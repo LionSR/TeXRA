@@ -27,6 +27,7 @@ vi.mock('@transcript', async (importActual) => ({
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
 import { noopTrace } from '@agent/trace';
+import { registerExecution } from '@agent/storage/executionLifecycle';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -422,7 +423,7 @@ describe('AgentLaunchContext', () => {
 
   it('commits initial status with creation instead of publishing a reservation', async () => {
     const session = createTestSession();
-    const batches = vi.spyOn(session, 'publish');
+    const batches = vi.spyOn(session, 'commitRegistration');
     const recording = recordSessionEvents(session);
     const handler = {
       capabilities: { supportsVision: false, supportsNativeAudio: false },
@@ -443,13 +444,20 @@ describe('AgentLaunchContext', () => {
       dispose: vi.fn(),
     });
     mocks.buildVars.mockResolvedValueOnce({ ATTACHED_MEMORY_MISSES: [] });
+    const config = AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'gpt55',
+      agentCategory: AgentCategory.ToolUse,
+    });
     try {
-      const context = await buildAgentLaunchContext({
-        config: AgentConfigSchema.parse({
-          agent: 'chat',
-          model: 'gpt55',
-          agentCategory: AgentCategory.ToolUse,
+      await Effect.runPromise(
+        registerExecution(session, EXECUTION_ID, config, 'chat', {
+          streamId: `chat#${EXECUTION_ID}`,
+          identity: { kind: 'agent', agent: 'chat' },
         }),
+      );
+      const context = await buildAgentLaunchContext({
+        config,
         executionId: EXECUTION_ID,
         session,
         modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
@@ -457,18 +465,19 @@ describe('AgentLaunchContext', () => {
       try {
         expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
           'run.start',
+          'execution.launchLabel',
+          'execution.config',
           'run.activate',
           'status',
         ]);
-        expect(recording.events.slice(0, 3).map((event) => event.type)).toEqual(
-          ['run.start', 'run.activate', 'status'],
-        );
-        expect(recording.events[2]).toMatchObject({
+        expect(
+          (await recording.read()).slice(0, 3).map((event) => event.type),
+        ).toEqual(['run.start', 'run.activate', 'status']);
+        expect((await recording.read())[2]).toMatchObject({
           seq: 3,
           phase: STREAM_PHASE.RUNNING,
           substate: STREAM_SUBSTATE.STARTING,
-          runStartedAt: session.status.getStreamState(context.runScope.streamId)
-            ?.runStartedAt,
+          runStartedAt: expect.any(Number),
         });
       } finally {
         context.disposeTrace();
@@ -502,10 +511,8 @@ describe('AgentLaunchContext', () => {
       order.push('stage');
     });
     const detachTrace = vi.fn(() => {
-      expect(terminalEvents.events).toContainEqual(
-        expect.objectContaining({ type: 'status', phase: STREAM_PHASE.FAILED }),
-      );
       order.push('detach');
+      return terminalEvents.read();
     });
     const rawDispose = vi.fn(() => order.push('raw-trace'));
     const trace = { ...noopTrace, subscribe: vi.fn(() => detachTrace) };
@@ -558,6 +565,9 @@ describe('AgentLaunchContext', () => {
         STREAM_PHASE.FAILED,
       );
       expect(detachTrace).toHaveBeenCalledOnce();
+      await expect(detachTrace.mock.results[0]?.value).resolves.toContainEqual(
+        expect.objectContaining({ type: 'status', phase: STREAM_PHASE.FAILED }),
+      );
       expect(rawDispose).toHaveBeenCalledOnce();
       // Terminal compensation is committed before the trace is detached.
       expect(order).toEqual(['stage', 'detach', 'raw-trace', 'handler']);

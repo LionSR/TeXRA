@@ -27,6 +27,7 @@ import { registerInlineAgents } from '@agent/index';
 import {
   clearStoreCache,
   getExecutionStore,
+  getExecutionRecords,
   registerExecution,
 } from '@agent/storage';
 import { clearInlineAgents } from '@agent/index/agentRegistry';
@@ -196,10 +197,14 @@ async function waitForPersistedResult(
 ): Promise<void> {
   await vi.waitFor(
     async () => {
-      const report = await getExecutionStore(executionId).readReport();
+      const report = await Effect.runPromise(
+        getExecutionRecords(session, executionId).readReport(),
+      );
       expect(report).toContain(expectedText);
       await expect(
-        getExecutionStore(executionId).readResultMeta(),
+        Effect.runPromise(
+          getExecutionRecords(session, executionId).readResultMeta(),
+        ),
       ).resolves.toMatchObject({
         result: { response: expectedText },
       });
@@ -301,11 +306,19 @@ async function launchWaitingChild(options: {
     instruction: 'Coordinate the child proof review.',
     workingDirectory: process.cwd(),
   });
-  await registerExecution(PARENT_EXECUTION_ID, parentConfig, PARENT_AGENT, {
-    streamId: PARENT_STREAM_ID,
-    identity: { kind: 'agent', agent: PARENT_AGENT },
-    parentExecutionId: OUTER_EXECUTION_ID,
-  });
+  await Effect.runPromise(
+    registerExecution(
+      session,
+      PARENT_EXECUTION_ID,
+      parentConfig,
+      PARENT_AGENT,
+      {
+        streamId: PARENT_STREAM_ID,
+        identity: { kind: 'agent', agent: PARENT_AGENT },
+        parentExecutionId: OUTER_EXECUTION_ID,
+      },
+    ),
+  );
   await expect(
     Effect.runPromise(
       executeAgent(parentConfig, PARENT_EXECUTION_ID, {
@@ -372,7 +385,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // so the ephemeral default this file's setup installed gives way to it.
     teardownDefaultSession();
     session = initializeDefaultSession({});
-    publishTestRunStart(session, OUTER_STREAM_ID);
+    publishTestRunStart(session, OUTER_STREAM_ID, OUTER_EXECUTION_ID);
     await session.settlePublications();
     childId = undefined;
     resumedStreams = [];
@@ -493,11 +506,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await vi.waitFor(
       async () => {
         await expect(
-          getExecutionStore(executionId).readResultMeta(),
+          Effect.runPromise(
+            getExecutionRecords(session, executionId).readResultMeta(),
+          ),
         ).resolves.toMatchObject({
           result: { response: '' },
         });
-        const report = await getExecutionStore(executionId).readReport();
+        const report = await Effect.runPromise(
+          getExecutionRecords(session, executionId).readReport(),
+        );
         expect(report).not.toContain('Result A.');
         expect(report).not.toContain('<response>');
       },
@@ -613,13 +630,19 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     expect(turnState?.activeTurn).toBeUndefined();
     const completed = turnState?.lastCompletedTurn;
     expect(completed?.token).toBeTruthy();
-    await expect(store.readResultMeta()).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(
+        getExecutionRecords(session, executionId).readResultMeta(),
+      ),
+    ).resolves.toMatchObject({
       turnToken: completed!.token,
     });
 
     // Replay the identical logical delivery 100 times through the real
     // admission path: no additional parent message, no additional wake.
-    const report = await store.readReport();
+    const report = await Effect.runPromise(
+      getExecutionRecords(session, executionId).readReport(),
+    );
     for (let replay = 0; replay < 100; replay++) {
       await Effect.runPromise(
         deliverChildRunFollowUp({
@@ -711,7 +734,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       },
       { timeout: 10_000 },
     );
-    await expect(store.readResultMeta()).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(
+        getExecutionRecords(session, executionId).readResultMeta(),
+      ),
+    ).resolves.toMatchObject({
       turnToken: completed1!.token,
       result: { response: 'Result A.' },
     });
@@ -719,8 +746,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // Stop the child before turn 2 persists any result. The registry stop
     // reaches the loop as well as the turn, so the turn is interrupted rather
     // than delivered as a cancelled completion.
-    expect(session.executions.kill(executionId)).toBe(true);
+    const stopped = session.executions.kill(executionId);
+    expect(stopped.accepted).toBe(true);
+    const stopSettlement = Effect.runPromise(stopped.settlement);
     releaseTurn2(new Error('interrupted before result persistence'));
+    await stopSettlement;
     await waitForLeaseRelease(executionId);
 
     // Turn 1 stays the latest completed turn; turn 2 remains on record as
@@ -728,7 +758,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     const finalState = await store.readTurnState();
     expect(finalState?.lastCompletedTurn?.token).toBe(completed1!.token);
     expect(finalState?.activeTurn?.token).toBeTruthy();
-    await expect(store.readResultMeta()).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(
+        getExecutionRecords(session, executionId).readResultMeta(),
+      ),
+    ).resolves.toMatchObject({
       turnToken: completed1!.token,
       result: { response: 'Result A.', outcome: RUN_OUTCOME.CANCELLED },
     });

@@ -34,9 +34,8 @@ function fingerprintWorkflowAgentDependencies(
     ? Rest
     : never
 ) {
-  return fingerprintInputDependencies(
-    parentContext().runScope.session,
-    ...args,
+  return Effect.runPromise(
+    fingerprintInputDependencies(parentContext().runScope.session, ...args),
   );
 }
 
@@ -86,7 +85,7 @@ vi.mock('@tools/delegation/delegationAvailability', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  getExecutionStore: vi.fn(() => ({ readMeta: mocks.readExecutionMeta })),
+  getExecutionRecords: vi.fn(() => ({ readMeta: mocks.readExecutionMeta })),
   resolveChildRunOutput: mocks.resolveChildRunOutput,
 }));
 
@@ -268,7 +267,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     mocks.realpath.mockImplementation(async (file: string) => file);
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
-    mocks.readExecutionMeta.mockResolvedValue(undefined);
+    mocks.readExecutionMeta.mockReturnValue(Effect.succeed(undefined));
     mocks.executeStableSubagentInBand.mockImplementation(
       inBandRunReturning(result),
     );
@@ -556,8 +555,8 @@ describe('createWorkflowScriptAgentRunner', () => {
         ? { kind: 'runStorage' }
         : undefined,
     );
-    mocks.resolveChildRunOutput.mockImplementation(
-      async (_parentExecutionId, file) => ({
+    mocks.resolveChildRunOutput.mockImplementation((_parentExecutionId, file) =>
+      Effect.succeed({
         kind: 'runStorage',
         absolutePath:
           file === firstRequested ? firstCanonical : secondCanonical,
@@ -592,11 +591,13 @@ describe('createWorkflowScriptAgentRunner', () => {
       1,
       runExecutionId,
       firstRequested,
+      parentContext().runScope.session,
     );
     expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
       2,
       runExecutionId,
       secondRequested,
+      parentContext().runScope.session,
     );
     expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/notes.tex');
     expect(mocks.preparedOptions[0]).toEqual(
@@ -614,7 +615,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
       kind: 'runStorage',
     });
-    mocks.resolveChildRunOutput.mockResolvedValue(undefined);
+    mocks.resolveChildRunOutput.mockReturnValue(Effect.succeed(undefined));
     const runner = defaultRunner();
 
     await expect(
@@ -664,7 +665,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
       kind: 'runStorage',
     });
-    mocks.resolveChildRunOutput.mockRejectedValue(storageError);
+    mocks.resolveChildRunOutput.mockReturnValue(Effect.fail(storageError));
     const runner = defaultRunner();
 
     await expect(
@@ -683,15 +684,17 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation((file) =>
       file === resolved || file === stale ? { kind: 'runStorage' } : undefined,
     );
-    mocks.resolveChildRunOutput.mockImplementation(async (_parent, file) =>
-      file === resolved
-        ? {
-            kind: 'runStorage',
-            absolutePath: '/canonical/executions/bbbbbb222222/r1/draft.tex',
-            relativePath: 'r1/draft.tex',
-            executionId: 'bbbbbb222222',
-          }
-        : undefined,
+    mocks.resolveChildRunOutput.mockImplementation((_parent, file) =>
+      Effect.succeed(
+        file === resolved
+          ? {
+              kind: 'runStorage',
+              absolutePath: '/canonical/executions/bbbbbb222222/r1/draft.tex',
+              relativePath: 'r1/draft.tex',
+              executionId: 'bbbbbb222222',
+            }
+          : undefined,
+      ),
     );
     const runner = defaultRunner();
 
@@ -772,9 +775,11 @@ describe('createWorkflowScriptAgentRunner', () => {
     const onCost = vi.fn();
     const report = reportSpy();
     const recoveredStreamId = 'correct@child-model#bbbbbb222222' as StreamTabId;
-    mocks.readExecutionMeta.mockResolvedValueOnce({
-      streamId: recoveredStreamId,
-    });
+    mocks.readExecutionMeta.mockReturnValueOnce(
+      Effect.succeed({
+        streamId: recoveredStreamId,
+      }),
+    );
     mocks.executeStableSubagentInBand.mockResolvedValueOnce({
       executionId: 'bbbbbb222222',
       result: { ...result, cost: 0.25 },
@@ -793,8 +798,8 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it('keeps a recovered result when navigation metadata cannot be read', async () => {
     const report = reportSpy();
-    mocks.readExecutionMeta.mockRejectedValueOnce(
-      new Error('metadata unavailable'),
+    mocks.readExecutionMeta.mockReturnValueOnce(
+      Effect.fail(new Error('metadata unavailable')),
     );
     mocks.executeStableSubagentInBand.mockResolvedValueOnce({
       executionId: 'bbbbbb222222',

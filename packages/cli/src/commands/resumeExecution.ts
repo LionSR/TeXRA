@@ -1,15 +1,17 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect, Result } from 'effect';
+
 import {
   classifyRun,
   describeFollowUpFailure,
   resumeRun,
 } from '@agent/runtime';
-import { executionHeldMessage, getExecutionStore } from '@agent/storage';
+import { executionHeldMessage, getExecutionRecords } from '@agent/storage';
 import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
@@ -64,145 +66,165 @@ export async function runResumeExecution(
 ): Promise<number> {
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
-  const store = getExecutionStore(id);
-  let config, meta;
-  try {
-    [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
-  } catch (error) {
-    writeTextStderr(loadFailureMessage(id, error));
-    return CliExitCode.AgentError;
-  }
-  if (!config) {
-    writeTextStderr(`Execution not found: ${id}`);
-    return CliExitCode.Usage;
-  }
-  // Gate resume on ownership: a run held by any owner that is alive or cannot
-  // be proven dead refuses, naming that owner.
-  const classification = await classifyRun(id);
-  switch (classification.kind) {
-    case 'held_elsewhere':
-      writeTextStderr(executionHeldMessage(id, classification.owner));
-      return CliExitCode.Usage;
-    case 'owned_here':
-      writeTextStderr(`Execution ${id} is already running in this process.`);
-      return CliExitCode.Usage;
-    case 'unclassified':
-      // A history row is advertised from its checkpoint file alone, so a run
-      // whose checkpoint is corrupt lands here and gets the same words the
-      // chat's open path gives that cohort, with the fact that decided it.
-      // A lease or metadata read that failed says nothing about the
-      // checkpoint, so it stays the operational fact it is.
-      writeTextStderr(
-        classification.fault === 'checkpoint-malformed'
-          ? `${describeFollowUpFailure('unusable_checkpoint')} (${classification.cause})`
-          : `Could not read the state of execution ${id}: ${classification.cause}`,
+  const session = await initializeCliTranscriptSession();
+  return effectRuntime().runPromise(
+    Effect.gen(function* () {
+      const store = getExecutionRecords(session, id);
+      const metadata = yield* Effect.result(
+        Effect.all([store.readConfig(), store.readMeta()]),
       );
-      return CliExitCode.AgentError;
-    case 'finished':
-      writeTextStderr(describeFollowUpFailure('finished'));
-      return CliExitCode.Usage;
-    case 'resumable':
-      break;
-  }
-  // FK-first: the stream id stamped at registration is the reproduction
-  // contract. A row without one predates stamping, so there is no persisted
-  // stream to reopen — a different fact from "this run finished", and worth
-  // saying plainly since only an explicitly named id reaches here (the
-  // history listing never advertises such a row).
-  if (!meta?.streamId) {
-    writeTextStderr(
-      `Execution ${id} predates transcript stream stamping and cannot be continued. Start a new agent task instead.`,
-    );
-    return CliExitCode.Usage;
-  }
+      if (Result.isFailure(metadata)) {
+        writeTextStderr(loadFailureMessage(id, metadata.failure));
+        return CliExitCode.AgentError;
+      }
+      const [config, meta] = metadata.success;
+      if (!config) {
+        writeTextStderr(`Execution not found: ${id}`);
+        return CliExitCode.Usage;
+      }
+      // Gate resume on ownership: a run held by any owner that is alive or cannot
+      // be proven dead refuses, naming that owner.
+      const classification = yield* classifyRun(id, session);
+      switch (classification.kind) {
+        case 'held_elsewhere':
+          writeTextStderr(executionHeldMessage(id, classification.owner));
+          return CliExitCode.Usage;
+        case 'owned_here':
+          writeTextStderr(
+            `Execution ${id} is already running in this process.`,
+          );
+          return CliExitCode.Usage;
+        case 'unclassified':
+          // A history row is advertised from its checkpoint file alone, so a run
+          // whose checkpoint is corrupt lands here and gets the same words the
+          // chat's open path gives that cohort, with the fact that decided it.
+          // A lease or metadata read that failed says nothing about the
+          // checkpoint, so it stays the operational fact it is.
+          writeTextStderr(
+            classification.fault === 'checkpoint-malformed'
+              ? `${describeFollowUpFailure('unusable_checkpoint')} (${classification.cause})`
+              : `Could not read the state of execution ${id}: ${classification.cause}`,
+          );
+          return CliExitCode.AgentError;
+        case 'finished':
+          writeTextStderr(describeFollowUpFailure('finished'));
+          return CliExitCode.Usage;
+        case 'resumable':
+          break;
+      }
+      // FK-first: the stream id stamped at registration is the reproduction
+      // contract. A row without one predates stamping, so there is no persisted
+      // stream to reopen, a different fact from "this run finished", and worth
+      // saying plainly since only an explicitly named id reaches here (the
+      // history listing never advertises such a row).
+      if (!meta?.streamId) {
+        writeTextStderr(
+          `Execution ${id} predates transcript stream stamping and cannot be continued. Start a new agent task instead.`,
+        );
+        return CliExitCode.Usage;
+      }
 
-  // Tool-use resume reopens the interactive TUI, so headless callers are
-  // rejected before resume-state loading. Workflow resume runs headless and
-  // skips this gate entirely.
-  if (config.agentCategory === AgentCategory.ToolUse) {
-    const terminalFailure = interactiveTerminalFailure(context);
-    if (terminalFailure) {
-      const commandName = context.commandName;
-      const runCommand = `${commandName} run`;
-      writeTextStderr(
-        formatInteractiveTerminalFailure(terminalFailure, {
-          headlessMessage: `Resuming continues an interactive chat session — run \`${formatResumeCommand(
-            commandName,
-            id,
-            { approvalPolicy: context.approvalPolicy },
-          )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
-          dumbTerminalCommand: 'resume',
-          dumbTerminalOptions: {
-            commandName,
-            nonInteractiveFallback: `\`${runCommand}\``,
+      // Tool-use resume reopens the interactive TUI, so headless callers are
+      // rejected before resume-state loading. Workflow resume runs headless and
+      // skips this gate entirely.
+      if (config.agentCategory === AgentCategory.ToolUse) {
+        const terminalFailure = interactiveTerminalFailure(context);
+        if (terminalFailure) {
+          const commandName = context.commandName;
+          const runCommand = `${commandName} run`;
+          writeTextStderr(
+            formatInteractiveTerminalFailure(terminalFailure, {
+              headlessMessage: `Resuming continues an interactive chat session, run \`${formatResumeCommand(
+                commandName,
+                id,
+                { approvalPolicy: context.approvalPolicy },
+              )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
+              dumbTerminalCommand: 'resume',
+              dumbTerminalOptions: {
+                commandName,
+                nonInteractiveFallback: `\`${runCommand}\``,
+              },
+            }),
+          );
+          return CliExitCode.Usage;
+        }
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const { runChat } = await import('../chat/tui/runChatTui');
+            return (await runChat(context, { initialResume: { id, config } }))
+              .exitCode;
+          },
+          catch: ensureError,
+        });
+      }
+
+      const agent = yield* Effect.result(
+        Effect.tryPromise({
+          try: () => resolveCliLaunchAgent(config.agent, 'run'),
+          catch: ensureError,
+        }),
+      );
+      if (Result.isFailure(agent)) {
+        const error = agent.failure;
+        if (error instanceof CliUsageError) {
+          writeTextStderr(error.message);
+          return CliExitCode.Usage;
+        }
+        writeTextStderr(loadFailureMessage(id, error));
+        return CliExitCode.AgentError;
+      }
+
+      let exitCode: number = CliExitCode.Usage;
+      const resumed = yield* Effect.result(
+        resumeRun(id, {
+          session,
+          executeWorkflow: async (
+            workflowConfig,
+            executionId,
+            modelHandlerCompatibilityKey,
+          ) => {
+            // Fast-fail on an unusable destination before the run restarts;
+            // `executeCliWorkflowConfig` reads the same persisted `cli` block.
+            await assertOutputFileAvailable(
+              resumeWorkflowOutputFile(workflowConfig),
+              context.cwd,
+            );
+            await assertOutputDirAvailable(
+              resumeWorkflowOutputDirectory(workflowConfig),
+              context.cwd,
+            );
+            exitCode = await effectRuntime().runPromise(
+              executeCliWorkflowConfig(
+                workflowConfig,
+                buildHeadlessRunContext(context),
+                {
+                  executionId,
+                  modelHandlerCompatibilityKey,
+                  recoveryInputIsDurable:
+                    await workflowRecoveryInputsAreDurable(
+                      workflowConfig,
+                      context.cwd,
+                    ),
+                  categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
+                },
+              ),
+            );
           },
         }),
       );
-      return CliExitCode.Usage;
-    }
-    const { runChat } = await import('../chat/tui/runChatTui');
-    return (await runChat(context, { initialResume: { id, config } })).exitCode;
-  }
-
-  try {
-    await resolveCliLaunchAgent(config.agent, 'run');
-  } catch (error) {
-    if (error instanceof CliUsageError) {
-      writeTextStderr(error.message);
-      return CliExitCode.Usage;
-    }
-    writeTextStderr(loadFailureMessage(id, error));
-    return CliExitCode.AgentError;
-  }
-
-  // `resumeRun`'s guards need the live session planes; the headless skeleton
-  // adopts this session rather than re-initializing.
-  const session = await initializeCliTranscriptSession();
-  let exitCode: number = CliExitCode.Usage;
-  try {
-    const result = await effectRuntime().runPromise(
-      resumeRun(id, {
-        session,
-        executeWorkflow: async (
-          workflowConfig,
-          executionId,
-          modelHandlerCompatibilityKey,
-        ) => {
-          // Fast-fail on an unusable destination before the run restarts;
-          // `executeCliWorkflowConfig` reads the same persisted `cli` block.
-          await assertOutputFileAvailable(
-            resumeWorkflowOutputFile(workflowConfig),
-            context.cwd,
-          );
-          await assertOutputDirAvailable(
-            resumeWorkflowOutputDirectory(workflowConfig),
-            context.cwd,
-          );
-          exitCode = await executeCliWorkflowConfig(
-            workflowConfig,
-            buildHeadlessRunContext(context),
-            {
-              executionId,
-              modelHandlerCompatibilityKey,
-              recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
-                workflowConfig,
-                context.cwd,
-              ),
-              categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
-            },
-          );
-        },
-      }),
-    );
-    if ('started' in result) return exitCode;
-    writeTextStderr(describeFollowUpFailure(result.failed));
-    return CliExitCode.Usage;
-  } catch (error) {
-    if (error instanceof CliUsageError) {
-      writeTextStderr(error.message);
-      return CliExitCode.Usage;
-    }
-    writeTextStderr(loadFailureMessage(id, error));
-    return CliExitCode.AgentError;
-  }
+      if (Result.isSuccess(resumed)) {
+        if ('started' in resumed.success) return exitCode;
+        writeTextStderr(describeFollowUpFailure(resumed.success.failed));
+        return CliExitCode.Usage;
+      } else {
+        const error = resumed.failure;
+        if (error instanceof CliUsageError) {
+          writeTextStderr(error.message);
+          return CliExitCode.Usage;
+        }
+        writeTextStderr(loadFailureMessage(id, error));
+        return CliExitCode.AgentError;
+      }
+    }),
+  );
 }

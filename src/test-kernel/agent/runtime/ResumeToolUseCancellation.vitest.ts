@@ -39,22 +39,39 @@ vi.mock('@agent/runtime/AgentLaunchContext', async () => {
         try: () => mocks.buildAgentLaunchContext(...args),
         catch: ensureError,
       }),
-    withExecutionRunContext: async (
+    withExecutionRunContext: (
       _context: unknown,
       _options: unknown,
-      run: () => Promise<unknown>,
+      run: () => Effect.Effect<unknown, unknown>,
     ) => run(),
   };
 });
 
 vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
-  runFlowWithLifecycle: mocks.runFlowWithLifecycle,
+  runFlowWithLifecycle: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.runFlowWithLifecycle(...args),
+      catch: ensureError,
+    }),
 }));
 
-vi.mock('@agent/storage/executionLifecycle', () => ({
-  clearTerminalExecutionState: mocks.clearTerminalExecutionState,
-  getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
-  hasPersistedParent: mocks.hasPersistedParent,
+vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
+  clearTerminalExecutionState: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.clearTerminalExecutionState(...args),
+      catch: ensureError,
+    }),
+  getPersistedUserFollowUpSupport: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.getPersistedUserFollowUpSupport(...args),
+      catch: ensureError,
+    }),
+  hasPersistedParent: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.hasPersistedParent(...args),
+      catch: ensureError,
+    }),
 }));
 
 vi.mock('@agent/implementations/flows/reflection/runReflectionFlow', () => ({
@@ -66,7 +83,11 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
+  retrieveSessionResumeData: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.retrieveSessionResumeData(...args),
+      catch: ensureError,
+    }),
 }));
 
 // Local imports
@@ -114,6 +135,8 @@ const LANE_SESSION = {
       operation: Effect.Effect<unknown, unknown>,
     ) => operation,
   },
+  acquireExecutionClaims: () => Effect.succeed(Effect.void),
+  graph: { releaseExecutionClaims: () => Effect.void },
   transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
   status: {},
   flushArtifacts: vi.fn(async () => {}),
@@ -219,7 +242,10 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       createToolUseResumeData({ executionId, streamId }),
     );
 
-    expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(executionId);
+    expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(
+      executionId,
+      LANE_SESSION,
+    );
     expect(order).toEqual(['lease', 'retrieve', 'clear', 'launch', 'flow']);
   });
 

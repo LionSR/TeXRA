@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 // Local imports
 import {
   detachSubagentsOnStop,
@@ -84,28 +86,32 @@ export class AgentReviewRunController {
   }
 
   /** Attach the exact execution handle and replay any earlier stop. */
-  bind(run: AgentReviewRunToken, handle: AgentRunHandle): void {
-    if (this.activeRun !== run) return;
+  bind(run: AgentReviewRunToken, handle: AgentRunHandle): Effect.Effect<void> {
+    if (this.activeRun !== run) return Effect.void;
     run.handle = handle;
-    if (run.stopRequested) this.stop(run);
+    return run.stopRequested ? this.stop(run) : Effect.void;
   }
 
   /** Request one idempotent stop of the active run. */
-  requestStop(): boolean {
+  requestStop(): {
+    readonly accepted: boolean;
+    readonly settlement: Effect.Effect<void>;
+  } {
     const run = this.activeRun;
-    if (!run || run.stopRequested) return false;
+    if (!run || run.stopRequested)
+      return { accepted: false, settlement: Effect.void };
     run.stopRequested = true;
-    this.stop(run);
-    return true;
+    return { accepted: true, settlement: this.stop(run) };
   }
 
   /** Stop the active run and drop whatever it still produces. */
-  discard(): void {
+  discard(): Effect.Effect<void> {
     const run = this.activeRun;
-    if (!run) return;
-    this.requestStop();
+    if (!run) return Effect.void;
+    const stop = this.requestStop();
     run.discarded = true;
     run.collection = undefined;
+    return stop.settlement;
   }
 
   /** Release the run slot only when the caller still owns it. */
@@ -115,11 +121,12 @@ export class AgentReviewRunController {
     return true;
   }
 
-  private stop(run: AgentReviewRunToken): void {
+  private stop(run: AgentReviewRunToken): Effect.Effect<void> {
     const handle = run.handle;
-    if (!handle) return;
-    if (run.session.executions.getHandle(handle.executionId) !== handle) return;
-    run.session.executions.stopAgentStream(handle.childStreamId, {
+    if (!handle) return Effect.void;
+    if (run.session.executions.getHandle(handle.executionId) !== handle)
+      return Effect.void;
+    return run.session.executions.stopAgentStream(handle.childStreamId, {
       detachActiveChildren: detachSubagentsOnStop(),
     });
   }

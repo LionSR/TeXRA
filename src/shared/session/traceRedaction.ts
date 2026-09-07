@@ -1,5 +1,5 @@
 /** Existing transcript redaction rules, shared by publication and display. */
-import { redactSecrets } from '@logger/redaction';
+import { redactDisplayValue, redactSecrets } from '@logger/redaction';
 import {
   SessionEventDraftSchema,
   type SessionEventDraft,
@@ -9,6 +9,8 @@ import { isObject } from '@utils/core';
 /** Apply the existing transcript rules before source facts enter the event table. */
 export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
   switch (event.type) {
+    case 'run.config':
+      return { ...event, config: redactDisplayValue(event.config) };
     case 'result':
       return SessionEventDraftSchema.parse({
         ...event,

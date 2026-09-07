@@ -99,3 +99,20 @@ export function redactSecrets(text: string): string {
 
   return redacted;
 }
+
+/** Scrub a constructed JSON-shaped display value without changing its field structure.
+ * Persisted execution records and provider inputs must retain their original values.
+ */
+export function redactDisplayValue<T>(value: T): T {
+  if (typeof value === 'string') return redactSecrets(value) as T;
+  if (Array.isArray(value)) return value.map(redactDisplayValue) as T;
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, field]) => [
+      key,
+      typeof field === 'string' && SECRET_FIELD_NAME_PATTERN.test(key)
+        ? REDACTED
+        : redactDisplayValue(field),
+    ]),
+  ) as T;
+}

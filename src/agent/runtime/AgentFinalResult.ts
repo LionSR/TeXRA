@@ -1,81 +1,20 @@
-import { z } from 'zod';
-
 import {
-  ToolUseFlowResultSchema,
-  WorkflowFlowResultSchema,
   type AgentFlowCategory,
   type AgentFlowResult,
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+
 import {
-  JsonValueSchema,
-  RetryErrorInfoSchema,
-  RUN_OUTCOME,
-  type RunOutcome,
+  AgentFinalResultSchema,
+  type AgentFinalResult,
+  type ResultDiffSummary,
 } from '@shared/schemas';
-
-/** Reference to one persisted workflow diff. */
-const ResultDiffSummarySchema = z.strictObject({
-  /** Absolute path of the output file the diff belongs to. */
-  path: z.string(),
-  /** Diff file path relative to the execution run directory. */
-  diffRelPath: z.string(),
-  /** True when the change ratio exceeded the large-change threshold. */
-  largeChange: z.boolean(),
-});
-
-export type ResultDiffSummary = z.infer<typeof ResultDiffSummarySchema>;
-
-const CostSchema = z.number().nonnegative().prefault(0);
-
-export const WorkflowAgentFinalResultSchema = WorkflowFlowResultSchema.pick({
-  category: true,
-  outcome: true,
-  outputs: true,
-  compileFailures: true,
-})
-  .extend({
-    outputs: WorkflowFlowResultSchema.shape.outputs.prefault(() => []),
-    compileFailures: WorkflowFlowResultSchema.shape.compileFailures.prefault(
-      () => [],
-    ),
-    diffs: z.array(ResultDiffSummarySchema).prefault(() => []),
-    cost: CostSchema,
-    diffsUnavailable: z.string().optional(),
-    structured: JsonValueSchema.optional(),
-    /**
-     * Structured provider/runtime error behind a FAILED outcome, when present.
-     * Outcome-only domain failures can end FAILED without this field and carry
-     * their diagnostics in category-specific result fields. Absent on every
-     * non-failed outcome; journal entries only ever hold completed results.
-     */
-    error: RetryErrorInfoSchema.optional(),
-  })
-  .strict();
-
-const ToolUseAgentFinalResultSchema = ToolUseFlowResultSchema.pick({
-  category: true,
-  outcome: true,
-  response: true,
-  files: true,
-})
-  .extend({
-    response: ToolUseFlowResultSchema.shape.response.unwrap().prefault(''),
-    files: ToolUseFlowResultSchema.shape.files.unwrap().prefault(() => []),
-    cost: CostSchema,
-    structured: JsonValueSchema.optional(),
-    /** See the workflow member: provider/runtime failures carry this field. */
-    error: RetryErrorInfoSchema.optional(),
-  })
-  .strict();
-
-/** Stable result returned by any terminal agent run. */
-export const AgentFinalResultSchema = z.discriminatedUnion('category', [
-  WorkflowAgentFinalResultSchema,
-  ToolUseAgentFinalResultSchema,
-]);
-
-export type AgentFinalResult = z.infer<typeof AgentFinalResultSchema>;
+export {
+  AgentFinalResultSchema,
+  type AgentFinalResult,
+  type ResultDiffSummary,
+} from '@shared/schemas';
 
 type AgentFinalResultSource =
   | {

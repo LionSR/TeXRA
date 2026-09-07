@@ -64,9 +64,11 @@ import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  isDisplaySessionEvent,
   ownerIdentity,
   type OwnerId,
   type SessionCloseReport,
+  type SessionEvent,
   type StreamTabId,
 } from '@shared/schemas';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
@@ -223,6 +225,41 @@ const sessionHandleLayer = (
           SubscriptionRef.getUnsafe(view.ref).cursor,
           SubscriptionRef.getUnsafe(delivered),
         );
+      const settlePublication = (rows: readonly SessionEvent[]) =>
+        Effect.gen(function* () {
+          const last = rows.at(-1);
+          if (last) {
+            yield* SubscriptionRef.changes(delivered).pipe(
+              Stream.filter((commit) => commit >= last.commit),
+              Stream.runHead,
+              Effect.raceFirst(
+                Deferred.await(tailEnded).pipe(
+                  Effect.andThen(
+                    Effect.die(
+                      new Error('Session committed-event consumer stopped'),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+          if (last) {
+            yield* view.changes.pipe(
+              Stream.filter((state) => state.cursor >= last.commit),
+              Stream.runHead,
+              Effect.flatMap((state) =>
+                Option.isSome(state)
+                  ? Effect.void
+                  : Effect.die(
+                      new Error(
+                        'Session view stopped before publication settled',
+                      ),
+                    ),
+              ),
+            );
+          }
+          return rows;
+        });
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
         publishText: (streamId, id, text) =>
@@ -249,41 +286,54 @@ const sessionHandleLayer = (
           }
           return pieces.reverse().join('');
         },
+        acquireExecutionClaims: (executionId, streamId) =>
+          eventLog
+            .acquireClaims([
+              qualifyAggregateId('stream', streamId),
+              qualifyAggregateId('execution', executionId),
+            ])
+            .pipe(
+              Effect.map((ids) =>
+                eventLog.releaseClaims(ids).pipe(Effect.orDie),
+              ),
+              Effect.orDie,
+            ),
+        releaseExecutionClaims: (executionId) =>
+          Effect.gen(function* () {
+            const id = qualifyAggregateId('execution', executionId);
+            const rows = yield* eventLog.aggregateState([id]);
+            const parent = rows[0]?.parentId;
+            yield* eventLog.releaseClaims(
+              parent === undefined || parent === null ? [id] : [id, parent],
+            );
+          }).pipe(Effect.orDie),
+        executionRecords: (id) =>
+          eventLog
+            .readExecutionRecords(qualifyAggregateId('execution', id))
+            .pipe(Effect.orDie),
+        executionChildren: (id) =>
+          eventLog
+            .readExecutionChildren(qualifyAggregateId('execution', id))
+            .pipe(Effect.orDie),
+        recordListing: () => eventLog.readListing().pipe(Effect.orDie),
         publish: (events) =>
+          publish(events).pipe(Effect.flatMap(settlePublication)),
+        publishRegistration: (events) =>
           Effect.gen(function* () {
             const rows = yield* publish(events);
-            const last = rows.at(-1);
-            if (last) {
-              yield* SubscriptionRef.changes(delivered).pipe(
-                Stream.filter((commit) => commit >= last.commit),
-                Stream.runHead,
-                Effect.raceFirst(
-                  Deferred.await(tailEnded).pipe(
-                    Effect.andThen(
-                      Effect.die(
-                        new Error('Session committed-event consumer stopped'),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }
-            if (last) {
-              yield* view.changes.pipe(
-                Stream.filter((state) => state.cursor >= last.commit),
-                Stream.runHead,
-                Effect.flatMap((state) =>
-                  Option.isSome(state)
-                    ? Effect.void
-                    : Effect.die(
-                        new Error(
-                          'Session view stopped before publication settled',
-                        ),
-                      ),
-                ),
-              );
-            }
-            return rows;
+            const born = rows.flatMap((row) =>
+              row.type === 'run.start'
+                ? [
+                    row.aggregateId,
+                    qualifyAggregateId('execution', row.executionId),
+                  ]
+                : [],
+            );
+            return yield* settlePublication(rows).pipe(
+              Effect.onError(() =>
+                eventLog.releaseClaims(born).pipe(Effect.orDie),
+              ),
+            );
           }),
         view: view.ref,
         viewChanges: view.changes,
@@ -294,7 +344,7 @@ const sessionHandleLayer = (
             (from) =>
               Stream.fromIterableEffect(
                 eventLog.readAll(from).pipe(Effect.orDie),
-              ),
+              ).pipe(Stream.filter(isDisplaySessionEvent)),
             {
               get: Effect.sync(settledCursor),
               changes: Stream.merge(
@@ -362,7 +412,7 @@ const sessionHandleLayer = (
           ),
       );
       yield* SubscriptionRef.set(delivered, anchor);
-      yield* reads.all(anchor).pipe(
+      yield* reads.all(anchor, delivered).pipe(
         Stream.runForEach((event) =>
           session.receiveCommittedEvent(event).pipe(
             Effect.andThen(() =>
@@ -598,45 +648,57 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // writes its stores there. A child with a handle is stopped by its
     // parent's cascade; a native child between turns has no handle, and
     // its kill interrupts the loop the registry retains for it.
-    yield* Effect.sync(() =>
-      runInSession(session, () => {
-        for (const executionId of executions.getActiveIds()) {
-          if (executions.getHandle(executionId)?.isChildExecution) continue;
-          executions.kill(executionId, { detachActiveChildren: false });
-        }
-      }),
+    const termination = yield* Effect.forkDetach(
+      Effect.all(
+        executions.getActiveIds().flatMap((executionId) => {
+          if (executions.getHandle(executionId)?.isChildExecution) return [];
+          return [
+            executions.kill(executionId, { detachActiveChildren: false })
+              .settlement,
+          ];
+        }),
+        { concurrency: 'unbounded', discard: true },
+      ),
+      { startImmediately: true },
     );
-    // Ends at the actual settlement, or when interrupted.
-    const settled = Effect.promise(
-      (interrupt) =>
-        runInSession(session, () =>
-          untilSettled(executions, interrupt),
-        ) as Promise<void>,
+    // The entry remains owned until waiting metadata finalization, not merely
+    // handle removal, has completed as well as every live driver.
+    const settled = Fiber.join(termination).pipe(
+      Effect.andThen(
+        Effect.promise(
+          (interrupt) =>
+            runInSession(session, () =>
+              untilSettled(executions, interrupt),
+            ) as Promise<void>,
+        ),
+      ),
     );
     // One budget for the whole close: the caller's signal, else the phase
     // deadline, forked once so the flush below shares what settlement left.
     const budget = yield* Effect.forkChild(
       signal ? aborted(signal) : Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
     );
-    yield* Effect.race(settled, Fiber.join(budget));
+    const didSettle = yield* Effect.race(
+      settled.pipe(Effect.as(true)),
+      Fiber.join(budget).pipe(Effect.as(false)),
+    );
     const abandoned = executions.getActiveIds();
-    const release =
-      abandoned.length === 0
-        ? sessions.invalidate(key)
-        : Effect.sync(() =>
-            log.warn(
-              `Session ${root} is closing with executions still live past its budget: ${abandoned.join(', ')}; it stays open, refusing new work, until they settle`,
+    const release = didSettle
+      ? sessions.invalidate(key)
+      : Effect.sync(() =>
+          log.warn(
+            `Session ${root} is closing with executions still live past its budget: ${abandoned.join(', ')}; it stays open, refusing new work, until they settle`,
+          ),
+        ).pipe(
+          // Started now, so the wait holds its listener before this close
+          // returns and no timer stands between the report and the release.
+          Effect.andThen(
+            Effect.forkDetach(
+              settled.pipe(Effect.andThen(sessions.invalidate(key))),
+              { startImmediately: true },
             ),
-          ).pipe(
-            // Started now, so the wait holds its listener before this close
-            // returns and no timer stands between the report and the release.
-            Effect.andThen(
-              Effect.forkDetach(
-                settled.pipe(Effect.andThen(sessions.invalidate(key))),
-                { startImmediately: true },
-              ),
-            ),
-          );
+          ),
+        );
     // The release is the flush's finalizer: the entry goes, or its release
     // is armed on the settlement, whatever the flush's exit, and a flush
     // that fails still fails this close.
@@ -658,7 +720,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
       ),
     ).pipe(Effect.ensuring(release));
     const report: SessionCloseReport = {
-      settled: abandoned.length === 0,
+      settled: didSettle,
       abandoned,
     };
     return report;

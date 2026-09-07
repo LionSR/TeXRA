@@ -35,7 +35,7 @@ describe('listRunGeneratedFiles', () => {
       [path.join(RUN_PATH, 'unreadable.tex')]: 'unreadable',
       // A KV-*named* directory is internal metadata all the way down: the walk
       // must skip it before recursing, or its children leak into the listing.
-      [path.join(RUN_PATH, 'meta.json', 'buried.tex')]: 'buried',
+      [path.join(RUN_PATH, 'turn-state.json', 'buried.tex')]: 'buried',
     },
   });
   afterEach(() => vi.restoreAllMocks());

@@ -6,9 +6,12 @@
  * and generic read/write for arbitrary keys.
  */
 
+import { Cause, Effect } from 'effect';
+
 import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   isAgentRunRecord,
@@ -19,77 +22,44 @@ import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
-  ExecutionMetaCoreSchema,
   ExecutionMetaSchema,
-  PersistedWorkflowExecutionSnapshotSchema,
   RUN_OUTCOME,
+  aggregateId,
+  aggregateTarget,
+  EXECUTION_META_SCHEMA_VERSION,
+  type SessionEvent,
+  type SessionEventDraft,
   type ExecutionId,
   type ExecutionMeta,
 } from '@shared/schemas';
-import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  PersistedResultMetaSchema,
-  ResultMetaSchema,
-  type ResultMeta,
-} from './resultMeta';
+import { ResultMetaSchema, type ResultMeta } from './resultMeta';
 import { runWithExecutionLeaseWriteFence } from './executionLease';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
 // ============================================================================
 
-/** Prefix for a per-child execution record's KV key. */
-const CHILD_KEY_PREFIX = 'child-';
+const KEYS = { TURN_STATE: 'turn-state' } as const;
 
-const SINGLE_VALUE_KEYS = {
-  META: 'meta',
-  CONFIG: 'config',
-  REPORT: 'report',
-  WORKSPACE_FILES: 'workspace-files',
-  RESULT_META: 'result-meta',
-  TURN_STATE: 'turn-state',
-} as const;
-
-const KEYS = {
-  ...SINGLE_VALUE_KEYS,
-  child: (id: string) => `${CHILD_KEY_PREFIX}${id}`,
-} as const;
-
-/** Single-value keys, derived from SINGLE_VALUE_KEYS so the reserved-name check below never drifts. */
-const RESERVED_KEY_NAMES = new Set<string>(Object.values(SINGLE_VALUE_KEYS));
-
-/**
- * True when `key` is one of ExecutionKVStore's reserved keys — any
- * `SINGLE_VALUE_KEYS` name or a per-child record key (`child-{id}`). Exported
- * so callers that walk an execution's storage directory (e.g.
- * `src/tools/executions/executionKvFiles.ts`) can recognize internal KV
- * entries without re-deriving this vocabulary themselves.
- */
+/** Generic persistence remains scoped to checkpoints and delegation state. */
 export function isReservedKvKeyName(key: string): boolean {
-  return RESERVED_KEY_NAMES.has(key) || key.startsWith(CHILD_KEY_PREFIX);
+  return key === KEYS.TURN_STATE;
 }
 
 const log = createLog('ExecutionKVStore');
-type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 
 // ============================================================================
 // Domain types — Zod schemas as source of truth
 // ============================================================================
 
-const WorkspaceFilePathArraySchema = z.array(z.string());
-
-/** Stored data for a child execution record (without the derived `id` field). */
-const ChildRecordDataSchema = z.object({
-  agent: z.string(),
-  timestamp: z.string(),
-});
-type ChildRecordData = z.infer<typeof ChildRecordDataSchema>;
-
-/** Full child record including the `id` derived from the KV key name. */
-export interface ChildRecord extends ChildRecordData {
-  id: ExecutionId;
+/** A child launch projected from its canonical creation fact. */
+export interface ChildRecord {
+  readonly id: ExecutionId;
+  readonly agent: string;
+  readonly timestamp: string;
 }
 
 /**
@@ -140,31 +110,7 @@ export interface ExecutionKVStore {
   clear(): Promise<void>;
   getExecutionId(): ExecutionId;
 
-  // -- Typed readers --------------------------------------------------------
-  readMeta(): Promise<ExecutionMeta | null>;
-  /**
-   * Read metadata while preserving the distinction between an absent record
-   * and a malformed present record. Durable repair paths use this accessor so
-   * corruption stops recovery instead of being treated as missing state.
-   */
-  readMetaStrict(): Promise<ExecutionMeta | null>;
-  /** The persisted run record: honest union across agent and non-agent runs. */
-  readRunRecord(): Promise<RunRecord | null>;
-  /** Agent-arm view of the run record; null for non-agent records. */
-  readConfig(): Promise<AgentConfig | null>;
-  readReport(): Promise<string | null>;
-  readWorkspaceFiles(): Promise<string[]>;
-  readChildren(): Promise<ChildRecord[]>;
-  readResultMeta(): Promise<ResultMeta | null>;
   readTurnState(): Promise<ChildTurnState | null>;
-
-  // -- Typed writers --------------------------------------------------------
-  writeMeta(meta: ExecutionMetaInput): Promise<void>;
-  writeRunRecord(record: RunRecord): Promise<void>;
-  writeReport(report: string): Promise<void>;
-  writeWorkspaceFiles(paths: readonly string[]): Promise<void>;
-  writeChild(childId: ExecutionId, data: ChildRecordData): Promise<void>;
-  writeResultMeta(data: ResultMeta): Promise<void>;
   writeTurnState(state: ChildTurnState): Promise<void>;
 }
 
@@ -211,9 +157,8 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   /**
    * Read a key and validate it against a schema, returning the parsed value
    * or `null` when the key is absent. These readers are permissive: malformed
-   * data warns and also reads as `null`. `readValidatedMeta` is the one reader
-   * that must keep corruption distinct from absence, and owns that throwing
-   * policy itself.
+   * turn-state data warns and also reads as `null`, preserving the existing
+   * turn-state policy. Canonical execution metadata uses the strict event accessor.
    */
   private async readValidated<T>(
     key: string,
@@ -232,159 +177,8 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return null;
   }
 
-  private async readValidatedMeta(
-    malformed: 'return-null' | 'throw' = 'return-null',
-  ): Promise<ExecutionMeta | null> {
-    const raw = await this.read(KEYS.META);
-    if (raw === undefined) return null;
-
-    const core = ExecutionMetaCoreSchema.safeParse(raw);
-    if (!core.success) {
-      log.warn(
-        `Failed to parse execution ${this.executionId} meta.json: ${toErrorMessage(
-          core.error,
-        )}`,
-        { data: core.error },
-      );
-      if (malformed === 'throw') throw core.error;
-      return null;
-    }
-
-    const workflow =
-      PersistedWorkflowExecutionSnapshotSchema.optional().safeParse(
-        (raw as { workflow?: unknown }).workflow,
-      );
-    if (!workflow.success) {
-      log.warn(
-        `Failed to parse execution ${this.executionId} meta.json workflow: ${toErrorMessage(
-          workflow.error,
-        )}`,
-        { data: workflow.error },
-      );
-      // Ordinary reads keep core metadata so listing/finalization survive a
-      // bad workflow projection. Strict recovery must fail closed so a present
-      // but corrupt snapshot is never treated as "no prior state."
-      if (malformed === 'throw') throw workflow.error;
-      return core.data;
-    }
-    return workflow.data === undefined
-      ? core.data
-      : { ...core.data, workflow: workflow.data };
-  }
-
-  async readMeta(): Promise<ExecutionMeta | null> {
-    return this.readValidatedMeta();
-  }
-
-  async readRunRecord(): Promise<RunRecord | null> {
-    return this.readValidated(KEYS.CONFIG, RunRecordSchema);
-  }
-
-  async readMetaStrict(): Promise<ExecutionMeta | null> {
-    return this.readValidatedMeta('throw');
-  }
-
-  /**
-   * Agent-arm view of the run record: null when the record is a non-agent
-   * run's honest minimal shape. Pre-consolidation non-agent rows persisted a
-   * fabricated `AgentConfig` and still read through this arm.
-   */
-  async readConfig(): Promise<AgentConfig | null> {
-    const record = await this.readRunRecord();
-    return record && isAgentRunRecord(record) ? record : null;
-  }
-
-  async readReport(): Promise<string | null> {
-    return (await this.read<string>(KEYS.REPORT)) ?? null;
-  }
-
-  async readWorkspaceFiles(): Promise<string[]> {
-    const paths =
-      (await this.readValidated(
-        KEYS.WORKSPACE_FILES,
-        WorkspaceFilePathArraySchema,
-      )) ?? [];
-    return normalizeWorkspaceFilePaths(paths);
-  }
-
-  /** Read children: per-child KV keys with schema validation. */
-  async readChildren(): Promise<ChildRecord[]> {
-    const childKeys = await this.listKeys(CHILD_KEY_PREFIX);
-
-    if (childKeys.length === 0) return [];
-
-    const entries = await Promise.all(
-      childKeys.map(async (key) => {
-        const id = key.replace(CHILD_KEY_PREFIX, '') as ExecutionId;
-        const data = await this.readValidated(key, ChildRecordDataSchema);
-        return data ? { id, ...data } : null;
-      }),
-    );
-    return entries.filter(filterNotNull);
-  }
-
-  /**
-   * The persisted result record with the execution's durable terminal outcome
-   * projected onto it. `meta.outcome` is the only writer of "how did this run
-   * end": the result record is an interim envelope rewritten by every turn,
-   * and a run can end after its last turn wrote one (interrupted between
-   * turns, stopped while suspended, settled by the host's exit drain). An
-   * ABSENT outcome is not liveness: a run whose owner crashed never wrote
-   * one, so "is this still going" is answered by `resolveExecutionLiveness`
-   * (`@tools/executions/executionLiveness`), never by this record. A durable
-   * `completed` is never projected: it only ever agrees with the envelope,
-   * whose producer may already have downgraded a nominally completed flow that
-   * reported an application-level error (`buildSubagentFailureResultMeta`).
-   */
-  async readResultMeta(): Promise<ResultMeta | null> {
-    const [record, meta] = await Promise.all([
-      this.readValidated(KEYS.RESULT_META, PersistedResultMetaSchema),
-      this.readMeta(),
-    ]);
-    if (!record) return null;
-    const outcome = meta?.outcome;
-    if (
-      record.producer === 'backgroundBash' ||
-      outcome === undefined ||
-      outcome === RUN_OUTCOME.COMPLETED ||
-      record.result.outcome === outcome
-    ) {
-      return record;
-    }
-    return ResultMetaSchema.parse({
-      ...record,
-      result: { ...record.result, outcome },
-    });
-  }
-
   async readTurnState(): Promise<ChildTurnState | null> {
     return this.readValidated(KEYS.TURN_STATE, ChildTurnStateSchema);
-  }
-
-  // -- Typed writers --------------------------------------------------------
-
-  async writeMeta(meta: ExecutionMetaInput): Promise<void> {
-    await this.write(KEYS.META, ExecutionMetaSchema.parse(meta));
-  }
-
-  async writeRunRecord(record: RunRecord): Promise<void> {
-    await this.write(KEYS.CONFIG, RunRecordSchema.parse(record));
-  }
-
-  async writeReport(report: string): Promise<void> {
-    await this.write(KEYS.REPORT, report);
-  }
-
-  async writeWorkspaceFiles(paths: readonly string[]): Promise<void> {
-    await this.write(KEYS.WORKSPACE_FILES, normalizeWorkspaceFilePaths(paths));
-  }
-
-  async writeChild(childId: ExecutionId, data: ChildRecordData): Promise<void> {
-    await this.write(KEYS.child(childId), data);
-  }
-
-  async writeResultMeta(data: ResultMeta): Promise<void> {
-    await this.write(KEYS.RESULT_META, ResultMetaSchema.parse(data));
   }
 
   async writeTurnState(state: ChildTurnState): Promise<void> {
@@ -392,13 +186,179 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 }
 
-function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
-  const normalized = new Set<string>();
-  for (const rawPath of paths) {
-    const pathValue = normalizeFilePath(rawPath.trim());
-    if (pathValue) normalized.add(pathValue);
-  }
-  return [...normalized].sort(byString);
+/** Fold the named metadata records for one execution from one database prefix. */
+export function executionMetaFromEvents(
+  rows: readonly SessionEvent[],
+  executionId: ExecutionId,
+): ExecutionMeta | null {
+  const id = aggregateId('execution', executionId);
+  const startOf = (rows: readonly SessionEvent[]) =>
+    rows.find(
+      (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
+        row.type === 'run.start' && row.executionId === executionId,
+    );
+  const metaOf = (rows: readonly SessionEvent[]): ExecutionMeta | null => {
+    const start = startOf(rows);
+    if (
+      !start ||
+      rows.some(
+        (row) =>
+          row.aggregateId === start.aggregateId &&
+          row.type === 'stream.removed',
+      )
+    )
+      return null;
+    const status = rows.findLast(
+      (row) => row.aggregateId === start.aggregateId && row.type === 'status',
+    );
+    const description = rows.findLast(
+      (row) => row.aggregateId === id && row.type === 'execution.description',
+    );
+    const workflow = rows.findLast(
+      (row) => row.aggregateId === id && row.type === 'execution.workflow',
+    );
+    return ExecutionMetaSchema.parse({
+      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
+      timestamp: new Date(start.at).toISOString(),
+      streamId: aggregateTarget(start.aggregateId).id,
+      identity: start.identity ?? undefined,
+      userFollowUpSupport: start.userFollowUpSupport,
+      parentExecutionId: start.parentExecutionId,
+      outcome:
+        status?.type === 'status' &&
+        (status.phase === RUN_OUTCOME.COMPLETED ||
+          status.phase === RUN_OUTCOME.CANCELLED ||
+          status.phase === RUN_OUTCOME.FAILED)
+          ? status.phase
+          : undefined,
+      description:
+        description?.type === 'execution.description'
+          ? description.description
+          : undefined,
+      workflow:
+        workflow?.type === 'execution.workflow' ? workflow.workflow : undefined,
+    });
+  };
+  return metaOf(rows);
+}
+
+/** Read the current configuration from the same committed prefix as metadata. */
+export function executionRunRecordFromEvents(
+  rows: readonly SessionEvent[],
+  executionId: ExecutionId,
+): RunRecord | null {
+  if (!executionMetaFromEvents(rows, executionId)) return null;
+  const id = aggregateId('execution', executionId);
+  const event = rows.findLast(
+    (row) => row.aggregateId === id && row.type === 'execution.config',
+  );
+  return event?.type === 'execution.config'
+    ? RunRecordSchema.parse(event.record)
+    : null;
+}
+
+/** Native access to named execution metadata, with no file-backed read arm. */
+export function getExecutionRecords(
+  session: SessionHandle,
+  executionId: ExecutionId,
+) {
+  const id = aggregateId('execution', executionId);
+  const read = <A>(
+    select: (rows: readonly SessionEvent[]) => A,
+  ): Effect.Effect<A, Error> =>
+    session.readExecutionRecords(executionId).pipe(
+      Effect.map(select),
+      Effect.catchCause((cause) => {
+        const error = Cause.squash(cause);
+        return Effect.fail(
+          error instanceof z.ZodError ? error : ensureError(error),
+        );
+      }),
+    );
+  const write = (draft: SessionEventDraft): Effect.Effect<void, Error> =>
+    session.commit([draft]).pipe(
+      Effect.asVoid,
+      Effect.catchCause((cause) => {
+        const error = Cause.squash(cause);
+        return Effect.fail(
+          error instanceof z.ZodError ? error : ensureError(error),
+        );
+      }),
+    );
+  const metaOf = (rows: readonly SessionEvent[]) =>
+    executionMetaFromEvents(rows, executionId);
+  const recordOf = (rows: readonly SessionEvent[]) =>
+    executionRunRecordFromEvents(rows, executionId);
+  return {
+    readMeta: (): Effect.Effect<ExecutionMeta | null, Error> => read(metaOf),
+    readRunRecord: (): Effect.Effect<RunRecord | null, Error> => read(recordOf),
+    readConfig: (): Effect.Effect<AgentConfig | null, Error> =>
+      read((rows) => {
+        const record = recordOf(rows);
+        return record && isAgentRunRecord(record) ? record : null;
+      }),
+    readReport: (): Effect.Effect<string | null, Error> =>
+      read((rows) => {
+        const event = rows.findLast(
+          (row) => row.aggregateId === id && row.type === 'execution.report',
+        );
+        return event?.type === 'execution.report' ? event.report : null;
+      }),
+    readWorkspaceFiles: (): Effect.Effect<string[], Error> =>
+      read((rows) => {
+        const event = rows.findLast(
+          (row) =>
+            row.aggregateId === id && row.type === 'execution.workspaceFiles',
+        );
+        return event?.type === 'execution.workspaceFiles' ? event.paths : [];
+      }),
+    readResultMeta: (): Effect.Effect<ResultMeta | null, Error> =>
+      read((rows) => {
+        const event = rows.findLast(
+          (row) => row.aggregateId === id && row.type === 'execution.result',
+        );
+        if (event?.type !== 'execution.result') return null;
+        const record = event.result;
+        const outcome = metaOf(rows)?.outcome;
+        if (
+          record.producer === 'backgroundBash' ||
+          outcome === undefined ||
+          outcome === RUN_OUTCOME.COMPLETED ||
+          record.result.outcome === outcome
+        )
+          return record;
+        return ResultMetaSchema.parse({
+          ...record,
+          result: { ...record.result, outcome },
+        });
+      }),
+    writeRunRecord: (record: RunRecord) =>
+      Effect.suspend(() =>
+        write({
+          type: 'execution.config',
+          aggregateId: id,
+          record: RunRecordSchema.parse(record),
+        }),
+      ),
+    clearReport: () =>
+      write({ type: 'execution.report', aggregateId: id, report: null }),
+    writeReport: (report: string) =>
+      write({ type: 'execution.report', aggregateId: id, report }),
+    writeWorkspaceFiles: (paths: readonly string[]) =>
+      write({
+        type: 'execution.workspaceFiles',
+        aggregateId: id,
+        paths: [...paths],
+      }),
+    writeResultMeta: (result: ResultMeta) =>
+      Effect.suspend(() =>
+        write({
+          type: 'execution.result',
+          aggregateId: id,
+          result: ResultMetaSchema.parse(result),
+        }),
+      ),
+  };
 }
 
 // ============================================================================

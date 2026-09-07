@@ -16,7 +16,11 @@
 import { Cause, Effect, Exit, Fiber, Semaphore } from 'effect';
 
 // Local imports
-import { getExecutionStore, type ResultMeta } from '@agent/storage';
+import {
+  getExecutionStore,
+  getExecutionRecords,
+  type ResultMeta,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -158,25 +162,22 @@ const executeInBand = Effect.fn('executeInBand')(
       getExecutionStore(executionId),
     );
 
-    const { childStreamId } = yield* Effect.tryPromise({
-      try: () =>
-        runInSession(options.session, () =>
-          registerChildExecution({
-            executionId,
-            config,
-            agentName: options.agentName,
-            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-            parentExecutionId: options.parentExecutionId,
-          }),
-        ),
-      catch: (cause) =>
+    const { childStreamId } = yield* registerChildExecution(options.session, {
+      executionId,
+      config,
+      agentName: options.agentName,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      parentExecutionId: options.parentExecutionId,
+    }).pipe(
+      Effect.mapError((cause) =>
         mode === 'required-result'
           ? new SubagentDurabilityError(
               `Failed to register subagent ${executionId}.`,
               { cause },
             )
           : ensureError(cause),
-    });
+      ),
+    );
     let stableCompletionCommitted = false;
     const completed = yield* Effect.gen(function* () {
       let settledTurn: SettledInBandTurn | undefined;
@@ -194,7 +195,7 @@ const executeInBand = Effect.fn('executeInBand')(
         onTurnSettled: (settled) => {
           settledTurn = settled;
         },
-        afterArtifactsDrained: async () => {
+        afterArtifactsDrained: Effect.gen(function* () {
           const settledResultMeta = settledTurn?.resultMeta;
           if (
             !stableAttempt ||
@@ -204,9 +205,14 @@ const executeInBand = Effect.fn('executeInBand')(
           ) {
             return;
           }
-          await commitStableSubagentAttempt(store, executionId, stableAttempt);
+          yield* commitStableSubagentAttempt(
+            store,
+            executionId,
+            stableAttempt,
+            options.session,
+          );
           stableCompletionCommitted = true;
-        },
+        }),
         buildLaunch: () =>
           Effect.gen(function* () {
             // Inside the loop's lease launch guard, like every attempt-scoped
@@ -260,17 +266,12 @@ const executeInBand = Effect.fn('executeInBand')(
           loopFailure !== undefined ? { cause: loopFailure } : undefined,
         );
         if (mode === 'required-result') {
-          return yield* Effect.tryPromise({
-            try: () =>
-              runInSession(options.session, () =>
-                throwRetryableDurabilityError(
-                  executionId,
-                  stableAttempt,
-                  failure,
-                ),
-              ),
-            catch: ensureError,
-          });
+          return yield* throwRetryableDurabilityError(
+            executionId,
+            stableAttempt,
+            failure,
+            options.session,
+          );
         }
         throw failure;
       }
@@ -311,11 +312,7 @@ const executeInBand = Effect.fn('executeInBand')(
         // the thrown error names the I/O cause instead of blaming persistence.
         let readFailure: unknown;
         const persistedExit = yield* Effect.exit(
-          Effect.tryPromise({
-            try: () =>
-              runInSession(options.session, () => store.readResultMeta()),
-            catch: ensureError,
-          }),
+          getExecutionRecords(options.session, executionId).readResultMeta(),
         );
         if (Exit.isSuccess(persistedExit)) {
           persisted = persistedExit.value;
@@ -329,27 +326,20 @@ const executeInBand = Effect.fn('executeInBand')(
         if (!persisted) {
           if (childFailed) {
             const error = childError();
-            return yield* Effect.tryPromise({
-              try: () =>
-                runInSession(options.session, () =>
-                  throwRetryableDurabilityError(
-                    executionId,
-                    stableAttempt,
-                    new SubagentDurabilityError(
-                      `Subagent ${executionId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-                      {
-                        cause: new AggregateError(
-                          readFailure === undefined
-                            ? [error]
-                            : [error, readFailure],
-                          `Subagent ${executionId} execution and persistence both failed.`,
-                        ),
-                      },
-                    ),
+            return yield* throwRetryableDurabilityError(
+              executionId,
+              stableAttempt,
+              new SubagentDurabilityError(
+                `Subagent ${executionId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
+                {
+                  cause: new AggregateError(
+                    readFailure === undefined ? [error] : [error, readFailure],
+                    `Subagent ${executionId} execution and persistence both failed.`,
                   ),
-                ),
-              catch: ensureError,
-            });
+                },
+              ),
+              options.session,
+            );
           }
           if (readFailure !== undefined) {
             throw new SubagentDurabilityError(
@@ -368,20 +358,15 @@ const executeInBand = Effect.fn('executeInBand')(
         loopFailure !== undefined &&
         !childFailed
       ) {
-        return yield* Effect.tryPromise({
-          try: () =>
-            runInSession(options.session, () =>
-              throwRetryableDurabilityError(
-                executionId,
-                stableAttempt,
-                new SubagentDurabilityError(
-                  `Subagent ${executionId} failed to persist its final artifacts.`,
-                  { cause: loopFailure },
-                ),
-              ),
-            ),
-          catch: ensureError,
-        });
+        return yield* throwRetryableDurabilityError(
+          executionId,
+          stableAttempt,
+          new SubagentDurabilityError(
+            `Subagent ${executionId} failed to persist its final artifacts.`,
+            { cause: loopFailure },
+          ),
+          options.session,
+        );
       }
 
       if (childFailed) {
@@ -429,13 +414,10 @@ export const executeStableSubagentInBand = Effect.fn(
         );
         return yield* reservation.semaphore.withPermit(
           Effect.gen(function* () {
-            const reserved = yield* Effect.tryPromise({
-              try: () =>
-                runInSession(options.session, () =>
-                  reserveStableAttempt(options),
-                ),
-              catch: ensureError,
-            });
+            const reserved = yield* reserveStableAttempt(
+              options,
+              options.session,
+            );
             if (reserved.kind === 'recovered') return reserved.result;
             const { executionId, attempt } = reserved;
             // Publish the physical attempt id before resolving mutable launch state.

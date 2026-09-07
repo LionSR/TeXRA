@@ -10,12 +10,21 @@ status: implemented
 [#11861](https://github.com/LionSR/TeXRA/issues/11861). Lanes 1, 2 and 3
 landed together as
 [#11881](https://github.com/LionSR/TeXRA/pull/11881), lane 4 as
-[#11911](https://github.com/LionSR/TeXRA/pull/11911) (closing issue
-[#11863](https://github.com/LionSR/TeXRA/issues/11863)), and lane 6 as
-[#11827](https://github.com/LionSR/TeXRA/pull/11827). Lanes 5, 7 and 8 are
-still open as [#11864](https://github.com/LionSR/TeXRA/issues/11864),
-[#11865](https://github.com/LionSR/TeXRA/issues/11865) and
-[#11866](https://github.com/LionSR/TeXRA/issues/11866). The nine decisions
+[#11883](https://github.com/LionSR/TeXRA/pull/11883), lane 5 through
+[#11881](https://github.com/LionSR/TeXRA/pull/11881) (headless) and
+[#11884](https://github.com/LionSR/TeXRA/pull/11884) (SDK), and lane 6 as
+[#11827](https://github.com/LionSR/TeXRA/pull/11827). Lane 8's shell landed
+through [#11883](https://github.com/LionSR/TeXRA/pull/11883), with desktop
+completion in [#11917](https://github.com/LionSR/TeXRA/pull/11917) and TUI
+parity in [#11911](https://github.com/LionSR/TeXRA/pull/11911). The latter
+also consolidated host behavior and closed lane 4's tracking issue
+[#11863](https://github.com/LionSR/TeXRA/issues/11863). Lane 7's remaining
+consolidation work is tracked by
+[#11865](https://github.com/LionSR/TeXRA/issues/11865); several of its
+cleanups have already merged, including in #11911. Tracking issues
+[#11864](https://github.com/LionSR/TeXRA/issues/11864) and
+[#11866](https://github.com/LionSR/TeXRA/issues/11866) remain open, which
+does not mean their implementations are absent. The nine decisions
 of section 17 no longer gate a lane start: lanes 1 and 2 implement decisions
 1 and 9, lane 6 implements decision 7, and all three have shipped. Decision
 9 is still the one to read first: it rules that a `StreamTabId` names a run

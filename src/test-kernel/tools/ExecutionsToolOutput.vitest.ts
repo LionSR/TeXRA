@@ -11,8 +11,8 @@ import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 // Local imports
 import {
   getExecutionStore,
+  getExecutionRecords,
   registerExecution,
-  writeWorkflowExecutionSnapshot,
 } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
@@ -24,6 +24,8 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecResult,
+  type ExecutionId,
+  type WorkflowExecutionSnapshot,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -37,6 +39,20 @@ import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';
 import { generateExecutionId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
+
+function writeWorkflowExecutionSnapshot(
+  session: ReturnType<typeof defaultSession>,
+  executionId: ExecutionId,
+  workflow: WorkflowExecutionSnapshot,
+) {
+  return session.commit([
+    {
+      type: 'execution.workflow',
+      aggregateId: aggregateId('execution', executionId),
+      workflow,
+    },
+  ]);
+}
 
 // Local file imports
 import {
@@ -143,18 +159,21 @@ async function registerProcessExecution(
 ): Promise<{ executionId: string; streamId: StreamTabId }> {
   const executionId = generateExecutionId();
   const streamId = `bash@tool#${executionId}` as StreamTabId;
-  await registerExecution(
-    executionId,
-    AgentConfigSchema.parse({
-      agent: 'bash',
-      instruction,
-      agentCategory: AgentCategory.ToolUse,
-    }),
-    'bash',
-    {
-      streamId,
-      identity: { kind: 'process', tool: 'bash' },
-    },
+  await Effect.runPromise(
+    registerExecution(
+      defaultSession(),
+      executionId,
+      AgentConfigSchema.parse({
+        agent: 'bash',
+        instruction,
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      'bash',
+      {
+        streamId,
+        identity: { kind: 'process', tool: 'bash' },
+      },
+    ),
   );
   return { executionId, streamId };
 }
@@ -165,18 +184,21 @@ async function registerWorkflowExecution(
   model?: string,
 ): Promise<string> {
   const executionId = generateExecutionId();
-  await registerExecution(
-    executionId,
-    {
+  await Effect.runPromise(
+    registerExecution(
+      defaultSession(),
+      executionId,
+      {
+        name,
+        instruction: `Workflow script ${name}`,
+        ...(model ? { model } : {}),
+      },
       name,
-      instruction: `Workflow script ${name}`,
-      ...(model ? { model } : {}),
-    },
-    name,
-    {
-      streamId: `workflow-script#${executionId}` as StreamTabId,
-      identity: { kind: 'multiAgentWorkflow', workflowName: name },
-    },
+      {
+        streamId: `workflow-script#${executionId}` as StreamTabId,
+        identity: { kind: 'multiAgentWorkflow', workflowName: name },
+      },
+    ),
   );
   return executionId;
 }
@@ -301,7 +323,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     const { executionId, streamId } =
       await registerProcessExecution('legacy command');
     const session = defaultSession();
-    publishTestRunStart(session, streamId, executionId);
     let seqNo = 0;
     const append = (
       id: string,
@@ -414,31 +435,34 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     );
   });
 
-  it('points at /report when a process execution has no retained stream log', async () => {
+  it('points at /report when a registered process has no output yet', async () => {
     const { executionId } = await registerProcessExecution('sleep 1');
 
     const result = await readOutput(executionId);
 
     assert.equal(result.status, 'executed');
     const output = result.output ?? '';
-    assert.ok(output.includes('No retained output'));
+    assert.ok(output.includes('0 retained transcript chars'));
     assert.ok(output.includes(`/executions/${executionId}/report`));
   });
 
   it('points a non-process execution at /conversation instead of dumping its transcript', async () => {
     const executionId = generateExecutionId();
-    await registerExecution(
-      executionId,
-      AgentConfigSchema.parse({
-        agent: 'chat',
-        instruction: 'Check the proof.',
-        agentCategory: AgentCategory.ToolUse,
-      }),
-      'chat',
-      {
-        streamId: `chat@model#${executionId}` as StreamTabId,
-        identity: { kind: 'agent', agent: 'chat' },
-      },
+    await Effect.runPromise(
+      registerExecution(
+        defaultSession(),
+        executionId,
+        AgentConfigSchema.parse({
+          agent: 'chat',
+          instruction: 'Check the proof.',
+          agentCategory: AgentCategory.ToolUse,
+        }),
+        'chat',
+        {
+          streamId: `chat@model#${executionId}` as StreamTabId,
+          identity: { kind: 'agent', agent: 'chat' },
+        },
+      ),
     );
 
     const result = await readOutput(executionId);
@@ -460,64 +484,66 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       { length: 513 },
       (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
     );
-    await writeWorkflowExecutionSnapshot(executionId, {
-      lifecycle: 'active',
-      currentStageId: longStageId,
-      stages: [
-        {
-          id: longStageId,
-          title: longTitle,
-          order: 0,
-          lifecycle: 'active',
-          startedAt: timestamp,
-        },
-      ],
-      calls: [
-        {
-          id: longCallId,
-          label: '   ',
-          stageId: longStageId,
-          agent: 'writer',
-          files: { input: longFiles, context: [], media: [] },
-          childExecutionId: 'abcdef123456',
-          attempts: [
-            {
-              number: 1,
-              id: '111111111111',
-              startedAt: timestamp,
-              completedAt: timestamp,
-            },
-            {
-              number: 2,
-              id: '222222222222',
-              childStreamId: 'writer#222222222222',
-              model: 'historical-model',
-              costUsd: 0.2,
-              startedAt: timestamp,
-              completedAt: timestamp,
-            },
-            {
-              number: 3,
-              id: 'abcdef123456',
-              childStreamId: 'writer#abcdef123456',
-              model: 'replacement-model',
-              costUsd: 0.3,
-              startedAt: timestamp,
-              completedAt: timestamp,
-            },
-          ],
-          status: 'failed',
-          error: longError,
-          timestamps: {
-            createdAt: timestamp,
+    await Effect.runPromise(
+      writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+        lifecycle: 'active',
+        currentStageId: longStageId,
+        stages: [
+          {
+            id: longStageId,
+            title: longTitle,
+            order: 0,
+            lifecycle: 'active',
             startedAt: timestamp,
-            updatedAt: timestamp,
-            completedAt: timestamp,
           },
-        },
-      ],
-      timestamps: { createdAt: timestamp, updatedAt: timestamp },
-    });
+        ],
+        calls: [
+          {
+            id: longCallId,
+            label: '   ',
+            stageId: longStageId,
+            agent: 'writer',
+            files: { input: longFiles, context: [], media: [] },
+            childExecutionId: 'abcdef123456',
+            attempts: [
+              {
+                number: 1,
+                id: '111111111111',
+                startedAt: timestamp,
+                completedAt: timestamp,
+              },
+              {
+                number: 2,
+                id: '222222222222',
+                childStreamId: 'writer#222222222222',
+                model: 'historical-model',
+                costUsd: 0.2,
+                startedAt: timestamp,
+                completedAt: timestamp,
+              },
+              {
+                number: 3,
+                id: 'abcdef123456',
+                childStreamId: 'writer#abcdef123456',
+                model: 'replacement-model',
+                costUsd: 0.3,
+                startedAt: timestamp,
+                completedAt: timestamp,
+              },
+            ],
+            status: 'failed',
+            error: longError,
+            timestamps: {
+              createdAt: timestamp,
+              startedAt: timestamp,
+              updatedAt: timestamp,
+              completedAt: timestamp,
+            },
+          },
+        ],
+        timestamps: { createdAt: timestamp, updatedAt: timestamp },
+      }),
+    );
 
     const result = await new ExecutionsTool().call({
       path: `/executions/${executionId}`,
@@ -541,38 +567,46 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(!output.includes('error-tail'));
     assert.ok(!output.includes('file-tail'));
     assert.ok(output.length < 20_000);
-    assert.ok((await getExecutionStore(executionId).readMeta())?.workflow);
+    assert.ok(
+      (
+        await Effect.runPromise(
+          getExecutionRecords(defaultSession(), executionId).readMeta(),
+        )
+      )?.workflow,
+    );
   });
 
   it('keeps cancellation reasons on the aggregate and omits per-call error', async () => {
     const executionId = await registerWorkflowExecution('cancelled-summary');
     const timestamp = new Date().toISOString();
-    await writeWorkflowExecutionSnapshot(executionId, {
-      lifecycle: 'cancelled',
-      stages: [],
-      calls: [
-        {
-          id: 'cancelled-call',
-          label: 'Cancelled call',
-          issued: true,
-          kind: 'document',
-          files: { input: [], context: [], media: [] },
-          attempts: [],
-          status: 'cancelled',
-          timestamps: {
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            completedAt: timestamp,
+    await Effect.runPromise(
+      writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+        lifecycle: 'cancelled',
+        stages: [],
+        calls: [
+          {
+            id: 'cancelled-call',
+            label: 'Cancelled call',
+            issued: true,
+            kind: 'document',
+            files: { input: [], context: [], media: [] },
+            attempts: [],
+            status: 'cancelled',
+            timestamps: {
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              completedAt: timestamp,
+            },
           },
+        ],
+        error: 'Workflow cancelled by user.',
+        timestamps: {
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          completedAt: timestamp,
         },
-      ],
-      error: 'Workflow cancelled by user.',
-      timestamps: {
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        completedAt: timestamp,
-      },
-    });
+      }),
+    );
 
     const result = await new ExecutionsTool().call({
       path: `/executions/${executionId}`,
@@ -605,52 +639,54 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       };
     });
     const failedAt = new Date(base).toISOString();
-    await writeWorkflowExecutionSnapshot(executionId, {
-      lifecycle: 'active',
-      currentStageId: 'stage-2',
-      stages: [
-        {
-          id: 'stage-1',
-          title: 'Earlier stage',
-          order: 0,
-          lifecycle: 'failed',
-          startedAt: failedAt,
-          completedAt: failedAt,
-        },
-        {
-          id: 'stage-2',
-          title: 'Current stage',
-          order: 1,
-          lifecycle: 'active',
-          startedAt: failedAt,
-        },
-      ],
-      calls: [
-        {
-          id: 'older-failed',
-          label: 'Older failed',
-          stageId: 'stage-1',
-          files: { input: [], context: [], media: [] },
-          attempts: [
-            {
-              number: 1,
-              startedAt: failedAt,
-              completedAt: failedAt,
-            },
-          ],
-          status: 'failed',
-          error: 'expected failure',
-          timestamps: {
-            createdAt: failedAt,
+    await Effect.runPromise(
+      writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+        lifecycle: 'active',
+        currentStageId: 'stage-2',
+        stages: [
+          {
+            id: 'stage-1',
+            title: 'Earlier stage',
+            order: 0,
+            lifecycle: 'failed',
             startedAt: failedAt,
-            updatedAt: failedAt,
             completedAt: failedAt,
           },
-        },
-        ...completedCalls,
-      ],
-      timestamps: { createdAt: failedAt, updatedAt: failedAt },
-    });
+          {
+            id: 'stage-2',
+            title: 'Current stage',
+            order: 1,
+            lifecycle: 'active',
+            startedAt: failedAt,
+          },
+        ],
+        calls: [
+          {
+            id: 'older-failed',
+            label: 'Older failed',
+            stageId: 'stage-1',
+            files: { input: [], context: [], media: [] },
+            attempts: [
+              {
+                number: 1,
+                startedAt: failedAt,
+                completedAt: failedAt,
+              },
+            ],
+            status: 'failed',
+            error: 'expected failure',
+            timestamps: {
+              createdAt: failedAt,
+              startedAt: failedAt,
+              updatedAt: failedAt,
+              completedAt: failedAt,
+            },
+          },
+          ...completedCalls,
+        ],
+        timestamps: { createdAt: failedAt, updatedAt: failedAt },
+      }),
+    );
 
     const result = await new ExecutionsTool().call({
       path: `/executions/${executionId}`,
@@ -679,44 +715,46 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         completedAt: timestamp,
       },
     }));
-    await writeWorkflowExecutionSnapshot(executionId, {
-      lifecycle: 'active',
-      currentStageId: 'stage-2',
-      stages: [
-        {
-          id: 'stage-1',
-          title: 'Earlier stage',
-          order: 0,
-          lifecycle: 'completed',
-          startedAt: timestamp,
-          completedAt: timestamp,
-        },
-        {
-          id: 'stage-2',
-          title: 'Current stage',
-          order: 1,
-          lifecycle: 'active',
-          startedAt: timestamp,
-        },
-      ],
-      calls: [
-        ...terminalCalls,
-        {
-          id: 'earlier-live',
-          label: 'Earlier live',
-          stageId: 'stage-1',
-          files: { input: [], context: [], media: [] },
-          attempts: [{ number: 1, startedAt: timestamp }],
-          status: 'running',
-          timestamps: {
-            createdAt: timestamp,
+    await Effect.runPromise(
+      writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+        lifecycle: 'active',
+        currentStageId: 'stage-2',
+        stages: [
+          {
+            id: 'stage-1',
+            title: 'Earlier stage',
+            order: 0,
+            lifecycle: 'completed',
             startedAt: timestamp,
-            updatedAt: timestamp,
+            completedAt: timestamp,
           },
-        },
-      ],
-      timestamps: { createdAt: timestamp, updatedAt: timestamp },
-    });
+          {
+            id: 'stage-2',
+            title: 'Current stage',
+            order: 1,
+            lifecycle: 'active',
+            startedAt: timestamp,
+          },
+        ],
+        calls: [
+          ...terminalCalls,
+          {
+            id: 'earlier-live',
+            label: 'Earlier live',
+            stageId: 'stage-1',
+            files: { input: [], context: [], media: [] },
+            attempts: [{ number: 1, startedAt: timestamp }],
+            status: 'running',
+            timestamps: {
+              createdAt: timestamp,
+              startedAt: timestamp,
+              updatedAt: timestamp,
+            },
+          },
+        ],
+        timestamps: { createdAt: timestamp, updatedAt: timestamp },
+      }),
+    );
 
     const result = await new ExecutionsTool().call({
       path: `/executions/${executionId}`,

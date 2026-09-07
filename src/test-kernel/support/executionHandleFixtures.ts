@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import {
@@ -50,7 +52,9 @@ export function testExecutionRegistry(): ExecutionRegistry {
     streamStatus,
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     publishResult: () => {},
-    releaseRootExecutionLease: async () => {},
+    releaseRootExecutionLease: () => Effect.void,
+    finalizeExecution: (input) =>
+      Effect.succeed({ ok: true, outcome: input.outcome }),
   });
   return registry;
 }

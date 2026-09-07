@@ -1,3 +1,5 @@
+import { Cause, Effect } from 'effect';
+
 import type { FinalizeExecutionInput } from '@agent/storage';
 import {
   logSdkError,
@@ -44,6 +46,7 @@ import {
   setFirstRunDone,
 } from '@shared/state/onboardingState';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { ensureError } from '@utils/errors/errorMessage';
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import {
   buildTerminalFlowResult,
@@ -112,6 +115,7 @@ export type RunTerminalPersistence =
     };
 
 interface FinalizeRunTerminalParams {
+  readonly session: SessionHandle;
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
   readonly handle: AgentExecutionHandle;
   /** Registry tracking the handle; untracked after the delivery hook runs. */
@@ -177,9 +181,9 @@ interface FinalizeRunTerminalResult {
  * gate (`AgentExecutionHandle.beginSuspendedTermination`), so a kill landing
  * mid-finalize cannot publish a second, contradictory outcome either.
  */
-export async function finalizeRunTerminal(
+export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   params: FinalizeRunTerminalParams,
-): Promise<FinalizeRunTerminalResult | undefined> {
+): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error> {
   const { handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
   // The stream phase is the single owner of a run's terminal outcome, so
@@ -198,7 +202,7 @@ export async function finalizeRunTerminal(
   const error = outcome === params.outcome ? params.error : undefined;
   if (params.persistence.kind === 'finalize') {
     const { flowRecord } = params.persistence;
-    const finalization = await finalizeRun({
+    const finalization = yield* finalizeRun(params.session, {
       executionId: handle.executionId,
       outcome,
       flowRecord:
@@ -216,22 +220,33 @@ export async function finalizeRunTerminal(
     }
   }
   if (params.stage) {
-    try {
-      params.stage.end(outcome);
-    } catch (stageErr) {
-      logger.warn('Failed to end parent stage', {
-        data: { agentIdentifier: handle.agentName, error: stageErr },
-      });
-    }
+    const stage = params.stage;
+    yield* Effect.try({
+      try: () => stage.end(outcome),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((stageErr) =>
+        Effect.sync(() => {
+          logger.warn('Failed to end parent stage', {
+            data: { agentIdentifier: handle.agentName, error: stageErr },
+          });
+        }),
+      ),
+    );
   }
   if (params.flushArtifacts) {
-    try {
-      await params.flushArtifacts();
-    } catch (artifactError) {
-      logger.warn('Failed to persist pre-terminal display artifacts', {
-        data: { executionId: handle.executionId, error: artifactError },
-      });
-    }
+    yield* Effect.tryPromise({
+      try: params.flushArtifacts,
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((artifactError) =>
+        Effect.sync(() => {
+          logger.warn('Failed to persist pre-terminal display artifacts', {
+            data: { executionId: handle.executionId, error: artifactError },
+          });
+        }),
+      ),
+    );
   }
   // Emit the terminal result BEFORE untrack so the registry's terminal
   // listener event never precedes the result event, and settle the handle's
@@ -252,45 +267,58 @@ export async function finalizeRunTerminal(
   params.trace?.emit(event);
   handle.settleResult(event);
   if (params.deliver) {
-    try {
-      await params.deliver(outcome);
-    } catch (deliveryError) {
-      logger.warn('Terminal delivery hook failed', {
-        data: { agentIdentifier: handle.agentName, error: deliveryError },
-      });
-    }
+    const deliver = params.deliver;
+    yield* Effect.tryPromise({
+      try: async () => deliver(outcome),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((deliveryError) =>
+        Effect.sync(() => {
+          logger.warn('Terminal delivery hook failed', {
+            data: { agentIdentifier: handle.agentName, error: deliveryError },
+          });
+        }),
+      ),
+    );
   }
   // The run has produced its canonical terminal result. Guard the cleanup so
   // a throw from untrack's listeners or a stream-status host emit cannot
   // escape past an already-settled result.
-  try {
-    params.executions.untrack(handle.executionId);
-    // Refused only when the phase turned terminal after the resolution above,
-    // i.e. a stop that landed across this function's own awaits. The phase
-    // keeps its own value; the divergence from the published result is real
-    // and must stay loud.
-    if (
-      !params.streamStatus.transitionToTerminal(
-        handle.childStreamId,
-        outcome,
-        STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      )
-    ) {
-      logger.warn('Failed to set terminal stream status', {
-        data: {
-          agentIdentifier: handle.agentName,
-          streamId: handle.childStreamId,
-          status: outcome,
-        },
-      });
-    }
-  } catch (cleanupErr) {
-    logger.warn('Post-terminal cleanup threw', {
-      data: { agentIdentifier: handle.agentName, error: cleanupErr },
-    });
-  }
+  yield* Effect.try({
+    try: () => {
+      params.executions.untrack(handle.executionId);
+      // Refused only when the phase turned terminal after the resolution above,
+      // i.e. a stop that landed across this function's own awaits. The phase
+      // keeps its own value; the divergence from the published result is real
+      // and must stay loud.
+      if (
+        !params.streamStatus.transitionToTerminal(
+          handle.childStreamId,
+          outcome,
+          STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        )
+      ) {
+        logger.warn('Failed to set terminal stream status', {
+          data: {
+            agentIdentifier: handle.agentName,
+            streamId: handle.childStreamId,
+            status: outcome,
+          },
+        });
+      }
+    },
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((cleanupErr) =>
+      Effect.sync(() => {
+        logger.warn('Post-terminal cleanup threw', {
+          data: { agentIdentifier: handle.agentName, error: cleanupErr },
+        });
+      }),
+    ),
+  );
   return { event };
-}
+});
 
 /** Failures finalizeFailedRun already logged, published, and wrapped; the
  *  outer catch rethrows these untouched instead of finalizing them again. */
@@ -420,19 +448,22 @@ function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
 }
 
 /** Close a suspended run's stage through its session after its trace detached. */
-async function closeSuspendedTranscriptGroup(
+const closeSuspendedTranscriptGroup = Effect.fn(function* (
   session: SessionHandle,
   streamId: StreamTabId,
   parentStageId: string | undefined,
-): Promise<void> {
+): Effect.fn.Return<void, Error> {
   if (!parentStageId) return;
   session.publishRunEvent(streamId, {
     type: 'stage.end',
     id: parentStageId,
     status: RUN_OUTCOME.CANCELLED,
   });
-  await session.settlePublications();
-}
+  yield* Effect.tryPromise({
+    try: () => session.settlePublications(),
+    catch: ensureError,
+  });
+});
 
 /**
  * Wraps a flow runner with full agent run lifecycle management: execution
@@ -443,342 +474,394 @@ async function closeSuspendedTranscriptGroup(
  * routing while this module owns the invariants that must hold across every
  * agent run (registration, status accounting, error surfacing, cleanup).
  */
-export async function runFlowWithLifecycle(
-  ctx: AgentLaunchContext,
-  runner: (
-    handle: AgentExecutionHandle,
-    lifecycle: FlowLifecycleControl,
-  ) => Promise<AgentRuntimeFlowResult>,
-  options?: RunFlowLifecycleOptions,
-): Promise<AgentRuntimeFlowResult> {
-  const { streamId, executionId, session } = ctx.runScope;
-  const agentIdentifier = ctx.config.agent;
-  const parentStreamId = options?.parentStreamId ?? streamId;
-  const handle = new AgentExecutionHandle(
-    {
-      streamId,
-      executionId,
-      identity: { kind: 'agent', agent: agentIdentifier },
-      category: ctx.setting.agentCategory,
-    },
-    parentStreamId,
-    ctx.logger,
-  );
-  // Roster display fields must be on the handle BEFORE it is tracked:
-  // `track()` emits `child.activity` synchronously, so anything assigned
-  // later (e.g. from `onRun`) misses the parent's first roster snapshot.
-  if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
-  const runInterruptHandler = {
-    interrupt(): void {
-      ctx.interrupt();
-      session.interactions.cancel({
+export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
+  function* (
+    ctx: AgentLaunchContext,
+    runner: (
+      handle: AgentExecutionHandle,
+      lifecycle: FlowLifecycleControl,
+    ) => Promise<AgentRuntimeFlowResult>,
+    options?: RunFlowLifecycleOptions,
+  ): Effect.fn.Return<AgentRuntimeFlowResult, Error> {
+    const { streamId, executionId, session } = ctx.runScope;
+    const agentIdentifier = ctx.config.agent;
+    const parentStreamId = options?.parentStreamId ?? streamId;
+    const handle = new AgentExecutionHandle(
+      {
         streamId,
-        cause: 'Run interrupted.',
-      });
-    },
-  };
-  const detachRunInterrupt = handle.attachInterruptHandler(runInterruptHandler);
-  session.executions.track(handle);
-  // A lease record removed out from under this run is not watched: the next
-  // fenced write throws `ExecutionLeaseLostError` and the run aborts dirty.
-  let suspended = false;
-  let flowRecordDisposition: FlowRecordDisposition | undefined;
-  const lifecycleControl: FlowLifecycleControl = {
-    setFlowRecordDisposition(disposition): void {
-      flowRecordDisposition = disposition;
-    },
-  };
-  // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
-  // throw nor an async rejection from a consumer callback may abort the run.
-  if (options?.onRun) {
-    try {
-      void Promise.resolve(options.onRun(handle)).catch((err: unknown) =>
-        logger.warn('onRun callback rejected', {
-          data: { agentIdentifier, error: err },
-        }),
-      );
-    } catch (err) {
-      logger.warn('onRun callback threw', {
-        data: { agentIdentifier, error: err },
-      });
-    }
-  }
-  // Shared parameterization of the terminal finalizer for both arms below;
-  // outcome, error facts, and the delivery hook are the only per-arm inputs.
-  const finalizeTerminal = (arm: {
-    outcome: RunOutcome;
-    error?: ResultEvent['error'];
-    deliver?: (outcome: RunOutcome) => void | Promise<void>;
-  }): Promise<FinalizeRunTerminalResult | undefined> =>
-    finalizeRunTerminal({
-      handle,
-      executions: session.executions,
-      streamStatus: session.status,
-      usage: ctx.usageMonitor.lastTotals(),
-      isSubagent: options?.isSubagent ?? false,
-      stage: ctx.parentStage,
-      trace: ctx.logger,
-      flushArtifacts: () => session.flushArtifacts(),
-      persistence: {
-        kind: 'finalize',
-        // Tool-use flows report the exact recovery decision through the
-        // private lifecycle control. Other flows retain the historical
-        // policy, read against the outcome finalization resolves rather
-        // than this arm's report.
-        flowRecord: flowRecordDisposition ?? retainFlowRecordUnlessCompleted,
+        executionId,
+        identity: { kind: 'agent', agent: agentIdentifier },
+        category: ctx.setting.agentCategory,
       },
-      ...arm,
-    });
-  /**
-   * The single owner of provider/runtime failure exits, entered from both arms
-   * below: a flow carrying structured error metadata and an exception that
-   * escaped the runner. Outcome-only domain failures bypass classification and
-   * finalize through the ordinary terminal-result path without a fabricated
-   * RetryErrorInfo.
-   */
-  const finalizeFailedRun = async (
-    err: unknown,
-    carried: AgentFlowResult | undefined,
-  ): Promise<AgentFlowResult> => {
-    const kind = classifyAgentError(err);
-    const outcome = AGENT_ERROR_OUTCOME[kind];
-    // normalizeProviderError recovers the structured shape the flow attached
-    // (T2-2) when there was one, or formats a fresh one otherwise.
-    // toRetryErrorInfo strips rawErrorBody — the ResultEvent.error type omits
-    // it (bulky, not worth persisting) and a bare object spread would silently
-    // smuggle it through past the type check.
-    const { message: sdkMsg, ...providerErrorInfo } = toRetryErrorInfo(
-      normalizeProviderError(err),
+      parentStreamId,
+      ctx.logger,
     );
-    const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
-
-    // Root-agent failures are surfaced in the stream log. Subagent failures
-    // are delivered to the orchestrator below, so avoid adding a second
-    // wrapper error that makes a child failure look like the parent failed.
-    if (kind !== 'abort' && !options?.isSubagent) {
-      logSdkError(ctx.logger, errorMsg, err, {
-        operation: `execute ${agentIdentifier}`,
-      });
+    // Roster display fields must be on the handle BEFORE it is tracked:
+    // `track()` emits `child.activity` synchronously, so anything assigned
+    // later (e.g. from `onRun`) misses the parent's first roster snapshot.
+    if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
+    const runInterruptHandler = {
+      interrupt(): void {
+        ctx.interrupt();
+        session.interactions.cancel({
+          streamId,
+          cause: 'Run interrupted.',
+        });
+      },
+    };
+    const detachRunInterrupt =
+      handle.attachInterruptHandler(runInterruptHandler);
+    session.executions.track(handle);
+    // A lease record removed out from under this run is not watched: the next
+    // fenced write throws `ExecutionLeaseLostError` and the run aborts dirty.
+    let suspended = false;
+    let flowRecordDisposition: FlowRecordDisposition | undefined;
+    const lifecycleControl: FlowLifecycleControl = {
+      setFlowRecordDisposition(disposition): void {
+        flowRecordDisposition = disposition;
+      },
+    };
+    // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
+    // throw nor an async rejection from a consumer callback may abort the run.
+    if (options?.onRun) {
+      const onRun = options.onRun;
+      // Start observation at the same time as invocation. The callback may
+      // await handle.result, so its observer must not hold up the flow.
+      yield* Effect.tryPromise({
+        try: async () => onRun(handle),
+        catch: ensureError,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logger.warn('onRun callback failed', {
+              data: { agentIdentifier, error },
+            });
+          }),
+        ),
+        Effect.forkDetach({ startImmediately: true }),
+      );
     }
+    // Shared parameterization of the terminal finalizer for both arms below;
+    // outcome, error facts, and the delivery hook are the only per-arm inputs.
+    const finalizeTerminal = (arm: {
+      outcome: RunOutcome;
+      error?: ResultEvent['error'];
+      deliver?: (outcome: RunOutcome) => void | Promise<void>;
+    }) =>
+      finalizeRunTerminal({
+        session,
+        handle,
+        executions: session.executions,
+        streamStatus: session.status,
+        usage: ctx.usageMonitor.lastTotals(),
+        isSubagent: options?.isSubagent ?? false,
+        stage: ctx.parentStage,
+        trace: ctx.logger,
+        flushArtifacts: () => session.flushArtifacts(),
+        persistence: {
+          kind: 'finalize',
+          // Tool-use flows report the exact recovery decision through the
+          // private lifecycle control. Other flows retain the historical
+          // policy, read against the outcome finalization resolves rather
+          // than this arm's report.
+          flowRecord: flowRecordDisposition ?? retainFlowRecordUnlessCompleted,
+        },
+        ...arm,
+      });
+    /**
+     * The single owner of provider/runtime failure exits, entered from both arms
+     * below: a flow carrying structured error metadata and an exception that
+     * escaped the runner. Outcome-only domain failures bypass classification and
+     * finalize through the ordinary terminal-result path without a fabricated
+     * RetryErrorInfo.
+     */
+    const finalizeFailedRun = Effect.fn(function* (
+      err: unknown,
+      carried: AgentFlowResult | undefined,
+    ) {
+      const kind = classifyAgentError(err);
+      const outcome = AGENT_ERROR_OUTCOME[kind];
+      // normalizeProviderError recovers the structured shape the flow attached
+      // (T2-2) when there was one, or formats a fresh one otherwise.
+      // toRetryErrorInfo strips rawErrorBody, the ResultEvent.error type omits
+      // it (bulky, not worth persisting) and a bare object spread would silently
+      // smuggle it through past the type check.
+      const { message: sdkMsg, ...providerErrorInfo } = toRetryErrorInfo(
+        normalizeProviderError(err),
+      );
+      const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
 
-    const message = kind === 'unexpected' ? errorMsg : sdkMsg;
-    // `abort`/`disk-full` route through `formatProviderHttpError`'s
-    // `terminalError()` branch, which never populates the provider/
-    // credential fields — narrow to the fields it actually sets so
-    // `ResultEvent.error`'s per-kind union stays honest (see events.ts).
-    // Abort still carries the SDK message for event consumers; the toast
-    // mapper intentionally suppresses user-facing notifications for aborts.
-    const error: NonNullable<ResultEvent['error']> =
-      kind === 'abort' || kind === 'disk-full'
-        ? {
-            kind,
-            message,
-            userRetryable: providerErrorInfo.userRetryable,
-            streamDiagnostics: providerErrorInfo.streamDiagnostics,
-            partialText: providerErrorInfo.partialText,
-          }
-        : {
-            kind,
-            message,
-            ...providerErrorInfo,
-          };
-    const subagentResult = options?.isSubagent
-      ? (carried ??
-        buildTerminalFlowResult(
+      // Root-agent failures are surfaced in the stream log. Subagent failures
+      // are delivered to the orchestrator below, so avoid adding a second
+      // wrapper error that makes a child failure look like the parent failed.
+      if (kind !== 'abort' && !options?.isSubagent) {
+        logSdkError(ctx.logger, errorMsg, err, {
+          operation: `execute ${agentIdentifier}`,
+        });
+      }
+
+      const message = kind === 'unexpected' ? errorMsg : sdkMsg;
+      // `abort`/`disk-full` route through `formatProviderHttpError`'s
+      // `terminalError()` branch, which never populates the provider/
+      // credential fields, narrow to the fields it actually sets so
+      // `ResultEvent.error`'s per-kind union stays honest (see events.ts).
+      // Abort still carries the SDK message for event consumers; the toast
+      // mapper intentionally suppresses user-facing notifications for aborts.
+      const error: NonNullable<ResultEvent['error']> =
+        kind === 'abort' || kind === 'disk-full'
+          ? {
+              kind,
+              message,
+              userRetryable: providerErrorInfo.userRetryable,
+              streamDiagnostics: providerErrorInfo.streamDiagnostics,
+              partialText: providerErrorInfo.partialText,
+            }
+          : {
+              kind,
+              message,
+              ...providerErrorInfo,
+            };
+      const subagentResult = options?.isSubagent
+        ? (carried ??
+          buildTerminalFlowResult(
+            handle.category,
+            outcome,
+            executionId,
+            streamId,
+            ctx.attachedMemoryMisses,
+          ))
+        : undefined;
+      // One finalize covers all three exits below (subagent / abort / throw).
+      // No-ops entirely when the success arm already finalized, so a
+      // post-completion throw cannot double-publish a contradictory result.
+      // Terminal-error toasts are not emitted here: hosts present them from the
+      // `result` event via `session.onResult` + `terminalResultToast` (the
+      // single decision point), keeping the run-lifecycle out of host UI.
+      const finalized = yield* finalizeTerminal({
+        outcome,
+        error,
+        deliver:
+          subagentResult && options?.onError
+            ? (resolved) =>
+                options.onError?.(
+                  err,
+                  withResolvedOutcome(subagentResult, resolved),
+                )
+            : undefined,
+      });
+      // The finalizer resolved this run's terminal fact; the exits below report
+      // the same one it published. It returns nothing only when the success arm
+      // already finalized, and then this arm's report is all this exit knows.
+      const resolvedOutcome = finalized?.event.outcome ?? outcome;
+
+      if (subagentResult) {
+        return withResolvedOutcome(subagentResult, resolvedOutcome);
+      }
+      if (kind === 'abort') {
+        return buildTerminalFlowResult(
           handle.category,
-          outcome,
+          resolvedOutcome,
           executionId,
           streamId,
           ctx.attachedMemoryMisses,
-        ))
-      : undefined;
-    // One finalize covers all three exits below (subagent / abort / throw).
-    // No-ops entirely when the success arm already finalized, so a
-    // post-completion throw cannot double-publish a contradictory result.
-    // Terminal-error toasts are not emitted here: hosts present them from the
-    // `result` event via `session.onResult` + `terminalResultToast` (the
-    // single decision point), keeping the run-lifecycle out of host UI.
-    const finalized = await finalizeTerminal({
-      outcome,
-      error,
-      deliver:
-        subagentResult && options?.onError
-          ? (resolved) =>
-              options.onError?.(
-                err,
-                withResolvedOutcome(subagentResult, resolved),
-              )
-          : undefined,
-    });
-    // The finalizer resolved this run's terminal fact; the exits below report
-    // the same one it published. It returns nothing only when the success arm
-    // already finalized, and then this arm's report is all this exit knows.
-    const resolvedOutcome = finalized?.event.outcome ?? outcome;
-
-    if (subagentResult) {
-      return withResolvedOutcome(subagentResult, resolvedOutcome);
-    }
-    if (kind === 'abort') {
-      return buildTerminalFlowResult(
-        handle.category,
-        resolvedOutcome,
-        executionId,
-        streamId,
-        ctx.attachedMemoryMisses,
-      );
-    }
-
-    const finalizedFailure = new AgentError(errorMsg, { cause: err });
-    finalizedRunFailures.add(finalizedFailure);
-    throw finalizedFailure;
-  };
-  /**
-   * Invoke the composition-supplied run-end hook when the run genuinely ends.
-   * The lifecycle owns the guard rails: the WAITING branch invokes it only
-   * from the parked-handle teardown if a later kill actually ends the run.
-   */
-  const runOnRunEnd = async (): Promise<void> => {
-    if (!options?.onRunEnd) return;
-    try {
-      await options.onRunEnd(executionId);
-    } catch (runEndError) {
-      logger.warn('Failed to run the run-end hook', {
-        data: { agentIdentifier, streamId, error: runEndError },
-      });
-    }
-  };
-  try {
-    // `run.start` is already out: the launch context published it at its
-    // reservation commit point. Publish the run config before the RUNNING
-    // transition so progress backends can create the initial
-    // StreamExecutionState with the real category when the transition-owned
-    // run-start side effects fire.
-    ctx.logger.emit({
-      type: 'run.config',
-      streamId,
-      executionId,
-      config: ctx.config,
-    });
-    // The lifecycle owns every stream-status transition: the start claim here,
-    // terminal states in the success/error arms below. Runners must not
-    // set stream status themselves. Either branch leaves the stream carrying
-    // this run's own phase, which is what makes the terminal phase a verdict
-    // about this run rather than whatever the last one left behind.
-    if (ctx.runScope.signal.aborted) {
-      transitionStopBeforeRunStart(ctx);
-    } else {
-      transitionRunStart(ctx);
-    }
-    let result: AgentRuntimeFlowResult;
-    try {
-      result = await runner(handle, lifecycleControl);
-    } finally {
-      // Once the runner settles there is no live run operation left to abort.
-      // Refuse later stops while terminal persistence completes, matching the
-      // registry contract that an interrupt target represents live work.
-      detachRunInterrupt();
-    }
-    if (isWaitingFlowResult(result)) {
-      suspended = true;
-      logger.debug(`Task suspended with outcome: ${result.outcome}`);
-      // The handle stays tracked (correct for resume) but the live tool-use
-      // session and its interrupt handler are already gone by the time
-      // this returns (runToolUseFlow's finally). Parking the handle is the
-      // one place this run is recorded as suspended, and carries the teardown
-      // a stop/kill runs instead of the absent interrupt target — see
-      // AgentRunLifecycle/ExecutionRegistry issue #7287.
-      handle.suspend(async () => {
-        session.followUps.terminalize(streamId);
-        // The run trace has detached; publish its stage close through the session.
-        try {
-          await closeSuspendedTranscriptGroup(
-            session,
-            streamId,
-            ctx.parentStage.id,
-          );
-        } finally {
-          // A parked run that a later stop/kill tears down has ended here,
-          // through the suspended-handle path instead of the success/error
-          // arms. Lean cleanup is independent of transcript persistence.
-          await runOnRunEnd();
-        }
-      });
-      return result;
-    }
-    // Provider/runtime failures carry structured error metadata and use the
-    // classified failure path. A domain failure may report FAILED without this
-    // field and is finalized below as an outcome-only terminal result.
-    if (result.error) {
-      return await finalizeFailedRun(toFlowFailureError(result.error), result);
-    }
-    // Persist the terminal fact before any supplementary UX state. In
-    // particular, a completed tool-use flow must not remain resumable while an
-    // onboarding write is pending.
-    const finalized = await finalizeTerminal({ outcome: result.outcome });
-    // The phase decides the verdict here exactly as in the catch arm: a stop
-    // that won on the stream must not let the caller observe COMPLETED.
-    const resolvedOutcome = finalized?.event.outcome ?? result.outcome;
-
-    // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
-    // real run completes. The setup conversation itself doesn't count, but the
-    // demo it delegates does (subagent runs land here too). Best-effort: a
-    // state write failure must never affect the run.
-    if (
-      resolvedOutcome === RUN_OUTCOME.COMPLETED &&
-      baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
-    ) {
-      try {
-        const { globalState } = platform();
-        if (!getFirstRunDone(globalState)) {
-          await setFirstRunDone(globalState, true);
-        }
-      } catch {
-        // Ignore: the flag is a UX nicety, never run-critical.
+        );
       }
-    }
 
-    logger.debug(`Task completed with outcome: ${resolvedOutcome}`);
-    return withResolvedOutcome(result, resolvedOutcome);
-  } catch (err) {
-    // A carried failure already went through finalizeFailedRun on the return
-    // path above; its AgentError must not be logged and classified twice.
-    if (err instanceof Error && finalizedRunFailures.has(err)) throw err;
-    return await finalizeFailedRun(err, undefined);
-  } finally {
-    detachRunInterrupt();
-    // Settle every host interaction this run left pending. The lifecycle owns
-    // it for both flows: a run that ends with an approval still on screen must
-    // release the host whether it completed, failed, was stopped, or parked at
-    // WAITING. The interrupt-time cancel a stop performs stays with the
-    // interrupt handler, which has to settle the prompt before the flow can
-    // unwind; a second cancel here matches nothing and is a no-op. Guarded so a
-    // throwing host adapter cannot replace the result this run already
-    // published.
-    try {
-      session.interactions.cancel({ streamId, cause: 'Run ended.' });
-    } catch (cancelError) {
-      logger.warn('Failed to cancel host interactions after the run ended', {
-        data: { agentIdentifier, streamId, error: cancelError },
+      const finalizedFailure = new AgentError(errorMsg, { cause: err });
+      finalizedRunFailures.add(finalizedFailure);
+      return yield* Effect.fail(finalizedFailure);
+    });
+    /**
+     * Invoke the composition-supplied run-end hook when the run genuinely ends.
+     * The lifecycle owns the guard rails: the WAITING branch invokes it only
+     * from the parked-handle teardown if a later kill actually ends the run.
+     */
+    const runOnRunEnd = Effect.gen(function* () {
+      if (!options?.onRunEnd) return;
+      const onRunEnd = options.onRunEnd;
+      yield* Effect.tryPromise({
+        try: async () => onRunEnd(executionId),
+        catch: ensureError,
+      }).pipe(
+        Effect.catch((runEndError) =>
+          Effect.sync(() => {
+            logger.warn('Failed to run the run-end hook', {
+              data: { agentIdentifier, streamId, error: runEndError },
+            });
+          }),
+        ),
+      );
+    });
+    const run = Effect.gen(function* () {
+      // `run.start` is already out: the launch context published it at its
+      // reservation commit point. Publish the run config before the RUNNING
+      // transition so progress backends can create the initial
+      // StreamExecutionState with the real category when the transition-owned
+      // run-start side effects fire.
+      ctx.logger.emit({
+        type: 'run.config',
+        streamId,
+        executionId,
+        config: ctx.config,
       });
-    }
-    // Stop the Lean servers attributed to this run in its worktree(s) so they
-    // do not idle until the timeout after the run is gone (CLI/desktop; a host
-    // whose Lean integration owns server lifetime no-ops here). Servers still
-    // leased by an in-flight request are disposed after their final lease
-    // ends. Guarded like the cancel above: a failing stop must not replace the
-    // result this run already published. A WAITING suspension is not a run
-    // end, so its return skips this and leaves the stop to the suspended-handle
-    // teardown if a later kill actually ends the run.
-    if (!suspended) {
-      await runOnRunEnd();
-    }
-    // Release long-lived resources (e.g., WebSocket connections, keepalive
-    // intervals) to prevent leaks when handler instances are discarded after
-    // execution. The cell disposed each handler a mid-run switch retired, so
-    // this closes the one still live.
-    ctx.modelCell.dispose();
-    // Drop the run-trace subscribers (channel sink + transcript recorder) so
-    // they don't pile up across many agent runs.
-    ctx.disposeTrace();
-  }
-}
+      // The lifecycle owns every stream-status transition: the start claim here,
+      // terminal states in the success/error arms below. Runners must not
+      // set stream status themselves. Either branch leaves the stream carrying
+      // this run's own phase, which is what makes the terminal phase a verdict
+      // about this run rather than whatever the last one left behind.
+      if (ctx.runScope.signal.aborted) {
+        transitionStopBeforeRunStart(ctx);
+      } else {
+        transitionRunStart(ctx);
+      }
+      const flow = yield* Effect.try({
+        try: () => runner(handle, lifecycleControl),
+        catch: ensureError,
+      });
+      const result = yield* Effect.tryPromise({
+        try: () => flow,
+        catch: ensureError,
+      }).pipe(
+        Effect.onInterrupt(() =>
+          Effect.gen(function* () {
+            // The retained Promise flow owns provider work. Signal its real abort
+            // path, then join it before disposing its model and trace resources.
+            runInterruptHandler.interrupt();
+            yield* Effect.promise(() =>
+              flow.then(
+                () => undefined,
+                () => undefined,
+              ),
+            );
+          }),
+        ),
+        Effect.ensuring(Effect.sync(detachRunInterrupt)),
+      );
+      if (isWaitingFlowResult(result)) {
+        suspended = true;
+        logger.debug(`Task suspended with outcome: ${result.outcome}`);
+        // The handle stays tracked (correct for resume) but the live tool-use
+        // session and its interrupt handler are already gone by the time
+        // this returns (runToolUseFlow's finally). Parking the handle is the
+        // one place this run is recorded as suspended, and carries the teardown
+        // a stop/kill runs instead of the absent interrupt target, see
+        // AgentRunLifecycle/ExecutionRegistry issue #7287.
+        handle.suspend(
+          Effect.gen(function* () {
+            session.followUps.terminalize(streamId);
+            // The run trace has detached; publish its stage close through the session.
+            yield* closeSuspendedTranscriptGroup(
+              session,
+              streamId,
+              ctx.parentStage.id,
+            );
+          }).pipe(
+            // A parked run killed later ends here. Run-end cleanup remains
+            // independent of transcript persistence.
+            Effect.ensuring(runOnRunEnd),
+          ),
+        );
+        return result;
+      }
+      // Provider/runtime failures carry structured error metadata and use the
+      // classified failure path. A domain failure may report FAILED without this
+      // field and is finalized below as an outcome-only terminal result.
+      if (result.error) {
+        return yield* finalizeFailedRun(
+          toFlowFailureError(result.error),
+          result,
+        );
+      }
+      // Persist the terminal fact before any supplementary UX state. In
+      // particular, a completed tool-use flow must not remain resumable while an
+      // onboarding write is pending.
+      const finalized = yield* finalizeTerminal({ outcome: result.outcome });
+      // The phase decides the verdict here exactly as in the catch arm: a stop
+      // that won on the stream must not let the caller observe COMPLETED.
+      const resolvedOutcome = finalized?.event.outcome ?? result.outcome;
+
+      // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
+      // real run completes. The setup conversation itself doesn't count, but the
+      // demo it delegates does (subagent runs land here too). Best-effort: a
+      // state write failure must never affect the run.
+      if (
+        resolvedOutcome === RUN_OUTCOME.COMPLETED &&
+        baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
+      ) {
+        yield* Effect.tryPromise({
+          try: async () => {
+            const { globalState } = platform();
+            if (!getFirstRunDone(globalState)) {
+              await setFirstRunDone(globalState, true);
+            }
+          },
+          catch: ensureError,
+        }).pipe(Effect.ignore);
+      }
+
+      logger.debug(`Task completed with outcome: ${resolvedOutcome}`);
+      return withResolvedOutcome(result, resolvedOutcome);
+    });
+    return yield* run.pipe(
+      Effect.catchCause((cause) => {
+        const err = ensureError(Cause.squash(cause));
+        // A failure already classified and published retains its one error path.
+        if (finalizedRunFailures.has(err)) return Effect.fail(err);
+        return finalizeFailedRun(err, undefined);
+      }),
+      Effect.onInterrupt(() =>
+        // The Promise flow has joined its actual abort above. Complete the
+        // owned terminal result before cleanup while retaining interruption.
+        finalizeTerminal({ outcome: RUN_OUTCOME.CANCELLED }).pipe(Effect.orDie),
+      ),
+      Effect.ensuring(
+        Effect.gen(function* () {
+          detachRunInterrupt();
+          // Settle every host interaction this run left pending. The lifecycle owns
+          // it for both flows: a run that ends with an approval still on screen must
+          // release the host whether it completed, failed, was stopped, or parked at
+          // WAITING. The interrupt-time cancel a stop performs stays with the
+          // interrupt handler, which has to settle the prompt before the flow can
+          // unwind; a second cancel here matches nothing and is a no-op. Guarded so a
+          // throwing host adapter cannot replace the result this run already
+          // published.
+          yield* Effect.try({
+            try: () =>
+              session.interactions.cancel({ streamId, cause: 'Run ended.' }),
+            catch: ensureError,
+          }).pipe(
+            Effect.catch((cancelError) =>
+              Effect.sync(() => {
+                logger.warn(
+                  'Failed to cancel host interactions after the run ended',
+                  {
+                    data: { agentIdentifier, streamId, error: cancelError },
+                  },
+                );
+              }),
+            ),
+          );
+          // Stop the Lean servers attributed to this run in its worktree(s) so they
+          // do not idle until the timeout after the run is gone (CLI/desktop; a host
+          // whose Lean integration owns server lifetime no-ops here). Servers still
+          // leased by an in-flight request are disposed after their final lease
+          // ends. Guarded like the cancel above: a failing stop must not replace the
+          // result this run already published. A WAITING suspension is not a run
+          // end, so its return skips this and leaves the stop to the suspended-handle
+          // teardown if a later kill actually ends the run.
+          if (!suspended) {
+            yield* runOnRunEnd;
+          }
+          // Release long-lived resources (e.g., WebSocket connections, keepalive
+          // intervals) to prevent leaks when handler instances are discarded after
+          // execution. The cell disposed each handler a mid-run switch retired, so
+          // this closes the one still live.
+          ctx.modelCell.dispose();
+          // Drop the run-trace subscribers (channel sink + transcript recorder) so
+          // they don't pile up across many agent runs.
+          ctx.disposeTrace();
+        }),
+      ),
+    );
+  },
+);

@@ -13,8 +13,19 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  finalizeRun: mocks.finalizeRun,
-  registerExecution: mocks.registerExecution,
+  finalizeRun: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.finalizeRun(...args),
+      catch: ensureError,
+    }),
+  registerExecution: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.registerExecution(...args),
+      catch: ensureError,
+    }),
+  getExecutionRecords: () => ({
+    readMeta: () => Effect.succeed({ streamId: 'assistant#run-agent-owner' }),
+  }),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
@@ -23,9 +34,18 @@ vi.mock('@agent/storage/executionLease', () => ({
   validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
 }));
 
-vi.mock('@agent/storage/executionLifecycle', () => ({
-  clearTerminalExecutionState: mocks.clearTerminalExecutionState,
-  finalizeRun: mocks.finalizeRun,
+vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
+  clearTerminalExecutionState: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.clearTerminalExecutionState(...args),
+      catch: ensureError,
+    }),
+  finalizeRun: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.finalizeRun(...args),
+      catch: ensureError,
+    }),
 }));
 
 vi.mock('@agent/runtime/executeAgent', async () => {
@@ -85,6 +105,8 @@ const SESSION = {
     ),
   },
   flushArtifacts,
+  acquireExecutionClaims: () => Effect.succeed(Effect.void),
+  graph: { releaseExecutionClaims: () => Effect.void },
   settlePublications: vi.fn(async () => {}),
   releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
 } as never;
@@ -178,6 +200,7 @@ describe('runAgent execution ownership', () => {
     // #9590 obligation 1: registration carries the birth stream identity and
     // completes before the run — so before any transcript/snapshot fact.
     expect(mocks.registerExecution).toHaveBeenCalledWith(
+      SESSION,
       EXECUTION_ID,
       CONFIG,
       CONFIG.agent,
@@ -226,6 +249,7 @@ describe('runAgent execution ownership', () => {
 
     expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(
       EXECUTION_ID,
+      SESSION,
     );
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       CONFIG,
@@ -257,7 +281,7 @@ describe('runAgent execution ownership', () => {
     await expect(launch({ kind: 'fresh' })).rejects.toBe(launchError);
 
     expect(order).toEqual(['finalize', 'release']);
-    expect(mocks.finalizeRun).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
       executionId: EXECUTION_ID,
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
@@ -287,7 +311,7 @@ describe('runAgent execution ownership', () => {
 
     await expect(launch()).rejects.toBe(launchError);
 
-    expect(mocks.finalizeRun).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
       executionId: EXECUTION_ID,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',

@@ -239,12 +239,11 @@ function handle(
 ): Effect.Effect<Outcome, RequestError> {
   switch (req.kind) {
     case 'stream.stop':
-      return Effect.sync(() => {
+      return Effect.suspend(() =>
         session.executions.stopAgentStream(req.streamId, {
           detachActiveChildren: req.detachActiveChildren ?? undefined,
-        });
-        return done;
-      });
+        }),
+      ).pipe(Effect.as(done), Effect.uninterruptible);
     case 'stream.delete':
       return deleteAdmittedStream(
         session,

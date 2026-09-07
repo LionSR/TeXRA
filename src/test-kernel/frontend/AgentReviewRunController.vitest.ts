@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +11,7 @@ import {
 } from '@frontend/review/AgentReviewRunController';
 
 function createRunHarness() {
-  const stopAgentStream = vi.fn();
+  const stopAgentStream = vi.fn(() => Effect.void);
   let currentHandle: AgentRunHandle | undefined;
   const session = {
     executions: {
@@ -28,7 +29,7 @@ function createRunHarness() {
       childStreamId: `review#${executionId}`,
     } as AgentRunHandle;
     currentHandle = handle;
-    controller.bind(run, handle);
+    Effect.runSync(controller.bind(run, handle));
     return handle;
   };
   return { bind, session, stopAgentStream };
@@ -51,18 +52,24 @@ function reviewCollection(...changedFiles: string[]) {
   };
 }
 
+function stopReview(controller: AgentReviewRunController): boolean {
+  const stop = controller.requestStop();
+  Effect.runSync(stop.settlement);
+  return stop.accepted;
+}
+
 describe('AgentReviewRunController', () => {
   it('latches a stop requested before the execution handle arrives', () => {
     const controller = new AgentReviewRunController();
     const harness = createRunHarness();
     const run = controller.start(harness.session);
 
-    expect(controller.requestStop()).toBe(true);
+    expect(stopReview(controller)).toBe(true);
     expect(controller.isActive).toBe(true);
     harness.bind(controller, run, 'review-a');
 
     expect(harness.stopAgentStream).toHaveBeenCalledOnce();
-    expect(controller.requestStop()).toBe(false);
+    expect(stopReview(controller)).toBe(false);
     expect(harness.stopAgentStream).toHaveBeenCalledOnce();
     expect(controller.isActive).toBe(true);
     expect(controller.finish(run)).toBe(true);
@@ -79,7 +86,7 @@ describe('AgentReviewRunController', () => {
     startBoundRun(controller, second, 'review-b');
 
     expect(controller.finish(runA)).toBe(false);
-    expect(controller.requestStop()).toBe(true);
+    expect(stopReview(controller)).toBe(true);
     expect(first.stopAgentStream).not.toHaveBeenCalled();
     expect(second.stopAgentStream).toHaveBeenCalledOnce();
   });
@@ -106,7 +113,7 @@ describe('AgentReviewRunController', () => {
     const run = startBoundRun(controller, harness, 'review-a');
     controller.collect(run, reviewCollection('src/a.ts'));
 
-    controller.discard();
+    Effect.runSync(controller.discard());
 
     expect(harness.stopAgentStream).toHaveBeenCalledOnce();
     // The execution settles on its own schedule, so the slot stays claimed
@@ -126,7 +133,7 @@ describe('AgentReviewRunController', () => {
     const controller = new AgentReviewRunController();
     const first = createRunHarness();
     const runA = startBoundRun(controller, first, 'review-a');
-    controller.discard();
+    Effect.runSync(controller.discard());
     expect(controller.finish(runA)).toBe(true);
 
     const second = createRunHarness();

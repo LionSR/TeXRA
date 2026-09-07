@@ -35,7 +35,10 @@ import {
 } from './ExecutionHandle';
 import { ExecutionInteractionOwnership } from './executionInteractionOwnership';
 import { ExecutionLanes } from './executionLanes';
-import { WaitingTermination } from './waitingTermination';
+import {
+  WaitingTermination,
+  type WaitingTerminationContext,
+} from './waitingTermination';
 
 /**
  * Child policy shared by `kill()` and `stopAgentStream()`. The caller owns the
@@ -45,6 +48,11 @@ import { WaitingTermination } from './waitingTermination';
  * cascades. Omitting the field means cascade — the conservative reading, since
  * a child left running has no owner to report to.
  */
+export interface ExecutionStop {
+  readonly accepted: boolean;
+  readonly settlement: Effect.Effect<void>;
+}
+
 interface ExecutionStopOptions {
   readonly detachActiveChildren?: boolean;
 }
@@ -115,9 +123,8 @@ interface ExecutionRegistryInit {
    * — required so no construction path can silently release a lease without
    * draining the session's durable writers first.
    */
-  readonly releaseRootExecutionLease: (
-    executionId: ExecutionId,
-  ) => Promise<void>;
+  readonly releaseRootExecutionLease: WaitingTerminationContext['releaseRootExecutionLease'];
+  readonly finalizeExecution: WaitingTerminationContext['finalizeExecution'];
 }
 
 /**
@@ -154,9 +161,7 @@ export class ExecutionRegistry {
     event: ResultEvent,
     streamId: StreamTabId,
   ) => void;
-  private readonly releaseRootExecutionLease: (
-    executionId: ExecutionId,
-  ) => Promise<void>;
+  private readonly releaseRootExecutionLease: WaitingTerminationContext['releaseRootExecutionLease'];
   private readonly listeners = new Map<
     string,
     Set<(handle: AgentExecutionHandle | undefined) => void>
@@ -180,6 +185,7 @@ export class ExecutionRegistry {
     this.waitingTermination = new WaitingTermination({
       publishResult: this.publishResult,
       releaseRootExecutionLease: this.releaseRootExecutionLease,
+      finalizeExecution: options.finalizeExecution,
       lanes: this.lanes,
       getHandle: (executionId) => this.handles.get(executionId),
       untrackIfCurrent: (handle) => this.untrackIfCurrent(handle),
@@ -507,17 +513,19 @@ export class ExecutionRegistry {
   /**
    * Terminate an execution via its handle, or, for a native child loop
    * between turns (an activation with no turn handle), interrupt the loop
-   * itself. Returns true on success.
+   * itself. Admission is synchronous; the caller executes the returned
+   * settlement at its Effect boundary before releasing ownership.
    */
-  kill(executionId: string, options: ExecutionStopOptions = {}): boolean {
+  kill(executionId: string, options: ExecutionStopOptions = {}): ExecutionStop {
     const handle = this.handles.get(executionId);
     if (!handle) {
       const activation = this.childActivations.get(executionId);
       activation?.interrupt();
       this.notifyWaiters(executionId);
-      return activation !== undefined;
+      return { accepted: activation !== undefined, settlement: Effect.void };
     }
     const visited = new Set<string>();
+    const settlements: Effect.Effect<void>[] = [];
     if (options.detachActiveChildren === true) {
       this.detachActiveChildren(handle.childStreamId);
     }
@@ -525,11 +533,18 @@ export class ExecutionRegistry {
       handle,
       visited,
       options.detachActiveChildren !== true,
+      settlements,
     );
     // Always notify waiters — even if terminate() returned false (e.g. PID not
     // yet assigned), callers blocking on this execution should be unblocked.
     this.notifyWaiters(executionId);
-    return result;
+    return {
+      accepted: result,
+      settlement: Effect.all(settlements, {
+        concurrency: 'unbounded',
+        discard: true,
+      }),
+    };
   }
 
   /**
@@ -620,6 +635,7 @@ export class ExecutionRegistry {
     parentStreamId: StreamTabId,
     visited: Set<string>,
     cascadeChildren: boolean,
+    settlements: Effect.Effect<void>[],
   ): void {
     // A loop between turns has no handle to interrupt; a loop inside a turn
     // also gets its turn handle terminated below. The activation is keyed
@@ -632,7 +648,7 @@ export class ExecutionRegistry {
     }
     for (const handle of this.handles.values()) {
       if (handle.isOwnedBy(parentStreamId)) {
-        this.terminate(handle, visited, cascadeChildren);
+        this.terminate(handle, visited, cascadeChildren, settlements);
       }
     }
   }
@@ -690,16 +706,17 @@ export class ExecutionRegistry {
   stopAgentStream(
     streamId: StreamTabId,
     options: ExecutionStopOptions = {},
-  ): void {
+  ): Effect.Effect<void> {
     const rootHandle = this.getAgentHandleByStream(streamId);
     // Shared across the child sweep and the root cascade so each execution in
     // the chain is interrupted exactly once.
     const visited = new Set<string>();
+    const settlements: Effect.Effect<void>[] = [];
 
     if (options.detachActiveChildren === true) {
       this.detachActiveChildren(streamId);
     } else {
-      this.interruptActiveChildren(streamId, visited, true);
+      this.interruptActiveChildren(streamId, visited, true, settlements);
     }
 
     const stopped = rootHandle
@@ -707,14 +724,15 @@ export class ExecutionRegistry {
           rootHandle,
           visited,
           options.detachActiveChildren !== true,
+          settlements,
         )
       : false;
     // `terminate()` already publishes CANCELLED for a stream it owned; an
     // ownerless (or already-untracked) stream still needs the write. The
     // stream-status machine rejects the transition out of a terminal phase,
     // so a finished stream keeps its outcome.
-    if (stopped) return;
-    this.cancelStreamStatus(streamId);
+    if (!stopped) this.cancelStreamStatus(streamId);
+    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
   }
 
   /**
@@ -833,11 +851,17 @@ export class ExecutionRegistry {
     handle: AgentExecutionHandle,
     visited: Set<string>,
     cascadeChildren: boolean,
+    settlements: Effect.Effect<void>[],
   ): boolean {
     if (visited.has(handle.executionId)) return false;
     visited.add(handle.executionId);
     if (cascadeChildren) {
-      this.interruptActiveChildren(handle.childStreamId, visited, true);
+      this.interruptActiveChildren(
+        handle.childStreamId,
+        visited,
+        true,
+        settlements,
+      );
     }
     // A child execution is its loop, not only the turn this handle runs:
     // stopping it ends the loop too, so the interrupted turn is not delivered
@@ -859,7 +883,10 @@ export class ExecutionRegistry {
     // (runToolUseFlow's finally), while the handle stays tracked for resume
     // (runFlowWithLifecycle). Run the teardown it parked with instead of
     // silently no-oping the kill.
-    return this.waitingTermination.terminateWaitingHandle(handle);
+    const settlement = this.waitingTermination.terminateWaitingHandle(handle);
+    if (!settlement) return false;
+    settlements.push(settlement);
+    return true;
   }
 
   /**

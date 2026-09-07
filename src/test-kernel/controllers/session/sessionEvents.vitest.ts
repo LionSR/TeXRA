@@ -31,7 +31,15 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Clock, Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
+import {
+  Clock,
+  Deferred,
+  Effect,
+  Fiber,
+  Layer,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterAll, describe, expect, vi } from 'vitest';
 
@@ -504,7 +512,7 @@ describe('Sessions owner', () => {
             unreadable: [],
           }),
         );
-        const stopAgentStream = vi.fn();
+        const stopAgentStream = vi.fn(() => Effect.void);
         const session = {
           view: view.ref,
           executions: { stopAgentStream },
@@ -770,6 +778,44 @@ describe('Sessions owner', () => {
           session.now(),
         );
         expect(isLive(session)).toBe(false);
+      }),
+  );
+
+  it.effect(
+    'close retains the session until an untracked waiting generation finishes its owned teardown',
+    () =>
+      Effect.gen(function* () {
+        const root = '/workspace/owner/waiting-teardown';
+        const session = open(root);
+        const handle = testExecutionHandle({
+          executionId: 'exec:waiting-teardown',
+          parentStreamId: 'stream:exec:waiting-teardown' as StreamTabId,
+          agent: 'chat',
+        });
+        const release = yield* Deferred.make<void>();
+        handle.suspend(
+          Effect.gen(function* () {
+            session.executions.untrack(handle.executionId);
+            yield* Deferred.await(release);
+          }),
+        );
+        session.executions.track(handle);
+        const closing = yield* Effect.forkChild(closeSession(root));
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(session.executions.getActiveIds()).toEqual([]),
+          ),
+        );
+        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
+        expect(yield* Fiber.join(closing)).toEqual({
+          settled: false,
+          abandoned: [],
+        });
+        expect(isLive(session)).toBe(true);
+        yield* Deferred.succeed(release, undefined);
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(isLive(session)).toBe(false)),
+        );
       }),
   );
 

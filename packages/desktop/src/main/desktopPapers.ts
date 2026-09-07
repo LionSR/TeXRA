@@ -195,10 +195,16 @@ const responseTextProcessing = createTexraResponseTextProcessing(
 async function stopPaperExecutions(session: SessionHandle): Promise<void> {
   const { executions } = session;
   await runInSession(session, async () => {
-    for (const executionId of executions.getActiveIds()) {
-      if (executions.getHandle(executionId)?.isChildExecution) continue;
-      executions.kill(executionId, { detachActiveChildren: false });
-    }
+    const stops = executions.getActiveIds().flatMap((executionId) => {
+      if (executions.getHandle(executionId)?.isChildExecution) return [];
+      return [
+        executions.kill(executionId, { detachActiveChildren: false })
+          .settlement,
+      ];
+    });
+    await effectRuntime().runPromise(
+      Effect.all(stops, { concurrency: 'unbounded' }),
+    );
     for (;;) {
       const active = executions.getActiveIds();
       if (active.length === 0) return;

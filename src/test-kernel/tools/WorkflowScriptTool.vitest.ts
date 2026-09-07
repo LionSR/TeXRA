@@ -7,7 +7,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
 import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionStore, getExecutionRecords } from '@agent/storage';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
@@ -31,6 +31,7 @@ setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
 const mocks = vi.hoisted(() => ({
   registerExecution: vi.fn(),
+  recordStores: new Map<string, ReturnType<typeof getExecutionRecords>>(),
   startChildRunLoop: vi.fn(),
   createChildStream: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
@@ -48,7 +49,30 @@ const mocks = vi.hoisted(() => ({
 // `ExecutionLeaseActiveError` and lease helpers the same way.
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
-  return { ...actual, registerExecution: mocks.registerExecution };
+  const { createFakeExecutionRecords } =
+    await import('@test/support/FakeExecutionKVStore');
+  return {
+    ...actual,
+    registerExecution: mocks.registerExecution,
+    getExecutionRecords: (_session: unknown, id: string) => {
+      const existing = mocks.recordStores.get(id);
+      if (existing) return existing;
+      let report: string | null = null;
+      const records = createFakeExecutionRecords({
+        readReport: () => Effect.succeed(report),
+        writeReport: (value) =>
+          Effect.sync(() => {
+            report = value;
+          }),
+        clearReport: () =>
+          Effect.sync(() => {
+            report = null;
+          }),
+      });
+      mocks.recordStores.set(id, records);
+      return records;
+    },
+  };
 });
 
 // The launch sites register through `registerExecution`; route the spy through it.
@@ -185,9 +209,11 @@ function mockPersistedReport(
   report: string,
   outcome: (typeof RUN_OUTCOME)[keyof typeof RUN_OUTCOME],
 ): void {
-  const store = getExecutionStore(runExecutionIdFor(name));
-  vi.spyOn(store, 'readReport').mockResolvedValue(report);
-  vi.spyOn(store, 'readMeta').mockResolvedValue({ outcome } as never);
+  const store = getExecutionRecords(currentSession(), runExecutionIdFor(name));
+  vi.spyOn(store, 'readReport').mockReturnValue(Effect.succeed(report));
+  vi.spyOn(store, 'readMeta').mockReturnValue(
+    Effect.succeed({ outcome } as never),
+  );
 }
 
 async function callTool(
@@ -232,12 +258,13 @@ async function callToolInput(
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  mocks.recordStores.clear();
   mocks.lastStrategyParams = undefined;
   await WorkspaceFS.ensureDir('.');
   await WorkspaceFS.write('paper.tex', '\\documentclass{article}');
   await WorkspaceFS.write('references.bib', '@book{example}');
   await WorkspaceFS.write('figure.pdf', 'pdf');
-  mocks.registerExecution.mockResolvedValue(undefined);
+  mocks.registerExecution.mockReturnValue(Effect.void);
   mocks.selectAvailableDelegationModel.mockResolvedValue('parent-model');
   mocks.requestDelegationProposal.mockResolvedValue({
     result: { action: 'approve' },
@@ -491,6 +518,7 @@ return null`;
     // relaunch with the same meta.name re-roots at the same anchor and resume
     // still works (#8712).
     expect(mocks.registerExecution).toHaveBeenCalledWith(
+      currentSession(),
       runExecutionId,
       // The durable record is honest: workflow name, launch summary, and the
       // real delegation model. It has no fabricated agent identity or category.
@@ -586,6 +614,7 @@ return null`;
     });
     expect(result.output).toContain(`Script file: ${scriptPath}`);
     expect(mocks.registerExecution).toHaveBeenCalledWith(
+      currentSession(),
       runExecutionIdFor('edited-tool-test'),
       registrationRecordFor('edited-tool-test'),
       'edited-tool-test',
@@ -714,11 +743,15 @@ return null`;
       "name: 'interrupted-resume'",
     );
     const runExecutionId = runExecutionIdFor('interrupted-resume');
-    const store = getExecutionStore(runExecutionId);
-    await store.writeReport('stale success from the prior attempt');
-    vi.spyOn(store, 'readMeta').mockResolvedValue({
-      outcome: RUN_OUTCOME.FAILED,
-    } as never);
+    const store = getExecutionRecords(currentSession(), runExecutionId);
+    await Effect.runPromise(
+      store.writeReport('stale success from the prior attempt'),
+    );
+    vi.spyOn(store, 'readMeta').mockReturnValue(
+      Effect.succeed({
+        outcome: RUN_OUTCOME.FAILED,
+      } as never),
+    );
 
     // The default resolved completion writes no report, matching an
     // interruption before childRunLoop reaches deliverTurn.
@@ -734,7 +767,7 @@ return null`;
       ),
     });
     expect(result.error).not.toContain('stale success from the prior attempt');
-    await expect(store.readReport()).resolves.toBeNull();
+    await expect(Effect.runPromise(store.readReport())).resolves.toBeNull();
   });
 
   it('rejects an unknown default agent before registering a detached run', async () => {
@@ -759,6 +792,7 @@ return null`;
       parentModel: 'parent-model',
     });
     expect(mocks.registerExecution).toHaveBeenCalledWith(
+      currentSession(),
       runExecutionIdFor('tool-test'),
       registrationRecordFor('tool-test', 'served-model'),
       'tool-test',
@@ -883,9 +917,9 @@ return null`;
     expect(second).toBe(first);
   });
 
-  it('captures prior workflow snapshot before registerExecution overwrites meta', async () => {
+  it('hydrates the committed workflow snapshot when reopening a named execution', async () => {
     const runId = runExecutionIdFor('tool-test');
-    const store = getExecutionStore(runId);
+    const store = getExecutionRecords(currentSession(), runId);
     const priorWorkflow = {
       lifecycle: 'active' as const,
       stages: [],
@@ -916,53 +950,42 @@ return null`;
         updatedAt: '2026-08-01T00:00:01.000Z',
       },
     };
-    await store.writeMeta({
-      timestamp: '2026-08-01T00:00:00.000Z',
-      workflow: priorWorkflow,
-    });
-
     const callOrder: string[] = [];
-    const readStrict = vi
-      .spyOn(store, 'readMetaStrict')
-      .mockImplementation(async () => {
-        callOrder.push('readMetaStrict');
+    const readStrict = vi.spyOn(store, 'readMeta').mockImplementation(() =>
+      Effect.sync(() => {
+        callOrder.push('readMeta');
         return {
           schemaVersion: 1,
           timestamp: '2026-08-01T00:00:00.000Z',
           workflow: priorWorkflow,
         };
-      });
-    mocks.registerExecution.mockImplementation(async () => {
-      callOrder.push('registerExecution');
-      // Simulate production: registration replaces meta without workflow.
-      await store.writeMeta({
-        timestamp: '2026-08-10T00:00:00.000Z',
-        streamId: `workflow-script#${runId}`,
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      });
-    });
+      }),
+    );
+    mocks.registerExecution.mockImplementation(() =>
+      Effect.sync(() => {
+        callOrder.push('registerExecution');
+      }),
+    );
 
     const result = await callTool();
 
     expect(result.status).toBe('executed');
-    expect(callOrder).toEqual(['readMetaStrict', 'registerExecution']);
+    expect(callOrder).toEqual(['readMeta', 'registerExecution']);
     // Strategy must receive the pre-register snapshot, not a post-wipe read.
     expect(mocks.lastStrategyParams?.initialSnapshot).toEqual(priorWorkflow);
-    // Post-register meta no longer has workflow — a post-register read would
-    // have lost hydration state.
-    await expect(store.readMeta()).resolves.not.toHaveProperty('workflow');
     readStrict.mockRestore();
   });
 
   it('reports already-running when the deterministic id is still leased', async () => {
     const runExecutionId = runExecutionIdFor('tool-test');
-    mocks.registerExecution.mockRejectedValueOnce(
-      new ExecutionLeaseActiveError(runExecutionId, {
-        pid: 1,
-        processStart: '1',
-        hostname: 'test-host',
-      }),
+    mocks.registerExecution.mockReturnValueOnce(
+      Effect.fail(
+        new ExecutionLeaseActiveError(runExecutionId, {
+          pid: 1,
+          processStart: '1',
+          hostname: 'test-host',
+        }),
+      ),
     );
 
     const result = await callTool();

@@ -200,54 +200,59 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
   const userFollowUpSupport = isToolUse
     ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
     : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
-  const { childStreamId } = yield* Effect.tryPromise({
-    try: () =>
-      runInSession(parentSession, () =>
-        registerChildExecution({
-          executionId,
-          config,
-          agentName,
-          userFollowUpSupport,
-          parentExecutionId,
-        }),
-      ),
-    catch: ensureError,
-  });
+  yield* Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const { childStreamId } = yield* registerChildExecution(parentSession, {
+        executionId,
+        config,
+        agentName,
+        userFollowUpSupport,
+        parentExecutionId,
+      });
 
-  const strategyParams = {
-    config,
-    agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
-    executionId,
-    parentExecutionId,
-    agentName,
-    parentStreamId,
-    session: parentSession,
-    startedAt,
-    workingDirectory,
-    approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
-    onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
-    runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-    onStreamResolved: inheritChildStreamApprovals,
-    userFollowUpSupport,
-  };
+      const strategyParams = {
+        config,
+        agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
+        executionId,
+        parentExecutionId,
+        agentName,
+        parentStreamId,
+        session: parentSession,
+        startedAt,
+        workingDirectory,
+        approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
+        runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
+        onStreamResolved: inheritChildStreamApprovals,
+        userFollowUpSupport,
+      };
 
-  yield* startDetachedChildRunLoop({
-    session: parentSession,
-    executionId,
-    parentStreamId,
-    childStreamId,
-    agentName,
-    recordCost,
-    buildLaunch: () =>
-      Effect.sync(() => ({
-        strategy: createNativeSubagentStrategy(strategyParams),
-        onLoopFailed: (error: unknown): void => {
-          log.error(`Subagent '${agentName}' run loop failed after launch`, {
-            data: error,
-          });
-        },
-      })),
-  });
+      yield* startDetachedChildRunLoop({
+        session: parentSession,
+        executionId,
+        parentStreamId,
+        childStreamId,
+        agentName,
+        recordCost,
+        buildLaunch: () =>
+          restore(Effect.void).pipe(
+            Effect.andThen(
+              Effect.sync(() => ({
+                strategy: createNativeSubagentStrategy(strategyParams),
+                onLoopFailed: (error: unknown): void => {
+                  log.error(
+                    `Subagent '${agentName}' run loop failed after launch`,
+                    {
+                      data: error,
+                    },
+                  );
+                },
+              })),
+            ),
+          ),
+      });
+    }),
+  );
 
   const meta = options?.approvalMeta;
   const metaLines: string[] = [];

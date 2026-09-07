@@ -4,11 +4,13 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { listExecutions } from '@agent/storage';
+import { Effect } from 'effect';
+import type { SessionHandle } from '@agent/runtime';
+import type { ExecutionListingEntry } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   __resetUserConfigWarningDedupeForTests,
-  resolveChatDefaults,
+  resolveChatDefaults as nativeResolveChatDefaults,
 } from '@cli/runtime/chatDefaults';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -18,6 +20,7 @@ import * as logSinks from '@cli/runtime/logSinks';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { ensureError } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 /** A cwd with no `.texra` directory, so the workspace tier finds nothing. */
@@ -43,9 +46,20 @@ function enoentError(): NodeJS.ErrnoException {
   return error;
 }
 
+const mocks = vi.hoisted(() => ({
+  listExecutions: vi.fn(async (): Promise<ExecutionListingEntry[]> => []),
+}));
+const resolveChatDefaults = (
+  options: Parameters<typeof nativeResolveChatDefaults>[0],
+) => Effect.runPromise(nativeResolveChatDefaults(options, {} as SessionHandle));
+
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  listExecutions: vi.fn(async () => []),
+  listExecutions: () =>
+    Effect.tryPromise({
+      try: () => mocks.listExecutions(),
+      catch: ensureError,
+    }),
 }));
 
 // Spied, not stubbed: the workspace tiers below still read real `.texra`
@@ -59,7 +73,7 @@ vi.mock('@cli/runtime/cliConfig', async (importOriginal) => {
   };
 });
 
-const mockedListExecutions = vi.mocked(listExecutions);
+const mockedListExecutions = mocks.listExecutions;
 const mockedLoadWorkspaceCliConfig = vi.mocked(loadWorkspaceCliConfig);
 
 function historyEntry(
@@ -79,7 +93,7 @@ function historyEntry(
       agentCategory: AgentCategory.ToolUse,
       ...overrides,
     }),
-  } satisfies Awaited<ReturnType<typeof listExecutions>>[number];
+  } satisfies ExecutionListingEntry;
 }
 
 vi.mock('@utils/files/storageFS', () => ({

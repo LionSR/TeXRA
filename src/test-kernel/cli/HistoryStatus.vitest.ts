@@ -1,5 +1,6 @@
 import '@test/support/sessionGraphTestSetup';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
 
 import { registerExecution, getExecutionStore } from '@agent/storage';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
@@ -12,6 +13,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import {
   initializeDefaultSession,
+  currentSession,
   teardownDefaultSession,
 } from '@agent/runtime/SessionHandle';
 import {
@@ -21,6 +23,7 @@ import {
 } from '@cli/runtime/history';
 import {
   EXECUTION_META_SCHEMA_VERSION,
+  aggregateId,
   EXECUTION_STATUS,
   AgentCategory,
   HISTORY_RUN_STATUS,
@@ -61,10 +64,12 @@ async function seedFlowRecord(
   agent: string,
   shared: unknown,
 ): Promise<void> {
-  await registerExecution(id, config, agent, {
-    streamId: `${agent}@deepseekT#${id}` as StreamTabId,
-    identity: { kind: 'agent', agent },
-  });
+  await Effect.runPromise(
+    registerExecution(currentSession(), id, config, agent, {
+      streamId: `${agent}@deepseekT#${id}` as StreamTabId,
+      identity: { kind: 'agent', agent },
+    }),
+  );
   await releaseOwnedExecutionLease(id);
   await getExecutionStore(id).write(flowKey(id), {
     shared,
@@ -166,7 +171,7 @@ describe('CLI history status formatting', () => {
   ])(
     'still advertises a checkpoint with %s, and never calls it completed',
     async (description, config, agent, shared) => {
-      const id = `unloadable-${description.split(' ')[0]}` as ExecutionId;
+      const id = 'bad-f10' as ExecutionId;
       await seedFlowRecord(id, config, agent, shared);
 
       const details = await readCliHistoryDetails(id);
@@ -181,7 +186,7 @@ describe('CLI history status formatting', () => {
   );
 
   it('marks workflow flow records as CLI-resumable', async () => {
-    const id = 'workflow-with-flow' as ExecutionId;
+    const id = 'c0ffee-f10' as ExecutionId;
     await seedFlowRecord(
       id,
       WORKFLOW_CONFIG,
@@ -212,9 +217,24 @@ describe('CLI history status formatting', () => {
   // A checkpoint alone is not enough: without a config there is no category
   // to resume under and nothing for a host to adopt, so the row says so.
   it('does not offer a run whose config is missing as resumable', async () => {
-    const id = 'checkpoint-without-config' as ExecutionId;
-    await seedFlowRecord(id, TOOL_USE_CONFIG, 'orchestrator', {});
-    await getExecutionStore(id).delete('config');
+    const id = 'baad-c0f' as ExecutionId;
+    await Effect.runPromise(
+      currentSession().commit([
+        {
+          type: 'run.start',
+          aggregateId: aggregateId('stream', `orchestrator#${id}`),
+          executionId: id,
+          identity: { kind: 'agent', agent: 'orchestrator' },
+          category: AgentCategory.ToolUse,
+          userFollowUpSupport: 'unsupported',
+          isRemote: false,
+        },
+      ]),
+    );
+    await getExecutionStore(id).write(flowKey(id), {
+      shared: {},
+      cursor: { nextNodeId: 'start' },
+    });
 
     const details = await readCliHistoryDetails(id);
 

@@ -1,46 +1,48 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { beforeEach, describe, it, vi } from 'vitest';
-
+import { beforeEach, afterEach, describe, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunOutcome } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
 const mocks = vi.hoisted(() => ({
-  currentSession: vi.fn(),
   inspectExecutionLease: vi.fn(),
   readMeta: vi.fn(),
   exists: vi.fn(),
-}));
-
-vi.mock('@agent/runtime/SessionHandle', () => ({
-  currentSession: mocks.currentSession,
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
   inspectExecutionLease: mocks.inspectExecutionLease,
 }));
 
-vi.mock('@agent/storage/ExecutionKVStore', () => ({
-  getExecutionStore: () => ({ readMeta: mocks.readMeta, exists: mocks.exists }),
+vi.mock('@agent/storage/ExecutionKVStore', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/ExecutionKVStore')>()),
+  getExecutionStore: () => ({ exists: mocks.exists }),
+  getExecutionRecords: () => ({ readMeta: mocks.readMeta }),
 }));
 
 // Local imports
 import { getExecutionStatusInfo } from '@tools/executionFormatters';
 import { turnAttributionNote } from '@tools/executions/turnAttribution';
 
-/** No handle in this process, whatever the durable facts then say. */
-function noLiveHandle(): void {
-  mocks.currentSession.mockReturnValue({
-    executions: { getHandle: () => undefined },
-  });
-}
+let session: SessionHandle;
+beforeEach(() => {
+  session = createTestSession();
+});
+afterEach(() => {
+  session.dispose();
+});
 
 /** Persisted facts: the given metadata row, and whether a checkpoint is on disk. */
 function persisted(
   meta: { outcome?: RunOutcome } | null,
   checkpoint: 'checkpoint' | 'no-checkpoint',
 ): void {
-  mocks.readMeta.mockResolvedValue(
-    meta && { timestamp: '2026-05-15T23:42:06.000Z', ...meta },
+  mocks.readMeta.mockReturnValue(
+    Effect.succeed(meta && { timestamp: '2026-05-15T23:42:06.000Z', ...meta }),
   );
   mocks.exists.mockResolvedValue(checkpoint === 'checkpoint');
 }
@@ -48,7 +50,6 @@ function persisted(
 describe('getExecutionStatusInfo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    noLiveHandle();
     // Unowned unless a case says otherwise: every outcome-less row reads the
     // lease before it decides anything from the checkpoint.
     mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
@@ -62,7 +63,9 @@ describe('getExecutionStatusInfo', () => {
     async ({ outcome, expected }) => {
       persisted({ outcome }, 'no-checkpoint');
 
-      const info = await getExecutionStatusInfo('exec-1');
+      const info = await Effect.runPromise(
+        getExecutionStatusInfo('exec-1', session),
+      );
 
       assert.strictEqual(info.status, expected);
     },
@@ -73,9 +76,11 @@ describe('getExecutionStatusInfo', () => {
     // and nothing else for a run that already said how it ended.
     persisted(null, 'no-checkpoint');
 
-    const info = await getExecutionStatusInfo('exec-1', {
-      outcome: 'completed',
-    });
+    const info = await Effect.runPromise(
+      getExecutionStatusInfo('exec-1', session, {
+        outcome: 'completed',
+      }),
+    );
 
     assert.strictEqual(info.status, 'completed');
     assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
@@ -86,7 +91,9 @@ describe('getExecutionStatusInfo', () => {
   it('costs one lease read and one stat for a settled row', async () => {
     persisted({}, 'no-checkpoint');
 
-    const info = await getExecutionStatusInfo('exec-1', {});
+    const info = await Effect.runPromise(
+      getExecutionStatusInfo('exec-1', session, {}),
+    );
 
     assert.strictEqual(info.status, 'unknown');
     assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
@@ -103,7 +110,9 @@ describe('getExecutionStatusInfo', () => {
       owner: { pid: 5150, hostname: 'other-host' },
     });
 
-    const info = await getExecutionStatusInfo('exec-1', {});
+    const info = await Effect.runPromise(
+      getExecutionStatusInfo('exec-1', session, {}),
+    );
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /pid 5150 on other-host/);
@@ -114,7 +123,9 @@ describe('getExecutionStatusInfo', () => {
     persisted({}, 'checkpoint');
     mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
 
-    const info = await getExecutionStatusInfo('exec-1');
+    const info = await Effect.runPromise(
+      getExecutionStatusInfo('exec-1', session),
+    );
 
     assert.strictEqual(info.status, 'cancelled');
     // Presence, not validity: a stat cannot promise the record can be resumed.
@@ -131,7 +142,9 @@ describe('getExecutionStatusInfo', () => {
       owner: { pid: 4242, hostname: 'other-host' },
     });
 
-    const info = await getExecutionStatusInfo('exec-1');
+    const info = await Effect.runPromise(
+      getExecutionStatusInfo('exec-1', session),
+    );
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /pid 4242 on other-host/);
@@ -142,7 +155,9 @@ describe('getExecutionStatusInfo', () => {
     persisted({}, 'checkpoint');
     mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
 
-    const info = await getExecutionStatusInfo('exec-1');
+    const info = await Effect.runPromise(
+      getExecutionStatusInfo('exec-1', session),
+    );
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /no live run/);
@@ -155,7 +170,9 @@ describe('getExecutionStatusInfo', () => {
     persisted({ outcome: 'completed' }, 'checkpoint');
     mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
 
-    const info = await getExecutionStatusInfo('exec-1');
+    const info = await Effect.runPromise(
+      getExecutionStatusInfo('exec-1', session),
+    );
 
     assert.strictEqual(info.status, 'completed');
   });
@@ -164,7 +181,9 @@ describe('getExecutionStatusInfo', () => {
     persisted({}, 'checkpoint');
     mocks.inspectExecutionLease.mockRejectedValue(new Error('lease corrupt'));
 
-    const info = await getExecutionStatusInfo('exec-1');
+    const info = await Effect.runPromise(
+      getExecutionStatusInfo('exec-1', session),
+    );
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /cannot read \(lease corrupt\)/);
@@ -179,12 +198,13 @@ describe('turnAttributionNote', () => {
   it('does not call an accepted turn running once its stream is terminal', async () => {
     // The handle outlives the stream's terminal phase, so handle presence
     // alone must not word the note as "still running".
-    mocks.currentSession.mockReturnValue({
-      executions: {
-        getHandle: () => ({}),
-        getStatus: () => ({ status: 'completed', elapsed: null }),
-      },
+    const handle = testExecutionHandle({
+      executionId: 'exec-1',
+      parentStreamId: 'stream-1',
+      agent: 'test',
     });
+    session.executions.track(handle);
+    seedStreamStatusForTest(session.status, 'stream-1', { phase: 'completed' });
     const store = {
       getExecutionId: () => 'exec-1',
       readTurnState: async () => ({
@@ -193,7 +213,7 @@ describe('turnAttributionNote', () => {
       }),
     } as unknown as Parameters<typeof turnAttributionNote>[0];
 
-    const note = await turnAttributionNote(store);
+    const note = await Effect.runPromise(turnAttributionNote(store, session));
 
     assert.match(note ?? '', /turn turn-2 ended with its run \(completed\)/);
     assert.doesNotMatch(note ?? '', /still running/);

@@ -14,9 +14,11 @@ import { Effect, Layer, Ref, Stream, SubscriptionRef } from 'effect';
 import type { AgentEvent, StatusEvent } from '@agent/trace';
 import {
   aggregateId as qualifyAggregateId,
+  isDisplaySessionEvent,
   type CommitOrdinal,
   type OwnerId,
   type SessionEvent,
+  type DisplaySessionEvent,
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
@@ -49,15 +51,15 @@ export function processOwnerId(processStart: string | undefined): OwnerId {
  * that must know the tail passed an ordinal (the NDJSON detach drain) waits
  * on this coordinate, never on the events alone.
  */
-export function tailFrom(
-  read: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>,
+export function tailFrom<A extends SessionEvent>(
+  read: (fromCommit: SessionCursor) => Stream.Stream<A>,
   level: {
     readonly get: Effect.Effect<CommitOrdinal>;
     readonly changes: Stream.Stream<CommitOrdinal>;
   },
   fromCommit: SessionCursor,
   drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-): Stream.Stream<SessionEvent> {
+): Stream.Stream<A> {
   return Stream.unwrap(
     Effect.gen(function* () {
       const at = yield* Ref.make(fromCommit);
@@ -105,10 +107,12 @@ export const sessionEventsLayer = Layer.effect(
     const all = (
       fromCommit: SessionCursor,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ): Stream.Stream<SessionEvent> =>
+    ): Stream.Stream<DisplaySessionEvent> =>
       tailFrom(
         (from) =>
-          Stream.fromIterableEffect(log.readAll(from).pipe(Effect.orDie)),
+          Stream.fromIterableEffect(log.readAll(from).pipe(Effect.orDie)).pipe(
+            Stream.filter(isDisplaySessionEvent),
+          ),
         {
           get: log.currentCommit.pipe(Effect.orDie),
           changes: SubscriptionRef.changes(log.level),
@@ -119,12 +123,14 @@ export const sessionEventsLayer = Layer.effect(
     return {
       publish,
       listing: () =>
-        Stream.fromIterableEffect(log.readListing().pipe(Effect.orDie)),
+        Stream.fromIterableEffect(log.readListing().pipe(Effect.orDie)).pipe(
+          Stream.filter(isDisplaySessionEvent),
+        ),
       all,
       aggregate: (aggregateId, fromSeq) =>
         Stream.fromIterableEffect(
           log.readAggregate(aggregateId, fromSeq).pipe(Effect.orDie),
-        ),
+        ).pipe(Stream.filter(isDisplaySessionEvent)),
     };
   }),
 );

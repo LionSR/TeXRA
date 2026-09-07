@@ -1,4 +1,6 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getExecutionRecords } from '@agent/storage';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -22,16 +24,11 @@ import { recordSessionEvents } from '../progressTestUtils';
 
 const mocks = vi.hoisted(() => ({
   createHelperModelKit: vi.fn(),
-  writeSessionDescription: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
   createHelperModelKit: mocks.createHelperModelKit,
-}));
-
-vi.mock('@agent/storage/executionLifecycle', () => ({
-  writeSessionDescription: mocks.writeSessionDescription,
 }));
 
 function runDescription(
@@ -116,12 +113,15 @@ describe('session description helpers', () => {
     expect(handler.initializeMessages.mock.calls[0]?.[1]).toContain(
       '<agent-purpose>Corrects a draft</agent-purpose>',
     );
-    expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
-      'a0b0c1',
-      'Correcting derivation signs',
-    );
+    expect(
+      (
+        await Effect.runPromise(
+          getExecutionRecords(session, 'a0b0c1').readMeta(),
+        )
+      )?.description,
+    ).toBe('Correcting derivation signs');
     await session.settlePublications();
-    expect(recorded.events).toMatchObject([
+    expect(await recorded.read()).toMatchObject([
       {
         type: 'updateStreamDescription',
         aggregateId: qualifyAggregateId('stream', 'stream-workflow'),
@@ -170,12 +170,15 @@ describe('session description helpers', () => {
 
     await runDescription('a0b0c2', 'stream-tool', session);
 
-    expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
-      'a0b0c2',
-      'Fixing proof typos',
-    );
+    expect(
+      (
+        await Effect.runPromise(
+          getExecutionRecords(session, 'a0b0c2').readMeta(),
+        )
+      )?.description,
+    ).toBe('Fixing proof typos');
     await session.settlePublications();
-    expect(recorded.events).toMatchObject([
+    expect(await recorded.read()).toMatchObject([
       {
         type: 'updateStreamDescription',
         aggregateId: qualifyAggregateId('stream', 'stream-tool'),

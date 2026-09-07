@@ -7,7 +7,7 @@ import { Effect, Option, Stream, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import { ExecutionLeaseActiveError, getExecutionStore } from '@agent/storage';
+import { ExecutionLeaseActiveError, getExecutionRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
@@ -662,12 +662,12 @@ export function createChatSessionController(
     const supersededRecovery = supersedeInterruptedRecovery();
     let recovery: FollowUpRecoveryLease | undefined;
     let recoveryHandedOff = false;
-    const attemptResume = async (): Promise<void> => {
+    const attemptResume = Effect.gen(function* () {
       // The durable record names the stream (FK stamped at registration) and
       // the config the TUI adopts before the run. Workflow runs resume
       // headless through `texra resume`, not inside a chat.
-      const store = getExecutionStore(id);
-      const [config, meta] = await Promise.all([
+      const store = getExecutionRecords(runtimeSession, id);
+      const [config, meta] = yield* Effect.all([
         store.readConfig(),
         store.readMeta(),
       ]);
@@ -791,9 +791,9 @@ export function createChatSessionController(
       // settles here, before the run finishes, fire-and-forget per the
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
-    };
+    });
     await effectRuntime().runPromise(
-      tryPromise(attemptResume).pipe(
+      attemptResume.pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
             handBackUnusedRecovery(recovery, recoveryHandedOff);
@@ -851,7 +851,7 @@ export function createChatSessionController(
       let finalize = (): void => session.markRunCompleted();
       let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
-      const attempt = async (): Promise<boolean> => {
+      const attempt = Effect.gen(function* () {
         recovery = options.recovery
           ? runtimeSession.followUps.useRecovery(options.recovery)
           : runtimeSession.followUps.claimRecovery(streamId, true);
@@ -867,14 +867,15 @@ export function createChatSessionController(
             runtimeSession.followUps.notifySent(recovery.streamId);
         }
 
-        await effectRuntime().runPromise(snapshotStore.preload([streamId]));
+        yield* snapshotStore.preload([streamId]);
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId = runMetadata.executionId;
         if (!executionId) return false;
 
-        const config =
-          runMetadata.config ??
-          (await getExecutionStore(executionId).readConfig());
+        const config = yield* getExecutionRecords(
+          runtimeSession,
+          executionId,
+        ).readConfig();
         if (!config) return false;
         if (isCancellationRequested()) return false;
         const parentStreamId = snapshotStore.getParentStreamId(streamId);
@@ -898,17 +899,14 @@ export function createChatSessionController(
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 
-        const result = await setCliHelperModel(config.model).then(() => {
-          recoveryHandedOff = true;
-          return effectRuntime().runPromise(
-            resumeRun(executionId, {
-              ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
-              recovery,
-              extraFollowUps: options.extraFollowUps,
-              onFollowUpQueueReady: options.onFollowUpQueueReady,
-              isCancellationRequested,
-            }),
-          );
+        yield* tryPromise(() => setCliHelperModel(config.model));
+        recoveryHandedOff = true;
+        const result = yield* resumeRun(executionId, {
+          ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+          recovery,
+          extraFollowUps: options.extraFollowUps,
+          onFollowUpQueueReady: options.onFollowUpQueueReady,
+          isCancellationRequested,
         });
 
         if ('started' in result && result.delivered) {
@@ -919,9 +917,9 @@ export function createChatSessionController(
           session.runExitCode = CliExitCode.Interrupted;
         }
         return false;
-      };
+      });
       return effectRuntime().runPromise(
-        tryPromise(attempt).pipe(
+        attempt.pipe(
           Effect.catch((error) =>
             Effect.sync(() => {
               reportRunFailure(error);

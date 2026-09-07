@@ -24,7 +24,7 @@ import {
   ExecutionLeaseActiveError,
   inspectExecutionLease,
 } from '@agent/storage/executionLease';
-import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { getExecutionRecords } from '@agent/storage/ExecutionKVStore';
 import { checkpointExists } from '@agent/storage/resumability';
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
@@ -226,11 +226,11 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     if (suppliedRecovery)
       releaseUnstartedRecovery(session, suppliedRecovery, provisional);
   };
-  const store = getExecutionStore(executionId);
-  const [config, meta] = yield* Effect.tryPromise({
-    try: () => Promise.all([store.readConfig(), store.readMeta()]),
-    catch: ensureError,
-  }).pipe(Effect.onError(() => Effect.sync(() => abandonSupplied())));
+  const store = getExecutionRecords(session, executionId);
+  const [config, meta] = yield* Effect.all([
+    store.readConfig(),
+    store.readMeta(),
+  ]).pipe(Effect.onError(() => Effect.sync(() => abandonSupplied())));
   const streamId = meta?.streamId;
   if (!config || !streamId) {
     abandonSupplied();
@@ -262,13 +262,15 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
       const snapshots = session.snapshots;
       if (snapshots.getRunMetadata(streamId).executionId === undefined)
         yield* snapshots.preload([streamId]);
-      return yield* Effect.tryPromise({
-        try: () =>
-          retrieveSessionResumeData(streamId, executionId, config, {
-            parentStreamId: snapshots.getParentStreamId(streamId),
-          }),
-        catch: ensureError,
-      });
+      return yield* retrieveSessionResumeData(
+        streamId,
+        executionId,
+        config,
+        session,
+        {
+          parentStreamId: snapshots.getParentStreamId(streamId),
+        },
+      );
     }),
   );
   if (Result.isFailure(retrieved)) {
@@ -288,10 +290,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   }
   if (!resume) {
     releaseQueue();
-    const classification = yield* Effect.tryPromise({
-      try: () => classifyRun(executionId),
-      catch: ensureError,
-    });
+    const classification = yield* classifyRun(executionId, session);
     const failed = recordRunRefusal(streamId, session, classification);
     if (
       classification.kind === 'held_elsewhere' ||
@@ -301,10 +300,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     const unusable =
       classification.kind === 'unclassified'
         ? classification.fault === 'checkpoint-malformed'
-        : yield* Effect.tryPromise({
-            try: () => checkpointExists(executionId),
-            catch: ensureError,
-          });
+        : yield* checkpointExists(executionId, session);
     if (!unusable) return { failed };
     log.warn(
       `Refusing to resume ${executionId}: its checkpoint holds no resumable state.`,

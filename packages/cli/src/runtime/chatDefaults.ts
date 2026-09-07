@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+import type { SessionHandle } from '@agent/runtime';
 import {
   isUserVisibleExecution,
   listExecutions,
@@ -12,7 +14,7 @@ import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
 import { isObject, toNewestFirstByTimestamp } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -90,7 +92,9 @@ export function __resetUserConfigWarningDedupeForTests(): void {
   previousUserConfigWarnings = new Set();
 }
 
-async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
+const loadUserDefaults = Effect.fn(function* (
+  quiet: boolean,
+): Effect.fn.Return<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). A read failure — corrupt JSON, a
   // permission error — a top-level shape that isn't an object, and an
@@ -110,15 +114,19 @@ async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
     if (previousUserConfigWarnings.has(message)) return;
     writeTextStderr(`WARN ${message}`);
   };
-  let raw: unknown;
-  try {
-    raw = await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME);
-  } catch (error: unknown) {
-    if (!isFileNotFoundError(error)) {
-      warn(`Could not read ${USER_CONFIG_LABEL}: ${toErrorMessage(error)}`);
-    }
-    raw = undefined;
-  }
+  let raw: unknown = yield* Effect.tryPromise({
+    try: () => GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME),
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        if (!isFileNotFoundError(error)) {
+          warn(`Could not read ${USER_CONFIG_LABEL}: ${toErrorMessage(error)}`);
+        }
+        return undefined;
+      }),
+    ),
+  );
   if (raw !== undefined && !isObject(raw)) {
     warn(`Ignoring ${USER_CONFIG_LABEL}; expected a JSON object.`);
     raw = undefined;
@@ -137,12 +145,14 @@ async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   for (const warning of warnings) warn(warning);
   previousUserConfigWarnings = thisCallsWarnings;
   return defaultsFromConfigValues(values);
-}
+});
 
-async function loadHistoryDefaults(): Promise<PartialDefaults> {
+const loadHistoryDefaults = Effect.fn(function* (
+  session: SessionHandle,
+): Effect.fn.Return<PartialDefaults> {
   // An unreadable history listing means no history defaults.
-  const entries: ExecutionListingEntry[] = await listExecutions().catch(
-    () => [],
+  const entries: ExecutionListingEntry[] = yield* listExecutions(session).pipe(
+    Effect.catch(() => Effect.succeed([])),
   );
   const candidates = toNewestFirstByTimestamp(
     entries.filter(isUserVisibleExecution).filter(
@@ -157,7 +167,7 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   const mostRecent = candidates[0];
   if (!mostRecent) return {};
   return { model: resolveKnownCliModelId(mostRecent.record.model) };
-}
+});
 
 interface ResolveChatDefaultsInit {
   readonly cwd: string;
@@ -180,9 +190,10 @@ interface ResolveChatDefaultsInit {
  * independence: a workspace that only sets `agent` still falls through to
  * user/history for `model`, but history never changes the single-chat agent.
  */
-export async function resolveChatDefaults(
+export const resolveChatDefaults = Effect.fn(function* (
   init: ResolveChatDefaultsInit,
-): Promise<ChatDefaults> {
+  session: SessionHandle,
+): Effect.fn.Return<ChatDefaults, Error> {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
   const envAgent = usableConfiguredAgent(init.envAgent);
@@ -199,13 +210,19 @@ export async function resolveChatDefaults(
     // Tiers are independent I/O — fan out in parallel.
     // Workspace defaults use the same .texra/config.json reader as the CLI
     // context so startup does not depend on platform initialization.
-    [workspace, user, history] = await Promise.all([
-      loadWorkspaceCliConfig(init.cwd).then((loaded) =>
-        defaultsFromConfigValues(loaded.values),
-      ),
-      loadUserDefaults(init.quiet ?? false),
-      loadHistoryDefaults(),
-    ]);
+    [workspace, user, history] = yield* Effect.all(
+      [
+        Effect.tryPromise({
+          try: () => loadWorkspaceCliConfig(init.cwd),
+          catch: ensureError,
+        }).pipe(
+          Effect.map((loaded) => defaultsFromConfigValues(loaded.values)),
+        ),
+        loadUserDefaults(init.quiet ?? false),
+        loadHistoryDefaults(session),
+      ],
+      { concurrency: 'unbounded' },
+    );
     // History never changes the chat agent, so only the two config tiers can
     // supply one; the order below is the per-field fallthrough.
     for (const defaults of [workspace, user]) {
@@ -231,4 +248,4 @@ export async function resolveChatDefaults(
     model: model ?? CLI_BUILTIN_DEFAULT_MODEL,
     modelSource: modelSource ?? 'builtin-default',
   };
-}
+});

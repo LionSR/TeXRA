@@ -4,17 +4,17 @@
  * behind both the agent-facing `/executions/{id}/files` listing and the CLI's
  * history file listing, so the two agree on what counts as internal metadata.
  *
- * The reserved-key vocabulary itself (meta, config, report, `child-*`, …) is
+ * The reserved turn-state key is
  * owned by `ExecutionKVStore`; the `flow_*` prefix is owned by
  * `persistedFlow`; workflow checkpoint keys are owned by `multiAgentWorkflow`.
  * This module only strips the on-disk `.json` suffix and defers to those
  * owners rather than re-deriving the vocabulary.
  *
  * Every real KV entry is written through `KVStore.keyToPath`, which always
- * appends `.json` — so a name without that suffix can never be an internal
+ * appends `.json`, so a name without that suffix can never be an internal
  * KV file. Requiring the suffix here (before checking the reserved-name
  * vocabulary) keeps a generated file that happens to be named exactly
- * `meta`, `config`, etc. from being wrongly hidden.
+ * `turn-state` from being wrongly hidden.
  */
 
 import { isReservedKvKeyName } from '@agent/storage';

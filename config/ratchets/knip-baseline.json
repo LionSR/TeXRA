@@ -749,12 +749,6 @@
       "file": "packages/cli/src/runtime/workflowInputs.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "createStdinWorkflowInputMaterializer"
-    },
-    {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "expandRunInputs"
     },
     {
@@ -762,12 +756,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "workflowInputGlobOptions"
-    },
-    {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StdinWorkflowInputMaterializer"
     },
     {
       "file": "packages/cli/src/runtime/workflowOutput.ts",
@@ -1482,12 +1470,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "STATE_SETTINGS"
-    },
-    {
-      "file": "src/shared/schemas/stream.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "EXECUTION_META_SCHEMA_VERSION"
     },
     {
       "file": "src/shared/schemas/subscriptionUsage.ts",

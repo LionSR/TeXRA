@@ -561,7 +561,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
         // Same non-blank provider-key/server-side-key check used by the
         // funnel and setup launch preflight.
         hasAnyUsableSetupCredential(),
-        listExecutions().then((entries) => entries.length > 0),
+        effectRuntime()
+          .runPromise(listExecutions(defaultSession()))
+          .then((entries) => entries.length > 0),
       ]);
       await backfillFirstRunDone(context.globalState, {
         hasCredential,

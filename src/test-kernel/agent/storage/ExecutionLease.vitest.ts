@@ -26,6 +26,10 @@ import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   deadOwner,
@@ -45,7 +49,7 @@ import { StorageFS } from '@utils/files/storageFS';
 const ownedExecutionIds = new Set<ExecutionId>();
 
 async function writeExecution(executionId: ExecutionId): Promise<void> {
-  await getExecutionStore(executionId).writeMeta({
+  await getExecutionStore(executionId).write('lease-probe', {
     timestamp: '2026-07-16T12:00:00.000Z',
   });
 }
@@ -405,7 +409,9 @@ describe('cross-process execution leases', () => {
       publish: () => {},
       approvals: createSessionApprovals({ setApprovalBypassState() {} }),
       publishResult: () => {},
-      releaseRootExecutionLease: async () => undefined,
+      releaseRootExecutionLease: () => Effect.void,
+      finalizeExecution: (input) =>
+        Effect.succeed({ ok: true, outcome: input.outcome }),
     });
     const readToken = async (): Promise<string> => {
       const [record, ...rest] = await readLeaseRecords(executionId);
@@ -479,11 +485,16 @@ describe('cross-process execution leases', () => {
     await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
       status: 'owned',
     });
-    await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.COMPLETED,
-      flowRecord: 'preserve',
-    });
+    const session = createProcessSession();
+    publishTestRunStart(session, `stream:${executionId}`, executionId);
+    await session.settlePublications();
+    await Effect.runPromise(
+      finalizeRun(session, {
+        executionId,
+        outcome: RUN_OUTCOME.COMPLETED,
+        flowRecord: 'preserve',
+      }),
+    );
     await releaseOwnedExecutionLease(executionId);
     ownedExecutionIds.delete(executionId);
 
@@ -537,7 +548,7 @@ describe('cross-process execution leases', () => {
 
     expect(ownsExecutionLease(executionId)).toBe(false);
     await expect(
-      getExecutionStore(executionId).writeMeta({
+      getExecutionStore(executionId).write('lease-probe', {
         timestamp: '2026-07-16T12:01:00.000Z',
       }),
     ).rejects.toBeInstanceOf(ExecutionLeaseLostError);

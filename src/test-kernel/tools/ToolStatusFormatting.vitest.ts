@@ -3,9 +3,11 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
+import type { ExecutionListingEntry } from '@agent/storage';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 
 // Local imports
-import type { ExecutionListingEntry } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
@@ -80,7 +82,9 @@ describe('tool status formatting', () => {
     // The row's own `outcome` is a recorded durable fact, so the status column
     // shows it without re-reading the metadata file it came from. The other
     // columns under test are the `process` category and the suppressed model.
-    await expect(formatListingLine(entry)).resolves.toBe(
+    await expect(
+      Effect.runPromise(formatListingLine(entry, defaultSession())),
+    ).resolves.toBe(
       '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [completed]  parent=fcf5150d37c6',
     );
   });

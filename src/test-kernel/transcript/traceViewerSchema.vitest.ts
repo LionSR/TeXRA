@@ -1,14 +1,14 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  aggregateId,
   EXECUTION_STATUS,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -17,14 +17,16 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
-import { assembleTrace, StreamLogStore } from '@transcript';
+import { assembleTrace } from '@transcript';
 import {
   parseTraceData,
   TraceDataSchema,
@@ -70,29 +72,30 @@ describe('trace-viewer TraceDataSchema', () => {
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
     const streamId = getStreamTabId('review', { executionId });
-    await getExecutionStore(executionId).writeRunRecord(executionConfig);
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-      outcome: 'completed',
-      streamId,
-    });
-    const store = StreamLogStore.ephemeral('trace schema fixture');
-    appendTranscriptEntry(store, streamId, {
-      id: 'entry-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'hello',
-    });
-
-    const result = await Effect.runPromise(
-      assembleTrace(executionId, {
-        roots: processWorkspaceRoots(),
-        snapshots: createTestSession().snapshots,
-        transcripts: store,
-      }),
+    const session = createTestSession();
+    publishTestRunStart(session, streamId, executionId);
+    await session.settlePublications();
+    await Effect.runPromise(
+      getExecutionRecords(session, executionId).writeRunRecord(executionConfig),
     );
+    session.publish([
+      {
+        type: 'log',
+        aggregateId: aggregateId('stream', streamId),
+        message: 'hello',
+        level: LOG_LEVELS.INFO,
+        messageType: MESSAGE_TYPES.DEFAULT,
+      },
+      {
+        type: 'status',
+        aggregateId: aggregateId('stream', streamId),
+        phase: 'completed',
+        cause: 'lifecycle',
+      },
+    ]);
+    await session.settlePublications();
+    const result = await Effect.runPromise(assembleTrace(executionId, session));
+    session.dispose();
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
 

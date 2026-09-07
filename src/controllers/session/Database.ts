@@ -59,6 +59,7 @@ import {
   referencedAggregates,
   type AggregateId,
   type CommitOrdinal,
+  type ExecutionId,
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -129,6 +130,7 @@ CREATE TABLE IF NOT EXISTS event (
 CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);
 CREATE INDEX IF NOT EXISTS event_agg_commit   ON event(aggregate_id, "commit");
 CREATE INDEX IF NOT EXISTS event_type_commit  ON event(type, "commit");
+CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.parentStartCommit')) WHERE type = 'run.start.1';
 `;
 
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
@@ -305,6 +307,32 @@ export const databaseLayer = (
         WHERE e."commit" > ? AND e."commit" <= ?
           AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         ORDER BY e."commit"`);
+      const executionRecords = db.prepare(`
+        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?1),
+        latest AS (
+          SELECT aggregate_id, type, MAX(seq) AS seq FROM event
+          WHERE aggregate_id = ?1
+            OR (aggregate_id = (SELECT id FROM own_stream) AND type IN ('run.start.1', 'status.1', 'stream.removed.1'))
+          GROUP BY aggregate_id, type
+        )
+        SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq)
+        ORDER BY "commit"
+      `);
+      const executionChildren = db.prepare(`
+        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?1),
+        parent AS (SELECT "commit" AS start FROM event WHERE aggregate_id = (SELECT id FROM own_stream) AND type = 'run.start.1'),
+        children AS (SELECT aggregate_id AS id, data FROM event INDEXED BY event_parent_start
+          WHERE type = 'run.start.1' AND json_extract(data, '$.parentStartCommit') = (SELECT start FROM parent)),
+        relevant AS (
+          SELECT id, 'run.start.1' AS type FROM children
+          UNION ALL SELECT id, 'stream.removed.1' FROM children
+          UNION ALL SELECT json_array('execution',json_extract(data,'$.executionId')), 'execution.launchLabel.1' FROM children
+          UNION ALL SELECT id, 'run.start.1' FROM own_stream
+          UNION ALL SELECT id, 'stream.removed.1' FROM own_stream
+        ),
+        latest AS (SELECT e.aggregate_id,e.type,MAX(e.seq) AS seq FROM relevant r JOIN event e ON e.aggregate_id=r.id AND e.type=r.type GROUP BY e.aggregate_id,e.type)
+        SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq) ORDER BY "commit"
+      `);
       const aggregate = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
           AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
@@ -570,6 +598,7 @@ export const databaseLayer = (
           // Capture the declared parent in this same transaction. A
           // reused logical id must not redirect the child to a new run.
           let parentStartCommit: number | undefined;
+          let parentExecutionId: ExecutionId | undefined;
           if (draft.type === 'run.start' && draft.parentStreamId != null) {
             const parent = readState([
               qualifyAggregateId('stream', draft.parentStreamId),
@@ -580,21 +609,33 @@ export const databaseLayer = (
               );
             }
             parentStartCommit = parent.startCommit;
+            const parentRow = aggregate.get(
+              qualifyAggregateId('stream', draft.parentStreamId),
+              1,
+            );
+            if (!parentRow) throw new Error('Parent creation row is missing');
+            const parentCreation = decodeEvent(parentRow);
+            if (parentCreation.type !== 'run.start')
+              throw new Error('Parent creation row is missing');
+            parentExecutionId = parentCreation.executionId;
           }
           // A tombstone names only execution directories owned by this
           // lifecycle. Derive the targets under the same write permit
           // and transaction as closure; no caller chooses cleanup paths.
-          const committedDraft =
-            draft.type === 'stream.removed'
-              ? {
-                  ...draft,
-                  executionIds: deletionExecutions
-                    .all(draft.aggregateId)
-                    .map((row) => ExecutionIdSchema.parse(row.executionId)),
-                }
-              : draft;
+          const committedDraft = (() => {
+            if (draft.type === 'stream.removed')
+              return {
+                ...draft,
+                executionIds: deletionExecutions
+                  .all(draft.aggregateId)
+                  .map((row) => ExecutionIdSchema.parse(row.executionId)),
+              };
+            return parentExecutionId === undefined
+              ? draft
+              : { ...draft, parentExecutionId };
+          })();
           const committedPayload =
-            draft.type === 'stream.removed'
+            draft.type === 'stream.removed' || parentExecutionId !== undefined
               ? payloadOf(committedDraft)
               : payload;
           const commit = insertEvent.get(
@@ -640,7 +681,9 @@ export const databaseLayer = (
           }
           return {
             ...committedDraft,
-            ...(parentStartCommit === undefined ? {} : { parentStartCommit }),
+            ...(parentStartCommit === undefined
+              ? {}
+              : { parentStartCommit, parentExecutionId }),
             seq,
             commit,
             ownerId: identity.ownerId,
@@ -661,6 +704,10 @@ export const databaseLayer = (
           query(() =>
             listing.all(JSON.stringify(LISTING_TYPES)).map(decodeEvent),
           ),
+        readExecutionRecords: (id) =>
+          query(() => executionRecords.all(id).map(decodeEvent)),
+        readExecutionChildren: (id) =>
+          query(() => executionChildren.all(id).map(decodeEvent)),
         readAggregate: (id, fromSeq) =>
           query(() => aggregate.all(id, fromSeq).map(decodeEvent)),
         aggregatesAfterCommit: (ids, afterCommit, throughCommit) =>
@@ -706,7 +753,7 @@ export const databaseLayer = (
           ),
         acquireClaims: (ids) =>
           Effect.gen(function* () {
-            if (ids.length === 0) return;
+            if (ids.length === 0) return [];
             const observed = yield* query(() => readState(ids));
             if (
               observed.length !== new Set(ids).size ||
@@ -717,7 +764,7 @@ export const databaseLayer = (
               );
             }
             yield* proveReclaimable(observed);
-            yield* transact(() => {
+            return yield* transact(() => {
               for (const row of observed) {
                 if (
                   claim.run(identity.ownerId, row.aggregateId, row.ownerId)
@@ -728,6 +775,9 @@ export const databaseLayer = (
                   );
                 }
               }
+              return observed
+                .filter((row) => row.ownerId !== identity.ownerId)
+                .map((row) => row.aggregateId);
             });
           }),
         removeStream: (id, mode, expectedStartCommit) =>

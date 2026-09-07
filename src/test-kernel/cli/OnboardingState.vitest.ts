@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import { it as effectIt } from '@effect/vitest';
 
 import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
 import { formatPersonalApiKeysLine } from '@cli/runtime/apiStatus';
@@ -54,44 +56,52 @@ describe('formatPersonalApiKeysLine', () => {
 });
 
 describe('maybeRunCliOnboarding headless parity', () => {
-  it('returns configured:false and writes nothing in headless mode', async () => {
-    const writeSpy = vi.spyOn(process.stdout, 'write');
-    try {
-      await expect(
-        maybeRunCliOnboarding({
-          mode: 'headless',
-          stdoutIsTty: true,
-          termIsDumb: false,
-        }),
-      ).resolves.toEqual({ configured: false, declined: false });
-      expect(writeSpy).not.toHaveBeenCalled();
-    } finally {
-      writeSpy.mockRestore();
-    }
-  });
+  effectIt.effect(
+    'returns configured:false and writes nothing in headless mode',
+    () =>
+      Effect.gen(function* () {
+        const writeSpy = vi.spyOn(process.stdout, 'write');
+        try {
+          expect(
+            yield* maybeRunCliOnboarding({
+              mode: 'headless',
+              stdoutIsTty: true,
+              termIsDumb: false,
+            }),
+          ).toEqual({ configured: false, declined: false });
+          expect(writeSpy).not.toHaveBeenCalled();
+        } finally {
+          writeSpy.mockRestore();
+        }
+      }),
+  );
 
-  it('returns configured:false on a non-TTY stdout even when marked interactive', async () => {
-    // The defensive `!process.stdout.isTTY` guard must bail before rendering.
-    // Stub isTTY explicitly so the test is deterministic regardless of whether
-    // the runner attaches a TTY (vitest locally vs CI).
-    const original = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, 'isTTY', {
-      value: false,
-      configurable: true,
-    });
-    try {
-      await expect(
-        maybeRunCliOnboarding({
-          mode: 'interactive',
-          stdoutIsTty: true,
-          termIsDumb: false,
-        }),
-      ).resolves.toEqual({ configured: false, declined: false });
-    } finally {
-      Object.defineProperty(process.stdout, 'isTTY', {
-        value: original,
-        configurable: true,
-      });
-    }
-  });
+  effectIt.effect(
+    'returns configured:false on a non-TTY stdout even when marked interactive',
+    () =>
+      Effect.gen(function* () {
+        // The defensive `!process.stdout.isTTY` guard must bail before rendering.
+        // Stub isTTY explicitly so the test is deterministic regardless of whether
+        // the runner attaches a TTY (vitest locally vs CI).
+        const original = process.stdout.isTTY;
+        Object.defineProperty(process.stdout, 'isTTY', {
+          value: false,
+          configurable: true,
+        });
+        try {
+          expect(
+            yield* maybeRunCliOnboarding({
+              mode: 'interactive',
+              stdoutIsTty: true,
+              termIsDumb: false,
+            }),
+          ).toEqual({ configured: false, declined: false });
+        } finally {
+          Object.defineProperty(process.stdout, 'isTTY', {
+            value: original,
+            configurable: true,
+          });
+        }
+      }),
+  );
 });

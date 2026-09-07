@@ -1,136 +1,68 @@
-import { describe, expect, it, vi } from 'vitest';
-
-import { finalizeRun, getExecutionStore } from '@agent/storage';
-import { writeSessionDescription } from '@agent/storage/executionLifecycle';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import { Effect } from 'effect';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { finalizeRun, getExecutionRecords } from '@agent/storage';
+import { aggregateId } from '@shared/schemas';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
+setupPlatform({ workspacePath: '/workspace' });
+let session: ReturnType<typeof createTestSession>;
+const id = 'bbb001';
+beforeEach(async () => {
+  session = createTestSession();
+  publishTestRunStart(session, 'stream:metadata', id);
+  await session.settlePublications();
+});
+
 describe('execution metadata updates', () => {
-  setupPlatform({ workspacePath: '/workspace' });
-
-  it('keeps every field when updates for one execution overlap', async () => {
-    const id = 'bbb001' as ExecutionId;
-    await getExecutionStore(id).writeMeta({
-      timestamp: new Date(0).toISOString(),
+  it('preserves description and outcome when independent facts overlap', async () => {
+    await Effect.runPromise(
+      Effect.all(
+        [
+          session.commit([
+            {
+              type: 'execution.description',
+              aggregateId: aggregateId('execution', id),
+              description: 'A described session',
+            },
+          ]),
+          finalizeRun(session, {
+            executionId: id,
+            outcome: 'completed',
+            flowRecord: 'preserve',
+          }),
+        ],
+        { concurrency: 'unbounded' },
+      ),
+    );
+    expect(
+      await Effect.runPromise(getExecutionRecords(session, id).readMeta()),
+    ).toMatchObject({
+      description: 'A described session',
+      outcome: 'completed',
     });
-
-    // Both are read-modify-write cycles over the same metadata record; without
-    // per-execution serialization the later write drops the earlier field.
-    await Promise.all([
-      writeSessionDescription(id, 'A described session'),
-      finalizeRun({
+  });
+  it('keeps a driver outcome when host-exit finalization follows', async () => {
+    await Effect.runPromise(
+      finalizeRun(session, {
         executionId: id,
-        outcome: RUN_OUTCOME.COMPLETED,
+        outcome: 'completed',
         flowRecord: 'preserve',
       }),
-    ]);
-
-    const meta = await getExecutionStore(id).readMeta();
-    expect(meta?.description).toBe('A described session');
-    expect(meta?.outcome).toBe(RUN_OUTCOME.COMPLETED);
-  });
-
-  // The host-exit drain finalizes CANCELLED for whatever a session still owns,
-  // and can reach the meta lock just after the run's own driver recorded a real
-  // outcome. Serialization alone would let it overwrite that; the backstop must
-  // yield to the driver instead.
-  it('keeps a driver-written outcome when a backstop finalizer follows it', async () => {
-    const id = 'bbb002' as ExecutionId;
-    await getExecutionStore(id).writeMeta({
-      timestamp: new Date(0).toISOString(),
-    });
-
-    await finalizeRun({
-      executionId: id,
-      outcome: RUN_OUTCOME.COMPLETED,
-      flowRecord: 'preserve',
-    });
-    await finalizeRun({
-      executionId: id,
-      outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: 'preserve',
-      keepExistingOutcome: true,
-    });
-
-    expect((await getExecutionStore(id).readMeta())?.outcome).toBe(
-      RUN_OUTCOME.COMPLETED,
     );
-  });
-
-  it('updates and finalizes core metadata despite malformed workflow observability', async () => {
-    const id = 'bbb003' as ExecutionId;
-    const store = getExecutionStore(id);
-    await store.write('meta', {
-      timestamp: new Date(0).toISOString(),
-      identity: { kind: 'process', tool: 'bash' },
-      description: 'Original description',
-      workflow: { lifecycle: 'active' },
-    });
-
-    await writeSessionDescription(id, 'Updated description');
-    await expect(
-      finalizeRun({
+    await Effect.runPromise(
+      finalizeRun(session, {
         executionId: id,
-        outcome: RUN_OUTCOME.COMPLETED,
+        outcome: 'cancelled',
         flowRecord: 'preserve',
+        keepExistingOutcome: true,
       }),
-    ).resolves.toMatchObject({ ok: true });
-
-    const meta = await store.readMeta();
-    expect(meta).toMatchObject({
-      identity: { kind: 'process', tool: 'bash' },
-      description: 'Updated description',
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
-    expect(meta?.workflow).toBeUndefined();
-  });
-
-  it('resolves to a failed result instead of rejecting when the terminal write fails', async () => {
-    const id = 'bbb004' as ExecutionId;
-    const store = getExecutionStore(id);
-    await store.writeMeta({
-      timestamp: new Date(0).toISOString(),
-    });
-
-    // Catchless callers rely on finalizeRun never rejecting: every store
-    // failure must surface as an ok: false result (#10614). CANCELLED +
-    // 'preserve' skips the fail-closed flow-record delete, isolating the
-    // terminal-write arm.
-    const writeError = new Error('terminal write rejected');
-    const writeSpy = vi
-      .spyOn(store, 'writeMeta')
-      .mockRejectedValueOnce(writeError);
-    try {
-      await expect(
-        finalizeRun({
-          executionId: id,
-          outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'preserve',
-        }),
-      ).resolves.toEqual({
-        ok: false,
-        error: writeError,
-        outcomePersisted: false,
-      });
-    } finally {
-      writeSpy.mockRestore();
-    }
-  });
-
-  it('accepts a later update after one fails on absent metadata', async () => {
-    const id = 'bbb002' as ExecutionId;
-    // Nothing to read-modify-write yet: this update fails inside the lock and
-    // must release it, or every later update for the execution would hang.
-    const failing = writeSessionDescription(id, 'dropped');
-    await getExecutionStore(id).writeMeta({
-      timestamp: new Date(0).toISOString(),
-    });
-    await failing;
-
-    await writeSessionDescription(id, 'Written after the failure');
-
-    expect((await getExecutionStore(id).readMeta())?.description).toBe(
-      'Written after the failure',
     );
+    expect(
+      await Effect.runPromise(getExecutionRecords(session, id).readMeta()),
+    ).toMatchObject({ outcome: 'completed' });
   });
 });

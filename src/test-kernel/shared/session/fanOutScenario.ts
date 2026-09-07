@@ -17,7 +17,7 @@ import {
   type FoldInput,
   type LocalRuntimeState,
   type RunIdentity,
-  type SessionEvent,
+  type DisplaySessionEvent,
   type StreamLogEntry,
   type StreamTabId,
   type WorkflowCallProgress,
@@ -85,7 +85,7 @@ type EntryFixture = StreamLogEntry extends infer E
 
 /** A durable arm without its envelope: what a publisher builds before the
  *  aggregate, seq, commit, owner, and clock are stamped on. */
-type SessionEventBody = SessionEvent extends infer E
+type DisplaySessionEventBody = DisplaySessionEvent extends infer E
   ? E extends unknown
     ? Omit<E, 'aggregateId' | 'seq' | 'commit' | 'ownerId' | 'at'>
     : never
@@ -94,7 +94,7 @@ type SessionEventBody = SessionEvent extends infer E
 /** Seq numbered per aggregate and committed in one session order, the way
  *  the event table keys them (contract C1). */
 export class Log {
-  readonly events: SessionEvent[] = [];
+  readonly events: DisplaySessionEvent[] = [];
   private readonly seq = new Map<string, number>();
   private readonly entrySeq = new Map<StreamTabId, number>();
   private commit = 0;
@@ -102,9 +102,9 @@ export class Log {
   emit(
     aggregateId: string,
     at: number,
-    body: SessionEventBody,
+    body: DisplaySessionEventBody,
     ownerId: string | null = OWNER,
-  ): SessionEvent {
+  ): DisplaySessionEvent {
     const key = qualifyAggregateId(
       body.type === 'inquiryThreadUpdated' ? 'inquiry' : 'stream',
       aggregateId,
@@ -121,15 +121,15 @@ export class Log {
       ownerId,
       at,
       ...body,
-    } as SessionEvent;
+    } as DisplaySessionEvent;
     this.events.push(event);
     return event;
   }
 
   /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
   drained(through = this.events.length): FoldInput {
-    const claims = new Map<SessionEvent['aggregateId'], string | null>();
-    const removed = new Set<SessionEvent['aggregateId']>();
+    const claims = new Map<DisplaySessionEvent['aggregateId'], string | null>();
+    const removed = new Set<DisplaySessionEvent['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
       if (event.seq === 1) claims.set(event.aggregateId, event.ownerId);
       if (event.type === 'stream.removed') {
@@ -183,7 +183,7 @@ function call(
   };
 }
 
-export const tail = (event: SessionEvent): FoldInput => ({
+export const tail = (event: DisplaySessionEvent): FoldInput => ({
   _tag: 'event',
   read: 'all',
   event,

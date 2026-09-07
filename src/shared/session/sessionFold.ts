@@ -78,7 +78,7 @@ import {
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type RoundIndexed,
-  type SessionEvent,
+  type DisplaySessionEvent,
   type StreamLogEntry,
   type StreamTabId,
   type TaskGroup,
@@ -138,8 +138,11 @@ import { StreamLog } from './traceEntries';
 
 import type { SessionView, StreamView, TranscriptView } from './sessionView';
 
-type RunStartEvent = Extract<SessionEvent, { type: 'run.start' }>;
-type TranscriptEntryEvent = Extract<SessionEvent, { type: 'transcript.entry' }>;
+type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
+type TranscriptEntryEvent = Extract<
+  DisplaySessionEvent,
+  { type: 'transcript.entry' }
+>;
 
 /** Workflow-script stream ids whose run model a batch derives at its end. */
 type DeferredRunModels = Set<StreamTabId> | null;
@@ -1329,7 +1332,7 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
 
 /** A tool-use fact on a stream whose arm cannot hold it is a publisher or
  *  category defect, made loud at the fold's boundary. */
-function wrongArm(stream: StreamView, event: SessionEvent): never {
+function wrongArm(stream: StreamView, event: DisplaySessionEvent): never {
   throw new Error(
     `${event.type} names ${stream.id}, a ${stream.category} stream; the fact belongs to the ${AgentCategory.ToolUse} arm`,
   );
@@ -1339,7 +1342,7 @@ function wrongArm(stream: StreamView, event: SessionEvent): never {
  *  the transcript tier are handled by the caller). */
 function applyOwnArm(
   stream: StreamView,
-  event: Exclude<SessionEvent, TranscriptEntryEvent>,
+  event: Exclude<DisplaySessionEvent, TranscriptEntryEvent>,
 ): StreamView {
   switch (event.type) {
     case 'log':
@@ -1488,7 +1491,7 @@ function applyOwnArm(
 function applySessionSlices(
   view: SessionView,
   streamId: StreamTabId | null,
-  event: SessionEvent,
+  event: DisplaySessionEvent,
 ): void {
   switch (event.type) {
     case 'run.start':
@@ -1593,7 +1596,7 @@ function relink(
 
 /** The stream a durable event names: its aggregate, except for the thread
  *  aggregate of an inquiry (5.1). */
-function streamOf(event: SessionEvent): StreamTabId | null {
+function streamOf(event: DisplaySessionEvent): StreamTabId | null {
   return event.type === 'inquiryThreadUpdated'
     ? null
     : aggregateTarget(event.aggregateId).id;
@@ -1602,7 +1605,7 @@ function streamOf(event: SessionEvent): StreamTabId | null {
 /** Returns whether the event changed anything. */
 function foldDurable(
   view: SessionView,
-  event: SessionEvent,
+  event: DisplaySessionEvent,
   deferred: DeferredRunModels,
   read: 'listing' | 'aggregate' | 'all',
 ): boolean {
@@ -1692,7 +1695,7 @@ function foldDurable(
 /** Replay and live durable inputs use one trace projection for each resident aggregate. */
 function foldTraceEvent(
   view: SessionView,
-  event: SessionEvent,
+  event: DisplaySessionEvent,
   deferred: DeferredRunModels,
 ): boolean {
   const retained = view.folded.get(event.aggregateId);

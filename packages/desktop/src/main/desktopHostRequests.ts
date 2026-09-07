@@ -190,7 +190,7 @@ export function createDesktopHostRequests(
   const fileActions = new DesktopProgressFileActions(
     { ...host, showErrorMessage: rejectRequest },
     {
-      snapshots: session.snapshots,
+      session,
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
       startExecution: (request) => {
@@ -259,11 +259,13 @@ export function createDesktopHostRequests(
     streamId: StreamTabId,
     editedFile: string,
   ): Promise<DesktopLatexdiffRunContext | undefined> {
-    await effectRuntime().runPromise(snapshots.preload([streamId]));
+    const config = await effectRuntime().runPromise(
+      runActions.readConfig(streamId),
+    );
     const outputsByRound = cloneRoundIndexed(
       snapshots.getOutputFiles(streamId),
     );
-    const { config, executionId } = getRunMetadata(streamId);
+    const { executionId } = getRunMetadata(streamId);
     const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
       ? {
           agent: config.agent,
@@ -629,27 +631,32 @@ export function createDesktopHostRequests(
         await effectRuntime().runPromise(
           session.snapshots.preload([request.streamId]),
         );
-        await runActions.runCompileFixer(request.streamId);
+        await effectRuntime().runPromise(
+          runActions.runCompileFixer(request.streamId),
+        );
         return done;
       case 'useOwnApiKey':
         await effectRuntime().runPromise(runActions.useOwnApiKey(request));
         return done;
-      case 'latexdiff':
-        await effectRuntime().runPromise(
-          session.snapshots.preload([request.streamId]),
+      case 'latexdiff': {
+        const config = await effectRuntime().runPromise(
+          runActions.readConfig(request.streamId),
         );
-        await workflowRunActions.diffStream(request.streamId);
+        await workflowRunActions.diffStream(request.streamId, config);
         return done;
+      }
       case 'pack':
-      case 'clean':
-        await effectRuntime().runPromise(
-          session.snapshots.preload([request.streamId]),
+      case 'clean': {
+        const config = await effectRuntime().runPromise(
+          runActions.readConfig(request.streamId),
         );
         await workflowRunActions.runFileOperation(
           request.streamId,
           request.kind,
+          config,
         );
         return done;
+      }
       case 'latexdiffs':
         await latexdiffs(request);
         return done;
@@ -711,12 +718,13 @@ export function createDesktopHostRequests(
           request.feedback ?? undefined,
         );
         return done;
-      case 'fileAction':
-        await effectRuntime().runPromise(
-          session.snapshots.preload([request.streamId]),
+      case 'fileAction': {
+        const config = await effectRuntime().runPromise(
+          runActions.readConfig(request.streamId),
         );
-        await workflowFileActions.handle(request);
+        await workflowFileActions.handle(request, config);
         return done;
+      }
       case 'restoreProposalConfig':
         await restoreIntoLauncher(runActions.restoreProposal(request.proposal));
         return done;

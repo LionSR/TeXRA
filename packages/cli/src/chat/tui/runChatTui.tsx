@@ -180,7 +180,9 @@ export async function runChat(
   // resolution below then see the freshly-set credentials in the same process.
   const { maybeRunCliOnboarding } =
     await import('@cli/onboarding/runOnboarding');
-  const onboarding = await maybeRunCliOnboarding(context);
+  const onboarding = await effectRuntime().runPromise(
+    maybeRunCliOnboarding(context),
+  );
   if (onboarding.declined) {
     // The user saw the picker and chose "Skip for now"; the skip summary already
     // told them how to set up later. Exit cleanly instead of falling through to
@@ -200,15 +202,20 @@ export async function runChat(
   });
   await effectRuntime().runPromise(loadAgents());
   const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
-  const defaults = await resolveChatDefaults({
-    cwd: context.cwd,
-    agentOverride: explicitAgent ?? setupAgentOverride,
-    modelOverride: initialResume?.config.model ?? init.modelOverride,
-    envAgent: context.envAgent,
-    envModel: context.envModel,
-    visibleToolUseAgents,
-    quiet: context.quietLogs,
-  });
+  const defaults = await effectRuntime().runPromise(
+    resolveChatDefaults(
+      {
+        cwd: context.cwd,
+        agentOverride: explicitAgent ?? setupAgentOverride,
+        modelOverride: initialResume?.config.model ?? init.modelOverride,
+        envAgent: context.envAgent,
+        envModel: context.envModel,
+        visibleToolUseAgents,
+        quiet: context.quietLogs,
+      },
+      runtimeSession,
+    ),
+  );
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {
     writeTextStderr(agentUsageError);
@@ -497,9 +504,10 @@ export async function runChat(
       onSuspend={() => exitController.handleSigtstp()}
       onKillExecution={(executionId) => {
         runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
-        runtimeSession.executions.kill(executionId, {
+        const stop = runtimeSession.executions.kill(executionId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
+        effectRuntime().runFork(stop.settlement);
       }}
       onWorkflowControl={(executionId, action) => {
         runtimeSession.workflowControls.control(

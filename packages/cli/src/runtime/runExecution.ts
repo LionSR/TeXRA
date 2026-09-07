@@ -1,4 +1,4 @@
-import { Deferred, Effect, Result } from 'effect';
+import { Cause, Deferred, Effect, Result } from 'effect';
 
 import {
   attachTerminalResultToast,
@@ -24,7 +24,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { aggregateError, generateExecutionId, onAbort } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
@@ -53,7 +53,7 @@ type RunAgentWorkflowOutput = NonNullable<
 type CliWorkflowOutputHandler = (
   result: Parameters<RunAgentWorkflowOutput>[0],
   tryCommitPublication: () => boolean,
-) => ReturnType<RunAgentWorkflowOutput>;
+) => Effect.Effect<Awaited<ReturnType<RunAgentWorkflowOutput>>, Error>;
 
 interface CliExecuteOptions {
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
@@ -114,58 +114,65 @@ export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
  * common request lifecycle so workflow, tool-use, and multi-agent runs cannot
  * drift on validation, execution ids, or category-mismatch status writes.
  */
-export async function executeCliConfig<
+export function executeCliConfig<
   C extends AgentCategory | undefined = undefined,
 >(
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliConfigExecuteOptions<C> = {},
-): Promise<CliConfigExecuteResult<C>> {
-  const {
-    expectedCategory,
-    categoryMismatchMessage,
-    executionId: resumedExecutionId,
-    ...executeOptions
-  } = options;
-  const executionId = resumedExecutionId ?? generateExecutionId();
-  const validation = validateExecutionRequest({ config, executionId });
-  if (!validation.valid) {
-    writeTextStderr(validation.message);
-    return { ok: false, exitCode: CliExitCode.Usage };
-  }
+): Effect.Effect<CliConfigExecuteResult<C>, Error> {
+  return Effect.gen(function* () {
+    const {
+      expectedCategory,
+      categoryMismatchMessage,
+      executionId: resumedExecutionId,
+      ...executeOptions
+    } = options;
+    const executionId = resumedExecutionId ?? generateExecutionId();
+    const validation = validateExecutionRequest({ config, executionId });
+    if (!validation.valid) {
+      writeTextStderr(validation.message);
+      return { ok: false as const, exitCode: CliExitCode.Usage };
+    }
 
-  const request: RunAgentRequest = resumedExecutionId
-    ? { kind: 'resume', ...validation.request, executionId }
-    : { kind: 'fresh', ...validation.request, executionId };
-  const execution = await executeCliRequest(request, runContext, {
-    ...executeOptions,
-    enforceCategory: expectedCategory !== undefined,
-  });
-  if (!execution.ok) {
-    return execution;
-  }
-  const { result } = execution;
+    const request: RunAgentRequest = resumedExecutionId
+      ? { kind: 'resume', ...validation.request, executionId }
+      : { kind: 'fresh', ...validation.request, executionId };
+    const execution = yield* executeCliRequest(request, runContext, {
+      ...executeOptions,
+      enforceCategory: expectedCategory !== undefined,
+    });
+    if (!execution.ok) {
+      return execution;
+    }
+    const { result } = execution;
 
-  if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    // Unreachable: `enforceCategory` above makes the launch throw before the
-    // run whenever the resolved agent setting disagrees, and `result.category`
-    // is stamped from that same resolved setting. Kept as an invariant so the
-    // `ExecuteAgentResultForCategory<C>` narrowing below stays honest.
-    throw new Error(
-      categoryMismatchMessage ??
-        `Agent resolved to a non ${expectedCategory} run.`,
-    );
-  }
+    if (
+      expectedCategory !== undefined &&
+      result.category !== expectedCategory
+    ) {
+      // Unreachable: `enforceCategory` above makes the launch throw before the
+      // run whenever the resolved agent setting disagrees, and `result.category`
+      // is stamped from that same resolved setting. Kept as an invariant so the
+      // `ExecuteAgentResultForCategory<C>` narrowing below stays honest.
+      throw new Error(
+        categoryMismatchMessage ??
+          `Agent resolved to a non ${expectedCategory} run.`,
+      );
+    }
 
-  return {
-    ok: true,
-    executionId,
-    outcomePersisted: execution.outcomePersisted,
-    result: result as ExecuteAgentResultForCategory<C>,
-  };
+    return {
+      ok: true as const,
+      executionId,
+      outcomePersisted: execution.outcomePersisted,
+      result: result as ExecuteAgentResultForCategory<C>,
+    };
+  }).pipe(
+    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  );
 }
 
-export async function executeCliToolUseConfig(
+export function executeCliToolUseConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliConfigExecuteOptions<typeof AgentCategory.ToolUse> & {
@@ -173,39 +180,41 @@ export async function executeCliToolUseConfig(
     readonly recoveryInputIsDurable?: boolean;
   } = {},
 ) {
-  const { recoveryInputIsDurable = true, ...executeOptions } = options;
-  const recoveryProcessCwd = tryReadCliCwd();
-  const workingDirectory = config.workingDirectory || runContext.cwd;
-  const execution = await executeCliConfig(config, runContext, {
-    ...executeOptions,
-    onInterruptedExecutionFinalized:
-      recoveryInputIsDurable === true
-        ? (executeOptions.onInterruptedExecutionFinalized ??
-          ((executionId) =>
-            writeInterruptedResumeHint(
-              formatInterruptedResumeHint(
-                runContext,
-                executionId,
-                'session',
-                workingDirectory,
-                recoveryProcessCwd,
-              ),
-              true,
-            )))
-        : undefined,
-    expectedCategory: AgentCategory.ToolUse,
-  });
-  if (!execution.ok) return execution;
+  return Effect.gen(function* () {
+    const { recoveryInputIsDurable = true, ...executeOptions } = options;
+    const recoveryProcessCwd = tryReadCliCwd();
+    const workingDirectory = config.workingDirectory || runContext.cwd;
+    const execution = yield* executeCliConfig(config, runContext, {
+      ...executeOptions,
+      onInterruptedExecutionFinalized:
+        recoveryInputIsDurable === true
+          ? (executeOptions.onInterruptedExecutionFinalized ??
+            ((executionId) =>
+              writeInterruptedResumeHint(
+                formatInterruptedResumeHint(
+                  runContext,
+                  executionId,
+                  'session',
+                  workingDirectory,
+                  recoveryProcessCwd,
+                ),
+                true,
+              )))
+          : undefined,
+      expectedCategory: AgentCategory.ToolUse,
+    });
+    if (!execution.ok) return execution;
 
-  const { result } = execution;
-  return {
-    ok: true,
-    result: {
-      ...result,
-      workingDirectory: runContext.cwd,
-    },
-    exitCode: runOutcomeExitCode(result.outcome),
-  };
+    const { result } = execution;
+    return {
+      ok: true as const,
+      result: {
+        ...result,
+        workingDirectory: runContext.cwd,
+      },
+      exitCode: runOutcomeExitCode(result.outcome),
+    };
+  });
 }
 
 /**
@@ -227,432 +236,444 @@ export async function executeCliToolUseConfig(
  * `workspaceState.update` failures) is genuinely unexpected and is rethrown
  * so the crash handler still reports it.
  */
-export async function executeCliRequest(
+export function executeCliRequest(
   request: RunAgentRequest,
   runContext: CliContext,
   options: CliExecuteOptions = {},
-): Promise<
+): Effect.Effect<
   | {
       ok: true;
       outcomePersisted: boolean;
       result: ExecuteAgentResult;
     }
-  | { ok: false; exitCode: CliExitCode }
+  | { ok: false; exitCode: CliExitCode },
+  Error
 > {
-  // Transcript persistence is a launch prerequisite for every headless run.
-  // This executes before runtime-host construction and before runAgent.
-  const session = await initializeCliTranscriptSession();
-  session.setApprovalPolicy(runContext.approvalPolicy);
-  const presentationHost = createCliRuntimeHost(runContext);
-  let failurePresented = false;
-  const renderWorkflowPlainProgress =
-    runContext.outputFormat === 'text' && runContext.renderRunProgress === true;
-  const detachRunProgressRenderer = presentationHost.attachRunProgressRenderer(
-    session,
-    {
-      executionId: request.executionId,
-    },
-  );
-  const detachHostInteractions = session.interactions.use(
-    createHeadlessCliHostInteractions(runContext, {
-      beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
-      emit: (event, payload) => {
-        if (event === 'requestShowError') failurePresented = true;
-        return presentationHost.emit(event, payload);
-      },
-      setApprovalBypassState: (update) =>
-        presentationHost.emitApprovalBypassState(update),
-    }),
-  );
-  // Present terminal-error toasts from the run's `result` event through the same
-  // presentationHost path the lifecycle used before (so ndjson / logger output is
-  // unchanged); the lifecycle no longer emits them directly.
-  const detachResultToast = attachTerminalResultToast(
-    session,
-    session.interactions,
-  );
-  const terminalResult = trackTerminalResultPresentation(
-    session,
-    (event) => event.executionId === request.executionId,
-  );
-  const detachSessionProgressProjection =
-    runContext.outputFormat === 'ndjson'
-      ? attachCliSessionProgressProjection(session)
-      : async () => undefined;
-  const detachWorkflowPlainOutput = renderWorkflowPlainProgress
-    ? attachWorkflowPlainOutput(session, {
-        executionId: request.executionId,
-        beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
-        writeLine: writeTextStderr,
-      })
-    : () => undefined;
-  const launchExecutionId = request.executionId;
-  let ownedExecutionId: ExecutionId | undefined;
-  // Feeds `runAgent`'s `launchSignal` option: the agent runtime's launch
-  // contract is still AbortSignal-native, so the launch-cancellation signal
-  // stays until that lane migrates it to fiber interruption (PRD R5 adapts
-  // signals only at such edges).
-  const launchAbortController = new AbortController();
-  let shutdownRequested = false;
-  // Workflow-output publication and shutdown-driven interruption race on the
-  // same synchronous tick (see tryCommitWorkflowOutputPublication and the
-  // onShutdown handler below): at most one may own the terminal verdict for
-  // this launch. Modeling that as one variable makes "both committed and
-  // interrupted" unrepresentable instead of relying on two booleans staying
-  // in sync by hand. The artifact-failure and report-dedupe bookkeeping are
-  // only ever meaningful once interrupted, so they live on that variant too.
-  type LaunchVerdict =
-    | { readonly kind: 'undecided' }
-    | { readonly kind: 'published' }
-    | {
-        readonly kind: 'interrupted';
-        artifactFailure: unknown;
-        finalizationFailureReported: boolean;
-      };
-  let launchVerdict: LaunchVerdict = { kind: 'undecided' };
-  const reportFinalizationFailure = (error: unknown): void => {
-    session.interactions.emit('requestShowError', {
-      message: toErrorMessage(error),
+  return Effect.gen(function* () {
+    // Transcript persistence is a launch prerequisite for every headless run.
+    // This executes before runtime-host construction and before runAgent.
+    const session = yield* Effect.tryPromise({
+      try: initializeCliTranscriptSession,
+      catch: ensureError,
     });
-  };
-  const reportShutdownFinalizationFailure = (error: Error): void => {
-    if (
-      launchVerdict.kind !== 'interrupted' ||
-      launchVerdict.finalizationFailureReported
-    ) {
-      return;
-    }
-    launchVerdict.finalizationFailureReported = true;
-    reportFinalizationFailure(error);
-  };
-  const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
-  const recoveryNoticeStarted = Deferred.makeUnsafe<void>();
-  let shutdownStatusFinalized: Promise<boolean> | undefined;
-  // Both callbacks enter on this event loop, and neither yields between the
-  // check and assignment. Exactly one can therefore own the terminal verdict.
-  const tryCommitWorkflowOutputPublication = (): boolean => {
-    if (launchVerdict.kind === 'interrupted') return false;
-    launchVerdict = { kind: 'published' };
-    return true;
-  };
-  const finalizeShutdownStatus = (): Promise<boolean> => {
-    if (launchVerdict.kind !== 'interrupted') return Promise.resolve(false);
-    shutdownStatusFinalized ??= effectRuntime().runPromise(
-      Effect.gen(function* () {
-        // Both call sites run after runAgent has already published (or failed to
-        // publish) the lease, so the plain variable is the settled answer.
-        const executionId = ownedExecutionId;
-        if (!executionId) return false;
-        const onFinalized = options.onInterruptedExecutionFinalized;
-        const drain = Effect.gen(function* () {
-          const terminalStatusPersisted = (yield* Effect.tryPromise({
-            try: () =>
-              finalizeRun({
-                executionId,
-                outcome: RUN_OUTCOME.CANCELLED,
-                flowRecord: 'preserve',
-                report: reportShutdownFinalizationFailure,
-              }),
-            catch: (error: unknown) => error,
-          })).ok;
-          yield* Effect.tryPromise({
-            try: () => session.releaseExecutionLease(executionId),
-            catch: (error: unknown) => error,
-          });
-          const resumability = terminalStatusPersisted
-            ? yield* Effect.tryPromise({
-                try: () => deriveResumability(executionId),
-                catch: (error: unknown) => error,
-              })
-            : undefined;
-          // The lease was released just above, so the checkpoint alone decides
-          // whether the recovery notice is usable.
-          if (
-            resumability?.kind === 'checkpoint' &&
-            onFinalized !== undefined
-          ) {
-            const advertise = yield* Effect.try({
-              try: () =>
-                options.canAdvertiseInterruptedExecution?.(resumability) ??
-                true,
-              catch: (error: unknown) => error,
-            });
-            if (advertise) {
-              yield* Deferred.succeed(recoveryNoticeStarted, undefined);
-              yield* Effect.tryPromise({
-                try: () => Promise.resolve(onFinalized(executionId)),
-                catch: (error: unknown) => error,
-              });
-            }
-          }
-          return true;
-        });
-        // Record the original drain failure for the one-shot runtime adapter
-        // below, which rethrows it into runAgent's artifact aggregate. This
-        // memoized operation itself resolves false so the outer shutdown await
-        // cannot rethrow the same error over the primary run failure. A lease
-        // loss is the expected shutdown contention, not a drain failure.
-        return yield* drain.pipe(
-          Effect.catch((error: unknown) =>
-            Effect.sync(() => {
-              if (
-                !(error instanceof ExecutionLeaseLostError) &&
-                launchVerdict.kind === 'interrupted'
-              ) {
-                launchVerdict.artifactFailure = error;
-              }
-              return false;
-            }),
-          ),
-        );
+    session.setApprovalPolicy(runContext.approvalPolicy);
+    const presentationHost = createCliRuntimeHost(runContext);
+    let failurePresented = false;
+    const renderWorkflowPlainProgress =
+      runContext.outputFormat === 'text' &&
+      runContext.renderRunProgress === true;
+    const detachRunProgressRenderer =
+      presentationHost.attachRunProgressRenderer(session, {
+        executionId: request.executionId,
+      });
+    const detachHostInteractions = session.interactions.use(
+      createHeadlessCliHostInteractions(runContext, {
+        beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
+        emit: (event, payload) => {
+          if (event === 'requestShowError') failurePresented = true;
+          return presentationHost.emit(event, payload);
+        },
+        setApprovalBypassState: (update) =>
+          presentationHost.emitApprovalBypassState(update),
       }),
     );
-    return shutdownStatusFinalized;
-  };
-  const disposeShutdownStatus = platform().lifecycle.onShutdown(
-    SHUTDOWN_PHASE.BEFORE,
-    async (shutdownDeadline) => {
-      shutdownRequested = true;
-      launchAbortController.abort();
-      // Paired with tryCommitWorkflowOutputPublication: keep this read of
-      // launchVerdict and the assignment below in one synchronous turn.
-      // Headless shutdown deliberately cascades into active children: a
-      // detached child cannot outlive the exiting CLI process, so the
-      // detach-on-stop toggle is not consulted on this path.
-      const interruptionAccepted =
-        launchVerdict.kind !== 'published' && launchExecutionId
-          ? session.executions.kill(launchExecutionId, {
-              detachActiveChildren: false,
-            })
-          : false;
-      if (interruptionAccepted && launchVerdict.kind === 'undecided') {
-        launchVerdict = {
-          kind: 'interrupted',
-          artifactFailure: undefined,
-          finalizationFailureReported: false,
+    // Present terminal-error toasts from the run's `result` event through the same
+    // presentationHost path the lifecycle used before (so ndjson / logger output is
+    // unchanged); the lifecycle no longer emits them directly.
+    const detachResultToast = attachTerminalResultToast(
+      session,
+      session.interactions,
+    );
+    const terminalResult = trackTerminalResultPresentation(
+      session,
+      (event) => event.executionId === request.executionId,
+    );
+    const detachSessionProgressProjection =
+      runContext.outputFormat === 'ndjson'
+        ? attachCliSessionProgressProjection(session)
+        : async () => undefined;
+    const detachWorkflowPlainOutput = renderWorkflowPlainProgress
+      ? attachWorkflowPlainOutput(session, {
+          executionId: request.executionId,
+          beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
+          writeLine: writeTextStderr,
+        })
+      : () => undefined;
+    const launchExecutionId = request.executionId;
+    let ownedExecutionId: ExecutionId | undefined;
+    // Feeds `runAgent`'s `launchSignal` option: the agent runtime's launch
+    // contract is still AbortSignal-native, so the launch-cancellation signal
+    // stays until that lane migrates it to fiber interruption (PRD R5 adapts
+    // signals only at such edges).
+    const launchAbortController = new AbortController();
+    let shutdownRequested = false;
+    // Workflow-output publication and shutdown-driven interruption race on the
+    // same synchronous tick (see tryCommitWorkflowOutputPublication and the
+    // onShutdown handler below): at most one may own the terminal verdict for
+    // this launch. Modeling that as one variable makes "both committed and
+    // interrupted" unrepresentable instead of relying on two booleans staying
+    // in sync by hand. The artifact-failure and report-dedupe bookkeeping are
+    // only ever meaningful once interrupted, so they live on that variant too.
+    type LaunchVerdict =
+      | { readonly kind: 'undecided' }
+      | { readonly kind: 'published' }
+      | {
+          readonly kind: 'interrupted';
+          artifactFailure: unknown;
+          finalizationFailureReported: boolean;
         };
-      }
-      let resumableCheckpoint:
-        Extract<ResumabilityDecision, { kind: 'checkpoint' }> | undefined;
-      if (launchVerdict.kind === 'interrupted' && ownedExecutionId) {
-        const executionId = ownedExecutionId;
-        const inspection = await effectRuntime().runPromise(
-          Effect.result(
-            Effect.tryPromise({
-              try: () => deriveResumability(executionId),
-              catch: (error: unknown) => error,
-            }),
-          ),
-        );
-        // The ordinary bounded shutdown path below remains authoritative when
-        // checkpoint inspection itself is unavailable.
-        if (
-          Result.isSuccess(inspection) &&
-          inspection.success.kind === 'checkpoint'
-        ) {
-          resumableCheckpoint = inspection.success;
-        }
-      }
-      // Earlier shutdown handlers interrupt the live agent sessions. Wait for
-      // runAgent to finish unwinding before the final drain releases ownership,
-      // so no transcript or checkpoint writer can race the lease release.
-      // A provider or filesystem operation outside our abortable boundaries
-      // must not prevent termination indefinitely before recovery is known to
-      // be possible: the lifecycle host's phase deadline (`shutdownDeadline`)
-      // bounds this wait. Once durable resumability and lease availability
-      // have been established, however, keep shutdown alive until the promised
-      // recovery notice has been flushed.
+    let launchVerdict: LaunchVerdict = { kind: 'undecided' };
+    const reportFinalizationFailure = (error: unknown): void => {
+      session.interactions.emit('requestShowError', {
+        message: toErrorMessage(error),
+      });
+    };
+    const reportShutdownFinalizationFailure = (error: Error): void => {
       if (
-        resumableCheckpoint &&
-        (options.canAdvertiseInterruptedExecution?.(resumableCheckpoint) ??
-          true) &&
-        options.onInterruptedExecutionFinalized
+        launchVerdict.kind !== 'interrupted' ||
+        launchVerdict.finalizationFailureReported
       ) {
-        await effectRuntime().runPromise(
-          Deferred.await(shutdownFinalizationDone),
-        );
         return;
       }
-      const first = await effectRuntime().runPromise(
-        Effect.raceAll([
-          Deferred.await(shutdownFinalizationDone).pipe(
-            Effect.as('finalized' as const),
-          ),
-          Effect.callback<'deadline'>((resume) => {
-            const detach = onAbort(shutdownDeadline, () =>
-              resume(Effect.succeed('deadline' as const)),
-            );
-            return Effect.sync(detach);
-          }),
-          ...(options.onInterruptedExecutionFinalized
-            ? [
-                Deferred.await(recoveryNoticeStarted).pipe(
-                  Effect.as('recovery-started' as const),
-                ),
-              ]
-            : []),
-        ]),
-      );
-      if (first === 'recovery-started') {
-        await effectRuntime().runPromise(
-          Deferred.await(shutdownFinalizationDone),
-        );
-      }
-    },
-  );
-  const openWorkflowOutput = options.openWorkflowOutput;
-  const invoke = (): Effect.Effect<ExecuteAgentResult, Error> =>
-    runAgent(request, {
-      session,
-      enforceCategory: options.enforceCategory,
-      openWorkflowOutput:
-        openWorkflowOutput === undefined
-          ? undefined
-          : (result) =>
-              openWorkflowOutput(result, tryCommitWorkflowOutputPublication),
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-      launchSignal: launchAbortController.signal,
-      beforeLeaseRelease: async () => {
-        const handled = await finalizeShutdownStatus();
-        if (
-          launchVerdict.kind === 'interrupted' &&
-          launchVerdict.artifactFailure !== undefined
-        ) {
-          const error = launchVerdict.artifactFailure;
-          launchVerdict.artifactFailure = undefined;
-          throw error;
-        }
-        return handled;
-      },
-      onExecutionLeaseAcquired: (executionId) => {
-        ownedExecutionId = executionId;
-      },
-      stopAfterCycle: options.stopAfterCycle,
-      approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
-        runContext,
-        runContext.approvalPolicy,
-      ),
-      onApprovalPolicyDenial: () =>
-        warnApprovalDenied(runContext, 'Tool or edit approval'),
-      runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-    });
-
-  let runResult:
-    | { readonly ok: true; readonly result: ExecuteAgentResult }
-    | { readonly ok: false } = { ok: false };
-  let primaryRunFailure: { readonly error: unknown } | undefined;
-  let shutdownLaunchAborted = false;
-  let presentationAttached = true;
-  const detachPresentation = async (): Promise<void> => {
-    if (!presentationAttached) return;
-    presentationAttached = false;
-    detachResultToast();
-    terminalResult.dispose();
-    detachRunProgressRenderer();
-    await detachSessionProgressProjection();
-    detachWorkflowPlainOutput();
-    detachHostInteractions();
-    await presentationHost.close();
-  };
-  const invocation = await effectRuntime().runPromise(
-    Effect.result(Effect.suspend(invoke)),
-  );
-  if (Result.isSuccess(invocation)) {
-    runResult = { ok: true, result: invocation.success };
-  } else {
-    const err = invocation.failure;
-    // Only a classified, already-handled AgentError resolves to a non-zero
-    // exit code here; anything else (e.g. registerExecution disk I/O,
-    // workspaceState.update failures) is unexpected and must keep
-    // propagating to bin/texra.ts's crash handler.
-    if (shutdownRequested && isUserAbort(err)) {
-      shutdownLaunchAborted = true;
-    } else if (!(err instanceof AgentError)) {
-      primaryRunFailure = { error: err };
-    } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
-      // A failure before lifecycle startup has no `result` event. Preserve the
-      // ordinary toast path when it ran, and provide the missing direct fallback
-      // while the presentation host is still attached. A launch failure that
-      // already presented itself through a targeted notification is marked by
-      // the delivery-confirmed throw site (model-not-recognized, and now also
-      // agent-not-found because `showAgentConfigBanner` renders a visible CLI
-      // error) -- this CLI-local `failurePresented` flag only tracks
-      // `requestShowError`, so it would otherwise re-surface that failure a
-      // second time here.
-      terminalResult.reportUnhandled(() =>
-        session.interactions.emit('requestShowError', {
-          message: toErrorMessage(err),
+      launchVerdict.finalizationFailureReported = true;
+      reportFinalizationFailure(error);
+    };
+    const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
+    const recoveryNoticeStarted = Deferred.makeUnsafe<void>();
+    let shutdownStatusFinalized: Promise<boolean> | undefined;
+    // Both callbacks enter on this event loop, and neither yields between the
+    // check and assignment. Exactly one can therefore own the terminal verdict.
+    const tryCommitWorkflowOutputPublication = (): boolean => {
+      if (launchVerdict.kind === 'interrupted') return false;
+      launchVerdict = { kind: 'published' };
+      return true;
+    };
+    const finalizeShutdownStatus = (): Promise<boolean> => {
+      if (launchVerdict.kind !== 'interrupted') return Promise.resolve(false);
+      shutdownStatusFinalized ??= effectRuntime().runPromise(
+        Effect.gen(function* () {
+          // Both call sites run after runAgent has already published (or failed to
+          // publish) the lease, so the plain variable is the settled answer.
+          const executionId = ownedExecutionId;
+          if (!executionId) return false;
+          const onFinalized = options.onInterruptedExecutionFinalized;
+          const drain = Effect.gen(function* () {
+            const terminalStatusPersisted = (yield* finalizeRun(session, {
+              executionId,
+              outcome: RUN_OUTCOME.CANCELLED,
+              flowRecord: 'preserve',
+              report: reportShutdownFinalizationFailure,
+            })).ok;
+            yield* session.releaseExecutionLease(executionId);
+            const resumability = terminalStatusPersisted
+              ? yield* deriveResumability(executionId, session)
+              : undefined;
+            // The lease was released just above, so the checkpoint alone decides
+            // whether the recovery notice is usable.
+            if (
+              resumability?.kind === 'checkpoint' &&
+              onFinalized !== undefined
+            ) {
+              const advertise = yield* Effect.try({
+                try: () =>
+                  options.canAdvertiseInterruptedExecution?.(resumability) ??
+                  true,
+                catch: (error: unknown) => error,
+              });
+              if (advertise) {
+                yield* Deferred.succeed(recoveryNoticeStarted, undefined);
+                yield* Effect.tryPromise({
+                  try: () => Promise.resolve(onFinalized(executionId)),
+                  catch: (error: unknown) => error,
+                });
+              }
+            }
+            return true;
+          });
+          // Record the original drain failure for the one-shot runtime adapter
+          // below, which rethrows it into runAgent's artifact aggregate. This
+          // memoized operation itself resolves false so the outer shutdown await
+          // cannot rethrow the same error over the primary run failure. A lease
+          // loss is the expected shutdown contention, not a drain failure.
+          return yield* drain.pipe(
+            Effect.catch((error: unknown) =>
+              Effect.sync(() => {
+                if (
+                  !(error instanceof ExecutionLeaseLostError) &&
+                  launchVerdict.kind === 'interrupted'
+                ) {
+                  launchVerdict.artifactFailure = error;
+                }
+                return false;
+              }),
+            ),
+          );
         }),
       );
-    }
-  }
-
-  disposeShutdownStatus.dispose();
-  let finalizationCompleted = false;
-  const cleanupFailures: unknown[] = [];
-  const finalization = await effectRuntime().runPromise(
-    Effect.result(
-      Effect.tryPromise({
-        try: async () => {
-          await finalizeShutdownStatus();
-          await session.flushArtifacts();
+      return shutdownStatusFinalized;
+    };
+    const disposeShutdownStatus = platform().lifecycle.onShutdown(
+      SHUTDOWN_PHASE.BEFORE,
+      async (shutdownDeadline) => {
+        shutdownRequested = true;
+        launchAbortController.abort();
+        // Paired with tryCommitWorkflowOutputPublication: keep this read of
+        // launchVerdict and the assignment below in one synchronous turn.
+        // Headless shutdown deliberately cascades into active children: a
+        // detached child cannot outlive the exiting CLI process, so the
+        // detach-on-stop toggle is not consulted on this path.
+        const stop =
+          launchVerdict.kind !== 'published' && launchExecutionId
+            ? session.executions.kill(launchExecutionId, {
+                detachActiveChildren: false,
+              })
+            : undefined;
+        if (stop?.accepted && launchVerdict.kind === 'undecided') {
+          launchVerdict = {
+            kind: 'interrupted',
+            artifactFailure: undefined,
+            finalizationFailureReported: false,
+          };
+        }
+        const interruptedExecutionId =
+          launchVerdict.kind === 'interrupted' ? ownedExecutionId : undefined;
+        if (stop) await effectRuntime().runPromise(stop.settlement);
+        let resumableCheckpoint:
+          Extract<ResumabilityDecision, { kind: 'checkpoint' }> | undefined;
+        if (interruptedExecutionId) {
+          const executionId = interruptedExecutionId;
+          const inspection = await effectRuntime().runPromise(
+            Effect.result(deriveResumability(executionId, session)),
+          );
+          // The ordinary bounded shutdown path below remains authoritative when
+          // checkpoint inspection itself is unavailable.
+          if (
+            Result.isSuccess(inspection) &&
+            inspection.success.kind === 'checkpoint'
+          ) {
+            resumableCheckpoint = inspection.success;
+          }
+        }
+        // Earlier shutdown handlers interrupt the live agent sessions. Wait for
+        // runAgent to finish unwinding before the final drain releases ownership,
+        // so no transcript or checkpoint writer can race the lease release.
+        // A provider or filesystem operation outside our abortable boundaries
+        // must not prevent termination indefinitely before recovery is known to
+        // be possible: the lifecycle host's phase deadline (`shutdownDeadline`)
+        // bounds this wait. Once durable resumability and lease availability
+        // have been established, however, keep shutdown alive until the promised
+        // recovery notice has been flushed.
+        if (
+          resumableCheckpoint &&
+          (options.canAdvertiseInterruptedExecution?.(resumableCheckpoint) ??
+            true) &&
+          options.onInterruptedExecutionFinalized
+        ) {
+          await effectRuntime().runPromise(
+            Deferred.await(shutdownFinalizationDone),
+          );
+          return;
+        }
+        const first = await effectRuntime().runPromise(
+          Effect.raceAll([
+            Deferred.await(shutdownFinalizationDone).pipe(
+              Effect.as('finalized' as const),
+            ),
+            Effect.callback<'deadline'>((resume) => {
+              const detach = onAbort(shutdownDeadline, () =>
+                resume(Effect.succeed('deadline' as const)),
+              );
+              return Effect.sync(detach);
+            }),
+            ...(options.onInterruptedExecutionFinalized
+              ? [
+                  Deferred.await(recoveryNoticeStarted).pipe(
+                    Effect.as('recovery-started' as const),
+                  ),
+                ]
+              : []),
+          ]),
+        );
+        if (first === 'recovery-started') {
+          await effectRuntime().runPromise(
+            Deferred.await(shutdownFinalizationDone),
+          );
+        }
+      },
+    );
+    const openWorkflowOutput = options.openWorkflowOutput;
+    const invoke = (): Effect.Effect<ExecuteAgentResult, Error> =>
+      runAgent(request, {
+        session,
+        enforceCategory: options.enforceCategory,
+        openWorkflowOutput:
+          openWorkflowOutput === undefined
+            ? undefined
+            : (result) =>
+                effectRuntime().runPromise(
+                  openWorkflowOutput(
+                    result,
+                    tryCommitWorkflowOutputPublication,
+                  ),
+                ),
+        modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+        launchSignal: launchAbortController.signal,
+        beforeLeaseRelease: async () => {
+          const handled = await finalizeShutdownStatus();
+          if (
+            launchVerdict.kind === 'interrupted' &&
+            launchVerdict.artifactFailure !== undefined
+          ) {
+            const error = launchVerdict.artifactFailure;
+            launchVerdict.artifactFailure = undefined;
+            throw error;
+          }
+          return handled;
         },
-        catch: (error: unknown) => error,
+        onExecutionLeaseAcquired: (executionId) => {
+          ownedExecutionId = executionId;
+        },
+        stopAfterCycle: options.stopAfterCycle,
+        approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
+          runContext,
+          runContext.approvalPolicy,
+        ),
+        onApprovalPolicyDenial: () =>
+          warnApprovalDenied(runContext, 'Tool or edit approval'),
+        runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+      });
+
+    let runResult:
+      | { readonly ok: true; readonly result: ExecuteAgentResult }
+      | { readonly ok: false } = { ok: false };
+    let primaryRunFailure: { readonly error: unknown } | undefined;
+    let shutdownLaunchAborted = false;
+    let presentationAttached = true;
+    const detachPresentation = async (): Promise<void> => {
+      if (!presentationAttached) return;
+      presentationAttached = false;
+      detachResultToast();
+      terminalResult.dispose();
+      detachRunProgressRenderer();
+      await detachSessionProgressProjection();
+      detachWorkflowPlainOutput();
+      detachHostInteractions();
+      await presentationHost.close();
+    };
+    const invocation = yield* Effect.result(
+      Effect.suspend(invoke).pipe(
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(Cause.squash(cause))),
+        ),
+      ),
+    );
+    if (Result.isSuccess(invocation)) {
+      runResult = { ok: true as const, result: invocation.success };
+    } else {
+      const err = invocation.failure;
+      // Only a classified, already-handled AgentError resolves to a non-zero
+      // exit code here; anything else (e.g. registerExecution disk I/O,
+      // workspaceState.update failures) is unexpected and must keep
+      // propagating to bin/texra.ts's crash handler.
+      if (shutdownRequested && isUserAbort(err)) {
+        shutdownLaunchAborted = true;
+      } else if (!(err instanceof AgentError)) {
+        primaryRunFailure = { error: err };
+      } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
+        // A failure before lifecycle startup has no `result` event. Preserve the
+        // ordinary toast path when it ran, and provide the missing direct fallback
+        // while the presentation host is still attached. A launch failure that
+        // already presented itself through a targeted notification is marked by
+        // the delivery-confirmed throw site (model-not-recognized, and now also
+        // agent-not-found because `showAgentConfigBanner` renders a visible CLI
+        // error) -- this CLI-local `failurePresented` flag only tracks
+        // `requestShowError`, so it would otherwise re-surface that failure a
+        // second time here.
+        terminalResult.reportUnhandled(() =>
+          session.interactions.emit('requestShowError', {
+            message: toErrorMessage(err),
+          }),
+        );
+      }
+    }
+
+    disposeShutdownStatus.dispose();
+    let finalizationCompleted = false;
+    const cleanupFailures: unknown[] = [];
+    const finalization = yield* Effect.result(
+      Effect.gen(function* () {
+        yield* Effect.tryPromise({
+          try: async () => {
+            await finalizeShutdownStatus();
+            await session.flushArtifacts();
+          },
+          catch: (error: unknown) => error,
+        });
+        if (runResult.ok) {
+          return yield* readCliRunOutcomeState(
+            session,
+            runResult.result,
+            reportFinalizationFailure,
+          );
+        }
+        return undefined;
       }),
-    ),
-  );
-  finalizationCompleted = Result.isSuccess(finalization);
-  if (Result.isFailure(finalization))
-    cleanupFailures.push(finalization.failure);
-  Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
-  if (!runResult.ok || !finalizationCompleted) {
-    const detachment = await effectRuntime().runPromise(
-      Effect.result(
+    );
+    finalizationCompleted = Result.isSuccess(finalization);
+    if (Result.isFailure(finalization))
+      cleanupFailures.push(finalization.failure);
+    Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
+    if (!runResult.ok || !finalizationCompleted) {
+      const detachment = yield* Effect.result(
         Effect.tryPromise({
           try: detachPresentation,
           catch: (error: unknown) => error,
         }),
+      );
+      if (Result.isFailure(detachment))
+        cleanupFailures.push(detachment.failure);
+    }
+    if (cleanupFailures.length > 0) {
+      const cleanupFailure = aggregateError(
+        cleanupFailures,
+        'CLI execution cleanup encountered multiple failures',
+      );
+      if (primaryRunFailure) {
+        throw aggregateError(
+          [primaryRunFailure.error, cleanupFailure],
+          'CLI execution failed and its final artifacts could not be persisted',
+        );
+      }
+      throw cleanupFailure;
+    }
+    if (primaryRunFailure) {
+      throw primaryRunFailure.error;
+    }
+
+    if (!runResult.ok) {
+      return {
+        ok: false as const,
+        exitCode: shutdownLaunchAborted
+          ? CliExitCode.Interrupted
+          : runOutcomeExitCode(RUN_OUTCOME.FAILED),
+      };
+    }
+
+    return yield* Effect.sync(() => {
+      const { outcome, outcomePersisted } = Result.getOrThrow(finalization)!;
+      return {
+        ok: true as const,
+        outcomePersisted,
+        result: { ...runResult.result, outcome },
+      };
+    }).pipe(
+      Effect.ensuring(
+        Effect.tryPromise({ try: detachPresentation, catch: ensureError }).pipe(
+          Effect.orDie,
+        ),
       ),
     );
-    if (Result.isFailure(detachment)) cleanupFailures.push(detachment.failure);
-  }
-  if (cleanupFailures.length > 0) {
-    const cleanupFailure = aggregateError(
-      cleanupFailures,
-      'CLI execution cleanup encountered multiple failures',
-    );
-    if (primaryRunFailure) {
-      throw aggregateError(
-        [primaryRunFailure.error, cleanupFailure],
-        'CLI execution failed and its final artifacts could not be persisted',
-      );
-    }
-    throw cleanupFailure;
-  }
-  if (primaryRunFailure) {
-    throw primaryRunFailure.error;
-  }
-
-  if (!runResult.ok) {
-    return {
-      ok: false,
-      exitCode: shutdownLaunchAborted
-        ? CliExitCode.Interrupted
-        : runOutcomeExitCode(RUN_OUTCOME.FAILED),
-    };
-  }
-
-  try {
-    const { outcome, outcomePersisted } = await readCliRunOutcomeState(
-      runResult.result,
-      reportFinalizationFailure,
-    );
-    return {
-      ok: true,
-      outcomePersisted,
-      result: { ...runResult.result, outcome },
-    };
-  } finally {
-    await detachPresentation();
-  }
+  }).pipe(
+    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  );
 }

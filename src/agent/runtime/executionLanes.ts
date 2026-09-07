@@ -118,13 +118,23 @@ export class ExecutionLanes {
    * A child loop's generation stays the lane's live promise until the loop
    * ends; the turn's teardown chains onto it rather than replacing it.
    */
-  holdLive(executionId: string, termination: Promise<void>): void {
+  holdLive(
+    executionId: string,
+    termination: Effect.Effect<void>,
+  ): Effect.Effect<void> {
+    const completion = pDefer<void>();
     const lane = this.laneFor(executionId);
     const previous = lane.live;
     lane.live = settled(
-      previous ? Promise.all([previous, termination]) : termination,
+      previous
+        ? Promise.all([previous, completion.promise])
+        : completion.promise,
     );
     this.forgetIdleLane(executionId, lane);
+    return termination.pipe(
+      Effect.ensuring(Effect.sync(() => completion.resolve())),
+      Effect.uninterruptible,
+    );
   }
 
   /** Refuse every admitted-but-unstarted step and drop all lanes. */

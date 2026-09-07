@@ -1,9 +1,11 @@
+import '@test/support/sessionGraphTestSetup';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hasMagic } from 'glob';
+import { Effect, Exit, Scope } from 'effect';
 import stripAnsi from 'strip-ansi';
 
 import { rootCommand, runCli } from '@cli/commands/root';
@@ -29,8 +31,7 @@ import {
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
 import {
-  createStdinWorkflowInputMaterializer,
-  expandRunInputs,
+  expandRunInputs as expandInputs,
   hasMixedStdinWorkflowInputSpecs,
   workflowInputGlobOptions,
 } from '@cli/runtime/workflowInputs';
@@ -108,22 +109,25 @@ async function withExternalDirs(
 const STDIN_DOCUMENT =
   '\\documentclass{article}\\begin{document}Hi\\end{document}';
 
-function trackedStdinMaterializer(
-  root: string,
-  body: string = STDIN_DOCUMENT,
-): {
-  stdinInputFile: ReturnType<typeof createStdinWorkflowInputMaterializer>;
+function trackedStdinReader(body: string = STDIN_DOCUMENT): {
+  readStdinText: () => Promise<string>;
   readCount: () => number;
 } {
   let reads = 0;
-  const stdinInputFile = createStdinWorkflowInputMaterializer({
-    tempDir: root,
+  return {
     readStdinText: async () => {
       reads += 1;
       return body;
     },
-  });
-  return { stdinInputFile, readCount: () => reads };
+    readCount: () => reads,
+  };
+}
+
+let inputScope: Scope.Closeable;
+function expandRunInputs(...args: Parameters<typeof expandInputs>) {
+  return Effect.runPromise(
+    Effect.provideService(expandInputs(...args), Scope.Scope, inputScope),
+  );
 }
 
 /**
@@ -137,7 +141,7 @@ async function expandSpecs(
   flagLabel: '--input' | '--context' = '--input',
   options: {
     readonly requireWorkspaceFiles?: boolean;
-    readonly stdinInputFile?: () => Promise<string>;
+    readonly readStdinText?: () => Promise<string>;
   } = {},
 ): Promise<string[]> {
   if (flagLabel === '--context') {
@@ -152,6 +156,12 @@ async function expandSpecs(
 }
 
 describe('CLI root argument routing', () => {
+  beforeEach(async () => {
+    inputScope = await Effect.runPromise(Scope.make());
+  });
+  afterEach(async () => {
+    await Effect.runPromise(Scope.close(inputScope, Exit.void));
+  });
   it('routes top-level version shortcuts to the version command', () => {
     expect(normalizeRootShortcuts(['--version'])).toEqual(['version']);
     expect(normalizeRootShortcuts(['--no-color', '-v'])).toEqual([
@@ -564,13 +574,12 @@ describe('CLI root argument routing', () => {
 
   it('materializes stdin when --input - is passed', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      const { stdinInputFile, readCount } = trackedStdinMaterializer(
-        root,
+      const { readStdinText, readCount } = trackedStdinReader(
         '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n',
       );
 
       const expanded = await expandSpecs(['-', '-'], root, '--input', {
-        stdinInputFile,
+        readStdinText,
       });
 
       expect(expanded).toHaveLength(1);
@@ -580,7 +589,7 @@ describe('CLI root argument routing', () => {
       await expect(
         fs.readFile(path.resolve(root, expanded[0]), 'utf8'),
       ).resolves.toContain('\\begin{document}Hi');
-      await stdinInputFile.cleanup();
+      await Effect.runPromise(Scope.close(inputScope, Exit.void));
       await expect(fs.stat(path.resolve(root, expanded[0]))).rejects.toThrow();
       await expect(
         fs.stat(path.dirname(path.resolve(root, expanded[0]))),
@@ -591,10 +600,10 @@ describe('CLI root argument routing', () => {
   it('preserves stdin position when mixed with file inputs', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
       await fs.writeFile(path.join(root, 'paper.tex'), 'paper');
-      const { stdinInputFile } = trackedStdinMaterializer(root);
+      const { readStdinText } = trackedStdinReader();
 
       const expanded = await expandSpecs(['-', 'paper.tex'], root, '--input', {
-        stdinInputFile,
+        readStdinText,
       });
 
       expect(path.basename(expanded[0])).toBe('stdin.tex');
@@ -605,10 +614,10 @@ describe('CLI root argument routing', () => {
 
   it('rejects empty stdin input', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      const { stdinInputFile } = trackedStdinMaterializer(root, ' \n\t ');
+      const { readStdinText } = trackedStdinReader(' \n\t ');
 
       await expect(
-        expandSpecs(['-'], root, '--input', { stdinInputFile }),
+        expandSpecs(['-'], root, '--input', { readStdinText }),
       ).rejects.toThrow(/stdin: no data on stdin/);
     });
   });
@@ -622,11 +631,11 @@ describe('CLI root argument routing', () => {
 
   it('does not read stdin before later --input validation errors', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      const { stdinInputFile, readCount } = trackedStdinMaterializer(root);
+      const { readStdinText, readCount } = trackedStdinReader();
 
       await expect(
         expandSpecs(['-', 'missing.tex'], root, '--input', {
-          stdinInputFile,
+          readStdinText,
         }),
       ).rejects.toThrow(/--input: file not found: missing\.tex/);
       expect(readCount()).toBe(0);
@@ -635,11 +644,11 @@ describe('CLI root argument routing', () => {
 
   it('does not read stdin before --context validation errors', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      const { stdinInputFile, readCount } = trackedStdinMaterializer(root);
+      const { readStdinText, readCount } = trackedStdinReader();
 
       await expect(
         expandRunInputs(['-'], ['missing-context.tex'], root, {
-          stdinInputFile,
+          readStdinText,
         }),
       ).rejects.toThrow(/--context: file not found: missing-context\.tex/);
       expect(readCount()).toBe(0);
@@ -649,13 +658,13 @@ describe('CLI root argument routing', () => {
   it('materializes stdin for --context - when input is a normal file', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
       await fs.writeFile(path.join(root, 'main.tex'), 'main');
-      const { stdinInputFile } = trackedStdinMaterializer(root, 'context body');
+      const { readStdinText } = trackedStdinReader('context body');
 
       const { inputFiles, contextFiles } = await expandRunInputs(
         ['main.tex'],
         ['-'],
         root,
-        { stdinInputFile },
+        { readStdinText },
       );
 
       expect(inputFiles).toEqual(['main.tex']);
@@ -672,9 +681,9 @@ describe('CLI root argument routing', () => {
 
   it('rejects stdin across both input and context with a clear usage error', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
-      const { stdinInputFile } = trackedStdinMaterializer(root, 'piped body');
+      const { readStdinText } = trackedStdinReader('piped body');
       await expect(
-        expandRunInputs(['-'], ['-'], root, { stdinInputFile }),
+        expandRunInputs(['-'], ['-'], root, { readStdinText }),
       ).rejects.toThrow(/Use `-` for either --input or --context/);
     });
   });
@@ -697,20 +706,6 @@ describe('CLI root argument routing', () => {
           requireWorkspaceFiles: true,
         }),
       ).rejects.toThrow(/--input: file is outside --cwd:/);
-    });
-  });
-
-  it('uses the caller flag label when rejecting external stdin materialization', async () => {
-    await withExternalDirs(async (root, externalDir) => {
-      const external = path.join(externalDir, 'stdin.md');
-      await fs.writeFile(external, 'outside');
-
-      await expect(
-        expandSpecs(['-'], root, '--context', {
-          requireWorkspaceFiles: true,
-          stdinInputFile: async () => external,
-        }),
-      ).rejects.toThrow(/--context: file is outside --cwd:/);
     });
   });
 

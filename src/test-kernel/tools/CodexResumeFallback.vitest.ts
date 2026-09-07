@@ -81,9 +81,10 @@ vi.mock('@tools/delegation/childStream', () => ({
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
   runWithOwnedExecutionLeaseLaunchGuard: (
-    _executionId: string,
-    operation: Effect.Effect<unknown, Error>,
-  ) => operation,
+    ...args: Parameters<
+      typeof import('@agent/runtime/childRunLoop').runWithOwnedExecutionLeaseLaunchGuard
+    >
+  ) => args[2],
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
@@ -151,7 +152,7 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.findCodexBinaryPath.mockReset();
     mocks.requestBashApproval.mockResolvedValue({ action: 'approve' });
     mocks.getCurrentToolContexts.mockReturnValue(toolContext());
-    mocks.registerExecution.mockResolvedValue(undefined);
+    mocks.registerExecution.mockReturnValue(Effect.void);
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
     mocks.findCodexBinaryPath.mockResolvedValue(undefined);
     mocks.createChildStream.mockReturnValue(

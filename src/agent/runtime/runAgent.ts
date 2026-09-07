@@ -1,11 +1,11 @@
 import { Cause, Effect, Exit } from 'effect';
 
-import { registerExecution } from '@agent/storage';
+import { registerExecution, getExecutionRecords } from '@agent/storage';
 import {
   clearTerminalExecutionState,
+  acquireResumedExecutionOwnership,
   finalizeRun,
 } from '@agent/storage/executionLifecycle';
-import { acquireResumedExecutionLease } from '@agent/storage/executionLease';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -112,7 +112,15 @@ export const runAgent = Effect.fn('runAgent')(function* (
     launchAbortController,
   );
   const launchSignal = launchAbortController.signal;
-  const launchStreamId = getStreamTabId(request.config.agent, { executionId });
+  const prior = shouldRegister
+    ? null
+    : yield* getExecutionRecords(runSession, executionId).readMeta();
+  if (!shouldRegister && !prior?.streamId)
+    return yield* Effect.fail(
+      new Error(`Execution metadata not found for ${executionId}`),
+    );
+  const launchStreamId =
+    prior?.streamId ?? getStreamTabId(request.config.agent, { executionId });
   const launchHandle = runSession.executions.getHandle(executionId)
     ? undefined
     : new AgentExecutionHandle(
@@ -148,21 +156,25 @@ export const runAgent = Effect.fn('runAgent')(function* (
           executeAgentOptions.stopAfterCycle !== true
             ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
-        yield* Effect.tryPromise({
-          try: async () =>
-            runInSession(runSession, async () => {
-              if (shouldRegister) {
-                await registerExecution(executionId, config, config.agent, {
-                  streamId: launchStreamId,
-                  identity: { kind: 'agent', agent: config.agent },
-                  userFollowUpSupport,
-                });
-              } else {
-                await acquireResumedExecutionLease(executionId);
-              }
-            }),
-          catch: ensureError,
-        });
+        if (shouldRegister) {
+          yield* registerExecution(
+            runSession,
+            executionId,
+            config,
+            config.agent,
+            {
+              streamId: launchStreamId,
+              identity: { kind: 'agent', agent: config.agent },
+              userFollowUpSupport,
+            },
+          );
+        } else {
+          yield* acquireResumedExecutionOwnership(
+            runSession,
+            executionId,
+            launchStreamId,
+          );
+        }
 
         let lifecycleStarted = false;
         let previousTerminalOutcome: RunOutcome | undefined;
@@ -172,13 +184,10 @@ export const runAgent = Effect.fn('runAgent')(function* (
           Effect.gen(function* () {
             onExecutionLeaseAcquired?.(executionId);
             if (!shouldRegister) {
-              const cleared = yield* Effect.tryPromise({
-                try: async () =>
-                  runInSession(runSession, () =>
-                    clearTerminalExecutionState(executionId),
-                  ),
-                catch: ensureError,
-              });
+              const cleared = yield* clearTerminalExecutionState(
+                executionId,
+                runSession,
+              );
               resumedStreamId = cleared.streamId;
               previousTerminalOutcome = cleared.previousOutcome;
             }
@@ -205,16 +214,10 @@ export const runAgent = Effect.fn('runAgent')(function* (
             : previousTerminalOutcome;
           if (!lifecycleStarted && restoredOutcome !== undefined) {
             const finalization = yield* Effect.exit(
-              Effect.tryPromise({
-                try: async () =>
-                  runInSession(runSession, () =>
-                    finalizeRun({
-                      executionId,
-                      outcome: restoredOutcome,
-                      flowRecord: shouldRegister ? 'delete' : 'preserve',
-                    }),
-                  ),
-                catch: ensureError,
+              finalizeRun(runSession, {
+                executionId,
+                outcome: restoredOutcome,
+                flowRecord: shouldRegister ? 'delete' : 'preserve',
               }),
             );
             if (Exit.isFailure(finalization))
@@ -235,13 +238,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           failures.push(Cause.squash(artifacts.cause));
         if (Exit.isFailure(artifacts) || artifacts.value !== true) {
           const release = yield* Effect.exit(
-            Effect.tryPromise({
-              try: async () =>
-                runInSession(runSession, () =>
-                  runSession.releaseExecutionLease(executionId),
-                ),
-              catch: ensureError,
-            }),
+            runSession.releaseExecutionLease(executionId),
           );
           if (Exit.isFailure(release))
             failures.push(Cause.squash(release.cause));
