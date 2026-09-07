@@ -751,8 +751,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     // Created before the wait's fiber starts so `attempt.cancel` is armed in
     // the same synchronous segment, as the Promise executor armed it.
     const outcome = Deferred.makeUnsafe<SupabaseSession | null, unknown>();
+    // Timeout covers only the wait for a matching callback, as
+    // `clearTimeout` did once `cleanupListeners` ran — not the token exchange.
+    const callbackSeen = Deferred.makeUnsafe<void>();
     attempt.cancel = () => {
       if (this.activeAttempt === attempt) this.activeAttempt = undefined;
+      Deferred.doneUnsafe(callbackSeen, Effect.void);
       Deferred.doneUnsafe(outcome, Effect.succeed(null));
     };
 
@@ -769,6 +773,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
                 effectRuntime().runFork(
                   this.handleAttemptCallback(uri, attempt, outcome, () => {
                     subscription?.dispose();
+                    Deferred.doneUnsafe(callbackSeen, Effect.void);
                   }),
                 );
               });
@@ -789,16 +794,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             );
           }
 
-          return yield* Deferred.await(outcome).pipe(
+          yield* Deferred.await(callbackSeen).pipe(
             Effect.timeoutOption(AUTH_CALLBACK_TIMEOUT_MS),
             Effect.flatMap((settled) =>
               Option.isSome(settled)
-                ? Effect.succeed(settled.value)
+                ? Effect.void
                 : Effect.fail(
                     new Error('Authentication timed out. Try again.'),
                   ),
             ),
           );
+          return yield* Deferred.await(outcome);
         }),
       ),
     );
