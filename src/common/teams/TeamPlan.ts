@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
@@ -254,24 +255,26 @@ export function buildTeamOptions(
     });
 }
 
-export async function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
+export function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
   customPresetsRaw: unknown;
-  ensureCatalogLoaded: () => Promise<void>;
+  ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
   getAgents: (category: AgentCategory) => readonly T[];
   canAccessRemoteCatalog: () => Promise<boolean>;
-  refreshRemote: () => Promise<void>;
-}): Promise<TeamOptionData[]> {
-  await ports.ensureCatalogLoaded();
-  const presets = teamPresets(ports.customPresetsRaw);
-  const planCurrent = () =>
-    planTeamRuns(presets, currentCatalogOptions(ports.getAgents));
-  const result = await refreshRemoteCatalogForGaps(
-    planCurrent(),
-    (plans) => plans.some(teamPlanHasGaps),
-    planCurrent,
-    ports,
-  );
-  return buildTeamOptions(result.value);
+  refreshRemote: () => Effect.Effect<void, unknown>;
+}): Effect.Effect<TeamOptionData[], unknown> {
+  return Effect.gen(function* () {
+    yield* ports.ensureCatalogLoaded();
+    const presets = teamPresets(ports.customPresetsRaw);
+    const planCurrent = () =>
+      planTeamRuns(presets, currentCatalogOptions(ports.getAgents));
+    const result = yield* refreshRemoteCatalogForGaps(
+      planCurrent(),
+      (plans) => plans.some(teamPlanHasGaps),
+      planCurrent,
+      ports,
+    );
+    return buildTeamOptions(result.value);
+  });
 }
 
 export type TeamLaunchResolution =
@@ -296,96 +299,109 @@ export type TeamLaunchResolution =
       readonly unavailableNames: readonly string[];
     };
 
-export async function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
+export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   teamId: string;
   customPresetsRaw: unknown;
-  ensureCatalogLoaded: () => Promise<void>;
+  ensureCatalogLoaded: () => Effect.Effect<void, unknown>;
   getAgents: (category: AgentCategory) => readonly T[];
   canAccessRemoteCatalog: () => Promise<boolean>;
-  refreshRemote: () => Promise<void>;
+  refreshRemote: () => Effect.Effect<void, unknown>;
   choose: (
     unavailableNames: readonly string[],
   ) => Promise<TeamAvailabilityChoice | undefined>;
   signIn: () => Promise<boolean>;
   providedChoice?: TeamAvailabilityChoice;
-}): Promise<TeamLaunchResolution> {
-  const preset = findTeamPreset(
-    teamPresets(args.customPresetsRaw),
-    args.teamId,
-  );
-  if (!preset) return { status: 'unknown-team' };
+}): Effect.Effect<TeamLaunchResolution, unknown> {
+  return Effect.gen(function* () {
+    const preset = findTeamPreset(
+      teamPresets(args.customPresetsRaw),
+      args.teamId,
+    );
+    if (!preset) return { status: 'unknown-team' as const };
 
-  await args.ensureCatalogLoaded();
-  const planCurrent = () =>
-    planTeamRun(preset, currentCatalogOptions(args.getAgents));
-  const refreshed = await refreshRemoteCatalogForGaps(
-    planCurrent(),
-    teamPlanHasGaps,
-    planCurrent,
-    args,
-  );
-  const preflight = await preflightTeamAvailability({
-    initial: refreshed.value,
-    unresolvedNames: teamTexraHostedMissingNames,
-    texraHostedNames: teamHostedNamesForPreflight(
-      preset,
-      missingMemberNames(refreshed.value),
-    ),
-    canAccessRemoteCatalog: args.canAccessRemoteCatalog,
-    providedChoice: args.providedChoice,
-    choose: args.choose,
-    signIn: args.signIn,
-    refresh: async () => {
-      await args.refreshRemote();
-      return planCurrent();
-    },
-    remoteCatalogRefreshAttempted: refreshed.remoteCatalogRefreshAttempted,
+    yield* args.ensureCatalogLoaded();
+    const planCurrent = () =>
+      planTeamRun(preset, currentCatalogOptions(args.getAgents));
+    const refreshed = yield* refreshRemoteCatalogForGaps(
+      planCurrent(),
+      teamPlanHasGaps,
+      planCurrent,
+      args,
+    );
+    const preflight = yield* preflightTeamAvailability({
+      initial: refreshed.value,
+      unresolvedNames: teamTexraHostedMissingNames,
+      texraHostedNames: teamHostedNamesForPreflight(
+        preset,
+        missingMemberNames(refreshed.value),
+      ),
+      canAccessRemoteCatalog: args.canAccessRemoteCatalog,
+      providedChoice: args.providedChoice,
+      choose: args.choose,
+      signIn: args.signIn,
+      refreshRemote: args.refreshRemote,
+      replan: planCurrent,
+      remoteCatalogRefreshAttempted: refreshed.remoteCatalogRefreshAttempted,
+    });
+
+    // 'choice-required' is reachable only when no provided choice exists and the
+    // interactive choice port returns no decision; hosts treat dismissal as cancel.
+    if (
+      preflight.status === 'cancelled' ||
+      preflight.status === 'choice-required'
+    ) {
+      return { status: 'cancelled' as const };
+    }
+    if (preflight.status === 'unavailable') {
+      return {
+        status: 'unavailable' as const,
+        unavailableNames: preflight.unavailableNames,
+      };
+    }
+
+    const plan = preflight.value;
+    if (!canLaunchTeam(plan)) {
+      return {
+        status: 'blocked' as const,
+        reason: teamLaunchBlockReason(plan)!,
+      };
+    }
+    return {
+      status: 'ready' as const,
+      fields: teamExecutionFields(plan),
+      partial: preflight.partial,
+      missingNames: missingMemberNames(plan),
+    };
   });
-
-  // 'choice-required' is reachable only when no provided choice exists and the
-  // interactive choice port returns no decision; hosts treat dismissal as cancel.
-  if (
-    preflight.status === 'cancelled' ||
-    preflight.status === 'choice-required'
-  ) {
-    return { status: 'cancelled' };
-  }
-  if (preflight.status === 'unavailable') {
-    return {
-      status: 'unavailable',
-      unavailableNames: preflight.unavailableNames,
-    };
-  }
-
-  const plan = preflight.value;
-  if (!canLaunchTeam(plan)) {
-    return {
-      status: 'blocked',
-      reason: teamLaunchBlockReason(plan)!,
-    };
-  }
-  return {
-    status: 'ready',
-    fields: teamExecutionFields(plan),
-    partial: preflight.partial,
-    missingNames: missingMemberNames(plan),
-  };
 }
 
-export async function refreshRemoteCatalogForGaps<T>(
+export function refreshRemoteCatalogForGaps<T>(
   value: T,
   hasGaps: (value: T) => boolean,
   replan: () => T,
   ports: {
     canAccessRemoteCatalog: () => Promise<boolean>;
-    refreshRemote: () => Promise<void>;
+    refreshRemote: () => Effect.Effect<void, unknown>;
   },
-): Promise<{ value: T; remoteCatalogRefreshAttempted: boolean }> {
-  if (hasGaps(value) && (await ports.canAccessRemoteCatalog())) {
-    await ports.refreshRemote();
-    return { value: replan(), remoteCatalogRefreshAttempted: true };
-  }
-  return { value, remoteCatalogRefreshAttempted: false };
+): Effect.Effect<
+  { value: T; remoteCatalogRefreshAttempted: boolean },
+  unknown
+> {
+  return Effect.gen(function* () {
+    // `hasGaps` first, as in the Promise original: a gapless plan must not
+    // even probe remote access.
+    if (hasGaps(value)) {
+      const canAccess = yield* Effect.tryPromise({
+        try: () => ports.canAccessRemoteCatalog(),
+        catch: (error) => error,
+      });
+      if (canAccess) {
+        yield* ports.refreshRemote();
+        return { value: replan(), remoteCatalogRefreshAttempted: true };
+      }
+    }
+    return { value, remoteCatalogRefreshAttempted: false };
+  });
 }
 
 // ---------------------------------------------------------------------------

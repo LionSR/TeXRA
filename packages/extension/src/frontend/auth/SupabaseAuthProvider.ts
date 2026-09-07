@@ -719,7 +719,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private async afterLocalSessionCleared(sessionId: string): Promise<void> {
     await refreshRemoteAgentCatalogAfterSignOut(
-      invalidateRemoteAgentsAfterSignOut,
+      () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
       log.warn,
     );
     this._onDidChangeSessions.fire({

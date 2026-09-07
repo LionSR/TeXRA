@@ -24,6 +24,7 @@ import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { hostPort } from '@common/hostPort';
 import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireRunStream } from '@tools/contextHelpers';
@@ -166,14 +167,6 @@ function parsePath(raw: string): ParsedPath {
 }
 
 /**
- * One wrap of a Promise call across the tool's Effect edge: the rejection
- * keeps its identity, so the fold in `execute()` rethrows exactly the
- * ToolError (or plain error) the old promise chain rejected with.
- */
-const port = <A>(promise: () => Promise<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: promise, catch: (error) => error });
-
-/**
  * The one run of a subscription-tool program settles here (R1: the tool
  * execute() contract is the Promise boundary). A failure — the program's
  * ToolError, or a defect such as the registry's max-concurrent guard — is
@@ -187,7 +180,7 @@ function foldToolExit(exit: Exit.Exit<ToolResult, unknown>): ToolResult {
 
 const requireToken = (): Effect.Effect<void, unknown> =>
   Effect.flatMap(
-    port(() => getGitHubToken()),
+    hostPort(() => getGitHubToken()),
     (token) =>
       token
         ? Effect.void
@@ -326,7 +319,7 @@ const resolveIssueIsPR = (
   number: number,
 ): Effect.Effect<boolean, unknown> =>
   Effect.flatMap(
-    port(() => ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`)),
+    hostPort(() => ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`)),
     (res) =>
       res.status !== 200
         ? Effect.fail(
@@ -411,7 +404,7 @@ const gitInDir = (
   cwd: string,
 ): Effect.Effect<string, unknown> =>
   Effect.flatMap(
-    port(() =>
+    hostPort(() =>
       executeCommand(['git', ...args], {
         cwd,
         timeout: 10_000,
@@ -439,7 +432,9 @@ const getDefaultBranch = (
   repo: string,
 ): Effect.Effect<string, unknown> =>
   Effect.flatMap(
-    port(() => ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`)),
+    hostPort(() =>
+      ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
+    ),
     (res) =>
       res.status !== 200
         ? Effect.fail(
@@ -468,7 +463,7 @@ const listOpenPullSuggestions = (
   repo: string,
 ): Effect.Effect<string, unknown> =>
   Effect.map(
-    port(() =>
+    hostPort(() =>
       ghGet<OpenPullSummary[]>(
         `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
       ),
@@ -543,7 +538,7 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
       );
     }
     const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
-    const res = yield* port(() =>
+    const res = yield* hostPort(() =>
       ghGet<Array<{ number: number; html_url: string }>>(apiPath),
     );
     if (res.status !== 200) {

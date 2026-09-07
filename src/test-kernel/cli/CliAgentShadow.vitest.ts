@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
@@ -58,7 +59,7 @@ describe('CLI agent validation with a shadowed name', () => {
       },
     );
 
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
   });
 
   afterAll(async () => {

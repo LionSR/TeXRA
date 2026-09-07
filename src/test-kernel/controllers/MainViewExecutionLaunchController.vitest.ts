@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -49,7 +50,9 @@ function teamMessage(teamId = 'physicist'): MainViewExecuteMessage {
 }
 
 function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
-  return prepareMainViewExecutionLaunch(teamMessage(teamId), host);
+  return Effect.runPromise(
+    prepareMainViewExecutionLaunch(teamMessage(teamId), host),
+  );
 }
 
 describe('main-view execution launch controller', () => {
@@ -66,7 +69,7 @@ describe('main-view execution launch controller', () => {
     });
 
     await expect(
-      prepareMainViewExecutionLaunch(message, createHost()),
+      Effect.runPromise(prepareMainViewExecutionLaunch(message, createHost())),
     ).resolves.toEqual(request);
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
   });
@@ -101,7 +104,7 @@ describe('main-view execution launch controller', () => {
     'returns $resolution.status team failures',
     async ({ resolution, expected }) => {
       const host = createHost();
-      mocks.resolveTeamLaunch.mockResolvedValue(resolution);
+      mocks.resolveTeamLaunch.mockReturnValue(Effect.succeed(resolution));
 
       await expect(launchTeam(host)).rejects.toMatchObject({
         _tag: 'Rejected',
@@ -113,7 +116,9 @@ describe('main-view execution launch controller', () => {
 
   it('returns without presenting an error when team launch is cancelled', async () => {
     const host = createHost();
-    mocks.resolveTeamLaunch.mockResolvedValue({ status: 'cancelled' });
+    mocks.resolveTeamLaunch.mockReturnValue(
+      Effect.succeed({ status: 'cancelled' }),
+    );
 
     await expect(launchTeam(host)).rejects.toMatchObject({ _tag: 'Cancelled' });
   });
@@ -129,12 +134,14 @@ describe('main-view execution launch controller', () => {
       cli: { multiAgentPresetId: 'physicist' },
     };
     const request = { agentName: 'team-root' };
-    mocks.resolveTeamLaunch.mockResolvedValue({
-      status: 'ready',
-      fields,
-      partial: true,
-      missingNames: ['writer'],
-    });
+    mocks.resolveTeamLaunch.mockReturnValue(
+      Effect.succeed({
+        status: 'ready',
+        fields,
+        partial: true,
+        missingNames: ['writer'],
+      }),
+    );
     mocks.prepareMainViewTeamExecutionRequest.mockReturnValue({
       valid: true,
       request,
@@ -142,7 +149,7 @@ describe('main-view execution launch controller', () => {
     const message = teamMessage();
 
     await expect(
-      prepareMainViewExecutionLaunch(message, host),
+      Effect.runPromise(prepareMainViewExecutionLaunch(message, host)),
     ).resolves.toEqual(request);
     expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
     expect(mocks.prepareMainViewTeamExecutionRequest).toHaveBeenCalledWith(
@@ -166,7 +173,9 @@ describe('main-view execution launch controller', () => {
 
   it('surfaces catalog errors as a launch error', async () => {
     const host = createHost();
-    mocks.resolveTeamLaunch.mockRejectedValue(new Error('catalog unavailable'));
+    mocks.resolveTeamLaunch.mockReturnValue(
+      Effect.fail(new Error('catalog unavailable')),
+    );
 
     await expect(launchTeam(host)).rejects.toMatchObject({
       _tag: 'Rejected',

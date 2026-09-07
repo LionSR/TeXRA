@@ -641,10 +641,10 @@ export function createDesktopHostRequests(
         postDesktopSettingsView((message) => options.postToRenderer(message));
         return done;
       case 'refreshCommits':
-        await options.snapshot.refreshCommits();
+        await effectRuntime().runPromise(options.snapshot.refreshCommits);
         return done;
       case 'refreshFiles':
-        await options.snapshot.refreshFiles();
+        await effectRuntime().runPromise(options.snapshot.refreshFiles);
         return done;
       case 'openSettings':
         postDesktopSettingsView(
@@ -673,7 +673,9 @@ export function createDesktopHostRequests(
           ),
         };
       case 'launch':
-        await execution.runValidated(await prepareSurfaceLaunch(request, host));
+        await execution.runValidated(
+          await effectRuntime().runPromise(prepareSurfaceLaunch(request, host)),
+        );
         return done;
       case 'compileInputPdf':
         throw notOnDesktop('Compiling the input PDF');

@@ -171,9 +171,10 @@ vi.mock('vscode', () => ({
   FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
 }));
 
-vi.mock('@agent/index', () => ({
-  loadAgents: () => Promise.resolve(),
-}));
+vi.mock('@agent/index', async () => {
+  const { Effect } = await import('effect');
+  return { loadAgents: () => Effect.void };
+});
 
 vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: () => Promise.resolve(),

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -90,7 +91,7 @@ describe('CLI init command', () => {
         { name: 'assistant', category: AgentCategory.ToolUse },
       ]);
     mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
-    mocks.loadAgents.mockReset().mockResolvedValue(undefined);
+    mocks.loadAgents.mockReset().mockReturnValue(Effect.void);
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
       stdout += chunk;
     });
