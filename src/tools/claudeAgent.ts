@@ -34,6 +34,7 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
@@ -49,7 +50,6 @@ import type {
   ToolUseLog,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { effectRuntime } from '@platform/processRuntime';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import {
   formatWallTimeSeconds,
@@ -71,7 +71,7 @@ import { type ChildStream } from './delegation/childStream';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
   agentCliCall,
-  type AgentCliCallFailed,
+  type AgentCliToolFailure,
   dispatchAgentCliTool,
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
@@ -533,7 +533,7 @@ export class ClaudeAgentTool extends defineTool({
   private readonly run = Effect.fn('ClaudeAgentTool.run')(function* (
     this: ClaudeAgentTool,
     input: ClaudeAgentInput,
-  ): Effect.fn.Return<ToolResult, ToolError | AgentCliCallFailed> {
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
     const config = yield* agentCliCall(() => getClaudeAgentConfig());
     const permissionMode =
       input.permission_mode ?? config.getClaudeAgentPermissionMode();
@@ -583,7 +583,7 @@ const launchClaudeAgentSession = Effect.fn(
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
-): Effect.fn.Return<ToolResult, ToolError | AgentCliCallFailed> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
   const config = yield* agentCliCall(() => getClaudeAgentConfig());
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   // Mirrors codex behavior so subagents can see the project: when the call

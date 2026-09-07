@@ -30,6 +30,7 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import { effectRuntime } from '@platform/processRuntime';
 import type {
   ExecutionId,
   StreamTabId,
@@ -44,7 +45,6 @@ import {
   ToolError,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { effectRuntime } from '@platform/processRuntime';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -62,7 +62,7 @@ import { type ChildStream } from './delegation/childStream';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
   agentCliCall,
-  type AgentCliCallFailed,
+  type AgentCliToolFailure,
   dispatchAgentCliTool,
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
@@ -480,7 +480,7 @@ export class CodexTool extends defineTool({
   private readonly run = Effect.fn('CodexTool.run')(function* (
     this: CodexTool,
     input: CodexInput,
-  ): Effect.fn.Return<ToolResult, ToolError | AgentCliCallFailed> {
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
     // Resolve the effective sandbox mode once (per-call override, else the
     // user-configured default) rather than mutating the parsed input object.
     const sandboxMode =
@@ -519,7 +519,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
-): Effect.fn.Return<ToolResult, ToolError | AgentCliCallFailed> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = yield* agentCliCall(() =>
     createCodexThread(input, sandboxMode, workingDir),

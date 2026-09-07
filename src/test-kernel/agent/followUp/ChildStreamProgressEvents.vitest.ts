@@ -2,6 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -19,7 +20,11 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
-import { launchAgentCliSession } from '@tools/agentCliShared';
+import {
+  launchAgentCliSession,
+  reraiseAgentCliCallFailure,
+} from '@tools/agentCliShared';
+import { codexThreadsFor } from '@tools/agentCliSessionStores';
 import {
   createChildStream,
   createRehydratedChildStream,
@@ -419,26 +424,31 @@ describe('child stream progress events', () => {
 
     try {
       await expect(
-        launchAgentCliSession({
-          parentStreamId,
-          parentExecutionId: undefined,
-          agentName: 'codex',
-          streamPrefix: 'codex',
-          description: 'Fail during synchronous loop setup',
-          config,
-          registerFailedMessage: 'registration failed',
-          startLoop: (context) => {
-            childStream = context.childStream;
-            childExecutionId = context.executionId;
-            handle = session.executions.getAgentHandleByStream(
-              context.childStream.childStreamId,
-            );
-            throw setupError;
-          },
-          summary: 'unreachable',
-          launchedLine: 'unreachable',
-          followUpLine: 'unreachable',
-        }),
+        Effect.runPromise(
+          reraiseAgentCliCallFailure(
+            launchAgentCliSession({
+              parentStreamId,
+              parentExecutionId: undefined,
+              agentName: 'codex',
+              streamPrefix: 'codex',
+              description: 'Fail during synchronous loop setup',
+              config,
+              registerFailedMessage: 'registration failed',
+              store: codexThreadsFor,
+              startLoop: (context) => {
+                childStream = context.childStream;
+                childExecutionId = context.executionId;
+                handle = session.executions.getAgentHandleByStream(
+                  context.childStream.childStreamId,
+                );
+                throw setupError;
+              },
+              summary: 'unreachable',
+              launchedLine: 'unreachable',
+              followUpLine: 'unreachable',
+            }),
+          ),
+        ),
       ).rejects.toBe(setupError);
 
       expect(childStream).toBeDefined();
