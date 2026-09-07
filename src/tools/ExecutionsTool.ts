@@ -172,6 +172,8 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       ),
       (stop) => Effect.sync(stop),
     );
+    // Non-rejecting: `waitForAnyChange`'s executor resolves on a registry
+    // listener or on the abort and never rejects.
     const statusChange = Effect.promise((signal) =>
       context.session.executions.waitForAnyChange(executionIds, signal),
     );

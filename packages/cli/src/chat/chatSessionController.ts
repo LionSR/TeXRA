@@ -3,7 +3,7 @@
 // Host-neutral (no Ink/TUI rendering dependencies): the Ink component
 // consumes narrow commands exposed here.
 
-import { Effect, Option, Stream, SubscriptionRef } from 'effect';
+import { Cause, Effect, Option, Stream, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
@@ -41,6 +41,7 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
+import { hostPort } from '@common/hostPort';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
@@ -131,10 +132,25 @@ interface AutoResumeOptions {
 // Controller
 // ---------------------------------------------------------------------------
 
-/** `Effect.tryPromise` with the identity catch every Promise boundary below
- *  wants: the rejection value flows through unchanged as the error. */
-const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: run, catch: (error) => error });
+/**
+ * The recovery tail every run/resume program below shares. A typed failure
+ * from a `hostPort` leaf and a throw from the imperative body alike reach
+ * `recover` with the original value, which is exactly what the `try`/`catch`
+ * around these bodies did before they became programs. Interruption is not
+ * folded in: a fiber the runtime is tearing down is not a run failure to
+ * report, and the caller's own settlement still sees it.
+ */
+const recoverRun = <A, E, R>(
+  program: Effect.Effect<A, E, R>,
+  recover: (error: unknown) => A,
+): Effect.Effect<A, E, R> =>
+  program.pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterrupts(cause)
+        ? Effect.failCause(cause)
+        : Effect.sync(() => recover(Cause.squash(cause))),
+    ),
+  );
 
 /**
  * Narrow commands the chat-session controller exposes to the Ink component.
@@ -662,15 +678,15 @@ export function createChatSessionController(
     const supersededRecovery = supersedeInterruptedRecovery();
     let recovery: FollowUpRecoveryLease | undefined;
     let recoveryHandedOff = false;
-    const attemptResume = async (): Promise<void> => {
+    const attemptResume = Effect.gen(function* () {
       // The durable record names the stream (FK stamped at registration) and
       // the config the TUI adopts before the run. Workflow runs resume
       // headless through `texra resume`, not inside a chat.
       const store = getExecutionStore(id);
-      const [config, meta] = await Promise.all([
-        store.readConfig(),
-        store.readMeta(),
-      ]);
+      const [config, meta] = yield* Effect.all(
+        [hostPort(() => store.readConfig()), hostPort(() => store.readMeta())],
+        { concurrency: 'unbounded' },
+      );
       const streamId = meta?.streamId;
       let failure: string | undefined;
       if (!config || !streamId) {
@@ -791,19 +807,15 @@ export function createChatSessionController(
       // settles here, before the run finishes, fire-and-forget per the
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
-    };
+    });
     await effectRuntime().runPromise(
-      tryPromise(attemptResume).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            handBackUnusedRecovery(recovery, recoveryHandedOff);
-            restoreInterruptedRecovery(supersededRecovery);
-            reportRunFailure(error);
-            session.markRunCompleted();
-            resolveRunPromise();
-          }),
-        ),
-      ),
+      recoverRun(attemptResume, (error) => {
+        handBackUnusedRecovery(recovery, recoveryHandedOff);
+        restoreInterruptedRecovery(supersededRecovery);
+        reportRunFailure(error);
+        session.markRunCompleted();
+        resolveRunPromise();
+      }),
     );
   };
 
@@ -851,7 +863,7 @@ export function createChatSessionController(
       let finalize = (): void => session.markRunCompleted();
       let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
-      const attempt = async (): Promise<boolean> => {
+      const attempt = Effect.gen(function* () {
         recovery = options.recovery
           ? runtimeSession.followUps.useRecovery(options.recovery)
           : runtimeSession.followUps.claimRecovery(streamId, true);
@@ -867,14 +879,14 @@ export function createChatSessionController(
             runtimeSession.followUps.notifySent(recovery.streamId);
         }
 
-        await effectRuntime().runPromise(snapshotStore.preload([streamId]));
+        yield* snapshotStore.preload([streamId]);
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId = runMetadata.executionId;
         if (!executionId) return false;
 
         const config =
           runMetadata.config ??
-          (await getExecutionStore(executionId).readConfig());
+          (yield* hostPort(() => getExecutionStore(executionId).readConfig()));
         if (!config) return false;
         if (isCancellationRequested()) return false;
         const parentStreamId = snapshotStore.getParentStreamId(streamId);
@@ -898,17 +910,14 @@ export function createChatSessionController(
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 
-        const result = await setCliHelperModel(config.model).then(() => {
-          recoveryHandedOff = true;
-          return effectRuntime().runPromise(
-            resumeRun(executionId, {
-              ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
-              recovery,
-              extraFollowUps: options.extraFollowUps,
-              onFollowUpQueueReady: options.onFollowUpQueueReady,
-              isCancellationRequested,
-            }),
-          );
+        yield* hostPort(() => setCliHelperModel(config.model));
+        recoveryHandedOff = true;
+        const result = yield* resumeRun(executionId, {
+          ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+          recovery,
+          extraFollowUps: options.extraFollowUps,
+          onFollowUpQueueReady: options.onFollowUpQueueReady,
+          isCancellationRequested,
         });
 
         if ('started' in result && result.delivered) {
@@ -919,15 +928,12 @@ export function createChatSessionController(
           session.runExitCode = CliExitCode.Interrupted;
         }
         return false;
-      };
+      });
       return effectRuntime().runPromise(
-        tryPromise(attempt).pipe(
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              reportRunFailure(error);
-              return false;
-            }),
-          ),
+        recoverRun(attempt, (error) => {
+          reportRunFailure(error);
+          return false;
+        }).pipe(
           Effect.ensuring(
             Effect.sync(() => {
               handBackUnusedRecovery(recovery, recoveryHandedOff);
@@ -974,7 +980,7 @@ export function createChatSessionController(
       // any failure) is already reported by the run's own recovery.
       await effectRuntime().runPromise(
         Effect.ignoreCause(
-          tryPromise(() => session.runPromise ?? Promise.resolve()),
+          hostPort(() => session.runPromise ?? Promise.resolve()),
         ),
       );
       if (batch.superseded) return true;
@@ -1039,50 +1045,53 @@ export function createChatSessionController(
     session.executionId = undefined;
     let started = false;
     const pendingStart = effectRuntime().runPromise(
-      tryPromise(async (): Promise<void> => {
-        const meta = sessionMetaSignal.get();
-        const currentAgent = meta.agent || initialAgent;
-        const currentModel = meta.model || initialModel;
-        const selection = await selectCliRunnableModel(currentModel, {
-          fallbackReason: meta.model ? meta.modelSource : initialModelSource,
-          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-            CHAT_API_MODE_MODEL_RECOVERY,
-          ),
-        });
-        await setCliHelperModel(selection.model);
-        if (session.stopRequested) {
-          session.markRunCompleted();
-          return;
-        }
-        startRootRun({
-          agent: currentAgent,
-          model: selection.model,
-          instruction,
-          ...(displayInstruction !== undefined ? { displayInstruction } : {}),
-          agentCategory: AgentCategory.ToolUse,
-          workingDirectory: cwd,
-          ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-          ...(meta.cliMultiAgentPresetId
-            ? { cli: { multiAgentPresetId: meta.cliMultiAgentPresetId } }
-            : {}),
-          ...(meta.delegationAgentScope
-            ? { delegationAgentScope: meta.delegationAgentScope }
-            : {}),
-        });
-        started = true;
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            if (!session.stopRequested) {
-              appendLocalUserTranscript(displayInstruction ?? instruction);
-              appendLocalErrorTranscript(toErrorMessage(error));
-            }
-            session.runExitCode = session.stopRequested
-              ? CliExitCode.Success
-              : CliExitCode.AgentError;
+      recoverRun(
+        Effect.gen(function* () {
+          const meta = sessionMetaSignal.get();
+          const currentAgent = meta.agent || initialAgent;
+          const currentModel = meta.model || initialModel;
+          const selection = yield* hostPort(() =>
+            selectCliRunnableModel(currentModel, {
+              fallbackReason: meta.model
+                ? meta.modelSource
+                : initialModelSource,
+              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                CHAT_API_MODE_MODEL_RECOVERY,
+              ),
+            }),
+          );
+          yield* hostPort(() => setCliHelperModel(selection.model));
+          if (session.stopRequested) {
             session.markRunCompleted();
-          }),
-        ),
+            return;
+          }
+          startRootRun({
+            agent: currentAgent,
+            model: selection.model,
+            instruction,
+            ...(displayInstruction !== undefined ? { displayInstruction } : {}),
+            agentCategory: AgentCategory.ToolUse,
+            workingDirectory: cwd,
+            ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
+            ...(meta.cliMultiAgentPresetId
+              ? { cli: { multiAgentPresetId: meta.cliMultiAgentPresetId } }
+              : {}),
+            ...(meta.delegationAgentScope
+              ? { delegationAgentScope: meta.delegationAgentScope }
+              : {}),
+          });
+          started = true;
+        }),
+        (error) => {
+          if (!session.stopRequested) {
+            appendLocalUserTranscript(displayInstruction ?? instruction);
+            appendLocalErrorTranscript(toErrorMessage(error));
+          }
+          session.runExitCode = session.stopRequested
+            ? CliExitCode.Success
+            : CliExitCode.AgentError;
+          session.markRunCompleted();
+        },
       ),
     );
     session.markRunPending(pendingStart);

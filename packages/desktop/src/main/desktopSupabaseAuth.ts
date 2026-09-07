@@ -401,6 +401,9 @@ export function createDesktopSupabaseAuth(
         authLanes,
         AUTH_CALLBACK_LANE,
       )(
+        // Non-rejecting: `runQueuedCallback` runs the callback through
+        // `runPromiseExit` and answers both exits itself, settling the
+        // attempt, logging the cause, and notifying the user.
         Effect.promise(() =>
           runQueuedCallback({ callback, attempt: claimedAttempt }),
         ),

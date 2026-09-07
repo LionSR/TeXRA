@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - auth
-import { runAuthProgram } from '@auth/authProgram';
+import { callPort, runAuthProgram } from '@auth/authProgram';
 import {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   parseStoredSupabaseSession,
@@ -636,5 +636,25 @@ describe('SupabaseSession', () => {
         assert.equal(coordinator.getLastRefreshFailure(), failure);
       },
     );
+  });
+
+  describe('runAuthProgram error identity', () => {
+    it('re-throws a port rejection unchanged, whatever its shape', async () => {
+      // The AuthPortError contract: `cause` is the caller's own error and the
+      // Promise edge re-throws it unchanged, so every `instanceof` and message
+      // check a host makes still holds. A non-Error cause is the case that
+      // coercion destroys, and 33 call sites across three hosts rely on it.
+      const rejection = { status: 401, message: 'invalid_grant' };
+      const thrown = await runAuthProgram(
+        callPort(async () => {
+          throw rejection;
+        }),
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      assert.equal(thrown, rejection);
+    });
   });
 });
