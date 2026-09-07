@@ -587,7 +587,10 @@ const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   builtInToolUse: async () => '/workspace/resources/tool_use_agents',
 };
 
-const FAKE_HOST_ENVIRONMENT: HostEnvironmentPort = {
+// Frozen: every createFakePlatform() call shares this object, so a test that
+// mutated it (rather than passing a `hostEnvironment` override) would leak
+// into later tests (AGENTS.md "Never hand out a shared mutable literal").
+const FAKE_HOST_ENVIRONMENT: HostEnvironmentPort = Object.freeze({
   hostInfo: () => ({
     platform: 'linux',
     arch: 'x64',
@@ -595,7 +598,7 @@ const FAKE_HOST_ENVIRONMENT: HostEnvironmentPort = {
     shell: '/bin/bash',
   }),
   packagedElectronResourcesPath: () => undefined,
-};
+});
 
 export function createFakePlatform(
   options: FakePlatformOptions = {},

@@ -1,7 +1,7 @@
 /**
- * Node implementation of {@link HostEnvironmentPort} — the one place raw
- * `process`/`os` environment facts get read, so business logic (setup
- * probes, native-binary resolution) never touches them directly.
+ * Node implementation of {@link HostEnvironmentPort}: the OS/arch/shell probe
+ * and the packaged-Electron-resources check that used to live inline in
+ * `ProbeEnvironmentTool` and `externalBinaryUtils`, respectively.
  */
 import * as os from 'node:os';
 
@@ -12,7 +12,10 @@ type ElectronProcess = NodeJS.Process & {
   resourcesPath?: string;
 };
 
-export const nodeHostEnvironment: HostEnvironmentPort = {
+// Frozen: this module-level object is imported by every consumer of the
+// port, so a mutated method would change behavior for all of them (AGENTS.md
+// "Never hand out a shared mutable literal").
+export const nodeHostEnvironment: HostEnvironmentPort = Object.freeze({
   hostInfo() {
     return {
       platform: process.platform,
@@ -27,4 +30,4 @@ export const nodeHostEnvironment: HostEnvironmentPort = {
     if (electronProcess.defaultApp === true) return undefined;
     return electronProcess.resourcesPath;
   },
-};
+});

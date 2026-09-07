@@ -303,9 +303,12 @@ export interface AgentResumePort {
 // ---------------------------------------------------------------------------
 
 /**
- * Host-owned reads of the current process's raw OS/runtime environment.
- * Exists so business logic (setup/environment probes, native-binary
- * resolution) never touches `process`/`os` directly.
+ * Host-owned reads of the current process's raw OS/runtime environment: the
+ * `probe_environment` tool's OS/arch/shell summary, and the packaged-Electron
+ * check native-binary resolution uses to locate `app.asar.unpacked`
+ * resources. Other `process`/`os` reads (e.g. the platform/arch key each
+ * vendor CLI's binary resolver selects its npm package by) are unrelated
+ * lookups, not environment reporting, and stay where they are.
  */
 export interface HostEnvironmentPort {
   /** OS, architecture, kernel release, and shell of the current process. */

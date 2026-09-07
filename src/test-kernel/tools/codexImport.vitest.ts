@@ -5,11 +5,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, it, vi } from 'vitest';
+import { afterEach, describe, it } from 'vitest';
 
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { findCodexBinaryPath } from '@tools/codexImport';
 
@@ -56,7 +55,6 @@ describe('findCodexBinaryPath', () => {
   setupPlatform({}, { fs: nodeFilesystem });
 
   afterEach(() => {
-    vi.restoreAllMocks();
     if (tempDir != null) {
       fs.rmSync(tempDir, { recursive: true, force: true });
       tempDir = undefined;
@@ -85,12 +83,26 @@ describe('findCodexBinaryPath', () => {
     fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
     fs.writeFileSync(binaryPath, '');
 
-    // Impersonate a packaged Electron app: the resolver's highest-priority
-    // probe reads this through nodeHostEnvironment.
-    vi.spyOn(
-      nodeHostEnvironment,
-      'packagedElectronResourcesPath',
-    ).mockReturnValue(tempDir);
-    assert.equal(await findCodexBinaryPath(), binaryPath);
+    // Impersonate a packaged Electron app: nodeHostEnvironment's
+    // packagedElectronResourcesPath() (a frozen, shared singleton — see
+    // nodeHostEnvironment.ts) reads process.versions.electron,
+    // process.defaultApp, and process.resourcesPath directly, so mutating
+    // those is the only way to steer it from a test.
+    const electronProcess = process as NodeJS.Process & {
+      defaultApp?: boolean;
+      resourcesPath?: string;
+    };
+    Object.defineProperty(process.versions, 'electron', {
+      value: '30.0.0',
+      configurable: true,
+      enumerable: true,
+    });
+    electronProcess.resourcesPath = tempDir;
+    try {
+      assert.equal(await findCodexBinaryPath(), binaryPath);
+    } finally {
+      Reflect.deleteProperty(process.versions, 'electron');
+      Reflect.deleteProperty(electronProcess, 'resourcesPath');
+    }
   });
 });
