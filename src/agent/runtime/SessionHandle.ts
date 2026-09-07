@@ -32,7 +32,14 @@
  * session is justified only as the ownership container.
  */
 
-import { Cause, Effect, Exit, SubscriptionRef, type Stream } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Semaphore,
+  SubscriptionRef,
+  type Stream,
+} from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 
 import type {
@@ -50,6 +57,7 @@ import {
 import { finalizeRun } from '@agent/storage/executionLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
+import { redactSecrets } from '@logger/redaction';
 import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -62,6 +70,7 @@ import {
   aggregateTarget,
   isTranscriptEvent,
   RUN_OUTCOME,
+  STREAM_PHASE,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
   type ExecutionId,
@@ -70,12 +79,23 @@ import {
   type StreamTabId,
   type TranscriptSubscription,
 } from '@shared/schemas';
+import { interruptedWorkflowCall } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
-import type { RunTrace, RunTraceFlushEntry } from '@transcript/runTrace';
-import type { StreamLogStore } from '@transcript/StreamLogStore';
+import {
+  isRunningGroupEntry,
+  isRunningStreamingTextEntry,
+  nonterminalWorkflowCall,
+} from '@shared/session/traceEntries';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import type { RunTrace } from '@transcript/runTrace';
+import type {
+  StreamLogStore,
+  StreamLogStoreMode,
+} from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { throwAggregated } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunContextSession,
   runInSession,
@@ -104,8 +124,8 @@ import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 const logger = createLog('sessionHandle');
 
 /**
- * What opening a session supplies (`openSession`): a valid transcript store
- * is required; other owners may be injected. `interactions` is the host the
+ * What opening a session supplies (`openSession`): persistence mode and
+ * host-owned policies. The graph constructs its store over its event database. `interactions` is the host the
  * session is born with, attached for its whole life, for an opener with no
  * later attach step of its own (the SDK's headless host).
  *
@@ -115,10 +135,12 @@ const logger = createLog('sessionHandle');
  * separately-injected machine or plane could not silently drop every fact
  * of a session onto a plane nobody reads. The session co-constructs them.
  */
-export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
-  Partial<Pick<SessionHandle, 'responseTextProcessing' | 'roots'>> & {
-    readonly interactions?: HostInteractions;
-  };
+export type SessionHandleInit = Partial<
+  Pick<SessionHandle, 'responseTextProcessing' | 'roots'>
+> & {
+  readonly interactions?: HostInteractions;
+  readonly transcriptMode?: StreamLogStoreMode;
+};
 
 export class SessionHandle {
   /**
@@ -194,19 +216,9 @@ export class SessionHandle {
     event: SessionEvent,
   ) => Effect.Effect<void>;
   private readonly graph: SessionGraph;
-  /**
-   * The transcript recorders' status ports (`RunTrace.handleStatus`), one per
-   * attached run trace: status is a session fact the recorder cannot hear on
-   * its own trace, and it must land in transcript order, so the session calls
-   * them inside {@link publishStatus} before the log moves.
-   */
-  private readonly statusPorts = new Set<(event: StatusEvent) => void>();
   private disposed = false;
-  private readonly publications = new Set<
-    Promise<Exit.Exit<readonly SessionEvent[]>>
-  >();
-  /** This session's execution-keyed trace flushers. */
-  readonly flushers: Map<string, RunTraceFlushEntry>;
+  private readonly publicationGate = Semaphore.makeUnsafe(1);
+  private readonly publications = new Set<Promise<Exit.Exit<unknown>>>();
   private readonly artifactFlushers = new Set<() => Promise<void>>();
   private pendingArtifactFlush: DeferredPromise<void> | undefined;
   private artifactFlushWorkerRunning = false;
@@ -235,11 +247,12 @@ export class SessionHandle {
    * handle it serves. Every other caller opens through `openSession`.
    */
   constructor(
-    init: SessionHandleInit & {
-      readonly roots: WorkspaceRoots;
-      readonly snapshots: StreamSnapshotStore;
-      readonly graph: (session: SessionHandle) => SessionGraph;
-    },
+    init: SessionHandleInit &
+      Pick<SessionHandle, 'transcripts'> & {
+        readonly roots: WorkspaceRoots;
+        readonly snapshots: StreamSnapshotStore;
+        readonly graph: (session: SessionHandle) => SessionGraph;
+      },
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
@@ -292,7 +305,6 @@ export class SessionHandle {
     this.workflowControls = new WorkflowControlRegistry();
     // Every session owns exactly one trace-flusher map. There is no
     // process-wide registry: a host drains the session it is shutting down.
-    this.flushers = new Map<string, RunTraceFlushEntry>();
     if (init.interactions) this.interactions.use(init.interactions);
     liveSessions.add(this);
     // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
@@ -306,7 +318,6 @@ export class SessionHandle {
     // the last owner has unwound.
     this.teardown.add(() => {
       this.disposed = true;
-      this.statusPorts.clear();
     });
     this.teardown.add(() => this.resultListeners.clear());
     this.teardown.add(() => this.artifactFlushers.clear());
@@ -316,7 +327,6 @@ export class SessionHandle {
     this.teardown.add(() => this.approvals.clearAll());
     this.teardown.add(() => this.executions.dispose());
     this.teardown.add(() => this.followUps.dispose());
-    this.teardown.add(() => this.flushPendingTraces());
   }
 
   /** Live host-neutral approval policy for executable requests. */
@@ -366,25 +376,6 @@ export class SessionHandle {
     ]);
   }
 
-  /** Drain one execution's pending trace, or every trace during shutdown. */
-  flushPendingTraces(ownerKey?: string): void {
-    const failures: unknown[] = [];
-    const flushers =
-      ownerKey === undefined
-        ? [...this.flushers.values()]
-        : [this.flushers.get(ownerKey)].filter(
-            (entry): entry is RunTraceFlushEntry => entry !== undefined,
-          );
-    for (const entry of flushers) {
-      try {
-        entry.flush();
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-    throwAggregated(failures, 'Multiple session trace writers failed to flush');
-  }
-
   /** Register a session-owned durable writer such as a snapshot store. */
   useArtifactFlusher(flush: () => Promise<void>): () => void {
     this.artifactFlushers.add(flush);
@@ -408,7 +399,7 @@ export class SessionHandle {
     let drainError: unknown;
     try {
       await validateOwnedExecutionLease(executionId);
-      await this.flushArtifacts(executionId);
+      await this.flushArtifacts();
       await afterArtifactsDrained?.();
       await this.settlePublications();
     } catch (error) {
@@ -430,14 +421,8 @@ export class SessionHandle {
     if (drainError !== undefined) throw drainError;
   }
 
-  /** Persist one execution's trace plus the session's shared artifact stores. */
-  flushArtifacts(ownerKey?: string): Promise<void> {
-    let traceFailure: unknown;
-    try {
-      this.flushPendingTraces(ownerKey);
-    } catch (error) {
-      traceFailure = error;
-    }
+  /** Drain registered artifact writers and all pending event publications. */
+  flushArtifacts(): Promise<void> {
     this.pendingArtifactFlush ??= pDefer<void>();
     const batch = this.pendingArtifactFlush;
     if (!this.artifactFlushWorkerRunning) {
@@ -446,18 +431,7 @@ export class SessionHandle {
         void this.drainArtifactFlushBatches();
       });
     }
-    if (traceFailure === undefined) return batch.promise;
-    return batch.promise.then(
-      () => {
-        throw traceFailure;
-      },
-      (artifactFailure: unknown) => {
-        throw new AggregateError(
-          [traceFailure, artifactFailure],
-          'Trace and shared artifact writers failed to flush',
-        );
-      },
-    );
+    return batch.promise;
   }
 
   /**
@@ -480,10 +454,11 @@ export class SessionHandle {
   }
 
   private async flushArtifactsOnce(): Promise<void> {
-    const writers = [() => this.transcripts.flush(), ...this.artifactFlushers];
-    const results = await Promise.allSettled(
-      writers.map((flush) => Promise.resolve().then(flush)),
-    );
+    const writers = this.artifactFlushers;
+    const results = await Promise.allSettled([
+      this.settlePublications(),
+      ...[...writers].map((flush) => Promise.resolve().then(flush)),
+    ]);
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],
     );
@@ -519,17 +494,12 @@ export class SessionHandle {
    * trace teardown.
    */
   attachRunTrace(
-    run: Pick<RunTrace, 'trace' | 'handleStatus'>,
+    run: Pick<RunTrace, 'trace'>,
     streamId: StreamTabId,
   ): () => void {
-    const detachTrace = run.trace.subscribe((event) =>
+    return run.trace.subscribe((event) =>
       this.publishRunEvent(streamId, event),
     );
-    this.statusPorts.add(run.handleStatus);
-    return () => {
-      this.statusPorts.delete(run.handleStatus);
-      detachTrace();
-    };
   }
 
   /**
@@ -545,13 +515,33 @@ export class SessionHandle {
    */
   publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
     if (this.disposed) return;
-    const draft = runEventDraft(streamId, event);
-    if (draft)
-      this.publish([
-        isTranscriptEvent(draft)
-          ? { ...draft, transcriptDebug: isDebugModeEnabled() }
-          : draft,
-      ]);
+    if (event.type === 'stream.chunk') {
+      this.schedulePublication(
+        this.graph.publishText(streamId, event.id, redactSecrets(event.text)),
+      );
+      return;
+    }
+    this.schedulePublication(
+      Effect.suspend(() => {
+        const draft = runEventDraft(
+          streamId,
+          event.type === 'stream.end'
+            ? {
+                ...event,
+                finalText:
+                  event.finalText ?? this.graph.readText(streamId, event.id),
+              }
+            : event,
+        );
+        return draft === null
+          ? Effect.void
+          : this.graph.publish([
+              isTranscriptEvent(draft)
+                ? { ...draft, transcriptDebug: isDebugModeEnabled() }
+                : draft,
+            ]);
+      }),
+    );
   }
 
   /**
@@ -562,7 +552,29 @@ export class SessionHandle {
    */
   publishStatus(event: StatusEvent): void {
     if (this.disposed) return;
-    this.publish([statusDraft(event)]);
+    this.schedulePublication(
+      Effect.suspend(() => {
+        const closure: SessionEventDraft[] = [];
+        if (
+          event.phase === STREAM_PHASE.WAITING ||
+          isTerminalOutcomePhase(event.phase)
+        ) {
+          for (const entry of this.transcripts
+            .get(event.streamId)
+            ?.getRange(0) ?? []) {
+            if (!isRunningStreamingTextEntry(entry)) continue;
+            closure.push({
+              type: 'stream.end',
+              aggregateId: qualifyAggregateId('stream', event.streamId),
+              id: entry.id,
+              finalText:
+                this.graph.readText(event.streamId, entry.id) ?? entry.text,
+            });
+          }
+        }
+        return this.graph.publish([...closure, statusDraft(event)]);
+      }),
+    );
   }
 
   /**
@@ -573,8 +585,12 @@ export class SessionHandle {
    */
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
+    this.schedulePublication(this.graph.publish(events));
+  }
+
+  private schedulePublication(program: Effect.Effect<unknown>): void {
     const publication = effectRuntime().runPromise(
-      this.graph.publish(events).pipe(
+      this.publicationGate.withPermit(program).pipe(
         Effect.tapDefect((cause) =>
           Effect.sync(() => {
             logger.error('Session publication failed', { data: cause });
@@ -608,17 +624,14 @@ export class SessionHandle {
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
-    // The fold is this process's reading of the shared table, so every
-    // committed row enters it whoever authored it: the store's synchronous
-    // accessors would otherwise answer a cross-process run's questions from a
-    // fold that never saw its rows. The ownership fence below is on the local
-    // side effects only — file writers, host notifications and runtime waiters
-    // belong to the process that authored the fact.
-    return this.applySnapshotEvent(event).pipe(
+    return this.transcripts.acceptCommitted(event).pipe(
+      Effect.andThen(this.applySnapshotEvent(event)),
       Effect.andThen(
         Effect.sync(() => {
+          // Host notifications and runtime waiters belong to the authoring process.
           const { self } = SubscriptionRef.getUnsafe(this.graph.local);
           if (event.ownerId == null || !self.includes(event.ownerId)) return;
+
           if (event.type === 'result') {
             for (const listener of [...this.resultListeners]) {
               try {
@@ -637,13 +650,6 @@ export class SessionHandle {
             ...event,
             streamId: aggregateTarget(event.aggregateId).id as StreamTabId,
           };
-          for (const port of [...this.statusPorts]) {
-            try {
-              port(status);
-            } catch (error) {
-              logger.warn('Session status port threw', { data: error });
-            }
-          }
           this.executions.handleStatus(status.streamId);
         }),
       ),
@@ -738,50 +744,23 @@ export function forEachLiveSession(
 }
 
 /**
- * Settle the executions live sessions still own, so a host exit leaves no
- * execution recorded as neither running nor finished.
+ * Settle executions still owned when the host exits. Hosts register this as
+ * their first ON-phase handler, after reachable drivers have unwound and
+ * before sessions or persistence services are disposed.
  *
- * Run drivers settle their own executions as they unwind, through
- * {@link SessionHandle.releaseExecutionLease}. Hosts register this drain as
- * their **first ON-phase handler** so that every driver a BEFORE handler
- * *does* reach has already had its turn — on the CLI that is the whole
- * headless path, whose handler kills the run and awaits its unwind — and so
- * that nothing has been disposed yet.
+ * Each owned execution keeps its checkpoint and receives CANCELLED unless a
+ * driver has already persisted another outcome. Under the same lease, publish
+ * canonical closure facts for its running transcript entries using the outcome
+ * that remains authoritative. Release waits for those publications to commit.
+ * A driver that writes a different outcome after this settlement remains a
+ * separate lifecycle race; keepExistingOutcome only protects earlier writes.
  *
- * On desktop and the extension no BEFORE handler aborts or awaits an
- * in-process run: `registerAgentShutdownHandlers` interrupts background OS
- * processes and the agent-CLI registries only. A run in flight there is still
- * being driven when this runs, which is precisely why the drain exists — its
- * driver's promise would otherwise never settle — and why the terminal write
- * below yields to a driver that did reach its own outcome first. What is left
- * for the drain is a run the process is exiting out from under (quitting the
- * desktop app or VS Code mid-run) or a tool-use flow parked at its WAIT node.
- *
- * Each such execution gets the same durable settlement the CLI has always
- * given its own: the CANCELLED outcome, its transcript's running groups closed
- * as whatever outcome that write left standing (the driver's own when it
- * reached its terminal write first, so the transcript never closes on an
- * outcome the header contradicts), its flow record preserved so
- * `deriveResumability` can still offer the checkpoint, and its lease record
- * deleted rather than left for a later launch to prove dead. The outcome and
- * the group close are both written inside the lease-fenced post-drain window,
- * so the run's durable state and its transcript settle under one claim. That
- * pairing assumes the outcome write is the one that resolves the race: if this
- * drain writes CANCELLED first and an in-flight driver's `finalizeRunTerminal`
- * then overwrites the header with COMPLETED or FAILED, the groups below are
- * already closed as CANCELLED and stay that way — the documented case is the
- * driver reaching the meta-lock first, which `keepExistingOutcome` handles.
- *
- * Bounded by the caller's phase deadline — a host that cannot exit because a
- * release is slow would be worse than the unsettled record. The budget is
- * sized for what each execution costs here: one outcome write plus one
- * transcript flush. Once `signal` fires, every remaining execution is named
- * in the log instead of being silently skipped, and the signal is re-checked
- * between the two writes so a deadline reached mid-settlement is logged too.
+ * The caller's phase deadline bounds the drain. An expired deadline is logged
+ * for each skipped execution and checked again after its outcome write.
  */
-export async function settleLiveSessionExecutions(
-  signal: AbortSignal,
-): Promise<void> {
+export const settleLiveSessionExecutions = Effect.fn(
+  'settleLiveSessionExecutions',
+)(function* (signal: AbortSignal) {
   const pending: { session: SessionHandle; executionId: ExecutionId }[] = [];
   forEachLiveSession((session) => {
     for (const executionId of session.executions.getActiveIds()) {
@@ -791,75 +770,102 @@ export async function settleLiveSessionExecutions(
   for (const { session, executionId } of pending) {
     if (signal.aborted) {
       logger.warn(
-        `Host exit deadline passed before this drain reached execution ${executionId}; settling one execution costs an outcome write and a transcript flush, which the exit deadline budgets for, so a run left here means the budget ran out. If it was still unsettled it keeps its open transcript groups, which a later launch renders as interrupted from the derived outcome until a later settlement persists the close`,
+        `Host exit deadline passed before execution ${executionId} could settle`,
       );
       continue;
     }
-    // A host quit handler runs outside any run scope, and the lease key and
-    // the terminal write both resolve through the owning session's storage
-    // root, so the drain enters each session before asking who owns what: a
-    // desktop with several papers open would otherwise look every paper's
-    // lease up under the no-workspace root and skip them all.
-    await runInSession(session, async () => {
-      // Skips both a run whose driver already settled it and one this process
-      // never owned (a run another TeXRA process holds).
-      if (!ownsExecutionLease(executionId)) return;
-      try {
-        await session.releaseExecutionLease(executionId, async () => {
-          const finalization = await finalizeRun({
-            executionId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            flowRecord: 'preserve',
-            // A driver that reached its own terminal write between the
-            // registry read above and this one owns the result: this drain
-            // records what the exit interrupted, never what already finished.
-            keepExistingOutcome: true,
+    const settlement = Effect.gen(function* () {
+      if (!runInSession(session, () => ownsExecutionLease(executionId))) return;
+      const streamId = session.executions.getHandle(executionId)?.childStreamId;
+      // Read the committed transcript once after queued publications settle.
+      // Host exit needs no presentation residency or mutable writer handle.
+      const transcript = yield* Effect.exit(
+        Effect.gen(function* () {
+          yield* Effect.tryPromise({
+            try: () => session.settlePublications(),
+            catch: ensureError,
           });
-          if (!finalization.ok) {
-            throw new Error(
-              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
-              { cause: finalization.error },
-            );
-          }
-          // Same claim, second write: close the run's transcript. Outside
-          // this callback the claim is already unlinked, so another process
-          // could have taken the run over and be appending to its log;
-          // settling its groups from this process's stale resident copy would
-          // then write that owner's entries back out from under it.
-          if (signal.aborted) {
-            logger.warn(
-              `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open and render as interrupted from that outcome`,
-            );
-            return;
-          }
-          const streamId =
-            session.executions.getHandle(executionId)?.childStreamId;
-          if (streamId === undefined) {
-            logger.warn(
-              `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
-            );
-            return;
-          }
-          // The outcome that actually stands on disk, which is the driver's
-          // own when it won the race above: closing this run's groups as
-          // CANCELLED there would contradict the COMPLETED (or FAILED) result
-          // the header reports.
-          const closed = await session.transcripts.endRunningGroupsForStreams(
-            [streamId],
-            Date.now(),
-            finalization.outcome,
-          );
-          if (closed.length > 0) await session.transcripts.flush();
-        });
-      } catch (error) {
-        logger.warn(
-          `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
-          { data: error },
-        );
-      }
+          return streamId === undefined
+            ? []
+            : yield* session.transcripts.readEntries(streamId);
+        }),
+      );
+      yield* Effect.tryPromise({
+        try: () =>
+          runInSession(session, () =>
+            session.releaseExecutionLease(executionId, async () => {
+              const finalization = await finalizeRun({
+                executionId,
+                outcome: RUN_OUTCOME.CANCELLED,
+                flowRecord: 'preserve',
+                keepExistingOutcome: true,
+              });
+              if (!finalization.ok) {
+                throw new Error(
+                  `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+                  { cause: finalization.error },
+                );
+              }
+              if (signal.aborted) {
+                logger.warn(
+                  `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open`,
+                );
+                return;
+              }
+              if (streamId === undefined) {
+                logger.warn(
+                  `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
+                );
+                return;
+              }
+              // A failed read must still pass through the owner's release
+              // choreography after recording the terminal outcome.
+              if (Exit.isFailure(transcript))
+                throw Cause.squash(transcript.cause);
+              // These are ordinary canonical facts. The lease owner settles their
+              // publication before unlinking the claim, so replay sees the same
+              // closure as the resident transcript.
+              for (const entry of transcript.value) {
+                if (isRunningGroupEntry(entry)) {
+                  session.publishRunEvent(streamId, {
+                    type: 'stage.end',
+                    id: entry.id,
+                    status: finalization.outcome,
+                  });
+                } else if (isRunningStreamingTextEntry(entry)) {
+                  session.publishRunEvent(streamId, {
+                    type: 'stream.end',
+                    id: entry.id,
+                  });
+                } else {
+                  const call = nonterminalWorkflowCall(entry);
+                  if (call)
+                    session.publishRunEvent(streamId, {
+                      type: 'workflow.call',
+                      logId: entry.id,
+                      stageId: entry.groupId,
+                      call: interruptedWorkflowCall(call),
+                    });
+                }
+              }
+            }),
+          ),
+        catch: ensureError,
+      });
     });
+    yield* settlement.pipe(
+      Effect.scoped,
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          logger.warn(
+            `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
+            { data: Cause.squash(cause) },
+          );
+        }),
+      ),
+    );
   }
-}
+});
 
 let defaultSessionFallbackWarned = false;
 

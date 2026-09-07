@@ -1,12 +1,9 @@
+import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const submitFollowUpMock = vi.hoisted(() =>
-  vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
-    status: 'sent' as const,
-  })),
-);
+const submitFollowUpMock = vi.hoisted(() => vi.fn());
 const getThreadSummaryMock = vi.hoisted(() => vi.fn());
 const listThreadsByStatusMock = vi.hoisted(() => vi.fn(async () => []));
 const readExternalInquiryThreadMock = vi.hoisted(() => vi.fn());
@@ -28,7 +25,6 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
 }));
 
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   aggregateId as qualifyAggregateId,
   type InquiryThreadId,
@@ -116,7 +112,9 @@ function answeredManifest(): ExternalInquiryThreadManifest {
 
 describe('external inquiry continuation session routing', () => {
   beforeEach(() => {
-    submitFollowUpMock.mockClear();
+    submitFollowUpMock
+      .mockReset()
+      .mockReturnValue(Effect.succeed({ status: 'sent' }));
     getThreadSummaryMock.mockResolvedValue({
       threadId: THREAD,
       parentStreamId: STREAM,
@@ -132,10 +130,8 @@ describe('external inquiry continuation session routing', () => {
   it('passes the host-provided session through to sendFollowUp', async () => {
     const session = sessionStub('desktop-session');
 
-    const outcome: InjectionOutcome = await injectContinuationForAnsweredThread(
-      THREAD,
-      answeredManifest(),
-      session,
+    const outcome: InjectionOutcome = await Effect.runPromise(
+      injectContinuationForAnsweredThread(THREAD, answeredManifest(), session),
     );
 
     expect(outcome).toBe('sent');
@@ -149,10 +145,16 @@ describe('external inquiry continuation session routing', () => {
   it('archives a turn-less manifest without dispatching a follow-up', async () => {
     // The manifest schema does not require turns; the structural guard must
     // archive (not crash) when there is no turn to fence against.
-    const outcome = await injectContinuationForAnsweredThread(THREAD, {
-      ...answeredManifest(),
-      turns: [],
-    });
+    const outcome = await Effect.runPromise(
+      injectContinuationForAnsweredThread(
+        THREAD,
+        {
+          ...answeredManifest(),
+          turns: [],
+        },
+        sessionStub(),
+      ),
+    );
 
     expect(outcome).toBe('archived');
     expect(submitFollowUpMock).not.toHaveBeenCalled();
@@ -166,10 +168,12 @@ describe('external inquiry continuation session routing', () => {
     const fallback = captureFacts(defaultSession());
 
     try {
-      await injectContinuationForAnsweredThread(
-        THREAD,
-        answeredManifest(),
-        session,
+      await Effect.runPromise(
+        injectContinuationForAnsweredThread(
+          THREAD,
+          answeredManifest(),
+          session,
+        ),
       );
       await session.settlePublications();
 
@@ -195,49 +199,18 @@ describe('external inquiry continuation session routing', () => {
     }
   });
 
-  it("emits inquiry thread updates through the active run's session when no explicit session is provided", async () => {
-    const session = createTestSession({ roots: paperRoots() });
-    publishTestRunStart(session, STREAM);
-    await session.settlePublications();
-    const run = captureFacts(session);
-    const fallback = captureFacts(defaultSession());
-
-    try {
-      await withRunContext(
-        createRunContext({
-          session,
-        }),
-        () => injectContinuationForAnsweredThread(THREAD, answeredManifest()),
-      );
-      await session.settlePublications();
-
-      await session.settlePublications();
-      expect(run.facts).toMatchObject([
-        expect.objectContaining({
-          type: 'inquiryThreadUpdated',
-          aggregateId: qualifyAggregateId('inquiry', THREAD),
-          threadId: THREAD,
-          resumeOutcome: 'sent',
-        }),
-      ]);
-      expect(fallback.facts).toEqual([]);
-    } finally {
-      run.detach();
-      fallback.detach();
-      session.dispose();
-    }
-  });
-
   it('does not emit an inquiry thread update when no summary is returned', async () => {
     const session = createTestSession();
     const { facts, detach } = captureFacts(session);
     getThreadSummaryMock.mockResolvedValueOnce(null);
 
     try {
-      await injectContinuationForAnsweredThread(
-        THREAD,
-        answeredManifest(),
-        session,
+      await Effect.runPromise(
+        injectContinuationForAnsweredThread(
+          THREAD,
+          answeredManifest(),
+          session,
+        ),
       );
 
       expect(facts).toEqual([]);
@@ -252,19 +225,19 @@ describe('external inquiry continuation session routing', () => {
       name: 'threads the provided session to the wake decision',
       session: sessionStub('desktop-session'),
     },
-    {
-      name: 'passes an undefined session when none was provided',
-      session: undefined,
-    },
   ])(
     'delegates queued wake decisions to the follow-up owner ($name)',
     async ({ session }) => {
-      submitFollowUpMock.mockResolvedValueOnce({ status: 'queued' });
+      submitFollowUpMock.mockReturnValueOnce(
+        Effect.succeed({ status: 'queued' }),
+      );
 
-      const outcome = await injectContinuationForAnsweredThread(
-        THREAD,
-        answeredManifest(),
-        session,
+      const outcome = await Effect.runPromise(
+        injectContinuationForAnsweredThread(
+          THREAD,
+          answeredManifest(),
+          session,
+        ),
       );
 
       expect(outcome).toBe('queued');
@@ -272,14 +245,19 @@ describe('external inquiry continuation session routing', () => {
   );
 
   it('archives inquiries when the follow-up owner refuses a stale queue', async () => {
-    submitFollowUpMock.mockResolvedValueOnce({
-      status: 'failed' as const,
-      reason: 'not_resumable' as const,
-    });
+    submitFollowUpMock.mockReturnValueOnce(
+      Effect.succeed({
+        status: 'failed' as const,
+        reason: 'not_resumable' as const,
+      }),
+    );
 
-    const outcome = await injectContinuationForAnsweredThread(
-      THREAD,
-      answeredManifest(),
+    const outcome = await Effect.runPromise(
+      injectContinuationForAnsweredThread(
+        THREAD,
+        answeredManifest(),
+        sessionStub(),
+      ),
     );
 
     expect(outcome).toBe('archived');

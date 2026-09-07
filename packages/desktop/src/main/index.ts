@@ -1619,6 +1619,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // toast → session, most recently opened first).
       const processResources = new DisposableStore();
       registerRuntimeShutdownHandlers(lifecycle, {
+        runSettlement: (settlement) => effectRuntime().runPromise(settlement),
         beforeAgentShutdown: [() => processResumeOwner.disable()],
         afterAgentShutdown: [() => killActiveRecording()],
         // Agent shutdown runs first so its final events enter the

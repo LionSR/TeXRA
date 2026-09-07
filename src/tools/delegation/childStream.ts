@@ -1,3 +1,6 @@
+// Third-party imports
+import { Cause, Effect, Exit } from 'effect';
+
 // Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -6,11 +9,9 @@ import {
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
+import { runInSession } from '@agent/runtime/RunContext';
 import { classifyAgentError } from '@common/errors';
 import {
   aggregateId as qualifyAggregateId,
@@ -25,10 +26,9 @@ import type {
   UserFollowUpSupport,
 } from '@shared/schemas';
 import { createRunTrace } from '@transcript';
-import type { TranscriptWriter } from '@transcript/StreamLogStore';
 import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildStreamOptions {
   streamPrefix: string;
@@ -38,8 +38,6 @@ interface CreateChildStreamOptions {
   userFollowUpSupport: UserFollowUpSupport;
   description: string;
   config: AgentConfig;
-  /** Writer atomically reserved by createRehydratedChildStream. */
-  reservedWriter?: TranscriptWriter;
   /** A workflow-script run's resume anchor, stamped on `run.start`
    *  (decision 9): the checkpoint it journals into. */
   checkpointId?: string;
@@ -58,7 +56,7 @@ interface FinalizeChildStreamOptions {
   stage?: Pick<StageHandle, 'end'>;
   /** Durable execution-state action. */
   persistence?: RunTerminalPersistence;
-  /** Remove the child stream tab from the progress view once finalized. */
+  /** Release completed transcript residency while preserving command history. */
   autoClose?: boolean;
 }
 
@@ -77,7 +75,7 @@ export interface ChildStream {
    * untracked — callers that must not exit before the terminal status lands
    * (headless CLI session loops) await it.
    */
-  finalize: (options: FinalizeChildStreamOptions) => Promise<void>;
+  finalize: (options: FinalizeChildStreamOptions) => Effect.Effect<void, Error>;
 }
 
 /**
@@ -92,25 +90,24 @@ export function childStreamDescription(raw: string): string {
 }
 
 /** Create a child stream tab and execution handle for a background child task. */
-export async function createChildStream(
+export const createChildStream = Effect.fn('createChildStream')(function* (
+  session: SessionHandle,
   executionId: ExecutionId,
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
-): Promise<ChildStream> {
+): Effect.fn.Return<ChildStream, Error> {
   const childStreamId = getStreamTabId(options.streamPrefix, { executionId });
 
-  // Capture the run's session at creation (inside the parent run's ALS); the
-  // status-update and finalize closures below fire later, possibly outside it.
-  const session = currentSession();
-  await session.settlePublications();
+  yield* Effect.tryPromise({
+    try: () => session.settlePublications(),
+    catch: ensureError,
+  });
   const existing = session.hasStream(childStreamId);
-  const runTrace = createRunTrace(
+  const residency = yield* session.transcripts.loadAndAcquireWriter(
     childStreamId,
-    session.transcripts,
-    session.flushers,
     executionId,
-    options.reservedWriter,
   );
+  const runTrace = createRunTrace(childStreamId, residency);
   const handle = new AgentExecutionHandle(
     {
       streamId: childStreamId,
@@ -123,118 +120,126 @@ export async function createChildStream(
   );
   let detachSessionTrace: (() => void) | undefined;
   let started = false;
-  try {
-    // The trace's durable arms and the recorder's status port, one attachment.
-    detachSessionTrace = session.attachRunTrace(runTrace, childStreamId);
-    const disposeTrace = () => {
-      detachSessionTrace?.();
-      runTrace.dispose();
-    };
+  const setup = yield* Effect.exit(
+    Effect.gen(function* () {
+      // Attach the run's canonical event publication before activation.
+      detachSessionTrace = session.attachRunTrace(runTrace, childStreamId);
+      const disposeTrace = () => {
+        detachSessionTrace?.();
+        runTrace.dispose();
+      };
 
-    // The existence fact and its activation, one batch on the session (PRD
-    // one-fold-three-renderers, section 6, item 8): a child is activated
-    // exactly once, here, and the frozen NDJSON `setActiveStream` line
-    // projects from that. A background child never takes a host's focus:
-    // which stream a surface shows is that surface's own selection, so the
-    // fact carries no hint about it. `removeStream` permanently tombstones
-    // deterministic IDs in the CLI, so every fallible setup step above ran
-    // before this point; a failure here rolls back below without a fact.
-    session.publish([
-      ...(existing
-        ? []
-        : [
-            {
-              type: 'run.start' as const,
-              aggregateId: qualifyAggregateId('stream', childStreamId),
-              executionId,
-              identity: options.run,
-              userFollowUpSupport: options.userFollowUpSupport,
-              // Launch facts the fold reads verbatim (item 6). Remoteness is an
-              // agent-registry fact (a `source: 'remote'` entry); a process,
-              // agent-CLI, or workflow-script child has no registry entry and is
-              // never remote.
-              category: options.config.agentCategory,
-              isRemote: false,
-              worktree: launchWorktreeInfo(options.config.workingDirectory),
-              parentStreamId,
-              background: true,
-              // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
-              // the child is registered after this event by the delegation site;
-              // the queue publishes `approval.policy` for every value the edge
-              // changes.
-              approvalPolicy: session.approvalPolicySnapshotFor(childStreamId),
-              ...(options.checkpointId
-                ? { checkpointId: options.checkpointId }
-                : {}),
-            },
-          ]),
-      // No `isRemote`: the wire line never carried one for a child, which
-      // has no agent-registry entry to be remote.
-      {
-        type: 'run.activate',
-        aggregateId: qualifyAggregateId('stream', childStreamId),
-        category: options.config.agentCategory,
-        background: true,
-      },
-    ]);
-    started = true;
-    // Register local ownership before awaiting the creation commit. The start
-    // batch is already queued, so its first event still precedes handle facts.
-    session.executions.trackAgentExecution(handle, {
-      status: STREAM_PHASE.RUNNING,
-    });
-    await session.settlePublications();
-    runTrace.trace.emit({
-      type: 'run.config',
-      streamId: childStreamId,
-      executionId,
-      config: options.config,
-    });
-    // Display-only fan-out: the durable copy is `ExecutionMeta.description`,
-    // written by `registerExecution` before this stream exists (#9590 Stage 6).
-    const description = childStreamDescription(options.description);
-    session.publish([
-      {
-        type: 'updateStreamDescription',
-        aggregateId: qualifyAggregateId('stream', childStreamId),
-        description,
-      },
-    ]);
+      // The existence fact and its activation, one batch on the session (PRD
+      // one-fold-three-renderers, section 6, item 8): a child is activated
+      // exactly once, here, and the frozen NDJSON `setActiveStream` line
+      // projects from that. A background child never takes a host's focus:
+      // which stream a surface shows is that surface's own selection, so the
+      // fact carries no hint about it. `removeStream` permanently tombstones
+      // deterministic IDs in the CLI, so every fallible setup step above ran
+      // before this point; a failure here rolls back below without a fact.
+      session.publish([
+        ...(existing
+          ? []
+          : [
+              {
+                type: 'run.start' as const,
+                aggregateId: qualifyAggregateId('stream', childStreamId),
+                executionId,
+                identity: options.run,
+                userFollowUpSupport: options.userFollowUpSupport,
+                // Launch facts the fold reads verbatim (item 6). Remoteness is an
+                // agent-registry fact (a `source: 'remote'` entry); a process,
+                // agent-CLI, or workflow-script child has no registry entry and is
+                // never remote.
+                category: options.config.agentCategory,
+                isRemote: false,
+                worktree: launchWorktreeInfo(options.config.workingDirectory),
+                parentStreamId,
+                background: true,
+                // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
+                // the child is registered after this event by the delegation site;
+                // the queue publishes `approval.policy` for every value the edge
+                // changes.
+                approvalPolicy:
+                  session.approvalPolicySnapshotFor(childStreamId),
+                ...(options.checkpointId
+                  ? { checkpointId: options.checkpointId }
+                  : {}),
+              },
+            ]),
+        // No `isRemote`: the wire line never carried one for a child, which
+        // has no agent-registry entry to be remote.
+        {
+          type: 'run.activate',
+          aggregateId: qualifyAggregateId('stream', childStreamId),
+          category: options.config.agentCategory,
+          background: true,
+        },
+      ]);
+      started = true;
+      // Register local ownership before awaiting the creation commit. The start
+      // batch is already queued, so its first event still precedes handle facts.
+      session.executions.trackAgentExecution(handle, {
+        status: STREAM_PHASE.RUNNING,
+      });
+      yield* Effect.tryPromise({
+        try: () => session.settlePublications(),
+        catch: ensureError,
+      });
+      runTrace.trace.emit({
+        type: 'run.config',
+        streamId: childStreamId,
+        executionId,
+        config: options.config,
+      });
+      // Display-only fan-out: the durable copy is `ExecutionMeta.description`,
+      // written by `registerExecution` before this stream exists (#9590 Stage 6).
+      const description = childStreamDescription(options.description);
+      session.publish([
+        {
+          type: 'updateStreamDescription',
+          aggregateId: qualifyAggregateId('stream', childStreamId),
+          description,
+        },
+      ]);
 
-    return {
-      childStreamId,
-      logger: runTrace.trace,
-      // Reports, not writes: the status machine's transition table decides
-      // which of these lands, so a stale handle or a stream a stop already
-      // cancelled simply keeps the phase it has.
-      waitForInput: () => {
-        session.executions.updateAgentExecutionStatus(
-          handle,
-          STREAM_PHASE.WAITING,
-        );
-      },
-      beginTurn: () => {
-        session.executions.updateAgentExecutionStatus(
-          handle,
-          STREAM_PHASE.RUNNING,
-        );
-      },
-      failTurn: () => {
-        session.executions.updateAgentExecutionStatus(
-          handle,
-          STREAM_PHASE.FAILED,
-        );
-      },
-      finalize: (finalizeOptions) =>
-        finalizeChildStream({
-          handle,
-          session,
-          logger: runTrace.trace,
-          disposeTrace,
-          options: finalizeOptions,
-        }),
-    };
-  } catch (error) {
+      return {
+        childStreamId,
+        logger: runTrace.trace,
+        // Reports, not writes: the status machine's transition table decides
+        // which of these lands, so a stale handle or a stream a stop already
+        // cancelled simply keeps the phase it has.
+        waitForInput: () => {
+          session.executions.updateAgentExecutionStatus(
+            handle,
+            STREAM_PHASE.WAITING,
+          );
+        },
+        beginTurn: () => {
+          session.executions.updateAgentExecutionStatus(
+            handle,
+            STREAM_PHASE.RUNNING,
+          );
+        },
+        failTurn: () => {
+          session.executions.updateAgentExecutionStatus(
+            handle,
+            STREAM_PHASE.FAILED,
+          );
+        },
+        finalize: (finalizeOptions) =>
+          finalizeChildStream({
+            handle,
+            session,
+            logger: runTrace.trace,
+            disposeTrace,
+            options: finalizeOptions,
+          }),
+      } satisfies ChildStream;
+    }),
+  );
+  if (Exit.isFailure(setup)) {
+    const error = Cause.squash(setup.cause);
     // Roll back every fallible setup step in reverse-ish order; a cleanup
     // failure must neither mask the original error nor skip later steps. A
     // stream that already published its `run.start` exists for every fold,
@@ -242,8 +247,8 @@ export async function createChildStream(
     // started-but-never-run ghost; the child's result stays out of the host
     // result plane (`isSubagent`), as every child-stream result does.
     const failures: unknown[] = [error];
-    const cleanups: (() => void | Promise<void>)[] = [
-      () => {
+    const cleanups: Effect.Effect<unknown, Error>[] = [
+      Effect.sync(() => {
         if (!started) return;
         runTrace.trace.emit({
           type: 'result',
@@ -258,57 +263,30 @@ export async function createChildStream(
             message: `Child stream setup failed: ${toErrorMessage(error)}`,
           },
         });
-      },
-      () => session.settlePublications(),
-      () => {
+      }),
+      Effect.tryPromise({
+        try: () => session.settlePublications(),
+        catch: ensureError,
+      }),
+      Effect.sync(() => {
         session.executions.untrackIfCurrent(handle);
-      },
-      () => detachSessionTrace?.(),
-      () => runTrace.dispose(),
+      }),
+      Effect.sync(() => detachSessionTrace?.()),
+      Effect.sync(() => runTrace.dispose()),
     ];
     for (const cleanup of cleanups) {
-      try {
-        await cleanup();
-      } catch (cleanupError) {
-        failures.push(cleanupError);
-      }
+      const cleaned = yield* Effect.exit(cleanup);
+      if (Exit.isFailure(cleaned)) failures.push(Cause.squash(cleaned.cause));
     }
     if (failures.length > 1) {
-      throw new AggregateError(
-        failures,
-        'Child stream setup and cleanup failed',
+      return yield* Effect.fail(
+        new AggregateError(failures, 'Child stream setup and cleanup failed'),
       );
     }
-    throw error;
+    return yield* Effect.fail(ensureError(error));
   }
-}
-
-/**
- * Reactivate a deterministic child stream whose prior trace may have released
- * its persisted transcript. Writer reservation and loading are atomic with
- * respect to eviction.
- */
-export async function createRehydratedChildStream(
-  executionId: ExecutionId,
-  parentStreamId: StreamTabId,
-  options: CreateChildStreamOptions,
-): Promise<ChildStream> {
-  const session = currentSession();
-  const childStreamId = getStreamTabId(options.streamPrefix, { executionId });
-  const writer = await session.transcripts.loadAndAcquireWriter(
-    childStreamId,
-    executionId,
-  );
-  try {
-    return await createChildStream(executionId, parentStreamId, {
-      ...options,
-      reservedWriter: writer,
-    });
-  } catch (error) {
-    writer.close();
-    throw error;
-  }
-}
+  return setup.value;
+}, Effect.uninterruptible);
 
 interface FinalizeChildStreamArgs {
   handle: AgentExecutionHandle;
@@ -321,43 +299,46 @@ interface FinalizeChildStreamArgs {
 /**
  * Finalize a child stream tab: presentation logging plus the child's report of
  * its own exit, then the shared terminal finalizer (settle, untrack, terminal
- * stream phase) and the autoClose emit. Child streams never traverse the run
+ * stream phase) and the autoClose residency release. Child streams never traverse the run
  * lifecycle, so this is their only settle point.
  */
-async function finalizeChildStream(
+const finalizeChildStream = Effect.fn('finalizeChildStream')(function* (
   args: FinalizeChildStreamArgs,
-): Promise<void> {
+) {
   const { handle, session, logger, disposeTrace, options } = args;
 
   // The failure prologue (error formatting, logging, classification) is
   // fallible. It must never prevent `finalizeRunTerminal` below from running:
   // a throw here, past `claimTerminalFinalize`'s exactly-once guard, would
   // otherwise strand the handle in the registry forever with no untrack.
-  let outcome: RunOutcome;
+  let outcome: RunOutcome = options.outcome;
   let error: Parameters<typeof finalizeRunTerminal>[0]['error'];
-  try {
-    const failed = options.outcome === RUN_OUTCOME.FAILED;
-    const errorMessage =
-      failed && options.error != null
-        ? toErrorMessage(options.error)
-        : undefined;
+  const prologue = yield* Effect.exit(
+    Effect.sync(() => {
+      const failed = options.outcome === RUN_OUTCOME.FAILED;
+      const errorMessage =
+        failed && options.error != null
+          ? toErrorMessage(options.error)
+          : undefined;
 
-    if (errorMessage) {
-      logger.error(errorMessage);
-    }
-    // What the child saw, in the shared vocabulary. The stream phase decides
-    // which of this and an already-landed stop is the run's terminal fact;
-    // that resolution lives in `finalizeRunTerminal`.
-    outcome = options.outcome;
-    error = failed
-      ? {
-          kind: classifyAgentError(options.error),
-          message: errorMessage ?? 'Child stream failed',
-        }
-      : undefined;
-  } catch (prologueError) {
+      if (errorMessage) {
+        logger.error(errorMessage);
+      }
+      // What the child saw, in the shared vocabulary. The stream phase decides
+      // which of this and an already-landed stop is the run's terminal fact;
+      // that resolution lives in `finalizeRunTerminal`.
+      outcome = options.outcome;
+      error = failed
+        ? {
+            kind: classifyAgentError(options.error),
+            message: errorMessage ?? 'Child stream failed',
+          }
+        : undefined;
+    }),
+  );
+  if (Exit.isFailure(prologue)) {
     logger.error('Child stream finalize prologue failed', {
-      data: { error: prologueError },
+      data: { error: Cause.squash(prologue.cause) },
     });
     outcome = RUN_OUTCOME.FAILED;
     error = {
@@ -366,27 +347,28 @@ async function finalizeChildStream(
     };
   }
 
-  await finalizeRunTerminal({
-    handle,
-    executions: session.executions,
-    streamStatus: session.status,
-    outcome,
-    error,
-    isSubagent: handle.isChildExecution,
-    stage: options.stage,
-    flushArtifacts: () => session.flushArtifacts(handle.executionId),
-    // No trace emit: child-stream results must stay out of `session.onResult`
-    // (host toast) consumers — the loop already presents them as follow-ups.
-    persistence: options.persistence ?? { kind: 'skip' },
+  yield* Effect.tryPromise({
+    try: () =>
+      runInSession(session, () =>
+        finalizeRunTerminal({
+          handle,
+          executions: session.executions,
+          streamStatus: session.status,
+          outcome,
+          error,
+          isSubagent: handle.isChildExecution,
+          stage: options.stage,
+          flushArtifacts: () => session.flushArtifacts(),
+          // No trace emit: child-stream results must stay out of `session.onResult`
+          // (host toast) consumers; the loop already presents them as follow-ups.
+          persistence: options.persistence ?? { kind: 'skip' },
+        }),
+      ),
+    catch: ensureError,
   });
   disposeTrace();
 
   if (options.autoClose) {
-    session.publish([
-      {
-        type: 'stream.removed',
-        aggregateId: qualifyAggregateId('stream', handle.childStreamId),
-      },
-    ]);
+    session.transcripts.requestEviction(handle.childStreamId);
   }
-}
+}, Effect.uninterruptible);

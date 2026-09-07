@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 /**
  * Tools for delegating agent executions from tool-use agents.
  * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
@@ -29,6 +30,8 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
+import type { StreamTabId } from '@shared/schemas';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -71,27 +74,29 @@ const log = createLog('delegation');
  * failure delivering THIS message is logged, not re-thrown (this already runs
  * fire-and-forget off `resumeAgent`'s own return).
  */
-async function deliverResumeWakeFailure(
-  handle: AgentExecutionHandle,
-  session: SessionHandle,
-  executionId: string,
-  err: unknown,
-): Promise<void> {
-  log.warn(
-    `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
-  );
-  const msg = formatSubagentError(executionId, handle.agentName, err);
-  const delivery = await deliverChildRunFollowUp({
-    targetStreamId: handle.parentStreamId,
-    followUp: { text: msg, origin: 'subagent_result' },
-    session,
-  });
-  if (delivery.kind !== 'delivered') {
+const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
+  function* (
+    handle: AgentExecutionHandle,
+    session: SessionHandle,
+    executionId: string,
+    err: unknown,
+  ): Effect.fn.Return<void, Error> {
     log.warn(
-      `Also failed to deliver the wake-failure error for '${executionId}' to the parent (${delivery.kind}).`,
+      `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
     );
-  }
-}
+    const msg = formatSubagentError(executionId, handle.agentName, err);
+    const delivery = yield* deliverChildRunFollowUp({
+      targetStreamId: handle.parentStreamId,
+      followUp: { text: msg, origin: 'subagent_result' },
+      session,
+    });
+    if (delivery.kind !== 'delivered') {
+      log.warn(
+        `Also failed to deliver the wake-failure error for '${executionId}' to the parent (${delivery.kind}).`,
+      );
+    }
+  },
+);
 
 // ============================================================================
 // delegate_workflow tool - for document processing agents
@@ -160,7 +165,16 @@ Optional auto-attach from the input LaTeX:
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
-    return proposeAndExecute(proposal, agentName, streamId);
+    return effectRuntime().runPromise(
+      proposeAndExecute(
+        currentSession(),
+        context,
+        getCurrentToolCallContext(),
+        proposal,
+        agentName,
+        streamId,
+      ),
+    );
   }
 }
 
@@ -235,7 +249,14 @@ Git worktree support: resolved from the active workspace at runtime.`,
   protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
     // Resume path: execution_id is set
     if (input.execution_id) {
-      return this.resumeAgent(input.execution_id, input.instruction);
+      return effectRuntime().runPromise(
+        this.resumeAgent(
+          input.execution_id,
+          input.instruction,
+          currentSession(),
+          getRunContextStreamId(tryUseRunContext()),
+        ),
+      );
     }
 
     // New-delegation path: the schema's refine() guarantees exactly one of
@@ -267,94 +288,124 @@ Git worktree support: resolved from the active workspace at runtime.`,
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
-    return proposeAndExecute(proposal, agentName, streamId);
+    return effectRuntime().runPromise(
+      proposeAndExecute(
+        currentSession(),
+        context,
+        getCurrentToolCallContext(),
+        proposal,
+        agentName,
+        streamId,
+      ),
+    );
   }
 
   /** Queue follow-up instructions for a tool-use subagent. */
-  private async resumeAgent(
-    executionId: string,
-    instruction: string,
-  ): Promise<ToolResult> {
-    const parentContext = tryUseRunContext();
-    const session = currentSession();
-    const handle = session.executions.getHandle(executionId);
-    if (!handle) {
-      throw new Error(
-        `Execution '${executionId}' not found. Use the executions tool to check status.`,
-      );
-    }
+  private readonly resumeAgent = Effect.fn('DelegateAgentTool.resumeAgent')(
+    function* (
+      executionId: string,
+      instruction: string,
+      session: SessionHandle,
+      callerStreamId: StreamTabId | undefined,
+    ): Effect.fn.Return<ToolResult, Error> {
+      const handle = session.executions.getHandle(executionId);
+      if (!handle) {
+        return yield* Effect.fail(
+          new Error(
+            `Execution '${executionId}' not found. Use the executions tool to check status.`,
+          ),
+        );
+      }
 
-    if (handle.category !== 'toolUse') {
-      throw new Error(
-        `Execution '${executionId}' is a workflow agent. Only tool-use subagents can be resumed.`,
-      );
-    }
+      if (handle.category !== 'toolUse') {
+        return yield* Effect.fail(
+          new Error(
+            `Execution '${executionId}' is a workflow agent. Only tool-use subagents can be resumed.`,
+          ),
+        );
+      }
 
-    // Results route to handle.parentStreamId — a detached subagent (parent ===
-    // child) delivers nowhere, and a subagent of another orchestrator reports
-    // to that orchestrator, not the caller. Fail fast instead of silently
-    // queueing instructions whose results would never come back here.
-    if (!handle.isChildExecution) {
-      throw new Error(
-        `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,
-      );
-    }
-    const callerStreamId = getRunContextStreamId(parentContext);
-    if (callerStreamId && !handle.isOwnedBy(callerStreamId)) {
-      throw new Error(
-        `Execution '${executionId}' belongs to a different orchestrator session. Its results would be delivered there, not here. Start a new delegation instead.`,
-      );
-    }
+      // Results route to handle.parentStreamId. A detached subagent (parent ===
+      // child) delivers nowhere, and a subagent of another orchestrator reports
+      // to that orchestrator, not the caller. Fail fast instead of silently
+      // queueing instructions whose results would never come back here.
+      if (!handle.isChildExecution) {
+        return yield* Effect.fail(
+          new Error(
+            `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,
+          ),
+        );
+      }
+      if (callerStreamId && !handle.isOwnedBy(callerStreamId)) {
+        return yield* Effect.fail(
+          new Error(
+            `Execution '${executionId}' belongs to a different orchestrator session. Its results would be delivered there, not here. Start a new delegation instead.`,
+          ),
+        );
+      }
 
-    const framedInstruction = formatFollowUpInstruction(instruction);
-    const result = await submitFollowUp(
-      handle.childStreamId,
-      framedInstruction,
-      {
-        session,
-      },
-    );
-    if (result.status === 'failed') {
-      throw new Error(
-        `Follow-up for '${handle.agentName}' was not accepted (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
+      const framedInstruction = formatFollowUpInstruction(instruction);
+      const result = yield* submitFollowUp(
+        handle.childStreamId,
+        framedInstruction,
+        {
+          session,
+        },
       );
-    }
-    if (result.status === 'queued' && result.wake === 'failed') {
-      // The instruction is in the subagent's queue; only its wake failed.
-      // The parent learns of that through its own follow-up queue as well,
-      // the same way a child's turn failure reaches it.
-      void deliverResumeWakeFailure(
-        handle,
-        session,
-        executionId,
-        new Error(
-          'The subagent could not be resumed to process the follow-up.',
-        ),
-      );
+      if (result.status === 'failed') {
+        return yield* Effect.fail(
+          new Error(
+            `Follow-up for '${handle.agentName}' was not accepted (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
+          ),
+        );
+      }
+      if (result.status === 'queued' && result.wake === 'failed') {
+        // The instruction is in the subagent's queue; only its wake failed.
+        // The parent learns of that through its own follow-up queue as well,
+        // the same way a child's turn failure reaches it.
+        yield* Effect.forkDetach(
+          deliverResumeWakeFailure(
+            handle,
+            session,
+            executionId,
+            new Error(
+              'The subagent could not be resumed to process the follow-up.',
+            ),
+          ).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                log.warn('Could not deliver the subagent wake failure.', {
+                  data: error,
+                });
+              }),
+            ),
+          ),
+        );
+        return executed(
+          [
+            `Follow-up instruction queued for '${handle.agentName}', but the subagent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`,
+            `Execution ID: ${executionId}`,
+          ].join('\n'),
+          `Follow-up queued for '${handle.agentName}' (resume failed)`,
+        );
+      }
+
+      if (result.status === 'sent') {
+        return executed(
+          [
+            `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
+            `Execution ID: ${executionId}`,
+          ].join('\n'),
+          `Follow-up sent to '${handle.agentName}'`,
+        );
+      }
       return executed(
         [
-          `Follow-up instruction queued for '${handle.agentName}', but the subagent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`,
+          `Follow-up instruction queued for '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
           `Execution ID: ${executionId}`,
         ].join('\n'),
-        `Follow-up queued for '${handle.agentName}' (resume failed)`,
+        `Follow-up queued for '${handle.agentName}'`,
       );
-    }
-
-    if (result.status === 'sent') {
-      return executed(
-        [
-          `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-          `Execution ID: ${executionId}`,
-        ].join('\n'),
-        `Follow-up sent to '${handle.agentName}'`,
-      );
-    }
-    return executed(
-      [
-        `Follow-up instruction queued for '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-        `Execution ID: ${executionId}`,
-      ].join('\n'),
-      `Follow-up queued for '${handle.agentName}'`,
-    );
-  }
+    },
+  );
 }

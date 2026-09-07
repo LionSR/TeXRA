@@ -11,7 +11,7 @@ import type {
  * Acquires and closes the writer around the callback so tests keep their
  * previous call-site shape without holding writer ownership across steps.
  */
-export function withTranscriptWriter<T>(
+function withTranscriptWriter<T>(
   store: StreamLogStore,
   streamId: StreamTabId,
   mutate: (writer: TranscriptWriter) => T,

@@ -11,13 +11,13 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import { SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import { currentSession } from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
   hasUsableApiKey: vi.fn(),
-  handleExternalInquiryAction: vi.fn(async () => {}),
+  handleExternalInquiryAction: vi.fn(),
   invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
   preferKimiCode: false,
@@ -424,6 +424,7 @@ async function approveOrdinaryRetryOnOldRoute(
 }
 
 beforeEach(() => {
+  mocks.handleExternalInquiryAction.mockReturnValue(Effect.succeed(true));
   mocks.preferSubscription = true;
   mocks.openRouter = false;
   mocks.apiKeyExistsUncached.mockResolvedValue(true);
@@ -465,7 +466,9 @@ afterEach(() => {
   mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();
   mocks.hasUsableApiKey.mockReset();
-  mocks.handleExternalInquiryAction.mockClear();
+  mocks.handleExternalInquiryAction
+    .mockReset()
+    .mockReturnValue(Effect.succeed(true));
   mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
   mocks.setCliSubscriptionPreference.mockReset();
@@ -494,12 +497,15 @@ describe('TUI retry approvals', () => {
     defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
 
     await vi.waitFor(() =>
-      expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
-        action: 'drop',
-        threadId: 'ei_aabbccddeeff',
-        turnIndex: 1,
-        cause: 'Session interrupted.',
-      }),
+      expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith(
+        {
+          action: 'drop',
+          threadId: 'ei_aabbccddeeff',
+          turnIndex: 1,
+          cause: 'Session interrupted.',
+        },
+        { session: defaultSession() },
+      ),
     );
   });
 
@@ -522,11 +528,14 @@ describe('TUI retry approvals', () => {
     currentApproval.get()?.decide({ accepted: false });
 
     await vi.waitFor(() =>
-      expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
-        action: 'drop',
-        threadId: 'ei_112233445566',
-        turnIndex: 1,
-      }),
+      expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith(
+        {
+          action: 'drop',
+          threadId: 'ei_112233445566',
+          turnIndex: 1,
+        },
+        { session: defaultSession() },
+      ),
     );
   });
 
@@ -758,9 +767,7 @@ describe('TUI retry approvals', () => {
       agentCategory: AgentCategory.ToolUse,
     });
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload.kind).toBe('proposal');
-    });
+    await waitForApproval('proposal', { requestId: 'proposal-one-off' });
     currentApproval.get()?.decide({ accepted: true });
 
     await expect(result).resolves.toEqual({ action: 'approve' });

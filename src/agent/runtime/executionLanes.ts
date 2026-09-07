@@ -85,16 +85,28 @@ export class ExecutionLanes {
     );
   }
 
-  /**
-   * Launch a generation of `executionId`: its promise becomes the generation
-   * later steps wait on. See `ExecutionRegistry.launchExecution`.
-   */
-  launch<T>(executionId: string, start: () => Promise<T>): Promise<T> {
-    return this.enqueueLaneStep(executionId, (lane) => {
-      const result = start();
-      lane.live = settled(result);
-      return { result, hold: undefined };
-    });
+  /** Hold a generation's lane until its Effect and finalizers settle. */
+  launch<A, E, R>(
+    executionId: string,
+    operation: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | Error, R> {
+    return Effect.scoped(
+      Effect.gen({ self: this }, function* () {
+        const held = yield* Effect.acquireRelease(
+          Effect.sync(() => pDefer<void>()),
+          (held) => Effect.sync(() => held.resolve()),
+        );
+        yield* Effect.tryPromise({
+          try: () =>
+            this.enqueueLaneStep(executionId, () => ({
+              result: Promise.resolve(),
+              hold: held.promise,
+            })),
+          catch: ensureError,
+        });
+        return yield* operation;
+      }),
+    );
   }
 
   /**

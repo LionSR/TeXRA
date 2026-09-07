@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -93,7 +94,9 @@ interface StartedLaunch {
  * the session so the launch's facts reach the hub the way a run's do.
  */
 async function captureStartedLaunch(
-  run: (session: ReturnType<typeof createTestSession>) => Promise<unknown>,
+  run: (
+    session: ReturnType<typeof createTestSession>,
+  ) => Effect.Effect<unknown, Error>,
   options: {
     readonly resumed?: { executionId: ExecutionId; streamId: StreamTabId };
   } = {},
@@ -131,7 +134,7 @@ async function captureStartedLaunch(
   mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
 
   try {
-    await expect(run(session)).rejects.toBe(LAUNCH_FAILURE);
+    await expect(Effect.runPromise(run(session))).rejects.toBe(LAUNCH_FAILURE);
     const starts = eventsOfType(recordedSession.events, 'run.start');
     expect(starts).toHaveLength(options.resumed ? 0 : 1);
     const activations = eventsOfType(recordedSession.events, 'run.activate');

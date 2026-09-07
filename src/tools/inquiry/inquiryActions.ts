@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+import { runInSession } from '@agent/runtime/RunContext';
 /**
  * External-inquiry action persistence and continuation dispatch.
  *
@@ -14,6 +16,7 @@ import { createLog } from '@logger/logUtils';
 
 // Local imports - shared
 import type { InquiryActionMessage } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local imports - inquiry
 import {
@@ -127,22 +130,24 @@ async function persistExternalInquiryAction(
 }
 
 /** Deliver the continuation represented by a completed durable transition. */
-async function continueExternalInquiryAction(
+const continueExternalInquiryAction = Effect.fn(
+  'continueExternalInquiryAction',
+)(function* (
   transition: ExternalInquiryTransition,
-  options: { session?: SessionHandle } = {},
-): Promise<void> {
+  options: { session: SessionHandle },
+): Effect.fn.Return<void, Error> {
   switch (transition.kind) {
     case 'answered':
       // Use the manifest just written so a concurrent follow-up cannot flip
       // storage back to `open` before this continuation observes the answer.
-      await injectContinuationForAnsweredThread(
+      yield* injectContinuationForAnsweredThread(
         transition.threadId,
         transition.manifest,
         options.session,
       );
       return;
     case 'dropped':
-      await injectContinuationForDroppedThread(
+      yield* injectContinuationForDroppedThread(
         transition.threadId,
         transition.manifest,
         options.session,
@@ -151,14 +156,22 @@ async function continueExternalInquiryAction(
     case 'stale':
       return;
   }
-}
+});
 
 /** Persist and continue an inquiry action for hosts without progress UI. */
-export async function handleExternalInquiryAction(
+export const handleExternalInquiryAction = Effect.fn(
+  'handleExternalInquiryAction',
+)(function* (
   payload: ExternalInquiryAction,
-  options: { session?: SessionHandle } = {},
-): Promise<boolean> {
-  const transition = await persistExternalInquiryAction(payload);
-  await continueExternalInquiryAction(transition, options);
+  options: { session: SessionHandle },
+): Effect.fn.Return<boolean, Error> {
+  const transition = yield* Effect.tryPromise({
+    try: async () =>
+      runInSession(options.session, () =>
+        persistExternalInquiryAction(payload),
+      ),
+    catch: ensureError,
+  });
+  yield* continueExternalInquiryAction(transition, options);
   return transition.kind !== 'stale';
-}
+});

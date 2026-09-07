@@ -276,24 +276,16 @@ function handle(
         }
       });
     case 'followUp.send':
-      // A collaborator rejection is a handler defect by this module's
-      // contract (see the header), and `Effect.promise` is what routes it
-      // there. Where the defect surfaces depends on the path: a bridge logs
-      // the cause under the request id and answers `Internal`; in process it
-      // reaches whatever ran the Effect.
-      return Effect.promise(() =>
-        submitFollowUp(
-          req.streamId,
-          {
-            text: req.text,
-            ...(req.displayText == null
-              ? {}
-              : { displayText: req.displayText }),
-            ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
-          },
-          { session },
-        ),
+      return submitFollowUp(
+        req.streamId,
+        {
+          text: req.text,
+          ...(req.displayText == null ? {} : { displayText: req.displayText }),
+          ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
+        },
+        { session },
       ).pipe(
+        Effect.orDie,
         Effect.flatMap((result) =>
           result.status === 'failed'
             ? Effect.fail(
@@ -388,29 +380,26 @@ function handle(
       );
     case 'externalInquiry.submit':
     case 'externalInquiry.drop':
-      // A rejection from the inquiry persistence is a handler defect, per the
-      // module contract above, not a `RequestError` to word.
-      return Effect.promise(() =>
-        handleExternalInquiryAction(
-          req.kind === 'externalInquiry.submit'
-            ? {
-                action: 'submit',
-                threadId: req.threadId,
-                turnIndex: req.turnIndex,
-                answer: req.answer,
-                ...(req.sessionLinks == null
-                  ? {}
-                  : { sessionLinks: req.sessionLinks }),
-              }
-            : {
-                action: 'drop',
-                threadId: req.threadId,
-                turnIndex: req.turnIndex,
-                ...(req.feedback == null ? {} : { feedback: req.feedback }),
-              },
-          { session },
-        ),
+      return handleExternalInquiryAction(
+        req.kind === 'externalInquiry.submit'
+          ? {
+              action: 'submit',
+              threadId: req.threadId,
+              turnIndex: req.turnIndex,
+              answer: req.answer,
+              ...(req.sessionLinks == null
+                ? {}
+                : { sessionLinks: req.sessionLinks }),
+            }
+          : {
+              action: 'drop',
+              threadId: req.threadId,
+              turnIndex: req.turnIndex,
+              ...(req.feedback == null ? {} : { feedback: req.feedback }),
+            },
+        { session },
       ).pipe(
+        Effect.orDie,
         Effect.flatMap((accepted) =>
           accepted
             ? Effect.succeed(done)

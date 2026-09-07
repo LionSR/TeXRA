@@ -48,18 +48,4 @@ describe('CLI transcript session policy', () => {
     expect(createCliRuntimeHost).not.toHaveBeenCalled();
     expect(runAgent).not.toHaveBeenCalled();
   });
-
-  it('rejects persistent open failure', async () => {
-    vi.resetModules();
-    await import('@test/support/sessionGraphTestSetup');
-    const { initializeCliTranscriptSession } =
-      await import('@cli/runtime/transcriptSession');
-    const failure = new Error('permission denied');
-
-    await expect(
-      initializeCliTranscriptSession(async () => {
-        throw failure;
-      }),
-    ).rejects.toBe(failure);
-  });
 });

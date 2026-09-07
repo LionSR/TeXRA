@@ -1716,10 +1716,16 @@ effectIt.effect(
       const executionId = 'abcd12';
       const started = createDeferred<void>();
       const finish = createDeferred<void>();
-      const generation = registry.launchExecution(executionId, async () => {
-        started.resolve();
-        await finish.promise;
-      });
+      const generation = yield* Effect.forkChild(
+        registry.launchExecution(
+          executionId,
+          Effect.promise(async () => {
+            started.resolve();
+            await finish.promise;
+          }),
+        ),
+        { startImmediately: true },
+      );
       const remove = vi.fn();
       const removal = registry.withInactiveExecutionStep(
         executionId,
@@ -1734,7 +1740,7 @@ effectIt.effect(
       } finally {
         finish.resolve();
       }
-      yield* Effect.promise(() => generation);
+      yield* Fiber.join(generation);
       yield* Effect.yieldNow;
 
       // A parked turn may have no running generation, but its handle retains ownership.
@@ -1757,11 +1763,14 @@ effectIt.effect(
       );
       yield* Deferred.await(admitted);
       const launch = vi.fn(async () => {});
-      const next = registry.launchExecution(executionId, launch);
+      const next = yield* Effect.forkChild(
+        registry.launchExecution(executionId, Effect.promise(launch)),
+        { startImmediately: true },
+      );
       expect(launch).not.toHaveBeenCalled();
       yield* Deferred.succeed(collected, undefined);
       yield* Fiber.join(deleting);
-      yield* Effect.promise(() => next);
+      yield* Fiber.join(next);
       expect(remove).toHaveBeenCalledOnce();
       expect(launch).toHaveBeenCalledOnce();
       registry.dispose();

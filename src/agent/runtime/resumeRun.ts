@@ -155,10 +155,7 @@ export const resumeStream = Effect.fn('resumeStream')(function* (
     if (recovery) session.followUps.release(recovery, 'recoverable');
     return REFUSED;
   }
-  const executionId = yield* Effect.tryPromise({
-    try: () => lookupStreamExecutionId(streamId, session),
-    catch: ensureError,
-  }).pipe(
+  const executionId = yield* lookupStreamExecutionId(streamId, session).pipe(
     Effect.onError(() =>
       Effect.sync(() =>
         releaseUnstartedRecovery(session, recovery, options.recovery == null),
@@ -175,8 +172,6 @@ export const resumeStream = Effect.fn('resumeStream')(function* (
     options.recovery == null,
   );
 }, Effect.uninterruptible);
-
-export { lookupStreamExecutionId } from '@agent/followUp/ToolUseFollowUp';
 
 const log = createLog('ResumeRun');
 
@@ -463,45 +458,50 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (followUps.length > 0) notifyQueued();
   };
   const resumed = yield* Effect.result(
-    Effect.tryPromise({
-      try: async () => {
-        options.onFollowUpQueueReady?.(queueLease);
-        followUps = [...seed, ...followUpsQueue.queue(queueLease).drainItems()];
-        notifyQueued();
+    Effect.gen(function* () {
+      yield* Effect.try({
+        try: () => {
+          options.onFollowUpQueueReady?.(queueLease);
+          followUps = [
+            ...seed,
+            ...followUpsQueue.queue(queueLease).drainItems(),
+          ];
+          notifyQueued();
+        },
+        catch: ensureError,
+      });
 
-        // The drained batch must reach the resumed flow through the direct
-        // `drainedFollowUps` handoff, not by re-queuing: a subagent's WAITING
-        // cursor suspends again before ever reading the stream queue (see
-        // `ToolUseWaitNode`; only its child-run loop's queue wait consumes it),
-        // so re-queued items would sit unconsumed until the next wake. A root
-        // cursor accepts either route; the handoff works for both.
-        return await resumeToolUseFromResumeData(resume, {
-          session: options.session,
-          approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-          onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-          runtimeUnavailableTools: options.runtimeUnavailableTools,
-          parentStreamId: resume.parentStreamId,
-          onFollowUpConsumed: () => {
-            followUps = [];
-          },
-          isCancellationRequested: options.isCancellationRequested,
-          onCancellationAtFlowAttachment: () => {
-            cancelledAtFlowAttachment = true;
-          },
-          drainedFollowUps: followUps.map(toFollowUpBatchItem),
-          // The first call closes the gap between the initial drain and live-flow
-          // attachment. Later calls occur after a subagent parks at WAITING. A
-          // native child loop owns that queue boundary when registered; otherwise
-          // this host resume must claim the late batch so input accepted by the
-          // live context cannot remain dormant.
-          takePendingFollowUps: () => {
-            const raced = followUpsQueue.queue(queueLease).drainItems();
-            followUps = [...followUps, ...raced];
-            return raced.map(toFollowUpBatchItem);
-          },
-        });
-      },
-      catch: ensureError,
+      // The drained batch must reach the resumed flow through the direct
+      // `drainedFollowUps` handoff, not by re-queuing: a subagent's WAITING
+      // cursor suspends again before ever reading the stream queue (see
+      // `ToolUseWaitNode`; only its child-run loop's queue wait consumes it),
+      // so re-queued items would sit unconsumed until the next wake. A root
+      // cursor accepts either route; the handoff works for both.
+      return yield* resumeToolUseFromResumeData(resume, {
+        session,
+        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: options.onApprovalPolicyDenial,
+        runtimeUnavailableTools: options.runtimeUnavailableTools,
+        parentStreamId: resume.parentStreamId,
+        onFollowUpConsumed: () => {
+          followUps = [];
+        },
+        isCancellationRequested: options.isCancellationRequested,
+        onCancellationAtFlowAttachment: () => {
+          cancelledAtFlowAttachment = true;
+        },
+        drainedFollowUps: followUps.map(toFollowUpBatchItem),
+        // The first call closes the gap between the initial drain and live-flow
+        // attachment. Later calls occur after a subagent parks at WAITING. A
+        // native child loop owns that queue boundary when registered; otherwise
+        // this host resume must claim the late batch so input accepted by the
+        // live context cannot remain dormant.
+        takePendingFollowUps: () => {
+          const raced = followUpsQueue.queue(queueLease).drainItems();
+          followUps = [...followUps, ...raced];
+          return raced.map(toFollowUpBatchItem);
+        },
+      });
     }),
   ).pipe(
     Effect.tap((result) =>

@@ -143,11 +143,9 @@ export async function runHistoryExport(
     return CliExitCode.Success;
   }
 
-  const session = await effectRuntime().runPromise(
-    openSessionEffect({ transcripts: await StreamLogStore.open() }),
-  );
+  const session = await effectRuntime().runPromise(openSessionEffect({}));
   const traceResult = await effectRuntime().runPromise(
-    assembleTrace(id, session.snapshots),
+    assembleTrace(id, session),
   );
   if (traceResult.status !== 'ok') {
     switch (traceResult.status) {

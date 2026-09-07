@@ -14,9 +14,10 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
-import { createRunTrace, StreamLogStore } from '@transcript';
+import { StreamLogStore } from '@transcript';
 
 // Local file imports
 import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
@@ -55,7 +56,7 @@ async function createLogger(): Promise<{
 }> {
   const store = StreamLogStore.ephemeral('test');
   await store.clear();
-  return { store, logger: createRunTrace(streamId, store).trace };
+  return { store, logger: createTestRunTrace(streamId, store).trace };
 }
 
 function turnCompleted(inputTokens: number, outputTokens: number): ThreadEvent {

@@ -2,6 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -26,14 +27,17 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
-import {
-  executeStableSubagentInBand,
-  SubagentDurabilityError,
-} from '@tools/delegation/inBandSubagentExecution';
-import {
-  provideAgentEngine,
-  type AgentEngine,
-} from '@tools/delegation/nativeSubagentStrategy';
+import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentExecution';
+import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
+import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
+import { ensureError } from '@utils/errors/errorMessage';
+
+/** Drive the native operation at the test entry point. */
+function executeStableSubagentInBand(
+  options: Parameters<typeof executeStableSubagentInBandEffect>[0],
+) {
+  return Effect.runPromise(executeStableSubagentInBandEffect(options));
+}
 
 const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
@@ -151,6 +155,15 @@ function callDelegateReview() {
   });
 }
 
+/** Await actual child activation release before disposing its test session. */
+async function waitForChildren(session: SessionHandle): Promise<void> {
+  while (true) {
+    const active = session.executions.getActiveIds();
+    if (active.length === 0) return;
+    await session.executions.waitForAnyChange(active);
+  }
+}
+
 /** The same delegation routed through the host's proposal port, with the host
  *  fake answering `decision`. The session owns the fake port, so it is created
  *  and disposed per case. */
@@ -162,9 +175,11 @@ async function delegateWithProposalDecision(decision: ProposalResult) {
     requestAgentProposal: vi.fn().mockResolvedValue(decision),
   } satisfies HostInteractions);
   try {
-    return await withRunContext(parentRunContext({ session }), () =>
+    const result = await withRunContext(parentRunContext({ session }), () =>
       callDelegateReview(),
     );
+    await waitForChildren(session);
+    return result;
   } finally {
     session.dispose();
   }
@@ -173,7 +188,7 @@ async function delegateWithProposalDecision(decision: ProposalResult) {
 const STABLE_PARENT_EXECUTION_ID = 'abcdef123456' as ExecutionId;
 const IN_BAND_LOGICAL_EXECUTION_ID = 'aaaaaa111111' as ExecutionId;
 
-type PreparedInBandSubagentOptions = Awaited<
+type PreparedInBandSubagentOptions = Effect.Success<
   ReturnType<Parameters<typeof executeStableSubagentInBand>[0]['prepare']>
 >;
 type InBandSubagentExecutionOptions = PreparedInBandSubagentOptions & {
@@ -208,8 +223,9 @@ function runInBand(
   return executeStableSubagentInBand({
     executionId,
     parentExecutionId,
+    session: prepared.session,
     signal,
-    prepare: async () => prepared,
+    prepare: () => Effect.succeed(prepared),
   });
 }
 
@@ -376,9 +392,17 @@ describe('headless delegation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     restoreAgentEngine = provideAgentEngine({
-      executeAgent: mocks.executeAgent,
-      resumeToolUseTurn: mocks.resumeToolUseTurn,
-    } as unknown as AgentEngine);
+      executeAgent: (...args) =>
+        Effect.tryPromise({
+          try: () => mocks.executeAgent(...args),
+          catch: ensureError,
+        }),
+      resumeToolUseTurn: (...args) =>
+        Effect.tryPromise({
+          try: () => mocks.resumeToolUseTurn(...args),
+          catch: ensureError,
+        }),
+    });
     mocks.getVisibleAgents.mockReturnValue([
       {
         name: 'review',
@@ -420,13 +444,18 @@ describe('headless delegation', () => {
     });
   });
 
-  afterEach(() => {
-    restoreAgentEngine();
-    for (const executionId of defaultSession().executions.getActiveIds()) {
-      defaultSession().executions.untrack(executionId);
+  afterEach(async () => {
+    const session = defaultSession();
+    for (const executionId of session.executions.getActiveIds()) {
+      // Test handles have no provider interrupt handler. Remove the fake
+      // handle, then stop the real child activation that owns the loop.
+      session.executions.untrack(executionId);
+      session.executions.kill(executionId);
     }
-    defaultSession().followUps.terminalize(PARENT_STREAM_ID);
-    defaultSession().followUps.terminalize(CHILD_STREAM_ID);
+    session.followUps.terminalize(PARENT_STREAM_ID);
+    session.followUps.terminalize(CHILD_STREAM_ID);
+    await waitForChildren(session);
+    restoreAgentEngine();
   });
 
   it('awaits child delegation during one-shot tool-use runs', async () => {
@@ -710,13 +739,14 @@ describe('headless delegation', () => {
       completedChildStore(stableExecutionId, persistedResult),
     );
     const prepare = vi.fn(() =>
-      Promise.reject(new Error('current agent is unavailable')),
+      Effect.fail(new Error('current agent is unavailable')),
     );
 
     await expect(
       executeStableSubagentInBand({
         executionId: stableExecutionId,
         parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        session: defaultSession(),
         prepare,
       }),
     ).resolves.toEqual({
@@ -753,6 +783,7 @@ describe('headless delegation', () => {
     const recovered = await executeStableSubagentInBand({
       executionId: logicalExecutionId,
       parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+      session: defaultSession(),
       prepare,
     });
 
@@ -784,6 +815,7 @@ describe('headless delegation', () => {
       executeStableSubagentInBand({
         executionId: stableExecutionId,
         parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        session: defaultSession(),
         prepare: vi.fn(),
       }),
     ).rejects.toBeInstanceOf(SubagentDurabilityError);
@@ -1216,6 +1248,7 @@ describe('headless delegation', () => {
     // than hand the caller's instruction through verbatim. Deliberately
     // wording-free — the injected copy churns (#9568) without behavior changing.
     await withRunContext(parentRunContext(), () => callDelegateReview());
+    await waitForChildren(defaultSession());
 
     const instruction = mocks.executeAgent.mock.calls.at(-1)?.[0].instruction;
     expect(instruction).toContain('Check the proof.');
@@ -1232,6 +1265,7 @@ describe('headless delegation', () => {
       },
       () => withRunContext(parentRunContext(), () => callDelegateReview()),
     );
+    await waitForChildren(defaultSession());
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1300,6 +1334,7 @@ describe('headless delegation', () => {
     expect(result.output).toContain(
       "Subagent 'review' launched. Result will be delivered automatically",
     );
+    await waitForChildren(defaultSession());
     const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
     expect(executeOptions).toEqual(
       expect.objectContaining({
@@ -1356,6 +1391,7 @@ describe('headless delegation', () => {
         () => callDelegateReview(),
       );
 
+      await waitForChildren(session);
       expect(requestAgentProposal).not.toHaveBeenCalled();
       expect(result.status).toBe('executed');
       expect(result.summary).toBe("Launched 'review' (async)");

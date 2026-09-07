@@ -26,6 +26,8 @@
  * launching, resuming (tool-use only), and formatting its result shape.
  */
 
+import { Cause, Effect, Exit } from 'effect';
+
 import { getExecutionStore } from '@agent/storage';
 import {
   isWaitingFlowResult,
@@ -38,6 +40,7 @@ import {
 } from '@agent/runtime/SessionResumeRetrieval';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type {
   ChildRunPorts,
@@ -56,6 +59,7 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { onAbort, unique } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentFailureResultMeta,
   buildSubagentResult,
@@ -84,8 +88,8 @@ export interface AgentEngine {
    */
   readonly resumeToolUseTurn: (
     resume: ToolUseResumeData,
-    options?: ResumeToolUseFromResumeDataOptions,
-  ) => Promise<AgentRuntimeFlowResult>;
+    options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
+  ) => Effect.Effect<AgentRuntimeFlowResult, Error>;
 }
 
 const log = createLog('nativeSubagentStrategy');
@@ -222,36 +226,32 @@ export function createNativeSubagentStrategy(
   const resolveDeliveryTarget = (): StreamTabId | undefined =>
     runHandle ? runHandle.deliveryTargetStreamId : params.parentStreamId;
 
-  const runNative = async (
+  const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
     signal: AbortSignal,
     call: (
       onRun: (handle: AgentRunHandle) => void,
-    ) => Promise<AgentRuntimeFlowResult>,
-  ): Promise<AgentRuntimeFlowResult> => {
+    ) => Effect.Effect<AgentRuntimeFlowResult, Error>,
+  ) {
     lastErr = undefined;
     lastResult = undefined;
     cachedBuilt = undefined;
     cachedDelivery = undefined;
     let detachAbort = (): void => {};
-    try {
-      const result = await call((handle) => {
-        detachAbort();
-        runHandle = handle;
-        detachAbort = bindAbortSignals([params.signal, signal], handle);
-      });
-      lastResult = toDeliveryResult(result, params.executionId);
-      // Every turn's totalCostUsd is the run's cumulative cost to date, not a
-      // per-turn delta. The loop retains the best value and commits it to the
-      // parent exactly once, when the child's run ends. A failed turn resolves
-      // with its terminal result too, so its cost is recorded here as well; a
-      // rejection means the turn never produced one.
-      ports.recordCost(result.totalCostUsd);
-      return result;
-    } finally {
+    return yield* call((handle) => {
       detachAbort();
-    }
-  };
+      runHandle = handle;
+      detachAbort = bindAbortSignals([params.signal, signal], handle);
+    }).pipe(
+      Effect.tap((result) =>
+        Effect.sync(() => {
+          lastResult = toDeliveryResult(result, params.executionId);
+          ports.recordCost(result.totalCostUsd);
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => detachAbort())),
+    );
+  });
 
   const buildResult = async (
     turn: AgentRuntimeFlowResult,
@@ -290,119 +290,136 @@ export function createNativeSubagentStrategy(
     }),
 
     launch: (ports, signal) =>
-      runNative(ports, signal, async (onRun) => {
-        const executeOptions = {
-          session: params.session,
-          enforceCategory: params.agentCategoryExplicit,
-          parentStreamId: params.parentStreamId,
-          approvalPromptsUnavailable: params.approvalPromptsUnavailable,
-          onApprovalPolicyDenial: params.onApprovalPolicyDenial,
-          runtimeUnavailableTools: params.runtimeUnavailableTools,
-          workflowPhase: params.workflowPhase,
-          onStreamResolved: params.onStreamResolved,
-          onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
-            ports.notify(update),
-          onRunError: (err: unknown) => {
-            lastErr = err;
-          },
-          onRun,
-        };
-        const turn = await engine().executeAgent(
-          params.config,
-          params.executionId,
-          {
-            ...executeOptions,
-            // True by construction: this strategy only ever launches child
-            // runs (`parentStreamId` is required), matching
-            // `handle.isChildExecution` once the run handle exists. Written
-            // inline as a literal `true` so overload resolution admits the
-            // WAITING result this strategy consumes as a loop turn.
-            isSubagent: true,
-            userFollowUpSupport: params.userFollowUpSupport,
-            ...(params.executionMode === 'single-cycle'
-              ? { stopAfterCycle: true }
-              : {}),
-          },
-        );
-        // A single-cycle run must end its cycle: a WAITING turn here is an
-        // invariant violation, surfaced loudly as this turn's failure rather
-        // than parked on a queue no follow-up will ever reach. Record the
-        // turn's facts first so the failure meta and the parent's cost
-        // accounting keep what the run actually spent.
-        if (
-          params.executionMode === 'single-cycle' &&
-          isWaitingFlowResult(turn)
-        ) {
-          lastResult = toDeliveryResult(turn, params.executionId);
-          ports.recordCost(turn.totalCostUsd);
-          throw new Error(
-            `Single-cycle subagent ${params.executionId} unexpectedly suspended.`,
+      runNative(ports, signal, (onRun) =>
+        Effect.gen(function* () {
+          const executeOptions = {
+            session: params.session,
+            enforceCategory: params.agentCategoryExplicit,
+            parentStreamId: params.parentStreamId,
+            approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+            onApprovalPolicyDenial: params.onApprovalPolicyDenial,
+            runtimeUnavailableTools: params.runtimeUnavailableTools,
+            workflowPhase: params.workflowPhase,
+            onStreamResolved: params.onStreamResolved,
+            onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
+              ports.notify(update),
+            onRunError: (err: unknown) => {
+              lastErr = err;
+            },
+            onRun,
+          };
+          const turn = yield* engine().executeAgent(
+            params.config,
+            params.executionId,
+            {
+              ...executeOptions,
+              // True by construction: this strategy only ever launches child
+              // runs (`parentStreamId` is required), matching
+              // `handle.isChildExecution` once the run handle exists. Written
+              // inline as a literal `true` so overload resolution admits the
+              // WAITING result this strategy consumes as a loop turn.
+              isSubagent: true,
+              userFollowUpSupport: params.userFollowUpSupport,
+              ...(params.executionMode === 'single-cycle'
+                ? { stopAfterCycle: true }
+                : {}),
+            },
           );
-        }
-        return turn;
-      }),
+          // A single-cycle run must end its cycle: a WAITING turn here is an
+          // invariant violation, surfaced loudly as this turn's failure rather
+          // than parked on a queue no follow-up will ever reach. Record the
+          // turn's facts first so the failure meta and the parent's cost
+          // accounting keep what the run actually spent.
+          if (
+            params.executionMode === 'single-cycle' &&
+            isWaitingFlowResult(turn)
+          ) {
+            lastResult = toDeliveryResult(turn, params.executionId);
+            ports.recordCost(turn.totalCostUsd);
+            return yield* Effect.fail(
+              new Error(
+                `Single-cycle subagent ${params.executionId} unexpectedly suspended.`,
+              ),
+            );
+          }
+          return turn;
+        }),
+      ),
 
     runTurn: (followUps, ports, signal) =>
-      runNative(ports, signal, async (onRun) => {
-        const streamId = runHandle?.childStreamId;
-        if (!streamId) {
-          throw new Error(
-            `Native subagent ${params.executionId} has no live stream to resume.`,
-          );
-        }
-        const config = await getExecutionStore(params.executionId).readConfig();
-        if (!config) {
-          throw new Error(
-            `Native subagent ${params.executionId} has no persisted config to resume.`,
-          );
-        }
-        const resume = await retrieveSessionResumeData(
-          streamId,
-          params.executionId,
-          config,
-        );
-        if (!resume || resume.type !== 'toolUse') {
-          throw new Error(
-            `Native subagent ${params.executionId} has no resumable tool-use snapshot.`,
-          );
-        }
+      runNative(ports, signal, (onRun) =>
+        Effect.gen(function* () {
+          const streamId = runHandle?.childStreamId;
+          if (!streamId) {
+            return yield* Effect.fail(
+              new Error(
+                `Native subagent ${params.executionId} has no live stream to resume.`,
+              ),
+            );
+          }
+          const resume = yield* Effect.tryPromise({
+            try: async () =>
+              runInSession(params.session, async () => {
+                const config = await getExecutionStore(
+                  params.executionId,
+                ).readConfig();
+                if (!config) {
+                  throw new Error(
+                    `Native subagent ${params.executionId} has no persisted config to resume.`,
+                  );
+                }
+                const saved = await retrieveSessionResumeData(
+                  streamId,
+                  params.executionId,
+                  config,
+                );
+                if (!saved || saved.type !== 'toolUse') {
+                  throw new Error(
+                    `Native subagent ${params.executionId} has no resumable tool-use snapshot.`,
+                  );
+                }
+                return saved;
+              }),
+            catch: ensureError,
+          });
 
-        // childRunLoop already consumed this batch from the stream queue. A
-        // queued-resume wrapper would append it to ToolUseSessionLifecycle,
-        // which is backed by that same queue; the next WAITING result would
-        // therefore feed the identical batch back into this method forever.
-        // Hand it directly to the persisted WAITING cursor instead. Any item
-        // that races into the queue after this drain remains there for the
-        // loop's next turn.
-        params.session.status.transition(
-          streamId,
-          STREAM_PHASE.RUNNING,
-          STREAM_TRANSITION_CAUSE.RESUME,
-          { substate: STREAM_SUBSTATE.RESUMING },
-        );
-        return await engine().resumeToolUseTurn(resume, {
-          session: params.session,
-          approvalPromptsUnavailable: params.approvalPromptsUnavailable,
-          onApprovalPolicyDenial: params.onApprovalPolicyDenial,
-          runtimeUnavailableTools: params.runtimeUnavailableTools,
-          parentStreamId: params.parentStreamId,
-          // The loop's queue never admits synthetic goal continuations for
-          // a subagent, but its batch type is shared with root flows. Keep
-          // the existing defensive downgrade rather than silently dropping
-          // a future synthetic item.
-          drainedFollowUps: followUps.map((item) => ({
-            text: item.text,
-            displayText: item.displayText,
-            mediaFiles: item.mediaFiles,
-            origin: item.origin === 'synthetic' ? 'user' : item.origin,
-          })),
-          onProgress: (update) => ports.notify(update),
-          onRunError: (err) => {
-            lastErr = err;
-          },
-          onRun,
-        });
-      }),
+          // childRunLoop already consumed this batch from the stream queue. A
+          // queued-resume wrapper would append it to ToolUseSessionLifecycle,
+          // which is backed by that same queue; the next WAITING result would
+          // therefore feed the identical batch back into this method forever.
+          // Hand it directly to the persisted WAITING cursor instead. Any item
+          // that races into the queue after this drain remains there for the
+          // loop's next turn.
+          params.session.status.transition(
+            streamId,
+            STREAM_PHASE.RUNNING,
+            STREAM_TRANSITION_CAUSE.RESUME,
+            { substate: STREAM_SUBSTATE.RESUMING },
+          );
+          return yield* engine().resumeToolUseTurn(resume, {
+            session: params.session,
+            approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+            onApprovalPolicyDenial: params.onApprovalPolicyDenial,
+            runtimeUnavailableTools: params.runtimeUnavailableTools,
+            parentStreamId: params.parentStreamId,
+            // The loop's queue never admits synthetic goal continuations for
+            // a subagent, but its batch type is shared with root flows. Keep
+            // the existing defensive downgrade rather than silently dropping
+            // a future synthetic item.
+            drainedFollowUps: followUps.map((item) => ({
+              text: item.text,
+              displayText: item.displayText,
+              mediaFiles: item.mediaFiles,
+              origin: item.origin === 'synthetic' ? 'user' : item.origin,
+            })),
+            onProgress: (update) => ports.notify(update),
+            onRunError: (err) => {
+              lastErr = err;
+            },
+            onRun,
+          });
+        }),
+      ),
 
     isTerminal: (turn) => !isWaitingFlowResult(turn),
     isTurnError: () => lastErr !== undefined,
@@ -446,32 +463,39 @@ export function createNativeSubagentStrategy(
       );
     },
 
-    buildResultMeta: async (turn, isError, _wallTimeMs, error) => {
-      if (isError || turn === null) {
-        // Overwrite any interim success manifest from an earlier turn so
-        // /executions/{id}/result never claims success for a failed run.
-        const result = turn
-          ? toDeliveryResult(turn, params.executionId)
-          : lastResult;
-        const wallTimeMs = Date.now() - params.startedAt;
-        const failureOptions = {
-          parentExecutionId: params.parentExecutionId,
-          cause: lastErr ?? error,
-        };
-        try {
-          return buildSubagentFailureResultMeta(
-            params.agentName,
-            params.config.agentCategory,
-            result,
-            wallTimeMs,
-            failureOptions,
+    buildResultMeta: (turn, isError, _wallTimeMs, error) =>
+      Effect.gen(function* () {
+        if (isError || turn === null) {
+          // Overwrite any interim success manifest from an earlier turn so
+          // /executions/{id}/result never claims success for a failed run.
+          const result = turn
+            ? toDeliveryResult(turn, params.executionId)
+            : lastResult;
+          const wallTimeMs = Date.now() - params.startedAt;
+          const failureOptions = {
+            parentExecutionId: params.parentExecutionId,
+            cause: lastErr ?? error,
+          };
+          const built = yield* Effect.exit(
+            Effect.sync(() =>
+              buildSubagentFailureResultMeta(
+                params.agentName,
+                params.config.agentCategory,
+                result,
+                wallTimeMs,
+                failureOptions,
+              ),
+            ),
           );
-        } catch (buildError) {
+          if (Exit.isSuccess(built)) return built.value;
           // Even an unconstructable failure result must leave a durable
           // failure manifest (with the child's real error), never a stale
           // interim record. The category-only form cannot throw.
           log.warn('Failed to build the full subagent failure manifest', {
-            data: { executionId: params.executionId, error: buildError },
+            data: {
+              executionId: params.executionId,
+              error: Cause.squash(built.cause),
+            },
           });
           return buildSubagentFailureResultMeta(
             params.agentName,
@@ -481,8 +505,11 @@ export function createNativeSubagentStrategy(
             failureOptions,
           );
         }
-      }
-      return (await buildResult(turn)).resultMeta;
-    },
+        const built = yield* Effect.tryPromise({
+          try: () => runInSession(params.session, () => buildResult(turn)),
+          catch: ensureError,
+        });
+        return built.resultMeta;
+      }),
   };
 }

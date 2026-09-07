@@ -13,7 +13,6 @@ import {
   attachTerminalResultToast,
   describeFollowUpFailure,
   detachSubagentsOnStop,
-  lookupStreamExecutionId,
   resumeRun,
   runAgent,
   type AgentConfig,
@@ -594,32 +593,23 @@ export function createChatSessionController(
     ownExecution(executionId);
     session.executionId = executionId;
 
-    // Claim the root-run slot BEFORE the program starts, through a deferred,
-    // the way `resume` and `tryResumeStream` already claim theirs.
-    // `markRunPending` resets `session.streamId`, and this program's first
-    // step calls `runAgent`, which is free to resolve this run's stream
-    // before `runPromise` has even returned; claiming first keeps the reset
-    // ahead of the publication instead of depending on where the fiber
-    // suspends. The chain's settlement is forwarded to the claimed promise,
-    // so exit-drain still awaits the real run.
     const {
       promise: claimedRunPromise,
       resolve: resolveRunPromise,
       reject: rejectRunPromise,
     } = pDefer<void>();
+    // Native launch may resolve its stream on this turn. Claim first so
+    // marking the run pending cannot erase that stream or a reentrant stop.
     session.markRunPending(claimedRunPromise);
-    effectRuntime()
+    void effectRuntime()
       .runPromise(
         recoverRun(
-          Effect.gen(function* () {
-            const registeredConfig = AgentConfigSchema.parse(config);
-            // `runAgent` is a Promise API of the agent runtime, so the leaf
-            // crosses through `hostPort`; the sequencing around it is this
-            // controller's own and is the program.
-            const result = yield* hostPort(() =>
+          Effect.try(() => AgentConfigSchema.parse(config)).pipe(
+            Effect.flatMap((registeredConfig) =>
               runAgent(
                 { kind: 'fresh', config: registeredConfig, executionId },
                 {
+                  session: runtimeSession,
                   enforceCategory: true,
                   approvalPromptsUnavailable: approvalsUnavailable,
                   onApprovalPolicyDenial: () =>
@@ -652,10 +642,12 @@ export function createChatSessionController(
                   },
                 },
               ),
-            );
-            session.runExitCode = runOutcomeExitCode(result.outcome);
-            notify('agentFinished');
-          }),
+            ),
+            Effect.map((result) => {
+              session.runExitCode = runOutcomeExitCode(result.outcome);
+              notify('agentFinished');
+            }),
+          ),
           reportRunFailure,
         ),
       )
@@ -756,16 +748,11 @@ export function createChatSessionController(
         // marks recoverable.
         if (session.stopRequested) interruptActiveRun();
 
-        await runtimeSession.transcripts.ensureLoaded(streamId);
-        // `load` evicts every other record synchronously before its async
-        // seed, and the store reports no provenance for an evicted record, so
-        // nothing projects an evicted/unseeded stream (or re-emits
-        // warnIfUnseeded) mid-seed without any marker bookkeeping here. A
-        // previously seeded retained root deliberately keeps its provenance
-        // during reseeding: this keeps its canonical pre-resume projection
-        // visible at the cost of bounded warnIfUnseeded notices until the seed
-        // completes.
-        await effectRuntime().runPromise(snapshotStore.load([streamId]));
+        await effectRuntime().runPromise(
+          runtimeSession.transcripts
+            .ensureLoaded(streamId)
+            .pipe(Effect.andThen(snapshotStore.load([streamId]))),
+        );
         // The load re-establishes this stream's work-plan provenance in the
         // store, which is what an open `/plan` reader re-reads to clear its
         // failure-time mask. The transcript itself is the fold's: the TUI
@@ -897,11 +884,7 @@ export function createChatSessionController(
 
         yield* snapshotStore.preload([streamId]);
         const runMetadata = snapshotStore.getRunMetadata(streamId);
-        const executionId =
-          runMetadata.executionId ??
-          (yield* hostPort(() =>
-            lookupStreamExecutionId(streamId, runtimeSession),
-          ));
+        const executionId = runMetadata.executionId;
         if (!executionId) return false;
 
         const config =

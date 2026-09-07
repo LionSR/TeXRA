@@ -95,23 +95,18 @@
       "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/extension.ts": 1,
       "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts": 1,
-      "src/agent/runtime/childRunBudget.ts": 1,
-      "src/agent/runtime/childRunLoop.ts": 1,
       "src/agent/runtime/executionLanes.ts": 1,
       "src/agent/runtime/streamApprovalQueue.ts": 1,
       "src/agent/storage/executionLease.ts": 1,
       "src/agent/workflowScript/persistence.ts": 1,
       "src/agent/workflowScript/runWorkflowScript.ts": 1,
-      "src/transcript/StreamLogStore.ts": 1,
       "src/utils/core/perKeyQueue.ts": 1
     },
     "import:p-map": {
       "src/agent/modelHandlers/support/MediaAttachmentProcessor.ts": 1,
       "src/agent/storage/executionListing.ts": 1,
       "src/latex/LatexMediaManager.ts": 1,
-      "src/latex/extractFileDependencies.ts": 1,
-      "src/transcript/StreamLogStore.ts": 1,
-      "src/transcript/StreamSummaryCacheStore.ts": 1
+      "src/latex/extractFileDependencies.ts": 1
     },
     "import:p-retry": {
       "src/agent/core/flows/ModelInvocationNode.ts": 1,
@@ -150,7 +145,7 @@
       "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
-      "src/agent/runtime/SessionHandle.ts": 9,
+      "src/agent/runtime/SessionHandle.ts": 5,
       "src/agent/runtime/bundledPrompts.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2

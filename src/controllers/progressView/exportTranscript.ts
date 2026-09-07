@@ -113,10 +113,7 @@ export const exportStreamTranscript = Effect.fn('exportStreamTranscript')(
       yield* exportHtml(controller, executionId, ports);
       return;
     }
-    const result = yield* Effect.tryPromise({
-      try: async () => controller.buildExportInput(executionId),
-      catch: ensureError,
-    });
+    const result = yield* controller.buildExportInput(executionId);
     if (result.status !== 'ok') {
       yield* Effect.tryPromise({
         try: async () =>

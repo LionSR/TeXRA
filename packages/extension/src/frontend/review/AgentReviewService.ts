@@ -36,6 +36,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -308,15 +309,17 @@ class AgentReviewServiceImpl {
       // its fire-and-forget error swallowing) so the panel can distinguish
       // a completed review from a failed or cancelled one. The run itself
       // is visible as a regular tool-use session in the progress view.
-      const result = await runAgent(
-        { kind: 'fresh', config },
-        {
-          openWorkflowOutput: openFinalOutputIfAvailable,
-          stopAfterCycle: true,
-          session: run.session,
-          onRun: (handle) => this.reviewRuns.bind(run, handle),
-          onStreamResolved: presentLaunchedProgressStream,
-        },
+      const result = await effectRuntime().runPromise(
+        runAgent(
+          { kind: 'fresh', config },
+          {
+            openWorkflowOutput: openFinalOutputIfAvailable,
+            stopAfterCycle: true,
+            session: run.session,
+            onRun: (handle) => this.reviewRuns.bind(run, handle),
+            onStreamResolved: presentLaunchedProgressStream,
+          },
+        ),
       );
       outcome = result.outcome;
     } catch (err) {

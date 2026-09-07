@@ -1,5 +1,6 @@
-// Node imports
 import * as assert from 'node:assert';
+import { Effect } from 'effect';
+// Node imports
 
 // Third-party imports
 import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
@@ -179,11 +180,13 @@ describe('DelegateAgentTool resume ownership', () => {
     mocks.currentSession.mockReturnValue({
       executions: { getHandle: () => makeHandle() },
     } as never);
-    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+    mocks.deliverChildRunFollowUp.mockReturnValue(
+      Effect.succeed({ kind: 'delivered' }),
+    );
   });
 
   it('uses the merged submission result without a caller-local owner check', async () => {
-    mocks.submitFollowUp.mockResolvedValue({ status: 'queued' });
+    mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'queued' }));
 
     const result = await new DelegateAgentTool().call({
       execution_id: executionId,
@@ -196,10 +199,12 @@ describe('DelegateAgentTool resume ownership', () => {
   });
 
   it('reports a merged recovery failure to the parent', async () => {
-    mocks.submitFollowUp.mockResolvedValue({
-      status: 'queued',
-      wake: 'failed',
-    });
+    mocks.submitFollowUp.mockReturnValue(
+      Effect.succeed({
+        status: 'queued',
+        wake: 'failed',
+      }),
+    );
 
     await new DelegateAgentTool().call({
       execution_id: executionId,

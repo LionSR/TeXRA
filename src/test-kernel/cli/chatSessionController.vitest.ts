@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   attachTerminalResultToast: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
-  lookupStreamExecutionId: vi.fn(),
   notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
   appendLocalErrorTranscript: vi.fn(),
@@ -47,7 +46,6 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/runtime/resumeRun', () => ({
   resumeRun: mocks.resumeRun,
-  lookupStreamExecutionId: mocks.lookupStreamExecutionId,
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -355,7 +353,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
         executions as unknown as ExecutionRegistry,
       ),
     },
-    transcripts: { ensureLoaded: vi.fn(async () => undefined) },
+    transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
     ...overrides,
   });
 }
@@ -563,12 +561,15 @@ describe('createChatSessionController', () => {
       streamId: 'stream-start',
     });
     mocks.runAgent.mockImplementation(
-      async (
+      (
         request: { config: unknown; executionId: ExecutionId },
         options: object,
-      ) => {
-        return mocks.executeAgent(request.config, request.executionId, options);
-      },
+      ) =>
+        Effect.tryPromise({
+          try: () =>
+            mocks.executeAgent(request.config, request.executionId, options),
+          catch: ensureError,
+        }),
     );
     // Return the caller-provided default (undefined for roster keys) — a
     // blanket `false` is not a valid persisted value for
@@ -594,7 +595,6 @@ describe('createChatSessionController', () => {
     );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
-    mocks.lookupStreamExecutionId.mockResolvedValue('exec-1');
     installResumeExecutionStore();
     rootStreamId.set(undefined);
     rootRunPending.set(false);
@@ -1065,8 +1065,12 @@ describe('createChatSessionController', () => {
     const runA = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
     const runB = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.FAILED>>();
     mocks.runAgent
-      .mockReturnValueOnce(runA.promise)
-      .mockReturnValueOnce(runB.promise);
+      .mockReturnValueOnce(
+        Effect.tryPromise({ try: () => runA.promise, catch: ensureError }),
+      )
+      .mockReturnValueOnce(
+        Effect.tryPromise({ try: () => runB.promise, catch: ensureError }),
+      );
 
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -1109,6 +1113,21 @@ describe('createChatSessionController', () => {
     expect(hostA.close).toHaveBeenCalledOnce();
     expect(hostB.close).toHaveBeenCalledOnce();
     expect(resultPresenters).toHaveLength(0);
+  });
+
+  it('reports a fresh-run defect and settles its claimed run slot', async () => {
+    mocks.runAgent.mockReturnValueOnce(Effect.die(new Error('launch defect')));
+    const session = makeSession();
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.startRootRun(makeRunRequest('Check launch failure.'));
+
+    await expect(session.runPromise).resolves.toBeUndefined();
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+      'launch defect',
+    );
+    expect(session.runCompleted).toBe(true);
+    expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
   });
 
   it('cannot miss the final survivor untracking at host-listener registration', async () => {
@@ -1154,7 +1173,6 @@ describe('createChatSessionController', () => {
       preload: () => preload.promise,
       executionId: undefined,
     });
-    mocks.lookupStreamExecutionId.mockResolvedValueOnce(undefined);
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
@@ -1375,7 +1393,9 @@ describe('createChatSessionController', () => {
     // awaits finish.
     const ensureLoaded = pDefer<void>();
     installSession({
-      transcripts: { ensureLoaded: () => ensureLoaded.promise },
+      transcripts: {
+        ensureLoaded: () => Effect.promise(() => ensureLoaded.promise),
+      },
     });
 
     const session = makeSession({

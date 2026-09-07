@@ -11,12 +11,15 @@
  * place, plus native-agent registration that mints the child's stream id.
  */
 
+// Third-party imports
+import { Cause, Effect, Exit, Fiber } from 'effect';
+
 // Local imports
-import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   startChildRunLoop,
+  runWithOwnedExecutionLeaseLaunchGuard,
   type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
@@ -27,6 +30,7 @@ import {
   type StreamTabId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import type { ChildStream } from './childStream';
@@ -89,11 +93,11 @@ export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
   (
     | {
         /** Create the stream inside the lease guard, before any stream-dependent setup. */
-        readonly createChildStream: () => ChildStream | Promise<ChildStream>;
+        readonly createChildStream: () => Effect.Effect<ChildStream, Error>;
         /** Build attempt-scoped setup around the stream retained by the launch guard. */
         readonly buildLaunch: (
           childStream: ChildStream,
-        ) => Promise<DetachedChildRunLaunch<TTurn>>;
+        ) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error>;
       }
     | {
         /** Native strategies let `executeAgent` own handle creation for every turn. */
@@ -102,7 +106,10 @@ export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
          * Build the strategy (and any attempt-scoped setup) inside the lease launch
          * guard so a throw releases the owned-execution lease.
          */
-        readonly buildLaunch: () => Promise<DetachedChildRunLaunch<TTurn>>;
+        readonly buildLaunch: () => Effect.Effect<
+          DetachedChildRunLaunch<TTurn>,
+          Error
+        >;
       }
   );
 
@@ -112,59 +119,84 @@ export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
  * loop, then attach the completion error trace. Returns the launched loop's
  * stream id and completion so in-band callers can await it.
  */
-export async function startDetachedChildRunLoop<TTurn>(
+export function startDetachedChildRunLoop<TTurn>(
   input: DetachedChildRunInput<TTurn>,
-): Promise<{ childStreamId: StreamTabId; completion: Promise<void> }> {
-  return runWithOwnedExecutionLeaseLaunchGuard(input.executionId, async () => {
-    let childStream: ChildStream | undefined;
-    let launch: DetachedChildRunLaunch<TTurn>;
-    let autoCloseOnLaunchFailure = false;
-    let completion: Promise<void>;
-    try {
-      if (input.createChildStream) {
-        childStream = await input.createChildStream();
-        launch = await input.buildLaunch(childStream);
-      } else {
-        launch = await input.buildLaunch();
-      }
-      autoCloseOnLaunchFailure = launch.strategy.autoCloseChildStream === true;
-      const {
-        createChildStream: _createChildStream,
-        buildLaunch: _buildLaunch,
-        budgeted,
-        ...loopParams
-      } = input;
-      completion = startChildRunLoop({
-        ...loopParams,
-        ...(childStream !== undefined && { childStream }),
-        strategy: launch.strategy,
-        // Every detached native/workflow child takes one shared-budget slot per
-        // turn; an awaited in-band child rides its idle parent's slot instead.
-        budgeted: budgeted ?? true,
-      });
-    } catch (error) {
-      if (childStream) {
-        try {
-          await childStream.finalize({
-            outcome: RUN_OUTCOME.FAILED,
-            error,
-            persistence: { kind: 'finalize', flowRecord: 'delete' },
-            ...(autoCloseOnLaunchFailure && { autoClose: true }),
+): Effect.Effect<
+  {
+    childStreamId: StreamTabId;
+    completion: Fiber.Fiber<void, Error>;
+  },
+  Error
+> {
+  return runWithOwnedExecutionLeaseLaunchGuard(
+    input.executionId,
+    Effect.gen(function* () {
+      let childStream: ChildStream | undefined;
+      let autoCloseOnLaunchFailure = false;
+      const setup = yield* Effect.exit(
+        Effect.gen(function* () {
+          let launch: DetachedChildRunLaunch<TTurn>;
+          if (input.createChildStream) {
+            childStream = yield* input.createChildStream();
+            launch = yield* input.buildLaunch(childStream);
+          } else {
+            launch = yield* input.buildLaunch();
+          }
+          autoCloseOnLaunchFailure =
+            launch.strategy.autoCloseChildStream === true;
+          const {
+            createChildStream: _createChildStream,
+            buildLaunch: _buildLaunch,
+            budgeted,
+            ...loopParams
+          } = input;
+          const completion = yield* startChildRunLoop({
+            ...loopParams,
+            ...(childStream !== undefined && { childStream }),
+            strategy: launch.strategy,
+            // An awaited in-band child rides its idle parent's budget slot.
+            budgeted: budgeted ?? true,
           });
-        } catch (finalizeError) {
-          throw new AggregateError(
-            [error, finalizeError],
-            `Detached child execution ${input.executionId} failed and its child stream could not be finalized`,
+          return { launch, completion };
+        }),
+      );
+      if (Exit.isFailure(setup)) {
+        const error = Cause.squash(setup.cause);
+        if (childStream) {
+          const finalized = yield* Effect.exit(
+            childStream.finalize({
+              outcome: RUN_OUTCOME.FAILED,
+              error,
+              persistence: { kind: 'finalize', flowRecord: 'delete' },
+              autoClose: autoCloseOnLaunchFailure,
+            }),
           );
+          if (Exit.isFailure(finalized)) {
+            return yield* Effect.fail(
+              new AggregateError(
+                [error, Cause.squash(finalized.cause)],
+                `Detached child execution ${input.executionId} failed and its child stream could not be finalized`,
+              ),
+            );
+          }
         }
+        return yield* Effect.fail(ensureError(error));
       }
-      throw error;
-    }
-
-    if (launch.onLoopFailed) void completion.catch(launch.onLoopFailed);
-    return {
-      childStreamId: childStream?.childStreamId ?? input.childStreamId,
-      completion,
-    };
-  });
+      const { launch, completion } = setup.value;
+      if (launch.onLoopFailed) {
+        const onLoopFailed = launch.onLoopFailed;
+        yield* Effect.forkDetach(
+          Fiber.join(completion).pipe(
+            Effect.catchCause((cause) =>
+              Effect.sync(() => onLoopFailed(Cause.squash(cause))),
+            ),
+          ),
+        );
+      }
+      return {
+        childStreamId: childStream?.childStreamId ?? input.childStreamId,
+        completion,
+      };
+    }),
+  ).pipe(Effect.uninterruptible);
 }

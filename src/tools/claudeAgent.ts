@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 /**
  * Claude Code CLI tool — spin off a Claude Code agent via @anthropic-ai/claude-agent-sdk.
  *
@@ -34,6 +35,15 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
+import {
+  getCurrentToolContexts,
+  type CurrentToolContexts,
+} from '@agent/followUp/ToolFileInteractionContext';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   ClaudeAgentEffortSchema,
@@ -51,6 +61,7 @@ import type {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { requestBashApproval } from '@tools/approval/bashApproval';
 import {
   formatWallTimeSeconds,
   isNonEmptyString,
@@ -396,6 +407,7 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 // ============================================================================
 
 function startClaudeAgentLoop(params: {
+  session: SessionHandle;
   childStream: ChildStream;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
@@ -419,7 +431,7 @@ function startClaudeAgentLoop(params: {
   releaseFallbackClaim: (() => void) | undefined;
   /** Settled by the loop wrapper when the loop's completion settles. */
   loopSettled: Deferred.Deferred<void>;
-}): void {
+}): Effect.Effect<void, Error> {
   const { childStream, parentStreamId, executionId, initialPrompt } = params;
   const { logger } = childStream;
 
@@ -432,7 +444,8 @@ function startClaudeAgentLoop(params: {
     ? undefined
     : params.resumeSessionId;
 
-  startAgentCliLoop({
+  return startAgentCliLoop({
+    session: params.session,
     childStream,
     parentStreamId,
     executionId,
@@ -526,15 +539,27 @@ export class ClaudeAgentTool extends defineTool({
     // collaborator's rejection is re-raised as its own cause; a `ToolError`
     // stays a typed failure and `runPromise` rejects with it.
     return effectRuntime().runPromise(
-      reraiseAgentCliCallFailure(this.run(input)),
+      reraiseAgentCliCallFailure(
+        this.run(
+          input,
+          currentSession(),
+          getCurrentToolContexts(),
+          AsyncLocalStorage.bind(requestBashApproval),
+        ),
+      ),
     );
   }
 
   private readonly run = Effect.fn('ClaudeAgentTool.run')(function* (
     this: ClaudeAgentTool,
     input: ClaudeAgentInput,
+    session: SessionHandle,
+    contexts: CurrentToolContexts | undefined,
+    requestApproval: typeof requestBashApproval,
   ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
-    const config = yield* agentCliCall(() => getClaudeAgentConfig());
+    const config = yield* agentCliCall(() =>
+      runInSession(session, getClaudeAgentConfig),
+    );
     const permissionMode =
       input.permission_mode ?? config.getClaudeAgentPermissionMode();
     const model = input.model ?? config.getClaudeAgentModel();
@@ -543,6 +568,9 @@ export class ClaudeAgentTool extends defineTool({
     const isFork = input.fork_session === true;
 
     return yield* dispatchAgentCliTool({
+      session,
+      contexts,
+      requestApproval,
       agentName: CLAUDE_AGENT_NAME,
       approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       store: claudeAgentSessionsFor,
@@ -567,6 +595,7 @@ export class ClaudeAgentTool extends defineTool({
           context.parentExecutionId,
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
+          session,
         ),
     });
   });
@@ -583,8 +612,11 @@ const launchClaudeAgentSession = Effect.fn(
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
+  session: SessionHandle,
 ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
-  const config = yield* agentCliCall(() => getClaudeAgentConfig());
+  const config = yield* agentCliCall(() =>
+    runInSession(session, getClaudeAgentConfig),
+  );
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   // Mirrors codex behavior so subagents can see the project: when the call
   // is made from inside the workspace, the agent runs in that directory but
@@ -594,7 +626,9 @@ const launchClaudeAgentSession = Effect.fn(
   // `additionalDirectories`, unlike codex's `workingDirectory`.
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(workingDir);
-  const env = yield* agentCliCall(() => config.buildClaudeAgentEnv());
+  const env = yield* agentCliCall(() =>
+    runInSession(session, () => config.buildClaudeAgentEnv()),
+  );
   const pathToClaudeCodeExecutable = yield* agentCliCall(() =>
     findClaudeBinaryPath(),
   );
@@ -602,6 +636,7 @@ const launchClaudeAgentSession = Effect.fn(
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
+    session,
     parentStreamId,
     parentExecutionId,
     agentName: CLAUDE_AGENT_NAME,
@@ -612,6 +647,7 @@ const launchClaudeAgentSession = Effect.fn(
     store: claudeAgentSessionsFor,
     startLoop: ({ childStream, executionId, loopSettled }) =>
       startClaudeAgentLoop({
+        session,
         childStream,
         parentStreamId,
         executionId,

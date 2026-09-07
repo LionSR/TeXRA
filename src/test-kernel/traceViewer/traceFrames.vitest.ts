@@ -7,6 +7,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -183,7 +184,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       timestamp: '2026-07-06T00:00:00.000Z',
       streamId,
     });
-    const store = await StreamLogStore.open();
+    const store = StreamLogStore.ephemeral('legacy trace import fixture');
     appendTranscriptEntry(store, streamId, {
       id: 'terminal-stage',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
@@ -197,10 +198,13 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       data: { status: 'error', endTime: 200 },
     });
-    await store.flush();
 
     const result = await Effect.runPromise(
-      assembleTrace(executionId, createTestSession().snapshots),
+      assembleTrace(executionId, {
+        roots: processWorkspaceRoots(),
+        snapshots: createTestSession().snapshots,
+        transcripts: store,
+      }),
     );
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;

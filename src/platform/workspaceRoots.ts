@@ -97,8 +97,8 @@ export function processWorkspaceRoots(): WorkspaceRoots {
  */
 export function runWithWorkspaceRoots<T>(
   roots: WorkspaceRoots,
-  fn: () => T | Promise<T>,
-): T | Promise<T> {
+  fn: () => T,
+): T {
   return rootsScope.run(roots, fn);
 }
 

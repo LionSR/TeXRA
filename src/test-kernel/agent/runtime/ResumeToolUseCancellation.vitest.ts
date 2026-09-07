@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -30,14 +31,21 @@ vi.mock('@agent/storage/executionLease', () => ({
     mocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
 
-vi.mock('@agent/runtime/AgentLaunchContext', () => ({
-  buildAgentLaunchContext: mocks.buildAgentLaunchContext,
-  withExecutionRunContext: async (
-    _context: unknown,
-    _options: unknown,
-    run: () => Promise<unknown>,
-  ) => run(),
-}));
+vi.mock('@agent/runtime/AgentLaunchContext', async () => {
+  const { Effect } = await import('effect');
+  return {
+    buildAgentLaunchContext: (...args: unknown[]) =>
+      Effect.tryPromise({
+        try: () => mocks.buildAgentLaunchContext(...args),
+        catch: ensureError,
+      }),
+    withExecutionRunContext: async (
+      _context: unknown,
+      _options: unknown,
+      run: () => Promise<unknown>,
+    ) => run(),
+  };
+});
 
 vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
   runFlowWithLifecycle: mocks.runFlowWithLifecycle,
@@ -78,6 +86,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 interface InterruptibleFlowInput {
   readonly runScope: { readonly signal: AbortSignal };
@@ -100,17 +109,25 @@ interface ModelSwitchingFlowInput {
  */
 const LANE_SESSION = {
   executions: {
-    launchExecution: (_executionId: ExecutionId, start: () => unknown) =>
-      start(),
+    launchExecution: (
+      _executionId: ExecutionId,
+      operation: Effect.Effect<unknown, unknown>,
+    ) => operation,
   },
-  transcripts: { ensureLoaded: vi.fn(async () => {}) },
+  transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
+  status: {},
+  flushArtifacts: vi.fn(async () => {}),
+  settlePublications: vi.fn(async () => {}),
+  releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
 } as never;
 
 function resumeToolUseFromResumeData(
   resume: Parameters<typeof resumeOnLane>[0],
   options: ResumeToolUseFromResumeDataOptions = {},
-): ReturnType<typeof resumeOnLane> {
-  return resumeOnLane(resume, { session: LANE_SESSION, ...options });
+) {
+  return Effect.runPromise(
+    resumeOnLane(resume, { session: LANE_SESSION, ...options }),
+  );
 }
 
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
@@ -124,15 +141,7 @@ function buildResumeContext(
     runScope: {
       executionId,
       streamId,
-      session: {
-        status: {},
-        flushArtifacts: vi.fn(async () => {}),
-        // The real exit choreography over the fake's flushArtifacts and the
-        // mocked lease verbs, so the releaseOwnedExecutionLease assertion
-        // keeps observing the drain through its one owner.
-        settlePublications: vi.fn(async () => {}),
-        releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
-      },
+      session: LANE_SESSION,
       signal: abortController.signal,
     },
     config: { agent: 'test-agent', model: 'test-model' },

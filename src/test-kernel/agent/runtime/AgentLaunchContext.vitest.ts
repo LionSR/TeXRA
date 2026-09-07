@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -32,7 +33,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  buildAgentLaunchContext,
+  buildAgentLaunchContext as buildAgentLaunchContextEffect,
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
@@ -51,6 +52,10 @@ import {
 } from '@test/support/sessionTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
+
+const buildAgentLaunchContext = (
+  ...args: Parameters<typeof buildAgentLaunchContextEffect>
+) => Effect.runPromise(buildAgentLaunchContextEffect(...args));
 
 const EXECUTION_ID = 'a00101' as ExecutionId;
 
@@ -491,22 +496,17 @@ describe('AgentLaunchContext', () => {
       responseTextProcessing,
     });
     publishTestRunStart(session, 'late-assembly-stream', EXECUTION_ID);
-    // The recorder-style status port hears the terminal fact in publish
-    // order, before any renderer wakes.
-    const detachStatus = session.attachRunTrace(
-      {
-        trace: noopTrace,
-        handleStatus: ({ phase }) => {
-          if (phase === STREAM_PHASE.FAILED) order.push('terminal');
-        },
-      },
-      'stream:launch-context-order' as StreamTabId,
-    );
+    const terminalEvents = recordSessionEvents(session);
     const stage = noopTrace.openStage('Run');
     const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
       order.push('stage');
     });
-    const detachTrace = vi.fn(() => order.push('detach'));
+    const detachTrace = vi.fn(() => {
+      expect(terminalEvents.events).toContainEqual(
+        expect.objectContaining({ type: 'status', phase: STREAM_PHASE.FAILED }),
+      );
+      order.push('detach');
+    });
     const rawDispose = vi.fn(() => order.push('raw-trace'));
     const trace = { ...noopTrace, subscribe: vi.fn(() => detachTrace) };
     trace.openStage = vi.fn(() => stage);
@@ -559,17 +559,9 @@ describe('AgentLaunchContext', () => {
       );
       expect(detachTrace).toHaveBeenCalledOnce();
       expect(rawDispose).toHaveBeenCalledOnce();
-      // LIFO store unwind: the load-bearing constraint is compensation
-      // ('terminal') strictly before trace detach/disposal.
-      expect(order).toEqual([
-        'stage',
-        'terminal',
-        'detach',
-        'raw-trace',
-        'handler',
-      ]);
+      // Terminal compensation is committed before the trace is detached.
+      expect(order).toEqual(['stage', 'detach', 'raw-trace', 'handler']);
     } finally {
-      detachStatus();
       session.dispose();
     }
   });

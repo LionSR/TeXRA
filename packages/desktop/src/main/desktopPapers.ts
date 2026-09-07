@@ -220,11 +220,7 @@ async function openPaperSession(
   return effectRuntime().runPromise(
     Effect.tryPromise({
       try: async () => {
-        const transcripts = await runWithWorkspaceRoots(roots, () =>
-          StreamLogStore.open(),
-        );
         const session = openSession({
-          transcripts,
           roots,
           responseTextProcessing,
         });

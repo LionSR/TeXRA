@@ -499,9 +499,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     languageModel.onDidChange(invalidateLanguageModels),
   );
-  const transcripts = await StreamLogStore.open();
   const runtimeSession = initializeDefaultSession({
-    transcripts,
     responseTextProcessing: createTexraResponseTextProcessing(
       agentResponseTextConnector,
     ),
@@ -510,6 +508,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
   registerRuntimeShutdownHandlers(lifecycle, {
+    runSettlement: (settlement) => effectRuntime().runPromise(settlement),
     afterAgentShutdown: [
       () => killActiveRecording(),
       () => effectRuntime().runPromise(UsageLogService.dispose()),

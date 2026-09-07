@@ -419,47 +419,19 @@ function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
   });
 }
 
-/**
- * Close the "Run: ..." transcript group a suspended subagent leaves open.
- *
- * The suspended-handle teardown a stop/kill runs (see the WAITING branch of
- * {@link runFlowWithLifecycle}) reaches this instead of the transcript stage
- * abstraction. Calling `ctx.parentStage.end()` there would be a silent no-op:
- * `runFlowWithLifecycle`'s own `finally` calls `ctx.disposeTrace()`
- * unconditionally the instant the WAITING branch returns — long before a later
- * kill can invoke the teardown — which unsubscribes the transcript recorder
- * from the parent stage's trace (see `createRunTrace`'s `dispose`). Emitting
- * `stage.end` through an already-desubscribed trace reaches no subscriber, so
- * update the session's transcript store directly instead, mirroring exactly
- * what `TexraTranscriptRecorder`'s own `stage.end` handler writes for a
- * `kind: 'run'` stage (see `beginRunStage` in AgentLaunchContext.ts). Each
- * suspension opens its own stage id (fresh `nanoid` per `beginRunStage` call,
- * including on resume), so this can never double-close a stage some other turn
- * already ended.
- */
+/** Close a suspended run's stage through its session after its trace detached. */
 async function closeSuspendedTranscriptGroup(
   session: SessionHandle,
   streamId: StreamTabId,
-  handle: AgentExecutionHandle,
   parentStageId: string | undefined,
 ): Promise<void> {
   if (!parentStageId) return;
-  const writer = await session.transcripts.loadAndAcquireWriter(
-    streamId,
-    handle.executionId,
-  );
-  try {
-    writer.update(parentStageId, {
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      data: {
-        status: RUN_OUTCOME.CANCELLED,
-        endTime: Date.now(),
-        kind: 'run',
-      },
-    });
-  } finally {
-    writer.close();
-  }
+  session.publishRunEvent(streamId, {
+    type: 'stage.end',
+    id: parentStageId,
+    status: RUN_OUTCOME.CANCELLED,
+  });
+  await session.settlePublications();
 }
 
 /**
@@ -546,7 +518,7 @@ export async function runFlowWithLifecycle(
       isSubagent: options?.isSubagent ?? false,
       stage: ctx.parentStage,
       trace: ctx.logger,
-      flushArtifacts: () => session.flushArtifacts(handle.executionId),
+      flushArtifacts: () => session.flushArtifacts(),
       persistence: {
         kind: 'finalize',
         // Tool-use flows report the exact recovery decision through the
@@ -717,14 +689,11 @@ export async function runFlowWithLifecycle(
       // AgentRunLifecycle/ExecutionRegistry issue #7287.
       handle.suspend(async () => {
         session.followUps.terminalize(streamId);
-        // See closeSuspendedTranscriptGroup for why this closes the transcript
-        // group via the store instead of the stage abstraction, and for the
-        // dispose-ordering caveat that makes the stage path a silent no-op.
+        // The run trace has detached; publish its stage close through the session.
         try {
           await closeSuspendedTranscriptGroup(
             session,
             streamId,
-            handle,
             ctx.parentStage.id,
           );
         } finally {

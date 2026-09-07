@@ -8,6 +8,7 @@
 // display name vs. the config's own registry name).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { StreamTabId } from '@shared/schemas';
@@ -22,6 +23,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
+  runWithOwnedExecutionLeaseLaunchGuard: (_id: unknown, operation: unknown) =>
+    operation,
 }));
 
 // `executeSubagent` reports a late detached-loop failure through an inline
@@ -68,6 +71,7 @@ vi.mock('@agent/runtime/RunContext', () => {
     context?.kind === 'launch' ? context.runScope[field] : context?.[field];
   return {
     tryUseRunContext: mocks.tryUseRunContext,
+    runInSession: (_session: unknown, operation: () => unknown) => operation(),
     getRunContextExecutionId: (context: any) =>
       readRunContextField(context, 'executionId'),
     getRunContextSession: (context: any) =>
@@ -94,17 +98,21 @@ describe('executeSubagent childStreamId derivation', () => {
     agentCategory: 'toolUse',
   } as never;
 
-  function runDefaultSubagent(): ReturnType<typeof executeSubagent> {
-    return executeSubagent(
-      defaultPayload,
-      'proof-checker',
-      orchestratorStreamId,
+  function runDefaultSubagent() {
+    return Effect.runPromise(
+      executeSubagent(
+        mocks.tryUseRunContext(),
+        mocks.getCurrentToolCallContext(),
+        defaultPayload,
+        'proof-checker',
+        orchestratorStreamId,
+      ),
     );
   }
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.startChildRunLoop.mockReturnValue(Promise.resolve());
+    mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.tryUseRunContext.mockReturnValue({
       executionId: 'parent-exec',
@@ -143,10 +151,14 @@ describe('executeSubagent childStreamId derivation', () => {
     // configPayload.agent — this is the exact mismatch the review flagged.
     const agentName = 'Proof Checker (display)';
 
-    await executeSubagent(
-      configPayload as never,
-      agentName,
-      orchestratorStreamId,
+    await Effect.runPromise(
+      executeSubagent(
+        mocks.tryUseRunContext(),
+        mocks.getCurrentToolCallContext(),
+        configPayload as never,
+        agentName,
+        orchestratorStreamId,
+      ),
     );
 
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
@@ -182,7 +194,9 @@ describe('executeSubagent childStreamId derivation', () => {
 
   it('logs a detached run-loop rejection through the childRunLoop channel log', async () => {
     const lateFailure = new Error('late subagent finalization failed');
-    mocks.startChildRunLoop.mockReturnValue(Promise.reject(lateFailure));
+    mocks.startChildRunLoop.mockReturnValue(
+      Effect.forkDetach(Effect.fail(lateFailure)),
+    );
 
     await expect(runDefaultSubagent()).resolves.toMatchObject({
       status: 'executed',

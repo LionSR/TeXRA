@@ -1,23 +1,26 @@
 import '@test/support/sessionGraphTestSetup';
 
+import type { AgentTrace, StatusEvent } from '@agent/trace';
 import { openSession } from '@agent/runtime/sessionGraph';
 import {
   forEachLiveSession,
   type SessionHandle,
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
+import { isDebugModeEnabled } from '@logger/logUtils';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { StreamLogStore } from '@transcript';
+import { isTranscriptEvent } from '@shared/schemas';
+import { createTranscriptFold } from '@shared/session/traceFold';
+import { createRunTrace, StreamLogStore } from '@transcript';
+import type { TranscriptWriter } from '@transcript/StreamLogStore';
 import { generateExecutionId } from '@utils/core';
 
-type TestSessionInit = Omit<SessionHandleInit, 'transcripts'> & {
-  readonly transcripts?: StreamLogStore;
-};
+type TestSessionInit = SessionHandleInit;
 
 let opened = 0;
 
@@ -38,8 +41,10 @@ export function createTestSession(init: TestSessionInit = {}): SessionHandle {
       config: process.config,
       workspaceState: process.workspaceState,
     },
-    transcripts:
-      init.transcripts ?? StreamLogStore.ephemeral('isolated test session'),
+    transcriptMode: init.transcriptMode ?? {
+      kind: 'ephemeral',
+      reason: 'isolated test session',
+    },
   });
 }
 
@@ -59,8 +64,10 @@ export function createProcessSession(
   return openSession({
     ...init,
     roots,
-    transcripts:
-      init.transcripts ?? StreamLogStore.ephemeral('process test session'),
+    transcriptMode: init.transcriptMode ?? {
+      kind: 'ephemeral',
+      reason: 'process test session',
+    },
   });
 }
 
@@ -82,4 +89,56 @@ export function publishTestRunStart(
     },
   ]);
   return executionId;
+}
+
+/** Exercise the pure transcript projection with deterministic source coordinates. */
+export function attachTestTranscriptFold(
+  trace: AgentTrace,
+  writer: TranscriptWriter,
+) {
+  const fold = createTranscriptFold(writer);
+  let seq = 0;
+  const unsubscribe = trace.subscribe((event) => {
+    if (!isTranscriptEvent(event)) return;
+    seq += 1;
+    fold.record(
+      event.type === 'usage'
+        ? {
+            type: event.type,
+            ...event.payload,
+            recordTranscript: event.recordTranscript,
+            stageId: event.stageId,
+          }
+        : event,
+      {
+        at: seq,
+        id: JSON.stringify([writer.streamId, seq]),
+        debug: isDebugModeEnabled(),
+      },
+    );
+  });
+  return {
+    unsubscribe,
+    handleStatus: (event: StatusEvent) => {
+      if (event.streamId === writer.streamId) fold.status(event.phase);
+    },
+  };
+}
+
+/** Standalone trace projection for tests that exercise formatting without a session. */
+export function createTestRunTrace(
+  streamId: StreamTabId,
+  store: StreamLogStore,
+) {
+  const writer = store.acquireWriter(streamId, streamId);
+  const run = createRunTrace(streamId, writer);
+  const projection = attachTestTranscriptFold(run.trace, writer);
+  return {
+    trace: run.trace,
+    handleStatus: projection.handleStatus,
+    dispose: () => {
+      projection.unsubscribe();
+      run.dispose();
+    },
+  };
 }

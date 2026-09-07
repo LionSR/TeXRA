@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResultMeta } from '@agent/storage';
@@ -59,14 +60,16 @@ describe('child run delivery', () => {
 
   it('submits delivery and recovery as one operation', async () => {
     const session = { tag: 'owner' };
-    mocks.submitFollowUp.mockResolvedValue({ status: 'queued' });
+    mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'queued' }));
 
     await expect(
-      deliverChildRunFollowUp({
-        targetStreamId: 'parent' as StreamTabId,
-        followUp: { text: 'done', origin: 'subagent_result' },
-        session: session as never,
-      }),
+      Effect.runPromise(
+        deliverChildRunFollowUp({
+          targetStreamId: 'parent' as StreamTabId,
+          followUp: { text: 'done', origin: 'subagent_result' },
+          session: session as never,
+        }),
+      ),
     ).resolves.toEqual({ kind: 'delivered' });
     expect(mocks.submitFollowUp).toHaveBeenCalledWith(
       'parent',
@@ -81,27 +84,33 @@ describe('child run delivery', () => {
   it('carries the refusal reason for a parent that did not accept delivery', async () => {
     function deliverToParent(followUp: {
       text: string;
-    }): ReturnType<typeof deliverChildRunFollowUp> {
-      return deliverChildRunFollowUp({
-        targetStreamId: 'parent' as StreamTabId,
-        followUp,
-        session: {} as never,
-      });
+    }): Promise<Effect.Success<ReturnType<typeof deliverChildRunFollowUp>>> {
+      return Effect.runPromise(
+        deliverChildRunFollowUp({
+          targetStreamId: 'parent' as StreamTabId,
+          followUp,
+          session: {} as never,
+        }),
+      );
     }
 
-    mocks.submitFollowUp.mockResolvedValueOnce({
-      status: 'failed',
-      reason: 'finished',
-    });
+    mocks.submitFollowUp.mockReturnValueOnce(
+      Effect.succeed({
+        status: 'failed',
+        reason: 'finished',
+      }),
+    );
     await expect(deliverToParent({ text: 'done' })).resolves.toEqual({
       kind: 'failed',
       reason: 'finished',
     });
 
-    mocks.submitFollowUp.mockResolvedValueOnce({
-      status: 'failed',
-      reason: 'not_resumable',
-    });
+    mocks.submitFollowUp.mockReturnValueOnce(
+      Effect.succeed({
+        status: 'failed',
+        reason: 'not_resumable',
+      }),
+    );
     await expect(deliverToParent({ text: 'late' })).resolves.toEqual({
       kind: 'failed',
       reason: 'not_resumable',

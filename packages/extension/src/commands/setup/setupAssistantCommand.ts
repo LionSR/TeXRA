@@ -245,9 +245,14 @@ export async function launchSetupAssistant(): Promise<
     await effectRuntime().runPromise(loadAgents());
 
     const launch = () =>
-      runAgent(
-        { kind: 'fresh', config },
-        { onStreamResolved: presentLaunchedProgressStream },
+      effectRuntime().runPromise(
+        runAgent(
+          { kind: 'fresh', config },
+          {
+            session: defaultSession(),
+            onStreamResolved: presentLaunchedProgressStream,
+          },
+        ),
       );
 
     if (resolution.requiresOpenRouter) {

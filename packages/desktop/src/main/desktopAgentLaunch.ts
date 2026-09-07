@@ -4,6 +4,7 @@ import {
   type RunAgentRequest,
   type SessionHandle,
 } from '@agent/runtime';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
 import {
   createExternalLocation,
@@ -34,38 +35,40 @@ export async function launchDesktopAgent(
     import('@agent/runtime'),
     import('@tools/registry'),
   ]);
-  await runAgent(request, {
-    session: context.session,
-    runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
-    modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-    copilotRouteOverride: options.copilotRouteOverride,
-    ...(options.preferHelperModel && { preferHelperModel: true }),
-    onRun: options.onRun,
-    onStreamResolved: options.onStreamResolved,
-    suppressErrorNotification: true,
-    openWorkflowOutput: async (result) => {
-      const output = selectAutoOpenFinalOutput(result);
-      if (!output) return;
-      let location: RequestOpenFilePayload['location'];
-      if (output.location === 'workspace') {
-        location = createWorkspaceLocation(
-          output.absolutePath,
-          output.relativePath,
+  await effectRuntime().runPromise(
+    runAgent(request, {
+      session: context.session,
+      runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
+      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+      copilotRouteOverride: options.copilotRouteOverride,
+      ...(options.preferHelperModel && { preferHelperModel: true }),
+      onRun: options.onRun,
+      onStreamResolved: options.onStreamResolved,
+      suppressErrorNotification: true,
+      openWorkflowOutput: async (result) => {
+        const output = selectAutoOpenFinalOutput(result);
+        if (!output) return;
+        let location: RequestOpenFilePayload['location'];
+        if (output.location === 'workspace') {
+          location = createWorkspaceLocation(
+            output.absolutePath,
+            output.relativePath,
+          );
+        } else if (output.location === 'runStorage') {
+          location = createRunStorageLocation(
+            output.absolutePath,
+            output.relativePath,
+            result.executionId,
+          );
+        } else {
+          location = createExternalLocation(output.absolutePath);
+        }
+        context.session.interactions.emit(
+          'requestOpenFile',
+          { location, preserveFocus: false },
+          { replayWhenAttached: true },
         );
-      } else if (output.location === 'runStorage') {
-        location = createRunStorageLocation(
-          output.absolutePath,
-          output.relativePath,
-          result.executionId,
-        );
-      } else {
-        location = createExternalLocation(output.absolutePath);
-      }
-      context.session.interactions.emit(
-        'requestOpenFile',
-        { location, preserveFocus: false },
-        { replayWhenAttached: true },
-      );
-    },
-  });
+      },
+    }),
+  );
 }

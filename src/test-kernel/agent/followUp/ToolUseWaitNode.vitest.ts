@@ -754,24 +754,18 @@ describe('ToolUseWaitNode', () => {
       },
     });
     const createUserFollowUpMessages = appendUserFollowUpMessages();
-    const sequence: string[] = [];
-    const info = vi.fn(() => sequence.push('info'));
+    const info = vi.fn(() => {
+      expect(eventsOfType(recorded.events, 'status')).toContainEqual(
+        expect.objectContaining({ phase: STREAM_STATUS.RUNNING }),
+      );
+    });
     const streamId = 'test-stream' as StreamTabId;
     const logger = Object.assign(new TraceEmitter(), {
       error: vi.fn(),
       info,
     });
     const ownerSession = sessionWithInteractions(undefined);
-    // Status is a session fact on the session's plane, the single rail; the
-    // recorder-style status port hears it in publish order.
     const recorded = recordSessionEvents(ownerSession);
-    const detachSequence = ownerSession.attachRunTrace(
-      {
-        trace: new TraceEmitter(),
-        handleStatus: () => sequence.push('status'),
-      },
-      streamId,
-    );
     const streamStatus = ownerSession.status;
     const services = createWaitNodeServices({
       logger,
@@ -817,9 +811,9 @@ describe('ToolUseWaitNode', () => {
       expect(eventsOfType(recorded.events, 'status')).toContainEqual(
         expect.objectContaining({ phase: STREAM_STATUS.RUNNING }),
       );
-      expect(sequence.indexOf('status')).toBeLessThan(sequence.indexOf('info'));
+      expect(info).toHaveBeenCalled();
     } finally {
-      detachSequence();
+      clearStreamStatusForTest(streamStatus, streamId);
     }
     expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
       1,

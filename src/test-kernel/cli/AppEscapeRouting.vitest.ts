@@ -42,9 +42,7 @@ import {
   STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type ActiveChildInfo,
-  type RunIdentity,
   type StreamTabId,
-  type UserFollowUpSupport,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
@@ -159,16 +157,16 @@ function setRunning(...streamIds: StreamTabId[]): void {
     });
   }
 }
-/** The identity-derived display fields these suites seed on a stream. */
-interface SeedStreamMeta {
-  readonly identity?: RunIdentity;
-  readonly userFollowUpSupport?: UserFollowUpSupport;
-  readonly agentCategory?: AgentCategory;
-}
-
 /** Summary metadata as the fold states it: an absent identity or support
  *  level is the fold's null and unsupported, never the fixture's default. */
-function seedStreamMeta(streamId: StreamTabId, meta: SeedStreamMeta): void {
+function seedStreamMeta(
+  streamId: StreamTabId,
+  meta: {
+    identity?: StreamView['identity'];
+    userFollowUpSupport?: StreamView['followUpSupport'];
+    agentCategory?: StreamView['category'];
+  },
+): void {
   seedStream(streamId, {
     identity: meta.identity ?? null,
     followUpSupport:

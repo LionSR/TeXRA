@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
@@ -5,6 +6,7 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 
 const storageMocks = vi.hoisted(() => ({
@@ -45,21 +47,33 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => storageMocks);
 
 vi.mock('@tools/inquiry/inquiryContinuation', () => continuationMocks);
 
+const session = {} as SessionHandle;
 describe('handleExternalInquiryAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    continuationMocks.injectContinuationForAnsweredThread.mockReturnValue(
+      Effect.succeed('sent'),
+    );
+    continuationMocks.injectContinuationForDroppedThread.mockReturnValue(
+      Effect.succeed('sent'),
+    );
   });
 
   it('persists and continues submit actions', async () => {
     const manifest = { status: 'answered' };
     storageMocks.recordAnswerForOpenTurn.mockResolvedValue(manifest);
 
-    await handleExternalInquiryAction({
-      action: 'submit',
-      threadId: 'thread-submit',
-      turnIndex: 1,
-      answer: 'A proof follows by compactness.',
-    });
+    await Effect.runPromise(
+      handleExternalInquiryAction(
+        {
+          action: 'submit',
+          threadId: 'thread-submit',
+          turnIndex: 1,
+          answer: 'A proof follows by compactness.',
+        },
+        { session },
+      ),
+    );
 
     expect(storageMocks.recordAnswerForOpenTurn).toHaveBeenCalledWith({
       threadId: 'thread-submit',
@@ -69,18 +83,23 @@ describe('handleExternalInquiryAction', () => {
     });
     expect(
       continuationMocks.injectContinuationForAnsweredThread,
-    ).toHaveBeenCalledWith('thread-submit', manifest, undefined);
+    ).toHaveBeenCalledWith('thread-submit', manifest, session);
   });
 
   it('persists note-free drops without synthesizing provenance', async () => {
     const manifest = { status: 'dropped' };
     storageMocks.markDropped.mockResolvedValue(manifest);
 
-    await handleExternalInquiryAction({
-      action: 'drop',
-      threadId: 'thread-drop',
-      turnIndex: 1,
-    });
+    await Effect.runPromise(
+      handleExternalInquiryAction(
+        {
+          action: 'drop',
+          threadId: 'thread-drop',
+          turnIndex: 1,
+        },
+        { session },
+      ),
+    );
 
     expect(storageMocks.markDropped).toHaveBeenCalledWith({
       threadId: 'thread-drop',
@@ -88,19 +107,24 @@ describe('handleExternalInquiryAction', () => {
     });
     expect(
       continuationMocks.injectContinuationForDroppedThread,
-    ).toHaveBeenCalledWith('thread-drop', manifest, undefined);
+    ).toHaveBeenCalledWith('thread-drop', manifest, session);
     expect(traceMocks.info).not.toHaveBeenCalled();
   });
 
   it('logs policy reasons without labeling them as feedback', async () => {
     storageMocks.markDropped.mockResolvedValue({ status: 'dropped' });
 
-    await handleExternalInquiryAction({
-      action: 'drop',
-      threadId: 'thread-denied',
-      turnIndex: 1,
-      reason: 'Human input is disabled by policy.',
-    });
+    await Effect.runPromise(
+      handleExternalInquiryAction(
+        {
+          action: 'drop',
+          threadId: 'thread-denied',
+          turnIndex: 1,
+          reason: 'Human input is disabled by policy.',
+        },
+        { session },
+      ),
+    );
 
     expect(traceMocks.info).toHaveBeenCalledWith(
       'Inquiry thread-denied denied',
@@ -111,12 +135,17 @@ describe('handleExternalInquiryAction', () => {
   it('logs lifecycle causes without labeling them as feedback', async () => {
     storageMocks.markDropped.mockResolvedValue({ status: 'dropped' });
 
-    await handleExternalInquiryAction({
-      action: 'drop',
-      threadId: 'thread-cancelled',
-      turnIndex: 1,
-      cause: 'Session interrupted.',
-    });
+    await Effect.runPromise(
+      handleExternalInquiryAction(
+        {
+          action: 'drop',
+          threadId: 'thread-cancelled',
+          turnIndex: 1,
+          cause: 'Session interrupted.',
+        },
+        { session },
+      ),
+    );
 
     expect(traceMocks.info).toHaveBeenCalledWith(
       'Inquiry thread-cancelled dropped with cause',

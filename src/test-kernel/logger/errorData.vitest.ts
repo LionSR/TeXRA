@@ -1,12 +1,13 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-import { createRunTrace, StreamLogStore } from '@transcript';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import { StreamLogStore } from '@transcript';
 
 describe('AgentTrace error data', () => {
   it('emits error data with stack', () => {
     const store = StreamLogStore.ephemeral('test');
-    const logger = createRunTrace('TestErrorLogger', store).trace;
+    const logger = createTestRunTrace('TestErrorLogger', store).trace;
     const err = new Error('test failure');
     logger.error(`Error occurred: ${err.message}`, { data: err });
     const log = store.get('TestErrorLogger');

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
  * looping, persisted resume, result/report writes, parent admission, recovery,
@@ -68,7 +69,7 @@ import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentExecution';
-import { readCompletedRunConversation, StreamLogStore } from '@transcript';
+import { readCompletedRunConversation } from '@transcript';
 
 const PARENT_EXECUTION_ID = 'a9531a9531a9' as ExecutionId;
 const OUTER_EXECUTION_ID = '0a95310a9531' as ExecutionId;
@@ -306,11 +307,13 @@ async function launchWaitingChild(options: {
     parentExecutionId: OUTER_EXECUTION_ID,
   });
   await expect(
-    executeAgent(parentConfig, PARENT_EXECUTION_ID, {
-      session,
-      isSubagent: true,
-      parentStreamId: OUTER_STREAM_ID,
-    }),
+    Effect.runPromise(
+      executeAgent(parentConfig, PARENT_EXECUTION_ID, {
+        session,
+        isSubagent: true,
+        parentStreamId: OUTER_STREAM_ID,
+      }),
+    ),
   ).resolves.toMatchObject({
     outcome: STREAM_PHASE.WAITING,
     response: 'Parent ready.',
@@ -328,18 +331,22 @@ async function launchWaitingChild(options: {
   };
   const launch = await runAsParentOwner(() =>
     withRunContext(parentContext, () =>
-      executeSubagent(
-        {
-          agent: CHILD_AGENT,
-          agentSource: 'inline',
-          agentCategory: AgentCategory.ToolUse,
-          model: CHILD_MODEL,
-          instruction: 'Prove the first assertion.',
-          memories: [],
-          workingDirectory: process.cwd(),
-        },
-        CHILD_AGENT,
-        PARENT_STREAM_ID,
+      Effect.runPromise(
+        executeSubagent(
+          parentContext,
+          undefined,
+          {
+            agent: CHILD_AGENT,
+            agentSource: 'inline',
+            agentCategory: AgentCategory.ToolUse,
+            model: CHILD_MODEL,
+            instruction: 'Prove the first assertion.',
+            memories: [],
+            workingDirectory: process.cwd(),
+          },
+          CHILD_AGENT,
+          PARENT_STREAM_ID,
+        ),
       ),
     ),
   );
@@ -364,9 +371,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // The process session over a persistent store: one session per root,
     // so the ephemeral default this file's setup installed gives way to it.
     teardownDefaultSession();
-    session = initializeDefaultSession({
-      transcripts: await StreamLogStore.open(),
-    });
+    session = initializeDefaultSession({});
     publishTestRunStart(session, OUTER_STREAM_ID);
     await session.settlePublications();
     childId = undefined;
@@ -417,8 +422,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       ]),
     );
 
-    await session.transcripts.flush();
-    const archivedChild = await readCompletedRunConversation(executionId);
+    await session.settlePublications();
+    const archivedChild = await Effect.runPromise(
+      readCompletedRunConversation(executionId, session),
+    );
     expect(archivedChild.conversation).toEqual([
       expect.objectContaining({ role: 'user' }),
       {
@@ -435,8 +442,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       },
     ]);
 
-    const archivedParent =
-      await readCompletedRunConversation(PARENT_EXECUTION_ID);
+    const archivedParent = await Effect.runPromise(
+      readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+    );
     const parentText = JSON.stringify(archivedParent.conversation);
     expect(parentText.match(/Result A\./g)).toHaveLength(1);
     expect(parentText.match(/Result B\./g)).toHaveLength(1);
@@ -497,8 +505,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     );
     await waitForCompletedResumes(2);
 
-    await session.transcripts.flush();
-    const archivedChild = await readCompletedRunConversation(executionId);
+    await session.settlePublications();
+    const archivedChild = await Effect.runPromise(
+      readCompletedRunConversation(executionId, session),
+    );
     // Turn 2 added the user instruction but no new assistant row.
     expect(archivedChild.conversation).toEqual([
       expect.objectContaining({ role: 'user' }),
@@ -512,8 +522,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       }),
     ]);
 
-    const archivedParent =
-      await readCompletedRunConversation(PARENT_EXECUTION_ID);
+    const archivedParent = await Effect.runPromise(
+      readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+    );
     const parentText = JSON.stringify(archivedParent.conversation);
     expect(parentText.match(/Result A\./g)).toHaveLength(1);
     expect(resumedStreams).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
@@ -562,8 +573,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
     // The child transcript has turn 1 (Result A) and the batch turn (Result B),
     // with BOTH follow-up instructions recorded as user messages in the batch.
-    await session.transcripts.flush();
-    const archivedChild = await readCompletedRunConversation(executionId);
+    await session.settlePublications();
+    const archivedChild = await Effect.runPromise(
+      readCompletedRunConversation(executionId, session),
+    );
     const childText = JSON.stringify(archivedChild.conversation);
     expect(childText.match(/Result A\./g)).toHaveLength(1);
     expect(childText.match(/Result B\./g)).toHaveLength(1);
@@ -571,8 +584,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     expect(childText).toContain('third assertion');
 
     // The parent received each distinct result exactly once.
-    const archivedParent =
-      await readCompletedRunConversation(PARENT_EXECUTION_ID);
+    const archivedParent = await Effect.runPromise(
+      readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+    );
     const parentText = JSON.stringify(archivedParent.conversation);
     expect(parentText.match(/Result A\./g)).toHaveLength(1);
     expect(parentText.match(/Result B\./g)).toHaveLength(1);
@@ -607,39 +621,51 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // admission path: no additional parent message, no additional wake.
     const report = await store.readReport();
     for (let replay = 0; replay < 100; replay++) {
-      await deliverChildRunFollowUp({
-        targetStreamId: PARENT_STREAM_ID,
-        followUp: {
-          text: report!,
-          origin: 'subagent_result',
-          // Derived from the persisted turn token exactly as production does.
-          deliveryId: `${completed!.token}:delivery`,
-        },
-        session,
-      });
+      await Effect.runPromise(
+        deliverChildRunFollowUp({
+          targetStreamId: PARENT_STREAM_ID,
+          followUp: {
+            text: report!,
+            origin: 'subagent_result',
+            // Derived from the persisted turn token exactly as production does.
+            deliveryId: `${completed!.token}:delivery`,
+          },
+          session,
+        }),
+      );
     }
-    await session.transcripts.flush();
+    await session.settlePublications();
     const afterReplay = JSON.stringify(
-      (await readCompletedRunConversation(PARENT_EXECUTION_ID)).conversation,
+      (
+        await Effect.runPromise(
+          readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+        )
+      ).conversation,
     );
     expect(afterReplay.match(/Result A\./g)).toHaveLength(1);
     expect(resumedStreams).toEqual([PARENT_STREAM_ID]);
     expect(completedResumes).toEqual([PARENT_STREAM_ID]);
 
     // A distinct delivery identity with identical text is a distinct turn.
-    await deliverChildRunFollowUp({
-      targetStreamId: PARENT_STREAM_ID,
-      followUp: {
-        text: report!,
-        origin: 'subagent_result',
-        deliveryId: `${completed!.token}:delivery:other`,
-      },
-      session,
-    });
+    await Effect.runPromise(
+      deliverChildRunFollowUp({
+        targetStreamId: PARENT_STREAM_ID,
+        followUp: {
+          text: report!,
+          origin: 'subagent_result',
+          deliveryId: `${completed!.token}:delivery:other`,
+        },
+        session,
+      }),
+    );
     await waitForCompletedResumes(2);
-    await session.transcripts.flush();
+    await session.settlePublications();
     const afterDistinct = JSON.stringify(
-      (await readCompletedRunConversation(PARENT_EXECUTION_ID)).conversation,
+      (
+        await Effect.runPromise(
+          readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+        )
+      ).conversation,
     );
     expect(afterDistinct.match(/Result A\./g)).toHaveLength(2);
     expect(resumedStreams).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);

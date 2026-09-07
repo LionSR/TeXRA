@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 // Regression coverage for atomic Codex disk-resume claims. Concurrent calls
 // with the same stale thread_id must share one fallback loop: the first call
 // owns asynchronous SDK setup, while later calls wait for registration and
@@ -23,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   importCodexClass: vi.fn(),
   findCodexBinaryPath: vi.fn(),
   resumeThread: vi.fn(),
-  submitFollowUp: vi.fn(async () => ({ status: 'sent' as const })),
+  submitFollowUp: vi.fn(),
 }));
 
 vi.mock('@tools/approval/bashApproval', () => ({
@@ -40,6 +41,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 vi.mock('@agent/runtime/RunContext', () => ({
+  runInSession: (_session: unknown, run: () => unknown) => run(),
   getRunContextExecutionId: (ctx: any) => ctx?.executionId,
   getRunContextStreamId: (ctx: any) => ctx?.streamId,
   getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
@@ -70,10 +72,6 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', () => ({
   assertOwnedExecutionLease: vi.fn(),
-  runWithOwnedExecutionLeaseLaunchGuard: (
-    _executionId: string,
-    operation: () => unknown,
-  ) => operation(),
 }));
 
 vi.mock('@tools/delegation/childStream', () => ({
@@ -82,6 +80,10 @@ vi.mock('@tools/delegation/childStream', () => ({
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
+  runWithOwnedExecutionLeaseLaunchGuard: (
+    _executionId: string,
+    operation: Effect.Effect<unknown, Error>,
+  ) => operation,
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
@@ -111,8 +113,8 @@ const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:codex-child' as StreamTabId;
 const executionId = 'parent-exec' as ExecutionId;
 
-function completedChildRunLoop(): Promise<void> {
-  return Promise.resolve();
+function completedChildRunLoop() {
+  return Effect.forkDetach(Effect.void);
 }
 
 function toolContext(runContext: Record<string, unknown> = {}): unknown {
@@ -142,6 +144,7 @@ function captureRunLoopStrategy(): () => ChildRunStrategy<unknown> | undefined {
 
 describe('codex tool - atomic resume fallback', () => {
   beforeEach(() => {
+    mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
     mocks.startChildRunLoop.mockReset();
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();
@@ -152,7 +155,7 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
     mocks.findCodexBinaryPath.mockResolvedValue(undefined);
     mocks.createChildStream.mockReturnValue(
-      createFakeAgentCliChildStream(childStreamId),
+      Effect.succeed(createFakeAgentCliChildStream(childStreamId)),
     );
     mocks.currentSession.mockReturnValue(testSession);
   });
@@ -169,8 +172,10 @@ describe('codex tool - atomic resume fallback', () => {
       .spyOn(childStream.logger, 'error')
       .mockImplementation(() => {});
     const lateFailure = new Error('late Codex finalization failed');
-    mocks.createChildStream.mockReturnValue(childStream);
-    mocks.startChildRunLoop.mockReturnValue(Promise.reject(lateFailure));
+    mocks.createChildStream.mockReturnValue(Effect.succeed(childStream));
+    mocks.startChildRunLoop.mockReturnValue(
+      Effect.forkDetach(Effect.fail(lateFailure)),
+    );
     mocks.importCodexClass.mockResolvedValue(
       class MockCodex {
         startThread(): {

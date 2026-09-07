@@ -1,4 +1,7 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
+import { Effect } from 'effect';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { StreamLogStore } from '@transcript/StreamLogStore';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -23,17 +26,28 @@ vi.mock('@transcript', () => ({
     ({ conversation }: { conversation: unknown[] | null }) =>
       (conversation?.length ?? 0) > 0,
   ),
-  readCompletedRunConversation: vi.fn(async () => {
-    const conversation = await mocks.readConversation();
-    return {
-      conversation,
-      source: conversation === null ? 'none' : 'streamLog',
-    };
-  }),
+  readCompletedRunConversation: vi.fn(() =>
+    Effect.promise(async () => {
+      const conversation = await mocks.readConversation();
+      return {
+        conversation,
+        source: conversation === null ? 'none' : 'streamLog',
+      };
+    }),
+  ),
 }));
 
 // Imported after vi.mock so the mocked dependency is in place.
-import { loadChatExportInput } from '@agent/export/loadChatExportInput';
+import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
+
+const transcripts = StreamLogStore.ephemeral('export loader fixture');
+const loadChatExportInput = (id: ExecutionId) =>
+  Effect.runPromise(
+    loadChatExportInputEffect(id, {
+      roots: createFakeWorkspaceRoots(),
+      transcripts,
+    }),
+  );
 
 const config = {
   agent: 'correct',

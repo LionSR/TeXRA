@@ -151,10 +151,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
  * A context with a session also enters that session's workspace roots, so
  * session-rooted services (`StorageFS`, `WorkspaceFS`) follow the run.
  */
-export function withRunContext<T>(
-  context: RunContext,
-  fn: () => T | Promise<T>,
-): T | Promise<T> {
+export function withRunContext<T>(context: RunContext, fn: () => T): T {
   const session = getRunContextSession(context);
   return runContextScope.run(context, () =>
     session ? runWithWorkspaceRoots(session.roots, fn) : fn(),
@@ -167,10 +164,7 @@ export function withRunContext<T>(
  * outside any agent run. A host holding several sessions in one process (the
  * desktop, one per open paper) wraps every touch of a session's storage.
  */
-export function runInSession<T>(
-  session: SessionHandle,
-  fn: () => T | Promise<T>,
-): T | Promise<T> {
+export function runInSession<T>(session: SessionHandle, fn: () => T): T {
   return withRunContext(createRunContext({ session }), fn);
 }
 
