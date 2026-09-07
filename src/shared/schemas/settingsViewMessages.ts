@@ -10,14 +10,14 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { LATEX_CONFIG_FIELD_TO_KEY } from '@shared/constants/latexConfig';
-import type {
+import {
+  LATEX_CONFIG_FIELD_TO_KEY,
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
-import type {
-  NonRegexReplacementCategory,
-  RegexReplacementCategory,
+import {
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
 } from '@shared/constants/replacementCategories';
 import {
   createDispatcher,
@@ -630,17 +630,32 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
  * and all) rather than restating it, so `LatexConfigValuesSchema` below can
  * never drift from the catalog's own validators the way a hand-duplicated
  * schema could — a bound tightened on the catalog row reaches this projection
- * for free. `Output` is a compile-time assertion of the field's known result
- * type (mirroring the `satisfies` pattern for schemas that must stay
- * synchronized with an external shape), not a second runtime declaration: the
- * actual validation is always the catalog schema found at `key`.
+ * for free. `expectedKind` is a throwaway schema of the same Zod subclass the
+ * catalog row is expected to carry (its own field values are never read); its
+ * type both drives `T`'s inference and is checked at runtime via `.constructor`
+ * against the schema actually found at `key`, so a catalog row that changes
+ * kind (a string field becoming a number, say) fails loudly here instead of
+ * silently mistyping the projected field — the `Output` cast this replaces
+ * had no such check.
  */
-function catalogField<Output>(key: string): z.ZodOptional<z.ZodType<Output>> {
+function catalogField<T extends z.ZodTypeAny>(
+  key: string,
+  expectedKind: T,
+): z.ZodOptional<T> {
   const entry = settingsViewSettingByKey(key);
   if (!entry) {
     throw new Error(`LATEX_CONFIG_FIELD_TO_KEY: no catalog entry for "${key}"`);
   }
-  return (settingSchemaWithoutPrefault(entry) as z.ZodType<Output>).optional();
+  const schema = settingSchemaWithoutPrefault(entry);
+  if (
+    !(schema instanceof z.ZodType) ||
+    schema.constructor !== expectedKind.constructor
+  ) {
+    throw new Error(
+      `LATEX_CONFIG_FIELD_TO_KEY: "${key}" catalog schema kind changed — expected ${expectedKind.constructor.name}, got ${(schema as z.ZodTypeAny | undefined)?.constructor?.name ?? typeof schema}`,
+    );
+  }
+  return (schema as T).optional();
 }
 
 /**
@@ -649,47 +664,61 @@ function catalogField<Output>(key: string): z.ZodOptional<z.ZodType<Output>> {
  * `LATEX_CONFIG_FIELD_TO_KEY`, not a fixed subset.
  */
 export const LatexConfigValuesSchema = z.object({
-  workflowAutoCompile: catalogField<boolean>(
+  workflowAutoCompile: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.workflowAutoCompile,
+    z.boolean(),
   ),
-  workflowAutoCompileTimeoutMs: catalogField<number>(
+  workflowAutoCompileTimeoutMs: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.workflowAutoCompileTimeoutMs,
+    z.int(),
   ),
-  workflowAutoOpenPdf: catalogField<boolean>(
+  workflowAutoOpenPdf: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.workflowAutoOpenPdf,
+    z.boolean(),
   ),
-  workflowRejectOnCompileFailure: catalogField<boolean>(
+  workflowRejectOnCompileFailure: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.workflowRejectOnCompileFailure,
+    z.boolean(),
   ),
-  latexdiffBetweenRounds: catalogField<boolean>(
+  latexdiffBetweenRounds: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.latexdiffBetweenRounds,
+    z.boolean(),
   ),
-  latexdiffTimeoutMs: catalogField<number>(
+  latexdiffTimeoutMs: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.latexdiffTimeoutMs,
+    z.int(),
   ),
-  latexdiffMathMarkup: catalogField<
-    (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number]
-  >(LATEX_CONFIG_FIELD_TO_KEY.latexdiffMathMarkup),
-  latexdiffChangesOnly: catalogField<boolean>(
+  latexdiffMathMarkup: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.latexdiffMathMarkup,
+    z.enum(LATEXDIFF_MATH_MARKUP_VALUES),
+  ),
+  latexdiffChangesOnly: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.latexdiffChangesOnly,
+    z.boolean(),
   ),
-  latexFormatter: catalogField<(typeof LATEX_FORMATTER_VALUES)[number]>(
+  latexFormatter: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.latexFormatter,
+    z.enum(LATEX_FORMATTER_VALUES),
   ),
-  wrapCritiqueInAlign: catalogField<boolean>(
+  wrapCritiqueInAlign: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.wrapCritiqueInAlign,
+    z.boolean(),
   ),
-  enabledReplacements: catalogField<NonRegexReplacementCategory[]>(
+  enabledReplacements: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.enabledReplacements,
+    z.array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES)),
   ),
-  enabledReplacementsRegex: catalogField<RegexReplacementCategory[]>(
+  enabledReplacementsRegex: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.enabledReplacementsRegex,
+    z.array(z.enum(REGEX_REPLACEMENT_CATEGORIES)),
   ),
-  customReplacementsRegex: catalogField<Record<string, string>>(
+  customReplacementsRegex: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.customReplacementsRegex,
+    z.record(z.string(), z.string()),
   ),
-  customReplacements: catalogField<Record<string, string>>(
+  customReplacements: catalogField(
     LATEX_CONFIG_FIELD_TO_KEY.customReplacements,
+    z.record(z.string(), z.string()),
   ),
 });
 export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
