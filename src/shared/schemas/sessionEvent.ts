@@ -228,6 +228,18 @@ const RunStartEventSchema = durable('run.start', {
   checkpointId: z.string().min(1).nullish(),
 });
 
+/** C9 cleanup targets, derived from owned execution edges by the database. */
+const StreamRemovedEventSchema = durable('stream.removed', {
+  executionIds: z.array(ExecutionIdSchema),
+});
+
+const RunStartDraftSchema = RunStartEventSchema.omit({
+  parentStartCommit: true,
+});
+const StreamRemovedDraftSchema = StreamRemovedEventSchema.omit({
+  executionIds: true,
+});
+
 /**
  * The durable arms. Run-scoped arms mirror `AgentEvent`
  * (`src/agent/trace/events.ts`); session-scoped arms mirror the session
@@ -235,7 +247,7 @@ const RunStartEventSchema = durable('run.start', {
  * last row of its aggregate, final (PRD 5.2, "Existence").
  */
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
-  RunStartEventSchema.omit({ parentStartCommit: true }),
+  RunStartDraftSchema,
   /**
    * Every activation of a run, the first launch and each resume (PRD 6,
    * item 8): the frozen NDJSON `setActiveStream` line projects from this and
@@ -284,7 +296,7 @@ export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   durable('goalPaused', {}),
   durable('setParentStream', { parentStreamId: StreamTabIdSchema.nullable() }),
-  durable('stream.removed', {}),
+  StreamRemovedDraftSchema,
   durable('updateStreamDescription', { description: z.string() }),
   /** Goal is per stream; the fact carries the state so the fold never reads
    *  `GoalStore`. */
@@ -332,8 +344,18 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
       (event.parentStartCommit === undefined),
     'A declared parent requires its creation commit, and a root has neither.',
   ),
+  StreamRemovedEventSchema.extend(envelope),
   ...SessionEventDraftSchema.options
-    .slice(1)
+    .filter(
+      (
+        schema,
+      ): schema is Exclude<
+        typeof schema,
+        typeof RunStartDraftSchema | typeof StreamRemovedDraftSchema
+      > =>
+        schema.shape.type.value !== 'run.start' &&
+        schema.shape.type.value !== 'stream.removed',
+    )
     .map((schema) => schema.extend(envelope)),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;

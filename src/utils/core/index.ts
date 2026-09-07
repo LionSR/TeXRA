@@ -101,18 +101,6 @@ export function groupBy<T, K, V = T>(
 }
 
 /**
- * Serialize a Map to a plain Record object. Keys are stringified.
- * @example mapToRecord(new Map([['a', 1]])) // { a: 1 }
- */
-export function mapToRecord<K extends string | number, V>(
-  map: ReadonlyMap<K, V>,
-): Record<string, V> {
-  return Object.fromEntries(
-    [...map].map(([key, value]) => [String(key), value]),
-  );
-}
-
-/**
  * Look up `key` in a string-keyed `Record`, guarded with `Object.hasOwn` so
  * an arbitrary/untrusted key (`toString`, `__proto__`, `constructor`, …)
  * cannot resolve to an inherited `Object.prototype` member. Returns

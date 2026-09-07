@@ -237,10 +237,9 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   protected override async createResponseImpl(
     options: CreateResponseOptions<LanguageModelMessage, LanguageModelPort>,
   ): Promise<CreateResponseResult<VscodeLmResponse, LanguageModelMessage>> {
-    const tools =
-      this.capabilities.supportsFunctionCalling && options.tools?.length
-        ? toVscodeLmTools(options.tools)
-        : undefined;
+    const tools = this.capabilities.supportsFunctionCalling
+      ? options.tools
+      : undefined;
     const signal = options.signal ?? new AbortController().signal;
     const model = this.languageModelReference();
     const output = this.createOutputStream();
@@ -251,7 +250,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
       countTokens: () =>
         this.estimateTokenCount(options.messages, {
           client: options.client,
-          tools: options.tools,
+          tools,
           signal,
         }),
       currentMaxTokens: maxTokens,
@@ -269,7 +268,9 @@ export class ModelHandlerVscodeLm extends ModelHandler<
         {
           justification: 'Run the selected TeXRA agent.',
           maxTokens,
-          ...(tools ? { tools, toolMode: 'auto' as const } : {}),
+          ...(tools?.length
+            ? { tools: toVscodeLmTools(tools), toolMode: 'auto' as const }
+            : {}),
         },
         signal,
       )) {

@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { StreamTabId } from '@shared/schemas';
-import { snapshotFacts } from '@test/support/storeTestDrivers';
-
 const tempDirs: string[] = [];
 
 afterEach(async () => {
@@ -60,69 +57,9 @@ describe('CLI transcript session policy', () => {
     const failure = new Error('permission denied');
 
     await expect(
-      initializeCliTranscriptSession({}, async () => {
+      initializeCliTranscriptSession(async () => {
         throw failure;
       }),
     ).rejects.toBe(failure);
-  });
-
-  it('reclaims an orphaned stream sidecar after a headless session opens', async () => {
-    vi.resetModules();
-    await import('@test/support/sessionGraphTestSetup');
-    const [
-      { installFakeHost },
-      { createTempDirPlatform },
-      { StreamLogStore, StreamSnapshotStore },
-      { initializeDefaultSession, teardownDefaultSession },
-      { GoalStore },
-      { initializeCliTranscriptSession },
-    ] = await Promise.all([
-      import('@test/support/setupPlatform'),
-      import('@test/support/tempDirPlatform'),
-      import('@transcript'),
-      import('@agent/runtime/SessionHandle'),
-      import('@tools/goal'),
-      import('@cli/runtime/transcriptSession'),
-    ]);
-    await installFakeHost(
-      await createTempDirPlatform('texra-cli-orphan-sweep-', tempDirs),
-    );
-    const orphan = 'orphaned-cli-stream' as StreamTabId;
-    const writer = new StreamSnapshotStore();
-    // Materialize a persisted sidecar via a durable current field;
-    // descriptions are memory-only for current records (#9590 Stage 6).
-    snapshotFacts(writer).setParentStream(
-      orphan,
-      'orphan-parent' as StreamTabId,
-    );
-    await writer.flush();
-    await expect(writer.listPersistedStreams()).resolves.toEqual([orphan]);
-
-    initializeDefaultSession({
-      transcripts: StreamLogStore.ephemeral('orphaned goal fixture'),
-    });
-    await GoalStore.start(orphan, 'orphaned goal');
-    expect(GoalStore.getForStream(orphan)).not.toBeNull();
-    teardownDefaultSession();
-
-    const transcripts = await StreamLogStore.open();
-    const result = await initializeCliTranscriptSession(
-      { delayMs: 0 },
-      async () => transcripts,
-    );
-
-    // The sweep is scheduled off the ready path now, so the reclaim lands a
-    // beat after the session opens instead of before it returns.
-    // The goal is cleared after the sidecar directory goes, so both facts
-    // are awaited together rather than asserting the second one early.
-    await vi.waitFor(
-      async () => {
-        await expect(result.snapshots.listPersistedStreams()).resolves.toEqual(
-          [],
-        );
-        expect(GoalStore.getForStream(orphan)).toBeNull();
-      },
-      { timeout: 10_000, interval: 100 },
-    );
   });
 });

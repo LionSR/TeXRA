@@ -33,7 +33,6 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -657,11 +656,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(), 0);
   registerCommands(context, progressViewProvider);
-  // The leftover-stream sweep reads the whole storage root, so it runs after
-  // the commands and views are wired rather than in front of them; nothing
-  // here awaits it, and deactivation cancels it if it has not started.
-  const cancelLeftoverStreamSweep = scheduleLeftoverStreamSweep(runtimeSession);
-  context.subscriptions.push({ dispose: cancelLeftoverStreamSweep });
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context);
 

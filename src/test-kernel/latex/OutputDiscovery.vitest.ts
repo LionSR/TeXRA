@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { Effect } from 'effect';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,16 +9,12 @@ import type {
   LatexExecutionDiscoveryPort,
 } from '@latex/latexdiff/executionDiscovery';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-// `discoverLatestExecutionOutputs` matches a run by agent/model/input and then
-// reads its per-round outputs. Headless `texra run` executions persist those
-// outputs on disk but never write the progress-view stream-tab snapshot, so the
-// snapshot read comes back empty. These fakes reproduce that case: a matching
-// execution whose stream-tab snapshot is empty while its run directory holds
-// r0/r1 outputs on disk (the same source the `--run-id` path scans).
+// A run may have generated files even when no output facts were recorded.
 const mocks = vi.hoisted(() => ({
   findRunDir: vi.fn(),
   read: vi.fn(),
@@ -28,19 +25,11 @@ vi.mock('@utils/files/runStorageFs', async (importActual) => ({
   findRunDir: mocks.findRunDir,
 }));
 
-vi.mock('@transcript', async (importActual) => {
-  // A class (not an arrow) so `new StreamSnapshotStore()` is constructable.
-  class FakeStreamSnapshotStore {
-    read = mocks.read;
-  }
-  return {
-    ...(await importActual<typeof import('@transcript')>()),
-    StreamSnapshotStore: FakeStreamSnapshotStore,
-  };
-});
-
-const { discoverLatestExecutionOutputs, scanRunDirForOutputs } =
+const snapshots = { read: mocks.read };
+const { discoverLatestExecutionOutputs } =
   await import('@latex/latexdiff/outputDiscovery');
+const { scanRunDirForOutputs } =
+  await import('@latex/latexdiff/runOutputFiles');
 
 function matchingExecution(id: string): LatexAgentRunEntry {
   return {
@@ -78,7 +67,7 @@ describe('discoverLatestExecutionOutputs', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await installPlatform({}, { fs: nodeFilesystem });
-    mocks.read.mockResolvedValue({ outputFilesByRound: {} });
+    mocks.read.mockReturnValue(Effect.succeed({ outputFilesByRound: {} }));
   });
 
   afterEach(async () => {
@@ -98,10 +87,14 @@ describe('discoverLatestExecutionOutputs', () => {
     const { discovery } = discoveryWith([matchingExecution('exec-headless')]);
     mocks.findRunDir.mockResolvedValue(runDir);
 
-    const result = await discoverLatestExecutionOutputs(
-      discovery,
-      MATCHING_QUERY,
-      'test',
+    const result = await Effect.runPromise(
+      discoverLatestExecutionOutputs(
+        discovery,
+        snapshots,
+        MATCHING_QUERY,
+        'test',
+        platform().fs,
+      ),
     );
 
     expect(result?.executionId).toBe('exec-headless');
@@ -120,12 +113,16 @@ describe('discoverLatestExecutionOutputs', () => {
     // Registered under a stream the agent/model config would NOT derive.
     readStreamId.mockResolvedValue('polish@earlierModel#exec-registered');
     const rounds = { 0: [] };
-    mocks.read.mockResolvedValue({ outputFilesByRound: rounds });
+    mocks.read.mockReturnValue(Effect.succeed({ outputFilesByRound: rounds }));
 
-    const result = await discoverLatestExecutionOutputs(
-      discovery,
-      MATCHING_QUERY,
-      'test',
+    const result = await Effect.runPromise(
+      discoverLatestExecutionOutputs(
+        discovery,
+        snapshots,
+        MATCHING_QUERY,
+        'test',
+        platform().fs,
+      ),
     );
 
     expect(readStreamId).toHaveBeenCalledWith('exec-registered');
@@ -142,10 +139,14 @@ describe('discoverLatestExecutionOutputs', () => {
     const { discovery } = discoveryWith([matchingExecution('exec-empty')]);
     mocks.findRunDir.mockResolvedValue(emptyDir);
 
-    const result = await discoverLatestExecutionOutputs(
-      discovery,
-      MATCHING_QUERY,
-      'test',
+    const result = await Effect.runPromise(
+      discoverLatestExecutionOutputs(
+        discovery,
+        snapshots,
+        MATCHING_QUERY,
+        'test',
+        platform().fs,
+      ),
     );
 
     expect(result).toBeNull();
@@ -179,6 +180,7 @@ describe('outputDiscovery logger seam', () => {
       'paper.tex',
       undefined,
       'test',
+      platform().fs,
     );
 
     expect(result).toBeNull();
@@ -191,30 +193,24 @@ describe('outputDiscovery logger seam', () => {
     expect(debug).not.toHaveBeenCalled();
   });
 
-  it('warns on the pinned channel when persisted execution metadata cannot be read', async () => {
+  it('propagates an unreadable execution index instead of choosing different outputs', async () => {
     const discovery: LatexExecutionDiscoveryPort = {
       listAgentRuns: async () => {
         throw new Error('execution index unreadable');
       },
       readStreamId: async () => undefined,
     };
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
-
-    const result = await discoverLatestExecutionOutputs(
-      discovery,
-      MATCHING_QUERY,
-      'test',
-    );
-
-    expect(result).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      'test',
-      expect.stringContaining(
-        'Metadata-driven latexdiff discovery failed: execution index unreadable',
+    await expect(
+      Effect.runPromise(
+        discoverLatestExecutionOutputs(
+          discovery,
+          snapshots,
+          MATCHING_QUERY,
+          'test',
+          platform().fs,
+        ),
       ),
-    );
-    expect(debug).not.toHaveBeenCalled();
+    ).rejects.toThrow('execution index unreadable');
   });
 
   // #10635: collectTexFiles keeps its own per-function createLog(channel) —
@@ -252,6 +248,7 @@ describe('outputDiscovery logger seam', () => {
       'paper.tex',
       undefined,
       'test',
+      platform().fs,
     );
 
     expect(Object.keys(result ?? {}).map(Number)).toEqual([1]);

@@ -353,9 +353,10 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
     );
   });
 
-  it('does not advertise tools when function calling is unsupported', async () => {
+  it('does not advertise or count tools when function calling is unsupported', async () => {
     const port = fakePort([{ kind: 'text', text: 'answer' }]);
     const handler = new ModelHandlerVscodeLm(modelConfig(false));
+    port.countTokens.mockResolvedValue(128_000);
 
     const { response } = await handler.createResponse({
       client: port,
@@ -365,6 +366,7 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
     });
 
     expect(response.stopReason).toBe(OPENAI_CHAT_FINISH.STOP);
+    expect(port.countTokens).not.toHaveBeenCalled();
     expect(port.sendRequest.mock.calls[0]?.[2]).toEqual({
       justification: 'Run the selected TeXRA agent.',
       maxTokens: 4096,

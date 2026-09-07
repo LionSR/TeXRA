@@ -111,6 +111,16 @@ export async function createChildStream(
     executionId,
     options.reservedWriter,
   );
+  const handle = new AgentExecutionHandle(
+    {
+      streamId: childStreamId,
+      executionId,
+      identity: options.run,
+      category: options.config.agentCategory,
+    },
+    parentStreamId,
+    runTrace.trace,
+  );
   let detachSessionTrace: (() => void) | undefined;
   let started = false;
   try {
@@ -167,8 +177,13 @@ export async function createChildStream(
         background: true,
       },
     ]);
-    await session.settlePublications();
     started = true;
+    // Register local ownership before awaiting the creation commit. The start
+    // batch is already queued, so its first event still precedes handle facts.
+    session.executions.trackAgentExecution(handle, {
+      status: STREAM_PHASE.RUNNING,
+    });
+    await session.settlePublications();
     runTrace.trace.emit({
       type: 'run.config',
       streamId: childStreamId,
@@ -185,23 +200,6 @@ export async function createChildStream(
         description,
       },
     ]);
-
-    const handle = new AgentExecutionHandle(
-      {
-        streamId: childStreamId,
-        executionId,
-        identity: options.run,
-        category: options.config.agentCategory,
-      },
-      parentStreamId,
-      runTrace.trace,
-    );
-    // The process-owned snapshot listener persists both facts before handle
-    // tracking; a later presentation replays them from the snapshot store during
-    // canonical state loading (#8258).
-    session.executions.trackAgentExecution(handle, {
-      status: STREAM_PHASE.RUNNING,
-    });
 
     return {
       childStreamId,
@@ -262,6 +260,9 @@ export async function createChildStream(
         });
       },
       () => session.settlePublications(),
+      () => {
+        session.executions.untrackIfCurrent(handle);
+      },
       () => detachSessionTrace?.(),
       () => runTrace.dispose(),
     ];

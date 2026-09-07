@@ -36,7 +36,6 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
-  parseSummaryShape,
   StreamSummaryCacheStore,
   toSummary,
   type ParsedPersistedEntries,
@@ -58,7 +57,7 @@ const log = createLog('StreamLogStore');
  * roll adjacent snapshot staging back instead of discarding a fresh
  * incarnation's buffered writes.
  */
-export class StreamDeletionSupersededError extends Error {
+class StreamDeletionSupersededError extends Error {
   constructor(readonly subject?: string) {
     super(
       subject === undefined
@@ -84,55 +83,6 @@ type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'read-only' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
-
-/**
- * Delete one known persisted transcript without opening or parsing the
- * transcript registry. History cleanup already resolved the stream from the
- * execution metadata, so hydrating every unrelated transcript would add work
- * and let unrelated corruption block deletion of the requested execution.
- */
-export async function deletePersistedStreamLog(
-  streamId: StreamTabId,
-): Promise<void> {
-  await new KVStore(STREAM_LOGS_DIR, { compactJson: true }).delete(streamId);
-  try {
-    await new KVStore(STREAM_LOG_SUMMARIES_DIR, {
-      compactJson: true,
-    }).delete(streamId);
-  } catch (error) {
-    log.warn(
-      `Failed to delete derived transcript summary for ${streamId}; continuing after authoritative log deletion: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-  }
-}
-
-/**
- * Clear one known stream's parent-edge from its always-resident summary
- * mirror, without opening the transcript registry. `StreamSnapshotStore` is
- * the parent-edge authority and republishes this mirror on every live
- * mutation (#9947), but a targeted cleanup path with no attached
- * `summaryMetaSink` (history delete without a live session) can durably
- * detach a child in its sidecar while this mirror — what the progress rail
- * actually reads — keeps pointing at the deleted parent. Callers already
- * know the exact child stream ids to patch, so this stays a single-key
- * read-modify-write, not a registry sweep. The write-back re-serializes the
- * schema-parsed `StreamLogSummarySchema` shape, so a field a newer build
- * added to the schema and an older build doesn't know is stripped here —
- * acceptable for this derived-tier cache under the discard-and-rebuild
- * contract (#9434), which never promises byte-for-byte forward compat.
- */
-export async function clearPersistedSummaryParentStream(
-  streamId: StreamTabId,
-): Promise<void> {
-  const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
-    compactJson: true,
-  });
-  const summary = parseSummaryShape(await summaries.read<unknown>(streamId));
-  if (!summary?.meta?.parentStreamId) return;
-  const { parentStreamId: _parentStreamId, ...meta } = summary.meta;
-  await summaries.write(streamId, { ...summary, meta });
-}
 
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
