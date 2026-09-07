@@ -8,7 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { SubscriptionRef } from 'effect';
+import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import {
   agentErrorPresentation,
@@ -193,31 +193,40 @@ export function createDesktopHostRequests(
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
       startExecution: (request) => {
-        void execution.runValidated(request).catch((error: unknown) => {
-          logger.error('Desktop merge execution failed', {
-            data: toLogData(error),
-          });
-          const primaryError = primaryAgentError(error);
-          const presentation = agentErrorPresentation({
-            kind: classifyAgentError(primaryError),
-            message: `Merge failed: ${toErrorMessage(primaryError)}`,
-          });
-          if (presentation?.type === 'instruction') {
-            session.interactions.emit(
-              'requestShowInstruction',
-              presentation.payload,
-              { replayWhenAttached: true },
-            );
-          } else if (presentation?.type === 'error') {
-            session.interactions.emit(
-              'requestShowError',
-              presentation.payload,
-              {
-                replayWhenAttached: true,
-              },
-            );
-          }
-        });
+        effectRuntime().runFork(
+          Effect.tryPromise({
+            try: () => execution.runValidated(request),
+            catch: (error) => error,
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                logger.error('Desktop merge execution failed', {
+                  data: toLogData(error),
+                });
+                const primaryError = primaryAgentError(error);
+                const presentation = agentErrorPresentation({
+                  kind: classifyAgentError(primaryError),
+                  message: `Merge failed: ${toErrorMessage(primaryError)}`,
+                });
+                if (presentation?.type === 'instruction') {
+                  session.interactions.emit(
+                    'requestShowInstruction',
+                    presentation.payload,
+                    { replayWhenAttached: true },
+                  );
+                } else if (presentation?.type === 'error') {
+                  session.interactions.emit(
+                    'requestShowError',
+                    presentation.payload,
+                    {
+                      replayWhenAttached: true,
+                    },
+                  );
+                }
+              }),
+            ),
+          ),
+        );
       },
       listWorkspaceCandidateFiles,
     },
@@ -356,18 +365,17 @@ export function createDesktopHostRequests(
     if (!executionId) {
       throw new Rejected({ reason: `Missing execution identity for ${verb}.` });
     }
-    let result: FileOpResult;
-    try {
-      result =
-        operation === 'pack'
-          ? await runPackRunDir(
-              executionId as ExecutionId,
-              agent,
-              model,
-              inputFile,
-            )
-          : await runCleanRunDir(executionId as ExecutionId);
-    } catch (error) {
+    const ran = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: () =>
+          operation === 'pack'
+            ? runPackRunDir(executionId as ExecutionId, agent, model, inputFile)
+            : runCleanRunDir(executionId as ExecutionId),
+        catch: (error) => error,
+      }),
+    );
+    if (Exit.isFailure(ran)) {
+      const error = Cause.squash(ran.cause);
       logger.error(`Desktop ${operation} operation failed`, {
         data: toLogData(error),
       });
@@ -375,7 +383,7 @@ export function createDesktopHostRequests(
         reason: `Error during ${operation}: ${toErrorMessage(error)}`,
       });
     }
-    await reportFileOperationResult(operation, result, inputFile);
+    await reportFileOperationResult(operation, ran.value, inputFile);
   }
 
   const workflowRunActions = new ProgressWorkflowRunActionsController({
@@ -386,19 +394,30 @@ export function createDesktopHostRequests(
 
   let chatExportControllerLoad: Promise<ChatExportController> | undefined;
   function getChatExportController(): Promise<ChatExportController> {
-    chatExportControllerLoad ??=
-      import('@controllers/progressView/ChatExportController')
-        .then(async ({ ChatExportController: Controller }) => {
-          const latexPreamble = await readFile(
-            path.join(options.resourcesPath, 'templates', 'chatExport.tex'),
-            'utf8',
-          );
-          return new Controller({ latexPreamble });
-        })
-        .catch((error: unknown) => {
+    chatExportControllerLoad ??= effectRuntime()
+      .runPromiseExit(
+        Effect.tryPromise({
+          try: async () => {
+            const { ChatExportController: Controller } =
+              await import('@controllers/progressView/ChatExportController');
+            const latexPreamble = await readFile(
+              path.join(options.resourcesPath, 'templates', 'chatExport.tex'),
+              'utf8',
+            );
+            return new Controller({ latexPreamble });
+          },
+          catch: (error) => error,
+        }),
+      )
+      .then((exit) => {
+        // A failed load clears the memo so the next export retries, and the
+        // caller sees the original failure, not the fold's envelope.
+        if (Exit.isFailure(exit)) {
           chatExportControllerLoad = undefined;
-          throw error;
-        });
+          throw Cause.squash(exit.cause);
+        }
+        return exit.value;
+      });
     return chatExportControllerLoad;
   }
 
@@ -622,10 +641,10 @@ export function createDesktopHostRequests(
         postDesktopSettingsView((message) => options.postToRenderer(message));
         return done;
       case 'refreshCommits':
-        await options.snapshot.refreshCommits();
+        await effectRuntime().runPromise(options.snapshot.refreshCommits);
         return done;
       case 'refreshFiles':
-        await options.snapshot.refreshFiles();
+        await effectRuntime().runPromise(options.snapshot.refreshFiles);
         return done;
       case 'openSettings':
         postDesktopSettingsView(
@@ -654,7 +673,9 @@ export function createDesktopHostRequests(
           ),
         };
       case 'launch':
-        await execution.runValidated(await prepareSurfaceLaunch(request, host));
+        await execution.runValidated(
+          await effectRuntime().runPromise(prepareSurfaceLaunch(request, host)),
+        );
         return done;
       case 'compileInputPdf':
         throw notOnDesktop('Compiling the input PDF');
@@ -723,38 +744,43 @@ export function createDesktopHostRequests(
 
   return {
     async handle(request, port) {
-      try {
-        return await dispatch(request, port);
-      } catch (error) {
-        if (error instanceof Cancelled) throw error;
-        // Request-scoped operations do not present. Every rejection, including
-        // a capability refusal, reaches this one dialog before the response.
-        const primaryError = primaryAgentError(error);
-        const presentation = agentErrorPresentation({
-          kind: classifyAgentError(primaryError),
-          message:
-            primaryError instanceof Rejected ||
-            primaryError instanceof Unavailable
-              ? primaryError.reason
-              : toErrorMessage(primaryError),
-        });
-        if (presentation?.type === 'instruction') {
-          await session.interactions.emit(
-            'requestShowInstruction',
-            presentation.payload,
-            { replayWhenAttached: true },
-          );
-        } else if (presentation?.type === 'error') {
-          await session.interactions.emit(
-            'requestShowError',
-            presentation.payload,
-            {
-              replayWhenAttached: true,
-            },
-          );
-        }
-        throw error;
+      const exit = await effectRuntime().runPromiseExit(
+        Effect.tryPromise({
+          try: () => dispatch(request, port),
+          catch: (error) => error,
+        }),
+      );
+      if (Exit.isSuccess(exit)) return exit.value;
+
+      const error = Cause.squash(exit.cause);
+      if (error instanceof Cancelled) throw error;
+      // Request-scoped operations do not present. Every rejection, including
+      // a capability refusal, reaches this one dialog before the response.
+      const primaryError = primaryAgentError(error);
+      const presentation = agentErrorPresentation({
+        kind: classifyAgentError(primaryError),
+        message:
+          primaryError instanceof Rejected ||
+          primaryError instanceof Unavailable
+            ? primaryError.reason
+            : toErrorMessage(primaryError),
+      });
+      if (presentation?.type === 'instruction') {
+        await session.interactions.emit(
+          'requestShowInstruction',
+          presentation.payload,
+          { replayWhenAttached: true },
+        );
+      } else if (presentation?.type === 'error') {
+        await session.interactions.emit(
+          'requestShowError',
+          presentation.payload,
+          {
+            replayWhenAttached: true,
+          },
+        );
       }
+      throw error;
     },
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,

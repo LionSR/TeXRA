@@ -1,4 +1,3 @@
-import type { LatexConfigValues } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**
@@ -55,10 +54,13 @@ export const LATEX_CONFIG_RANGES = {
 } as const;
 
 /**
- * Every frontend-facing LaTeX field → its canonical catalog key. Snapshot
- * payloads arrive under these keys, so latexSlice uses this map to project
- * them into frontend fields and LaTeXTab uses it for catalog-driven writes.
- * The coverage check keeps both directions aligned with the frontend model.
+ * Every frontend-facing LaTeX field → its canonical catalog key. This map is
+ * the field set: `LatexConfigValuesSchema` (`@shared/schemas`) is built by
+ * looking up each of these keys in the settings catalog and re-keying its
+ * schema under the frontend field name, so the projection can never drift
+ * from the catalog's own validators. `latexSlice` uses this map to build the
+ * projection at the wire boundary; `LaTeXTab` uses it for catalog-driven
+ * writes.
  */
 export const LATEX_CONFIG_FIELD_TO_KEY = {
   workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
@@ -77,4 +79,4 @@ export const LATEX_CONFIG_FIELD_TO_KEY = {
   enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
   customReplacementsRegex: 'texra.latex.customReplacementsRegex',
   customReplacements: 'texra.latex.customReplacements',
-} as const satisfies Record<keyof LatexConfigValues, string>;
+} as const;

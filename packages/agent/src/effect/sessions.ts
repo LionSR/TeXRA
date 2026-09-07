@@ -281,15 +281,15 @@ function admitInput(
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
     yield* admitTools(tools);
-    // The agent scan reads the configured directories through the
-    // platform, so it can fail on the environment. That is a failure of
-    // `start`, in the vocabulary the surface already names, not a defect
-    // an embedder's `catchTag` never sees.
-    yield* Effect.tryPromise({
-      try: () => loadAgents({ includeRemote: false }),
-      catch: (cause) =>
-        new RunFailure({ cause, message: toErrorMessage(cause) }),
-    });
+    yield* loadAgents({ includeRemote: false }).pipe(
+      Effect.mapError((cause) => {
+        // The agent scan reads the configured directories through the
+        // platform, so it can fail on the environment. That is a failure of
+        // `start`, in the vocabulary the surface already names, not a defect
+        // an embedder's `catchTag` never sees.
+        return new RunFailure({ cause, message: toErrorMessage(cause) });
+      }),
+    );
     const resolved = resolveAgent(input.agent);
     if (!resolved) {
       return yield* new AgentNotFound({

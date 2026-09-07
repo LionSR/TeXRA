@@ -9,6 +9,7 @@ import {
   computeSelectWindowSize,
   isCompactFormRows,
 } from '@cli/tui/selectWindow';
+import { effectRuntime } from '@platform/processRuntime';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas';
 
@@ -143,7 +144,9 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     title: '/agent',
     loadingLabel: 'Loading agents...',
     load: async () => {
-      const options = await computeAgentOptionsData();
+      const options = await effectRuntime().runPromise(
+        computeAgentOptionsData(),
+      );
       return { toolUse: options.toolUse, workflow: options.workflow };
     },
     isEmpty: (groups) => groups.toolUse.length === 0,

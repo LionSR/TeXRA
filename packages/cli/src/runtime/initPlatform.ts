@@ -10,6 +10,7 @@ import {
 import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
+import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { setOutputChannelFactory } from '@logger/logUtils';
@@ -90,11 +91,6 @@ function showLifecycleError(message: string): void {
   writeTextStderr(`[error] [cli.lifecycle] ${message}`);
 }
 
-/** `Effect.tryPromise` with the identity catch every Promise boundary below
- *  wants: the rejection value flows through unchanged as the error. */
-const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: run, catch: (error) => error });
-
 const cliPlatformLog: SupabaseSessionLog = {
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
@@ -124,12 +120,12 @@ export async function runCliPlatformShutdownSequence(
     Effect.gen(function* () {
       // Signal shutdown is best effort; output still gets one final flush.
       yield* Effect.ignoreCause(
-        tryPromise(() => lifecycle?.runShutdown() ?? Promise.resolve()),
+        hostPort(() => lifecycle?.runShutdown() ?? Promise.resolve()),
       );
       // A closed stderr pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(tryPromise(flushTextStderr));
+      yield* Effect.ignoreCause(hostPort(flushTextStderr));
       // A closed stdout pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(tryPromise(flushNdjsonStdout));
+      yield* Effect.ignoreCause(hostPort(flushNdjsonStdout));
     }),
   );
 }
@@ -338,7 +334,7 @@ export async function initCliPlatform(
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
     await effectRuntime().runPromise(
-      tryPromise(() => refreshModelListAndLog(stateStores.globalState)).pipe(
+      hostPort(() => refreshModelListAndLog(stateStores.globalState)).pipe(
         Effect.tap(({ messages }) =>
           Effect.sync(() => {
             for (const message of messages)

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import PQueue from 'p-queue';
+import { Cause, Deferred, Effect, Exit, Option } from 'effect';
 import { z } from 'zod';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -27,6 +27,7 @@ import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { TEXRA_PROTOCOL } from '../shared/desktopProtocol.js';
 import type {
   DesktopProtocolCallback,
@@ -34,6 +35,13 @@ import type {
 } from './desktopProtocolCallbacks.js';
 
 const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
+
+// Lane keys for the serialized auth work below: pending-state persists,
+// session commits, and protocol callbacks each run on their own exclusive
+// lane.
+const AUTH_PERSIST_LANE = 'persist';
+const AUTH_COMMIT_LANE = 'commit';
+const AUTH_CALLBACK_LANE = 'callback';
 
 const DesktopPendingOAuthStateSchema = z.object({
   createdAt: z.number(),
@@ -108,20 +116,82 @@ export interface DesktopAuthCoordinator {
   ): Promise<SupabaseCallbackResult>;
 }
 
+/**
+ * Settle one lane Effect as this module's Promise surface: the `Exit` fold
+ * re-throws the original error, so a caller sees the same rejection the
+ * queued job produced before the lanes were Effect programs.
+ */
+async function runSettled<A>(effect: Effect.Effect<A, unknown>): Promise<A> {
+  const exit = await effectRuntime().runPromiseExit(effect);
+  if (Exit.isSuccess(exit)) return exit.value;
+  throw Cause.squash(exit.cause);
+}
+
+/**
+ * Fire-and-forget cleanup: the caller's flow continues whether or not the
+ * work lands, and a failure leaves only the debug trace.
+ */
+function runCleanupDetached(
+  log: DesktopAuthLog,
+  cleanup: () => Promise<unknown>,
+  failureMessage: string,
+): void {
+  effectRuntime().runFork(
+    Effect.tryPromise({ try: cleanup, catch: (error) => error }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          log.debug(`${failureMessage}: ${toErrorMessage(error)}`);
+        }),
+      ),
+    ),
+  );
+}
+
+/**
+ * Best-effort host notifications: deliver, and warn with the surface's own
+ * error when the dialog host is already gone.
+ */
+async function warnOnNotificationFailure(
+  log: DesktopAuthLog,
+  notify: () => unknown,
+  failureMessage: string,
+): Promise<void> {
+  const notified = await effectRuntime().runPromiseExit(
+    Effect.tryPromise({ try: async () => notify(), catch: (error) => error }),
+  );
+  if (Exit.isFailure(notified)) {
+    log.warn(
+      `${failureMessage}: ${toErrorMessage(Cause.squash(notified.cause))}`,
+    );
+  }
+}
+
 export function createDesktopAuthCallbackState(
   log: DesktopAuthLog,
   store?: Pick<StateStore, 'get' | 'update'>,
 ): DesktopAuthCallbackState {
   let pendingState = readPendingOAuthState(store);
-  const persistQueue = new PQueue({ concurrency: 1 });
+  // One exclusive persist lane, so an expired-state clear cannot be
+  // reordered after a newer attempt's persist.
+  const persistLanes = new Map<string, PerKeyLane>();
+  const persistEffect = (state: DesktopPendingOAuthState | null) =>
+    withPerKeyLane(
+      persistLanes,
+      AUTH_PERSIST_LANE,
+    )(
+      Effect.tryPromise({
+        try: () =>
+          store?.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state) ??
+          Promise.resolve(),
+        catch: (error) => error,
+      }),
+    );
 
   const persistPendingState = async (
     state: DesktopPendingOAuthState | null,
   ): Promise<void> => {
     if (!store) return;
-    await persistQueue.add(() =>
-      store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
-    );
+    await runSettled(persistEffect(state));
   };
 
   // A dropped persist leaves the expired nonce on disk; in-memory state is
@@ -129,11 +199,18 @@ export function createDesktopAuthCallbackState(
   // record has a trace rather than appearing out of nowhere.
   const forgetExpiredPendingState = (): void => {
     pendingState = null;
-    void persistPendingState(null).catch((error: unknown) => {
-      log.debug(
-        `Desktop pending OAuth state cleanup failed: ${toErrorMessage(error)}`,
-      );
-    });
+    if (!store) return;
+    effectRuntime().runFork(
+      persistEffect(null).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            log.debug(
+              `Desktop pending OAuth state cleanup failed: ${toErrorMessage(error)}`,
+            );
+          }),
+        ),
+      ),
+    );
   };
 
   if (pendingState && isPendingOAuthStateExpired(pendingState)) {
@@ -201,17 +278,21 @@ export function createDesktopSupabaseAuth(
 ): DesktopSupabaseAuth {
   const { callbackState, coordinator, host, log, oauthClient, router } =
     options;
-  // Serialized so a second deeplink cannot commit a session while the first is
-  // still storing one.
-  const callbackQueue = new PQueue({ concurrency: 1 });
+  // The callback lane keeps a second deeplink from committing a session while
+  // the first is still storing one; the commit lane serializes session
+  // storage writes. The lane map itself answers "is a callback in flight",
+  // which the queue's `pending` count answered before.
+  const authLanes = new Map<string, PerKeyLane>();
   let activeAttempt: DesktopAuthAttempt | undefined;
   const ownsAttempt = (attempt: DesktopAuthAttempt): boolean =>
     activeAttempt === attempt;
-  const authCommitQueue = new PQueue({ concurrency: 1 });
-  // `add` widens to `T | void` to cover abort via signal/timeout; we pass
-  // neither, so the task always runs and resolves with `T`.
   const runAuthCommit = <T>(commit: () => Promise<T>): Promise<T> =>
-    authCommitQueue.add(commit) as Promise<T>;
+    runSettled(
+      withPerKeyLane(
+        authLanes,
+        AUTH_COMMIT_LANE,
+      )(Effect.tryPromise({ try: commit, catch: (error) => error })),
+    );
   const invalidateActiveAttempt = (): void => {
     const superseded = activeAttempt;
     activeAttempt = undefined;
@@ -226,55 +307,67 @@ export function createDesktopSupabaseAuth(
       activeAttempt = undefined;
     }
   };
-  const waitForCompletion = (attempt: DesktopAuthAttempt, timeoutMs: number) =>
-    new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => {
+  const waitForCompletion = (
+    attempt: DesktopAuthAttempt,
+    timeoutMs: number,
+  ): Promise<boolean> => {
+    // First completion wins: the attempt's own settle, or the timeout. The
+    // timeout's sleep belongs to the waiting fiber, so a settle cancels it —
+    // no timer outlives its attempt, and none is left over to clear a later
+    // attempt's pending callback state.
+    const outcome = Deferred.makeUnsafe<boolean>();
+    attempt.settle = (success) => {
+      Deferred.doneUnsafe(outcome, Effect.succeed(success));
+    };
+    return runSettled(
+      Effect.gen(function* () {
+        const settled = yield* Deferred.await(outcome).pipe(
+          Effect.timeoutOption(timeoutMs),
+        );
+        if (Option.isSome(settled)) return settled.value;
         const wasOwned = ownsAttempt(attempt);
         settleAttempt(attempt, false);
         if (wasOwned) {
-          void callbackState
-            .clearAwaitingCallback(attempt.nonce)
-            .catch((error: unknown) => {
-              log.debug(
-                `Desktop sign-in timeout cleanup failed: ${toErrorMessage(error)}`,
-              );
-            });
+          runCleanupDetached(
+            log,
+            () => callbackState.clearAwaitingCallback(attempt.nonce),
+            'Desktop sign-in timeout cleanup failed',
+          );
         }
-      }, timeoutMs);
-      let settled = false;
-      attempt.settle = (success) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        resolve(success);
-      };
-    });
+        return false;
+      }),
+    );
+  };
   const runQueuedCallback = async (queued: {
     callback: DesktopProtocolCallback;
     attempt: DesktopAuthAttempt;
   }): Promise<void> => {
-    try {
-      const success = await processProtocolCallback(
-        coordinator,
-        queued.callback,
-        host,
-        log,
-        () => ownsAttempt(queued.attempt),
-        runAuthCommit,
-      );
-      settleAttempt(queued.attempt, success);
-    } catch (error) {
-      settleAttempt(queued.attempt, false);
-      const message = toErrorMessage(error);
-      log.error(`Desktop auth callback failed: ${message}`);
-      try {
-        await host.showErrorMessage(`Sign-in failed: ${message}`);
-      } catch (notificationError) {
-        log.warn(
-          `Desktop sign-in error notification failed: ${toErrorMessage(notificationError)}`,
-        );
-      }
+    const processed = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: () =>
+          processProtocolCallback(
+            coordinator,
+            queued.callback,
+            host,
+            log,
+            () => ownsAttempt(queued.attempt),
+            runAuthCommit,
+          ),
+        catch: (error) => error,
+      }),
+    );
+    if (Exit.isSuccess(processed)) {
+      settleAttempt(queued.attempt, processed.value);
+      return;
     }
+    settleAttempt(queued.attempt, false);
+    const message = toErrorMessage(Cause.squash(processed.cause));
+    log.error(`Desktop auth callback failed: ${message}`);
+    await warnOnNotificationFailure(
+      log,
+      () => host.showErrorMessage(`Sign-in failed: ${message}`),
+      'Desktop sign-in error notification failed',
+    );
   };
   const subscription = router.subscribe((callback) => {
     if (!callbackState.hasPendingSignIn()) {
@@ -293,22 +386,59 @@ export function createDesktopSupabaseAuth(
     activeAttempt ??= createAuthAttempt(callbackNonce);
     const claimedAttempt = activeAttempt;
     if (claimedAttempt.nonce !== callbackNonce) return;
-    void callbackState
-      .clearAwaitingCallback(callbackNonce)
-      .catch((error: unknown) => {
-        log.debug(
-          `Desktop auth callback state clear failed: ${toErrorMessage(error)}`,
-        );
-      });
-    if (callbackQueue.pending > 0) {
+    runCleanupDetached(
+      log,
+      () => callbackState.clearAwaitingCallback(callbackNonce),
+      'Desktop auth callback state clear failed',
+    );
+    if (authLanes.has(AUTH_CALLBACK_LANE)) {
       log.debug(
         'Desktop auth callback queued while another callback is being processed',
       );
     }
-    void callbackQueue.add(() =>
-      runQueuedCallback({ callback, attempt: claimedAttempt }),
+    effectRuntime().runFork(
+      withPerKeyLane(
+        authLanes,
+        AUTH_CALLBACK_LANE,
+      )(
+        Effect.promise(() =>
+          runQueuedCallback({ callback, attempt: claimedAttempt }),
+        ),
+      ),
     );
   });
+
+  const startSignInAttempt = async (
+    provider: OAuthProvider,
+    attempt: DesktopAuthAttempt,
+  ): Promise<void> => {
+    // Drain the commit lane before claiming the attempt, so a callback still
+    // storing or clearing a session finishes against the attempt it owns.
+    await runAuthCommit(async () => {});
+    if (!ownsAttempt(attempt)) return;
+
+    // Bind this attempt to a one-time nonce carried on the callback URL.
+    // Supabase preserves redirect_to query params through to the callback
+    // (the same mechanism the Codespaces ?state= routing token relies on),
+    // so the nonce returns in the texra:// callback query — letting us reject
+    // a foreign token deeplink delivered while a sign-in is merely pending.
+    const callbackUri = getAuthCallbackUri(TEXRA_PROTOCOL);
+    const sep = callbackUri.includes('?') ? '&' : '?';
+    const redirectTo = `${callbackUri}${sep}app_nonce=${attempt.nonce}`;
+    await callbackState.beginAuthAttempt(attempt.nonce);
+    if (!ownsAttempt(attempt)) return;
+    const { data, error } = await oauthClient.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo },
+    });
+    const authUrl = requireOAuthRedirectUrl(data, error);
+    if (!ownsAttempt(attempt)) return;
+
+    await host.openExternalUrl(authUrl);
+    await host.showInfoMessage(
+      'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
+    );
+  };
 
   const startSignIn = async (
     provider: OAuthProvider,
@@ -319,37 +449,16 @@ export function createDesktopSupabaseAuth(
     const attempt = createAuthAttempt(nonce);
     activeAttempt = attempt;
     onAttempt?.(attempt);
-    try {
-      // Drain the commit queue before claiming the attempt, so a callback still
-      // storing or clearing a session finishes against the attempt it owns.
-      await runAuthCommit(async () => {});
-      if (!ownsAttempt(attempt)) return;
-
-      // Bind this attempt to a one-time nonce carried on the callback URL.
-      // Supabase preserves redirect_to query params through to the callback
-      // (the same mechanism the Codespaces ?state= routing token relies on),
-      // so the nonce returns in the texra:// callback query — letting us reject
-      // a foreign token deeplink delivered while a sign-in is merely pending.
-      const callbackUri = getAuthCallbackUri(TEXRA_PROTOCOL);
-      const sep = callbackUri.includes('?') ? '&' : '?';
-      const redirectTo = `${callbackUri}${sep}app_nonce=${nonce}`;
-      await callbackState.beginAuthAttempt(nonce);
-      if (!ownsAttempt(attempt)) return;
-      const { data, error } = await oauthClient.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo },
-      });
-      const authUrl = requireOAuthRedirectUrl(data, error);
-      if (!ownsAttempt(attempt)) return;
-
-      await host.openExternalUrl(authUrl);
-      await host.showInfoMessage(
-        'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
-      );
-    } catch (error) {
+    const started = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: () => startSignInAttempt(provider, attempt),
+        catch: (error) => error,
+      }),
+    );
+    if (Exit.isFailure(started)) {
       if (ownsAttempt(attempt)) activeAttempt = undefined;
       await callbackState.clearAwaitingCallback(nonce);
-      throw error;
+      throw Cause.squash(started.cause);
     }
   };
 
@@ -364,17 +473,22 @@ export function createDesktopSupabaseAuth(
     ) {
       let startedAttempt: DesktopAuthAttempt | undefined;
       let completion: Promise<boolean> | undefined;
-      try {
-        await startSignIn(provider, (attempt) => {
-          startedAttempt = attempt;
-          completion = waitForCompletion(
-            attempt,
-            waitOptions.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS,
-          );
-        });
-      } catch (error) {
+      const started = await effectRuntime().runPromiseExit(
+        Effect.tryPromise({
+          try: () =>
+            startSignIn(provider, (attempt) => {
+              startedAttempt = attempt;
+              completion = waitForCompletion(
+                attempt,
+                waitOptions.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS,
+              );
+            }),
+          catch: (error) => error,
+        }),
+      );
+      if (Exit.isFailure(started)) {
         startedAttempt?.settle(false);
-        throw error;
+        throw Cause.squash(started.cause);
       }
       return completion ?? false;
     },
@@ -386,7 +500,7 @@ export function createDesktopSupabaseAuth(
         await coordinator.clearSession();
       });
       await refreshRemoteAgentCatalogAfterSignOut(
-        invalidateRemoteAgentsAfterSignOut,
+        () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
         (message) => log.warn(message),
       );
       await host.onSessionChanged();
@@ -440,13 +554,11 @@ async function processProtocolCallback(
         log.info('Desktop sign-in was cancelled in the system browser');
         return false;
       }
-      try {
-        await host.showErrorMessage(`Sign-in failed: ${result.error}`);
-      } catch (error) {
-        log.warn(
-          `Desktop sign-in error notification failed: ${toErrorMessage(error)}`,
-        );
-      }
+      await warnOnNotificationFailure(
+        log,
+        () => host.showErrorMessage(`Sign-in failed: ${result.error}`),
+        'Desktop sign-in error notification failed',
+      );
     } else {
       log.debug(`Desktop auth callback ignored: ${result.error}`);
     }
@@ -466,20 +578,19 @@ async function processProtocolCallback(
     await coordinator.storeSession(result.session);
     if (!(await stillOwned())) return false;
 
-    try {
-      await host.showInfoMessage(
-        `Signed in as ${result.session.account.label}`,
-      );
-    } catch (error) {
-      log.warn(`Desktop sign-in notification failed: ${toErrorMessage(error)}`);
-    }
+    await warnOnNotificationFailure(
+      log,
+      () =>
+        host.showInfoMessage(`Signed in as ${result.session.account.label}`),
+      'Desktop sign-in notification failed',
+    );
     if (!(await stillOwned())) return false;
 
-    try {
-      await host.onSessionChanged();
-    } catch (error) {
-      log.warn(`Desktop auth surface refresh failed: ${toErrorMessage(error)}`);
-    }
+    await warnOnNotificationFailure(
+      log,
+      () => host.onSessionChanged(),
+      'Desktop auth surface refresh failed',
+    );
     return stillOwned();
   });
 }

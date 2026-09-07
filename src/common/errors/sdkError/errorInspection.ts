@@ -89,11 +89,7 @@ export function matchUsageLimitMessage(
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 export function safeGetReasonPhrase(statusCode: number): string | undefined {
-  try {
-    return getReasonPhrase(statusCode);
-  } catch {
-    return undefined;
-  }
+  return Result.getOrUndefined(Result.try(() => getReasonPhrase(statusCode)));
 }
 
 export function getErrorClassNames(err: unknown): string[] {

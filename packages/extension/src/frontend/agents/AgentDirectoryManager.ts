@@ -3,8 +3,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Cause, Effect, Exit } from 'effect';
 import * as vscode from 'vscode';
-import PQueue from 'p-queue';
 
 // Local imports
 import {
@@ -17,13 +17,29 @@ import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
 import { platform, tryGlobalState } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentLoad';
 const log = createLog(CHANNEL);
+
+const AGENT_WATCHER_REBUILD_LANE = 'agent-watcher-rebuild';
+
+/**
+ * Settle one watcher-lane Effect back to this module's Promise surface: the
+ * `Exit` fold re-throws the original error, as the queued rebuild did.
+ */
+async function runSettledEffect<A>(
+  effect: Effect.Effect<A, unknown>,
+): Promise<A> {
+  const exit = await effectRuntime().runPromiseExit(effect);
+  if (Exit.isSuccess(exit)) return exit.value;
+  throw Cause.squash(exit.cause);
+}
 
 class AgentDirectoryManager {
   private directoryService: AgentDirectoryService | undefined;
@@ -32,7 +48,7 @@ class AgentDirectoryManager {
   private onAgentYamlChange: (() => void) | undefined;
   private externalWatcherDirectoryPaths = new Set<string>();
   private watcherDirectories: AgentDirectoryEntry[] | null = null;
-  private readonly watcherRebuilds = new PQueue({ concurrency: 1 });
+  private readonly watcherRebuildLanes = new Map<string, PerKeyLane>();
 
   initialize(): void {
     this.directoryService = createPlatformAgentDirectories({
@@ -137,40 +153,61 @@ class AgentDirectoryManager {
   }
 
   /**
-   * The rebuild queue is the only writer of the watcher set and of the cached
+   * The rebuild lane is the only writer of the watcher set and of the cached
    * directory list. One rebuild runs at a time and at most one waits behind
    * it: a request arriving while a rebuild runs is answered by the waiting
    * one, which reads the directory list after the running rebuild has settled.
-   * Disposal never discards queued rebuilds, so every caller awaiting one
-   * settles; a rebuild that starts with no subscriber left has nothing to
-   * watch and returns.
+   * A claimed lane is never discarded, so every caller awaiting one settles;
+   * a rebuild that starts with no subscriber left has nothing to watch and
+   * returns.
    */
   private async ensureAgentWatchers(): Promise<void> {
-    if (this.watcherRebuilds.size > 0) {
-      await this.watcherRebuilds.onIdle();
+    const lane = this.watcherRebuildLanes.get(AGENT_WATCHER_REBUILD_LANE);
+    if (lane && lane.fibers > 1) {
+      // A rebuild is running and another is already waiting behind it, so the
+      // waiting one answers this request too. Claim the lane with no work to
+      // wait for both — what awaiting the queue's idle did.
+      await runSettledEffect(
+        withPerKeyLane(
+          this.watcherRebuildLanes,
+          AGENT_WATCHER_REBUILD_LANE,
+        )(Effect.void),
+      );
       return;
     }
 
-    await this.watcherRebuilds.add(async () => {
-      if (!this.onAgentYamlChange) {
-        return;
-      }
+    await runSettledEffect(
+      withPerKeyLane(
+        this.watcherRebuildLanes,
+        AGENT_WATCHER_REBUILD_LANE,
+      )(
+        Effect.tryPromise({
+          try: () => this.rebuildAgentWatchers(),
+          catch: (error) => error,
+        }),
+      ),
+    );
+  }
 
-      const directories = await this.getDirectoryService().getAllLocal();
-      if (!this.onAgentYamlChange) {
-        return;
-      }
-      const cached = this.watcherDirectories;
-      this.watcherDirectories = directories;
-      if (cached && this.sameDirectories(cached, directories)) {
-        return;
-      }
+  private async rebuildAgentWatchers(): Promise<void> {
+    if (!this.onAgentYamlChange) {
+      return;
+    }
 
-      await this.buildAgentWatchers(directories);
-      if (!this.onAgentYamlChange) {
-        this.disposeAgentWatchers();
-      }
-    });
+    const directories = await this.getDirectoryService().getAllLocal();
+    if (!this.onAgentYamlChange) {
+      return;
+    }
+    const cached = this.watcherDirectories;
+    this.watcherDirectories = directories;
+    if (cached && this.sameDirectories(cached, directories)) {
+      return;
+    }
+
+    await this.buildAgentWatchers(directories);
+    if (!this.onAgentYamlChange) {
+      this.disposeAgentWatchers();
+    }
   }
 
   private async buildAgentWatchers(
@@ -291,15 +328,19 @@ class AgentDirectoryManager {
       visitedRealPaths.add(realPath);
       directories.push(uri);
 
-      let entries: [string, vscode.FileType][];
-      try {
-        entries = await vscode.workspace.fs.readDirectory(uri);
-      } catch (error) {
+      const listed = await effectRuntime().runPromiseExit(
+        Effect.tryPromise({
+          try: () => vscode.workspace.fs.readDirectory(uri),
+          catch: (error) => error,
+        }),
+      );
+      if (Exit.isFailure(listed)) {
         log.debug(
-          `Unable to scan agent directory ${uri.fsPath}: ${toErrorMessage(error)}`,
+          `Unable to scan agent directory ${uri.fsPath}: ${toErrorMessage(Cause.squash(listed.cause))}`,
         );
         continue;
       }
+      const entries = listed.value;
 
       for (const [name, type] of entries) {
         if ((type & vscode.FileType.Directory) !== 0) {
@@ -344,17 +385,20 @@ class AgentDirectoryManager {
     directories: readonly vscode.Uri[],
   ): Promise<void> {
     for (const directory of directories) {
-      let files: [string, vscode.FileType][];
-      try {
-        files = await vscode.workspace.fs.readDirectory(directory);
-      } catch (error) {
+      const listed = await effectRuntime().runPromiseExit(
+        Effect.tryPromise({
+          try: () => vscode.workspace.fs.readDirectory(directory),
+          catch: (error) => error,
+        }),
+      );
+      if (Exit.isFailure(listed)) {
         log.debug(
-          `Unable to scan new agent directory ${directory.fsPath}: ${toErrorMessage(error)}`,
+          `Unable to scan new agent directory ${directory.fsPath}: ${toErrorMessage(Cause.squash(listed.cause))}`,
         );
         continue;
       }
 
-      for (const [name, type] of files) {
+      for (const [name, type] of listed.value) {
         if ((type & vscode.FileType.File) !== 0 && name.endsWith('.yaml')) {
           this.onAgentYamlChange?.();
         }
@@ -363,28 +407,45 @@ class AgentDirectoryManager {
   }
 
   private scheduleAgentWatcherSetup(): void {
-    void this.ensureAgentWatchers().catch((error) => {
-      log.error(
-        `Failed to refresh agent directory watchers: ${toErrorMessage(error)}`,
-      );
-    });
+    effectRuntime().runFork(
+      Effect.tryPromise({
+        try: () => this.ensureAgentWatchers(),
+        catch: (error) => error,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            log.error(
+              `Failed to refresh agent directory watchers: ${toErrorMessage(error)}`,
+            );
+          }),
+        ),
+      ),
+    );
   }
 
   private async isDirectoryUri(uri: vscode.Uri): Promise<boolean> {
-    try {
-      const stat = await vscode.workspace.fs.stat(uri);
-      return (stat.type & vscode.FileType.Directory) !== 0;
-    } catch {
-      return false;
-    }
+    const stat = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: () => vscode.workspace.fs.stat(uri),
+        catch: (error) => error,
+      }),
+    );
+    return (
+      Exit.isSuccess(stat) &&
+      (stat.value.type & vscode.FileType.Directory) !== 0
+    );
   }
 
   private async realDirectoryPath(uri: vscode.Uri): Promise<string> {
-    try {
-      return await fs.realpath(uri.fsPath);
-    } catch {
-      return this.normalizeFsPath(uri.fsPath);
-    }
+    const realPath = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: () => fs.realpath(uri.fsPath),
+        catch: (error) => error,
+      }),
+    );
+    return Exit.isSuccess(realPath)
+      ? realPath.value
+      : this.normalizeFsPath(uri.fsPath);
   }
 
   private normalizeFsPath(fsPath: string): string {

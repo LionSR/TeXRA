@@ -14,6 +14,7 @@ import {
   runInSession,
   type SessionHandle,
 } from '@agent/runtime';
+import { hostPort } from '@common/hostPort';
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { DisposableStore } from '@platform/disposable';
@@ -329,14 +330,12 @@ export async function openDesktopPaperRegistry(
     const remembered = readRememberedPapers(options.globalState, options.warn);
     if (remembered.at(-1) === root) return;
     effectRuntime().runFork(
-      Effect.tryPromise({
-        try: () =>
-          writeRememberedPapers(options.globalState, [
-            ...remembered.filter((entry) => entry !== root),
-            root,
-          ]),
-        catch: (error) => error,
-      }).pipe(
+      hostPort(() =>
+        writeRememberedPapers(options.globalState, [
+          ...remembered.filter((entry) => entry !== root),
+          root,
+        ]),
+      ).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
             options.warn(
@@ -430,14 +429,9 @@ export async function openDesktopPaperRegistry(
       const failures: string[] = [];
       for (const paper of [fallback, ...papers.values()]) {
         await effectRuntime().runPromise(
-          Effect.tryPromise({
-            try: async () => {
-              await runInSession(paper.session, () =>
-                paper.session.flushArtifacts(),
-              );
-            },
-            catch: (error) => error,
-          }).pipe(
+          hostPort(() =>
+            runInSession(paper.session, () => paper.session.flushArtifacts()),
+          ).pipe(
             Effect.catch((error) =>
               Effect.sync(() => {
                 failures.push(
