@@ -157,8 +157,12 @@ export async function initializeElectronPlatform(
   // carries an undefined host/version, so a queue shorter than one batch is
   // lost at quit — including plan accounting. `dispose()` drains it, from the
   // same BEFORE phase the other two hosts use.
-  UsageLogService.initialize({}, app.getVersion(), 'desktop');
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
+  await effectRuntime().runPromise(
+    UsageLogService.initialize({}, app.getVersion(), 'desktop'),
+  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    effectRuntime().runPromise(UsageLogService.dispose()),
+  );
 
   // Reconcile the persisted enabled-models list against the current curated
   // defaults, as the extension and CLI hosts do at startup. Preferred defaults

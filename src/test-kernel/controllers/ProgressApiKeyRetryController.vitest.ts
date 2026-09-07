@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -51,8 +52,40 @@ interface HarnessOptions {
   restoreChatGptSubscription?(enabled: boolean): Promise<void>;
 }
 
+/**
+ * The controller behind its host's run edge: the three arms are Effects the
+ * host arm that took the request runs, so the harness runs them here.
+ */
+interface RetryControllerAtRunEdge {
+  useOwnApiKey(
+    ...args: Parameters<ProgressApiKeyRetryController['useOwnApiKey']>
+  ): Promise<void>;
+  ensureOwnApiKey(
+    ...args: Parameters<ProgressApiKeyRetryController['ensureOwnApiKey']>
+  ): Promise<boolean>;
+  runCopilotFallbackWithRouting(
+    ...args: Parameters<
+      ProgressApiKeyRetryController['runCopilotFallbackWithRouting']
+    >
+  ): Promise<boolean>;
+}
+
+/** Run each arm where its host would: at the host's request edge. */
+function atRunEdge(
+  controller: ProgressApiKeyRetryController,
+): RetryControllerAtRunEdge {
+  return {
+    useOwnApiKey: (...args) =>
+      Effect.runPromise(controller.useOwnApiKey(...args)),
+    ensureOwnApiKey: (...args) =>
+      Effect.runPromise(controller.ensureOwnApiKey(...args)),
+    runCopilotFallbackWithRouting: (...args) =>
+      Effect.runPromise(controller.runCopilotFallbackWithRouting(...args)),
+  };
+}
+
 function createHarness(options: HarnessOptions = {}): {
-  controller: ProgressApiKeyRetryController;
+  controller: RetryControllerAtRunEdge;
   keys: Map<ApiProvider, string | undefined>;
   prompts: Array<ApiProvider | undefined>;
   chatGptSubscriptionValues: boolean[];
@@ -85,73 +118,75 @@ function createHarness(options: HarnessOptions = {}): {
     kimiCodeValues,
     grokSubscriptionValues,
     retries,
-    controller: new ProgressApiKeyRetryController({
-      providers: PROVIDERS,
-      readKey: async (provider) => keys.get(provider),
-      hasUsableKey: async (provider) =>
-        (keys.get(provider)?.trim().length ?? 0) > 0,
-      promptForApiKey: async (provider) => {
-        prompts.push(provider);
-        options.prompt?.(keys);
-      },
-      quotaFallbackRuntimes: [
-        testRuntime(
-          {
-            id: 'chatgpt',
-            exhaustionReason: 'chatgpt-subscription',
-            fallbackApiProvider: 'openai',
-          },
-          () => preferChatGptSubscription,
-          async (enabled) => {
-            preferChatGptSubscription = enabled;
-            chatGptSubscriptionValues.push(enabled);
-          },
-          options.restoreChatGptSubscription,
-        ),
-        testRuntime(
-          {
-            id: 'grok',
-            exhaustionReason: 'xai-subscription',
-            fallbackApiProvider: 'xai',
-          },
-          () => preferGrokSubscription,
-          async (enabled) => {
-            preferGrokSubscription = enabled;
-            grokSubscriptionValues.push(enabled);
-          },
-        ),
-        testRuntime(
-          {
-            id: 'glmCodingPlan',
-            exhaustionReason: 'glm-coding-plan',
-          },
-          () => glmCodingPlan,
-          async (enabled) => {
-            glmCodingPlan = enabled;
-            glmCodingPlanValues.push(enabled);
-          },
-        ),
-        testRuntime(
-          {
-            id: 'kimiCode',
-            exhaustionReason: 'kimi-code-subscription',
-          },
-          () => kimiCode,
-          async (enabled) => {
-            kimiCode = enabled;
-            kimiCodeValues.push(enabled);
-          },
-        ),
-      ],
-      isRetryPending:
-        options.isRetryPending ?? (() => options.retryPending ?? true),
-      triggerRetry:
-        options.triggerRetry ??
-        ((stream) => {
-          retries.push(stream);
-          return options.retryAvailable ?? true;
-        }),
-    }),
+    controller: atRunEdge(
+      new ProgressApiKeyRetryController({
+        providers: PROVIDERS,
+        readKey: async (provider) => keys.get(provider),
+        hasUsableKey: async (provider) =>
+          (keys.get(provider)?.trim().length ?? 0) > 0,
+        promptForApiKey: async (provider) => {
+          prompts.push(provider);
+          options.prompt?.(keys);
+        },
+        quotaFallbackRuntimes: [
+          testRuntime(
+            {
+              id: 'chatgpt',
+              exhaustionReason: 'chatgpt-subscription',
+              fallbackApiProvider: 'openai',
+            },
+            () => preferChatGptSubscription,
+            async (enabled) => {
+              preferChatGptSubscription = enabled;
+              chatGptSubscriptionValues.push(enabled);
+            },
+            options.restoreChatGptSubscription,
+          ),
+          testRuntime(
+            {
+              id: 'grok',
+              exhaustionReason: 'xai-subscription',
+              fallbackApiProvider: 'xai',
+            },
+            () => preferGrokSubscription,
+            async (enabled) => {
+              preferGrokSubscription = enabled;
+              grokSubscriptionValues.push(enabled);
+            },
+          ),
+          testRuntime(
+            {
+              id: 'glmCodingPlan',
+              exhaustionReason: 'glm-coding-plan',
+            },
+            () => glmCodingPlan,
+            async (enabled) => {
+              glmCodingPlan = enabled;
+              glmCodingPlanValues.push(enabled);
+            },
+          ),
+          testRuntime(
+            {
+              id: 'kimiCode',
+              exhaustionReason: 'kimi-code-subscription',
+            },
+            () => kimiCode,
+            async (enabled) => {
+              kimiCode = enabled;
+              kimiCodeValues.push(enabled);
+            },
+          ),
+        ],
+        isRetryPending:
+          options.isRetryPending ?? (() => options.retryPending ?? true),
+        triggerRetry:
+          options.triggerRetry ??
+          ((stream) => {
+            retries.push(stream);
+            return options.retryAvailable ?? true;
+          }),
+      }),
+    ),
   };
 }
 
