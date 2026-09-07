@@ -16,7 +16,7 @@
  * run edge.
  */
 
-import { Data, Duration, Effect, Random, Schedule } from 'effect';
+import { Data, Duration, Effect, Random, Schedule, Scope } from 'effect';
 import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
 
@@ -92,7 +92,7 @@ function isTransientRequestError(error: RequestError): boolean {
  * are not converted into request failures.
  */
 export const withRequestTimeout = Effect.fn('timeouts.withRequestTimeout')(
-  <T, E, R>(timeoutMs: number, request: Effect.Effect<T, E, R>) =>
+  <T, E, R>(timeoutMs: number, request: Effect.Effect<T, E, R | Scope.Scope>) =>
     Effect.scoped(request).pipe(
       Effect.mapError(
         (cause) => new RequestFailed({ message: toErrorMessage(cause), cause }),
