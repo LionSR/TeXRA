@@ -683,6 +683,7 @@ export function openaiChatModel(
           let usage: TurnResult['usage'] = null;
           let choiceUsage: TurnResult['usage'] = null;
           let reasoning: string | undefined;
+          let activePhase: 'reasoning' | 'text' | undefined;
           let receivedSentinel = false;
           const content: Array<{ kind: 'text' | 'refusal'; text: string }> = [];
           const calls = new Map<
@@ -866,8 +867,6 @@ export function openaiChatModel(
                 ) {
                   const text = choice.delta.reasoning_content;
                   reasoning = (reasoning ?? '') + text;
-                  if (text !== '')
-                    events.push({ kind: 'delta', part: 'reasoning', text });
                 }
                 if (
                   turn.protocol !== 'openai-chat' &&
@@ -880,14 +879,39 @@ export function openaiChatModel(
                   });
                 }
                 for (const [part, text] of [
+                  ['reasoning', choice.delta.reasoning_content],
                   ['text', choice.delta.content],
                   ['refusal', choice.delta.refusal],
                 ] as const) {
                   if (text == null || text === '') continue;
-                  const previous = content.at(-1);
-                  if (previous?.kind === part) previous.text += text;
-                  else content.push({ kind: part, text });
-                  events.push({ kind: 'delta', part, text });
+                  const phase = part === 'reasoning' ? 'reasoning' : 'text';
+                  if (activePhase !== phase) {
+                    if (activePhase !== undefined)
+                      events.push({
+                        kind: 'phase',
+                        part: activePhase,
+                        boundary: 'end',
+                        providerItemIndex: null,
+                      });
+                    events.push({
+                      kind: 'phase',
+                      part: phase,
+                      boundary: 'start',
+                      providerItemIndex: null,
+                    });
+                    activePhase = phase;
+                  }
+                  if (part !== 'reasoning') {
+                    const previous = content.at(-1);
+                    if (previous?.kind === part) previous.text += text;
+                    else content.push({ kind: part, text });
+                  }
+                  events.push({
+                    kind: 'delta',
+                    part,
+                    text,
+                    providerItemIndex: null,
+                  });
                 }
                 for (const delta of choice.delta.tool_calls ?? []) {
                   const call = calls.get(delta.index) ?? { arguments: '' };
@@ -910,6 +934,18 @@ export function openaiChatModel(
                   call.type = delta.type ?? call.type;
                   call.arguments += delta.function?.arguments ?? '';
                   calls.set(delta.index, call);
+                }
+                if (
+                  choice.delta.tool_calls?.length &&
+                  activePhase !== undefined
+                ) {
+                  events.push({
+                    kind: 'phase',
+                    part: activePhase,
+                    boundary: 'end',
+                    providerItemIndex: null,
+                  });
+                  activePhase = undefined;
                 }
                 if (choice.finish_reason !== null) {
                   switch (choice.finish_reason) {
@@ -1032,9 +1068,18 @@ export function openaiChatModel(
                   cause: parsedResult.error,
                 });
               }
-              return { kind: 'completed', result: parsedResult.data } as const;
+              const events: TurnEvent[] = [];
+              if (activePhase !== undefined)
+                events.push({
+                  kind: 'phase',
+                  part: activePhase,
+                  boundary: 'end',
+                  providerItemIndex: null,
+                });
+              events.push({ kind: 'completed', result: parsedResult.data });
+              return events;
             }),
-          );
+          ).pipe(Stream.flattenIterable);
           // Enrich before the reader scope closes, preserving primary + cleanup causes.
           return Stream.concat(progress, completion).pipe(
             Stream.mapError(enrich),

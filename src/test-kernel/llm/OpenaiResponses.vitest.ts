@@ -222,10 +222,25 @@ describe('native OpenAI Responses protocol', () => {
         response: snapshot([], { status: 'in_progress' }),
       },
       {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: { ...REASONING, status: 'in_progress', summary: [] },
+      },
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: REASONING,
+      },
+      {
         type: 'response.output_text.delta',
         output_index: 1,
         item_id: 'msg_1',
         delta: 'Progress only',
+      },
+      {
+        type: 'response.output_item.done',
+        output_index: 1,
+        item: MESSAGE,
       },
       { type: 'response.completed', response: snapshot(OUTPUT) },
     ];
@@ -284,21 +299,54 @@ describe('native OpenAI Responses protocol', () => {
       Stream.runCollect(
         model.background
           .observe(accepted.operation, policy)
-          .pipe(Stream.take(1)),
+          .pipe(Stream.take(3)),
       ),
     );
     expect(initial[0]).toMatchObject({ kind: 'identified', afterSequence: 1 });
+    expect(initial.slice(1)).toEqual([
+      {
+        kind: 'phase',
+        part: 'reasoning',
+        boundary: 'start',
+        providerItemIndex: 0,
+        afterSequence: 2,
+      },
+      {
+        kind: 'phase',
+        part: 'reasoning',
+        boundary: 'end',
+        providerItemIndex: 0,
+        afterSequence: 3,
+      },
+    ]);
     const resumed = await Effect.runPromise(
       Stream.runCollect(
         model.background.observe(
-          { ...accepted.operation, afterSequence: 1 },
+          { ...accepted.operation, afterSequence: 3 },
           policy,
         ),
       ),
     );
     expect(resumed.map((event) => [event.kind, event.afterSequence])).toEqual([
-      ['delta', 2],
-      ['completed', 3],
+      ['delta', 4],
+      ['phase', 5],
+      ['completed', 6],
+    ]);
+    expect(resumed.slice(0, 2)).toEqual([
+      {
+        kind: 'delta',
+        part: 'text',
+        text: 'Progress only',
+        providerItemIndex: 1,
+        afterSequence: 4,
+      },
+      {
+        kind: 'phase',
+        part: 'text',
+        boundary: 'end',
+        providerItemIndex: 1,
+        afterSequence: 5,
+      },
     ]);
     const terminal = resumed.at(-1);
     assert(terminal?.kind === 'completed');
@@ -374,7 +422,7 @@ describe('native OpenAI Responses protocol', () => {
       retrievals.map(([url]) =>
         new URL(String(url)).searchParams.get('starting_after'),
       ),
-    ).toEqual(['0', '1']);
+    ).toEqual(['0', '3']);
     for (const [url] of retrievals)
       expect(String(url)).toContain('reasoning.encrypted_content');
     expect(fetch).toHaveBeenCalledTimes(4);
@@ -678,6 +726,7 @@ describe('native OpenAI Responses protocol', () => {
             });
       const seen = await Effect.runPromise(Stream.runCollect(stream));
       const completed = seen.at(-1);
+      expect(seen.some((event) => event.kind === 'phase')).toBe(false);
       expect(completed).toMatchObject({
         kind: 'completed',
         result: { providerResponseId: 'resp_1', finishReason: 'stop' },
@@ -779,8 +828,16 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it('preserves grouped completed items, encrypted evidence and original tool IDs through a sparse terminal snapshot', async () => {
+    const laterReasoning = {
+      type: 'reasoning',
+      id: 'rs_2',
+      status: 'completed',
+      summary: [],
+      encrypted_content: 'enc_later',
+    };
+    const output = [...OUTPUT, laterReasoning];
     const frames = events(
-      OUTPUT,
+      output,
       snapshot(
         [
           {
@@ -802,9 +859,17 @@ describe('native OpenAI Responses protocol', () => {
       item: {
         ...REASONING,
         status: 'in_progress',
+        summary: [],
+        content: [],
         encrypted_content: 'enc_partial',
       },
     };
+    frames.splice(4, 0, {
+      type: 'response.output_text.delta',
+      output_index: 1,
+      item_id: 'msg_1',
+      delta: 'I will check.',
+    });
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(response(frames))
@@ -822,8 +887,41 @@ describe('native OpenAI Responses protocol', () => {
       providerResponseId: 'resp_1',
       returnedModel: 'returned-model',
     });
-    expect(collected).toHaveLength(2);
-    const terminal = collected[1];
+    expect(collected.slice(1, -1)).toEqual([
+      {
+        kind: 'phase',
+        part: 'reasoning',
+        boundary: 'start',
+        providerItemIndex: 0,
+      },
+      {
+        kind: 'phase',
+        part: 'reasoning',
+        boundary: 'end',
+        providerItemIndex: 0,
+      },
+      { kind: 'phase', part: 'text', boundary: 'start', providerItemIndex: 1 },
+      {
+        kind: 'delta',
+        part: 'text',
+        text: 'I will check.',
+        providerItemIndex: 1,
+      },
+      { kind: 'phase', part: 'text', boundary: 'end', providerItemIndex: 1 },
+      {
+        kind: 'phase',
+        part: 'reasoning',
+        boundary: 'start',
+        providerItemIndex: 4,
+      },
+      {
+        kind: 'phase',
+        part: 'reasoning',
+        boundary: 'end',
+        providerItemIndex: 4,
+      },
+    ]);
+    const terminal = collected.at(-1);
     if (terminal?.kind !== 'completed')
       throw new Error('Missing completed response');
     expect(terminal.result).toMatchObject({
@@ -858,6 +956,11 @@ describe('native OpenAI Responses protocol', () => {
           providerCallId: 'call_2',
           evidence: { itemId: 'fc_2' },
           arguments: { path: 'b' },
+        },
+        {
+          kind: 'reasoning',
+          summary: [],
+          evidence: { itemId: 'rs_2', encryptedContent: 'enc_later' },
         },
       ],
     });
@@ -906,7 +1009,7 @@ describe('native OpenAI Responses protocol', () => {
         role: 'user',
         content: [{ type: 'input_text', text: 'Compare two files.' }],
       },
-      ...OUTPUT,
+      ...output,
       { type: 'function_call_output', call_id: 'call_1', output: 'file text' },
       {
         type: 'function_call_output',

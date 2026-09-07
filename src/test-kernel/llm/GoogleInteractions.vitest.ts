@@ -71,7 +71,7 @@ function request(): TurnRequest {
   };
 }
 
-function signedEvents(): Array<Record<string, unknown>> {
+function signedEvents(includeSummary = true): Array<Record<string, unknown>> {
   return [
     {
       event_type: 'interaction.created',
@@ -82,14 +82,18 @@ function signedEvents(): Array<Record<string, unknown>> {
       },
     },
     { event_type: 'step.start', index: 0, step: { type: 'thought' } },
-    {
-      event_type: 'step.delta',
-      index: 0,
-      delta: {
-        type: 'thought_summary',
-        content: { type: 'text', text: 'plan' },
-      },
-    },
+    ...(includeSummary
+      ? [
+          {
+            event_type: 'step.delta',
+            index: 0,
+            delta: {
+              type: 'thought_summary',
+              content: { type: 'text', text: 'plan' },
+            },
+          },
+        ]
+      : []),
     {
       event_type: 'step.delta',
       index: 0,
@@ -213,9 +217,15 @@ describe('canonical Google Interactions protocol', () => {
     vi.unstubAllEnvs();
   });
 
-  it.each([true, false])(
-    'preserves materialized media in a signed two-call exchange with store=%s',
-    async (store) => {
+  it.each([
+    { store: true, includeSummary: true },
+    { store: false, includeSummary: false },
+  ])(
+    'preserves a signed two-call exchange with store=$store and readable summary=$includeSummary',
+    async ({ store, includeSummary }) => {
+      fetchModel.mockImplementationOnce(async () =>
+        response(signedEvents(includeSummary)),
+      );
       vi.stubEnv('GOOGLE_GENAI_USE_ENTERPRISE', 'true');
       const configured = model(store);
       const prepared = await Effect.runPromise(
@@ -238,6 +248,22 @@ describe('canonical Google Interactions protocol', () => {
       expect(
         events.filter((event) => event.kind === 'identified'),
       ).toHaveLength(1);
+      expect(
+        events.flatMap((event) => {
+          if (event.kind === 'phase')
+            return [[event.part, event.boundary, event.providerItemIndex]];
+          if (event.kind === 'delta')
+            return [[event.part, event.text, event.providerItemIndex]];
+          return [];
+        }),
+      ).toEqual([
+        ['reasoning', 'start', 0],
+        ...(includeSummary ? [['reasoning', 'plan', 0]] : []),
+        ['reasoning', 'end', 0],
+        ['text', 'start', 1],
+        ['text', 'thinking done', 1],
+        ['text', 'end', 1],
+      ]);
       const completed = events.at(-1);
       if (completed?.kind !== 'completed')
         throw new Error('Missing completed result');
@@ -282,7 +308,7 @@ describe('canonical Google Interactions protocol', () => {
         content: [
           {
             kind: 'reasoning',
-            summary: [{ kind: 'text', text: 'plan' }],
+            summary: includeSummary ? [{ kind: 'text', text: 'plan' }] : [],
             evidence: {
               kind: 'google-interactions-thought-signature',
               signature: 'sig_b',

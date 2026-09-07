@@ -77,6 +77,16 @@ All foreground protocols emit observed provider identity before progress or a
 completed result. This evidence is not acceptance of recoverable background work
 or confirmation of remote cancellation.
 
+Phase events distinguish reasoning and textual-output blocks, including blocks
+with no readable text. Responses output-item positions, Anthropic content-block
+positions and Google step positions identify their matching boundaries and deltas;
+they are not canonical-history or tool-call ordinals. Chat has no such item index:
+its index is null and phases follow the first nonempty fragment and observed
+transitions. Resumed background observation may begin with a delta or phase end,
+without an invented start. Each background source event carries its cursor once;
+terminal-only snapshots do not reconstruct live phase intervals. Runtime still
+owns presentation cleanup on failed or interrupted execution.
+
 For configured routes that support background execution, Responses exposes direct
 submission, observation and cancellation operations. Submission makes one streamed
 create request and returns accepted identity only after closing its local stream;
@@ -142,9 +152,8 @@ Completion follows the semantic `message_stop` event, not connection closure.
 Hosted execution, beta APIs, compaction, uploads and `pause_turn` remain unsupported.
 
 Responses hosted tools and sources, text annotations, log probabilities, media
-inputs, uploads, compaction and WebSocket transport remain unsupported. Complete
-phase-boundary progress, including reasoning phases with no text, and returned
-Responses service-tier billing evidence still require implementation.
+inputs, uploads, compaction and WebSocket transport remain unsupported. Returned
+Responses service-tier billing evidence still requires implementation.
 
 The contract is provisional: remaining media and opaque provider values require
 lossless support before it can be frozen for runtime integration or durable records.

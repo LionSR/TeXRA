@@ -697,23 +697,30 @@ export function anthropicMessagesModel(
                     signatureSeen:
                       block.type === 'thinking' && block.signature.length > 0,
                   };
+                  if (block.type === 'tool_use') return [];
+                  const events: TurnEvent[] = [
+                    {
+                      kind: 'phase',
+                      part: block.type === 'text' ? 'text' : 'reasoning',
+                      boundary: 'start',
+                      providerItemIndex: event.index,
+                    },
+                  ];
                   if (block.type === 'text' && block.text.length > 0)
-                    return [
-                      {
-                        kind: 'delta',
-                        part: 'text',
-                        text: block.text,
-                      } satisfies TurnEvent,
-                    ];
+                    events.push({
+                      kind: 'delta',
+                      part: 'text',
+                      text: block.text,
+                      providerItemIndex: event.index,
+                    });
                   if (block.type === 'thinking' && block.thinking.length > 0)
-                    return [
-                      {
-                        kind: 'delta',
-                        part: 'reasoning',
-                        text: block.thinking,
-                      } satisfies TurnEvent,
-                    ];
-                  return [];
+                    events.push({
+                      kind: 'delta',
+                      part: 'reasoning',
+                      text: block.thinking,
+                      providerItemIndex: event.index,
+                    });
+                  return events;
                 }
                 if (!open || open.index !== event.index)
                   return yield* new ModelError({
@@ -730,6 +737,7 @@ export function anthropicMessagesModel(
                         kind: 'delta',
                         part: 'text',
                         text: delta.text,
+                        providerItemIndex: event.index,
                       } satisfies TurnEvent,
                     ];
                   }
@@ -743,6 +751,7 @@ export function anthropicMessagesModel(
                         kind: 'delta',
                         part: 'reasoning',
                         text: delta.thinking,
+                        providerItemIndex: event.index,
                       } satisfies TurnEvent,
                     ];
                   }
@@ -827,7 +836,15 @@ export function anthropicMessagesModel(
                   });
                 }
                 open = undefined;
-                return [];
+                if (block.type === 'tool_use') return [];
+                return [
+                  {
+                    kind: 'phase',
+                    part: block.type === 'text' ? 'text' : 'reasoning',
+                    boundary: 'end',
+                    providerItemIndex: event.index,
+                  },
+                ];
               }),
             ),
             // message_stop settles the response; HTTP EOF is not an additional condition.

@@ -949,7 +949,20 @@ export function openaiResponsesModel(
                       });
                     items.set(index, { identity });
                   }
-                  return [];
+                  return item.type === 'function_call'
+                    ? []
+                    : [
+                        {
+                          kind: 'phase',
+                          part:
+                            item.type === 'reasoning' ? 'reasoning' : 'text',
+                          boundary:
+                            type === 'response.output_item.added'
+                              ? 'start'
+                              : 'end',
+                          providerItemIndex: index,
+                        },
+                      ];
                 }
                 if (
                   [
@@ -986,7 +999,12 @@ export function openaiResponsesModel(
                   if (type === 'response.output_text.delta') part = 'text';
                   if (type === 'response.refusal.delta') part = 'refusal';
                   return [
-                    { kind: 'delta' as const, part, text: decoded.data.delta },
+                    {
+                      kind: 'delta' as const,
+                      part,
+                      text: decoded.data.delta,
+                      providerItemIndex: decoded.data.output_index,
+                    },
                   ];
                 }
                 // These framing events do not own terminal content; output_item.done does.
@@ -1460,6 +1478,7 @@ export function openaiResponsesModel(
                         kind: 'delta',
                         part,
                         text: parsed.data.delta,
+                        providerItemIndex: parsed.data.output_index,
                         afterSequence,
                       },
                     ];
@@ -1488,7 +1507,23 @@ export function openaiResponsesModel(
                         yield* normalizeItem(parsed.data.item),
                       );
                     }
-                    return [{ kind: 'cursor', afterSequence }];
+                    return parsed.data.item.type === 'function_call'
+                      ? [{ kind: 'cursor', afterSequence }]
+                      : [
+                          {
+                            kind: 'phase',
+                            part:
+                              parsed.data.item.type === 'reasoning'
+                                ? 'reasoning'
+                                : 'text',
+                            boundary:
+                              type === 'response.output_item.added'
+                                ? 'start'
+                                : 'end',
+                            providerItemIndex: parsed.data.output_index,
+                            afterSequence,
+                          },
+                        ];
                   }
                   if (
                     [

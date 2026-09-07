@@ -660,6 +660,17 @@ export function googleInteractionsModel(
                     step: structuredClone(event.step),
                     stopped: false,
                   });
+                  if (
+                    event.step.type === 'thought' ||
+                    event.step.type === 'model_output'
+                  )
+                    progress.push({
+                      kind: 'phase',
+                      part:
+                        event.step.type === 'thought' ? 'reasoning' : 'text',
+                      boundary: 'start',
+                      providerItemIndex: event.index,
+                    });
                 } else if (
                   event.event_type === 'step.stop' ||
                   event.event_type === 'step.delta'
@@ -674,6 +685,17 @@ export function googleInteractionsModel(
                   if (event.event_type === 'step.stop') {
                     slot.stopped = true;
                     usage = event.usage ?? usage;
+                    if (
+                      slot.step.type === 'thought' ||
+                      slot.step.type === 'model_output'
+                    )
+                      progress.push({
+                        kind: 'phase',
+                        part:
+                          slot.step.type === 'thought' ? 'reasoning' : 'text',
+                        boundary: 'end',
+                        providerItemIndex: event.index,
+                      });
                   } else {
                     usage = event.metadata?.total_usage ?? usage;
                     const delta = event.delta;
@@ -689,6 +711,7 @@ export function googleInteractionsModel(
                         kind: 'delta',
                         part: 'text',
                         text: delta.text,
+                        providerItemIndex: event.index,
                       });
                     } else if (
                       delta.type === 'thought_summary' &&
@@ -708,6 +731,7 @@ export function googleInteractionsModel(
                         kind: 'delta',
                         part: 'reasoning',
                         text: delta.content.text,
+                        providerItemIndex: event.index,
                       });
                     } else if (
                       delta.type === 'thought_signature' &&

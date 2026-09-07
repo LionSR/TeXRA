@@ -7,6 +7,7 @@ import {
   ModelError,
   type ChatConfiguration,
   type Model,
+  type TurnEvent,
   type TurnRequest,
 } from '@texra-ai/llm/turn';
 import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
@@ -174,19 +175,46 @@ describe('native OpenAI Chat protocol', () => {
         apiKey: 'synthetic',
         fetch,
       });
+      const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
+      assert(turn.mode === 'foreground');
+      const events: TurnEvent[] = [];
+      const collect = Stream.runForEach(model.streamTurn(turn), (event) =>
+        Effect.sync(() => events.push(event)),
+      );
       if (present) {
-        const result = await Effect.runPromise(generate(model));
+        await Effect.runPromise(collect);
+        const completed = events.at(-1);
+        assert(completed?.kind === 'completed');
+        const result = completed.result;
         expect(result.finishReason).toBe('stop');
         expect(result.content).toEqual([
           { kind: 'message', content: [{ kind: 'text', text: 'x² 🙂' }] },
         ]);
       } else {
-        const failure = await Effect.runPromise(Effect.flip(generate(model)));
+        const failure = await Effect.runPromise(Effect.flip(collect));
         expect(failure).toMatchObject({
           kind: 'malformed-output',
           responseId: 'synthetic-response',
         });
       }
+      expect(events.filter((event) => event.kind === 'phase')).toEqual([
+        {
+          kind: 'phase',
+          part: 'text',
+          boundary: 'start',
+          providerItemIndex: null,
+        },
+        ...(present
+          ? [
+              {
+                kind: 'phase',
+                part: 'text',
+                boundary: 'end',
+                providerItemIndex: null,
+              },
+            ]
+          : []),
+      ]);
       expect(fetch).toHaveBeenCalledTimes(1);
     },
   );
@@ -629,10 +657,49 @@ describe('native OpenAI Chat protocol', () => {
         Stream.runCollect(model.streamTurn(turn)),
       );
       expect(events[0]?.kind).toBe('identified');
-      expect(events.filter((event) => event.kind === 'delta')).toEqual([
-        { kind: 'delta', part: 'reasoning', text: fragments[1] },
-        { kind: 'delta', part: 'reasoning', text: fragments[2] },
-        { kind: 'delta', part: 'text', text: 'Checking.' },
+      expect(events.slice(1, -1)).toEqual([
+        {
+          kind: 'phase',
+          part: 'reasoning',
+          boundary: 'start',
+          providerItemIndex: null,
+        },
+        {
+          kind: 'delta',
+          part: 'reasoning',
+          text: fragments[1],
+          providerItemIndex: null,
+        },
+        {
+          kind: 'delta',
+          part: 'reasoning',
+          text: fragments[2],
+          providerItemIndex: null,
+        },
+        {
+          kind: 'phase',
+          part: 'reasoning',
+          boundary: 'end',
+          providerItemIndex: null,
+        },
+        {
+          kind: 'phase',
+          part: 'text',
+          boundary: 'start',
+          providerItemIndex: null,
+        },
+        {
+          kind: 'delta',
+          part: 'text',
+          text: 'Checking.',
+          providerItemIndex: null,
+        },
+        {
+          kind: 'phase',
+          part: 'text',
+          boundary: 'end',
+          providerItemIndex: null,
+        },
       ]);
       const completed = events.at(-1);
       if (completed?.kind !== 'completed')
@@ -712,9 +779,29 @@ describe('native OpenAI Chat protocol', () => {
       const followUp = await Effect.runPromise(
         model.prepareTurn({ messages, tools: TOOLS }),
       );
-      const final = await Effect.runPromise(
-        model.generateTurn(JSON.parse(JSON.stringify(followUp))),
+      const followUpEvents = await Effect.runPromise(
+        Stream.runCollect(
+          model.streamTurn(JSON.parse(JSON.stringify(followUp))),
+        ),
       );
+      const followUpCompleted = followUpEvents.at(-1);
+      assert(followUpCompleted?.kind === 'completed');
+      const final = followUpCompleted.result;
+      // The reported empty reasoning is replayable content, not an observed phase.
+      expect(followUpEvents.filter((event) => event.kind === 'phase')).toEqual([
+        {
+          kind: 'phase',
+          part: 'text',
+          boundary: 'start',
+          providerItemIndex: null,
+        },
+        {
+          kind: 'phase',
+          part: 'text',
+          boundary: 'end',
+          providerItemIndex: null,
+        },
+      ]);
       const replayed = JSON.parse(
         String(fetch.mock.calls[1]?.[1]?.body),
       ).messages;
@@ -800,7 +887,24 @@ describe('native OpenAI Chat protocol', () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       response(
         sse(
-          chunk(),
+          chunk({
+            choices: [
+              {
+                index: 0,
+                delta: { content: 'generated: true' },
+                finish_reason: null,
+              },
+            ],
+          }),
+          chunk({
+            choices: [
+              {
+                index: 0,
+                delta: { refusal: 'Cannot continue.' },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
           chunk({
             choices: [],
             usage: {
@@ -856,7 +960,30 @@ describe('native OpenAI Chat protocol', () => {
         },
         returnedModel: 'returned-model-version',
       },
-      { kind: 'delta', part: 'text', text: 'generated: true' },
+      {
+        kind: 'phase',
+        part: 'text',
+        boundary: 'start',
+        providerItemIndex: null,
+      },
+      {
+        kind: 'delta',
+        part: 'text',
+        text: 'generated: true',
+        providerItemIndex: null,
+      },
+      {
+        kind: 'delta',
+        part: 'refusal',
+        text: 'Cannot continue.',
+        providerItemIndex: null,
+      },
+      {
+        kind: 'phase',
+        part: 'text',
+        boundary: 'end',
+        providerItemIndex: null,
+      },
       {
         kind: 'completed',
         result: {
@@ -872,7 +999,10 @@ describe('native OpenAI Chat protocol', () => {
           content: [
             {
               kind: 'message',
-              content: [{ kind: 'text', text: 'generated: true' }],
+              content: [
+                { kind: 'text', text: 'generated: true' },
+                { kind: 'refusal', text: 'Cannot continue.' },
+              ],
             },
           ],
           finishReason: 'stop',
@@ -973,14 +1103,29 @@ describe('native OpenAI Chat protocol', () => {
     const events = await Effect.runPromise(
       Stream.runCollect(model.streamTurn(prepared)),
     );
-    expect(events).toHaveLength(3);
+    expect(events).toHaveLength(5);
     expect(events[0]?.kind).toBe('identified');
-    expect(events[1]).toEqual({
-      kind: 'delta',
-      part: 'text',
-      text: 'Checking.',
-    });
-    const completed = events[2];
+    expect(events.slice(1, -1)).toEqual([
+      {
+        kind: 'phase',
+        part: 'text',
+        boundary: 'start',
+        providerItemIndex: null,
+      },
+      {
+        kind: 'delta',
+        part: 'text',
+        text: 'Checking.',
+        providerItemIndex: null,
+      },
+      {
+        kind: 'phase',
+        part: 'text',
+        boundary: 'end',
+        providerItemIndex: null,
+      },
+    ]);
+    const completed = events.at(-1);
     expect(completed?.kind).toBe('completed');
     if (completed?.kind !== 'completed')
       throw new Error('Missing completed result');
@@ -1450,9 +1595,27 @@ describe('native OpenAI Chat protocol', () => {
           },
         }),
       );
+      const model = modelWith(fetch);
+      const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
+      assert(prepared.mode === 'foreground');
+      const phases: TurnEvent[] = [];
       const failure = await Effect.runPromise(
-        Effect.flip(generate(modelWith(fetch))),
+        Effect.flip(
+          Stream.runForEach(model.streamTurn(prepared), (event) =>
+            Effect.sync(() => {
+              if (event.kind === 'phase') phases.push(event);
+            }),
+          ),
+        ),
       );
+      expect(phases).toEqual([
+        {
+          kind: 'phase',
+          part: 'text',
+          boundary: 'start',
+          providerItemIndex: null,
+        },
+      ]);
       expect(failure).toMatchObject({
         kind: kind ?? 'malformed-output',
         responseId: 'synthetic-response',
@@ -1554,6 +1717,7 @@ describe('native OpenAI Chat protocol', () => {
       });
       const onDelta = vi.fn();
       const onCompleted = vi.fn();
+      const onPhaseEnd = vi.fn();
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(
@@ -1622,6 +1786,8 @@ describe('native OpenAI Chat protocol', () => {
           Effect.sync(() => {
             if (event.kind === 'delta') onDelta();
             if (event.kind === 'completed') onCompleted();
+            if (event.kind === 'phase' && event.boundary === 'end')
+              onPhaseEnd();
           }),
         ),
       );
@@ -1658,6 +1824,7 @@ describe('native OpenAI Chat protocol', () => {
       }
       expect(body.locked).toBe(false);
       expect(onCompleted).not.toHaveBeenCalled();
+      if (phase !== 'tool arguments') expect(onPhaseEnd).not.toHaveBeenCalled();
       expect(fetch).toHaveBeenCalledTimes(1);
     },
   );

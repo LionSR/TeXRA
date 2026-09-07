@@ -222,6 +222,26 @@ describe('canonical Anthropic Messages protocol', () => {
     expect(events.filter((event) => event.kind === 'identified')).toHaveLength(
       1,
     );
+    expect(
+      events.flatMap((event) => {
+        if (event.kind === 'phase')
+          return [[event.part, event.boundary, event.providerItemIndex]];
+        if (event.kind === 'delta')
+          return [[event.part, event.text, event.providerItemIndex]];
+        return [];
+      }),
+    ).toEqual([
+      ['reasoning', 'start', 0],
+      ['reasoning', '  returned thinking\n', 0],
+      ['reasoning', 'end', 0],
+      ['reasoning', 'start', 1],
+      ['reasoning', 'end', 1],
+      ['reasoning', 'start', 2],
+      ['reasoning', 'end', 2],
+      ['text', 'start', 3],
+      ['text', '  calling tools\n', 3],
+      ['text', 'end', 3],
+    ]);
     const completed = events.at(-1);
     assert(completed?.kind === 'completed');
     const result = completed.result;
@@ -707,6 +727,7 @@ describe('canonical Anthropic Messages protocol', () => {
       });
       let aborted = false;
       const cleanupFailure = new Error('Cleanup failed');
+      const boundaries: string[] = [];
       let bodyController: ReadableStreamDefaultController<Uint8Array>;
       fetchModel.mockImplementation(async (_url, init) => {
         assert(init?.signal);
@@ -770,9 +791,14 @@ describe('canonical Anthropic Messages protocol', () => {
       const configured = model();
       const turn = await Effect.runPromise(configured.prepareTurn(REQUEST));
       assert(turn.mode === 'foreground');
-      const progress = configured
-        .streamTurn(turn)
-        .pipe(Stream.filter((event) => event.kind === 'delta'));
+      const progress = configured.streamTurn(turn).pipe(
+        Stream.tap((event) =>
+          Effect.sync(() => {
+            if (event.kind === 'phase') boundaries.push(event.boundary);
+          }),
+        ),
+        Stream.filter((event) => event.kind === 'delta'),
+      );
       if (phase === 'completed') {
         await expect(
           Effect.runPromise(configured.generateTurn(turn)),
@@ -821,6 +847,7 @@ describe('canonical Anthropic Messages protocol', () => {
         await Effect.runPromise(Fiber.interrupt(fiber));
       }
       expect(aborted).toBe(true);
+      expect(boundaries).not.toContain('end');
       expect(fetchModel).toHaveBeenCalledTimes(1);
     },
   );
