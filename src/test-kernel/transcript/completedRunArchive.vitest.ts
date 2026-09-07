@@ -1,15 +1,6 @@
-/**
- * Completed-run archive facade: the transcript sidecars own completed-run
- * display/export, with `executions/{id}/conversation.json` / `todos.json` as
- * transcript-sidecar archive reads.
- *
- * The fixtures build real completed executions on disk from sidecar data
- * alone, which is what a tool-use run persists, and prove that conversation
- * display, chat export, and todos all read through the facade. The
- * execution→stream mapping is the `streamId` stamped on execution metadata at
- * registration — nothing re-derives it from names, sidecar scans, or
- * suffix matching.
- */
+import { it as effectIt } from '@effect/vitest';
+/** Completed conversation reads and task reads through the archive facade. */
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
@@ -68,6 +59,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   AgentCategory,
+  aggregateId,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import {
@@ -77,13 +69,12 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createProcessSession,
+  createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import {
-  appendTranscriptEntry,
-  snapshotFacts,
-} from '@test/support/storeTestDrivers';
+import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
   hasCompletedRunConversationEvidence,
@@ -116,33 +107,23 @@ async function stampStreamId(
   });
 }
 
-interface StreamSeed {
-  streamId: StreamTabId;
-  /** Agent that ran the stream; roots run the orchestrator by default. */
-  agent?: string;
-  /** Set when the stream is a delegated child of another stream. */
-  parent?: StreamTabId;
-  /** Work-plan todos persisted alongside the run config. */
-  todos?: TodoItem[];
-}
+let taskSession: ReturnType<typeof createTestSession>;
 
-/** Persist the snapshot sidecars that tie streams to an execution. */
-async function seedStreams(
+/** Persist completed tasks as committed stream events. */
+async function seedTasks(
   executionId: ExecutionId,
-  seeds: readonly StreamSeed[],
-): Promise<StreamSnapshotStore> {
-  const snapshots = new StreamSnapshotStore();
-  for (const { streamId, agent = 'orchestrator', parent, todos } of seeds) {
-    snapshotFacts(snapshots).setRunConfig(
-      streamId,
-      runConfig(agent),
-      executionId,
-    );
-    if (parent) snapshotFacts(snapshots).setParentStream(streamId, parent);
-    if (todos) snapshotFacts(snapshots).setTodos(streamId, todos);
-  }
-  await snapshots.flush();
-  return snapshots;
+  streamId: StreamTabId,
+  todos: TodoItem[],
+): Promise<void> {
+  publishTestRunStart(taskSession, streamId, executionId);
+  taskSession.publish([
+    {
+      type: 'updateTodos',
+      aggregateId: aggregateId('stream', streamId),
+      todos,
+    },
+  ]);
+  await settleSessionEvents();
 }
 
 type LogRow = Parameters<TranscriptWriter['append']>[0];
@@ -197,18 +178,13 @@ async function persistRows(
   }
 }
 
-/** Write the sidecar fixture: transcript rows + snapshot meta/todos. */
+/** Write transcript rows and committed task events for a completed execution. */
 async function writeSidecarFixture(
   executionId: ExecutionId,
   streamId: StreamTabId,
 ): Promise<void> {
-  await seedStreams(executionId, [
-    {
-      streamId,
-      todos: [
-        { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
-      ],
-    },
+  await seedTasks(executionId, streamId, [
+    { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
   ]);
 
   await appendRows(streamId, [
@@ -263,13 +239,14 @@ describe('completedRunArchive facade', () => {
   beforeEach(() => {
     clearStoreCache();
     vi.resetAllMocks();
+    taskSession = createTestSession();
   });
 
   afterEach(async () => {
     vi.restoreAllMocks();
   });
 
-  it('serves conversation, chat export, and todos from the sidecars alone (projections gone)', async () => {
+  it('serves conversation and export from transcripts and tasks from committed events', async () => {
     const executionId = 'abc123abc123' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#abc123abc123' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
@@ -364,188 +341,226 @@ describe('completedRunArchive facade', () => {
       conversationResult.conversation,
     );
 
-    expect(await readCompletedRunTodos(executionId)).toEqual([
+    expect(
+      await Effect.runPromise(
+        readCompletedRunTodos(executionId, taskSession.snapshots),
+      ),
+    ).toEqual([
       { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
     ]);
   });
 
-  it('reconstructs both turns when the production resume launch reopens the canonical writer', async () => {
-    const executionId = '0aa1110aa111' as ExecutionId;
-    const streamId = 'orchestrator@legacyModel#0aa1110aa111' as StreamTabId;
-    const config = runConfig('orchestrator');
-    // The stamped id is the reproduction contract: minting from today's
-    // config would produce a different (wrong) id.
-    expect(getStreamTabId(config.agent, { executionId })).not.toBe(streamId);
+  effectIt.live(
+    'reconstructs both turns when the production resume launch reopens the canonical writer',
+    () =>
+      Effect.gen(function* () {
+        const executionId = '0aa1110aa111' as ExecutionId;
+        const streamId = 'orchestrator@legacyModel#0aa1110aa111' as StreamTabId;
+        const config = runConfig('orchestrator');
+        // The stamped id is the reproduction contract: minting from today's
+        // config would produce a different (wrong) id.
+        expect(getStreamTabId(config.agent, { executionId })).not.toBe(
+          streamId,
+        );
 
-    await seedStreams(executionId, [{ streamId }]);
-    await stampStreamId(executionId, streamId);
-    await getExecutionStore(executionId).writeRunRecord(config);
+        yield* Effect.promise(() => stampStreamId(executionId, streamId));
+        yield* Effect.promise(() =>
+          getExecutionStore(executionId).writeRunRecord(config),
+        );
 
-    const logs = await StreamLogStore.open();
-    const firstTurn = logs.acquireWriter(streamId, executionId);
-    firstTurn.appendSettled(
-      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Prove the first lemma.' }),
-    );
-    firstTurn.appendSettled(
-      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'First proof.' }),
-    );
-    firstTurn.close();
-    await logs.flush();
-    logs.requestEviction(streamId);
-    expect(logs.get(streamId)).toBeUndefined();
-
-    const launchFailure = new Error('stop after resumed writer acquisition');
-    launchMocks.acquireResumedExecutionLease.mockResolvedValue('existing');
-    launchMocks.clearTerminalExecutionState.mockResolvedValue(undefined);
-    launchMocks.hasPersistedParent.mockResolvedValue(false);
-    launchMocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
-      async (_executionId: ExecutionId, error: unknown) => error,
-    );
-    launchMocks.resolveAgent.mockReturnValue({
-      entry: { path: '/agents/orchestrator.yaml' },
-    });
-    launchMocks.loadAgent.mockResolvedValue([
-      { agentCategory: AgentCategory.ToolUse },
-      {},
-    ]);
-    launchMocks.createHandler.mockResolvedValue({
-      capabilities: { supportsVision: false, supportsNativeAudio: false },
-      config: { provider: 'openai' },
-      setAgentCategory: vi.fn(),
-      setLogger: vi.fn(),
-      dispose: vi.fn(),
-    });
-    launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
-
-    const persistedResumeState = createToolUseResumeData({
-      executionId,
-      streamId,
-      agentConfig: config,
-      shared: {
-        modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
-      },
-    });
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      shared: persistedResumeState.shared,
-      cursor: { nextNodeId: 'start' },
-    });
-
-    const session = createProcessSession({ transcripts: logs });
-    publishTestRunStart(session, streamId, executionId);
-    await session.settlePublications();
-    const loadAndAcquireWriter = logs.loadAndAcquireWriter.bind(logs);
-    const resumedWriter = vi
-      .spyOn(logs, 'loadAndAcquireWriter')
-      .mockImplementationOnce(async (requestedStreamId, ownerKey) => {
-        const writer = await loadAndAcquireWriter(requestedStreamId, ownerKey);
-        writer.appendSettled(
+        const logs = yield* Effect.promise(() => StreamLogStore.open());
+        const firstTurn = logs.acquireWriter(streamId, executionId);
+        firstTurn.appendSettled(
           logRow(MESSAGE_TYPES.USER_MESSAGE, {
-            text: 'Now prove the second lemma.',
+            text: 'Prove the first lemma.',
           }),
         );
-        writer.appendSettled(
-          logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Second proof.' }),
+        firstTurn.appendSettled(
+          logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'First proof.' }),
         );
-        return writer;
-      });
+        firstTurn.close();
+        yield* Effect.promise(() => logs.flush());
+        logs.requestEviction(streamId);
+        expect(logs.get(streamId)).toBeUndefined();
 
-    try {
-      await expect(
-        resumeRun(executionId, {
-          session,
-          executeWorkflow: vi.fn(async () => undefined),
-        }),
-      ).rejects.toBe(launchFailure);
-    } finally {
-      session.dispose();
-    }
-    await logs.flush();
+        const launchFailure = new Error(
+          'stop after resumed writer acquisition',
+        );
+        launchMocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+        launchMocks.clearTerminalExecutionState.mockResolvedValue(undefined);
+        launchMocks.hasPersistedParent.mockResolvedValue(false);
+        launchMocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
+          async (_executionId: ExecutionId, error: unknown) => error,
+        );
+        launchMocks.resolveAgent.mockReturnValue({
+          entry: { path: '/agents/orchestrator.yaml' },
+        });
+        launchMocks.loadAgent.mockResolvedValue([
+          { agentCategory: AgentCategory.ToolUse },
+          {},
+        ]);
+        launchMocks.createHandler.mockResolvedValue({
+          capabilities: { supportsVision: false, supportsNativeAudio: false },
+          config: { provider: 'openai' },
+          setAgentCategory: vi.fn(),
+          setLogger: vi.fn(),
+          dispose: vi.fn(),
+        });
+        launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
 
-    expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
-    expect(
-      launchMocks.releaseOwnedExecutionLeaseAfterFailure,
-    ).toHaveBeenCalledWith(executionId, launchFailure);
-    resumedWriter.mockRestore();
+        const persistedResumeState = createToolUseResumeData({
+          executionId,
+          streamId,
+          agentConfig: config,
+          shared: {
+            modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+          },
+        });
+        yield* Effect.promise(() =>
+          getExecutionStore(executionId).write(flowKey(executionId), {
+            shared: persistedResumeState.shared,
+            cursor: { nextNodeId: 'start' },
+          }),
+        );
 
-    const archived = await readCompletedRunConversation(executionId);
-    expect(archived).toEqual({
-      source: 'streamLog',
-      streamId,
-      conversation: [
-        { role: 'user', content: 'Prove the first lemma.' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'First proof.' }],
-        },
-        { role: 'user', content: 'Now prove the second lemma.' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Second proof.' }],
-        },
-      ],
-    });
+        const session = createProcessSession({ transcripts: logs });
+        publishTestRunStart(session, streamId, executionId);
+        yield* Effect.promise(() => session.settlePublications());
+        const loadAndAcquireWriter = logs.loadAndAcquireWriter.bind(logs);
+        const resumedWriter = vi
+          .spyOn(logs, 'loadAndAcquireWriter')
+          .mockImplementationOnce(async (requestedStreamId, ownerKey) => {
+            const writer = await loadAndAcquireWriter(
+              requestedStreamId,
+              ownerKey,
+            );
+            writer.appendSettled(
+              logRow(MESSAGE_TYPES.USER_MESSAGE, {
+                text: 'Now prove the second lemma.',
+              }),
+            );
+            writer.appendSettled(
+              logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Second proof.' }),
+            );
+            return writer;
+          });
 
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.status).toBe('executed');
-    expect(endpoint.output).toContain('Conversation (4 messages)');
-    expect(endpoint.output).toContain('Prove the first lemma.');
-    expect(endpoint.output).toContain('First proof.');
-    expect(endpoint.output).toContain('Now prove the second lemma.');
-    expect(endpoint.output).toContain('Second proof.');
+        try {
+          expect(
+            yield* Effect.flip(
+              resumeRun(executionId, {
+                session,
+                executeWorkflow: vi.fn(async () => undefined),
+              }),
+            ),
+          ).toBe(launchFailure);
+        } finally {
+          session.dispose();
+        }
+        yield* Effect.promise(() => logs.flush());
 
-    const firstPage = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-      offset: 0,
-      limit: 2,
-    });
-    const secondPage = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-      offset: 2,
-      limit: 2,
-    });
-    expect(firstPage.output).toContain('Source: streamLog');
-    expect(firstPage.output).toContain(`Stream: ${streamId}`);
-    expect(firstPage.output).toContain('Returned message interval: [0, 2)');
-    expect(firstPage.output).toContain('Next offset: 2');
-    expect(firstPage.output).toContain('<message index="1"');
-    expect(firstPage.output).toContain('<message index="2"');
-    expect(firstPage.output).not.toContain('Now prove the second lemma.');
-    expect(secondPage.output).toContain('Returned message interval: [2, 4)');
-    expect(secondPage.output).toContain('Next offset: none');
-    expect(secondPage.output).toContain('<message index="3"');
-    expect(secondPage.output).toContain('<message index="4"');
-    expect(secondPage.output).not.toContain('Prove the first lemma.');
+        expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
+        expect(
+          launchMocks.releaseOwnedExecutionLeaseAfterFailure,
+        ).toHaveBeenCalledWith(executionId, launchFailure);
+        resumedWriter.mockRestore();
 
-    for (const text of [
-      'Prove the first lemma.',
-      'First proof.',
-      'Now prove the second lemma.',
-      'Second proof.',
-    ]) {
-      expect(
-        `${firstPage.output}\n${secondPage.output}`.split(text),
-      ).toHaveLength(2);
-    }
+        const archived = yield* Effect.promise(() =>
+          readCompletedRunConversation(executionId),
+        );
+        expect(archived).toEqual({
+          source: 'streamLog',
+          streamId,
+          conversation: [
+            { role: 'user', content: 'Prove the first lemma.' },
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'First proof.' }],
+            },
+            { role: 'user', content: 'Now prove the second lemma.' },
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Second proof.' }],
+            },
+          ],
+        });
 
-    const lineRange = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-      view_range: [1, 10],
-    });
-    expect(lineRange.status).toBe('error');
-    expect(lineRange.error).toContain(
-      'Conversation pagination is message-based. Use offset and limit',
-    );
-  });
+        const endpoint = yield* Effect.promise(() =>
+          new ExecutionsTool().call({
+            path: `/executions/${executionId}/conversation`,
+          }),
+        );
+        expect(endpoint.status).toBe('executed');
+        expect(endpoint.output).toContain('Conversation (4 messages)');
+        expect(endpoint.output).toContain('Prove the first lemma.');
+        expect(endpoint.output).toContain('First proof.');
+        expect(endpoint.output).toContain('Now prove the second lemma.');
+        expect(endpoint.output).toContain('Second proof.');
 
-  it('reads an empty task list from a present empty work plan', async () => {
+        const firstPage = yield* Effect.promise(() =>
+          new ExecutionsTool().call({
+            path: `/executions/${executionId}/conversation`,
+            offset: 0,
+            limit: 2,
+          }),
+        );
+        const secondPage = yield* Effect.promise(() =>
+          new ExecutionsTool().call({
+            path: `/executions/${executionId}/conversation`,
+            offset: 2,
+            limit: 2,
+          }),
+        );
+        expect(firstPage.output).toContain('Source: streamLog');
+        expect(firstPage.output).toContain(`Stream: ${streamId}`);
+        expect(firstPage.output).toContain('Returned message interval: [0, 2)');
+        expect(firstPage.output).toContain('Next offset: 2');
+        expect(firstPage.output).toContain('<message index="1"');
+        expect(firstPage.output).toContain('<message index="2"');
+        expect(firstPage.output).not.toContain('Now prove the second lemma.');
+        expect(secondPage.output).toContain(
+          'Returned message interval: [2, 4)',
+        );
+        expect(secondPage.output).toContain('Next offset: none');
+        expect(secondPage.output).toContain('<message index="3"');
+        expect(secondPage.output).toContain('<message index="4"');
+        expect(secondPage.output).not.toContain('Prove the first lemma.');
+
+        for (const text of [
+          'Prove the first lemma.',
+          'First proof.',
+          'Now prove the second lemma.',
+          'Second proof.',
+        ]) {
+          expect(
+            `${firstPage.output}\n${secondPage.output}`.split(text),
+          ).toHaveLength(2);
+        }
+
+        const lineRange = yield* Effect.promise(() =>
+          new ExecutionsTool().call({
+            path: `/executions/${executionId}/conversation`,
+            view_range: [1, 10],
+          }),
+        );
+        expect(lineRange.status).toBe('error');
+        expect(lineRange.error).toContain(
+          'Conversation pagination is message-based. Use offset and limit',
+        );
+      }),
+  );
+
+  it('reads an empty task list from a committed empty work plan', async () => {
     const executionId = '0aa2220aa222' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
-    await seedStreams(executionId, [{ streamId, todos: [] }]);
+    await seedTasks(executionId, streamId, []);
     await stampStreamId(executionId, streamId);
 
-    expect(await readCompletedRunTodos(executionId)).toEqual([]);
+    expect(
+      await Effect.runPromise(
+        readCompletedRunTodos(executionId, taskSession.snapshots),
+      ),
+    ).toEqual([]);
   });
 
   it('reports none, with no conversation evidence, when metadata has no stamped stream', async () => {
@@ -555,7 +570,11 @@ describe('completedRunArchive facade', () => {
     expect(conversationResult).toEqual({ conversation: null, source: 'none' });
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
 
-    expect(await readCompletedRunTodos(executionId)).toEqual([]);
+    expect(
+      await Effect.runPromise(
+        readCompletedRunTodos(executionId, taskSession.snapshots),
+      ),
+    ).toEqual([]);
 
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-07T00:00:00.000Z',
@@ -607,7 +626,11 @@ describe('completedRunArchive facade', () => {
     // The stamped stream id alone is association evidence.
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(true);
 
-    expect(await readCompletedRunTodos(executionId)).toEqual([]);
+    expect(
+      await Effect.runPromise(
+        readCompletedRunTodos(executionId, taskSession.snapshots),
+      ),
+    ).toEqual([]);
 
     expect(scan).not.toHaveBeenCalled();
   });
@@ -627,7 +650,7 @@ describe('completedRunArchive facade', () => {
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {
     const executionId = '0ee5550ee555' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0ee5550ee555' as StreamTabId;
-    await seedStreams(executionId, [{ streamId }]);
+
     await stampStreamId(executionId, streamId);
 
     await appendRows(streamId, [
@@ -686,7 +709,7 @@ describe('completedRunArchive facade', () => {
   it('preserves a diagnostic-only stamped stream as execution evidence without a conversation', async () => {
     const executionId = '0999cb0999cb' as ExecutionId;
     const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
-    await seedStreams(executionId, [{ streamId: root }]);
+
     await stampStreamId(executionId, root);
 
     await appendRows(root, [
@@ -713,10 +736,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0999cc0999cc' as ExecutionId;
     const root = 'orchestrator@model#0999cc0999cc' as StreamTabId;
     const child = 'child@tool#0999cc0999cc' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: root },
-      { streamId: child, agent: 'bash', parent: root },
-    ]);
+
     await stampStreamId(executionId, root);
 
     await appendRows(root, [
@@ -738,9 +758,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0999cd0999cd' as ExecutionId;
     const streamId = 'child@tool#0999cd0999cd' as StreamTabId;
     const parentStreamId = 'orchestrator@model#parent' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId, agent: 'bash', parent: parentStreamId },
-    ]);
+
     await stampStreamId(executionId, streamId);
 
     await appendRows(streamId, [

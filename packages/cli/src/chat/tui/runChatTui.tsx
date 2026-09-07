@@ -173,9 +173,7 @@ export async function runChat(
   // initInteractiveCliPlatform's doc comment for the full handoff design.
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   const initialResume = init.initialResume;
-  const runtimeSession = await initializeCliTranscriptSession(
-    initialResume ? { delayMs: 0 } : {},
-  );
+  const runtimeSession = await initializeCliTranscriptSession();
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model

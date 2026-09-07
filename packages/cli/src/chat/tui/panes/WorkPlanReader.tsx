@@ -21,7 +21,6 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
-import type { WorkPlanProvenance } from '@transcript';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
@@ -86,44 +85,35 @@ export function workPlanReaderLayout({
   };
 }
 
-/** `available` marks the fields this reader may present as facts; a field it
- *  omits is presented, an unavailable one is masked. */
+/** Render the complete work plan loaded from committed events. */
 export function formatWorkPlanReaderText(
   plan: Plan | null,
   todos: readonly TodoItem[],
-  available?: WorkPlanProvenance,
 ): string {
-  const objective =
-    available?.plan === false
-      ? '(objective unavailable)'
-      : (plan?.objective ?? '(no objective)');
-  let todoLines: string[];
-  if (available?.todos === false) {
-    todoLines = ['(todos unavailable)'];
-  } else if (todos.length === 0) {
-    todoLines = ['(no todos)'];
-  } else {
-    todoLines = todos.map(
-      (todo, index) =>
-        `${index + 1}. [${TODO_STATUS_LABELS[todo.status]}] ${todo.content}`,
-    );
-  }
-  return ['Objective', objective, '', 'Todos', ...todoLines].join('\n');
+  const todoLines =
+    todos.length === 0
+      ? ['(no todos)']
+      : todos.map(
+          (todo, index) =>
+            `${index + 1}. [${TODO_STATUS_LABELS[todo.status]}] ${todo.content}`,
+        );
+  return [
+    'Objective',
+    plan?.objective ?? '(no objective)',
+    '',
+    'Todos',
+    ...todoLines,
+  ].join('\n');
 }
 
 export function WorkPlanReader({
   availableRows,
-  provenanceAtOpen,
   loading = false,
   onClose,
   streamId,
   title,
 }: {
   readonly availableRows: number;
-  /** Present only when this reader opened from a partially failed load: the
-   *  fields vouched for at that instant. Fields it excludes stay masked until
-   *  the store establishes them — no promotion is pushed in from outside. */
-  readonly provenanceAtOpen?: WorkPlanProvenance;
   readonly loading?: boolean;
   readonly onClose: () => void;
   readonly streamId: StreamTabId;
@@ -132,15 +122,6 @@ export function WorkPlanReader({
   const { columns } = useWindowSize();
   const snapshots = loading ? undefined : tryDefaultSession()?.snapshots;
   const workPlan = snapshots?.getWorkPlan(streamId);
-  // A field this reader's own load could not vouch for stays masked only while
-  // the store still cannot vouch for it. Every event that establishes one — a
-  // live todos/plan write, a completed preload, a resume load — bumps
-  // `streamArtifactRevision`, so this re-read repaints with it.
-  const established = snapshots?.workPlanProvenance(streamId);
-  const available: WorkPlanProvenance | undefined = provenanceAtOpen && {
-    plan: provenanceAtOpen.plan || established?.plan === true,
-    todos: provenanceAtOpen.todos || established?.todos === true,
-  };
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
   const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;
@@ -152,11 +133,7 @@ export function WorkPlanReader({
   });
   const text = loading
     ? WORK_PLAN_LOADING_TEXT
-    : formatWorkPlanReaderText(
-        workPlan?.plan ?? null,
-        workPlan?.todos ?? [],
-        available,
-      );
+    : formatWorkPlanReaderText(workPlan?.plan ?? null, workPlan?.todos ?? []);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();

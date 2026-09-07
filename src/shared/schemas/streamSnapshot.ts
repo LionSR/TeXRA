@@ -1,25 +1,8 @@
 /**
- * `StreamSnapshot` — the unified, host-agnostic per-stream render/resume shape.
- *
- * One logical schema that the CLI TUI, VS Code extension progress view, and
- * Electron desktop app all render and resume from. It is **not** one physical
- * file: it is persisted across the field-scoped `streamData/{id}/*` files (see
- * `@transcript/streamDataPaths`) and assembled on read by `StreamSnapshotStore`.
- *
- * Fields fall into three deliberately-separated classes (conflating them is what
- * produces lying UIs and double-writes):
- *
- *  - **Durable** — persisted to disk; restored verbatim on resume. The only
- *    genuinely new durable state is todos/plan/planSummary (ephemeral in every
- *    host today, not in the StreamLog); output files / usage already persist.
- *  - **Log-derived** — recomputed from `StreamLogStore` (+ `ExecutionKVStore`)
- *    on load. The log wins; any persisted copy here is advisory only.
- *  - **Liveness** — runtime-only. NEVER restored as live: active children clamp
- *    to `[]` and an in-flight RUNNING status is never reasserted on hydrate.
- *
- * `taskState` (resume/continuation data) is intentionally NOT inlined here — it
- * stays in `streamData/{id}/meta.json`, handled where `@agent` is importable, so
- * this shared schema avoids a `src/shared → @agent` import cycle.
+ * Host-neutral stream display shape. StreamSnapshotStore reconstructs durable
+ * fields from committed events; views combine those fields with transcript
+ * and live execution information. This display schema does not define the
+ * flow checkpoint or the resume protocol.
  */
 
 import { z } from 'zod';
@@ -48,34 +31,8 @@ const SharedBackendOwnedFieldsSchema = BackendOwnedFieldsSchema.pick({
   subagents: true,
 });
 
-/**
- * Bump when the persisted shape changes. A reader enforces this as a
- * forward-compat gate in `readPersistedWorkPlan` (`@transcript/streamSnapshotRead`):
- * a file stamped with a NEWER version is ignored (read as empty) rather than
- * having its unknown-shaped fields consumed as this version.
- */
-export const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
-
-// ============================================================================
-// Persisted workPlan.json — the one NEW durable file
-// ============================================================================
-
-/**
- * On-disk shape of `streamData/{id}/workPlan.json` — the strict reader/writer
- * for the one NEW durable file (todos/plan/planSummary have no other home). The
- * lenient {@link WorkPlanSnapshotSchema} (in `@shared/schemas/workPlan`) is a
- * deliberately separate role: it normalizes UNTRUSTED bus/agent input (deriving
- * planSummary from the plan), whereas this schema writes our own trusted disk
- * format. The reader recovers individual malformed fields loudly; a missing
- * `schemaVersion` is treated as v1, while a NEWER one is gated out upstream in
- * `readPersistedWorkPlan` before fields are read.
- */
-export const PersistedWorkPlanSchema = z.object({
-  schemaVersion: z.literal(STREAM_SNAPSHOT_SCHEMA_VERSION),
-  todos: WorkPlanSnapshotShape.todos,
-  plan: WorkPlanSnapshotShape.plan,
-  planSummary: WorkPlanSnapshotShape.planSummary,
-});
+/** Version of the exported logical snapshot shape. */
+const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 
 // ============================================================================
 // StreamSnapshot — the assembled logical view (durable + log-derived + liveness)

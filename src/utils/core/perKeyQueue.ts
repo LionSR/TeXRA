@@ -17,7 +17,7 @@ interface QueueMap<Key> {
  * caller; until then, code that already has a runtime at hand should reach
  * for {@link withPerKeyLane} instead.
  */
-export function getOrCreatePQueue<Key>(
+function getOrCreatePQueue<Key>(
   queues: QueueMap<Key>,
   key: Key,
   concurrency = 1,

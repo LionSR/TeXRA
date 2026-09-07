@@ -184,10 +184,13 @@ function requireNonEmpty(value: string, label: string): string {
  * no fiber and no runtime.
  */
 export function goalStateChanges(
-  session: Pick<SessionHandle, 'events' | 'now'>,
+  session: Pick<SessionHandle, 'folded' | 'now'>,
 ): Stream.Stream<GoalStateChange> {
-  return session.events.all(session.now()).pipe(
-    Stream.filter((event) => event.type === 'goalStateChanged'),
+  return session.folded(session.now()).pipe(
+    Stream.filter(
+      (event) =>
+        event.type === 'goalStateChanged' || event.type === 'stream.removed',
+    ),
     Stream.map((event) => ({
       streamId: aggregateTarget(event.aggregateId).id,
     })),
@@ -300,13 +303,21 @@ export const GoalStore = Object.freeze({
     streamIds: readonly StreamTabId[],
     session?: SessionHandle,
   ): Promise<void> {
+    const toRemove = await GoalStore.removeRecords(streamIds);
+    for (const id of toRemove) emitGoalStateChanged(id, null, session);
+  },
+
+  /** Remove stored records; the caller owns notification of the state change. */
+  async removeRecords(
+    streamIds: readonly StreamTabId[],
+  ): Promise<readonly StreamTabId[]> {
     const state = workspaceRoots().workspaceState;
     // Gate on raw key presence, not parse success, so explicit cleanup can
     // still remove an invalid record without first reading it.
     const toRemove = streamIds.filter(
       (id) => state.get<unknown>(streamKey(id)) != null,
     );
-    if (toRemove.length === 0) return;
+    if (toRemove.length === 0) return [];
     const dropped = new Set(toRemove);
     await Promise.all([
       ...toRemove.map((id) => state.update(streamKey(id), undefined)),
@@ -315,7 +326,7 @@ export const GoalStore = Object.freeze({
         return next.length === index.length ? index : next;
       }),
     ]);
-    for (const id of toRemove) emitGoalStateChanged(id, null, session);
+    return toRemove;
   },
 
   /**

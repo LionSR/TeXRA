@@ -19,15 +19,17 @@ import * as AgentRunner from '@agent/runtime/runAgent';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
 import {
   AgentCategory,
+  aggregateId,
   RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { createProcessSession } from '@test/support/sessionTestUtils';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import { snapshotFacts } from '@test/support/storeTestDrivers';
-import { StreamSnapshotStore } from '@transcript';
 
 const retrieveSessionResumeData = vi.spyOn(
   SessionResumeRetrieval,
@@ -137,14 +139,22 @@ function attachResultPresenter(session: SessionHandle): {
 }
 
 /** Harness disposal is idempotent so tests can shut it down mid-test. */
-function createResumeHarness(): {
+async function createResumeHarness(): Promise<{
   owner: DesktopProcessResumeOwner;
   session: SessionHandle;
   dispose(): void;
-} {
-  const snapshots = new StreamSnapshotStore();
-  snapshotFacts(snapshots).setRunConfig(stream, config, executionId);
-  const session = createProcessSession({ snapshots });
+}> {
+  const session = createProcessSession();
+  publishTestRunStart(session, stream, executionId);
+  session.publish([
+    {
+      type: 'run.config',
+      aggregateId: aggregateId('stream', stream),
+      executionId,
+      config,
+    },
+  ]);
+  await session.settlePublications();
   session.transcripts.ensureStream(stream);
   const owner = new DesktopProcessResumeOwner({ sessions: () => [session] });
   let disposed = false;
@@ -192,7 +202,7 @@ describe('desktop process resume owner', () => {
 
   it('resumes while no BrowserWindow presentation exists', async () => {
     await mockWorkflowResume();
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(true);
     expect(runAgent).toHaveBeenCalledOnce();
@@ -201,7 +211,7 @@ describe('desktop process resume owner', () => {
   it('presents one error when workflow resume fails before lifecycle startup', async () => {
     await mockWorkflowResume();
     runAgent.mockRejectedValue(new Error('launch failed'));
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
     const presenter = attachResultPresenter(harness.session);
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
@@ -215,7 +225,7 @@ describe('desktop process resume owner', () => {
 
   it('presents one workflow failure after lifecycle startup', async () => {
     await mockWorkflowResume();
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
     failAfterLifecycle(
       harness.session,
       'workflow',
@@ -232,7 +242,7 @@ describe('desktop process resume owner', () => {
 
   it('replays one detached post-lifecycle workflow failure on replacement', async () => {
     await mockWorkflowResume();
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
     failAfterLifecycle(
       harness.session,
       'workflow',
@@ -259,7 +269,7 @@ describe('desktop process resume owner', () => {
     retrieveSessionResumeData.mockResolvedValue(
       createToolUseResumeData({ streamId: stream, executionId }),
     );
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
     const flow = harness.session.followUps.claimLive(stream, 'flow')!;
     harness.session.followUps.queue(flow).enqueue({ text: 'keep this queued' });
     harness.session.followUps.release(flow, 'recoverable');
@@ -285,7 +295,7 @@ describe('desktop process resume owner', () => {
 
   it('does not duplicate a terminal resume failure presentation', async () => {
     await mockWorkflowResume();
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
     failAfterLifecycle(harness.session, 'workflow', 'terminal resume failed');
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
@@ -299,7 +309,7 @@ describe('desktop process resume owner', () => {
 
   it('reports a resume failure that follows a completed terminal result', async () => {
     await mockWorkflowResume();
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
     runAgent.mockImplementation(async (_request, options) => {
       await options.onRun?.({} as never);
       options.session?.publishRunEvent(stream, completedResult());
@@ -316,7 +326,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('rejects a termination-triggered wake after shutdown disables resume', async () => {
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
 
     harness.dispose();
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
@@ -325,7 +335,7 @@ describe('desktop process resume owner', () => {
 
   it('cancels an in-flight resume before shutdown can launch it', async () => {
     const retrieval = await gateWorkflowResume();
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
 
     const resume = harness.owner.tryResumeStream(stream);
     await retrieval.started;
@@ -338,7 +348,7 @@ describe('desktop process resume owner', () => {
 
   it('does not resume or recreate a stream deleted during retrieval', async () => {
     const retrieval = await gateWorkflowResume();
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
 
     const resume = harness.owner.tryResumeStream(stream);
     await retrieval.started;
@@ -352,7 +362,7 @@ describe('desktop process resume owner', () => {
 
   it('rejects a stale process store after another process deletes the stream', async () => {
     await mockWorkflowResume();
-    const harness = createResumeHarness();
+    const harness = await createResumeHarness();
     vi.spyOn(
       harness.session.transcripts,
       'hasAuthoritativeStream',

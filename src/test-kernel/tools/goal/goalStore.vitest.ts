@@ -315,6 +315,28 @@ describe('goalStateChanges', () => {
       await settleSessionEvents();
 
       expect(seen).toEqual([{ streamId: 'same-session' }]);
+      await withRunContext(createRunContext({ session: sessionA }), () =>
+        GoalStore.start('same-session', 'Determine the boundary conditions.'),
+      );
+      await sessionA.settlePublications();
+      const removed = effectRuntime().runPromise(
+        Stream.runHead(
+          goalStateChanges(sessionA).pipe(
+            Stream.map((change) =>
+              withRunContext(createRunContext({ session: sessionA }), () =>
+                GoalStore.getForStream(change.streamId),
+              ),
+            ),
+          ),
+        ),
+      );
+      sessionA.publish([
+        {
+          type: 'stream.removed',
+          aggregateId: qualifyAggregateId('stream', 'same-session'),
+        },
+      ]);
+      expect(await removed).toMatchObject({ _tag: 'Some', value: null });
     } finally {
       detach();
       sessionA.dispose();

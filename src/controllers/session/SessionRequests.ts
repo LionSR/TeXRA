@@ -25,7 +25,6 @@
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
-import type { SessionStores } from '@agent/storage';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type {
   PlanApprovalResult,
@@ -35,7 +34,13 @@ import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId as qualifyAggregateId } from '@shared/schemas';
 import type { LocalRuntimeState, StreamTabId } from '@shared/schemas';
-import type { Database } from '@shared/session/database';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+  type AggregateState,
+  type Database,
+  type DeletionMode,
+} from '@shared/session/database';
 import {
   NotOwner,
   Rejected,
@@ -44,13 +49,12 @@ import {
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
-import { createSessionStores } from './createSessionStores';
 
 const done: Outcome = { kind: 'done' };
 
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
-  'aggregateState' | 'acquireClaims' | 'appendAll'
+  'aggregateState' | 'readAll' | 'removeStream'
 >;
 
 /** The session's request handler, admitting on the log's sequence table. */
@@ -59,32 +63,42 @@ export function sessionRequests(
   log: SessionRequestLog,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
 ): SessionGraph['requests'] {
-  // The store lifecycle owner, built on the first request that deletes: it
-  // holds the deletion queues, which only those need.
-  let stores: SessionStores | undefined;
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
-    yield* admit(log, local, req);
-    return yield* handle(
-      session,
-      () => (stores ??= createSessionStores(session)),
-      req,
-      log,
-      local,
-    );
+    const admitted = yield* admit(log, local, req);
+    return yield* handle(session, req, log, admitted);
   });
-  return { request };
+  const removeStream = Effect.fn('SessionRequests.removeStream')(function* (
+    streamId: StreamTabId,
+    mode: DeletionMode,
+    expectedStartCommit: number,
+  ) {
+    const admitted = yield* admit(log, local, {
+      kind: 'stream.delete',
+      streamId,
+    });
+    if (admitted.startCommit !== expectedStartCommit) {
+      return yield* Effect.fail(
+        new Unavailable({
+          streamId,
+          reason: 'The run changed after it was listed.',
+        }),
+      );
+    }
+    return yield* deleteAdmittedStream(session, log, streamId, admitted, mode);
+  });
+  return { request, removeStream };
 }
 
 /** Admit against current sequence-row existence and claims. A foreign owner
  *  absent from the liveness snapshot is unprovable, so it cannot be admitted.
- *  Deletion retains its explicit single-run ownership protocol in the store. */
+ *  Deletion uses the database transaction for its explicit single-run exception. */
 function admit(
   log: Pick<Context.Service.Shape<typeof Database>, 'aggregateState'>,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   req: RuntimeRequest,
-): Effect.Effect<void, RequestError> {
+): Effect.Effect<AggregateState, RequestError> {
   // The stream a request acts on.
   const streamId =
     req.kind === 'policy.set' ? req.change.streamId : req.streamId;
@@ -93,7 +107,7 @@ function admit(
       Effect.orDie,
       Effect.map((rows) => rows[0]),
     ),
-    (state): Effect.Effect<void, RequestError> => {
+    (state): Effect.Effect<AggregateState, RequestError> => {
       if (!state || state.closed) {
         return Effect.fail(
           new Unavailable({
@@ -111,7 +125,7 @@ function admit(
       ) {
         return Effect.fail(new NotOwner({ streamId }));
       }
-      return Effect.void;
+      return Effect.succeed(state);
     },
   );
 }
@@ -157,12 +171,69 @@ function proposalDecision(
   }
 }
 
+/** Delete the admitted lifetime under its execution queue. */
+function deleteAdmittedStream(
+  session: SessionHandle,
+  log: SessionRequestLog,
+  streamId: StreamTabId,
+  admitted: AggregateState,
+  mode: DeletionMode,
+): Effect.Effect<Outcome, RequestError> {
+  const aggregateId = qualifyAggregateId('stream', streamId);
+  return Effect.gen(function* () {
+    const row = admitted;
+    if (row.startCommit === null) {
+      return yield* Effect.fail(
+        new Unavailable({
+          streamId: streamId,
+          reason: 'The stream has no recorded start.',
+        }),
+      );
+    }
+    const [start] = yield* log
+      .readAll(row.startCommit - 1, row.startCommit)
+      .pipe(Effect.orDie);
+    if (start?.type !== 'run.start' || start.aggregateId !== aggregateId) {
+      return yield* Effect.fail(
+        new Unavailable({
+          streamId: streamId,
+          reason: 'The stream start could not be read.',
+        }),
+      );
+    }
+    yield* session.executions
+      .withExecutionStep(
+        start.executionId,
+        log.removeStream(aggregateId, mode, start.commit),
+      )
+      .pipe(
+        Effect.mapError((error): RequestError => {
+          if (
+            error instanceof DatabaseWriteFailed &&
+            error.cause instanceof DatabaseClaimRefused
+          ) {
+            return error.cause.verdict === 'alive'
+              ? new NotOwner({ streamId })
+              : new Rejected({
+                  reason:
+                    'The current owner could not be verified, so automatic or bulk deletion was refused.',
+                });
+          }
+          return new Unavailable({
+            streamId,
+            reason: 'The stream could not be removed from the listing.',
+          });
+        }),
+      );
+    return { kind: 'deleted' as const, result: 'deleted' as const };
+  });
+}
+
 function handle(
   session: SessionHandle,
-  stores: () => SessionStores,
   req: RuntimeRequest,
   log: SessionRequestLog,
-  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
+  admitted: AggregateState,
 ): Effect.Effect<Outcome, RequestError> {
   switch (req.kind) {
     case 'stream.stop':
@@ -172,52 +243,14 @@ function handle(
         });
         return done;
       });
-    case 'stream.delete': {
-      const aggregateId = qualifyAggregateId('stream', req.streamId);
-      return Effect.gen(function* () {
-        const row = (yield* log
-          .aggregateState([aggregateId])
-          .pipe(Effect.orDie))[0];
-        if (row && !row.closed) {
-          const liveness = SubscriptionRef.getUnsafe(local);
-          if (row.ownerId === null) {
-            yield* log.acquireClaims([aggregateId]).pipe(
-              Effect.mapError(
-                () =>
-                  new Unavailable({
-                    streamId: req.streamId,
-                    reason: 'The stream claim could not be acquired.',
-                  }),
-              ),
-            );
-          } else if (!liveness.self.includes(row.ownerId)) {
-            if (!liveness.dead.includes(row.ownerId)) {
-              return yield* Effect.fail(
-                new NotOwner({ streamId: req.streamId }),
-              );
-            }
-            yield* log
-              .acquireClaims([aggregateId])
-              .pipe(
-                Effect.mapError(() => new NotOwner({ streamId: req.streamId })),
-              );
-          }
-          yield* log.appendAll([{ type: 'stream.removed', aggregateId }]).pipe(
-            Effect.mapError(
-              () =>
-                new Unavailable({
-                  streamId: req.streamId,
-                  reason: 'The stream could not be removed from the listing.',
-                }),
-            ),
-          );
-        }
-        const result = yield* Effect.promise(() =>
-          stores().deleteStream(req.streamId),
-        );
-        return { kind: 'deleted' as const, result };
-      });
-    }
+    case 'stream.delete':
+      return deleteAdmittedStream(
+        session,
+        log,
+        req.streamId,
+        admitted,
+        'single',
+      );
     case 'stream.compact':
       return Effect.suspend((): Effect.Effect<Outcome, RequestError> => {
         const result = session.executions.requestManualCompaction(req.streamId);
