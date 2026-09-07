@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 
 import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
-import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
@@ -192,7 +191,7 @@ export async function initializeElectronPlatform(
   // Copilot route preferences are swept on every startup. Runs here so it is
   // upstream of the settings view's first model-list paint.
   await effectRuntime().runPromise(
-    hostPort(() => refreshModelListAndLog(globalStateStore)).pipe(
+    refreshModelListAndLog(globalStateStore).pipe(
       Effect.tap(({ messages }) =>
         Effect.sync(() => {
           for (const message of messages) console.info(`[desktop] ${message}`);

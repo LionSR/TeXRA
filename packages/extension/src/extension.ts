@@ -603,10 +603,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
         log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
       }
     })(),
-    (async () => {
-      try {
-        const { currentVersion, previousVersion, skipped, messages } =
-          await refreshModelListAndLog(context.globalState);
+    effectRuntime()
+      .runPromise(refreshModelListAndLog(context.globalState))
+      .then(({ currentVersion, previousVersion, skipped, messages }) => {
         if (!skipped) {
           if (previousVersion !== currentVersion) {
             log.info(
@@ -616,10 +615,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
           log.info('Model list refresh completed successfully');
         }
         for (const message of messages) log.info(message);
-      } catch (err) {
+      })
+      .catch((err) => {
         log.error(`Failed to refresh model list: ${toErrorMessage(err)}`);
-      }
-    })(),
+      }),
   ]);
 
   registerSupabaseAuth(context);
