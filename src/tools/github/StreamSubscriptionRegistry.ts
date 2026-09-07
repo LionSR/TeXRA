@@ -11,6 +11,8 @@
  * that queue's session are auto-disposed.
  */
 
+import { Effect } from 'effect';
+
 import type { AgentTrace } from '@agent/trace';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
@@ -26,14 +28,19 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
+import type { PollEventListener } from './PollingSourceBase';
+
 export interface SubscriptionBinding<K extends string> {
   key: K;
   streamIds: readonly StreamTabId[];
 }
 
 interface PollingSourceLike<K extends string, Input> {
-  subscribe(input: Input, onEvent: (text: string) => void): Disposable;
-  updateSubscription?(input: Input, onEvent: (text: string) => void): void;
+  subscribe(
+    input: Input,
+    onEvent: PollEventListener,
+  ): Effect.Effect<Disposable>;
+  updateSubscription?(input: Input, onEvent: PollEventListener): void;
   activeKeys(): readonly K[];
   onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
 }
@@ -51,7 +58,7 @@ export interface StreamSubscriptionRegistryOptions<K extends string, Input> {
 
 interface BoundSubscription {
   disposable: Disposable;
-  onEvent: (text: string) => void;
+  onEvent: PollEventListener;
   /**
    * Owning session captured at bind() time (inside the run's AsyncLocalStorage).
    * onEvent fires later from a detached polling timer where the ALS is empty, so
@@ -81,64 +88,92 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     });
   }
 
-  /** Returns true if a new subscription was created, false if it already existed. */
-  bind(streamId: StreamTabId, input: Input): boolean {
-    const key = this.opts.keyOf(input);
-    // Capture the session HERE: bind() runs inside the run's AsyncLocalStorage
-    // (the github tool's execute()), but onEvent fires later from a detached
-    // polling timer where the ALS is empty.
-    const session = currentSession();
-    const bound =
-      this.perStream.get(streamId) ?? new Map<K, BoundSubscription>();
-    const existing = bound.get(key);
-    if (existing) {
-      this.ensureReleaseHook(session);
-      const previousOwner = existing.owner;
-      existing.owner = session;
-      if (previousOwner !== session) {
-        this.detachReleaseHookIfUnused(previousOwner);
+  /**
+   * Returns true if a new subscription was created, false if it already existed.
+   *
+   * The returned Effect is run by the tool's `execute()` (R1 boundary). Its
+   * synchronous prelude runs inside that call — inside the run's
+   * AsyncLocalStorage — so the owning session capture below happens with the
+   * run's context exactly as the old synchronous `bind()` did.
+   */
+  bind(streamId: StreamTabId, input: Input): Effect.Effect<boolean> {
+    return Effect.suspend(() => {
+      const key = this.opts.keyOf(input);
+      // Capture the session HERE: the returned Effect runs inside the run's
+      // AsyncLocalStorage (the github tool's execute()), but onEvent fires
+      // later from the detached poll loop where the ALS is empty.
+      const session = currentSession();
+      const bound =
+        this.perStream.get(streamId) ?? new Map<K, BoundSubscription>();
+      const existing = bound.get(key);
+      if (existing) {
+        this.ensureReleaseHook(session);
+        const previousOwner = existing.owner;
+        existing.owner = session;
+        if (previousOwner !== session) {
+          this.detachReleaseHookIfUnused(previousOwner);
+        }
+        this.opts.source.updateSubscription?.(input, existing.onEvent);
+        return Effect.succeed(false);
       }
-      this.opts.source.updateSubscription?.(input, existing.onEvent);
-      return false;
-    }
-    const onEvent = (text: string) => {
-      const subscription = bound.get(key);
-      if (!subscription) return;
-      // Capture the owner before awaiting: bind() reassigns it on rebind, and
-      // the queued-follow-up refresh belongs to the session that delivered.
-      const owner = subscription.owner;
-      void submitFollowUp(streamId, text, {
-        session: owner,
-        mode: 'live_notification',
-      })
-        .then((result) => {
-          if (result.status !== 'sent' && result.status !== 'queued') return;
-          owner.publish([
-            {
-              type: 'updateQueuedFollowUps',
-              aggregateId: qualifyAggregateId('stream', streamId),
-              messages: owner.followUps.getAll(streamId),
-            },
-          ]);
-        })
-        .catch((err: unknown) => {
-          this.logger.warn('Failed to deliver subscription follow-up', {
-            data: { key, streamId, err },
+      const onEvent = (text: string): Effect.Effect<void> => {
+        // Invoked synchronously on the emit turn (see PollEventListener):
+        // capture the binding and its owner now — bind() reassigns the owner
+        // on rebind, and the queued-follow-up refresh belongs to the session
+        // that delivered. Only the delivery itself runs detached.
+        const subscription = bound.get(key);
+        if (!subscription) return Effect.void;
+        const owner = subscription.owner;
+        const reportDeliveryFailure = (err: unknown) =>
+          Effect.sync(() => {
+            this.logger.warn('Failed to deliver subscription follow-up', {
+              data: { key, streamId, err },
+            });
           });
-        });
-    };
-    const disposable = this.opts.source.subscribe(input, onEvent);
-    const subscription: BoundSubscription = {
-      disposable,
-      onEvent,
-      owner: session,
-    };
-    bound.set(key, subscription);
-    this.perStream.set(streamId, bound);
-    this.ensureReleaseHook(session);
-    this.logger.info(`Bound subscription ${key} → stream ${streamId}`);
-    this.emitBindingsChanged();
-    return true;
+        return Effect.tryPromise({
+          try: () =>
+            submitFollowUp(streamId, text, {
+              session: owner,
+              mode: 'live_notification',
+            }),
+          catch: (err) => err,
+        }).pipe(
+          Effect.flatMap((result) => {
+            if (result.status !== 'sent' && result.status !== 'queued') {
+              return Effect.void;
+            }
+            return Effect.sync(() => {
+              owner.publish([
+                {
+                  type: 'updateQueuedFollowUps',
+                  aggregateId: qualifyAggregateId('stream', streamId),
+                  messages: owner.followUps.getAll(streamId),
+                },
+              ]);
+            });
+          }),
+          Effect.catch(reportDeliveryFailure),
+          // A defect (e.g. publish throwing) got the same warn through the old
+          // promise chain's .catch; keep one message for both channels.
+          Effect.catchDefect(reportDeliveryFailure),
+        );
+      };
+      return this.opts.source.subscribe(input, onEvent).pipe(
+        Effect.map((disposable) => {
+          const subscription: BoundSubscription = {
+            disposable,
+            onEvent,
+            owner: session,
+          };
+          bound.set(key, subscription);
+          this.perStream.set(streamId, bound);
+          this.ensureReleaseHook(session);
+          this.logger.info(`Bound subscription ${key} → stream ${streamId}`);
+          this.emitBindingsChanged();
+          return true;
+        }),
+      );
+    });
   }
 
   /** Returns true if a subscription existed and was removed. */
@@ -149,7 +184,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     if (!bound || !binding) return false;
     this.removeBoundKey(streamId, bound, key);
     this.detachReleaseHookIfUnused(binding.owner);
-    this.disposeSafe(binding.disposable, 'explicit unsubscribe');
+    binding.disposable.dispose();
     this.emitBindingsChanged();
     return true;
   }
@@ -173,7 +208,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     if (removedBindings.length > 0) {
       for (const owner of owners) this.detachReleaseHookIfUnused(owner);
       for (const binding of removedBindings) {
-        this.disposeSafe(binding.disposable, 'unbindAll');
+        binding.disposable.dispose();
       }
       this.emitBindingsChanged();
     }
@@ -210,7 +245,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       if (bound.size === 0) this.perStream.delete(streamId);
       this.detachReleaseHookIfUnused(session);
       for (const [, binding] of owned) {
-        this.disposeSafe(binding.disposable, 'release');
+        binding.disposable.dispose();
       }
       this.emitBindingsChanged();
     });
@@ -252,14 +287,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   ): void {
     bound.delete(key);
     if (bound.size === 0) this.perStream.delete(streamId);
-  }
-
-  private disposeSafe(d: Disposable, context: string): void {
-    try {
-      d.dispose();
-    } catch (err) {
-      this.logger.warn(`Disposer threw during ${context}`, { data: err });
-    }
   }
 
   private emitBindingsChanged(): void {

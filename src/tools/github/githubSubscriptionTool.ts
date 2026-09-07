@@ -17,12 +17,14 @@
  * - `owner/repo/pulls/N` and `owner/repo/issues/N` are nuanced (worker-friendly).
  */
 
+import { Cause, Effect, Exit } from 'effect';
 import { z } from 'zod';
 
 import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -163,13 +165,38 @@ function parsePath(raw: string): ParsedPath {
   );
 }
 
-async function requireToken(): Promise<void> {
-  if (!(await getGitHubToken())) {
-    throw new ToolError(
-      'No GitHub token configured. In the CLI, open /config → GitHub token. In VS Code, use TeXRA settings → Git tab → "Set token". Or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
-    );
-  }
+/**
+ * One wrap of a Promise call across the tool's Effect edge: the rejection
+ * keeps its identity, so the fold in `execute()` rethrows exactly the
+ * ToolError (or plain error) the old promise chain rejected with.
+ */
+const port = <A>(promise: () => Promise<A>): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: promise, catch: (error) => error });
+
+/**
+ * The one run of a subscription-tool program settles here (R1: the tool
+ * execute() contract is the Promise boundary). A failure — the program's
+ * ToolError, or a defect such as the registry's max-concurrent guard — is
+ * rethrown as the squashed cause, the same identity the async implementation
+ * rejected with.
+ */
+function foldToolExit(exit: Exit.Exit<ToolResult, unknown>): ToolResult {
+  if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+  return exit.value;
 }
+
+const requireToken = (): Effect.Effect<void, unknown> =>
+  Effect.flatMap(
+    port(() => getGitHubToken()),
+    (token) =>
+      token
+        ? Effect.void
+        : Effect.fail(
+            new ToolError(
+              'No GitHub token configured. In the CLI, open /config → GitHub token. In VS Code, use TeXRA settings → Git tab → "Set token". Or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
+            ),
+          ),
+  );
 
 /** `owner/repo` for any parsed target. */
 function slugOf(target: { owner: string; repo: string }): string {
@@ -201,8 +228,10 @@ function prSubscriptionActivitySentence(
   return `New comments, reviews, line comments, failed CI checks, inline check annotations (${annotationLevelDescription} pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups.`;
 }
 
-async function execSubscribe(input: SubscribeInput): Promise<ToolResult> {
-  await requireToken();
+const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
+  input: SubscribeInput,
+) {
+  yield* requireToken();
   const { streamId } = requireRunStream('github_subscription');
   const target = requirePath(input);
   const minAnnotationLevel =
@@ -210,7 +239,7 @@ async function execSubscribe(input: SubscribeInput): Promise<ToolResult> {
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
-    const created = repoSubscriptionRegistry.bind(streamId, target);
+    const created = yield* repoSubscriptionRegistry.bind(streamId, target);
     const slug = slugOf(target);
     return executed(
       created
@@ -222,7 +251,7 @@ async function execSubscribe(input: SubscribeInput): Promise<ToolResult> {
     );
   }
   if (target.kind === 'pr') {
-    const created = prSubscriptionRegistry.bind(streamId, {
+    const created = yield* prSubscriptionRegistry.bind(streamId, {
       ...target,
       minAnnotationLevel,
     });
@@ -251,10 +280,10 @@ async function execSubscribe(input: SubscribeInput): Promise<ToolResult> {
   const isPR =
     knownPR ||
     (!knownIssue &&
-      (await resolveIssueIsPR(target.owner, target.repo, target.issueNumber)));
+      (yield* resolveIssueIsPR(target.owner, target.repo, target.issueNumber)));
 
   if (isPR) {
-    const created = prSubscriptionRegistry.bind(streamId, {
+    const created = yield* prSubscriptionRegistry.bind(streamId, {
       owner: target.owner,
       repo: target.repo,
       pullNumber: target.issueNumber,
@@ -275,7 +304,7 @@ async function execSubscribe(input: SubscribeInput): Promise<ToolResult> {
       summary,
     );
   }
-  const created = issueSubscriptionRegistry.bind(streamId, target);
+  const created = yield* issueSubscriptionRegistry.bind(streamId, target);
   return executed(
     created
       ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught: call command="unsubscribe" to release the slot.`
@@ -284,27 +313,30 @@ async function execSubscribe(input: SubscribeInput): Promise<ToolResult> {
       ? `Subscribed to ${issueSlug}`
       : `Already subscribed to ${issueSlug}`,
   );
-}
+});
 
 /**
  * Returns true iff the given issue/PR number resolves to a PR. One GET to
  * `/repos/{o}/{r}/issues/{n}`; the response object has a `pull_request`
- * field iff this is actually a PR. Throws on non-200.
+ * field iff this is actually a PR. Fails with a ToolError on non-200.
  */
-async function resolveIssueIsPR(
+const resolveIssueIsPR = (
   owner: string,
   repo: string,
   number: number,
-): Promise<boolean> {
-  const res = await ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`);
-  if (res.status !== 200) {
-    throw new ToolError(
-      `Failed to resolve ${owner}/${repo}/issues/${number}: GitHub returned status ${res.status}. ` +
-        `Verify the number exists and the repo is accessible.`,
-    );
-  }
-  return res.data.pull_request != null;
-}
+): Effect.Effect<boolean, unknown> =>
+  Effect.flatMap(
+    port(() => ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`)),
+    (res) =>
+      res.status !== 200
+        ? Effect.fail(
+            new ToolError(
+              `Failed to resolve ${owner}/${repo}/issues/${number}: GitHub returned status ${res.status}. ` +
+                `Verify the number exists and the repo is accessible.`,
+            ),
+          )
+        : Effect.succeed(res.data.pull_request != null),
+  );
 
 function execUnsubscribe(input: UnsubscribeInput): ToolResult {
   const { streamId } = requireRunStream('github_subscription');
@@ -374,19 +406,27 @@ function parseGitHubRemote(
   return { owner: m[1], repo: m[2] };
 }
 
-async function gitInDir(args: string[], cwd: string): Promise<string> {
-  const result = await executeCommand(['git', ...args], {
-    cwd,
-    timeout: 10_000,
-    channel: 'github_subscription',
-  });
-  if (!result.success) {
-    throw new ToolError(
-      result.stderr || `git ${args.join(' ')} failed with no stderr.`,
-    );
-  }
-  return result.stdout.trim();
-}
+const gitInDir = (
+  args: string[],
+  cwd: string,
+): Effect.Effect<string, unknown> =>
+  Effect.flatMap(
+    port(() =>
+      executeCommand(['git', ...args], {
+        cwd,
+        timeout: 10_000,
+        channel: 'github_subscription',
+      }),
+    ),
+    (result) =>
+      result.success
+        ? Effect.succeed(result.stdout.trim())
+        : Effect.fail(
+            new ToolError(
+              result.stderr || `git ${args.join(' ')} failed with no stderr.`,
+            ),
+          ),
+  );
 
 interface OpenPullSummary {
   number: number;
@@ -394,15 +434,19 @@ interface OpenPullSummary {
   head?: { ref?: string };
 }
 
-async function getDefaultBranch(owner: string, repo: string): Promise<string> {
-  const res = await ghGet<{ default_branch?: string }>(
-    `/repos/${owner}/${repo}`,
+const getDefaultBranch = (
+  owner: string,
+  repo: string,
+): Effect.Effect<string, unknown> =>
+  Effect.flatMap(
+    port(() => ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`)),
+    (res) =>
+      res.status !== 200
+        ? Effect.fail(
+            new ToolError(`Unexpected GitHub response status: ${res.status}`),
+          )
+        : Effect.succeed(res.data.default_branch ?? 'main'),
   );
-  if (res.status !== 200) {
-    throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
-  }
-  return res.data.default_branch ?? 'main';
-}
 
 export function parseOriginHeadDefaultBranch(ref: string): string | undefined {
   const branch = ref.trim().replace(/^refs\/remotes\//, '');
@@ -410,116 +454,137 @@ export function parseOriginHeadDefaultBranch(ref: string): string | undefined {
   return branch.slice('origin/'.length) || undefined;
 }
 
-async function getLocalDefaultBranchHint(
+/** The local origin/HEAD hint: any lookup failure just means "no hint". */
+const getLocalDefaultBranchHint = (
   cwd: string,
-): Promise<string | undefined> {
-  try {
-    const ref = await gitInDir(
-      ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-      cwd,
-    );
-    return parseOriginHeadDefaultBranch(ref);
-  } catch {
-    return undefined;
-  }
-}
+): Effect.Effect<string | undefined> =>
+  gitInDir(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], cwd).pipe(
+    Effect.map(parseOriginHeadDefaultBranch),
+    Effect.catch(() => Effect.succeed(undefined)),
+  );
 
-async function listOpenPullSuggestions(
+const listOpenPullSuggestions = (
   owner: string,
   repo: string,
-): Promise<string> {
-  const res = await ghGet<OpenPullSummary[]>(
-    `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
+): Effect.Effect<string, unknown> =>
+  Effect.map(
+    port(() =>
+      ghGet<OpenPullSummary[]>(
+        `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
+      ),
+    ),
+    (res) => {
+      if (res.status !== 200 || res.data.length === 0) {
+        return '';
+      }
+      const lines = res.data.map((pr) => {
+        const title = pr.title ? ` - ${pr.title}` : '';
+        const head = pr.head?.ref ? ` (${pr.head.ref})` : '';
+        return `- ${prRef(slugOf({ owner, repo }), pr.number)}${head}${title}`;
+      });
+      return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
+    },
   );
-  if (res.status !== 200 || res.data.length === 0) {
-    return '';
-  }
-  const lines = res.data.map((pr) => {
-    const title = pr.title ? ` - ${pr.title}` : '';
-    const head = pr.head?.ref ? ` (${pr.head.ref})` : '';
-    return `- ${prRef(slugOf({ owner, repo }), pr.number)}${head}${title}`;
-  });
-  return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
-}
 
-async function getFindCurrentFallbackInfo(
+/** Neither half is essential: each recovers to its absence, concurrently. */
+const getFindCurrentFallbackInfo = (
   owner: string,
   repo: string,
   cwd: string,
-): Promise<{ defaultBranch?: string; suggestions: string }> {
-  const [defaultBranchResult, suggestionsResult] = await Promise.allSettled([
-    getDefaultBranch(owner, repo).catch(() => getLocalDefaultBranchHint(cwd)),
-    listOpenPullSuggestions(owner, repo),
-  ]);
-  return {
-    defaultBranch:
-      defaultBranchResult.status === 'fulfilled'
-        ? defaultBranchResult.value
-        : undefined,
-    suggestions:
-      suggestionsResult.status === 'fulfilled' ? suggestionsResult.value : '',
-  };
-}
-
-async function execFindCurrent(input: FindCurrentInput): Promise<ToolResult> {
-  await requireToken();
-  const cwd =
-    parseWorkingDirectory(input.working_directory) ??
-    getRunContextWorkingDirectory(tryUseRunContext());
-  if (!cwd) {
-    throw new ToolError(
-      'No working_directory available. Provide one explicitly.',
-    );
-  }
-  let remoteUrl: string;
-  let branch: string;
-  try {
-    remoteUrl = await gitInDir(['remote', 'get-url', 'origin'], cwd);
-    branch = await gitInDir(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
-  } catch (err) {
-    throw new ToolError(
-      `git invocation failed in ${cwd}: ${toErrorMessage(err)}`,
-    );
-  }
-  const remote = parseGitHubRemote(remoteUrl);
-  if (!remote) {
-    throw new ToolError(`origin remote is not a github.com URL: ${remoteUrl}`);
-  }
-  if (branch === 'HEAD') {
-    throw new ToolError('HEAD is detached: cannot infer a PR branch.');
-  }
-  const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
-  const res = await ghGet<Array<{ number: number; html_url: string }>>(apiPath);
-  if (res.status !== 200) {
-    throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
-  }
-  const pr = res.data[0];
-  if (!pr) {
-    const { defaultBranch, suggestions } = await getFindCurrentFallbackInfo(
-      remote.owner,
-      remote.repo,
-      cwd,
-    );
-    if (branch === defaultBranch) {
-      throw new ToolError(
-        `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
-      );
-    }
-    if (!defaultBranch && branch === 'main') {
-      throw new ToolError(
-        `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
-      );
-    }
-    throw new ToolError(
-      `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
-    );
-  }
-  const path = prRef(slugOf(remote), pr.number);
-  return executed(
-    `path: ${path}\nurl: ${pr.html_url}\n\nPass this path to command="subscribe" to start watching the PR.`,
-    path,
+): Effect.Effect<{ defaultBranch?: string; suggestions: string }> =>
+  Effect.zip(
+    getDefaultBranch(owner, repo).pipe(
+      Effect.catch(() => getLocalDefaultBranchHint(cwd)),
+    ),
+    listOpenPullSuggestions(owner, repo).pipe(
+      Effect.catch(() => Effect.succeed('')),
+    ),
+    { concurrent: true },
+  ).pipe(
+    Effect.map(([defaultBranch, suggestions]) => ({
+      defaultBranch,
+      suggestions,
+    })),
   );
-}
+
+const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
+  function* (input: FindCurrentInput) {
+    yield* requireToken();
+    const cwd =
+      parseWorkingDirectory(input.working_directory) ??
+      getRunContextWorkingDirectory(tryUseRunContext());
+    if (!cwd) {
+      return yield* Effect.fail(
+        new ToolError(
+          'No working_directory available. Provide one explicitly.',
+        ),
+      );
+    }
+    const [remoteUrl, branch] = yield* Effect.zip(
+      gitInDir(['remote', 'get-url', 'origin'], cwd),
+      gitInDir(['rev-parse', '--abbrev-ref', 'HEAD'], cwd),
+    ).pipe(
+      Effect.mapError(
+        (err) =>
+          new ToolError(
+            `git invocation failed in ${cwd}: ${toErrorMessage(err)}`,
+          ),
+      ),
+    );
+    const remote = parseGitHubRemote(remoteUrl);
+    if (!remote) {
+      return yield* Effect.fail(
+        new ToolError(`origin remote is not a github.com URL: ${remoteUrl}`),
+      );
+    }
+    if (branch === 'HEAD') {
+      return yield* Effect.fail(
+        new ToolError('HEAD is detached: cannot infer a PR branch.'),
+      );
+    }
+    const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
+    const res = yield* port(() =>
+      ghGet<Array<{ number: number; html_url: string }>>(apiPath),
+    );
+    if (res.status !== 200) {
+      return yield* Effect.fail(
+        new ToolError(`Unexpected GitHub response status: ${res.status}`),
+      );
+    }
+    const pr = res.data[0];
+    if (!pr) {
+      const { defaultBranch, suggestions } = yield* getFindCurrentFallbackInfo(
+        remote.owner,
+        remote.repo,
+        cwd,
+      );
+      if (branch === defaultBranch) {
+        return yield* Effect.fail(
+          new ToolError(
+            `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+          ),
+        );
+      }
+      if (!defaultBranch && branch === 'main') {
+        return yield* Effect.fail(
+          new ToolError(
+            `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+          ),
+        );
+      }
+      return yield* Effect.fail(
+        new ToolError(
+          `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
+        ),
+      );
+    }
+    const path = prRef(slugOf(remote), pr.number);
+    return executed(
+      `path: ${path}\nurl: ${pr.html_url}\n\nPass this path to command="subscribe" to start watching the PR.`,
+      path,
+    );
+  },
+);
 
 export class GitHubSubscriptionTool extends defineTool({
   name: 'github_subscription',
@@ -540,13 +605,17 @@ export class GitHubSubscriptionTool extends defineTool({
   protected async execute(input: GitHubSubscriptionInput): Promise<ToolResult> {
     switch (input.command) {
       case 'subscribe':
-        return execSubscribe(input);
+        return foldToolExit(
+          await effectRuntime().runPromiseExit(execSubscribe(input)),
+        );
       case 'unsubscribe':
         return execUnsubscribe(input);
       case 'list':
         return execList();
       case 'find_current':
-        return execFindCurrent(input);
+        return foldToolExit(
+          await effectRuntime().runPromiseExit(execFindCurrent(input)),
+        );
     }
   }
 }

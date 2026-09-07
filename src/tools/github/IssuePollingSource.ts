@@ -31,6 +31,7 @@ import {
   DEFAULT_POLLING_BACKOFF_CONFIG,
   dedupeComments,
   type DedupedResource,
+  type PollEventListener,
   type PollHookRejected,
   PollingSourceBase,
   pollRequest,
@@ -92,7 +93,10 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     });
   }
 
-  subscribe(issue: IssueKey, onEvent: (text: string) => void): Disposable {
+  subscribe(
+    issue: IssueKey,
+    onEvent: PollEventListener,
+  ): Effect.Effect<Disposable> {
     const key = issueKeyToString(issue);
     return this.register(key, () => createInitialState(issue), onEvent);
   }
@@ -154,12 +158,12 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
           // failsafe. Bound by `maxConcurrent`.
           if (state.initialized && state.state !== newState) {
             if (state.state === 'open' && newState === 'closed') {
-              this.emit(
+              yield* this.emit(
                 state,
                 formatIssueClosed(state.slug, issue.issueNumber, issueData),
               );
             } else if (state.state === 'closed') {
-              this.emit(
+              yield* this.emit(
                 state,
                 formatIssueReopened(state.slug, issue.issueNumber, issueData),
               );
@@ -186,7 +190,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
           `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
         );
         if (parsedComments) {
-          this.consumeCommentList(
+          yield* this.consumeCommentList(
             parsedComments,
             (etag) => {
               state.etags.comments = etag;

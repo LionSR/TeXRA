@@ -155,9 +155,15 @@ describe('PRPollingSource annotation drain', () => {
     const source = createDrainSource();
     const run = createCheckRun(12);
     const state = createDrainState([run]);
-    const defaultListener = vi.fn();
-    const warningListener = vi.fn();
-    const noticeListener = vi.fn();
+    const defaultListener = vi.fn<(text: string) => Effect.Effect<void>>(
+      () => Effect.void,
+    );
+    const warningListener = vi.fn<(text: string) => Effect.Effect<void>>(
+      () => Effect.void,
+    );
+    const noticeListener = vi.fn<(text: string) => Effect.Effect<void>>(
+      () => Effect.void,
+    );
     state.listeners.add(defaultListener);
     state.listeners.add(warningListener);
     state.listeners.add(noticeListener);
@@ -199,8 +205,10 @@ describe('PRPollingSource annotation drain', () => {
   it('updates the annotation level for an existing listener', async () => {
     const source = new PRPollingSource();
     const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
-    const listener = vi.fn();
-    const disposable = source.subscribe(pr, listener);
+    const listener = vi.fn<(text: string) => Effect.Effect<void>>(
+      () => Effect.void,
+    );
+    const disposable = await Effect.runPromise(source.subscribe(pr, listener));
     const key = prKeyToString(pr);
     const state = drainAccess(source).getSubscriptionState(key);
     if (!state) throw new Error('Expected subscription state');
