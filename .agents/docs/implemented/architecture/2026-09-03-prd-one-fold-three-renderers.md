@@ -1,21 +1,28 @@
 ---
 created: 2026-09-03
-updated: 2026-09-03
+updated: 2026-09-07
 status: implemented
 ---
 
 # PRD: One fold, three renderers
 
-**Status:** Proposed; requires owner ratification of the nine decisions in
-section 17 before lane 2 starts. Decision 9 is the one to read first: it
-rules that a `StreamTabId` names a run and is never reused, which is what
-lets all thirteen incarnation fences earlier drafts had accumulated be
-deleted rather than maintained. Its cost is that a relaunched workflow
-appears as a new row instead of reusing its tab, stated in full there;
-reverting is mechanical if the owner weighs that differently. Lane 1 needs
-decisions 1 **and 9** - it implements the identity change, so starting on
-decision 1 alone would ship an unratified one; lane 6 likewise needs
-decision 7, which is what it implements.
+**Status:** Partly implemented; tracked by
+[#11861](https://github.com/LionSR/TeXRA/issues/11861). Lanes 1, 2 and 3
+landed together as
+[#11881](https://github.com/LionSR/TeXRA/pull/11881), lane 4 as
+[#11911](https://github.com/LionSR/TeXRA/pull/11911) (closing issue
+[#11863](https://github.com/LionSR/TeXRA/issues/11863)), and lane 6 as
+[#11827](https://github.com/LionSR/TeXRA/pull/11827). Lanes 5, 7 and 8 are
+still open as [#11864](https://github.com/LionSR/TeXRA/issues/11864),
+[#11865](https://github.com/LionSR/TeXRA/issues/11865) and
+[#11866](https://github.com/LionSR/TeXRA/issues/11866). The nine decisions
+of section 17 no longer gate a lane start: lanes 1 and 2 implement decisions
+1 and 9, lane 6 implements decision 7, and all three have shipped. Decision
+9 is still the one to read first: it rules that a `StreamTabId` names a run
+and is never reused, which is what lets all thirteen incarnation fences
+earlier drafts had accumulated be deleted rather than maintained. Its cost
+is that a relaunched workflow appears as a new row instead of reusing its
+tab, stated in full there.
 
 **Decision in one sentence:** every process that shows a TeXRA session runs
 the same pure fold over the same events into one `SessionView`, the
@@ -42,9 +49,9 @@ classified). Where this PRD and those documents differ, this PRD governs.
 Its companion is the persistence decision
 `.agents/docs/proposed/architecture/2026-09-03-persistence-substrate-decision.md` (the event
 table as the only persisted truth), written by the persistence cutover owner
-after two rounds of alignment with this program. That document is in flight
-in another branch and is not part of this pull request, so every "agreed
-with the substrate owner" claim below is checkable only once it lands. This
+after two rounds of alignment with this program. That document has since
+landed and sits in the tree at that path, so every "agreed with the
+substrate owner" claim below is checkable against it. This
 PRD follows the governing rules of
 `.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md` (R1 to R3, R5 to R10).
 
@@ -2885,7 +2892,7 @@ As tests:
    thirteen fences and call the question open.
 
 Already agreed with the persistence owner and recorded in the companion
-proposal (in flight in another branch, see Lineage): the eight event changes
+proposal (landed, see Lineage): the eight event changes
 of section 6; Effect Schema nowhere; the publisher
 invariants of 7.1; `WorkspaceRoots` as the `Database` layer's parameter;
 the two v4 traps.
@@ -2903,8 +2910,8 @@ Corrected in this revision after re-checking the dist: the tail names are
 `Stream.toQueue(stream, { capacity })` and `Stream.unwrap` (the v3
 `toQueueScoped` and `unwrapScoped` are gone; 7.1 no longer needs the queue
 at all); the Cause-tapping combinator
-is `tapCause`, not `tapErrorCause`; and rc.112 exports no `catch` or
-`catchAll` (the family is `catchTag`, `catchTags`, `catchCause`,
+is `tapCause`, not `tapErrorCause`; and rc.112 exports no `catchAll` (the
+family is `catch`, `catchTag`, `catchTags`, `catchCause`,
 `catchDefect`, `catchReason(s)`, `catchIf`, `catchFilter`,
 `catchNoSuchElement`, `catchCauseIf`, `catchCauseFilter`, `catchEager`).
 `Stream.mergeAll(streams, { concurrency })` and `Effect.die` are present.
@@ -2912,6 +2919,12 @@ Re-checked 2026-09-04 for the sequenced hydrate: `Stream.concat`,
 `Stream.make`, `Stream.empty`, `Stream.dropWhile`, and `Stream.mapAccum`
 are present; `mapAccum` takes a lazy initial and its function returns
 `[state, outputs]`, which is the shape 7.2 uses.
+
+Corrected 2026-09-07: an earlier revision of this section claimed rc.112
+exported neither `catch` nor `catchAll`. Half of that was wrong.
+`Effect.catch` is a function in rc.112 and 80 production call sites under
+`src` and `packages` already use it; only `catchAll` is absent. Nothing else
+in this section changed.
 
 Not verified, to confirm at lane start: the `PRAGMA data_version` poll
 interval and its cost on a laptop (contract C7; it is a trigger, not a
@@ -2948,7 +2961,7 @@ scale.
 | Resource          | `Effect.acquireRelease(acquire, release)`, `Effect.scoped`, `Scope`                                                 | `effect`         | interaction scope                                                                                                          |
 | Serialize         | `Semaphore.make(permits)`, `.withPermit`, `.withPermits(n)`                                                         | `effect`         | own module; `Effect.makeSemaphore` does not exist                                                                          |
 | Queue             | `Queue.bounded/sliding/dropping/unbounded<A, E>`, `offer`, `take`, `takeAll`                                        | `effect`         | v4 queues carry an error channel                                                                                           |
-| Errors            | `class E extends Data.TaggedError('E')<{…}> {}`                                                                     | `effect`         | yieldable; `catchTag`, `catchTags`, `orDie`, `tapCause`; no `tapErrorCause`, no `catch`/`catchAll`                         |
+| Errors            | `class E extends Data.TaggedError('E')<{…}> {}`                                                                     | `effect`         | yieldable; `catchTag`, `catchTags`, `orDie`, `tapCause`; no `tapErrorCause`, no `catchAll` (`catch` exists)                |
 | Defect            | `Effect.die(defect)`                                                                                                | `effect`         | no `Effect.dieMessage`; the transport layer's `publish` (7.1)                                                              |
 | Tracing           | `Effect.fn('X.method')(function* (…) {…})`                                                                          | `effect`         | every named service method                                                                                                 |
 | Runtime           | `ManagedRuntime.make(layer)`, `.runPromise(effect, { signal })`, `.runFork`, `.dispose()`                           | `effect`         | one per process                                                                                                            |
