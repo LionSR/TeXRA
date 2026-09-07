@@ -246,6 +246,21 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     const output = this.createOutputStream();
     const text: string[] = [];
     const toolCalls: LanguageModelToolCallPart[] = [];
+    let maxTokens = this.getEffectiveMaxOutputTokens();
+    await this.applyTokenCountLimit({
+      countTokens: () =>
+        this.estimateTokenCount(options.messages, {
+          client: options.client,
+          tools: options.tools,
+          signal,
+        }),
+      currentMaxTokens: maxTokens,
+      contextWindow: this.getEffectiveContextWindow(),
+      detailLabel: 'VS Code LM: max_tokens reduced to fit context window',
+      applyReduced: (adjusted) => {
+        maxTokens = adjusted;
+      },
+    });
 
     try {
       for await (const part of options.client.sendRequest(
@@ -253,6 +268,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
         options.messages,
         {
           justification: 'Run the selected TeXRA agent.',
+          maxTokens,
           ...(tools ? { tools, toolMode: 'auto' as const } : {}),
         },
         signal,
