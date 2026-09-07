@@ -27,6 +27,15 @@ remain: 82 `Effect.tryPromise`, 16 `Effect.promise`.** Each was read at its
 call site and its callee traced to its defining module to decide whether the
 wrapped promise is foreign or ours.
 
+_Rebased onto `main` at b28e981._ The tree now holds **91** sites (78
+`tryPromise`, 13 `promise`). Six of the seven went in this branch's own work
+(§9): two `Effect.promise` sites converted in `ExecutionsTool`, four duplicate
+wrapper declarations deleted. The seventh went upstream —
+`SessionEvents.ts:329`, the `runWithWorkspaceRoots(transcripts.readEntries)`
+wrap, which the SQLite event plane (#11978) removed. It was a C2b site and one
+of §5.2's ambient-context crossings, so both counts drop by one below. Line
+numbers throughout this note predate that rebase; see §8.
+
 ## 2. The rule this audit applies
 
 A wrap is legitimate exactly when **the thing on the other side will never be
@@ -111,7 +120,7 @@ Until then the A1 wraps stay, and they are correct.
 | **B3** Ambient-context (`AsyncLocalStorage`) crossing           | 2 (+3 in C2b) | **Structural** — see §5.2                            |
 | **C1** `Effect.promise` with a verified totality claim          | 4             | Correct; reasons now stated                          |
 | **C2a** `Effect.promise`, totality deliberate, was undocumented | 5             | Documented in this pass                              |
-| **C2b** `Effect.promise`, totality still unverified             | 5             | **Open** — see §5.1                                  |
+| **C2b** `Effect.promise`, totality still unverified             | 5 → 4         | **Open** — see §5.1                                  |
 | **Converted in this pass**                                      | 2             | §9                                                   |
 
 `sig` in the tables below records whether the callback declares the
@@ -310,17 +319,17 @@ assumed:
 - **`sessionLayer.ts:163`.** `proveOwnerLiveness` returns
   `'unprovable' | 'dead' | …` and does not signal by rejecting.
 
-### C2b — totality still unverified (5)
+### C2b — totality still unverified (5, now 4)
 
 | Site                                          | Combinator       | Callee                                                  | Interruptible |
 | --------------------------------------------- | ---------------- | ------------------------------------------------------- | ------------- |
 | `src/controllers/session/sessionLayer.ts:508` | `Effect.promise` | runInSession(untilSettled) — B3 too; same-file async fn | yes           |
 | `src/controllers/session/sessionLayer.ts:542` | `Effect.promise` | runInSession(session.flushArtifacts) — B3 too           | —             |
 | `src/controllers/session/sessionLayer.ts:593` | `Effect.promise` | caller-supplied processStart promise                    | —             |
-| `src/agent/runtime/SessionEvents.ts:329`      | `Effect.promise` | runWithWorkspaceRoots(transcripts.readEntries) — B3 too | —             |
 | `packages/agent/src/effect/runtime.ts:155`    | `Effect.promise` | disposeProcessRuntime in ensuring                       | —             |
 
-These five remain open. Three are in `sessionLayer.ts` and one in
+Four remain open — `SessionEvents.ts:329` was the fifth and is gone with the
+SQLite event plane. Three are in `sessionLayer.ts` and one in
 `packages/agent/src/effect/runtime.ts` — the session-close and process-runtime
 lifecycle, which is `Effect.uninterruptible`, races a budget, and carries
 finalizers. `sessionLayer.ts:542` is the sharpest: `SessionHandle.ts:415`
@@ -417,10 +426,11 @@ with a stated reason, as `loopbackLogin.ts:86` does.
 `runInSession` (`src/agent/runtime/RunContext.ts:170`, over the
 `AsyncLocalStorage` at line 79) and `runWithWorkspaceRoots`
 (`src/platform/workspaceRoots.ts:98`, over the store at line 41) both take
-`() => T | Promise<T>` and run it inside an ambient scope. Five sites wrap a
+`() => T | Promise<T>` and run it inside an ambient scope. Four sites wrap a
 promise for no reason other than to cross one of those scopes —
-`sessionLayer.ts:508`, `:542`, `SessionEvents.ts:329`, `desktopPapers.ts:224`,
-`:433`. Ambient context propagated through the async call stack is what
+`sessionLayer.ts:508`, `:542`, `desktopPapers.ts:224`, and `:433`. A fifth,
+`SessionEvents.ts:329`, went with the SQLite event plane (#11978).
+Ambient context propagated through the async call stack is what
 Effect's `Context`/`FiberRef` provides natively, and `sessionLayer` already
 carries `Sessions` and `ProcessIdentity` as layers, so the replacement looks
 obvious.
@@ -429,7 +439,7 @@ It was scoped directly, and it is not available as its own step. Four
 findings, in the order that settles it:
 
 **The entries are not the work; the readers are.** Scope _entry_ is a small,
-tractable surface — 3 `runWithWorkspaceRoots` call sites (one of them internal
+tractable surface — 2 `runWithWorkspaceRoots` call sites (one of them internal
 to `withRunContext`) and 25 `runInSession` sites. Scope _reading_ is not:
 `workspaceRoots()` has 44 call sites, `tryUseRunContext()` 55, and
 `currentSession()` 52 (which resolves through `tryUseRunContext`). A
