@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
@@ -45,6 +45,10 @@ import {
   type ToolResult,
   AgentCategory,
 } from '@shared/schemas';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { withToolEnvironment } from '@test/support/toolEnvironment';
 import {
   clearStreamStatusForTest,
@@ -314,6 +318,7 @@ function launchedIds(result: ToolResult): {
 function launchBackgroundBash(
   parentStreamId: StreamTabId,
 ): Promise<ToolResult> {
+  publishTestRunStart(defaultSession(), parentStreamId);
   return withToolEnvironment(
     {
       run: { streamId: parentStreamId, session: defaultSession() },
@@ -329,6 +334,9 @@ function launchBackgroundBash(
 
 describe('BashTool', () => {
   setupPlatform(BASH_PLATFORM_OPTIONS);
+  beforeEach(() => {
+    createProcessSession();
+  });
 
   afterEach(() => {
     vi.restoreAllMocks();

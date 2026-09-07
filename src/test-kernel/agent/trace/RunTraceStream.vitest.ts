@@ -5,6 +5,7 @@ import {
   endToolUseCard,
   startToolUseCard,
   type AgentTrace,
+  type AgentEvent,
 } from '@agent/trace';
 import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
@@ -63,6 +64,8 @@ describe('AgentTrace stream output', () => {
 
   it('emits nothing for a deferred stream until the first chunk', () => {
     withStore((store, logger, flushPending) => {
+      const events: AgentEvent[] = [];
+      logger.subscribe((event) => events.push(event));
       const thinking = openDeferredThinking(logger);
 
       expect(store.get('stream')).toBeUndefined();
@@ -76,6 +79,11 @@ describe('AgentTrace stream output', () => {
       expect(entries[0]?.text).toBe('reasoning delta');
 
       expect(thinking.finalize()).toBe('reasoning delta');
+      expect(events.at(-1)).toMatchObject({
+        type: 'stream.end',
+        id: thinking.id,
+        finalText: 'reasoning delta',
+      });
       expect(streamEntries(store)[0]?.data).toEqual({
         status: 'completed',
       });

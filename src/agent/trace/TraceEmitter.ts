@@ -380,10 +380,7 @@ class StreamHandleImpl implements StreamHandle {
     this.emit({
       type: 'stream.end',
       id: this.id,
-      finalText:
-        !this.phaseOnly && typeof finalText === 'string'
-          ? finalText
-          : undefined,
+      finalText: this.phaseOnly ? undefined : this.finalText,
     });
     return this.finalText;
   }

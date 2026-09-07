@@ -8,6 +8,7 @@
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  AgentConfigFieldsSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
@@ -125,6 +126,31 @@ export class Log {
     return event;
   }
 
+  /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
+  drained(through = this.events.length): FoldInput {
+    const claims = new Map<SessionEvent['aggregateId'], string | null>();
+    const removed = new Set<SessionEvent['aggregateId']>();
+    for (const event of this.events.slice(0, through)) {
+      if (event.seq === 1) claims.set(event.aggregateId, event.ownerId);
+      if (event.type === 'stream.removed') {
+        claims.delete(event.aggregateId);
+        removed.add(event.aggregateId);
+      }
+    }
+    return {
+      _tag: 'drained',
+      cursor: this.events[through - 1]?.commit ?? 0,
+      existence: {
+        checkedAggregateIds: [...claims.keys(), ...removed],
+        removedAggregateIds: [...removed],
+        claims: [...claims].map(([aggregateId, ownerId]) => ({
+          aggregateId,
+          ownerId,
+        })),
+      },
+    };
+  }
+
   entry(
     streamId: StreamTabId,
     at: number,
@@ -171,7 +197,7 @@ export const subscribe = (...ids: StreamTabId[]): FoldInput => ({
 export function local(state: Partial<LocalRuntimeState>): FoldInput {
   return {
     _tag: 'local',
-    local: { self: [], heldBy: [], unreadable: [], ...state },
+    local: { self: [], dead: [], unreadable: [], ...state },
   };
 }
 
@@ -210,18 +236,25 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.root, {
     type: 'run.config',
     executionId: 'aaaaaaaaaaaa',
-    config: {
+    config: AgentConfigFieldsSchema.parse({
+      agentCategory: AgentCategory.Workflow,
       model: 'claude-sonnet-4-5',
       instruction: 'review the draft',
       agent: 'review',
       inputFiles: ['draft.tex'],
-    },
+    }),
   });
   log.emit(ROOT, T.root, {
     type: 'status',
     phase: STREAM_PHASE.RUNNING,
     cause: 'lifecycle',
     runStartedAt: T.root,
+  });
+  log.emit(ROOT, T.root + 1, {
+    type: 'workflow.plan',
+    attemptId: 'attempt-1',
+    phases: [{ title: 'Map' }],
+    tasks: [{ id: 'inspect', label: 'inspect', phase: 'Map' }],
   });
   rootEntries.push(
     log.entry(ROOT, T.root + 1, {
@@ -264,7 +297,11 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.config',
     executionId: 'bbbbbbbbbbbb',
-    config: { model: 'claude-sonnet-4-5', instruction: 'search' },
+    config: AgentConfigFieldsSchema.parse({
+      agentCategory: AgentCategory.ToolUse,
+      model: 'claude-sonnet-4-5',
+      instruction: 'search',
+    }),
   });
   log.emit(CHILD, T.child, {
     type: 'status',
@@ -336,6 +373,7 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'result',
     outcome: 'completed',
     executionId: 'dddddddddddd',
+    agentName: 'custom:lint',
     category: AgentCategory.ToolUse,
     isSubagent: true,
   });
@@ -378,7 +416,11 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(PROCESS, T.process, {
     type: 'run.config',
     executionId: 'cccccccccccc',
-    config: { model: 'unused', instruction: 'npm test' },
+    config: AgentConfigFieldsSchema.parse({
+      agentCategory: AgentCategory.ToolUse,
+      model: 'unused',
+      instruction: 'npm test',
+    }),
   });
   // Its output arrives as raw stdout chunks, one plain log entry each; the
   // process conversation paints them back as one terminal text.
@@ -448,6 +490,7 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'result',
     outcome: 'completed',
     executionId: 'bbbbbbbbbbbb',
+    agentName: 'custom:search',
     category: AgentCategory.ToolUse,
     isSubagent: true,
   });
@@ -478,6 +521,7 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'result',
     outcome: 'completed',
     executionId: 'aaaaaaaaaaaa',
+    agentName: 'review',
     category: AgentCategory.Workflow,
     isSubagent: false,
   });
@@ -493,11 +537,16 @@ export function buildScenario({ proposal = false } = {}) {
     log,
     rootEntries,
     /** The replay a subscriber of every transcript folds. */
-    events: [subscribe(ROOT, CHILD, GRANDCHILD, PROCESS), ...events],
+    events: [
+      subscribe(ROOT, CHILD, GRANDCHILD, PROCESS),
+      ...events,
+      log.drained(),
+    ],
     /** The prefix that ends with the child's approval still pending. */
     pending: [
       subscribe(ROOT, CHILD, GRANDCHILD, PROCESS),
       ...events.slice(0, pending),
+      log.drained(pending),
     ],
   };
 }
@@ -522,12 +571,21 @@ function ownedBy(
   aggregateId: StreamTabId,
   ownerId: string,
 ): FoldInput[] {
-  return inputs.map((input) =>
-    input._tag === 'event' &&
-    input.event.aggregateId === qualifyAggregateId('stream', aggregateId)
-      ? { ...input, event: { ...input.event, ownerId } }
-      : input,
-  );
+  const key = qualifyAggregateId('stream', aggregateId);
+  return inputs.map((input) => {
+    if (input._tag === 'drained' || input._tag === 'replay.complete') {
+      return {
+        ...input,
+        existence: {
+          ...input.existence,
+          claims: input.existence.claims.map((claim) =>
+            claim.aggregateId === key ? { ...claim, ownerId } : claim,
+          ),
+        },
+      };
+    }
+    return input;
+  });
 }
 
 /** `fanOutView` with no approval pending: nothing forces the tree open, so
@@ -547,7 +605,7 @@ export function withoutApproval(): SessionView {
 export function withInterruptedChild(): SessionView {
   return foldAll([
     ...ownedBy(buildScenario().pending, CHILD, OTHER_OWNER),
-    local({ self: [OWNER] }),
+    local({ self: [OWNER], dead: [OTHER_OWNER] }),
   ]);
 }
 
@@ -851,12 +909,13 @@ function boardView({
   log.emit(ROOT, startedAt, {
     type: 'run.config',
     executionId: 'aaaaaaaaaaaa',
-    config: {
+    config: AgentConfigFieldsSchema.parse({
+      agentCategory: AgentCategory.Workflow,
       model: 'claude-sonnet-4-5',
       instruction: 'simplification survey over the draft',
       agent: 'review',
       inputFiles: ['draft.tex'],
-    },
+    }),
   });
   log.emit(ROOT, startedAt, {
     type: 'status',
@@ -955,7 +1014,11 @@ function boardView({
       log.emit(kid.id, kid.startedAt, {
         type: 'run.config',
         executionId: kid.executionId,
-        config: { model: 'claude-sonnet-4-5', instruction: entry.id },
+        config: AgentConfigFieldsSchema.parse({
+          agentCategory: AgentCategory.ToolUse,
+          model: 'claude-sonnet-4-5',
+          instruction: entry.id,
+        }),
       });
       log.emit(kid.id, kid.startedAt, {
         type: 'status',
@@ -1012,6 +1075,7 @@ function boardView({
           type: 'result',
           outcome: done ? 'completed' : 'failed',
           executionId: kid.executionId,
+          agentName: `custom:${entry.id}`,
           category: AgentCategory.ToolUse,
           isSubagent: true,
         });
@@ -1043,6 +1107,7 @@ function boardView({
           type: 'result',
           outcome: 'completed',
           executionId: kid.executionId,
+          agentName: `custom:${entry.id}`,
           category: AgentCategory.ToolUse,
           isSubagent: true,
         });
@@ -1076,6 +1141,7 @@ function boardView({
       type: 'result',
       outcome,
       executionId: 'aaaaaaaaaaaa',
+      agentName: 'review',
       category: AgentCategory.Workflow,
       isSubagent: false,
     });
@@ -1090,6 +1156,7 @@ function boardView({
   return foldAll([
     subscribe(...ids),
     ...log.events.map(tail),
-    local(foreign ? { self: [], heldBy: [OWNER] } : { self: [OWNER] }),
+    log.drained(),
+    local(foreign ? { self: [], dead: [] } : { self: [OWNER] }),
   ]);
 }

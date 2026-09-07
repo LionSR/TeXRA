@@ -7,7 +7,13 @@ import {
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
+import {
+  aggregateId,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { StreamLogStore } from '@transcript';
+import { generateExecutionId } from '@utils/core';
 
 type TestSessionInit = Omit<SessionHandleInit, 'transcripts'> & {
   readonly transcripts?: StreamLogStore;
@@ -56,4 +62,24 @@ export function createProcessSession(
     transcripts:
       init.transcripts ?? StreamLogStore.ephemeral('process test session'),
   });
+}
+
+/** Publish the existence fact before a test exercises a run's later events. */
+export function publishTestRunStart(
+  session: SessionHandle,
+  streamId: StreamTabId,
+  executionId: ExecutionId = generateExecutionId(),
+): ExecutionId {
+  session.publish([
+    {
+      type: 'run.start',
+      aggregateId: aggregateId('stream', streamId),
+      executionId,
+      identity: { kind: 'agent', agent: 'chat' },
+      userFollowUpSupport: 'unsupported',
+      category: 'toolUse',
+      isRemote: false,
+    },
+  ]);
+  return executionId;
 }

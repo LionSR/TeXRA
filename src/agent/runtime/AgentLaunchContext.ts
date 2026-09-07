@@ -41,7 +41,6 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import { DisposableStore } from '@platform/disposable';
 import {
   aggregateId as qualifyAggregateId,
   type AgentSource,
@@ -294,7 +293,7 @@ async function assembleAgentLaunchContext(
   input: AgentLaunchInput & { session: SessionHandle },
   executionId: ExecutionId,
   streamId: StreamTabId,
-  resources: DisposableStore,
+  resources: Array<() => void | Promise<void>>,
   onStarted: (runTrace: RunTrace, category: AgentCategory) => void,
 ): Promise<AgentLaunchContext> {
   input.signal?.throwIfAborted();
@@ -355,19 +354,18 @@ async function assembleAgentLaunchContext(
     input.modelHandlerCompatibilityKey ??
     (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
   input.signal?.throwIfAborted();
-  const modelHandler = resources.add(
-    modelHandlerCompatibilityKey
-      ? await createModelHandlerForCompatibilityKey(
-          modelConfig,
-          modelHandlerCompatibilityKey,
-          session.responseTextProcessing,
-        )
-      : await createModelHandler(
-          modelConfig,
-          session.responseTextProcessing,
-          input.copilotRouteOverride,
-        ),
-  );
+  const modelHandler = modelHandlerCompatibilityKey
+    ? await createModelHandlerForCompatibilityKey(
+        modelConfig,
+        modelHandlerCompatibilityKey,
+        session.responseTextProcessing,
+      )
+    : await createModelHandler(
+        modelConfig,
+        session.responseTextProcessing,
+        input.copilotRouteOverride,
+      );
+  resources.push(() => modelHandler.dispose());
   input.signal?.throwIfAborted();
   const modelCell = new ModelCell(modelHandler, config.model);
 
@@ -386,7 +384,7 @@ async function assembleAgentLaunchContext(
   // The composed trace enters the store BEFORE session attachment, so a
   // failed attachment still disposes the raw trace through the store.
   const attachment: { detach?: () => void } = {};
-  const runTrace = resources.add<RunTrace>({
+  const runTrace: RunTrace = {
     trace: rawRunTrace.trace,
     handleStatus: rawRunTrace.handleStatus,
     dispose: () => {
@@ -396,7 +394,8 @@ async function assembleAgentLaunchContext(
         rawRunTrace.dispose();
       }
     },
-  });
+  };
+  resources.push(() => runTrace.dispose());
   attachment.detach = session.attachRunTrace(rawRunTrace, streamId);
 
   const agentLogger = runTrace.trace;
@@ -452,7 +451,22 @@ async function assembleAgentLaunchContext(
       isRemote,
       background,
     },
+    // Reservation is local admission, not a stream fact. Its first visible
+    // status belongs to this creation transaction, after run.start.
+    ...(input.streamTabIdOverride
+      ? []
+      : [
+          {
+            type: 'status' as const,
+            aggregateId: qualifyAggregateId('stream', streamId),
+            phase: STREAM_PHASE.RUNNING,
+            cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+            substate: STREAM_SUBSTATE.STARTING,
+            runStartedAt: session.status.getStreamState(streamId)?.runStartedAt,
+          },
+        ]),
   ]);
+  await session.settlePublications();
   onStarted(runTrace, setting.agentCategory);
   input.onStreamResolved?.(streamId, runTrace.trace);
 
@@ -476,7 +490,7 @@ async function assembleAgentLaunchContext(
     `Run: ${config.agent}`,
     initialMediaMayBeInserted ? undefined : initialInstruction,
   );
-  resources.add(() => parentStage.end(RUN_OUTCOME.FAILED));
+  resources.push(() => parentStage.end(RUN_OUTCOME.FAILED));
 
   // Tell the user when attached images will be dropped because the chosen model
   // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
@@ -497,9 +511,11 @@ async function assembleAgentLaunchContext(
   // until that signal aborts. A parent run's signal outlives each subagent it
   // launches, so a long orchestration would retain every finished child's run
   // scope. The link is detached with the run trace at end-of-run.
-  const detachRunAbortLink = resources.add(
-    linkAbortSignals([input.signal], runAbortController),
+  const detachRunAbortLink = linkAbortSignals(
+    [input.signal],
+    runAbortController,
   );
+  resources.push(detachRunAbortLink);
   const runSignal = runAbortController.signal;
   const runScope = createRunScope({
     streamId,
@@ -686,7 +702,7 @@ export async function buildAgentLaunchContext(
   // launch. Entries register in creation order, so a failed launch unwinds:
   // parent stage end → started-failure compensation (before the trace it
   // logs into is disposed) → run trace detach/dispose → model handler dispose.
-  const resources = new DisposableStore();
+  const resources: Array<() => void | Promise<void>> = [];
   const launchFailure: { error?: unknown } = {};
   let started = false;
   try {
@@ -697,7 +713,7 @@ export async function buildAgentLaunchContext(
       resources,
       (runTrace, category) => {
         started = true;
-        resources.add(() =>
+        resources.push(async () => {
           compensateStartedFailure({
             config,
             category,
@@ -707,18 +723,27 @@ export async function buildAgentLaunchContext(
             runTrace,
             streamStatus,
             err: launchFailure.error,
-          }),
-        );
+          });
+          await launchSession.settlePublications();
+        });
       },
     );
     // The runtime accepted the launch: the returned context and its run
     // lifecycle now own these resources.
-    resources.move();
     return ctx;
   } catch (err) {
     launchFailure.error = err;
     try {
-      resources.dispose();
+      const failures: unknown[] = [];
+      for (const dispose of resources.toReversed()) {
+        try {
+          await dispose();
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      if (failures.length)
+        throw new AggregateError(failures, 'Launch cleanup failed');
     } catch (cleanupError) {
       logger.warn('Failed to release launch resources after a failed launch', {
         data: { error: cleanupError },

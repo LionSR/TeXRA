@@ -80,6 +80,10 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
@@ -90,6 +94,7 @@ import {
 } from '@tools/agentCliSessionStores';
 import { createChildStream } from '@tools/delegation/childStream';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
+import { generateExecutionId } from '@utils/core';
 
 let session: SessionHandle;
 const trackedExecutionIds = new Set<string>();
@@ -111,12 +116,10 @@ function loopIds(label: string): {
   childStreamId: StreamTabId;
   executionId: ExecutionId;
 } {
-  const nonce = Math.random().toString(36).slice(2);
-  const executionId = `exec-${label}-${nonce}` as ExecutionId;
-  return {
-    childStreamId: `${label}#${executionId}` as StreamTabId,
-    executionId,
-  };
+  const executionId = generateExecutionId();
+  const childStreamId = `${label}#${executionId}` as StreamTabId;
+  publishTestRunStart(session, childStreamId, executionId);
+  return { childStreamId, executionId };
 }
 
 function trackChildHandle(
@@ -258,8 +261,10 @@ async function waitForLoopEnd(childStreamId: StreamTabId): Promise<void> {
   );
 }
 
-beforeEach(() => {
-  session = defaultSession();
+beforeEach(async () => {
+  session = createProcessSession();
+  publishTestRunStart(session, PARENT_STREAM_ID);
+  await session.settlePublications();
   vi.clearAllMocks();
   // The loop's terminal drain is the session's one exit choreography; the
   // suite observes it through the same (session, executionId) spy as before.
@@ -515,7 +520,7 @@ describe('childRunLoop E2E fixtures', () => {
         return formattedDelivery.promise;
       },
     );
-    const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
+    const childStream = await createChildStream(executionId, PARENT_STREAM_ID, {
       streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
       userFollowUpSupport: 'terminalBacked',
@@ -1053,7 +1058,7 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
     const executionId = 'fa11ed01' as ExecutionId;
-    const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
+    const childStream = await createChildStream(executionId, PARENT_STREAM_ID, {
       streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
       userFollowUpSupport: 'terminalBacked',
