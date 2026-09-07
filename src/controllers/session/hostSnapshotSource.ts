@@ -11,8 +11,8 @@
  */
 import { Cause, Effect, Exit } from 'effect';
 import { computeAgentOptionsData } from '@agent/index';
-import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { hostPort } from '@common/hostPort';
+import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
   computeModelOptionsData,
