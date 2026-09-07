@@ -170,6 +170,15 @@ describe('check-dead-code-ratchet parseKnipIssues', () => {
     );
   });
 
+  it('rejects partial JSON findings when Knip reports a configuration error', () => {
+    const stderr =
+      '\u001b[31mERROR\u001b[39m: Error loading packages/extension/vite.config.mts (VITE_WEBVIEW must name a webview (progressView, settingsView), got: webview)';
+
+    expect(() => parseKnipIssues('{"issues":[]}', stderr)).toThrow(
+      'knip reported an analysis error',
+    );
+  });
+
   // Each of these must throw the contextual error (never a raw TypeError or a
   // silent default of zero issues) when the `issues` array is unusable.
   it.each([
