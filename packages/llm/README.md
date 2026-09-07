@@ -48,6 +48,32 @@ video and documents remain unsupported in these Chat branches. Hosted execution,
 background, storage, cache-lifetime, stopping and geography controls are also
 unsupported. MiniMax remains unsupported pending its authoritative stream contract.
 
+Two further branches cover the currently configured xAI and Qwen Chat routes,
+without another handler or transport. xAI accepts a selected subset of
+low/medium/high/xhigh effort, nullable temperature, named and parallel local
+calls, and selected JPEG/PNG user images with low, high or omitted detail.
+Original reasoning is retained and replayed when present; a missing trace is
+not an error. Returned refusals are retained, but refusal-bearing history fails
+before transport because xAI's [request grammar](https://docs.x.ai/openapi.json)
+has no documented refusal field or content part. Reported usage remains cumulative,
+not additive. Latest reported cost ticks and processing tier survive later missing
+values; a reported zero is retained as evidence, not proof of a free request.
+Intermediate missing or `end_turn` finish values do not complete a turn: an actual
+terminal finish and `[DONE]` are both required.
+
+Qwen preserves consecutive message order and newline-joined text input. Its
+selected thinking mode is disabled explicitly; authored thinking and effort
+are unsupported. Preparation retains temperature below two, stopping strings
+and named/parallel local calls. The current routes use `max_tokens`, whose
+replacement is documented only for [newer model families](https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions).
+Reported reasoning is retained exactly in canonical output, but deliberately
+omitted from replay: the current routes do not select the newer
+[reasoning-preservation feature](https://www.alibabacloud.com/help/en/model-studio/deep-thinking).
+The documented empty `function_call` placeholder is accepted, not non-null legacy
+calls. Neither branch supports background work, hosted execution, uploads or
+tool-result media. Pricing and credential-route selection remain runtime-owned;
+no application caller has switched and neither old handler is deleted yet.
+
 Kimi preparation retains a caller-supplied `prompt_cache_key`; selected routes
 that require it reject missing keys. No session identity is invented. Selected
 Kimi routes may additionally expose a message-token estimate using the same
@@ -58,7 +84,7 @@ the stable cache identity and must not treat the old automatically assigned
 image detail as authored intent; those production consumers have not switched.
 
 Chat reads one SDK HTTP response through the native Effect SSE parser. This retains
-Kimi's required `[DONE]` terminator, which the SDK's parsed iterator suppresses;
+Kimi's and xAI's required `[DONE]` terminator, which the SDK's parsed iterator suppresses;
 it is not a second parser or reader over an already-decoded stream. Top-level usage is
 authoritative, with Kimi's choice receipt used only when the top-level receipt is absent;
 overlapping observed counts must agree. There is no reconnect, and retry hints alone

@@ -73,6 +73,23 @@ const REASONING_CONFIGS = [
   },
 ] as const satisfies readonly ChatConfiguration[];
 
+const XAI_CONFIG = {
+  ...CONFIG,
+  protocol: 'xai-chat',
+  supportsImageInput: true,
+  supportedEfforts: ['low', 'medium', 'high', 'xhigh'],
+  defaults: { ...CONFIG.defaults, effort: 'high' },
+} as const satisfies ChatConfiguration;
+const QWEN_CONFIG = {
+  ...CONFIG,
+  protocol: 'dashscope-chat',
+  defaults: {
+    ...CONFIG.defaults,
+    stopSequences: ['</answer>'],
+    thinking: { mode: 'disabled' },
+  },
+} as const satisfies ChatConfiguration;
+
 function chunk(overrides: Record<string, unknown> = {}): object {
   return {
     id: 'synthetic-response',
@@ -456,13 +473,15 @@ describe('native OpenAI Chat protocol', () => {
     },
   );
 
-  it.each([
-    { present: true, fragmented: false },
-    { present: true, fragmented: true },
-    { present: false, fragmented: true },
-  ])(
-    'requires the Kimi terminal sentinel (present: $present; fragmented: $fragmented)',
-    async ({ present, fragmented }) => {
+  it.each(
+    [REASONING_CONFIGS[1], XAI_CONFIG].flatMap((config) => [
+      { config, present: true, fragmented: false },
+      { config, present: true, fragmented: true },
+      { config, present: false, fragmented: true },
+    ]),
+  )(
+    'requires the $config.protocol terminal sentinel (present: $present; fragmented: $fragmented)',
+    async ({ config, present, fragmented }) => {
       const body =
         'retry: 1000\r\n: connection hint\r\n\r\n' +
         `data: ${JSON.stringify(chunk({ choices: [{ index: 0, delta: { content: 'x² 🙂' }, finish_reason: 'stop' }] }))}\r\n\r\n` +
@@ -483,7 +502,7 @@ describe('native OpenAI Chat protocol', () => {
             : body,
         ),
       );
-      const model = openaiChatModel(REASONING_CONFIGS[1], {
+      const model = openaiChatModel(config, {
         apiKey: 'synthetic',
         fetch,
       });
@@ -625,9 +644,47 @@ describe('native OpenAI Chat protocol', () => {
       finish: 'insufficient_system_resource',
       kind: 'provider-rejection',
     },
+    {
+      name: 'Qwen legacy function call',
+      config: QWEN_CONFIG,
+      delta: { function_call: { name: 'search', arguments: '{}' } },
+    },
+    {
+      name: 'Qwen malformed reasoning',
+      config: QWEN_CONFIG,
+      delta: { reasoning_content: [] },
+    },
+    {
+      name: 'xAI malformed reasoning',
+      config: XAI_CONFIG,
+      delta: { reasoning_content: {} },
+    },
+    {
+      name: 'xAI nonterminal end_turn',
+      config: XAI_CONFIG,
+      delta: { content: 'partial' },
+      finish: 'end_turn',
+    },
+    {
+      name: 'xAI missing final finish',
+      config: XAI_CONFIG,
+      delta: { content: 'partial' },
+      omitFinish: true,
+    },
+    {
+      name: 'xAI malformed cost',
+      config: XAI_CONFIG,
+      delta: { content: 'done' },
+      root: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+        cost_in_usd_ticks: '7',
+      },
+    },
   ])(
     'does not complete after $name',
-    async ({ config, root, choice, delta, finish, kind }) => {
+    async ({ config, root, choice, delta, finish, kind, omitFinish }) => {
       const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
         response(
           sse(
@@ -649,7 +706,7 @@ describe('native OpenAI Chat protocol', () => {
                 {
                   index: 0,
                   delta,
-                  finish_reason: finish ?? 'stop',
+                  ...(omitFinish ? {} : { finish_reason: finish ?? 'stop' }),
                   usage: choice,
                 },
               ],
@@ -692,6 +749,14 @@ describe('native OpenAI Chat protocol', () => {
       config: REASONING_CONFIGS[2],
       controls: { thinking: { mode: 'disabled' }, effort: null },
     },
+    {
+      config: {
+        ...XAI_CONFIG,
+        supportedEfforts: ['low', 'medium', 'high'] as const,
+      },
+      controls: { effort: 'xhigh' },
+    },
+    { config: QWEN_CONFIG, controls: { thinking: { mode: 'enabled' } } },
   ])(
     'revalidates rehydrated $config.protocol controls before transport',
     async ({ config, controls }) => {
@@ -850,6 +915,60 @@ describe('native OpenAI Chat protocol', () => {
       config: REASONING_CONFIGS[0],
       request: { thinking: { mode: 'enabled', budgetTokens: 1024 } },
     },
+    {
+      name: 'Qwen authored thinking',
+      config: QWEN_CONFIG,
+      request: { thinking: { mode: 'enabled' } },
+    },
+    {
+      name: 'Qwen authored effort',
+      config: QWEN_CONFIG,
+      request: { effort: 'high' },
+    },
+    {
+      name: 'Qwen unsupported temperature',
+      config: QWEN_CONFIG,
+      request: { temperature: 2 },
+    },
+    {
+      name: 'xAI authored thinking',
+      config: XAI_CONFIG,
+      request: { thinking: { mode: 'disabled' } },
+    },
+    {
+      name: 'xAI stop sequence',
+      config: XAI_CONFIG,
+      request: { stopSequences: ['stop'] },
+    },
+    {
+      name: 'xAI unsupported effort',
+      config: XAI_CONFIG,
+      request: { effort: 'max' },
+    },
+    ...[
+      { name: 'Qwen image', config: QWEN_CONFIG, mimeType: 'image/png' },
+      {
+        name: 'xAI unsupported image format',
+        config: XAI_CONFIG,
+        mimeType: 'image/svg+xml',
+      },
+      {
+        name: 'xAI image delimiter',
+        config: XAI_CONFIG,
+        mimeType: 'image/png;base64,SGVsbG8=#',
+      },
+    ].map(({ name, config, mimeType }) => ({
+      name,
+      config,
+      request: {
+        messages: [
+          {
+            role: 'user' as const,
+            content: [{ kind: 'image' as const, mimeType, base64: 'AA==' }],
+          },
+        ],
+      },
+    })),
   ] as const satisfies readonly {
     name: string;
     config: ChatConfiguration;
@@ -863,6 +982,334 @@ describe('native OpenAI Chat protocol', () => {
     expect(failure.kind).toBe('unsupported');
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it.each([XAI_CONFIG, QWEN_CONFIG])(
+    'preserves selected $protocol input, original reasoning and ordered tool follow-up',
+    async (config) => {
+      const isXai = config.protocol === 'xai-chat';
+      const receipt = {
+        prompt_tokens: 32,
+        completion_tokens: 9,
+        total_tokens: 135,
+        prompt_tokens_details: { cached_tokens: 3 },
+        completion_tokens_details: { reasoning_tokens: 94 },
+      };
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(
+          response(
+            sse(
+              chunk({
+                choices: [
+                  {
+                    index: 0,
+                    delta: { reasoning_content: '' },
+                    ...(isXai ? {} : { finish_reason: null }),
+                  },
+                ],
+                ...(isXai
+                  ? {
+                      usage: {
+                        ...receipt,
+                        completion_tokens: 1,
+                        total_tokens: 127,
+                        cost_in_usd_ticks: 0,
+                      },
+                      service_tier: 'default',
+                    }
+                  : {}),
+              }),
+              ...['  Examine ', 'x².\n'].map((text) =>
+                chunk({
+                  choices: [
+                    {
+                      index: 0,
+                      delta: { reasoning_content: text },
+                      ...(isXai ? {} : { finish_reason: null }),
+                    },
+                  ],
+                }),
+              ),
+              chunk({
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: null,
+                      content: 'Checking.',
+                      refusal: null,
+                      tool_calls: null,
+                      ...(isXai ? {} : { function_call: null }),
+                    },
+                    finish_reason: null,
+                  },
+                ],
+              }),
+              toolChunk([call(0), call(1)], 'tool_calls'),
+              chunk({
+                choices: [],
+                usage: {
+                  ...receipt,
+                  ...(isXai ? { cost_in_usd_ticks: 70 } : {}),
+                },
+              }),
+              ...(isXai
+                ? [
+                    chunk({
+                      choices: [],
+                      usage: { ...receipt, cost_in_usd_ticks: null },
+                      service_tier: null,
+                    }),
+                  ]
+                : []),
+            ),
+          ),
+        )
+        .mockResolvedValueOnce(
+          response(
+            sse(
+              chunk({
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      reasoning_content: '',
+                      ...(isXai
+                        ? { refusal: 'Refused.' }
+                        : { content: 'Done.' }),
+                    },
+                    finish_reason: 'stop',
+                  },
+                ],
+                ...(isXai
+                  ? {
+                      usage: { ...receipt, cost_in_usd_ticks: 0 },
+                      service_tier: 'default',
+                    }
+                  : {}),
+              }),
+            ),
+          ),
+        );
+      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const messages: TurnRequest['messages'] = [
+        {
+          role: 'user',
+          content: [
+            { kind: 'text', text: 'First' },
+            { kind: 'text', text: 'second' },
+          ],
+        },
+        // Neither route requires reasoning on a prior ordinary assistant turn.
+        {
+          role: 'assistant',
+          origin: {
+            protocol: config.protocol,
+            requestedModel: config.requestedModel,
+            deployment: config.deployment,
+            codecVersion: 1,
+          },
+          content: [
+            {
+              kind: 'message',
+              content: [
+                { kind: 'text', text: 'Old' },
+                { kind: 'text', text: 'reply' },
+              ],
+            },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            { kind: 'text', text: 'Image label' },
+            ...(isXai
+              ? [
+                  {
+                    kind: 'image' as const,
+                    mimeType: 'image/PNG',
+                    base64: '',
+                    detail: 'high' as const,
+                  },
+                ]
+              : []),
+            { kind: 'text', text: 'Question' },
+          ],
+        },
+      ];
+      const prepared = await Effect.runPromise(
+        model.prepareTurn({
+          messages,
+          tools: TOOLS,
+          parallelToolCalls: false,
+          toolChoice: { name: 'search' },
+          ...(isXai
+            ? { effort: 'xhigh' as const }
+            : { stopSequences: ['<end>'] }),
+        }),
+      );
+      assert(prepared.mode === 'foreground');
+      const events = await Effect.runPromise(
+        Stream.runCollect(
+          model.streamTurn(JSON.parse(JSON.stringify(prepared))),
+        ),
+      );
+      const completed = events.at(-1);
+      assert(completed?.kind === 'completed');
+      const result = completed.result;
+      expect(events[0]?.kind).toBe('identified');
+      expect(
+        events
+          .flatMap((event) =>
+            event.kind === 'delta' && event.part === 'reasoning'
+              ? [event.text]
+              : [],
+          )
+          .join(''),
+      ).toBe('  Examine x².\n');
+      expect(result.content[0]).toEqual({
+        kind: 'reasoning',
+        summary: [],
+        content: [{ kind: 'text', text: '  Examine x².\n' }],
+        evidence: { kind: 'chat-reasoning-content' },
+      });
+      expect(
+        result.content
+          .filter((part) => part.kind === 'local-call')
+          .map((part) => part.providerCallId),
+      ).toEqual(['call_0', 'call_1']);
+      expect(result.usage).toEqual({
+        inputTokens: 32,
+        outputTokens: 9,
+        totalTokens: 135,
+        cachedInputTokens: 3,
+        reasoningTokens: 94,
+        ...(isXai
+          ? {
+              providerUsage: {
+                kind: 'xai',
+                costInUsdTicks: 70,
+                serviceTier: 'default',
+              },
+            }
+          : {}),
+      });
+      const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+      expect(body).toMatchObject({
+        temperature: 0,
+        parallel_tool_calls: false,
+        tool_choice: { type: 'function', function: { name: 'search' } },
+        stream_options: { include_usage: true },
+      });
+      if (isXai) {
+        expect(body).toMatchObject({
+          max_completion_tokens: 100,
+          reasoning_effort: 'xhigh',
+        });
+        expect(body).not.toHaveProperty('max_tokens');
+        expect(body).not.toHaveProperty('stop');
+        expect(body.messages[2].content).toEqual([
+          { type: 'text', text: 'Image label' },
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/PNG;base64,', detail: 'high' },
+          },
+          { type: 'text', text: 'Question' },
+        ]);
+      } else {
+        expect(body).toMatchObject({
+          max_tokens: 100,
+          enable_thinking: false,
+          stop: ['<end>'],
+        });
+        expect(body).not.toHaveProperty('max_completion_tokens');
+        expect(body).not.toHaveProperty('reasoning_effort');
+        expect(body).not.toHaveProperty('thinking');
+        expect(body.messages).toEqual([
+          { role: 'user', content: 'First\nsecond' },
+          { role: 'assistant', content: 'Old\nreply' },
+          { role: 'user', content: 'Image label\nQuestion' },
+        ]);
+      }
+      const followUp = await Effect.runPromise(
+        model.prepareTurn({
+          tools: TOOLS,
+          messages: [
+            ...messages,
+            {
+              role: 'assistant',
+              origin: result.requestedOrigin,
+              content: result.content,
+            },
+            {
+              role: 'tool',
+              results: [
+                {
+                  callOrdinal: 0,
+                  status: 'success',
+                  content: [{ kind: 'text', text: 'a' }],
+                },
+                {
+                  callOrdinal: 1,
+                  status: 'error',
+                  content: [{ kind: 'text', text: 'b' }],
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      const final = await Effect.runPromise(
+        model.generateTurn(JSON.parse(JSON.stringify(followUp))),
+      );
+      const replay = JSON.parse(
+        String(fetch.mock.calls[1]?.[1]?.body),
+      ).messages;
+      expect(replay.slice(-2)).toEqual([
+        { role: 'tool', tool_call_id: 'call_0', content: 'a' },
+        { role: 'tool', tool_call_id: 'call_1', content: 'Error: b' },
+      ]);
+      if (isXai) {
+        expect(replay.at(-3).reasoning_content).toBe('  Examine x².\n');
+        expect(final.usage?.providerUsage).toEqual({
+          kind: 'xai',
+          costInUsdTicks: 0,
+          serviceTier: 'default',
+        });
+        expect(final.content.at(-1)).toEqual({
+          kind: 'message',
+          content: [{ kind: 'refusal', text: 'Refused.' }],
+        });
+        // xAI reports refusals but its request grammar has no refusal member.
+        const failure = await Effect.runPromise(
+          Effect.flip(
+            model.prepareTurn({
+              messages: [
+                {
+                  role: 'user',
+                  content: [{ kind: 'text', text: 'Previous question' }],
+                },
+                {
+                  role: 'assistant',
+                  origin: final.requestedOrigin,
+                  content: final.content,
+                },
+                { role: 'user', content: [{ kind: 'text', text: 'Continue' }] },
+              ],
+            }),
+          ),
+        );
+        expect(failure.kind).toBe('unsupported');
+      } else expect(replay.at(-3)).not.toHaveProperty('reasoning_content');
+      expect(final.content[0]).toEqual({
+        kind: 'reasoning',
+        summary: [],
+        content: [{ kind: 'text', text: '' }],
+        evidence: { kind: 'chat-reasoning-content' },
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it.each(REASONING_CONFIGS)(
     'preserves exact $protocol reasoning and complete tool settlements through the SDK',

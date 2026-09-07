@@ -35,6 +35,8 @@ const OriginSchema = BindingSchema.extend({
     'deepseek-chat',
     'kimi-chat',
     'glm-chat',
+    'xai-chat',
+    'dashscope-chat',
     'openrouter-chat',
   ]),
   codecVersion: z.literal(1),
@@ -282,7 +284,13 @@ function validateAssistantContent(
     if (
       evidence != null &&
       (evidence.kind === 'chat-reasoning-content'
-        ? !['deepseek-chat', 'kimi-chat', 'glm-chat'].includes(origin.protocol)
+        ? ![
+            'deepseek-chat',
+            'kimi-chat',
+            'glm-chat',
+            'xai-chat',
+            'dashscope-chat',
+          ].includes(origin.protocol)
         : origin.protocol !== EVIDENCE_PROTOCOL[evidence.kind])
     ) {
       ctx.addIssue({
@@ -598,6 +606,16 @@ const GlmControlsSchema = ChatReasoningControlsSchema.extend({
   temperature: z.number().min(0).max(1).nullable(),
   clearThinking: z.boolean(),
 });
+const XaiEffortSchema = EffortSchema.unwrap().exclude(['max']).nullable();
+const XaiControlsSchema = OpenAIControlsSchema.extend({
+  temperature: OpenAIControlsSchema.shape.temperature.nullable(),
+  effort: XaiEffortSchema,
+});
+const DashscopeControlsSchema = OpenAIControlsSchema.extend({
+  temperature: z.number().min(0).lt(2),
+  stopSequences: TurnRequestSchema.unwrap().shape.stopSequences.unwrap(),
+  thinking: DisabledThinkingSchema.readonly(),
+});
 const OpenRouterControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
   temperature: z.number().min(0).max(2).nullable(),
@@ -682,6 +700,30 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     supportsThinkingDisabled: z.boolean(),
     supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
     defaults: GlmControlsSchema.omit({ toolChoice: true }).readonly(),
+  }).readonly(),
+  BindingSchema.extend({
+    protocol: z.literal('xai-chat'),
+    supportsImageInput: z.boolean(),
+    supportedEfforts: z.array(XaiEffortSchema.unwrap()).readonly(),
+    defaults: XaiControlsSchema.omit({ toolChoice: true }).readonly(),
+  })
+    .superRefine((configuration, ctx) => {
+      if (
+        configuration.defaults.effort !== null &&
+        !configuration.supportedEfforts.includes(configuration.defaults.effort)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'effort'],
+          message:
+            'The default reasoning effort must be supported by the selected route.',
+        });
+      }
+    })
+    .readonly(),
+  BindingSchema.extend({
+    protocol: z.literal('dashscope-chat'),
+    defaults: DashscopeControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
   BindingSchema.extend({
     protocol: z.literal('openai-responses'),
@@ -779,7 +821,15 @@ export type OpenAIChatConfiguration = Extract<
 >;
 export type ChatConfiguration = Extract<
   ModelConfiguration,
-  { protocol: 'openai-chat' | 'deepseek-chat' | 'kimi-chat' | 'glm-chat' }
+  {
+    protocol:
+      | 'openai-chat'
+      | 'deepseek-chat'
+      | 'kimi-chat'
+      | 'glm-chat'
+      | 'xai-chat'
+      | 'dashscope-chat';
+  }
 >;
 export type GoogleInteractionsConfiguration = Extract<
   ModelConfiguration,
@@ -840,6 +890,14 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
       protocol: z.literal('glm-chat'),
       controls: GlmControlsSchema.readonly(),
     }).readonly(),
+    PreparedInputSchema.extend({
+      protocol: z.literal('xai-chat'),
+      controls: XaiControlsSchema.readonly(),
+    }).readonly(),
+    PreparedInputSchema.extend({
+      protocol: z.literal('dashscope-chat'),
+      controls: DashscopeControlsSchema.readonly(),
+    }).readonly(),
     ResponsesPreparedSchema.extend({
       transport: z.discriminatedUnion('kind', [
         HttpTransportSchema,
@@ -872,6 +930,13 @@ const UsageSchema = z
     reasoningTokens: z.int().nonnegative().nullable(),
     providerUsage: z
       .discriminatedUnion('kind', [
+        z
+          .strictObject({
+            kind: z.literal('xai'),
+            costInUsdTicks: z.int().nonnegative().nullable(),
+            serviceTier: z.enum(['default', 'priority']).nullable(),
+          })
+          .readonly(),
         z
           .strictObject({
             kind: z.literal('anthropic'),
@@ -1014,6 +1079,8 @@ export const TurnResultSchema = z
       (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
       (result.usage?.providerUsage?.kind === 'anthropic' &&
         result.requestedOrigin.protocol !== 'anthropic-messages') ||
+      (result.usage?.providerUsage?.kind === 'xai' &&
+        result.requestedOrigin.protocol !== 'xai-chat') ||
       ((result.usage?.providerUsage?.kind === 'openrouter' ||
         result.finishEvidence !== undefined) &&
         result.requestedOrigin.protocol !== 'openrouter-chat')

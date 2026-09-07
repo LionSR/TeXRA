@@ -437,7 +437,11 @@ describe('native OpenAI Responses protocol', () => {
     'rejects %s WebSocket traffic and does not reuse that connection',
     async (variant) => {
       let requests = 0;
-      const configuration = await socketServer((socket) =>
+      let closed = false;
+      const configuration = await socketServer((socket) => {
+        socket.once('close', () => {
+          closed = true;
+        });
         socket.on('message', () => {
           requests += 1;
           if (variant === 'binary') socket.send(Buffer.from('{}'));
@@ -501,8 +505,8 @@ describe('native OpenAI Responses protocol', () => {
               }),
             );
           }
-        }),
-      );
+        });
+      });
       await Effect.runPromise(
         Effect.scoped(
           Effect.gen(function* () {
@@ -512,26 +516,40 @@ describe('native OpenAI Responses protocol', () => {
             });
             const turn = yield* model.prepareTurn(REQUEST);
             assert(turn.mode === 'foreground');
-            const error = yield* Effect.flip(model.generateTurn(turn));
-            expect(error.kind).toBe(
-              variant === 'rejection' ||
-                variant === 'streaming-rejection' ||
-                variant === 'connection-limit'
-                ? 'provider-rejection'
-                : 'malformed-output',
+            // Separate frames may arrive before or after the terminal is consumed.
+            const first = yield* Effect.result(model.generateTurn(turn));
+            if (first._tag === 'Success') {
+              expect(variant).toBe('post-terminal');
+              expect(first.success).toMatchObject({
+                providerResponseId: 'resp_1',
+                finishReason: 'stop',
+              });
+            } else {
+              const error = first.failure;
+              expect(error.kind).toBe(
+                variant === 'rejection' ||
+                  variant === 'streaming-rejection' ||
+                  variant === 'connection-limit'
+                  ? 'provider-rejection'
+                  : 'malformed-output',
+              );
+              if (variant === 'rejection')
+                expect(error).toMatchObject({
+                  status: 429,
+                  message: 'Synthetic request rejection',
+                });
+              if (variant === 'connection-limit')
+                expect(error).toMatchObject({
+                  status: 400,
+                  cause: { code: 'websocket_connection_limit_reached' },
+                  message:
+                    'Responses websocket connection limit reached (60 minutes). Create a new websocket connection to continue.',
+                });
+            }
+            // Closure must occur while acquisition is still alive, not at scope exit.
+            yield* Effect.promise(() =>
+              vi.waitFor(() => expect(closed).toBe(true)),
             );
-            if (variant === 'rejection')
-              expect(error).toMatchObject({
-                status: 429,
-                message: 'Synthetic request rejection',
-              });
-            if (variant === 'connection-limit')
-              expect(error).toMatchObject({
-                status: 400,
-                cause: { code: 'websocket_connection_limit_reached' },
-                message:
-                  'Responses websocket connection limit reached (60 minutes). Create a new websocket connection to continue.',
-              });
             yield* Effect.flip(model.generateTurn(turn));
             expect(requests).toBe(1);
           }),
