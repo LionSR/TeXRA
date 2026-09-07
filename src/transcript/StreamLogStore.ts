@@ -31,6 +31,7 @@ import {
 } from '@shared/session/traceEntries';
 import {
   sessionMessageBytes,
+  SESSION_REPLAY_BYTES,
   type SessionReadBudget,
 } from '@shared/session/sessionReadBudget';
 import { createFlushableDebounce, isObject } from '@utils/core';
@@ -452,14 +453,16 @@ export class StreamLogStore {
   async readEntries(
     streamId: StreamTabId,
     budget?: SessionReadBudget,
+    fromSeq = 0,
   ): Promise<StreamLogEntry[]> {
     const resident = this.streams.get(streamId)?.log;
     if (resident) {
-      if (!budget) return resident.toJSON();
-      if (resident.head > budget.rows) throw new FileReadLimitError('rows');
+      if (!budget) return resident.getRange(fromSeq, resident.head);
+      if (resident.head - fromSeq > budget.rows)
+        throw new FileReadLimitError('rows');
       const entries: StreamLogEntry[] = [];
       let bytes = 0;
-      for (let index = 0; index < resident.head; index += 1) {
+      for (let index = fromSeq; index < resident.head; index += 1) {
         const entry = resident.getRange(index, index + 1)[0];
         if (entry === undefined) continue;
         bytes += sessionMessageBytes(entry);
@@ -471,12 +474,36 @@ export class StreamLogStore {
     if (this.mode.kind === 'ephemeral' || !this.summaries.has(streamId)) {
       return [];
     }
-    const raw = await this.logsKv.read<unknown[]>(streamId, budget);
+    let raw: unknown[] | undefined;
+    if (fromSeq === 0)
+      raw = await this.logsKv.read<unknown[]>(streamId, budget);
+    else {
+      raw = [];
+      let sequence = 0;
+      let bytes = 0;
+      for await (const value of this.logsKv.readArray(
+        streamId,
+        SESSION_REPLAY_BYTES,
+      )) {
+        const parsed = StreamLogEntrySchema.safeParse(value);
+        // Persisted unknown rows never occupied a typed transcript sequence.
+        if (!parsed.success) continue;
+        sequence += 1;
+        if (sequence <= fromSeq) continue;
+        const entry = { ...parsed.data, seqNo: sequence };
+        bytes += sessionMessageBytes(entry);
+        if (budget && (bytes > budget.bytes || raw.length >= budget.rows))
+          throw new FileReadLimitError(bytes > budget.bytes ? 'bytes' : 'rows');
+        raw.push(entry);
+      }
+    }
     const parsed = await this.hydratePersistedEntries(streamId, raw, budget);
     // The read-only view needs sequential row numbers, not a second resident
     // log with its own indexes and copies of the entire entries array.
     return parsed.entries.map((entry, index) =>
-      entry.seqNo === index + 1 ? entry : { ...entry, seqNo: index + 1 },
+      entry.seqNo === fromSeq + index + 1
+        ? entry
+        : { ...entry, seqNo: fromSeq + index + 1 },
     );
   }
 

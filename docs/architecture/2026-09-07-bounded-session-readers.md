@@ -63,6 +63,15 @@ cumulative budget. The in-memory event tail is materialized one row at a time;
 live text includes both its encoded fragments and its row envelope in the shared
 byte and row accounting. These display limits leave the saved files unchanged.
 
+A reconnect reads only the requested typed transcript suffix. For saved JSON
+arrays, it scans and validates one raw row at a time without hydrating prefix
+spills; malformed retained rows do not shift typed sequence numbers. One raw row
+has an independent 128 MiB decoding bound, including a row in the skipped prefix.
+Only retained suffix rows consume the replay budget. Unselected transcript and
+text rows are excluded before byte accounting, while the durable cursor still
+advances over skipped events. The reader retains text tails only for its selected
+streams.
+
 The SQLite integration accepts an optional budget on public reads. Its iterator
 checks encoded raw-row bytes and row count before decoding/retaining the next row;
 private execution/checkpoint events are filtered in SQL before public read budgets.

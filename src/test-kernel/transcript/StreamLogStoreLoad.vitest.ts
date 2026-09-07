@@ -429,6 +429,48 @@ describe('StreamLogStore load', () => {
       ]);
       expect(store.get('alpha')).toBeUndefined();
       expect(await readFile(file, 'utf8')).toBe(raw);
+
+      // Reconnect sequence numbers count typed entries, not malformed raw
+      // array positions. Prefix spill files must never be hydrated again.
+      const prefix = Array.from({ length: 20 }, (_, index) => ({
+        ...rows[0],
+        id: `prefix-${index}`,
+        seqNo: index + 1,
+        text: 'p'.repeat(5000),
+      }));
+      const suffix = { ...rows[1], id: 'suffix', seqNo: 99 };
+      const suffixRaw = JSON.stringify([
+        { unsupported: true },
+        ...prefix,
+        null,
+        suffix,
+      ]);
+      await writeFile(file, suffixRaw);
+      vi.spyOn(StorageFS, 'createReadStream').mockImplementation(
+        (target, options) =>
+          AbsoluteFS.createReadStream(path.join(directory, target), options),
+      );
+      vi.mocked(StorageFS.read).mockClear();
+      const resumed = await store.readEntries(
+        'alpha',
+        { bytes: 15_000, rows: 1 },
+        20,
+      );
+      expect(resumed.map((entry) => [entry.seqNo, entry.text])).toEqual([
+        [21, 'x'.repeat(10_000)],
+      ]);
+      expect(
+        vi.mocked(StorageFS.read).mock.calls.map(([target]) => target),
+      ).toEqual([spills[1]]);
+      expect(await readFile(file, 'utf8')).toBe(suffixRaw);
+      const resident = StreamLogStore.ephemeral('suffix replay regression');
+      for (const entry of [...prefix, suffix])
+        appendTranscriptEntry(resident, 'resident', entry);
+      expect(
+        (
+          await resident.readEntries('resident', { bytes: 1000, rows: 1 }, 20)
+        ).map((entry) => entry.seqNo),
+      ).toEqual([21]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

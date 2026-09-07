@@ -199,6 +199,22 @@ export function frameSubscription(
         Stream.map((value): FrameItem => ({ _tag: 'host', host: value })),
       );
       return Stream.merge(inputs, hosts).pipe(
+        Stream.map((item): FrameItem | null => {
+          if (
+            item._tag === 'chunk' &&
+            !named.has(qualifyAggregateId('stream', item.streamId))
+          )
+            return null;
+          if (
+            item._tag === 'event' &&
+            item.read === 'all' &&
+            item.event.type === 'transcript.entry' &&
+            !named.has(item.event.aggregateId)
+          )
+            return { _tag: 'drained', cursor: item.event.commit };
+          return item;
+        }),
+        Stream.filter((item): item is FrameItem => item !== null),
         Stream.aggregateWithin(
           Sink.fold(
             () => ({

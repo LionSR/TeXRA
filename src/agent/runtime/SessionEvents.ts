@@ -349,7 +349,7 @@ export class SessionEventLog extends Context.Service<
                 const entries = yield* Effect.tryPromise({
                   try: async () =>
                     runWithWorkspaceRoots(roots, () =>
-                      transcripts.readEntries(target.id, budget),
+                      transcripts.readEntries(target.id, budget, fromSeq),
                     ),
                   catch: (error) =>
                     error instanceof FileReadLimitError

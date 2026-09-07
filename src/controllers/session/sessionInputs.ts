@@ -7,7 +7,7 @@
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
 import { SessionEventLog } from '@agent/runtime/SessionEvents';
-import type { FoldInput, TextChunk } from '@shared/schemas';
+import { aggregateId, type FoldInput, type TextChunk } from '@shared/schemas';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import {
   SessionReaderError,
@@ -30,6 +30,7 @@ export const sessionInputsLayer = Layer.effect(
       read: (aggregates, fromCommit, budget) =>
         Stream.unwrap(
           Effect.gen(function* () {
+            const named = new Set(aggregates.map((aggregate) => aggregate.id));
             const anchor =
               fromCommit === 0
                 ? yield* SubscriptionRef.get(log.level)
@@ -123,6 +124,11 @@ export const sessionInputsLayer = Layer.effect(
                     };
                     yield* log.readAll(previous.cursor).pipe(
                       Stream.takeWhile((event) => event.commit <= cursor),
+                      Stream.filter(
+                        (event) =>
+                          event.type !== 'transcript.entry' ||
+                          named.has(event.aggregateId),
+                      ),
                       Stream.runForEach((event) =>
                         Effect.sync(() => {
                           charge({ _tag: 'event', read: 'all', event });
@@ -131,7 +137,12 @@ export const sessionInputsLayer = Layer.effect(
                       ),
                     );
                     const inputs: FoldInput[] = [];
+                    const selectedText = new Map<string, InflightTextChunk>();
                     for (const [key, value] of nextText) {
+                      const slash = key.indexOf('/');
+                      const streamId = key.slice(0, slash);
+                      if (!named.has(aggregateId('stream', streamId))) continue;
+                      selectedText.set(key, value);
                       const held = previous.text.get(key);
                       if (value === held) continue;
                       // Visit only appends since this reader's captured tail.
@@ -148,10 +159,9 @@ export const sessionInputsLayer = Layer.effect(
                       }
                       const from = at === held ? (held?.length ?? 0) : 0;
                       if (value.length <= from) continue;
-                      const slash = key.indexOf('/');
                       const chunk: TextChunk = {
                         _tag: 'chunk',
-                        streamId: key.slice(0, slash),
+                        streamId,
                         rowId: key.slice(slash + 1),
                         from,
                         to: value.length,
@@ -175,7 +185,7 @@ export const sessionInputsLayer = Layer.effect(
                     charge(drained);
                     inputs.push(drained);
                     batches.push(inputs);
-                    return [{ cursor, text: nextText }, batches] as const;
+                    return [{ cursor, text: selectedText }, batches] as const;
                   }),
               ),
             );

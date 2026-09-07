@@ -43,6 +43,9 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   FoldEventSchema,
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type ExecutionId,
   type FoldInput,
@@ -422,11 +425,38 @@ describe('session framer', () => {
             SESSION_FRAME_TARGET_BYTES -
             sessionMessageBytes(large),
         );
+        const hiddenText = 'h'.repeat(SESSION_FRAME_BYTES + 1);
+        const hiddenEvent = {
+          type: 'transcript.entry' as const,
+          aggregateId: qualifyAggregateId('stream', 'stream:unrequested'),
+          seq: 1,
+          commit: 7,
+          ownerId: SELF,
+          at: 0,
+          entry: {
+            id: 'hidden',
+            seqNo: 1,
+            timestamp: 0,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: LOG_LEVELS.INFO,
+            messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+            text: hiddenText,
+          },
+        };
         const frames = yield* frameSubscription(
           {
             ...source,
             inputs: () =>
               Stream.make([
+                { _tag: 'event', read: 'all', event: hiddenEvent },
+                {
+                  _tag: 'chunk',
+                  streamId: 'stream:unrequested',
+                  rowId: 'hidden',
+                  from: 0,
+                  to: hiddenText.length,
+                  text: hiddenText,
+                },
                 small,
                 large,
                 { _tag: 'event', read: 'aggregate', event },
@@ -443,6 +473,8 @@ describe('session framer', () => {
         expect(
           frames.flatMap((frame) => frame.events).map((row) => row.event),
         ).toEqual([small.event, large.event, event]);
+        expect(frames.at(-1)?.cursor).toBe(7);
+        expect(frames.flatMap((frame) => frame.chunks)).toEqual([]);
         expect(
           frames.every(
             (frame) => sessionMessageBytes(frame) <= SESSION_FRAME_BYTES,
@@ -472,7 +504,7 @@ describe('session framer', () => {
         ]) {
           const emitted: (readonly FoldInput[])[] = [];
           const exit = yield* Effect.exit(
-            inputs.read([], 0, budget).pipe(
+            inputs.read(subscribe.aggregates, 0, budget).pipe(
               Stream.take(2),
               Stream.runForEach((batch) =>
                 Effect.sync(() => {
@@ -487,6 +519,12 @@ describe('session framer', () => {
             false,
           );
         }
+        const unselected = yield* inputs
+          .read([], 0, { bytes: 4096, rows: 4 })
+          .pipe(Stream.take(2), Stream.runCollect);
+        expect(unselected.flat().some((input) => input._tag === 'chunk')).toBe(
+          false,
+        );
       }).pipe(Effect.provide(runtimeGraph([]))),
   );
 
