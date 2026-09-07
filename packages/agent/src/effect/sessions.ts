@@ -364,6 +364,8 @@ function start(
         release();
         // A run nobody read retains nothing: what it buffered goes with it.
         if (!reading) {
+          // clear replays a terminal queue failure already owned by the run;
+          // releasing retained items must not report that failure again.
           yield* Queue.clear(trace).pipe(Effect.catchCause(() => Effect.void));
           bufferedBytes = 0;
         }
@@ -534,6 +536,8 @@ function start(
             Stream.ensuring(
               Effect.gen(function* () {
                 release();
+                // A terminal queue failure was already delivered to this
+                // reader; clearing its buffer must not fail cleanup again.
                 yield* Queue.clear(trace).pipe(
                   Effect.catchCause(() => Effect.void),
                 );
