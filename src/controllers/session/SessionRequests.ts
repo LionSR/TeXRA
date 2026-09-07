@@ -354,6 +354,8 @@ function handle(
           : Effect.fail(settled(req.streamId, 'user question')),
       );
     case 'decision.retry':
+      // A rejection from the run's client preparation is a handler defect,
+      // per the module contract above, not a `RequestError` to word.
       return Effect.promise(() =>
         session.interactions.settleRetry(
           req.approvalId,

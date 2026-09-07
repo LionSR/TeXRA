@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { Effect } from 'effect';
 import {
   buildCliContext,
   CliUsageError,
@@ -210,7 +211,7 @@ describe('CLI context config defaults', () => {
       }),
     );
 
-    const loaded = await loadWorkspaceCliConfig(workspace);
+    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
 
     expect(loaded.values.chat?.model).toBe('deepseekT');
     expect(loaded.values.model).toBeUndefined();
@@ -226,7 +227,7 @@ describe('CLI context config defaults', () => {
       }),
     );
 
-    const loaded = await loadWorkspaceCliConfig(workspace);
+    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
 
     expect(loaded.warnings).toEqual([]);
   });
@@ -241,7 +242,7 @@ describe('CLI context config defaults', () => {
       }),
     );
 
-    const loaded = await loadWorkspaceCliConfig(workspace);
+    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
 
     expect(loaded.values.agent).toBe('generic');
     expect(loaded.values.model).toBe('gpt55');
@@ -280,7 +281,7 @@ describe('CLI context config defaults', () => {
   it('reports malformed workspace config files without failing', async () => {
     const workspace = await workspaceWithConfig('{');
 
-    const loaded = await loadWorkspaceCliConfig(workspace);
+    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
 
     expect(loaded.values).toEqual({});
     expect(loaded.path).toContain(join('.texra', 'config.json'));
@@ -293,7 +294,7 @@ describe('CLI context config defaults', () => {
       recursive: true,
     });
 
-    const loaded = await loadWorkspaceCliConfig(workspace);
+    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
 
     expect(loaded.values).toEqual({});
     expect(loaded.path).toContain(join('.texra', 'config.json'));

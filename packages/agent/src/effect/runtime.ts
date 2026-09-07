@@ -152,6 +152,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       if (holds > 0 || !installedHere) return Effect.void;
       installedHere = false;
       return closeOwnedSessions().pipe(
+        // A faithful round trip, not a swallowed rejection:
+        // `ManagedRuntime.disposeEffect` is `Effect<void, never>` over
+        // `Scope.close`, so the only way `disposeProcessRuntime` rejects is a
+        // layer finalizer defecting, and re-raising that as a defect is what
+        // the release above says the embedder sees.
         Effect.ensuring(Effect.promise(() => disposeProcessRuntime())),
       );
     }),

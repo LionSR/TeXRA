@@ -1,5 +1,6 @@
-import { Cause, Data, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
+import { hostPort } from '@common/hostPort';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsMessageFor, SETTINGS_VIEW_CMD } from '@shared/schemas';
 import type {
@@ -37,14 +38,9 @@ interface SettingsViewHostOptions {
   };
 }
 
-/** The view's `respond` callback rejected while posting a memory message. */
-class SettingsPostFailed extends Data.TaggedError('SettingsPostFailed')<{
-  readonly cause: unknown;
-}> {}
-
 /**
- * Re-raise a memory failure as the cause the filesystem, the host prompt, or
- * the view's respond callback raised. The memory path has no recovery above
+ * Re-raise a memory failure as the cause the filesystem or host prompt
+ * raised. The memory path has no recovery above
  * this point — the previous `await` chain let the same error reach the host's
  * own error handling — so the host edge's `runPromise` rejects with that
  * instance rather than with a tagged wrapper nobody reads.
@@ -80,7 +76,7 @@ export class SettingsViewHost {
       const message = yield* raiseCause(
         this.memoryController.getMemoryDataMessage(),
       );
-      yield* raiseCause(this.postToRespond(message, respond));
+      yield* hostPort(() => this.post(message, respond)).pipe(Effect.orDie);
     },
   );
 
@@ -102,33 +98,24 @@ export class SettingsViewHost {
     ) {
       const posted = yield* Effect.exit(
         this.memoryController.getMemoryPreviewMessage(data.storagePath).pipe(
-          Effect.flatMap((message) =>
-            this.postToRespond(message, options.respond),
-          ),
-          // Report the filesystem or post error itself, not the tag that
-          // carried it: `Data.TaggedError`'s `message` is the tag string,
-          // and the extension formats whatever reaches `onError` with
-          // `toErrorMessage`. Unwrapping in the failure channel (rather
-          // than after `Cause.squash`) keeps a defect untouched, and is
-          // the same contract `raiseCause` gives the sibling methods.
+          // Unwrap only the memory failure; hostPort preserves the response
+          // error itself, including an error that has its own cause field.
           Effect.catch((error) => Effect.fail(error.cause)),
+          Effect.flatMap((message) =>
+            hostPort(() => this.post(message, options.respond)),
+          ),
         ),
       );
       if (Exit.isSuccess(posted)) return;
-      yield* raiseCause(
-        Effect.tryPromise({
-          try: async () => {
-            await options.onError?.(Cause.squash(posted.cause));
-          },
-          catch: (cause) => new SettingsPostFailed({ cause }),
-        }),
+      yield* hostPort(() => options.onError?.(Cause.squash(posted.cause))).pipe(
+        Effect.orDie,
       );
-      yield* raiseCause(
-        this.postToRespond(
+      yield* hostPort(() =>
+        this.post(
           this.memoryController.getMemoryPreviewErrorMessage(data.storagePath),
           options.respond,
         ),
-      );
+      ).pipe(Effect.orDie);
     },
   );
 
@@ -138,7 +125,8 @@ export class SettingsViewHost {
     respond?: SettingsRespond,
   ) {
     const message = yield* raiseCause(this.memoryController.deleteMemory(data));
-    yield* raiseCause(this.postMaybeToRespond(message, respond));
+    if (message == null) return;
+    yield* hostPort(() => this.post(message, respond)).pipe(Effect.orDie);
   });
 
   readonly setMemoryPinned = Effect.fn('SettingsViewHost.setMemoryPinned')(
@@ -151,35 +139,10 @@ export class SettingsViewHost {
       const message = yield* raiseCause(
         this.memoryController.setMemoryPinned(storagePath, pinned),
       );
-      yield* raiseCause(this.postMaybeToRespond(message, respond));
+      if (message == null) return;
+      yield* hostPort(() => this.post(message, respond)).pipe(Effect.orDie);
     },
   );
-
-  /**
-   * The memory path's one wrap of the still-Promise post helpers below, which
-   * the model-selection methods share. A rejected `respond` is a tagged
-   * failure here so the memory programs can compose it; `raiseCause` turns it
-   * back into the host's own error at the surface.
-   */
-  private postToRespond(
-    message: unknown,
-    respond?: SettingsRespond,
-  ): Effect.Effect<void, SettingsPostFailed> {
-    return Effect.tryPromise({
-      try: () => this.post(message, respond),
-      catch: (cause) => new SettingsPostFailed({ cause }),
-    });
-  }
-
-  private postMaybeToRespond(
-    message: unknown | null | undefined,
-    respond?: SettingsRespond,
-  ): Effect.Effect<void, SettingsPostFailed> {
-    return Effect.tryPromise({
-      try: () => this.postMaybe(message, respond),
-      catch: (cause) => new SettingsPostFailed({ cause }),
-    });
-  }
 
   async sendModelSelectionData(respond?: SettingsRespond): Promise<void> {
     await this.post(
@@ -219,13 +182,5 @@ export class SettingsViewHost {
       throw new Error('SettingsViewHost has no response target.');
     }
     await respond(message);
-  }
-
-  private async postMaybe(
-    message: unknown | null | undefined,
-    respond?: SettingsRespond,
-  ): Promise<void> {
-    if (message == null) return;
-    await this.post(message, respond);
   }
 }
