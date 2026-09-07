@@ -608,6 +608,12 @@ export class SessionHandle {
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
+    // File writers, host notifications and runtime waiters belong only to
+    // the process that authored the fact.
+    const { self } = SubscriptionRef.getUnsafe(this.graph.local);
+    if (event.ownerId == null || !self.includes(event.ownerId)) {
+      return Effect.void;
+    }
     return this.applySnapshotEvent(event).pipe(
       Effect.andThen(
         Effect.sync(() => {

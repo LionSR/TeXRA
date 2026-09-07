@@ -36,6 +36,7 @@ import {
   Stream,
   SubscriptionRef,
   Fiber,
+  Scope,
 } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
 
@@ -351,6 +352,12 @@ const sessionHandleLayer = (
       // Capture before constructing the handle: constructor publications and
       // commits preceding subscription are covered by the tail's first read.
       const anchor = yield* eventLog.currentCommit.pipe(Effect.orDie);
+      // Register the consumer's scope first so handle teardown can publish and
+      // drain while both this tail and the underlying view are still alive.
+      const consumerScope = yield* Effect.acquireRelease(
+        Scope.make(),
+        (scope, exit) => Scope.close(scope, exit),
+      );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing().pipe(Effect.orDie);
       const session = yield* Effect.acquireRelease(
@@ -362,7 +369,10 @@ const sessionHandleLayer = (
               graph,
             }),
         ),
-        (session) => Effect.sync(() => session.unwind()),
+        (session) =>
+          Effect.sync(() => session.unwind()).pipe(
+            Effect.ensuring(Effect.promise(() => session.settlePublications())),
+          ),
       );
       yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor).pipe(
@@ -380,7 +390,7 @@ const sessionHandleLayer = (
           ),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
-        Effect.forkScoped,
+        Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverStreams(session, initialListing).pipe(
         Effect.catch((error) =>

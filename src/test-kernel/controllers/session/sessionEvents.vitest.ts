@@ -632,6 +632,18 @@ describe('Sessions owner', () => {
             seq: 3,
             commit: 5,
           });
+          const committed = yield* Stream.runCollect(
+            session.events.aggregate(qualifyAggregateId('stream', OLDER), 0),
+          );
+          const handleRegistryStatus = vi.spyOn(
+            session.executions,
+            'handleStatus',
+          );
+          for (const event of committed)
+            yield* session.receiveCommittedEvent({ ...event, ownerId: OTHER });
+          expect(handleStatus).toHaveBeenCalledOnce();
+          expect(onResult).toHaveBeenCalledOnce();
+          expect(handleRegistryStatus).not.toHaveBeenCalled();
         } finally {
           detachResult();
           detach();
@@ -645,6 +657,18 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = open('/workspace/owner/settled');
+        session.publish([runStart]);
+        yield* Effect.promise(() => session.settlePublications());
+        const pending = session.interactions.requestPlanApproval({
+          requestId: 'closing-plan',
+          streamId: STREAM,
+          plan: { objective: 'Settle the pending approval during close.' },
+          goalEnabled: false,
+        });
+        yield* Effect.promise(() => session.settlePublications());
+        expect(SubscriptionRef.getUnsafe(session.view).approvals).toHaveLength(
+          1,
+        );
         track(session, 'exec:settled');
         // The run completes: its driver untracks it as it unwinds.
         session.executions.untrack('exec:settled');
@@ -667,6 +691,15 @@ describe('Sessions owner', () => {
           abandoned: [],
         });
         expect(interrupt).toHaveBeenCalledOnce();
+        expect(yield* Effect.promise(() => pending)).toMatchObject({
+          action: 'reject',
+        });
+        expect(SubscriptionRef.getUnsafe(session.view).approvals).toHaveLength(
+          0,
+        );
+        expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(
+          session.now(),
+        );
         expect(isLive(session)).toBe(false);
       }),
   );
@@ -1239,19 +1272,65 @@ describe('the C1 event table and the C6 publisher', () => {
         const first = yield* Database;
         const root = runStart.aggregateId;
         const inquiry = qualifyAggregateId('inquiry', 'ei_012345abcdef');
+        const thread = {
+          type: 'inquiryThreadUpdated',
+          aggregateId: inquiry,
+          threadId: 'ei_012345abcdef',
+          parentStreamId: STREAM,
+          status: 'open',
+          lastQuestionPreview: 'Which boundary condition applies?',
+          lastActivityIso: '2026-09-06T12:00:00.000Z',
+          turnCount: 1,
+        } as const;
         const initial = yield* first.appendAll([
           runStart,
+          olderStart,
+          { ...thread, status: 'answered' },
+          { ...thread, parentStreamId: OLDER, turnCount: 2 },
           {
-            type: 'inquiryThreadUpdated',
-            aggregateId: inquiry,
-            threadId: 'ei_012345abcdef',
-            parentStreamId: STREAM,
-            status: 'open',
-            lastQuestionPreview: 'Which boundary condition applies?',
-            lastActivityIso: '2026-09-06T12:00:00.000Z',
-            turnCount: 1,
+            ...thread,
+            parentStreamId: OLDER,
+            status: 'answered',
+            turnCount: 2,
           },
+          { ...thread, turnCount: 3 },
         ]);
+        expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
+          root,
+        );
+        expect(
+          (yield* Effect.flip(
+            first.appendAll([
+              { ...thread, parentStreamId: 'stream:missing' as StreamTabId },
+            ]),
+          ))._tag,
+        ).toBe('DatabaseWriteFailed');
+        // Visiting the first asker again must not let its delayed turn-1
+        // answer regress state and then admit the former asker's turn-2 open.
+        const staleBatches: SessionEventDraft[][] = [
+          [
+            { ...thread, status: 'answered' },
+            { ...thread, parentStreamId: OLDER, turnCount: 2 },
+          ],
+          [
+            {
+              ...thread,
+              parentStreamId: OLDER,
+              status: 'answered',
+              turnCount: 2,
+            },
+          ],
+          [{ ...thread, parentStreamId: OLDER, turnCount: 2 }],
+        ];
+        for (const stale of staleBatches) {
+          expect((yield* Effect.flip(first.appendAll(stale)))._tag).toBe(
+            'DatabaseWriteFailed',
+          );
+        }
+        expect(yield* first.readAll(0)).toEqual(initial);
+        expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
+          root,
+        );
         // Include another execution owned by this stream in the recursive closure.
         yield* Effect.sync(() => {
           const raw = new DatabaseSync(join(storage, 'texra.db'));
@@ -1312,14 +1391,29 @@ describe('the C1 event table and the C6 publisher', () => {
           committed.at(-1),
         );
         expect(committed.map((row) => [row.seq, row.commit])).toEqual([
-          [2, 3],
-          [3, 4],
+          [2, 7],
+          [3, 8],
         ]);
         expect(
           (yield* first.aggregateState([root, inquiry])).every(
             (row) => row.closed,
           ),
         ).toBe(true);
+        // Neither a late update nor a new inquiry can attach to the tombstoned asker.
+        for (const draft of [
+          thread,
+          { ...thread, parentStreamId: OLDER },
+          {
+            ...thread,
+            aggregateId: qualifyAggregateId('inquiry', 'ei_abcdef012345'),
+            threadId: 'ei_abcdef012345',
+          },
+        ]) {
+          expect((yield* Effect.flip(first.appendAll([draft])))._tag).toBe(
+            'DatabaseWriteFailed',
+          );
+        }
+        expect(yield* first.currentCommit).toBe(8);
         const tombstone = committed.at(-1)!;
         const cleanupError = new Error(
           'The generated directory is not writable.',
@@ -1379,7 +1473,7 @@ describe('the C1 event table and the C6 publisher', () => {
         ).toEqual([]);
         expect(
           (yield* first.readAll(0)).map((event) => event.aggregateId),
-        ).toEqual([unrelated.aggregateId]);
+        ).toEqual([olderStart.aggregateId, unrelated.aggregateId]);
         const replacement = yield* first.appendAll([runStart]);
         expect(
           (yield* Effect.flip(

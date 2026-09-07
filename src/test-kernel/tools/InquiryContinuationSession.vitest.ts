@@ -171,6 +171,7 @@ describe('external inquiry continuation session routing', () => {
         answeredManifest(),
         session,
       );
+      await session.settlePublications();
 
       await session.settlePublications();
       expect(explicit.facts).toMatchObject([
@@ -208,6 +209,7 @@ describe('external inquiry continuation session routing', () => {
         }),
         () => injectContinuationForAnsweredThread(THREAD, answeredManifest()),
       );
+      await session.settlePublications();
 
       await session.settlePublications();
       expect(run.facts).toMatchObject([

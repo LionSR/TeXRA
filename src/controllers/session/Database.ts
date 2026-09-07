@@ -486,6 +486,16 @@ export const databaseLayer = (
             }
             const reopened =
               previous?.status === 'answered' && draft.status === 'open';
+            if (previous && draft.turnCount < previous.turnCount) {
+              throw new Error(
+                `Inquiry update must preserve turn order: ${draft.threadId}`,
+              );
+            }
+            if (reopened && draft.turnCount <= previous.turnCount) {
+              throw new Error(
+                `Inquiry reopen must advance the turn: ${draft.threadId}`,
+              );
+            }
             if (
               previous &&
               previous.parentStreamId !== draft.parentStreamId &&
