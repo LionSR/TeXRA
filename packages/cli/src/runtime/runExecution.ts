@@ -369,14 +369,21 @@ export async function executeCliRequest(
           // whether the recovery notice is usable.
           if (
             resumability?.kind === 'checkpoint' &&
-            onFinalized !== undefined &&
-            (options.canAdvertiseInterruptedExecution?.(resumability) ?? true)
+            onFinalized !== undefined
           ) {
-            yield* Deferred.succeed(recoveryNoticeStarted, undefined);
-            yield* Effect.tryPromise({
-              try: () => Promise.resolve(onFinalized(executionId)),
+            const advertise = yield* Effect.try({
+              try: () =>
+                options.canAdvertiseInterruptedExecution?.(resumability) ??
+                true,
               catch: (error: unknown) => error,
             });
+            if (advertise) {
+              yield* Deferred.succeed(recoveryNoticeStarted, undefined);
+              yield* Effect.tryPromise({
+                try: () => Promise.resolve(onFinalized(executionId)),
+                catch: (error: unknown) => error,
+              });
+            }
           }
           return true;
         });
