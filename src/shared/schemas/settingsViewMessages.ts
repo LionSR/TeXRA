@@ -691,7 +691,11 @@ function catalogField<T extends z.ZodTypeAny>(
 /**
  * Frontend field projection of the catalog-derived LaTeX snapshot. Every
  * field is optional because `latexSlice` projects only the wire keys named in
- * `LATEX_CONFIG_FIELD_TO_KEY`, not a fixed subset.
+ * `LATEX_CONFIG_FIELD_TO_KEY`, not a fixed subset. The `satisfies` below is
+ * the field-set half of the sync this schema owns: it fails to compile if a
+ * field is added to (or removed from) `LATEX_CONFIG_FIELD_TO_KEY` without a
+ * matching line here, in either direction — excess and missing properties are
+ * both excess-property-checked against the map's own key set.
  */
 export const LatexConfigValuesSchema = z.object({
   workflowAutoCompile: catalogField(
@@ -750,7 +754,7 @@ export const LatexConfigValuesSchema = z.object({
     LATEX_CONFIG_FIELD_TO_KEY.customReplacements,
     z.record(z.string(), z.string()),
   ),
-});
+} satisfies Record<keyof typeof LATEX_CONFIG_FIELD_TO_KEY, z.ZodTypeAny>);
 export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
 
 /** Outbound: backend → frontend current LaTeX/compile/diff config values. */
