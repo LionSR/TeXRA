@@ -72,14 +72,6 @@ function isTelemetryDisabledByEnv(): boolean {
 }
 
 /**
- * The flush ticker sleeps forever between ticks on {@link unrefSleepClock}: a
- * ticker alone must not keep a short-lived host (the CLI) alive until
- * `dispose()` interrupted it. Only the ticker's sleep sees it; a flush the
- * ticker forks runs on the process clock, and the request it sends holds the
- * loop on its own.
- */
-
-/**
  * Routes whose records meter what the user consumed against their plan.
  *
  * Subscription routes are accounted against a database aggregate populated by

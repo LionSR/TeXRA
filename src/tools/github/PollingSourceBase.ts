@@ -115,13 +115,6 @@ export const pollRequest = <A>(
     catch: (cause) => new PollHookRejected({ cause }),
   });
 
-/**
- * The poll loop sleeps between rounds on {@link unrefSleepClock}: the loop
- * alone must not keep a short-lived host (the CLI) alive until shutdown
- * interrupted it. It replaces the `setInterval` + `timer.unref()` pair this
- * file used to keep off Effect's clock.
- */
-
 interface PollingSourceConfig {
   /** Display name used in the logger and exception messages. */
   name: string;
