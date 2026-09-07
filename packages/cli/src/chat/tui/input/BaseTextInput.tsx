@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
-import pTimeout from 'p-timeout';
+import { Cause, Effect } from 'effect';
 
 import {
   isPlainReturnInput,
@@ -17,6 +17,7 @@ import {
   metaChordInput,
 } from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   applyTerminalInputChunk,
   clampCursor,
@@ -298,22 +299,37 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       if (isCtrlInput(input, key, 'v') && props.onImagePaste) {
         // Insert the chip at whatever the caret is when the async probe
         // resolves (read from a ref, not a keypress-time snapshot) so typing
-        // during the probe isn't clobbered.
+        // during the probe isn't clobbered. The probe runs on the process
+        // runtime with an Effect timeout; `matchCause` settles every outcome,
+        // so the tracked promise never rejects. Runtime disposal interrupts
+        // the fiber — not a paste failure to report.
         const attempt = imagePasteQueue.beginAttempt();
-        const paste = pTimeout(
-          Promise.resolve().then(() => props.onImagePaste?.(attempt) ?? null),
-          {
-            milliseconds: IMAGE_PASTE_TIMEOUT_MS,
-            message: 'Image paste timed out.',
-          },
-        )
-          .then((chip) => {
-            if (!chip || !attempt.isCurrent()) return;
-            insertIntoLatestDraft(chip);
-          })
-          .catch((err: unknown) => {
-            if (attempt.isCurrent()) props.onImagePasteError?.(err);
-          });
+        const paste = effectRuntime().runPromise(
+          Effect.tryPromise({
+            try: () =>
+              Promise.resolve().then(
+                () => props.onImagePaste?.(attempt) ?? null,
+              ),
+            catch: (error: unknown) => error,
+          }).pipe(
+            Effect.timeout(IMAGE_PASTE_TIMEOUT_MS),
+            Effect.matchCause({
+              onFailure: (cause) => {
+                if (Cause.hasInterrupts(cause) || !attempt.isCurrent()) return;
+                const error = Cause.squash(cause);
+                props.onImagePasteError?.(
+                  Cause.isTimeoutError(error)
+                    ? new Error('Image paste timed out.')
+                    : error,
+                );
+              },
+              onSuccess: (chip) => {
+                if (!chip || !attempt.isCurrent()) return;
+                insertIntoLatestDraft(chip);
+              },
+            }),
+          ),
+        );
         imagePasteQueue.track(paste);
         return;
       }

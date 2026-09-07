@@ -8,7 +8,7 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
-import { Effect, Fiber, Stream } from 'effect';
+import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -100,13 +100,15 @@ export function createDesktopAgentExecution(
     dialog: Promise<unknown> | void,
     logMessage: string,
   ): Promise<boolean> {
-    try {
-      await dialog;
-      return true;
-    } catch (error) {
-      logger.warn(logMessage, { data: toLogData(error) });
-      return false;
-    }
+    const presented = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: async () => dialog,
+        catch: (error) => error,
+      }),
+    );
+    if (Exit.isSuccess(presented)) return true;
+    logger.warn(logMessage, { data: toLogData(Cause.squash(presented.cause)) });
+    return false;
   }
 
   const presentationEventHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
