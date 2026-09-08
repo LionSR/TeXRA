@@ -142,9 +142,20 @@ ported suite still reached through `platform().fs` and still asserted Node
 errno codes, so what was measured was candidate **A** with an Effect backend.
 The seam question stayed unanswered.
 
-The experiment that would settle it is one line: change the default `fs` in
-`createFakePlatform` to an effect-backed provider and run the **full** vitest
-suite, not a chosen subset.
+**And the experiment first prescribed here repeated the same mistake.** An
+earlier revision said: change the default `fs` in `createFakePlatform` to an
+effect-backed provider and run the full suite. That is the identical error one
+level up — swapping one `FileSystemProvider` for another leaves every consumer
+reaching through `platform().fs`, so a green full suite would demonstrate only
+that candidate A tolerates an Effect backend. It cannot show that the interface
+is deletable, which is the whole of B.
+
+A settling experiment has to remove or redirect that access path, not
+re-implement behind it. The cheapest honest version: pick one leaf subsystem,
+convert its call sites to take `FileSystem` from context, delete its use of
+`platform().fs` entirely, and measure what the conversion cost and what broke
+around it. That is a real slice of B's cascade; the suite-wide swap is not a
+slice of anything.
 
 ## 3. `PubSub` cannot replace a synchronous listener set
 
@@ -161,18 +172,32 @@ is `publishUnsafe`, documented to return `false` when a bounded hub is full.
 **production class constructor** — there is no `Effect.gen` to yield in.
 (`src/transcript/runTrace.ts:34` constructs a second one, in a plain function.)
 
-Two semantic objections survive even an unbounded hub:
+Beyond the constructor problem, two behavioural differences. An earlier
+revision claimed both "survive even an unbounded hub"; review showed that
+overstates them, and the corrected form is below.
 
 1. **A `PubSub` couples subscribers into one shared buffer; a listener set
    keeps them independent.** `AgentTrace.emit` returns `void`, so the only
-   usable publish is `publishUnsafe`. If one subscriber stalls and the hub
-   fills, the event is dropped for _every_ subscriber at once — including the
-   durable event plane. Today one stalled subscriber structurally cannot affect
-   another.
-2. **Subscriber fault degrades from per-event to permanent.**
-   `TraceEmitter.emit` try/catches each subscriber and delivers the next event.
-   Under a hub each subscriber is a fiber looping on `take`; one defect kills
-   it and that sink goes dark for the rest of the run.
+   usable publish is `publishUnsafe`, which returns `false` when a bounded hub
+   is full — dropping the event for _every_ subscriber at once, including the
+   durable event plane. **This is a bounded-hub failure and does not apply to
+   `PubSub.unbounded`**, where publishing cannot fail. What replaces it under
+   an unbounded hub is not event loss but unbounded memory growth behind the
+   slowest subscriber — a different, arguably worse, failure for a long run.
+   Either way the coupling is real: today one stalled subscriber structurally
+   cannot affect another, and under any hub it can.
+2. **Per-event fault isolation becomes an adapter requirement rather than a
+   given.** `TraceEmitter.emit` try/catches each subscriber and delivers the
+   next event. Under a hub each subscriber is a fiber looping on `take`, and a
+   naïve loop dies on the first defect, taking that sink dark for the run.
+   **This is recoverable** — wrapping each handler invocation in
+   `Effect.catchAllCause` (or inspecting its `Exit`) restores exactly today's
+   isolation. So it is not an unavoidable regression; it is work the
+   replacement must do and that the current code gets for free.
+
+Neither point alone rejects `PubSub`. The constructor problem above is what
+actually blocks it for `TraceEmitter`; these two say what a replacement would
+have to reproduce.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
 
@@ -190,17 +215,25 @@ on unbounded accumulators for every `StreamLogStore`-owned log — converting a
 cleanup into a memory leak. The drain must survive regardless of whether any
 listener does.
 
-Furthermore, `src/test-kernel/transcript/StreamLogDelta.vitest.ts` uses
-`onChange` as the observation seam for genuinely valuable store-level
-behaviour: delta precedence (value supersedes chunks), immutability of already
-emitted payloads, and the `reset` flag. Removing the surface deletes the only
-way to observe that, and `StreamLog.vitest.ts`'s direct `drainEmission` tests
-do not cover the store-level half.
+An earlier revision offered a second argument — that
+`src/test-kernel/transcript/StreamLogDelta.vitest.ts` uses `onChange` as the
+observation seam for store-level delta behaviour (precedence, payload
+immutability, the `reset` flag), so removing the surface deletes the only way
+to observe it. **Review refuted that, correctly, against the repo's own rule.**
+AGENTS.md is explicit: "When code or a historical format is retired, delete
+tests and fixtures that exist only for that retired behavior instead of
+rewriting them around the new implementation." If `onChange` has no production
+consumer, that suite protects implementation-only machinery, not a durable or
+user-visible contract — so losing the seam is a consequence of the deletion,
+not an argument against it.
 
-The real decision is therefore larger than a deletion: is the delta-emission
-machinery itself (accumulators, delta computation, reset flags) dead weight to
-remove wholesale, or a deliberately kept extension point? That is a maintainer
-call, not a mechanical cleanup.
+**The accumulator drain is the only real objection**, and it stands on its own.
+
+The decision is therefore narrower than the earlier revision implied, but still
+not mechanical: is the delta-emission machinery (accumulators, delta
+computation, reset flags) dead weight to remove wholesale — in which case the
+test goes with it — or a deliberately kept extension point? Either way the
+drain has to be preserved or its accumulators removed with it.
 
 ## 4. `unstable/workflow` — what adoption would actually cost
 
@@ -211,13 +244,22 @@ Relevant to #12081. Prototypes typechecked at `tsc` exit 0 and ran against
 `WorkflowEngine.Encoded` is exactly ten methods, with `never` in **every**
 error channel and no pre-execution hook. The activity memo key includes the
 attempt number. `interruptUnsafe`, `resume` and `deferredDone` carry no owner
-identity, and `interruptUnsafe` requires a live in-process `Fiber` or Sharding
-routing — it is **not implementable cross-process** and degenerates into
-`interrupt`. `resume` always means full replay of the workflow body from the
-top. `Activity.make` and `Workflow.make` require Effect `Schema`.
+identity. `resume` always means full replay of the workflow body from the top.
+`Activity.make` and `Workflow.make` require Effect `Schema`.
 
-Tally for a repo-owned engine: **7 of 10 methods implementable, 2 in-process
-bookkeeping, 1 not.**
+**`interruptUnsafe` — scoped correctly.** Both shipped implementations need
+either a live in-process `Fiber` (`WorkflowEngine.js:339`) or Sharding routing.
+An earlier revision called it "not implementable cross-process"; review
+correctly pointed out that this overstates an interface limitation. Nothing in
+the signature forbids an engine from routing the execution id through its own
+worker registry or IPC — the Sharding implementation is itself proof that such
+routing works. What is unsupported is cross-process interruption **in TeXRA's
+current architecture**, which has no such routing layer and would have to build
+one. So the constraint is ours, not the interface's.
+
+Tally for a repo-owned engine, **in TeXRA as it stands today**: 7 of 10 methods
+implementable, 2 in-process bookkeeping, 1 requiring a routing layer the repo
+does not have.
 
 **The `Suspended` arm is the "not decided" channel.** It carries an optional
 `cause`, `Activity.js:130-133` parks the run on it, and
