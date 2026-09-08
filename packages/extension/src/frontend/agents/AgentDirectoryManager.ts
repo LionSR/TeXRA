@@ -16,7 +16,6 @@ import {
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
-import { platform, tryGlobalState } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -41,8 +40,15 @@ async function runSettledEffect<A>(
   throw Cause.squash(exit.cause);
 }
 
+/** The two host services `initialize()` hands the manager, kept together so
+ *  one guard covers both. */
+interface AgentDirectoryHost {
+  readonly directories: AgentDirectoryService;
+  readonly globalState: vscode.Memento;
+}
+
 class AgentDirectoryManager {
-  private directoryService: AgentDirectoryService | undefined;
+  private host: AgentDirectoryHost | undefined;
   private watcherDisposables: vscode.Disposable[] = [];
   /** The single watcher subscriber; `undefined` means nobody is listening. */
   private onAgentYamlChange: (() => void) | undefined;
@@ -50,36 +56,38 @@ class AgentDirectoryManager {
   private watcherDirectories: AgentDirectoryEntry[] | null = null;
   private readonly watcherRebuildLanes = new Map<string, PerKeyLane>();
 
-  initialize(): void {
-    this.directoryService = createPlatformAgentDirectories({
-      channel: CHANNEL,
-      customDirectoryStore: {
-        get: () =>
-          tryGlobalState()?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '') ??
-          '',
-      },
-      issueReporter: {
-        report: (message, docsId) =>
-          showLoggedMessageWithDocs(CHANNEL, message, docsId),
-      },
-    });
+  initialize(globalState: vscode.Memento): void {
+    this.host = {
+      globalState,
+      directories: createPlatformAgentDirectories({
+        channel: CHANNEL,
+        customDirectoryStore: {
+          get: () =>
+            globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+        },
+        issueReporter: {
+          report: (message, docsId) =>
+            showLoggedMessageWithDocs(CHANNEL, message, docsId),
+        },
+      }),
+    };
   }
 
-  private getDirectoryService(): AgentDirectoryService {
-    if (!this.directoryService) {
+  private getHost(): AgentDirectoryHost {
+    if (!this.host) {
       throw new Error(
         'Agent directories not initialized. Call agentDirectories.initialize() first.',
       );
     }
-    return this.directoryService;
+    return this.host;
   }
 
   async builtIn(): Promise<string> {
-    return this.getDirectoryService().builtIn();
+    return this.getHost().directories.builtIn();
   }
 
   async builtInToolUse(): Promise<string> {
-    return this.getDirectoryService().builtInToolUse();
+    return this.getHost().directories.builtInToolUse();
   }
 
   /**
@@ -87,11 +95,11 @@ class AgentDirectoryManager {
    * Returns undefined for Remote sources (which have no local directory).
    */
   async getDirectory(source: AgentSource): Promise<string | undefined> {
-    return this.getDirectoryService().getDirectory(source);
+    return this.getHost().directories.getDirectory(source);
   }
 
   async custom(): Promise<string> {
-    return this.getDirectoryService().custom();
+    return this.getHost().directories.custom();
   }
 
   async promptCustom(): Promise<string | undefined> {
@@ -102,7 +110,7 @@ class AgentDirectoryManager {
 
     await AbsoluteFS.ensureDir(selectedPath);
 
-    await platform().globalState.update(
+    await this.getHost().globalState.update(
       GlobalStateKey.CUSTOM_AGENT_DIR,
       selectedPath,
     );
@@ -116,7 +124,7 @@ class AgentDirectoryManager {
    * re-subscribing replaces the previous callback.
    */
   watchAgentDirectories(onChange: () => void): vscode.Disposable {
-    this.getDirectoryService();
+    this.getHost();
     this.onAgentYamlChange = onChange;
     this.scheduleAgentWatcherSetup();
 
@@ -194,7 +202,7 @@ class AgentDirectoryManager {
       return;
     }
 
-    const directories = await this.getDirectoryService().getAllLocal();
+    const directories = await this.getHost().directories.getAllLocal();
     if (!this.onAgentYamlChange) {
       return;
     }

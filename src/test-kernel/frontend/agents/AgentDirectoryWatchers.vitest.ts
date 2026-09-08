@@ -132,6 +132,17 @@ function fireCreate(watchedDirectory: string, createdPath: string): void {
   handler({ fsPath: createdPath });
 }
 
+/**
+ * The manager now takes the extension's global-state memento at
+ * `initialize()`. This suite mocks the directory service that reads it, so
+ * only the shape has to be there.
+ */
+const globalState = {
+  keys: () => [],
+  get: (_key: string, defaultValue?: unknown) => defaultValue,
+  update: async () => {},
+} as unknown as vscode.Memento;
+
 /** Lets every queued rebuild run to completion. */
 async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -149,7 +160,7 @@ describe('agent directory watcher rebuilds', () => {
     mocks.heldReads.clear();
     mocks.createHandlers.clear();
     mocks.getAllLocal.mockReset();
-    agentDirectories.initialize();
+    agentDirectories.initialize(globalState);
   });
 
   function subscribe(): vscode.Disposable {
