@@ -283,7 +283,18 @@ traversal actually calls. So:
   already a boundary kind. So B needs the adapter built at an allowed boundary
   and injected into four consumers, or a separate native seam for them — the
   same structural cost this note found for the hub constructor, in a second
-  place. The three `globSync` callers additionally need the synchronous set,
+  place.
+
+  **Generalise it, because two independent instances is a pattern and not a
+  coincidence.** Anywhere candidate B meets a synchronous or Promise-shaped
+  third-party contract — `path-scurry`'s `FSOption`, a class constructor, any
+  callback API that must return a value rather than an `Effect` — the
+  Effect-to-Promise bridge **is a `run` site**, and the ratchet decides whether
+  it may live where the consumer lives. Both instances found so far were found
+  by accident, while pricing something else. The cost is not "two places"; it
+  is one systematic cost of candidate B whose extent nobody has measured. A
+  grep for B's prospective consumers against the boundary kinds is the
+  measurement, and it has not been run. The three `globSync` callers additionally need the synchronous set,
   which Effect also lacks — and there no adapter exists at all.
 
 So under both candidates the seam closes for the five async callers and stays
