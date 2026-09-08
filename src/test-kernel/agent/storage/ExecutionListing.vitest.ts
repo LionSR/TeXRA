@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -57,12 +58,12 @@ describe('execution listing normalization', () => {
   });
 
   it('sees executions written by another host after an earlier listing', async () => {
-    expect(await listExecutions()).toEqual([]);
+    expect(await Effect.runPromise(listExecutions())).toEqual([]);
 
     const id = 'eee555' as ExecutionId;
     await writeExecution(id, '2026-07-15T11:00:00.000Z', config('assistant'));
 
-    expect(await listExecutions()).toEqual([
+    expect(await Effect.runPromise(listExecutions())).toEqual([
       expect.objectContaining({
         id,
         kind: 'run',
@@ -82,7 +83,7 @@ describe('execution listing normalization', () => {
       new Error('stat failed'),
     );
 
-    expect(await listExecutions()).toEqual([
+    expect(await Effect.runPromise(listExecutions())).toEqual([
       expect.objectContaining({ id, kind: 'run', checkpointPresent: false }),
     ]);
   });
@@ -90,7 +91,7 @@ describe('execution listing normalization', () => {
   it('sees metadata replaced by another host after an earlier listing', async () => {
     const id = 'fff666' as ExecutionId;
     await writeExecution(id, '2026-07-15T12:00:00.000Z', config('assistant'));
-    expect(await listExecutions()).toEqual([
+    expect(await Effect.runPromise(listExecutions())).toEqual([
       expect.not.objectContaining({ description: expect.any(String) }),
     ]);
 
@@ -100,7 +101,7 @@ describe('execution listing normalization', () => {
       outcome: 'completed',
     });
 
-    expect(await listExecutions()).toEqual([
+    expect(await Effect.runPromise(listExecutions())).toEqual([
       expect.objectContaining({
         id,
         description: 'Updated by another host',
@@ -114,7 +115,7 @@ describe('execution listing normalization', () => {
     const agentConfig = config('assistant');
     await writeExecution(id, '2026-07-15T10:00:00.000Z', agentConfig);
 
-    const entries = await listExecutions();
+    const entries = await Effect.runPromise(listExecutions());
 
     expect(entries).toEqual([
       {
@@ -149,7 +150,7 @@ describe('execution listing normalization', () => {
     );
     await writeExecution(incompleteId, '2026-07-15T07:00:00.000Z');
 
-    const entries = await listExecutions();
+    const entries = await Effect.runPromise(listExecutions());
 
     expect(entries.map(({ kind }) => kind)).toEqual([
       'run',
@@ -184,7 +185,7 @@ describe('execution listing normalization', () => {
     });
     await store.writeRunRecord({ name: 'bash', instruction: 'ls -la' });
 
-    const entries = await listExecutions();
+    const entries = await Effect.runPromise(listExecutions());
     const entry = entries.find((candidate) => candidate.id === id);
     expect(entry).toMatchObject({
       kind: 'run',
@@ -212,7 +213,7 @@ describe('execution listing normalization', () => {
       await store.writeRunRecord(config('assistant'));
     }
 
-    const entries = await listExecutions();
+    const entries = await Effect.runPromise(listExecutions());
 
     expect(entries.map(({ kind }) => kind)).toEqual([
       'incomplete',
@@ -250,7 +251,7 @@ describe('execution listing normalization', () => {
     // Persist the raw legacy bytes, bypassing the current input type.
     await store.writeRunRecord(legacyTeamRunConfig as unknown as AgentConfig);
 
-    const entries = await listExecutions();
+    const entries = await Effect.runPromise(listExecutions());
     const entry = entries.find((candidate) => candidate.id === id);
     expect(entry).toMatchObject({
       kind: 'run',
@@ -280,7 +281,7 @@ describe('execution listing normalization', () => {
       rootId,
     );
 
-    const entries = await listExecutions();
+    const entries = await Effect.runPromise(listExecutions());
 
     // The raw listing still carries the child so tool-facing callers can walk
     // the lineage; only the history-listing filter drops it.
@@ -318,7 +319,7 @@ describe('execution listing normalization', () => {
 
     // Unlike a history listing, latexdiff discovery keeps delegated children
     // and drops non-agent rows.
-    expect(await discovery.listAgentRuns()).toEqual([
+    expect(await Effect.runPromise(discovery.listAgentRuns())).toEqual([
       {
         id: rootId,
         timestamp: '2026-07-15T10:00:00.000Z',
@@ -334,9 +335,11 @@ describe('execution listing normalization', () => {
         inputFiles: ['child.tex'],
       },
     ]);
-    expect(await discovery.readStreamId(rootId)).toBe(
+    expect(await Effect.runPromise(discovery.readStreamId(rootId))).toBe(
       'assistant@deepseekT#ab1001',
     );
-    expect(await discovery.readStreamId(childId)).toBeUndefined();
+    expect(
+      await Effect.runPromise(discovery.readStreamId(childId)),
+    ).toBeUndefined();
   });
 });

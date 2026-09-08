@@ -142,9 +142,9 @@ async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
 
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
   // An unreadable history listing means no history defaults.
-  const entries: ExecutionListingEntry[] = await listExecutions().catch(
-    () => [],
-  );
+  const entries: ExecutionListingEntry[] = await effectRuntime()
+    .runPromise(listExecutions())
+    .catch(() => []);
   const candidates = toNewestFirstByTimestamp(
     entries.filter(isUserVisibleExecution).filter(
       (entry) =>

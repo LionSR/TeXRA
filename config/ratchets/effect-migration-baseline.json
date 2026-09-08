@@ -94,7 +94,6 @@
     },
     "import:p-map": {
       "src/agent/modelHandlers/support/MediaAttachmentProcessor.ts": 1,
-      "src/agent/storage/executionListing.ts": 1,
       "src/latex/LatexMediaManager.ts": 1,
       "src/latex/extractFileDependencies.ts": 1
     },

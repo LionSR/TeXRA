@@ -153,15 +153,20 @@ export function parseCliHistoryId(raw: string): ExecutionId | undefined {
 }
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
-  const entries = await listExecutions();
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
   // is bounded here so a history full of failed workflow runs cannot open one
   // file handle burst per run. `Effect.forEach` preserves input order.
   return effectRuntime().runPromise(
-    Effect.forEach(entries.filter(isUserVisibleExecution), toCliHistoryEntry, {
-      concurrency: HISTORY_ENTRY_CONCURRENCY,
-    }),
+    listExecutions().pipe(
+      Effect.flatMap((entries) =>
+        Effect.forEach(
+          entries.filter(isUserVisibleExecution),
+          toCliHistoryEntry,
+          { concurrency: HISTORY_ENTRY_CONCURRENCY },
+        ),
+      ),
+    ),
   );
 }
 

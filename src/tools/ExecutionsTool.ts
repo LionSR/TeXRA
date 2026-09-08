@@ -442,7 +442,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly listExecutions = Effect.fn('ExecutionsTool.listExecutions')(
     function* (context: ExecutionToolContext, offset: number, limit: number) {
-      const entries = yield* executionsRead(context, () => listExecutions());
+      // The listing reads through the run's workspace storage root, which
+      // is AsyncLocalStorage-scoped: the fiber must start inside the bound
+      // frame or `StorageFS` resolves the process roots instead.
+      const entries = yield* executionsRead(context, () =>
+        effectRuntime().runPromise(listExecutions()),
+      );
 
       if (entries.length === 0) {
         return executed('No execution history found.');

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Integration tests for the maybeRunCliOnboarding gate's early-return branches.
@@ -43,7 +44,7 @@ describe('maybeRunCliOnboarding gate', () => {
 
   beforeEach(() => {
     mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
-    mocks.listExecutions.mockReset().mockResolvedValue([]);
+    mocks.listExecutions.mockReset().mockReturnValue(Effect.succeed([]));
     services = createFakePlatform();
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {
@@ -120,7 +121,9 @@ describe('maybeRunCliOnboarding gate', () => {
   });
 
   it('skips onboarding for credential-less users with prior run history', async () => {
-    mocks.listExecutions.mockResolvedValue([{ id: 'previous-run' }]);
+    mocks.listExecutions.mockReturnValue(
+      Effect.succeed([{ id: 'previous-run' }]),
+    );
 
     await expect(maybeRunCliOnboarding(services, INTERACTIVE)).resolves.toEqual(
       SKIPPED,

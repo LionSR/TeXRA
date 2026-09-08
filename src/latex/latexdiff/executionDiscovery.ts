@@ -1,4 +1,5 @@
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 /**
  * The agent-run listing slice latexdiff discovery needs. Agent owns the
@@ -14,6 +15,8 @@ export interface LatexAgentRunEntry {
 }
 
 export interface LatexExecutionDiscoveryPort {
-  listAgentRuns(): Promise<readonly LatexAgentRunEntry[]>;
-  readStreamId(executionId: ExecutionId): Promise<StreamTabId | undefined>;
+  listAgentRuns(): Effect.Effect<readonly LatexAgentRunEntry[], Error>;
+  readStreamId(
+    executionId: ExecutionId,
+  ): Effect.Effect<StreamTabId | undefined, Error>;
 }
