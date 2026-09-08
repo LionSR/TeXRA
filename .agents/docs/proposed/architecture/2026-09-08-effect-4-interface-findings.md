@@ -101,11 +101,24 @@ So the exposure is three predicates plus one inline branch — not five, and
 scoped to ENOENT/EEXIST/ENOTDIR/ENOTEMPTY; ENOSPC is already recoverable
 through the existing cause-chain path.
 
-`isDiskFullError` is also the shape the other three would need. `jsonStore.ts`
-demonstrates the alternative at a boundary — unwrapping `error.reason.cause`
-back to the Node error identity its callers match. Either every predicate walks
-the chain, or every boundary unwraps; a written errno mapping that says which is
-a prerequisite for code motion touching those four codes.
+`isDiskFullError` is also the shape the other three would need. The alternative
+— unwrapping at the boundary — has a working example on `main` in
+`spawnFailure` (`src/tools/lean/direct/leanServer.ts:168`), which takes a
+`PlatformError` and reads `error.reason.cause ?? error` back to the Node error
+identity its callers match.
+
+**Do not look for that pattern in `jsonStore.ts`.** An earlier revision cited
+it, and on `main` it does no such thing: it wraps `node:fs/promises` calls in
+`Effect.tryPromise`, casts the failure to `NodeJS.ErrnoException`, and hands
+that raw error to `isFileNotFoundError` — there is no `PlatformError` to
+unwrap. The unwrapping version of `jsonStore.ts` exists only on
+`cutover/native-runtime-llm-20260907` (#11997), which is unmerged. Citing it
+without that qualifier sent a reader to a file that does not demonstrate the
+strategy.
+
+Either every predicate walks the chain, or every boundary unwraps; a written
+errno mapping that says which is a prerequisite for code motion touching those
+four codes.
 
 **`remove`'s contract is ambiguous exactly where the repo depends on it.** One
 `remove` covers both unlink and rmdir, and the interface never says which a
@@ -157,9 +170,11 @@ convert its call sites to take `FileSystem` from context, delete its use of
 around it. That is a real slice of B's cascade; the suite-wide swap is not a
 slice of anything.
 
-## 3. `PubSub` cannot replace a synchronous listener set
+## 3. Replacing the listener set with `PubSub` is a refactor, not a drop-in
 
-Relevant to #12074 §B4, which should be moved to that note's rejected list.
+Relevant to #12074 §B4. **This section has been corrected three times and the
+conclusion has weakened each time**; what follows is what survives, and it is
+"the cost exceeds the benefit", not "this is blocked".
 
 **[reproduced]** `effect@4.0.0-rc.112` has **no synchronous `PubSub`
 constructor**. `make`/`bounded`/`dropping`/`sliding`/`unbounded` all return an
@@ -169,10 +184,27 @@ returns `Effect<Subscription<A>, never, Scope>`. The only synchronous publish
 is `publishUnsafe`, documented to return `false` when a bounded hub is full.
 
 `src/agent/modelHandlers/ModelHandler.ts:279` does `new TraceEmitter()` in a
-**production class constructor** — there is no `Effect.gen` to yield in.
-(`src/transcript/runTrace.ts:34` constructs a second one, in a plain function.)
+**production class constructor**, and `src/transcript/runTrace.ts:34`
+constructs a second one in a plain function.
 
-Beyond the constructor problem, two behavioural differences. An earlier
+**An earlier revision called that constructor "the actual blocker". It is not.**
+Review pointed out that the handler-construction path is reached from inside an
+`Effect.gen` — `src/agent/runtime/AgentLaunchContext.ts:388` yields
+`Effect.tryPromise` around `createModelHandler` — so a caller can yield
+`PubSub.unbounded()` there and pass the hub into the synchronous constructor.
+What the constructor forbids is a **drop-in field initializer**; it does not
+forbid replacing `TraceEmitter`. The honest characterisation is construction
+and injection work: threading a hub through `createModelHandler`'s `async`
+signature and into every construction site.
+
+So nothing here is impossible. What remains is the size of the job — roughly
+sixteen files, including about ten test call sites that pass plain synchronous
+callbacks to `trace.subscribe` and read events out of a local array
+immediately — against a 29-line listener set that works. That is the argument
+against B4, and it is an economic one.
+
+Beyond construction, two behavioural differences a replacement must reproduce.
+An earlier
 revision claimed both "survive even an unbounded hub"; review showed that
 overstates them, and the corrected form is below.
 
@@ -184,8 +216,13 @@ overstates them, and the corrected form is below.
    `PubSub.unbounded`**, where publishing cannot fail. What replaces it under
    an unbounded hub is not event loss but unbounded memory growth behind the
    slowest subscriber — a different, arguably worse, failure for a long run.
-   Either way the coupling is real: today one stalled subscriber structurally
-   cannot affect another, and under any hub it can.
+   **And the "today they are independent" half was also wrong.**
+   `TraceEmitter.emit` fans out in a synchronous sequential `for...of`
+   (`src/agent/trace/TraceEmitter.ts:78-93`), so a slow or non-returning
+   synchronous subscriber already blocks every later subscriber in the loop,
+   including a durable sink. Head-of-line blocking exists now. A hub changes
+   the failure mode — retained backlog instead of a blocked loop — rather than
+   introducing coupling where there was none.
 2. **Per-event fault isolation becomes an adapter requirement rather than a
    given.** `TraceEmitter.emit` try/catches each subscriber and delivers the
    next event. Under a hub each subscriber is a fiber looping on `take`, and a
