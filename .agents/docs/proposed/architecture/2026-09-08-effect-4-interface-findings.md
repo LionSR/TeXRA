@@ -168,8 +168,21 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
   would silently start following what they exist to skip. Two —
   `runOutputFiles.ts:68` and `desktopWorkspaceIpc.ts:149` — additionally call
   the port's `isSymlink()` directly, which has no Effect equivalent at all.
+
+  **A third category sits outside this inventory entirely: symlink checks
+  made through `stat` rather than `readDirectory`.** `inspectRunStorageEntry`
+  (`runStorageFs.ts:64-125`) resolves the root, every ancestor and the leaf
+  via `StorageFS.stat(target)).type` and rejects the `SymbolicLink` bit at
+  `:108` and `:125`. The Node provider preserves that bit by using `lstat`;
+  Effect's `stat` follows links, so under candidate B the check would
+  silently never fire and a symlinked ancestor would be accepted as an
+  ordinary directory — after which run-file reads and copies could escape the
+  execution directory. This is a containment property, not a listing
+  nicety, and it means the `lstat` gap reaches code that never calls
+  `readDirectory` at all.
   So the cost is a correctness rewrite of each walker, on top of the syscall
   cost.
+
 - No `ctime` on `File.Info`.
 - `mtime` is `Option<Date>`. The natural `none → 0` default makes
   `cleanupOldFiles` delete files it should keep.
@@ -180,9 +193,11 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 it defaults `remove` to `Effect.void` and `exists` to `false`.
 
 **Eight production modules bypass the port entirely**, so a memfs-backed port
-does not control their inputs — a gap that is real today and separately
-closable (below), not a constraint on either R-1 candidate. An earlier
-version of this note counted two and called it unclosable; both were wrong.
+does not control their inputs. Five are closable independently of R-1; three
+are synchronous and interact with candidate B directly (both below). Earlier
+revisions of this paragraph counted two, then called the whole set
+unclosable, then called the whole set independent of R-1 — each wrong in a
+different direction.
 The full set of `glob`-package importers outside the test kernel is
 `src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts`,
 `src/tools/approval/latexPreview.ts`, `src/latex/formatter/latexindentpt.ts`,
@@ -197,11 +212,22 @@ The pinned `glob@13.0.6` takes an `fs?: FSOption` — "an fs implementation to
 override some or all of the defaults" (`glob.d.ts:231-234`) — while keeping
 the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` behaviour these callers
 rely on. Supplying memfs directly, or adapting whichever filesystem service
-wins R-1 behind one shared helper, closes it without touching R-1 at all.
-What is _not_ a route is Effect's own `glob`: its signature is
-`(pattern, {root?, exclude?})` and accepts none of those options. So this is
-an independent piece of work with its own (modest) cost, not a constraint on
-either candidate — the previous framing overstated it.
+wins R-1 behind one shared helper, closes it for the five **async** callers
+without touching R-1.
+
+**Three of the eight are synchronous, and those do interact with R-1.**
+`latexPreview.ts:78`, `latexindentpt.ts:49` and `platformPaths.ts:47` call
+`globSync`, which needs synchronous filesystem methods — so no helper can
+adapt an effectful `FileSystem` service to them. Under candidate B those
+three must either become async or keep explicit synchronous wiring, and
+supplying the same memfs instance separately adds a second injection seam.
+An earlier revision of this paragraph said the hole closes "independently of
+R-1"; that is true of five callers and false of three.
+What is _not_ a route for any of the eight is Effect's own `glob`: its
+signature is `(pattern, {root?, exclude?})` and accepts none of the options
+these callers pass. So the work splits — modest and R-1-independent for the
+five async callers, part of candidate B's migration for the three
+synchronous ones.
 
 ### A method note, because the obvious experiment was run wrong once
 
@@ -468,10 +494,33 @@ built deliberately.
 `Runners`, `RunnerStorage`, `MessageStorage` and `Snowflake`. Not adoptable for
 a single-process desktop application.
 
-**The Effect-Schema boundary can be held.** An `Activity` with
-`success: Schema.Unknown` round-trips a raw provider-shaped object through
-`toCodecJson`, demonstrated running. Zod can remain the source of truth inside
-the activity, so adoption does not force the deferred Zod → `Schema` migration.
+**The Effect-Schema boundary can be held, but not by validating inside the
+activity alone.** An `Activity` with `success: Schema.Unknown` round-trips a
+raw provider-shaped object through `toCodecJson`, demonstrated running, so
+adoption does not force the deferred Zod → `Schema` migration.
+
+The trap is that a memo hit **does not run the activity body** — the engine
+returns the stored exit directly (`WorkflowEngine.js:354`, and the replay
+mechanics above). A Zod parse placed inside the activity therefore runs on
+first execution and is skipped on every replay, while `Schema.Unknown`
+accepts whatever was stored without inspecting it. A payload corrupted at
+rest, or one written before a contract change, would enter the resumed
+workflow unvalidated — the persisted-data failure mode CLAUDE.md's Zod rules
+exist to prevent. So Zod stays the source of truth only if the parse runs on
+**both** paths: at the memo boundary as well as on fresh execution, or by
+giving the activity an Effect schema that enforces the durable contract.
+
+**A durable engine needs a declared storage-error path, and the interface
+gives it nowhere to go.** `WorkflowEngine.Encoded` has `never` in **every**
+error channel. Replacing `layerMemory` with `ExecutionKVStore` makes every
+read and write able to fail — malformed JSON, permissions, a full disk — and
+`KVStore` deliberately propagates every failure that is not "missing". With
+no error channel, an implementer's default is `Effect.orDie`, which converts
+ordinary recoverable storage failures into defects outside TeXRA's normal
+reporting path. Adoption must therefore say which operations can map a
+failure onto `Suspended` (where retrying later is the honest answer) and
+where an outer, typed engine boundary has to surface the rest. That decision
+is not expressible inside the interface and so belongs in the adoption plan.
 
 **Engine records belong in `src/agent/storage/ExecutionKVStore.ts`** — its
 header documents it as generic read/write for arbitrary keys, and
