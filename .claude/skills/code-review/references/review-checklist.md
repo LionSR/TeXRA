@@ -52,7 +52,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **`Date.now()` or synthetic IDs inside render functions** → move ID/timestamp creation to the producer.
 - **Lit components mutating shared state** → dispatch events; let the manager handle (`StreamTabs`, `LogList`, `OutputFilesManager`, `LitSessionRenderer`, `UsageStatsManager`).
 - **Direct DOM manipulation alongside Lit components** → extend the existing component instead.
-- **Webview providers/handlers not extending `BaseViewContentProvider` / `BaseViewMessageHandler`** (`packages/extension/src/common/webview/`).
+- **Webview providers/handlers not extending `BundledViewContentProvider` / `BaseViewMessageHandler`** (`packages/extension/src/common/webview/`).
 - **String literals for webview commands** → constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`, `MAIN_VIEW_COMMANDS`, …).
 - **New shared module path referenced without updating `localResourceRoots`** → 401 at runtime.
 - **The same action exposed from two UI surfaces** → one home per action. Flag an `*Events.<name>(` creator dispatched from 2+ components, the same config/state/message key edited in 2+ tabs or views, or multiple UI controls wired to the same command/effect. Secondary surfaces show **read-only status**, not a second control. Legit: global default vs per-item override; a command plus a single UI button for one stable action. See `AGENTS.md` → "UI anti-patterns" (Duplicate UI controls).
