@@ -14,18 +14,8 @@ import {
 const FIGURE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
 
 /**
- * Normalize a path to ensure it has a trailing slash.
- */
-function ensureTrailingSlash(p: string): string {
-  const trimmed = p.trim();
-  if (!trimmed) {
-    return '';
-  }
-  return trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
-}
-
-/**
  * Parse graphicspath commands supporting both single and multiple path formats.
+ * Each entry is trimmed and given a trailing slash; blank entries are skipped.
  * @param content LaTeX file content
  * @returns Array of paths found in graphicspath commands
  */
@@ -36,10 +26,11 @@ function parseGraphicspath(content: string): string[] {
   const extractedPaths: string[] = [];
   for (const outerMatch of content.matchAll(graphicspathPattern)) {
     for (const pathMatch of outerMatch[1].matchAll(pathPattern)) {
-      const normalized = ensureTrailingSlash(pathMatch[1]);
-      if (normalized) {
-        extractedPaths.push(normalized);
+      const trimmed = pathMatch[1].trim();
+      if (!trimmed) {
+        continue;
       }
+      extractedPaths.push(trimmed.endsWith('/') ? trimmed : `${trimmed}/`);
     }
   }
 
