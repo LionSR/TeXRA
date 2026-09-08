@@ -511,7 +511,7 @@ const localRules = {
 export default tseslint.config(
   // Global ignores specified in the old config
   {
-    ignores: ['dist/', '**/*.d.ts'],
+    ignores: ['dist/', '**/*.d.{ts,mts}'],
   },
 
   // Apply ESLint recommended rules globally
@@ -527,17 +527,17 @@ export default tseslint.config(
   // Configuration for TypeScript files
   {
     files: [
-      'src/**/*.ts',
-      'packages/agent/src/**/*.ts',
-      'packages/extension/src/**/*.ts',
-      'packages/desktop/src/**/*.ts',
-      'packages/desktop/design-harness/**/*.ts',
-      'packages/desktop/tests/e2e/**/*.ts',
-      'packages/cli/src/**/*.ts',
+      'src/**/*.{ts,mts}',
+      'packages/agent/src/**/*.{ts,mts}',
+      'packages/extension/src/**/*.{ts,mts}',
+      'packages/desktop/src/**/*.{ts,mts}',
+      'packages/desktop/design-harness/**/*.{ts,mts}',
+      'packages/desktop/tests/e2e/**/*.{ts,mts}',
+      'packages/cli/src/**/*.{ts,mts}',
       'packages/cli/src/**/*.tsx',
-      'packages/cli/scripts/**/*.ts',
+      'packages/cli/scripts/**/*.{ts,mts}',
       'packages/cli/scripts/**/*.tsx',
-      'packages/trace-viewer/src/**/*.ts',
+      'packages/trace-viewer/src/**/*.{ts,mts}',
     ],
     extends: [...tseslint.configs.recommended],
     languageOptions: {
@@ -659,7 +659,7 @@ export default tseslint.config(
   // Tests run separately so their application-wide program is not retained
   // alongside the production programs. Both passes keep the same rules.
   {
-    files: ['src/test-kernel/**/*.ts'],
+    files: ['src/test-kernel/**/*.{ts,mts}'],
     languageOptions: {
       parserOptions: { project: ['./tsconfig.test-kernel.json'] },
     },
@@ -669,7 +669,7 @@ export default tseslint.config(
   // with the workspace and host programs. Select it directly rather than
   // creating every earlier project while searching for the script's owner.
   {
-    files: ['packages/cli/scripts/**/*.{ts,tsx}'],
+    files: ['packages/cli/scripts/**/*.{ts,tsx,mts}'],
     languageOptions: {
       parserOptions: { project: ['./packages/cli/tsconfig.scripts.json'] },
     },
@@ -679,8 +679,8 @@ export default tseslint.config(
   // group in a fresh process so the other projects are released first.
   {
     files: [
-      'packages/desktop/design-harness/**/*.ts',
-      'packages/desktop/tests/e2e/**/*.ts',
+      'packages/desktop/design-harness/**/*.{ts,mts}',
+      'packages/desktop/tests/e2e/**/*.{ts,mts}',
     ],
     languageOptions: {
       parserOptions: {
@@ -690,7 +690,7 @@ export default tseslint.config(
   },
 
   {
-    files: ['src/replacement/**/*.{ts,tsx}'],
+    files: ['src/replacement/**/*.{ts,tsx,mts}'],
     rules: {
       'no-useless-escape': 'error',
     },
@@ -699,7 +699,7 @@ export default tseslint.config(
   // Production core code must not reach back into host-owned layers; import
   // declarations are forbidden.
   {
-    files: ['src/**/*.{ts,tsx}', 'packages/agent/src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx,mts}', 'packages/agent/src/**/*.{ts,tsx,mts}'],
     ignores: ['src/test-kernel/**'],
     rules: {
       'no-restricted-imports': [
@@ -715,7 +715,7 @@ export default tseslint.config(
   // Agent core is the neutral execution layer. It may depend on shared agent
   // contracts, but not on concrete provider-handler implementations.
   {
-    files: ['src/agent/core/**/*.{ts,tsx}'],
+    files: ['src/agent/core/**/*.{ts,tsx,mts}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -733,7 +733,7 @@ export default tseslint.config(
   // one turn, so async-local state bleeds across fibers (PRD
   // one-fold-three-renderers, 7.3).
   {
-    files: ['src/controllers/session/**/*.{ts,tsx}'],
+    files: ['src/controllers/session/**/*.{ts,tsx,mts}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -756,7 +756,7 @@ export default tseslint.config(
   // Authentication owns credentials, sessions, and preferences. Model policy
   // may consume that state, but auth must not depend back on the model layer.
   {
-    files: ['src/auth/**/*.{ts,tsx}'],
+    files: ['src/auth/**/*.{ts,tsx,mts}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -772,7 +772,7 @@ export default tseslint.config(
   // modules, but runtime values must come from browser-safe shared modules.
   {
     files: [
-      'packages/extension/src/{webview,progressView,settingsView}/frontend/**/*.{ts,tsx}',
+      'packages/extension/src/{webview,progressView,settingsView}/frontend/**/*.{ts,tsx,mts}',
     ],
     rules: {
       'no-restricted-imports': [
@@ -795,7 +795,7 @@ export default tseslint.config(
   // Font Awesome / Web Awesome icon set stays the single icon standard
   // instead of accumulating parallel hand-rolled `<wa-icon>` templates.
   {
-    files: ['src/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx,mts}', 'packages/**/*.{ts,tsx,mts}'],
     ignores: ['src/shared/wa/webAwesomeIcons.ts', '**/*.vitest.ts'],
     rules: {
       'no-restricted-syntax': [

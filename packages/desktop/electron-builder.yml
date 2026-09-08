@@ -12,9 +12,12 @@ protocols:
     schemes:
       - texra
 asar: true
+# Verify copied native bytes before platform signing rewrites Mach-O files.
+afterPack: ../../scripts/native-cleanup/verify-assets.mjs
 asarUnpack:
   # node-pty loads a native .node binary at runtime, which cannot be read from
   # inside an asar archive.
+  - '**/dist/main/*.node'
   - '**/node_modules/node-pty/**'
 npmRebuild: false
 directories:
@@ -59,7 +62,7 @@ mac:
   # @electron/universal refuses to merge Mach-O files that are byte-identical
   # across arches unless they are declared here; declaring them keeps every
   # prebuild in the merged app so each arch still resolves its own.
-  x64ArchFiles: '**/app.asar.unpacked/node_modules/node-pty/prebuilds/**'
+  x64ArchFiles: '**/app.asar.unpacked/{node_modules/node-pty/prebuilds/**,dist/main/*.node}'
   target:
     - target: dmg
       arch:
