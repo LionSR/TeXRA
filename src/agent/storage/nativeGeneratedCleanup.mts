@@ -16,17 +16,12 @@ import binary9 from '../../../scripts/native-cleanup/prebuilds/linux-s390x-gnu.n
 import binary10 from '../../../scripts/native-cleanup/prebuilds/linux-x64-musl.node';
 import binary11 from '../../../scripts/native-cleanup/prebuilds/linux-arm64-musl.node';
 
-/** The native root owns an OS directory handle until closeRoot releases it. */
-type NativeCleanupRoot = object;
-
 interface NativeCleanupBinding {
-  openRoot(path: string): NativeCleanupRoot;
   removeExecutionDirectories(
-    root: NativeCleanupRoot,
+    storage: string,
     directoryName: string,
     executionIds: readonly string[],
   ): Promise<void>;
-  closeRoot(root: NativeCleanupRoot): void;
 }
 
 const require = createRequire(import.meta.url);
@@ -65,22 +60,14 @@ function binding(): NativeCleanupBinding {
   return require(binaryPath) as NativeCleanupBinding;
 }
 
-export function openRoot(path: string): NativeCleanupRoot {
-  return binding().openRoot(path);
-}
-
 export function removeExecutionDirectories(
-  root: NativeCleanupRoot,
+  storage: string,
   directoryName: string,
   executionIds: readonly string[],
 ): Promise<void> {
   return binding().removeExecutionDirectories(
-    root,
+    storage,
     directoryName,
     executionIds,
   );
-}
-
-export function closeRoot(root: NativeCleanupRoot): void {
-  binding().closeRoot(root);
 }

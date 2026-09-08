@@ -90,12 +90,10 @@ jobs:
           const storage = await realpath(await mkdtemp(join(tmpdir(), 'texra-native-')));
           const id = 'b4df3ca4-8036-4ee1-aa20-eeb157e9e0ac';
           await mkdir(join(storage, 'executions', id), { recursive: true });
-          const root = addon.openRoot(storage);
           try {
-            await addon.removeExecutionDirectories(root, 'executions', [id]);
+            await addon.removeExecutionDirectories(storage, 'executions', [id]);
             if (await access(join(storage, 'executions', id)).then(() => true, () => false)) throw new Error('Directory was not removed');
           } finally {
-            addon.closeRoot(root);
             await rm(storage, { recursive: true, force: true });
           }
           JS
@@ -118,13 +116,11 @@ jobs:
             const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
             const addon = require(process.env.NATIVE_BINARY);
             const storage = fs.realpathSync(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'texra-electron-native-')));
-            const root = addon.openRoot(storage);
             const id = 'b4df3ca4-8036-4ee1-aa20-eeb157e9e0ac';
             fs.mkdirSync(path.join(storage, 'executions', id), { recursive: true });
-            addon.removeExecutionDirectories(root, 'executions', [id]).then(() => {
+            addon.removeExecutionDirectories(storage, 'executions', [id]).then(() => {
               assert.equal(fs.existsSync(path.join(storage, 'executions', id)), false);
             }).finally(() => {
-              addon.closeRoot(root);
               fs.rmSync(storage, { recursive: true, force: true });
             }).catch((error) => { console.error(error); process.exitCode = 1; });
             console.log('Native cleanup loaded in Electron', process.versions.electron);

@@ -88,10 +88,6 @@ static int fail(cleanup_error *error, DWORD number) {
   return -1;
 }
 
-/* Resolve the image containing our own data, without opening a pathname or
- * incrementing the module reference owned by the N-API loader. */
-
-
 static WCHAR *wide_path(const char *path, cleanup_error *error) {
   int length =
       MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
@@ -147,30 +143,11 @@ static int attributes_of(HANDLE handle, FILE_ATTRIBUTE_TAG_INFO *attributes,
   return 0;
 }
 
-
-
 void cleanup_close_root(cleanup_root *root) {
   if (root == NULL)
     return;
   CloseHandle(root->handle);
   free(root);
-}
-
-int cleanup_clone_root(cleanup_root *root, cleanup_root **out,
-                       cleanup_error *error) {
-  *out = NULL;
-  cleanup_root *copy = malloc(sizeof(*copy));
-  if (copy == NULL)
-    return fail(error, ERROR_NOT_ENOUGH_MEMORY);
-  HANDLE process = GetCurrentProcess();
-  if (!DuplicateHandle(process, root->handle, process, &copy->handle, 0, FALSE,
-                       DUPLICATE_SAME_ACCESS)) {
-    DWORD number = GetLastError();
-    free(copy);
-    return fail(error, number);
-  }
-  *out = copy;
-  return 0;
 }
 
 int cleanup_open_root(const char *path, cleanup_root **out,

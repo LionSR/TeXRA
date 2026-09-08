@@ -18,23 +18,18 @@ const removeExecutionDirectories = (
   storage: string,
   executionIds: readonly ExecutionId[],
 ) =>
-  Effect.acquireUseRelease(
-    Effect.try({
-      try: () => nativeCleanup.openRoot(realpathSync.native(storage)),
-      catch: ensureError,
-    }),
-    (root) =>
-      Effect.tryPromise({
-        try: () =>
-          nativeCleanup.removeExecutionDirectories(
-            root,
-            WORKSPACE_STORAGE_LAYOUT.runs,
-            executionIds,
-          ),
-        catch: ensureError,
-      }).pipe(Effect.uninterruptible),
-    (root) => Effect.sync(() => nativeCleanup.closeRoot(root)),
-  ).pipe(Effect.catchIf(isFileNotFoundError, () => Effect.void));
+  Effect.tryPromise({
+    try: () =>
+      nativeCleanup.removeExecutionDirectories(
+        realpathSync.native(storage),
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        executionIds,
+      ),
+    catch: ensureError,
+  }).pipe(
+    Effect.uninterruptible,
+    Effect.catchIf(isFileNotFoundError, () => Effect.void),
+  );
 
 /** One indexed pass. A failed record stays closed and available for retry. */
 export const collectPendingDeletions = Effect.fn('collectPendingDeletions')(

@@ -47,11 +47,7 @@ import { TestClock } from 'effect/testing';
 import { afterAll, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
-import {
-  openRoot,
-  closeRoot,
-  removeExecutionDirectories,
-} from '@agent/storage/nativeGeneratedCleanup.mjs';
+import { removeExecutionDirectories } from '@agent/storage/nativeGeneratedCleanup.mjs';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
   forEachLiveSession,
@@ -1670,36 +1666,24 @@ describe('the C1 event table and the C6 publisher', () => {
       writeFileSync(join(generated, 'output.tex'), 'generated');
       writeFileSync(join(replacement, 'keep.tex'), 'outside contents');
       symlinkSync(outside, join(generated, 'reference'));
-      const root = openRoot(realpathSync.native(admitted));
-      renameSync(admitted, moved);
-      symlinkSync(outside, admitted);
-      await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
-        EXECUTION,
-      ]);
-      // A crash after physical removal must permit the same tombstone to retry.
-      await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
-        EXECUTION,
-      ]);
-      expect(
-        existsSync(join(moved, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION)),
-      ).toBe(false);
-      expect(readFileSync(join(replacement, 'keep.tex'), 'utf8')).toBe(
-        'outside contents',
-      );
-
-      const next = join(moved, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION);
-      mkdirSync(next);
-      writeFileSync(join(next, 'output.tex'), 'generated again');
+      // Admission is synchronous even though deletion is performed by a worker.
       const pending = removeExecutionDirectories(
-        root,
+        realpathSync.native(admitted),
         WORKSPACE_STORAGE_LAYOUT.runs,
         [EXECUTION],
       );
-      // The native worker has duplicated the capability before it is queued.
-      // Releasing the caller cannot close or reuse that worker's descriptor.
-      closeRoot(root);
+      renameSync(admitted, moved);
+      symlinkSync(outside, admitted);
       await pending;
-      expect(existsSync(next)).toBe(false);
+      // A crash after physical removal must permit the same tombstone to retry.
+      await removeExecutionDirectories(
+        realpathSync.native(moved),
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      expect(
+        existsSync(join(moved, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION)),
+      ).toBe(false);
       expect(readFileSync(join(replacement, 'keep.tex'), 'utf8')).toBe(
         'outside contents',
       );
@@ -1726,10 +1710,11 @@ describe('the C1 event table and the C6 publisher', () => {
       mkdirSync(generated, { recursive: true });
       writeFileSync(join(generated, 'output.tex'), 'generated');
       writeFileSync(join(directory, 'keep.tex'), 'retained sibling');
-      const root = openRoot(directory);
-      await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
-        EXECUTION,
-      ]).finally(() => closeRoot(root));
+      await removeExecutionDirectories(
+        directory,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
       expect(existsSync(generated)).toBe(false);
       expect(readFileSync(join(directory, 'keep.tex'), 'utf8')).toBe(
         'retained sibling',
@@ -1748,55 +1733,76 @@ describe('the C1 event table and the C6 publisher', () => {
       mkdirSync(runs, { recursive: true });
       mkdirSync(outside);
       writeFileSync(join(outside, 'keep.tex'), 'outside contents');
-      const root = openRoot(admitted);
-      await (async () => {
-        // A generated leaf junction is removed through its own handle.
-        symlinkSync(outside, join(runs, EXECUTION), 'junction');
-        await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
-          EXECUTION,
-        ]);
-        expect(existsSync(join(runs, EXECUTION))).toBe(false);
-        expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
-          'outside contents',
-        );
+      // A generated leaf junction is removed through its own handle.
+      symlinkSync(outside, join(runs, EXECUTION), 'junction');
+      await removeExecutionDirectories(
+        admitted,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      expect(existsSync(join(runs, EXECUTION))).toBe(false);
+      expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
 
-        // Replacing the generated root with a junction never grants access to
-        // its target, even though the admitted storage handle remains valid.
-        rmSync(runs, { recursive: true });
-        symlinkSync(outside, runs, 'junction');
-        await expect(
-          removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
-            EXECUTION,
-          ]),
-        ).rejects.toMatchObject({ code: 'ELOOP' });
-        expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
-          'outside contents',
-        );
-        rmSync(runs, { recursive: true });
-
-        mkdirSync(join(runs, EXECUTION, 'nested'), { recursive: true });
-        writeFileSync(
-          join(runs, EXECUTION, 'nested', 'generated.tex'),
-          'original',
-        );
-        renameSync(admitted, moved);
-        const replacement = join(
-          admitted,
-          WORKSPACE_STORAGE_LAYOUT.runs,
+      // Replacing the generated root with a junction never grants access to
+      // its target. The storage directory itself is still admissible.
+      rmSync(runs, { recursive: true });
+      symlinkSync(outside, runs, 'junction');
+      await expect(
+        removeExecutionDirectories(admitted, WORKSPACE_STORAGE_LAYOUT.runs, [
           EXECUTION,
-        );
+        ]),
+      ).rejects.toMatchObject({ code: 'ELOOP' });
+      expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
+      rmSync(runs, { recursive: true });
+
+      mkdirSync(join(runs, EXECUTION, 'nested'), { recursive: true });
+      writeFileSync(
+        join(runs, EXECUTION, 'nested', 'generated.tex'),
+        'original',
+      );
+      const pending = removeExecutionDirectories(
+        admitted,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      // Windows may refuse an ancestor rename while the worker holds a child
+      // without delete sharing. Both outcomes must preserve confinement.
+      const destination = (() => {
+        try {
+          renameSync(admitted, moved);
+          return moved;
+        } catch (error) {
+          expect(error).toMatchObject({
+            code: expect.stringMatching(/^(EACCES|EPERM|EBUSY)$/),
+          });
+          return admitted;
+        }
+      })();
+      const replacement = join(
+        admitted,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      if (destination === moved) {
         mkdirSync(replacement, { recursive: true });
         writeFileSync(join(replacement, 'keep.tex'), 'replacement contents');
-        await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
-          EXECUTION,
-        ]);
-        expect(
-          existsSync(join(moved, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION)),
-        ).toBe(false);
+      }
+      await pending;
+      expect(
+        existsSync(join(destination, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION)),
+      ).toBe(false);
+      expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
+      if (destination === moved) {
         expect(readFileSync(join(replacement, 'keep.tex'), 'utf8')).toBe(
           'replacement contents',
         );
-      })().finally(() => closeRoot(root));
+      }
     },
   );
 

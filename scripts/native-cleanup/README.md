@@ -2,7 +2,7 @@
 
 This private N-API 8 addon removes tombstone-recorded execution directories without following links outside the admitted storage directory. SQL uses the official Effect SQLite client; this addon contains no SQLite engine, connection, extension or VFS.
 
-The deletion worker acquires a storage-directory handle for each operation, opens the generated directory and execution IDs relative to that handle, and awaits cleanup before releasing its existing deletion claim. POSIX uses directory-relative system calls; Windows uses relative native handle opens with reparse-point refusal. Link leaves are removed without traversing their targets. The asynchronous worker owns a duplicated handle, so closing the JavaScript handle cannot invalidate an active worker. Missing directories succeed; other failures retain the tombstone for retry.
+The native operation acquires a storage-directory handle synchronously before returning its Promise, opens the generated directory and execution IDs relative to that handle, and awaits cleanup before releasing its existing deletion claim. POSIX uses directory-relative system calls; Windows uses relative native handle opens with reparse-point refusal. Link leaves are removed without traversing their targets. The operation owns this one handle through worker completion, then releases it; JavaScript never owns a separate handle. Missing directories succeed; other failures retain the tombstone for retry.
 
 This implements the original C9 deletion confinement contract. It does not couple SQLite's filename admission to the cleanup handle or claim atomic database/cleanup identity under concurrent replacement between their independent admissions.
 

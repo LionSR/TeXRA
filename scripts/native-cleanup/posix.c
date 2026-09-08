@@ -13,8 +13,6 @@ struct cleanup_root {
   int fd;
 };
 
-
-
 static int fail(cleanup_error *error, int number) {
   const char *code;
   switch (number) {
@@ -72,10 +70,6 @@ static int fail(cleanup_error *error, int number) {
            "Generated-file cleanup: %s (errno %d)", strerror(number), number);
   return -1;
 }
-
-/* The loader reports the image containing this address. In packaged Electron
- * this is the unpacked native asset, not its logical path inside app.asar. */
-
 
 /* Each component is acquired from a held directory, including the initial
  * storage path. Replacing any ancestor cannot redirect subsequent operations.
@@ -246,21 +240,6 @@ int cleanup_remove_runs(cleanup_root *root, const char *directory,
     }
   }
   close(runs);
-  return 0;
-}
-
-int cleanup_clone_root(cleanup_root *root, cleanup_root **out,
-                       cleanup_error *error) {
-  int fd = fcntl(root->fd, F_DUPFD_CLOEXEC, 0);
-  if (fd < 0)
-    return fail(error, errno);
-  cleanup_root *copy = malloc(sizeof(*copy));
-  if (copy == NULL) {
-    close(fd);
-    return fail(error, ENOMEM);
-  }
-  copy->fd = fd;
-  *out = copy;
   return 0;
 }
 
