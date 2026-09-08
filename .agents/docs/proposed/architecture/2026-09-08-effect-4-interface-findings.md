@@ -143,10 +143,20 @@ only appears if the implementer routes to `rmdir`; `fs.rm` yields
 `ERR_FS_EISDIR`. This was demonstrated to bite: routing to `rmdir` in order to
 serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 
-**Five further gaps:**
+**Six further gaps:**
 
 - No `lstat` at all, so `isSymlink` needs a `readLink`-plus-errno probe — the
   silent-degradation shape CLAUDE.md forbids.
+- **`readDirectory` returns `Array<string>`, not `[name, type]`.** The port
+  reads each entry's type off the `withFileTypes` dirent for free; Effect's
+  shape forces a `stat` per entry. This is load-bearing, not tuple
+  adaptation: `indentDirectory.ts:82`, `diffOperations.ts:244,266,284` and
+  `memoryFileSystem.ts:252` call `isSymlink(type)` to **reject** symlinks,
+  and `runGeneratedFiles.ts:93` branches on `isDirectory(type)`. Because
+  `stat` follows links (previous bullet), a symlink-to-file classifies as
+  `File` and those walkers would start silently following what they exist to
+  skip. So the cost is a correctness rewrite of each walker, on top of the
+  syscall cost.
 - No `ctime` on `File.Info`.
 - `mtime` is `Option<Date>`. The natural `none → 0` default makes
   `cleanupOldFiles` delete files it should keep.
@@ -156,12 +166,19 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 **`FileSystem.makeNoop` should be banned in this repo** if adoption proceeds:
 it defaults `remove` to `Effect.void` and `exists` to `false`.
 
-**Two directory walkers bypass the port entirely** and are untestable on memfs
-under _either_ R-1 candidate: `src/agent/index/agentYamlScanner.ts` and
-`src/tools/glob.ts` both call the `glob` npm package against the real
-filesystem. `effect`'s own `glob` signature is `(pattern, {root?, exclude?})`
-and accepts none of the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow`
-options those callers pass, so adoption does not close the hole.
+**Eight production modules bypass the port entirely** and are untestable on
+memfs under _either_ R-1 candidate. An earlier version of this note counted
+two; the full set of `glob`-package importers outside the test kernel is
+`src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts`,
+`src/tools/approval/latexPreview.ts`, `src/latex/formatter/latexindentpt.ts`,
+`src/housekeeping/clean.ts`, `src/housekeeping/utils.ts`,
+`src/utils/system/platformPaths.ts`, and
+`packages/cli/src/runtime/workflowInputs.ts`. Several combine real-filesystem
+glob discovery with `WorkspaceFS` operations, so a memfs-backed port cannot
+control their inputs either. `effect`'s own `glob` signature is
+`(pattern, {root?, exclude?})` and accepts none of the
+`cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` options those callers pass,
+so adoption does not close the hole.
 
 ### A method note, because the obvious experiment was run wrong once
 
@@ -261,10 +278,22 @@ below.
    missing from persistence, not merely from a view. A replacement must acquire
    the subscription **before the run starts** and own its scope until disposal.
 
-**None of these three rejects `PubSub`.** They are the contract a replacement
+4. **Disposal is synchronous today, and tail events depend on that too.**
+   Acquiring early is necessary but not sufficient. `AgentRunLifecycle.ts:782`
+   calls `ctx.disposeTrace()` without awaiting any subscriber work, which is
+   safe only because `emit` delivers inline — by the time disposal runs, every
+   emitted event has already reached `SessionHandle.publishRunEvent`. Under a
+   hub the consumer is asynchronous, so events published just before disposal
+   may still be sitting untaken when the scope closes, and they never reach
+   `schedulePublication` for the later persistence flush. These are a run's
+   **final** events — outcome and status — so the loss is silent and lands on
+   the durable plane. A replacement needs a drain/ack barrier at disposal, or
+   must keep the subscriber scope alive until its queue is empty.
+
+**None of these four rejects `PubSub`.** They are the contract a replacement
 has to reproduce: bounded-vs-unbounded chosen deliberately, per-handler fault
-isolation added explicitly, and the subscription acquired before the first
-emit. Together with the injection work above, that is the real size of B4 —
+isolation added explicitly, the subscription acquired before the first emit,
+and its queue drained before disposal. Together with the injection work above, that is the real size of B4 —
 and the reason not to do it is that size, not impossibility.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
@@ -297,11 +326,21 @@ not an argument against it.
 
 **The accumulator drain is the only real objection**, and it stands on its own.
 
-The decision is therefore narrower than the earlier revision implied, but still
-not mechanical: is the delta-emission machinery (accumulators, delta
-computation, reset flags) dead weight to remove wholesale — in which case the
-test goes with it — or a deliberately kept extension point? Either way the
-drain has to be preserved or its accumulators removed with it.
+**The delta machinery is not dead weight, and that question is now settled.**
+An earlier revision left open whether the accumulators and delta computation
+could be removed wholesale. They cannot:
+`src/shared/session/sessionFold.ts:1710` calls `indexes.source.drainEmission()`
+for every durable trace event and folds the returned `appended`/`dirtied`
+entries into the session transcript view. That is a live production consumer,
+independent of `StreamLogStore` — and `StreamLogStore.ts:455` is a _second_
+drain, over a different instance of the same class, not the only one.
+
+So the scope is smaller and unambiguous. The `onChange` **listener** and its
+store-specific suite may be retired, but the shared `StreamLog` delta
+machinery in `src/shared/session/traceEntries.ts` must stay, and
+`StreamLogStore`'s own `notify()` drain must be preserved or its accumulators
+removed with it. Removing the machinery wholesale would stop live session
+transcripts from incorporating trace entries.
 
 ## 4. `unstable/workflow` — what adoption would actually cost
 
