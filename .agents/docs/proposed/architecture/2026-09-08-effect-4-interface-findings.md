@@ -199,11 +199,13 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 it defaults `remove` to `Effect.void` and `exists` to `false`.
 
 **Eight production modules bypass the port entirely**, so a memfs-backed port
-does not control their inputs. Five are closable independently of R-1; three
-are synchronous and interact with candidate B directly (both below). Earlier
-revisions of this paragraph counted two, then called the whole set
-unclosable, then called the whole set independent of R-1 — each wrong in a
-different direction.
+does not control their inputs. The hole is closable for testing by handing
+`glob` a memfs instance directly, but **none of the eight can be routed
+through whichever filesystem service wins R-1** — so candidate B keeps a
+second filesystem seam here permanently (below). This paragraph has been
+wrong three times in three different directions: it counted two importers,
+then called the set unclosable, then called it independent of R-1. Weigh it
+accordingly.
 The full set of `glob`-package importers outside the test kernel is
 `src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts`,
 `src/tools/approval/latexPreview.ts`, `src/latex/formatter/latexindentpt.ts`,
@@ -218,23 +220,29 @@ said none were.**
 The pinned `glob@13.0.6` takes an `fs?: FSOption` — "an fs implementation to
 override some or all of the defaults" (`glob.d.ts:231-234`) — while keeping
 the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` behaviour these callers
-rely on. Supplying memfs directly, or adapting whichever filesystem service
-wins R-1 behind one shared helper, closes it for the five **async** callers
-without touching R-1.
+rely on. Supplying memfs **directly** closes the testability hole for all
+eight, since memfs has the synchronous methods `glob` wants.
 
-**Three of the eight are synchronous, and those do interact with R-1.**
+What does _not_ work — and an earlier revision proposed it — is routing
+`glob` through whichever filesystem service wins R-1. `FSOption` requires
+`lstatSync`, `readdirSync` and friends (`path-scurry` `index.d.ts:22-48`):
+**synchronous**, and **`lstat`**. Effect's `FileSystem` has neither. So under
+candidate B the repo keeps a second filesystem injection seam for `glob`
+regardless — the selected service cannot satisfy the interface. That is a
+standing cost of B, not a free independent cleanup.
+
+**Three of the eight are synchronous**, which compounds it:
 `latexPreview.ts:78`, `latexindentpt.ts:49` and `platformPaths.ts:47` call
-`globSync`, which needs synchronous filesystem methods — so no helper can
-adapt an effectful `FileSystem` service to them. Under candidate B those
-three must either become async or keep explicit synchronous wiring, and
-supplying the same memfs instance separately adds a second injection seam.
-An earlier revision of this paragraph said the hole closes "independently of
-R-1"; that is true of five callers and false of three.
-What is _not_ a route for any of the eight is Effect's own `glob`: its
-signature is `(pattern, {root?, exclude?})` and accepts none of the options
-these callers pass. So the work splits — modest and R-1-independent for the
-five async callers, part of candidate B's migration for the three
-synchronous ones.
+`globSync`, so even an async adapter is unavailable to them — they must
+become async or keep explicit synchronous wiring.
+
+And Effect's own `glob` is not a route for any of the eight: its signature is
+`(pattern, {root?, exclude?})` and accepts none of the
+`cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` options these callers pass.
+
+So the honest summary is that `glob` stays on its own filesystem wiring under
+either candidate. Under A that is unremarkable — the port is already separate
+from `glob`. Under B it is a second seam that adoption does not remove.
 
 ### A method note, because the obvious experiment was run wrong once
 
@@ -316,11 +324,22 @@ below.
 
 1. **A `PubSub` puts every subscriber behind one shared buffer, which changes
    how the existing coupling fails — it does not introduce coupling.**
-   `AgentTrace.emit` returns `void`, so the only
-   usable publish is `publishUnsafe`, which returns `false` when a bounded hub
-   is full — dropping the event for _every_ subscriber at once, including the
-   durable event plane. **This is a bounded-hub failure and does not apply to
-   `PubSub.unbounded`**, where publishing cannot fail. What replaces it under
+   `AgentTrace.emit` returns `void`, so the **simplest** publish is
+   `publishUnsafe`, which returns `false` when a bounded hub is full —
+   dropping the event for _every_ subscriber at once, including the durable
+   event plane. **This is a bounded-hub failure and does not apply to
+   `PubSub.unbounded`**, where publishing cannot fail.
+
+   A `void` signature does not force `publishUnsafe`, though, and an earlier
+   revision implied it did. An adapter can launch the ordinary effectful
+   `PubSub.publish` on the process runtime — `effectRuntime().runFork(...)`,
+   the pattern `SessionHandle.ts:679` already uses from a synchronous method.
+   On a full bounded hub that fiber **waits** instead of dropping, which
+   removes the cross-subscriber loss entirely. The cost moves rather than
+   vanishing: those fibers become lifetime the adapter must track and join at
+   disposal, which is property 4 again. So bounded-with-backpressure is a
+   third option beside bounded-with-drops and unbounded-with-growth, and B4's
+   trade-off should be stated over all three. What replaces it under
    an unbounded hub is not event loss but unbounded memory growth behind the
    slowest subscriber — a different, arguably worse, failure for a long run.
    **And the "today they are independent" half was also wrong.**
@@ -330,6 +349,7 @@ below.
    including a durable sink. Head-of-line blocking exists now. A hub changes
    the failure mode — retained backlog instead of a blocked loop — rather than
    introducing coupling where there was none.
+
 2. **Per-event fault isolation becomes an adapter requirement rather than a
    given.** `TraceEmitter.emit` try/catches each subscriber and delivers the
    next event. Under a hub each subscriber is a fiber looping on `take`, and a
@@ -554,11 +574,19 @@ read and write able to fail — malformed JSON, permissions, a full disk — and
 no error channel, an implementer's default is `Effect.orDie`, which converts
 ordinary recoverable storage failures into defects outside TeXRA's normal
 reporting path. Adoption must therefore say which operations can map a
-failure onto `Suspended` (where retrying later is the honest answer — though
-see below: `Suspended` must not become the answer for an incomplete attempt
-marker, or the activity parks on every replay) and
+failure onto `Suspended` and
 where an outer, typed engine boundary has to surface the rest. That decision
 is not expressible inside the interface and so belongs in the adoption plan.
+
+**Classify by cause, not by operation.** Grouping malformed JSON with
+permission and disk failures and then deciding per operation gets it wrong in
+both directions. A corrupt persisted row is _present state_, not a transient
+condition: every resume reads the same bytes and parks again, so suspending
+on it is a permanent hang wearing a retry's clothing. Only genuinely
+transient causes may suspend; malformed state has to reach the typed outer
+failure path where someone is told about it. The same applies to the
+incomplete-attempt marker below — `Suspended` is not the answer there
+either.
 
 **Engine records belong in `src/agent/storage/ExecutionKVStore.ts`** — its
 header documents it as generic read/write for arbitrary keys, and
@@ -621,15 +649,25 @@ The real requirements are narrower and different:
   with `exit: undefined` _before_ running the activity
   (`WorkflowEngine.js:356-360`) and falls through to execute when it finds
   one. `layerMemory` makes that moot, but a durable engine persisting the row
-  must distinguish an attempt orphaned by a crash — safe to re-run — from one
-  a live process is still executing. Nothing in the interface expresses that,
+  must distinguish an attempt orphaned by a crash from one a live process is
+  still executing. Nothing in the interface expresses that,
   and the distinction cannot be made by suspending: mapping every
   start-without-completion to `Suspended` parks the activity on every replay,
   since the marker stays incomplete and the next resume meets the same state.
   What is needed is an **ownership or lease transition** — a live marker
-  suspends, a stale one is claimed and executed. The repo already has that
-  shape in `executionLease.ts`, which is the natural place to look rather
-  than inventing one.
+  suspends, a stale one is claimed. The repo already has that shape in
+  `executionLease.ts`, which is the natural place to look rather than
+  inventing one.
+
+  **But claiming a stale marker is not the same as its work being safe to
+  re-run**, and an earlier revision of this note said "safe to re-run" as
+  though it were. A lease proves no prior owner is still live; it says
+  nothing about whether that owner's model or tool call already reached the
+  outside world before the process died. That is the same crash window
+  `withCompensation` cannot close, so reclaiming a marker requires
+  idempotency, durable deduplication, or reconciliation against the external
+  effect — the lease is the precondition, not the answer.
+
 - **The interrupt-retry schedule is non-durable state, and it is a different
   counter from `CurrentAttempt`.** `makeExecute` — which reads
   `CurrentAttempt` and performs the memo lookup — wraps `executeWithoutInterrupt`
@@ -643,6 +681,18 @@ The real requirements are narrower and different:
   An earlier revision claimed "one durable row per attempt, unbounded in the
   retry dimension." That conflated the two counters and is withdrawn — the
   interrupt schedule creates no durable rows at all.
+
+- **`Activity.retry`'s schedule replays its delays.** Distinct from the
+  interruption schedule above. On resume, prior memoized _failures_ are
+  handed back to a freshly initialised `Effect.retry` driver, so the run
+  sleeps through the earlier delays again before reaching the first
+  unmemoized attempt — and a duration-based budget restarts from zero rather
+  than accounting for time already spent. The memo result carries no
+  replay-hit flag, so an adapter cannot tell a fresh failure from a replayed
+  one. Adoption therefore needs persisted schedule state, a wrapper that
+  skips delays on memo hits, or a restriction to replay-safe (delay-free,
+  count-bounded) policies. Left alone, a workflow that crashed after eight
+  slow retries pays those delays again on every resume.
 
 This was left open in an earlier revision, answered on #12081 in the
 collision form, and corrected here after review. The correction on #12081
