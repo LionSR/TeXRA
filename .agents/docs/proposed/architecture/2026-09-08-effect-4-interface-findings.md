@@ -250,8 +250,10 @@ the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` behaviour these callers
 rely on. Supplying memfs **directly** closes the testability hole for all
 eight, since memfs has the synchronous methods `glob` wants.
 
-What does _not_ work — and an earlier revision proposed it — is routing
-`glob` through Effect's `FileSystem`. `FSOption` (`path-scurry`
+What does _not_ work — and an earlier revision proposed it — is passing
+Effect's `FileSystem` **directly** as `FSOption`. Routing `glob` through it
+via an adapter does work, for both candidates; the bullets below price that.
+`FSOption` (`path-scurry`
 `index.d.ts:22-42`) carries both a synchronous set — `lstatSync`,
 `readdirSync`, `readlinkSync`, `realpathSync` — and a `promises` sub-object
 with async `lstat`, `readdir`, `readlink`, `realpath`, which is what the async
@@ -381,16 +383,34 @@ of adopting the storage layer rather than the strategy), threading one through
 `createModelHandler`'s `async` signature is not required either — an earlier
 revision prescribed that, and it is withdrawn.
 
-So nothing here is impossible. What remains is the size of the job, and it is
-smaller than earlier revisions of this note claimed. 26 files touch the seam
-in total, but **10 of them only construct** a `TraceEmitter` — and a
-constructor that builds its own hub leaves those unchanged. The migration
-surface is the **16 files that subscribe**, directly or through
-`attachChannelSubscriber`.
+So nothing here is impossible. What remains is the size of the job — and it is
+**two different sizes, because the construction finding above splits B4 into
+two candidates that earlier revisions of this note quietly averaged.**
 
-This figure has moved three times: "roughly sixteen" estimated, 24 from too
-narrow a grep, 26 counted as the union, and now 16 once constructor sites fall
-out. Treat it as measured at this tree, not as authoritative.
+26 files touch the seam in total, of which **10 only construct** a
+`TraceEmitter` and 16 subscribe (directly or through
+`attachChannelSubscriber`). Whether the 10 count depends on which hub is
+adopted:
+
+- **B4-atomic — 16 files.** `makeAtomicUnbounded` is synchronous, so each
+  constructor builds its own and the 10 are untouched. But this buys the
+  storage layer: no delivery strategy, no subscriber-completion machinery.
+  Most of the eight properties below then have to be re-implemented by hand on
+  top of it, which is approximately what `TraceEmitter` already does.
+- **B4-hub — 26 files.** A real `PubSub` needs `PubSub.make` or
+  `PubSub.unbounded`, both effectful, and `TraceEmitter.ts` cannot run them
+  (not a ratchet boundary kind, and the below-boundary register is not an
+  intake). So the hub is built at an `Effect` boundary and injected, and all
+  10 constructor sites change.
+
+An earlier revision excluded the constructors while pricing the full `PubSub`
+semantics below — combining the cheap route's file count with the expensive
+route's capabilities. That estimate was for a candidate that does not exist.
+
+This figure has moved four times: "roughly sixteen" estimated, 24 from too
+narrow a grep, 26 counted as the union, 16 once constructor sites fell out,
+and now 16 **or** 26 depending on the route. Treat it as measured at this
+tree, not as authoritative.
 
 The composition matters more than the total. **5 of the 16 are production** —
 `packages/agent/src/effect/sessions.ts`, `ModelHandler.ts`,
@@ -410,14 +430,22 @@ subscriber file for adapter-owned infrastructure inflates the case against
 B4, which is the direction this note has now erred in three separate
 places.
 
-That is the argument against B4, and it is an economic one — and it has shrunk
-in every round that examined it, which is worth stating plainly rather than
-restating the conclusion at a smaller number each time: 16 files of
-churn, mostly tests and each cheaper than first charged, plus the eight
-behavioural properties below, against the
-listener machinery being replaced — the `subscribers` field (`:47`),
-`subscribe` (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a
-217-line class that does much else besides. Not impossibility — price.
+That is the argument against B4, and it is an economic one: **16 files of churn
+for B4-atomic or 26 for B4-hub**, mostly tests and each cheaper than first
+charged, plus the eight behavioural properties below, against the listener
+machinery being replaced — the `subscribers` field (`:47`), `subscribe`
+(`:66-68`) and `emit` (`:70-94`), about 29 lines inside a 217-line class that
+does much else besides. Not impossibility — price.
+
+**A previous revision said this cost "has shrunk in every round that examined
+it" and told the reader it had only ever moved one way. That is no longer
+true, and the correction is instructive.** It had shrunk three rounds running,
+each time because an objection of mine failed. Then splitting the estimate by
+construction route moved it back **up** for B4-hub — the route that actually
+delivers the semantics the migration is for. So the earlier trend was not a
+property of B4; it was an artefact of pricing one candidate's file count
+against another candidate's capabilities. Read the two routes separately, and
+distrust any single number offered for "the cost of B4", this note's included.
 
 Beyond construction, eight behavioural properties a replacement must reproduce.
 An earlier revision listed the first two as objections that "survive even an
@@ -581,12 +609,11 @@ handler acknowledged** before disposal (an empty queue is not that), each
 event stage-stamped on the way in, detachment stopping delivery before it
 returns, the handover cap enforced at enqueue rather than in the handler, and
 ordering preserved against the separate status plane.
-Together with the subscription and lifecycle work above — but not
-the constructor sites, which can build their own storage-layer hub without
-tripping the ratchet — that is the real size of B4. The reason not to do it is
-that size, not impossibility. Read that verdict with the trend in mind: the
-size has fallen in each of the last three rounds, every time because an
-objection of mine failed rather than because a new capability appeared.
+Together with the subscription and lifecycle work above, that is the real size
+of B4 — and it is **route-dependent**: the constructor sites stay untouched
+only for B4-atomic, which reproduces these eight properties by hand rather
+than inheriting them. B4-hub inherits them and changes all 26 files. The
+reason not to do it is that size, not impossibility.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
 
