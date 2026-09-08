@@ -473,12 +473,16 @@ class ArxivSourceProcessor {
         paperDirFull,
       ));
       if (needsDownload) {
-        yield* this.fetchAndPlaceSource(
-          id,
-          paperDirRelative,
-          paperDirFull,
-          isRoot,
-          progressCallback,
+        // `Effect.scoped` closes the staging directory's finalizer here, on
+        // success, failure and interruption alike.
+        yield* Effect.scoped(
+          this.fetchAndPlaceSource(
+            id,
+            paperDirRelative,
+            paperDirFull,
+            isRoot,
+            progressCallback,
+          ),
         );
       }
 
@@ -532,8 +536,9 @@ class ArxivSourceProcessor {
 
   /**
    * Download the arXiv source tarball into a unique staging directory, reject
-   * PDF-only submissions, place the source files into the paper root, then
-   * remove the staging directory.
+   * PDF-only submissions, and place the source files into the paper root. The
+   * staging directory is removed by a scope finalizer, so the caller must run
+   * this inside `Effect.scoped`.
    */
   private readonly fetchAndPlaceSource = Effect.fn(
     'arxivProcessor.fetchAndPlaceSource',
@@ -555,6 +560,16 @@ class ArxivSourceProcessor {
       yield* permanent(() => WorkspaceFS.ensureDir(downloadDirRelative));
 
       const downloadDirFull = path.join(paperDirFull, stagingDirName);
+      // The staging directory belongs to this scope, so removing it is a scope
+      // finalizer rather than a step on the happy path. Every non-success exit
+      // used to leave `.arxiv-download-<id>/` behind in the paper directory: a
+      // download that ran out of retries, a PDF-only submission detected from
+      // the content type, a failed extraction, and interruption.
+      yield* Effect.addFinalizer(() =>
+        this.cleanUpBestEffort(downloadDirFull, 'staging download dir', {
+          recursive: true,
+        }),
+      );
       const downloadBasePath = path.join(downloadDirFull, 'source');
 
       progressCallback?.(`Downloading arXiv source for ${id}...`, 20);
@@ -569,9 +584,6 @@ class ArxivSourceProcessor {
       // Detect PDF-only submissions (no LaTeX source available)
       if (hasExtension(downloadedPath, '.pdf')) {
         yield* permanent(() => AbsoluteFS.delete(downloadedPath));
-        yield* this.cleanUpBestEffort(downloadDirFull, 'download dir', {
-          recursive: true,
-        });
         // Only clean up the paper directory when it was created for this download
         if (!isRoot) {
           yield* this.cleanUpBestEffort(paperDirFull, 'paper dir', {
@@ -589,11 +601,6 @@ class ArxivSourceProcessor {
         paperDirFull,
         progressCallback,
       );
-
-      // Remove the temporary download directory (files are now in paper root)
-      yield* this.cleanUpBestEffort(downloadDirFull, 'temporary download dir', {
-        recursive: true,
-      });
     },
   );
 

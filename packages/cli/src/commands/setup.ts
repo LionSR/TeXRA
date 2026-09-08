@@ -2,7 +2,6 @@ import { defineCommand } from 'citty';
 
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
@@ -44,17 +43,18 @@ export async function runSetup(context: CliContext): Promise<number> {
   // either way the platform's own handler (still installed here) covers
   // signals until the TUI mounts and takes over (see
   // initInteractiveCliPlatform).
-  await initInteractiveCliPlatform({ ...context, quietLogs: true });
+  const services = await initInteractiveCliPlatform({
+    ...context,
+    quietLogs: true,
+  });
   // State 0 first (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): a credential is the
   // one step no agent can do for the user. With a credential already in place
   // the picker is skipped — credentials-only (re)configuration is
   // `texra login`'s job under the new vocabulary.
-  if (
-    !(await hasUsableSetupCredential(platform().secrets, credentialLog.warn))
-  ) {
+  if (!(await hasUsableSetupCredential(services.secrets, credentialLog.warn))) {
     const { runCliOnboarding } = await import('../onboarding/runOnboarding');
     const result = await effectRuntime().runPromise(
-      runCliOnboarding(context.stdoutColorEnabled),
+      runCliOnboarding(services, context.stdoutColorEnabled),
     );
     // Skipped or abandoned the picker: exit cleanly (the skip summary already
     // printed) — there is no credential for the setup agent to run on.

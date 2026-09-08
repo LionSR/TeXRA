@@ -37,7 +37,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   backfillFirstRunDone,
@@ -62,6 +62,7 @@ import { saveProviderApiKey } from '../runtime/providerApiKey';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
+import type { CliPlatformServices } from '../runtime/initPlatform';
 
 /**
  * Human-facing "we stored your key here" line. Naming the exact secret entry
@@ -132,6 +133,7 @@ interface OnboardingResolution extends CliOnboardingResult {
  */
 export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
   function* (
+    services: CliPlatformServices,
     context: OnboardingGateContext,
   ): Effect.fn.Return<CliOnboardingResult, Error> {
     // context.* carries the parsed intent (headless / non-TTY / dumb); the final
@@ -141,10 +143,9 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
     if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
       return NO_ONBOARDING_RESULT;
     }
-    const globalState = platform().globalState;
+    const { globalState } = services;
     const hasCredential = yield* Effect.tryPromise({
-      try: () =>
-        hasUsableSetupCredential(platform().secrets, credentialLog.warn),
+      try: () => hasUsableSetupCredential(services.secrets, credentialLog.warn),
       catch: ensureError,
     });
     // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
@@ -236,6 +237,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       return NO_ONBOARDING_RESULT;
     }
     return yield* runOnboardingFlow({
+      globalState: services.globalState,
       firstRun: true,
       colorEnabled: context.stdoutColorEnabled,
     });
@@ -250,13 +252,19 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
  * rejects headless before calling this.
  */
 export const runCliOnboarding = Effect.fn('runCliOnboarding')(function* (
+  services: CliPlatformServices,
   colorEnabled = true,
 ): Effect.fn.Return<CliOnboardingResult, Error> {
   if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;
-  return yield* runOnboardingFlow({ firstRun: false, colorEnabled });
+  return yield* runOnboardingFlow({
+    globalState: services.globalState,
+    firstRun: false,
+    colorEnabled,
+  });
 });
 
 const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
+  readonly globalState: StateStore;
   readonly firstRun: boolean;
   readonly colorEnabled?: boolean;
 }): Effect.fn.Return<CliOnboardingResult, Error> {
@@ -294,7 +302,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
     yield* Effect.tryPromise({
-      try: () => setOnboardingDeclined(platform().globalState, true),
+      try: () => setOnboardingDeclined(options.globalState, true),
       catch: ensureError,
     }).pipe(
       Effect.catch(() =>
@@ -311,7 +319,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
     yield* Effect.tryPromise({
-      try: () => setOnboardingDeclined(platform().globalState, false),
+      try: () => setOnboardingDeclined(options.globalState, false),
       catch: ensureError,
     }).pipe(
       Effect.catch((error) =>

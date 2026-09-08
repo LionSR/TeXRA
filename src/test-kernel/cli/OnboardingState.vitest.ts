@@ -11,6 +11,7 @@ import {
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 
@@ -63,7 +64,7 @@ describe('maybeRunCliOnboarding headless parity', () => {
         const writeSpy = vi.spyOn(process.stdout, 'write');
         try {
           expect(
-            yield* maybeRunCliOnboarding({
+            yield* maybeRunCliOnboarding(createFakePlatform(), {
               mode: 'headless',
               stdoutIsTty: true,
               termIsDumb: false,
@@ -90,7 +91,7 @@ describe('maybeRunCliOnboarding headless parity', () => {
         });
         try {
           expect(
-            yield* maybeRunCliOnboarding({
+            yield* maybeRunCliOnboarding(createFakePlatform(), {
               mode: 'interactive',
               stdoutIsTty: true,
               termIsDumb: false,
