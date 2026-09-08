@@ -28,7 +28,7 @@ export const SLASH_PALETTE_ROWS = 13;
 
 const COMMAND_DESCRIPTION_GAP = 2;
 
-export interface SlashPaletteWindow {
+interface SlashPaletteWindow {
   readonly start: number;
   readonly end: number;
   readonly hiddenBefore: number;

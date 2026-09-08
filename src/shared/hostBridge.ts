@@ -3,7 +3,7 @@ import { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
 /**
  * Every host (VS Code, Electron, the exported trace viewer) installs its
  * bridge at `globalThis[HOST_BRIDGE_API_KEY]` before this bundle loads — see
- * `BaseViewContentProvider.buildWebviewHtml` (VS Code), `installElectronHostBridge`
+ * `BundledViewContentProvider.buildWebviewHtml` (VS Code), `installElectronHostBridge`
  * (desktop), and `installTraceHostBridge` (trace viewer).
  */
 function resolveHostBridgeApi(): HostBridgeApi {

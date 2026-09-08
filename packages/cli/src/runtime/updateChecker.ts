@@ -44,7 +44,7 @@ const DEFAULT_TIMEOUT_MS = 2500;
 const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
 
 /** Package manager the running binary was installed with. */
-export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
+type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
 
 /**
  * Guess the package manager from the path the binary runs out of, or

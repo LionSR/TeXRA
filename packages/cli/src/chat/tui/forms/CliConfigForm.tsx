@@ -51,7 +51,7 @@ export interface CliConfigFormProps {
   readonly onApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
 }
 
-export interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
+interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
   readonly stores: SettingsStores;
   readonly apiKeyStatusView?: ProviderApiKeyStatusView;
   readonly markProviderApiKeySet?: (provider: ApiProvider) => void;
