@@ -6,7 +6,9 @@
 // Third-party imports
 import { Layer } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
+
 import { vi, type Mock } from 'vitest';
+import { effectNodeFileSystemLayer } from '@platform/defaults/effectNodeFileSystem';
 
 /**
  * Builds a fetch-compatible `Response` from a JSON-serializable body, for
@@ -36,4 +38,14 @@ export const testHttpClientLayer = FetchHttpClient.layer.pipe(
       globalThis.fetch(input, init),
     ),
   ),
+);
+
+/**
+ * The services a `ProcessRuntime` must carry, for tests that install one.
+ * Kept beside the http layer so widening `ProcessRuntime` touches one place
+ * rather than every test that calls `initProcessRuntime`.
+ */
+export const testProcessRuntimeLayer = Layer.mergeAll(
+  testHttpClientLayer,
+  effectNodeFileSystemLayer,
 );

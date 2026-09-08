@@ -38,7 +38,6 @@
       "src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts": 1,
       "src/controllers/onboarding/setupLaunch.ts": 1,
       "src/controllers/session/hostRunActions.ts": 3,
-      "src/controllers/session/workspaceFileOptions.ts": 1,
       "src/controllers/settingsView/SettingsProfileKeyController.ts": 2,
       "src/housekeeping/runDirOps.ts": 2,
       "src/latex/LatexMediaManager.ts": 2,

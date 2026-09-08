@@ -153,7 +153,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.snapshot = createHostSnapshotSource({
       paper: paperDisplayOf(session.roots.storage, roots.workspace),
       globalState: platform().globalState,
-      fileOptions: () => workspaceFileOptions(roots.workspace),
+      fileOptions: () =>
+        effectRuntime().runPromise(workspaceFileOptions(roots.workspace)),
       readRecentCommits: async () => {
         const isGitRepo =
           (await vscode.commands.executeCommand<boolean>(

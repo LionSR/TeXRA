@@ -12,7 +12,7 @@ import {
   type AgentCatalog,
 } from '@test/support/agentCatalogFixtures';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { testProcessRuntimeLayer } from '@test/support/fetchTestUtils';
 
 import { commandOf } from './desktopSettingsTestSupport';
 
@@ -39,7 +39,7 @@ interface ControllerFixtureOptions {
 }
 
 beforeEach(() => {
-  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+  initProcessRuntime(ManagedRuntime.make(testProcessRuntimeLayer));
 });
 
 function createControllerFixture(options: ControllerFixtureOptions = {}) {

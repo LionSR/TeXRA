@@ -24,7 +24,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 import { writeClipboardText } from '@cli/runtime/clipboardText';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { initProcessRuntime } from '@platform/processRuntime';
-import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { testProcessRuntimeLayer } from '@test/support/fetchTestUtils';
 
 describe('CLI clipboard text writer', () => {
   beforeEach(() => {
@@ -90,7 +90,7 @@ describe('CLI clipboard text writer', () => {
       expect(execFileMock).toHaveBeenCalled();
     } finally {
       await disposeProcessRuntime();
-      initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+      initProcessRuntime(ManagedRuntime.make(testProcessRuntimeLayer));
     }
   });
 
