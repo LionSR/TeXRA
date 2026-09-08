@@ -2097,7 +2097,6 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   let phase: 'idle' | 'reading' | 'draining' = 'idle';
   let pendingRead: Promise<IteratorResult<unknown>> | undefined;
   let latestResponseId: string | undefined;
-  let eligibleResponseId: string | undefined;
 
   const failure = (cause: unknown) =>
     cause instanceof ModelError
@@ -2139,11 +2138,9 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       // This listener records failures while idle as well as during a pending read.
       reader.on('error', (cause) => {
         invalid ??= failure(cause);
-        eligibleResponseId = undefined;
       });
       socket.once('close', () => {
         invalid ??= closed;
-        eligibleResponseId = undefined;
       });
       return {
         socket,
@@ -2154,7 +2151,6 @@ export const openaiResponsesWebSocketModel = Effect.fn(
     ({ socket, reader, iterator }, exit) =>
       Effect.gen(function* () {
         invalid ??= closed;
-        eligibleResponseId = undefined;
         reader.destroy(closed);
         yield* join(
           iterator.return ? iterator.return() : Promise.resolve(),
@@ -2172,7 +2168,6 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   const { socket, reader, iterator } = resource;
   const invalidate = (error: ModelError) => {
     invalid ??= error;
-    eligibleResponseId = undefined;
     reader.destroy(invalid);
   };
   // The sole consumer decodes frames; this synchronous guard only invalidates idle traffic.
@@ -2267,7 +2262,6 @@ export const openaiResponsesWebSocketModel = Effect.fn(
             'foreground',
           );
           const now = yield* Clock.currentTimeMillis;
-          const anchor = turn.continuation?.anchor;
           yield* Effect.acquireRelease(
             Effect.suspend(() => {
               if (invalid) return Effect.fail(invalid);
@@ -2283,19 +2277,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                 invalidate(closed);
                 return Effect.fail(closed);
               }
-              if (
-                anchor?.kind === 'connection' &&
-                anchor.responseId !== eligibleResponseId
-              )
-                return Effect.fail(
-                  new ModelError({
-                    kind: 'invalid-request',
-                    message:
-                      'The connection anchor is not its latest eligible response.',
-                  }),
-                );
               phase = 'reading';
-              eligibleResponseId = undefined;
               return Effect.void;
             }),
             (_, exit) =>
@@ -2404,14 +2386,6 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                   turn,
                   event.result,
                 );
-                // Eligibility stays on the connection: a response this lane can
-                // chain from is never stamped into a value that outlives it.
-                if (
-                  config.supportsResponseChaining &&
-                  (event.result.finishReason === 'stop' ||
-                    event.result.finishReason === 'tool-calls')
-                )
-                  eligibleResponseId = latestResponseId;
                 completed = true;
                 return {
                   ...event,

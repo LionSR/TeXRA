@@ -624,13 +624,13 @@ const ResponsesContinuationSchema = PrefixSchema.extend({
   origin: OriginSchema.extend({
     protocol: z.literal('openai-responses'),
   }).readonly(),
-  anchor: z.discriminatedUnion('kind', [
-    ResponsesAnchorSchema.extend({ kind: z.literal('stored') }).readonly(),
-    ResponsesAnchorSchema.extend({
-      kind: z.literal('connection'),
-      connectionId: z.uuid(),
-    }).readonly(),
-  ]),
+  // Only a stored anchor is durable. A connection-scoped anchor named a single
+  // websocket, so it was dead the moment the process exited, and reusing a dead
+  // one failed the whole turn rather than dropping the acceleration. Keeping it
+  // representable here would let a persisted value carry it.
+  anchor: ResponsesAnchorSchema.extend({
+    kind: z.literal('stored'),
+  }).readonly(),
 }).readonly();
 /** Provider acceleration of an exact prefix, never the conversation authority. */
 export const ContinuationSchema = z.union([
