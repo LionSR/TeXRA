@@ -34,6 +34,7 @@ import {
   isPreviousResponseIdError,
   isUserAbort,
 } from '@common/errors/sdkError/errorPatterns';
+import { detectStatusText } from '@common/errors/sdkError/errorInspection';
 import {
   buildErrorLogData,
   formatProviderHttpError,
@@ -88,6 +89,35 @@ function providerAttributedError(body: unknown): Error {
   error.provider = 'openai';
   return error;
 }
+
+describe('detectStatusText', () => {
+  it('treats a blank direct statusText as absent, falling back to the reason phrase (not the nested statusText)', () => {
+    expect(
+      detectStatusText(
+        { statusText: '', response: { statusText: 'Teapot Override' } },
+        418,
+      ),
+    ).toBe("I'm a teapot");
+  });
+
+  it('returns a whitespace-only direct statusText verbatim', () => {
+    expect(
+      detectStatusText({
+        statusText: ' ',
+        response: { statusText: 'Not Found' },
+      }),
+    ).toBe(' ');
+  });
+
+  it('skips a null statusText on a nested carrier and keeps scanning', () => {
+    expect(
+      detectStatusText({
+        response: { statusText: null },
+        error: { statusText: 'Not Found' },
+      }),
+    ).toBe('Not Found');
+  });
+});
 
 describe('formatProviderHttpError', () => {
   it('matches generic SDK API errors through the prototype chain', () => {
