@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 
-import { Effect, ManagedRuntime } from 'effect';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initProcessRuntime } from '@platform/processRuntime';
@@ -141,7 +142,11 @@ const APPLY_AGENT_MODE_PRESET = {
 describe('AgentHandlers custom-agent file actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+    initProcessRuntime(
+      ManagedRuntime.make(
+        Layer.merge(testHttpClientLayer, NodeFileSystem.layer),
+      ),
+    );
   });
 
   it('logs notification failures after applying a team preset', async () => {
