@@ -180,6 +180,16 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
   execution directory. This is a containment property, not a listing
   nicety, and it means the `lstat` gap reaches code that never calls
   `readDirectory` at all.
+
+  A second member of the same category writes rather than reads.
+  `XmlOutputManager.ts:47` guards `writeRoundOutput` with
+  `AbsoluteFS.isSymbolicLink` — `stat().type` plus `isSymlink`
+  (`baseFS.ts:223-228`) — and deletes a pre-staged symlink before writing.
+  Its comment says why: "so the write never follows the link into the
+  immutable snapshot". Under link-following `stat` the guard returns false,
+  the delete is skipped, and the write goes **through** the link into the
+  snapshot it exists to protect. So in this path the `lstat` gap is not a
+  weakened check but silent corruption of immutable state.
   So the cost is a correctness rewrite of each walker, on top of the syscall
   cost.
 
@@ -215,8 +225,8 @@ The full set of `glob`-package importers outside the test kernel is
 glob discovery with `WorkspaceFS` operations, so a memfs-backed port does not
 control their inputs today.
 
-**Five of the eight are closable without R-1, and an earlier revision wrongly
-said none were.**
+**All eight are closable for testing without R-1 — but none can use the R-1
+winner.**
 The pinned `glob@13.0.6` takes an `fs?: FSOption` — "an fs implementation to
 override some or all of the defaults" (`glob.d.ts:231-234`) — while keeping
 the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` behaviour these callers
@@ -312,12 +322,12 @@ rewriting tests that would each need a fiber, a scope and a drain to observe
 what a callback observes today.
 
 That is the argument against B4, and it is an economic one: 26 files of
-churn, mostly tests, plus the five behavioural properties below, against the
+churn, mostly tests, plus the six behavioural properties below, against the
 listener machinery being replaced — the `subscribers` field (`:47`),
 `subscribe` (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a
 217-line class that does much else besides. Not impossibility — price.
 
-Beyond construction, five behavioural properties a replacement must reproduce.
+Beyond construction, six behavioural properties a replacement must reproduce.
 An earlier revision listed the first two as objections that "survive even an
 unbounded hub"; review showed that overstates them, and the corrected form is
 below.
@@ -409,11 +419,25 @@ below.
    misgrouped transcript entries. The adapter must hold the per-trace stage
    context and stamp before publishing.
 
-**None of these five rejects `PubSub`.** They are the contract a replacement
+6. **Detachment is synchronous too, and mid-run.** The inverse of property 3,
+   and not covered by property 4. `packages/agent/src/effect/sessions.ts`
+   holds `release()` — `detach?.(); detach = undefined;` — a plain `void`
+   function called while the run continues: by the reader's close, and by the
+   `TRACE_HANDOVER_EVENTS` cap at `:404` when nobody is reading. Both rely on
+   delivery having **stopped** by the time it returns. A hub adapter whose
+   detach merely begins an effectful scope close can keep offering events to a
+   consumer fiber that has not yet stopped, which defeats the bounded-handover
+   safeguard exactly when it matters — an unread run buffering past its cap.
+   Detach must establish a stop-delivery barrier before returning, or the
+   lifecycle must become asynchronous and await one. Property 4 drains tail
+   events at whole-run disposal; this is about ending one subscription early,
+   mid-run.
+
+**None of these six rejects `PubSub`.** They are the contract a replacement
 has to reproduce: bounded-vs-unbounded chosen deliberately, per-handler fault
 isolation added explicitly, the subscription acquired before the first emit,
-its queue drained before disposal, and each event stage-stamped on the way
-in. Together with the injection work above, that is the real size of B4 —
+its queue drained before disposal, each event stage-stamped on the way in,
+and detachment stopping delivery before it returns. Together with the injection work above, that is the real size of B4 —
 and the reason not to do it is that size, not impossibility.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
@@ -549,6 +573,21 @@ built deliberately.
 `ClusterWorkflowEngine` in `unstable/cluster`, which brings `Sharding`,
 `Runners`, `RunnerStorage`, `MessageStorage` and `Snowflake`. Not adoptable for
 a single-process desktop application.
+
+**Everything outside an activity replays.** `resume` re-executes the workflow
+body from the top; only activity _exits_ are memoized. So any ordinary effect
+sitting between activities — a session-progress emission, a KV update, a
+filesystem mutation — runs again on every resume, even when every model and
+tool activity short-circuits to its stored result. This is distinct from the
+crash-window discussion below, which is about an activity whose own effect may
+have completed: these are effects that never were activities and replay
+_successfully_, duplicating durable events or repeating mutations.
+
+Adoption therefore has to state that the workflow body is deterministic and
+free of externally visible effects, and inventory which of TeXRA's current
+between-step emissions must either become activities or acquire stable
+deduplication keys. For a run whose progress events are the user-visible
+transcript, that inventory is not small.
 
 **The Effect-Schema boundary can be held, but not by validating inside the
 activity alone.** An `Activity` with `success: Schema.Unknown` round-trips a
