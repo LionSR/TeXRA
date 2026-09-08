@@ -1,20 +1,18 @@
 import { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
 
-declare const acquireVsCodeApi: (() => HostBridgeApi) | undefined;
-
+/**
+ * Every host (VS Code, Electron, the exported trace viewer) installs its
+ * bridge at `globalThis[HOST_BRIDGE_API_KEY]` before this bundle loads — see
+ * `BaseViewContentProvider.buildWebviewHtml` (VS Code), `installElectronHostBridge`
+ * (desktop), and `installTraceHostBridge` (trace viewer).
+ */
 function resolveHostBridgeApi(): HostBridgeApi {
-  const globalScope = globalThis as typeof globalThis & {
-    [HOST_BRIDGE_API_KEY]?: HostBridgeApi;
-  };
-
-  const existing = globalScope[HOST_BRIDGE_API_KEY];
+  const existing = (
+    globalThis as typeof globalThis & {
+      [HOST_BRIDGE_API_KEY]?: HostBridgeApi;
+    }
+  )[HOST_BRIDGE_API_KEY];
   if (existing) return existing;
-
-  if (typeof acquireVsCodeApi === 'function') {
-    const api = acquireVsCodeApi();
-    globalScope[HOST_BRIDGE_API_KEY] = api;
-    return api;
-  }
 
   throw new Error(
     'TeXRA host bridge is unavailable. Webview code must run inside a TeXRA host.',

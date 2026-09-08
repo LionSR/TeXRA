@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
 import { createLog } from '@logger/logUtils';
+import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -13,6 +14,17 @@ function escapeAttribute(value: string): string {
     .replaceAll('&', '&amp;')
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;');
+}
+
+/**
+ * Installs the host bridge at `HOST_BRIDGE_API_KEY` before the webview
+ * bundle loads, mirroring `installElectronHostBridge` (desktop) and
+ * `installTraceHostBridge` (trace viewer): every host pre-populates the
+ * global itself, so `@shared/hostBridge` never needs to know a
+ * VS Code-specific API exists.
+ */
+function buildHostBridgeBootstrapScript(nonce: string): string {
+  return `<script nonce="${nonce}">window.${HOST_BRIDGE_API_KEY} = acquireVsCodeApi();</script>`;
 }
 
 function buildWebviewHtml(
@@ -38,7 +50,14 @@ function buildWebviewHtml(
     result = result.replaceAll(`\${${key}}`, escapeAttribute(value));
   }
 
-  return result;
+  const bodyTag = /<body\b[^>]*>/i;
+  if (!bodyTag.test(result)) {
+    throw new Error('Webview template is missing a <body> tag.');
+  }
+  return result.replace(
+    bodyTag,
+    (tag) => `${tag}\n    ${buildHostBridgeBootstrapScript(nonce)}`,
+  );
 }
 
 /**
