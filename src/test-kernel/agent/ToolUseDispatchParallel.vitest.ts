@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { describe, it, beforeAll } from 'vitest';
 
@@ -17,7 +18,6 @@ import type { ToolResult } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript';
-import { delay } from '@utils/core';
 
 import { testRunScope, withTestRunContext } from './progressTestUtils';
 import { testModelCell } from './modelCellTestUtils';

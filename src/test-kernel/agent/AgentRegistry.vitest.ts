@@ -1,5 +1,6 @@
 // Node imports
 import { resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { Effect } from 'effect';
@@ -23,7 +24,6 @@ import { AgentCategory } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
-import { delay } from '@utils/core';
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {

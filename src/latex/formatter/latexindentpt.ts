@@ -1,10 +1,10 @@
 import * as path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { sync as globSync } from 'glob';
 
 import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import { delay } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { runToolWithCheck } from '@utils/system/toolUtils';

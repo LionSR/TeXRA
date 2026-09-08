@@ -1,8 +1,8 @@
+// Node imports
+import { setTimeout as delay } from 'node:timers/promises';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
-
-// Local imports - shared utilities
-import { delay } from '@utils/core';
 
 // Local imports - test support
 import { loadSourceModule } from './loadSourceModule.ts';

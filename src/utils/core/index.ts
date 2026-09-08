@@ -176,9 +176,6 @@ export function assertNever(value: never, message: string): never {
 // Re-export debounce from perfect-debounce for consistent usage across codebase
 export { debounce } from 'perfect-debounce';
 
-// AbortSignal-aware sleep shared by extension, CLI, and webview code.
-export { default as delay } from 'delay';
-
 /**
  * Register an abort handler, firing it immediately if `signal` is already
  * aborted (an `addEventListener` after the fact never fires on its own).

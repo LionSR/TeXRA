@@ -21,14 +21,53 @@ import {
   userStep,
 } from './googleInteractionsTestUtils';
 
+// `vi.useFakeTimers()` cannot reach `node:timers/promises`: it binds Node's
+// internal timer implementation, not `globalThis.setTimeout`. Route the poll
+// sleep through the global timers the fake clock does drive, keeping the real
+// module's abort contract (a fresh `AbortError` carrying the caller's reason).
+vi.mock('node:timers/promises', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('node:timers/promises')>();
+  const abortError = (reason: unknown) =>
+    Object.assign(new Error('The operation was aborted'), {
+      name: 'AbortError',
+      code: 'ABORT_ERR',
+      cause: reason,
+    });
+  return {
+    ...original,
+    setTimeout: (
+      ms: number,
+      value?: unknown,
+      options?: { signal?: AbortSignal },
+    ) =>
+      new Promise<unknown>((resolve, reject) => {
+        const signal = options?.signal;
+        if (signal?.aborted) {
+          reject(abortError(signal.reason));
+          return;
+        }
+        const timer = globalThis.setTimeout(() => resolve(value), ms);
+        signal?.addEventListener(
+          'abort',
+          () => {
+            globalThis.clearTimeout(timer);
+            reject(abortError(signal.reason));
+          },
+          { once: true },
+        );
+      }),
+  } as typeof import('node:timers/promises');
+});
+
 type Step = Interactions.Step;
 
 /**
  * BACKGROUND-mode unit tests (B1–B10) for ModelHandlerGoogleInteractions.
  *
- * The poll loop is driven with vi.useFakeTimers(): the `delay` package honors
- * fake timers, so advancing the clock by BACKGROUND_POLL_INTERVAL_MS resolves
- * each poll wait. A non-streaming capturing client records create() params and
+ * The poll loop is driven with vi.useFakeTimers(): the `node:timers/promises`
+ * mock above routes the poll sleep through the faked global timers, so
+ * advancing the clock by BACKGROUND_POLL_INTERVAL_MS resolves each poll wait. A non-streaming capturing client records create() params and
  * serves a scripted sequence of get() results.
  *
  * Real-key SMOKE-TEST items (cannot be unit-tested offline):

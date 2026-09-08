@@ -66,7 +66,6 @@ const SUPERSEDED_PACKAGES = [
   'p-timeout',
   'p-defer',
   'async-mutex',
-  'delay',
 ];
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
@@ -677,10 +676,10 @@ function selfTestSurvey() {
       // ImportKeyword branch of moduleSpecifier, so it must always name a
       // live row: without it, a dynamic `import('p-queue')` would dodge its
       // row undetected, in a ratchet whose whole subject is import rows.
-      text: "import PQueue from 'p-queue';\nimport type { Options } from 'delay';\nimport pd from 'p-delay';\nimport local from './delay';\nconst map = require('p-map');\nexport { retry } from 'p-retry';\nawait import('async-mutex');\n",
+      text: "import PQueue from 'p-queue';\nimport type { Options } from 'p-timeout';\nimport pd from 'p-timeout-plus';\nimport local from './p-timeout';\nconst map = require('p-map');\nexport { retry } from 'p-retry';\nawait import('async-mutex');\n",
       expected: {
         [importRow('p-queue')]: 1,
-        [importRow('delay')]: 1,
+        [importRow('p-timeout')]: 1,
         [importRow('p-map')]: 1,
         [importRow('p-retry')]: 1,
         [importRow('async-mutex')]: 1,

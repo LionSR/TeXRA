@@ -127,7 +127,6 @@
     "data-uri-to-buffer": "^7.0.0",
     "date-fns": "^4.4.0",
     "deepmerge": "^4.3.1",
-    "delay": "^7.0.0",
     "diff": "^9.0.0",
     "diff-match-patch": "^1.0.5",
     "effect": "4.0.0-rc.112",

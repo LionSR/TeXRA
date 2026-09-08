@@ -2,6 +2,7 @@
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
+import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -15,7 +16,6 @@ import {
   countPinnedMemories,
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
-import { delay } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 
 const MEMORY_LISTING_CONCURRENCY = 8;
