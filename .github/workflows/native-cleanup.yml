@@ -20,12 +20,29 @@ jobs:
           - { target: win32-arm64, os: windows-11-arm, msvc: arm64, nodeArch: arm64 }
           - { target: win32-ia32, os: windows-2022, msvc: x86, nodeArch: x86 }
           - { target: linux-x64-gnu, os: ubuntu-latest }
-          - { target: linux-arm64-gnu, os: ubuntu-latest }
-          - { target: linux-arm-gnu, os: ubuntu-latest }
-          - { target: linux-ppc64-gnu, os: ubuntu-latest }
-          - { target: linux-s390x-gnu, os: ubuntu-latest }
-          - { target: linux-x64-musl, os: ubuntu-latest }
-          - { target: linux-arm64-musl, os: ubuntu-latest }
+          - target: linux-arm64-gnu
+            os: ubuntu-latest
+            containerPlatform: linux/arm64
+            emulator: arm64
+          - target: linux-arm-gnu
+            os: ubuntu-latest
+            containerPlatform: linux/arm/v7
+            emulator: arm
+          - target: linux-ppc64-gnu
+            os: ubuntu-latest
+            containerPlatform: linux/ppc64le
+            emulator: ppc64le
+          - target: linux-s390x-gnu
+            os: ubuntu-latest
+            containerPlatform: linux/s390x
+            emulator: s390x
+          - target: linux-x64-musl
+            os: ubuntu-latest
+            containerPlatform: linux/amd64
+          - target: linux-arm64-musl
+            os: ubuntu-latest
+            containerPlatform: linux/arm64
+            emulator: arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -74,17 +91,30 @@ jobs:
             }
           }
           JS
-      - name: Load native host binary
-        if: runner.os != 'Linux' || matrix.target == 'linux-x64-gnu'
+      - uses: docker/setup-qemu-action@v4.3.0
+        if: matrix.emulator
+        with:
+          platforms: ${{ matrix.emulator }}
+      - name: Execute native cleanup on the target runtime
         shell: bash
         env:
           NATIVE_TARGET: ${{ matrix.target }}
+          CONTAINER_PLATFORM: ${{ matrix.containerPlatform }}
+          CONTAINER_IMAGE: ${{ endsWith(matrix.target, '-musl') && 'node:22.16.0-alpine3.22@sha256:41e4389f3d988d2ed55392df4db1420ad048ae53324a8e2b7c6d19508288107e' || 'node:22.16.0-bookworm-slim@sha256:048ed02c5fd52e86fda6fbd2f6a76cf0d4492fd6c6fee9e2c463ed5108da0e34' }}
         run: |
-          node --input-type=module <<'JS'
+          runtime=(node)
+          if [[ -n "$CONTAINER_PLATFORM" ]]; then
+            runtime=(docker run --rm --platform "$CONTAINER_PLATFORM" --volume "$PWD:/work:ro" --workdir /work --env NATIVE_TARGET -i "$CONTAINER_IMAGE" node)
+          fi
+          "${runtime[@]}" --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
           import { createRequire } from 'node:module';
           import { mkdtemp, mkdir, rm, access, realpath } from 'node:fs/promises';
           import { tmpdir } from 'node:os';
           import { join, resolve } from 'node:path';
+          assert.equal(process.versions.node, '22.16.0');
+          assert.equal(`${process.platform}-${process.arch}`, process.env.NATIVE_TARGET.split('-').slice(0, 2).join('-'));
+          console.log('Native cleanup runtime', process.versions.node, process.platform, process.arch);
           const binary = resolve('scripts/native-cleanup/prebuilds', `${process.env.NATIVE_TARGET}.node`);
           const addon = createRequire(import.meta.url)(binary);
           const storage = await realpath(await mkdtemp(join(tmpdir(), 'texra-native-')));

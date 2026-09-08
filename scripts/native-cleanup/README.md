@@ -10,7 +10,7 @@ The twelve targets in `targets.mjs` are built before application CI jobs. Downst
 
 Desktop packaging unpacks every native asset. The afterPack hook checks exact bytes before signing, and the final verifier checks target presence and unpacked placement after signing. Node and Electron load the cleanup binary through ordinary module loading, including Electron's ASAR handling.
 
-Cross-compilation and ABI inspection are not runtime evidence. The workflow executes cleanup on matching Darwin, Windows and Linux x64 GNU hosts, and runs the existing confinement suite, including Windows junction and UNC cases. Other Linux targets require their matching host for runtime proof.
+Cross-compilation and ABI inspection are not runtime evidence. The workflow executes cleanup on matching Darwin, Windows and Linux x64 GNU hosts, and runs the existing confinement suite, including Windows junction and UNC cases. The same cleanup smoke runs in pinned official Node 22.16 containers for the other six Linux targets: x64 musl executes on the runner CPU; ARM, ARM64, PowerPC and s390x targets execute through QEMU user-mode emulation. Each smoke asserts the actual Node version and architecture. Emulated execution verifies the target binary in that environment; it is not evidence of a physical target host or Electron execution.
 
 ## Local build and test setup
 
