@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { DisposableStore } from '@platform/disposable';
 
-import type { BundledViewContentProvider } from './BaseViewContentProvider';
+import type { BundledViewContentProvider } from './BundledViewContentProvider';
 
 /**
  * Base class for webview providers.

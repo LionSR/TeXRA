@@ -7,7 +7,7 @@
  * and other files in this directory remain implementation details and are not
  * re-exported here.
  */
-export { BundledViewContentProvider } from './BaseViewContentProvider';
+export { BundledViewContentProvider } from './BundledViewContentProvider';
 export {
   BaseViewMessageHandler,
   type ViewSliceHost,
