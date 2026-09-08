@@ -244,7 +244,7 @@ does not control their inputs. The hole is closable for testing by handing
 **candidate A can serve the five async importers directly; candidate B can
 serve them only through an adapter** that costs **two** extra filesystem calls
 per entry — a `Dirent` probe plus the symlink test — **and a run boundary for
-four of the five consumers** (below). Only the three `globSync` callers are closed to both. This paragraph
+three of the five consumers** (below). Only the three `globSync` callers are closed to both. This paragraph
 has been wrong six times in six directions: two importers, then unclosable,
 then independent of R-1, then requiring synchronous methods, then B excluded on
 a correctness objection this note's own §2 disproves, then a lead still calling
@@ -386,7 +386,7 @@ earlier revisions of this very sentence**:
    `readLink`-plus-`stat` symlink test. A's `lstat`-backed port carries the
    type out of the directory read and pays neither.
 2. **A run boundary.** The `promises` callbacks must return real `Promise`s,
-   so four of the five consumers need adapter construction at an allowed
+   so three of the five consumers need adapter construction at an allowed
    boundary plus injection (above).
 3. The per-entry cost compounds with tree size, which is exactly the shape
    R-1 measured at ~8×.
