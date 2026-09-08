@@ -150,11 +150,15 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 - **`readDirectory` returns `Array<string>`, not `[name, type]`.** The port
   reads each entry's type off the `withFileTypes` dirent for free; Effect's
   shape forces a `stat` per entry. This is load-bearing, not tuple
-  adaptation. **Eight production walkers** branch on the type bits:
+  adaptation. **Twelve production consumers** branch on the type bits:
   `indentDirectory.ts:82`, `diffOperations.ts:244,266,284`,
   `memoryFileSystem.ts:252`, `runGeneratedFiles.ts:93`,
   `desktopWorkspaceIpc.ts:261-270`, `workspaceFileListing.ts:37,44`,
-  `executionListing.ts:136`, and `runOutputFiles.ts:70-72,126`. Four of them —
+  `executionListing.ts:136`, `runOutputFiles.ts:70-72,126`,
+  `relativeFS.ts:74` (`cleanupOldFiles` keeps only files),
+  `ArxivDownloadTool.ts:23-42` (renders file-vs-directory identity),
+  `externalInquiryStorage.ts:456` (accepts only directories), and
+  `KVStore.ts:102` (accepts only `.json` files). Four of them —
   `indentDirectory.ts`, `diffOperations.ts`, `memoryFileSystem.ts` and
   `desktopWorkspaceIpc.ts` — call `isSymlink(type)` to **reject** symlinks; because `stat` follows links
   (previous bullet), a symlink-to-file classifies as `File` and those walkers
@@ -172,19 +176,29 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 **`FileSystem.makeNoop` should be banned in this repo** if adoption proceeds:
 it defaults `remove` to `Effect.void` and `exists` to `false`.
 
-**Eight production modules bypass the port entirely** and are untestable on
-memfs under _either_ R-1 candidate. An earlier version of this note counted
-two; the full set of `glob`-package importers outside the test kernel is
+**Eight production modules bypass the port entirely**, so a memfs-backed port
+does not control their inputs — a gap that is real today and separately
+closable (below), not a constraint on either R-1 candidate. An earlier
+version of this note counted two and called it unclosable; both were wrong.
+The full set of `glob`-package importers outside the test kernel is
 `src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts`,
 `src/tools/approval/latexPreview.ts`, `src/latex/formatter/latexindentpt.ts`,
 `src/housekeeping/clean.ts`, `src/housekeeping/utils.ts`,
 `src/utils/system/platformPaths.ts`, and
 `packages/cli/src/runtime/workflowInputs.ts`. Several combine real-filesystem
-glob discovery with `WorkspaceFS` operations, so a memfs-backed port cannot
-control their inputs either. `effect`'s own `glob` signature is
-`(pattern, {root?, exclude?})` and accepts none of the
-`cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` options those callers pass,
-so adoption does not close the hole.
+glob discovery with `WorkspaceFS` operations, so a memfs-backed port does not
+control their inputs today.
+
+**This hole is closable, and an earlier revision wrongly said it was not.**
+The pinned `glob@13.0.6` takes an `fs?: FSOption` — "an fs implementation to
+override some or all of the defaults" (`glob.d.ts:231-234`) — while keeping
+the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` behaviour these callers
+rely on. Supplying memfs directly, or adapting whichever filesystem service
+wins R-1 behind one shared helper, closes it without touching R-1 at all.
+What is _not_ a route is Effect's own `glob`: its signature is
+`(pattern, {root?, exclude?})` and accepts none of those options. So this is
+an independent piece of work with its own (modest) cost, not a constraint on
+either candidate — the previous framing overstated it.
 
 ### A method note, because the obvious experiment was run wrong once
 
@@ -310,10 +324,23 @@ below.
    the durable plane. A replacement needs a drain/ack barrier at disposal, or
    must keep the subscriber scope alive until its queue is empty.
 
-**None of these four rejects `PubSub`.** They are the contract a replacement
+5. **`emit` stamps the stage before fan-out, and the transcript groups on
+   it.** `TraceEmitter.emit` resolves a missing `stageId` from the emitter's
+   own scope stack before delivering — `event.stageId !== undefined ? event :
+{ ...event, stageId: this.currentStageStack().at(-1) }`
+   (`TraceEmitter.ts:70-76`) — and `traceFold.ts` uses that value as the
+   transcript entry's `groupId`. The stamp is per-emitter context, not part
+   of the event a caller publishes. An adapter that puts the caller's raw
+   event into a hub loses grouping for everything emitted inside a
+   `StageHandle` scope without an explicit id, producing orphaned or
+   misgrouped transcript entries. The adapter must hold the per-trace stage
+   context and stamp before publishing.
+
+**None of these five rejects `PubSub`.** They are the contract a replacement
 has to reproduce: bounded-vs-unbounded chosen deliberately, per-handler fault
 isolation added explicitly, the subscription acquired before the first emit,
-and its queue drained before disposal. Together with the injection work above, that is the real size of B4 —
+its queue drained before disposal, and each event stage-stamped on the way
+in. Together with the injection work above, that is the real size of B4 —
 and the reason not to do it is that size, not impossibility.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
@@ -448,6 +475,22 @@ header documents it as generic read/write for arbitrary keys, and
 `src/agent/node/persistedFlow.ts` already stores arbitrary `flow_<runId>`
 records there — not in the closed `SessionEventDraftSchema` vocabulary.
 
+**But an arbitrary key is not automatically internal metadata, and the
+`flow_` precedent is precisely what shows the missing half.** `isKVFile`
+(`src/tools/executions/executionKvFiles.ts:25`) recognises a key only by
+deferring to each owning subsystem: `isReservedKvKeyName`, `FLOW_KEY_PREFIX`,
+`isWorkflowScriptCheckpointKvKey`, `isStableSubagentStateKvKey`.
+`isReservedKvKeyName` itself knows only the store's fixed vocabulary and the
+`child-` prefix — it returns **false** for `flow_abc123`, which the existing
+suite pins (`ExecutionKVStore.vitest.ts:102`). `runGeneratedFiles.ts:89`
+skips an entry only when `isKVFile` says so.
+
+So an engine that writes rows under an unregistered key surfaces its own JSON
+as generated output in **both** the agent-facing `/executions/{id}/files`
+listing and the CLI's history listing. The recommendation is therefore: give
+the engine an owned key prefix and register it in `isKVFile`, exactly as
+`persistedFlow` does.
+
 **Settled: `Activity.CurrentAttempt` is in-memory, and that is deliberate —
 it is how replay works, not a collision.** `Activity.js:75` is
 `let attempt = 1` inside a closure, incremented per retry by
@@ -477,11 +520,19 @@ The real requirements are narrower and different:
   one. `layerMemory` makes that moot, but a durable engine persisting the row
   must distinguish an attempt orphaned by a crash — safe to re-run — from one
   a live process is still executing. Nothing in the interface expresses that.
-- **The retry budget resets across a restart.** Because the counter is
-  in-memory, an activity that had consumed eight of its ten retries before a
-  crash resumes with a fresh ten. That consequence of `Activity.js:75` does
-  survive, and it is unbounded in the retry dimension: one durable row per
-  attempt, with the ceiling reset by every restart.
+- **The interrupt-retry schedule is non-durable state, and it is a different
+  counter from `CurrentAttempt`.** `makeExecute` — which reads
+  `CurrentAttempt` and performs the memo lookup — wraps `executeWithoutInterrupt`
+  from _outside_ (`Activity.js:26,53,59`), so all ten interruption retries run
+  **inside a single memo key**, re-running that invocation's effect rather than
+  allocating a row each. `CurrentAttempt` advances only through the separate
+  `Activity.retry` helper (`Activity.js:74-77`). What a crash resets is the
+  in-memory schedule: an activity eight interruption-retries deep resumes
+  against the existing `exit: undefined` row with a fresh ten-step budget.
+
+  An earlier revision claimed "one durable row per attempt, unbounded in the
+  retry dimension." That conflated the two counters and is withdrawn — the
+  interrupt schedule creates no durable rows at all.
 
 This was left open in an earlier revision, answered on #12081 in the
 collision form, and corrected here after review. The correction on #12081
