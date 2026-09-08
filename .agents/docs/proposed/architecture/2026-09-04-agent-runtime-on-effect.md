@@ -835,7 +835,9 @@ withdrawn.
 The clean sequencing is that **this program is Stage 5 and lane D of the
 substrate cutover**. The cutover already has zero code, so nothing is
 re-done: lane D's deliverable is the two loops, the row vocabulary of §2.1,
-`RunLedger`, `foldRunState`, and the one importer, which converts each
+`RunLedger`, and `foldRunState`.
+
+~~and the one importer, which converts each
 supported `flow_<id>.json` directly into canonical rows. It preserves the
 provider messages byte-exact in the initial message base and stores the
 remaining validated `shared` fields, including
@@ -843,26 +845,51 @@ remaining validated `shared` fields, including
 also translates the authoritative `FlowRecord.cursor.nextNodeId` and
 `lastAction` into the new durable phase and any necessary `flow.step` or
 repair rows; copying `shared` alone is insufficient. The mapping is explicit
-for each supported family and cursor:
+for each supported family and cursor:~~
 
-- A cursor before invocation becomes `model.ready` only when no completed
+- ~~A cursor before invocation becomes `model.ready` only when no completed
   response is present; a saved response awaiting processing becomes
-  `response.ready`, with all required normalized metadata present.
-- A cursor at tool dispatch uses the saved extracted calls and paired
+  `response.ready`, with all required normalized metadata present.~~
+- ~~A cursor at tool dispatch uses the saved extracted calls and paired
   results. Every unresolved barrier that might already have been dispatched
   gets a `tool.intent` requiring outcome-unknown approval; absence of a
-  legacy intent is not evidence that the call never ran.
-- Round/output boundaries and terminal edges preserve the last action and
-  next round or waiting state, without replaying a settled round.
+  legacy intent is not evidence that the call never ran.~~
+- ~~Round/output boundaries and terminal edges preserve the last action and
+  next round or waiting state, without replaying a settled round.~~
 
-Unknown cursor paths, missing response metadata, or a continuation whose
+~~Unknown cursor paths, missing response metadata, or a continuation whose
 next activity cannot be established safely stop the import for that run
 with an explicit unsupported-resume diagnostic. No resumable snapshot is
 committed for it, and its source files remain available for recovery;
 there is no guessed fresh-run fallback. Legacy owners must be stopped and
 the substrate §8 migration claim must be held throughout this conversion.
 The temporary input schemas and cursor mappings retire with that section's
-three-month compatibility window. `persistedFlow.ts`, `src/agent/node/`,
+three-month compatibility window.~~
+
+_Amended 2026-09-08 against the migration PRD's 2026-09-06 third ruling
+(0.41 compatibility):_ **the flow-checkpoint importer is cut.** Everything
+struck above, the `flow_<id>.json` arm and the cursor-to-`flow.step`
+derivation with its three mapping rules, buys only the resumability of
+whichever runs happen to be interrupted at one upgrade, and it is paid for
+with a reader, three mapping cases that each need their own correctness
+argument, and a retirement nobody will remember to perform. The behaviour
+instead is breaking and stated: a run whose only durable state is a
+`flow_<id>.json` record is reported as not resumable under the named
+release. The record is renamed to `flow_<id>.json.superseded` before that
+run's first ledger append, so a reverted release cannot resume from a stale
+cursor, and it is left on disk for the single-owner D8 sweep to delete.
+Nothing below this note is struck: the deletions in the next paragraph, the
+substrate Stage 5 replacement, and the §8 freeze all stand as written.
+
+The importer that lane E of the substrate cutover owns is a different
+importer and it is alive. Lane E has one importer covering every legacy
+store, and substrate Stage 7 retires it no earlier than the first release
+shipped at least three calendar months after the cutover. Only its
+flow-checkpoint arm dies with this amendment. Nothing here authorizes
+deleting lane E's importer, its input schemas, its lease reader, or its
+fixtures.
+
+`persistedFlow.ts`, `src/agent/node/`,
 and the three interpreters are deleted in the same branch, so no overwrite
 of a whole conversation checkpoint survives the cutover and the amplifier is fixed in the release that
 fixes the substrate. The substrate proposal's Stage 5 text (`messages` rows,
@@ -948,8 +975,8 @@ compresses when the phase ceremony goes. `output/` (3,482) and
 2. Both families on the ledger, one PR: `ModelInvoker`, `Tools`,
    `FollowUps`, `RunContext`, `OutputPipeline`, `runToolUse`,
    `runReflection`; `executeAgent` and every resume arm call
-   `runtime.runPromiseExit` with the fiber's signal; the importer's
-   `flow_<id>.json` to canonical rows/cursor mapping, and the existing
+   `runtime.runPromiseExit` with the fiber's signal; ~~the importer's
+   `flow_<id>.json` to canonical rows/cursor mapping,~~ and the existing
    `approval.requested` / `approval.resolved` rows required for safe repair
    and manual retry. Deletes `src/agent/node/`,
    `ModelInvocationNode`, `RoundPersistedFlow`, `ResponseCycleFlow`,
