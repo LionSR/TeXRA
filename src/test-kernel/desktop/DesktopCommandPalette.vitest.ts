@@ -1,8 +1,8 @@
+// Node imports
+import { setTimeout as delay } from 'node:timers/promises';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
-
-// Local imports
-import { delay } from '@utils/core';
 
 // Local imports - test DOM utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';

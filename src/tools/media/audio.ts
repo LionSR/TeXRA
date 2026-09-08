@@ -1,11 +1,11 @@
 import * as path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import { delay } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
