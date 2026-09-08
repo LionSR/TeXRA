@@ -14,7 +14,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=22.9.0"
+    "node": ">=22.16.0"
   },
   "publishConfig": {
     "access": "public"
@@ -52,6 +52,7 @@
     "@anthropic-ai/sdk": "^0.123.0",
     "@cantoo/pdf-lib": "^2.9.1",
     "@date-fns/tz": "^1.5.0",
+    "@effect/sql-sqlite-node": "4.0.0-rc.112",
     "@google/genai": "^2.21.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",

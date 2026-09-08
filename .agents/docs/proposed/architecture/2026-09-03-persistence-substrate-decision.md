@@ -816,7 +816,7 @@ Stages are lanes on one branch and ship in one release (§8).
 
 | Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Deletes in the same release                                                                                                                                                              | Companion step |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| 0     | Spike: `node:sqlite` on the CLI floor (raise `engines.node` to `>=22.13.0`, `packages/cli/package.json:37`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two local host processes on one local bucket; reject network/shared storage before open; kill -9 mid-transaction; `PRAGMA data_version` across processes. OpenCode's `packages/effect-sqlite-node` (MIT, ~200 LoC) is the starting client                                                    | nothing                                                                                                                                                                                  |                |
+| 0     | Spike: `node:sqlite` on the CLI floor (initially `>=22.13.0`; the September 8 official-client ruling raises CLI and SDK to `>=22.16.0`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two local host processes on one local bucket; reject network/shared storage before open; kill -9 mid-transaction; `PRAGMA data_version` across processes. The official `@effect/sql-sqlite-node` client is selected under section 7                              | nothing                                                                                                                                                                                  |                |
 | 1     | C1 schema and indexes; Effect `Database` layer parameterized by `WorkspaceRoots`; the C6 publisher behind `SessionEventHub`; the architecture test that fails any persistence write outside the database or the documents/export allowlist, and its sibling that fails a raw read of the execution row types outside `RunLedger` (or, better, a `Database` layer that only exposes those rows through `RunLedger`, so the query is unconstructible elsewhere and the test is unnecessary)          | nothing                                                                                                                                                                                  |                |
 | 2     | Listing tier: launcher history, resume picker, sessions rail, and the executions tool answered by C7/C8 indexed queries                                                                                                                                                                                                                                                                                                                                                                            | `streamLogSummaries/`, the mtime heuristic, `executionListing.ts` directory walks, `readExecutionStreamIndex`, `listExecutions` scans, the PR2 background hydration pass                 | S4, S5         |
 | 3     | C3 durable event set; transcript fold on hydrate reusing the recorder's live fold; `StreamLog` in-memory contract and `store-public-surface-baseline.json` unchanged                                                                                                                                                                                                                                                                                                                               | the 300 ms whole-array rewrite, `writeStream`/`hydrateStream`/`parsePersistedEntries`, `preservedRawEntries`, `seqNo` renumbering, the 50 KiB truncation and `toolOutput/` spill         |                |
@@ -908,34 +908,49 @@ on the same major (`4.0.0-beta.83`) and shows a shape worth copying exactly:
   `Schema.TaggedErrorClass`; named spans via `Effect.fn`. This is exactly the
   code that the cutover would otherwise hand-roll as promise plumbing and
   `p-queue` mutexes.
-- **Directly reusable:** `packages/effect-sqlite-node` (MIT) is an Effect
-  `SqlClient` over `node:sqlite` selected by a `#sqlite` import condition; the
-  vendored Drizzle adapter is about 3.4k lines. Copy, do not depend: OpenCode
-  publishes neither.
+- **Client selection:** use the official `@effect/sql-sqlite-node` package,
+  pinned to the same release as `effect`. The September 8 owner ruling
+  supersedes the earlier proposal to copy OpenCode's unpublished client.
+  Do not introduce a custom SQLite driver or VFS.
 
 ### Client selection at the approved host floor
 
 The September 6 comparison requested by the
 [delivery plan](2026-09-06-effect-runtime-delivery-plan.md#2-technology-choices-that-can-endure)
-retains the existing `Database` layer. The pinned official
+identified a host-floor constraint. The pinned official
 [`@effect/sql-sqlite-node` client](https://github.com/Effect-TS/effect/blob/effect%404.0.0-rc.112/packages/sql/sqlite-node/src/SqliteClient.ts#L32)
 statically imports `backup` from `node:sqlite`, and its ordinary statement path
 calls `StatementSync.columns()`. Both APIs were added in Node 22.16, after the
-approved 22.13.0 CLI floor. See the versioned Node histories for
+then-approved 22.13.0 CLI floor. See the versioned Node histories for
 [`backup`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#sqlitebackupsourcedb-destination-options)
 and [`columns`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#statementcolumns).
-Thus the unmodified client cannot serve every supported host. This is a source
-compatibility finding, not a throughput measurement of that client.
+On September 8 the owner selected the official client and approved raising the
+Node floor. The CLI and SDK now require Node 22.16.0 or later. This resolves
+the source compatibility constraint without copying or replacing the driver.
+The API comparison is not a throughput measurement of that client.
 
 Its serialized connection and `BEGIN IMMEDIATE` fit the transaction model,
 but do not remove TeXRA's responsibility for C1 schema, C5 claims, C6 validation
 and redaction, C7 queries, or foreign-process wake detection. It also uses
 synchronous SQLite busy waits, so adopting it would not itself remove event-loop
-blocking. The current layer retains the measured API subset and the existing
-stage 0 contention evidence. No second SQL layer, compatibility shim, vendored
-fork, or further host-floor increase is selected. Scheduling improvements remain
+blocking. The `Database` layer retains the existing stage 0 contention evidence
+and owns application queries over the official client. Effect's public
+transaction constructor and reserved connection provide deferred read snapshots
+and commit publication before connection release. No custom statement executor,
+compatibility shim or vendored fork is selected. Scheduling improvements remain
 subject to measurement and C1's nonzero busy-timeout rule; no provider or tool
 work may be retried as a database transaction.
+
+The installed Effect SQL release has a reproduced failed-COMMIT defect: a
+deferred-constraint failure leaves the transaction active when the connection
+is released. Adoption remains a draft until an upstream correction rolls back
+before release and preserves both failures if rollback also fails. The prepared
+upstream regression and correction do not authorize a local transaction patch.
+
+C9 continues to require confined generated-file deletion. It does not require
+SQLite admission and cleanup to share one physical directory handle. Cleanup
+owns its directory handle for the deletion operation; database admission remains
+subject to C1.
 
 Scope in this program:
 

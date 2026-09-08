@@ -53,7 +53,7 @@ async function loadDatabaseFixture(
     bundle: true,
     platform: 'node',
     format: 'esm',
-    target: 'node22.13',
+    target: 'node22.16',
     tsconfig: join(root, 'tsconfig.json'),
     banner: {
       js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
