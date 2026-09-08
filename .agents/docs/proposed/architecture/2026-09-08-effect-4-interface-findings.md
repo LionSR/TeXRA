@@ -290,13 +290,14 @@ traversal actually calls. So:
   same structural cost this note found for the hub constructor, in a second
   place.
 
-  **Generalise it, because two independent instances is a pattern and not a
+  **Generalise it, because three independent instances is a pattern and not a
   coincidence.** Anywhere candidate B meets a synchronous or Promise-shaped
   third-party contract — `path-scurry`'s `FSOption`, a class constructor, any
   callback API that must return a value rather than an `Effect` — the
   Effect-to-Promise bridge **is a `run` site**, and the ratchet decides whether
-  it may live where the consumer lives. Both instances found so far were found
-  by accident, while pricing something else. The cost is not "two places"; it
+  it may live where the consumer lives. The three instances found so far —
+  hub construction, the `glob` adapter, and the synchronous `subscribe` facade
+  (below) — were all found by accident, while pricing something else. The cost is not "two places"; it
   is one systematic cost of candidate B whose extent nobody has measured. A
   grep for B's prospective consumers against the boundary kinds is the
   measurement, and it has not been run. The three `globSync` callers additionally need the synchronous set,
@@ -491,11 +492,25 @@ test-kernel, most passing a plain synchronous callback to `trace.subscribe`
 and reading events out of a local array on the next line. So the production
 blast radius is six files.
 
+**The synchronous `subscribe` facade is itself a third run-boundary site, and
+this note had the fact 116 lines earlier without applying it.** `:382` records
+that `PubSub.subscribe` returns `Effect<Subscription<A>, never, Scope>`
+(`PubSub.d.ts:1143`). Keeping `TraceEmitter.subscribe` synchronous therefore
+means acquiring that scoped subscription and starting its consumer fiber
+**inside `TraceEmitter.ts`** — a third `Effect.run*` below the boundary, which
+`check-effect-migration-ratchet.mjs:1175-1188` rejects exactly as it rejects
+hub construction there. So B4-hub must also inject a boundary-owned
+subscription manager or runtime, or make subscription acquisition effectful
+and propagate that through every subscriber — **another injection chain the
+27 does not count**. This is the third instance of the run-boundary rule
+stated above, and the second time the note has held both halves of a fact in
+separate sections without joining them.
+
 **The eleven test files are cheaper than an earlier revision charged them.**
 That revision said each would need "a fiber, a scope and a drain". It would
-not: if `TraceEmitter.subscribe` stays a synchronous facade — which it must
-anyway, for properties 3 and 6 — the adapter owns each subscription's fiber
-and scope internally and exposes one drain barrier. What each test then needs
+not: if `TraceEmitter.subscribe` stays a synchronous facade — possible only
+with the injected runtime just described — the adapter owns each
+subscription's fiber and scope internally and exposes one drain barrier. What each test then needs
 is to _await that barrier_ before asserting on its array, not to build the
 machinery itself. Price the assertion and lifecycle change; charging every
 subscriber file for adapter-owned infrastructure inflates the case against
@@ -538,13 +553,30 @@ below.
    `PubSub.publish` on the process runtime — `effectRuntime().runFork(...)`,
    the pattern `SessionHandle.ts:679` already uses from a synchronous method.
    On a full bounded hub that fiber **waits** instead of dropping, which
-   removes the cross-subscriber loss entirely. The cost moves rather than
-   vanishing: those fibers become lifetime the adapter must track and join at
-   disposal, which is property 4 again. So bounded-with-backpressure is a
-   third option beside bounded-with-drops and unbounded-with-growth, and B4's
-   trade-off should be stated over all three. What replaces it under
-   an unbounded hub is not event loss but unbounded memory growth behind the
-   slowest subscriber — a different, arguably worse, failure for a long run.
+   removes the cross-subscriber loss.
+
+   **But calling that "backpressure" is wrong, and an earlier revision of this
+   paragraph did.** `runFork` suspends the _new fiber_; the synchronous `emit`
+   caller returns immediately and is free to emit again. Nothing propagates
+   back to the producer, so a slow subscriber does not slow the run down — it
+   accumulates **one suspended fiber per event, each retaining its event**.
+   The hub stays bounded and the memory growth simply moves outside it, which
+   is the unbounded-growth failure this option was supposed to avoid, now
+   harder to see. Property 4 (joining those fibers at disposal) is a real cost
+   on top, but it is not the main one.
+
+   So the third option is honestly named **bounded-hub-with-unbounded-pending-
+   publishers**, and it is only viable with an admission bound on pending
+   publishers — a cap with an explicit drop or block policy — or by making
+   publication awaitable, which `emit`'s `void` signature forbids without
+   changing every caller. B4's trade-off should be stated over all three, with
+   this one carrying its actual cost rather than the word "backpressure".
+
+   What replaces cross-subscriber loss under an _unbounded_ hub is not event
+   loss but unbounded memory growth behind the slowest subscriber — a
+   different, arguably worse, failure for a long run. Note that the
+   `runFork` option above collapses to the same failure by another path,
+   which is the point of renaming it.
    **And the "today they are independent" half was also wrong.**
    `TraceEmitter.emit` fans out in a synchronous sequential `for...of`
    (`src/agent/trace/TraceEmitter.ts:78-93`), so a slow or non-returning
@@ -927,15 +959,24 @@ records there — not in the closed `SessionEventDraftSchema` vocabulary.
 **That store validates nothing, so "route storage errors to a typed failure"
 does not cover the corruption that matters.** `KVStore.read<T>`
 (`src/common/storage/KVStore.ts:55-62`) is `JSON.parse(raw) as T` — an
-unchecked cast. A missing file and unparseable JSON both fail loudly, but a
-row that is _valid JSON of the wrong shape_ — the shape contract drift
-actually produces — is returned as if it were a `T`, and the engine consumes
-it as runnable workflow state. Whatever the adoption does about storage
-failures, the marker, ownership and completion records need a runtime schema
-parsed at this boundary; the repo's own rule already says so, and says which
-way to fail (`.catch(default)` on persisted data is the anti-pattern, not the
-fix). This is the storage-side twin of the `mtime` `Option` hazard in §2: the
-loss is not the read failing, it is the read succeeding with something wrong.
+unchecked cast. Three cases, and an earlier revision collapsed the first two:
+
+- **Missing is normal absence, not a failure.** `withMissingFallback` maps
+  `ENOENT` to `undefined`, and for a workflow executing a new activity the
+  memo row is _expected_ to be absent — that is the signal to run it. An
+  earlier revision said a missing file "fails loudly", which is both wrong and
+  dangerous in the opposite direction from the rest of this section: an
+  adoption that treats absence as corruption rejects every legitimate first
+  execution.
+- **Unparseable JSON does fail loudly.** `JSON.parse` throws.
+- **Valid JSON of the wrong shape does not fail at all** — the shape contract
+  drift actually produces — and is returned as if it were a `T`, so the engine
+  consumes it as runnable workflow state. Whatever the adoption does about storage
+  failures, the marker, ownership and completion records need a runtime schema
+  parsed at this boundary; the repo's own rule already says so, and says which
+  way to fail (`.catch(default)` on persisted data is the anti-pattern, not the
+  fix). This is the storage-side twin of the `mtime` `Option` hazard in §2: the
+  loss is not the read failing, it is the read succeeding with something wrong.
 
 **But an arbitrary key is not automatically internal metadata, and the
 `flow_` precedent is precisely what shows the missing half.** `isKVFile`
