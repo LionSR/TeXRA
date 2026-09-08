@@ -16,7 +16,7 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -175,9 +175,9 @@ async function promptGitMissing(): Promise<void> {
  *  (token validation, precondition checks, auth-failure retry) lives in
  *  `@latex/overleafClone`; this only renders it. */
 function buildOverleafClonePorts(
+  secrets: PlatformSecrets,
   remote: OverleafRemote,
 ): OverleafCloneWorkflowPorts {
-  const secrets = platform().secrets;
   return {
     // `getStored` (not `get`): the clone token is a persisted credential the
     // user manages here, never an environment override.
@@ -261,7 +261,9 @@ function buildOverleafClonePorts(
   };
 }
 
-export async function cloneOverleafProject(): Promise<void> {
+export async function cloneOverleafProject(
+  secrets: PlatformSecrets,
+): Promise<void> {
   const input = await promptInput(
     'Clone Overleaf/ShareLaTeX Project',
     'Enter project URL or 24-character project ID.',
@@ -283,6 +285,6 @@ export async function cloneOverleafProject(): Promise<void> {
   await runOverleafClone(
     remote,
     workspacePath,
-    buildOverleafClonePorts(remote),
+    buildOverleafClonePorts(secrets, remote),
   );
 }

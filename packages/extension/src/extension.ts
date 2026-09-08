@@ -70,8 +70,9 @@ import { redactSecrets } from '@logger/redaction';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import { initPlatform, platform } from '@platform/platform';
+import { initPlatform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   bootstrapNodeAgentDirectories,
@@ -136,6 +137,9 @@ let extensionShutdownPromise: Promise<void> | undefined;
  * The platform, the process runtime, and the process roots, wired once for
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
+ *
+ * Returns the secrets port it built so the surfaces registered below take it
+ * as an argument instead of reading it back off the ambient locator.
  */
 async function initVscodePlatform(
   context: vscode.ExtensionContext,
@@ -146,7 +150,7 @@ async function initVscodePlatform(
     NodePlatformServices,
     'toolAvailability' | 'languageModel' | 'toolMissingHandler'
   > = {},
-): Promise<void> {
+): Promise<PlatformSecrets> {
   // The process runtime comes first: the config stores below are opened as
   // Effect programs, so it must exist before the platform this host wires.
   // The identity is the Node default `createNodePlatform` wires as
@@ -163,11 +167,12 @@ async function initVscodePlatform(
       ),
     ),
   );
+  const secrets = new VscodeSecrets(context);
   initPlatform(
     createNodePlatform({
       globalState: context.globalState,
       storage,
-      secrets: new VscodeSecrets(context),
+      secrets,
       lifecycle,
       agentDirectories,
       agentResume: {
@@ -184,6 +189,7 @@ async function initVscodePlatform(
       workspaceState,
     }),
   );
+  return secrets;
 }
 
 function shutdownExtension(): Promise<void> {
@@ -323,32 +329,38 @@ function registerWalkthroughWorkspaceAction(
  * in SecretStorage, which needs no workspace, so the welcome (no-folder) path
  * offers the same sign-in the full path does.
  */
-function registerSupabaseAuth(context: vscode.ExtensionContext): void {
+function registerSupabaseAuth(
+  context: vscode.ExtensionContext,
+  secrets: PlatformSecrets,
+): void {
   try {
     setRuntimeExtensionId(context.extension.id);
-    const authProvider = new SupabaseAuthProvider({
-      showError: (msg) => void vscode.window.showErrorMessage(msg),
-      showInfo: (msg) => void vscode.window.showInformationMessage(msg),
-      showSignInPrompt: async (reason) => {
-        const message =
-          reason === 'expired'
-            ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-            : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
-        const action = await vscode.window.showWarningMessage(
-          message,
-          'Sign In',
-        );
-        if (action === 'Sign In') {
-          await vscode.commands
-            .executeCommand('texra.auth.signIn')
-            .then(undefined, (err: unknown) =>
-              authLog.error(
-                `Failed to trigger sign-in: ${toErrorMessage(err)}`,
-              ),
-            );
-        }
+    const authProvider = new SupabaseAuthProvider(
+      {
+        showError: (msg) => void vscode.window.showErrorMessage(msg),
+        showInfo: (msg) => void vscode.window.showInformationMessage(msg),
+        showSignInPrompt: async (reason) => {
+          const message =
+            reason === 'expired'
+              ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+              : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
+          const action = await vscode.window.showWarningMessage(
+            message,
+            'Sign In',
+          );
+          if (action === 'Sign In') {
+            await vscode.commands
+              .executeCommand('texra.auth.signIn')
+              .then(undefined, (err: unknown) =>
+                authLog.error(
+                  `Failed to trigger sign-in: ${toErrorMessage(err)}`,
+                ),
+              );
+          }
+        },
       },
-    });
+      secrets,
+    );
     context.subscriptions.push(
       vscode.authentication.registerAuthenticationProvider(
         AUTH_PROVIDER_ID,
@@ -405,14 +417,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // opening a folder reloads the window into that path (welcomeView.ts).
     const lifecycle = createLifecycleHost();
     lifecycleHost = lifecycle;
-    agentDirectories.initialize();
-    await initVscodePlatform(
+    agentDirectories.initialize(context.globalState);
+    const secrets = await initVscodePlatform(
       context,
       lifecycle,
       undefined,
       context.workspaceState,
     );
-    registerSupabaseAuth(context);
+    registerSupabaseAuth(context, secrets);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -436,7 +448,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       // No settings view exists before a folder is open, so there is no
       // credential surface to refresh after the key write.
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        apiSetApiKey(async () => {}),
+        apiSetApiKey(secrets, async () => {}),
       ),
     );
     registerWalkthroughWorkspaceAction(context, false);
@@ -456,7 +468,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
-  agentDirectories.initialize();
+  agentDirectories.initialize(context.globalState);
   setOutputChannelFactory((name) => vscode.window.createOutputChannel(name));
   initializeBundledPrompts(path.join(context.extensionPath, 'resources'));
   const workspaceState = gitRepoRoot
@@ -476,19 +488,28 @@ async function activateExtension(context: vscode.ExtensionContext) {
     vscode.extensions.getExtension(id) !== undefined;
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
-  await initVscodePlatform(context, lifecycle, workspaceRoot, workspaceState, {
-    toolAvailability: { isVscodeExtensionInstalled },
-    languageModel,
-    toolMissingHandler: async (message, openDocsCommand) => {
-      const actions = openDocsCommand ? ['View Installation Guide'] : [];
-      log.error(message);
-      const choice = await vscode.window.showErrorMessage(message, ...actions);
-      if (choice === 'View Installation Guide' && openDocsCommand) {
-        const [command, ...args] = openDocsCommand.split(',');
-        void vscode.commands.executeCommand(command, ...args);
-      }
+  const secrets = await initVscodePlatform(
+    context,
+    lifecycle,
+    workspaceRoot,
+    workspaceState,
+    {
+      toolAvailability: { isVscodeExtensionInstalled },
+      languageModel,
+      toolMissingHandler: async (message, openDocsCommand) => {
+        const actions = openDocsCommand ? ['View Installation Guide'] : [];
+        log.error(message);
+        const choice = await vscode.window.showErrorMessage(
+          message,
+          ...actions,
+        );
+        if (choice === 'View Installation Guide' && openDocsCommand) {
+          const [command, ...args] = openDocsCommand.split(',');
+          void vscode.commands.executeCommand(command, ...args);
+        }
+      },
     },
-  });
+  );
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes();
@@ -620,7 +641,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       }),
   ]);
 
-  registerSupabaseAuth(context);
+  registerSupabaseAuth(context, secrets);
 
   // Usage logging is a runtime service, not an authentication-provider
   // capability. Initialize it even when Supabase sign-in is not configured,
@@ -653,7 +674,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(), 0);
-  registerCommands(context, progressViewProvider);
+  registerCommands(context, progressViewProvider, secrets);
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context);
 

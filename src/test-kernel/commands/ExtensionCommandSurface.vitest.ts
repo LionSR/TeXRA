@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { EXTENSION_COMMAND_HANDLERS } from '@commands/extensionCommandHandlers';
 import { createExtensionCommandActions } from '@commands/extensionCommandSurface';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
@@ -25,6 +26,9 @@ describe('extension command action wiring', () => {
         {} as vscode.ExtensionContext,
         settingsViewProvider,
         {} as ProgressViewProvider,
+        // The subscription sign-in routes this suite checks never reach the
+        // secrets port the key and clone actions close over.
+        {} as PlatformSecrets,
       );
       const result = dispatchCommandFromRegistry(
         commandId,
