@@ -128,21 +128,29 @@ type SdkErrorLike = {
   data?: unknown;
 };
 
+/** Direct-or-enveloped SDK error candidates: the thrown error itself, then
+ *  its nested `.response` and `.error` carriers (some SDKs preserve the full
+ *  envelope, others unwrap it before it reaches us). Mirrors
+ *  {@link errorBodyCandidates} for the analogous raw-body case. Shared by
+ *  `detectStatusCode`/`detectStatusText`, which both check the same fields
+ *  across the same three shapes. */
+function sdkErrorCandidates(err: unknown): Record<string, unknown>[] {
+  if (!isObject(err)) return [];
+  const candidate = err as SdkErrorLike;
+  return [candidate, candidate.response, candidate.error].filter(isObject);
+}
+
 /** Canonical HTTP status extractor for thrown SDK/provider errors. The only
  *  place that knows the candidate field shapes (`status`, `statusCode`,
  *  `code`, `response.status`, `error.status`). */
 export function detectStatusCode(err: unknown): number | undefined {
-  if (!isObject(err)) {
-    return undefined;
-  }
-
-  const candidate = err as SdkErrorLike;
+  const [direct, ...nested] = sdkErrorCandidates(err);
+  if (!direct) return undefined;
   return (
-    pickStatus(candidate.status) ??
-    pickStatus(candidate.statusCode) ??
-    pickStatus(candidate.code) ??
-    pickStatus(candidate.response?.status) ??
-    pickStatus(candidate.error?.status)
+    pickStatus(direct.status) ??
+    pickStatus(direct.statusCode) ??
+    pickStatus(direct.code) ??
+    nested.map((c) => pickStatus(c.status)).find((v) => v !== undefined)
   );
 }
 
@@ -150,14 +158,15 @@ export function detectStatusText(
   err: unknown,
   statusCode?: number,
 ): string | undefined {
-  if (isObject(err)) {
-    const candidate = err as SdkErrorLike;
-    const explicit =
-      candidate.statusText ??
-      candidate.response?.statusText ??
-      candidate.error?.statusText;
-    if (isString(explicit) && explicit) return explicit;
-  }
+  // A flat `??` reduction, not `.find(v => v !== undefined)`: the original
+  // chain skips `null` at every step too, and a candidate's `statusText` can
+  // legitimately be `null` (e.g. `response.statusText: null` while
+  // `error.statusText` holds the real value).
+  const explicit = sdkErrorCandidates(err).reduce<unknown>(
+    (acc, c) => acc ?? c.statusText,
+    undefined,
+  );
+  if (isString(explicit) && explicit) return explicit;
   return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
 }
 

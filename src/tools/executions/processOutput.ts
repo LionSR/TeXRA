@@ -32,7 +32,7 @@ const OUTPUT_STDERR_PREFIX = 'err: ';
  */
 const OUTPUT_LINE_BREAK = /\r\n|\r|\n/;
 
-export interface ProcessOutputProjection {
+interface ProcessOutputProjection {
   readonly lines: readonly string[];
   readonly chars: number;
 }

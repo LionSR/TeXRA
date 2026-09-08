@@ -14,7 +14,7 @@ const CONVERSATION_FORMAT_OPTIONS: ConversationFormatOptions = {
   toolBlockLimit: 100,
 };
 
-export interface ConversationPageFormatOptions {
+interface ConversationPageFormatOptions {
   /** Zero-based index of the first message in this page. */
   readonly offset?: number;
   /** Total messages in the unsliced archive. */
