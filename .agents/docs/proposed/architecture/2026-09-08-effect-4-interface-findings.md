@@ -160,7 +160,10 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
   every other failure loudly. So the probe is **correct but expensive**: the
   cost is one extra syscall per entry on a traversal already paying one, plus
   a dependency on `reason.cause` surviving whichever layer produces the error.
-  Not a correctness objection.
+  Not a correctness objection. (That is the cost of _this probe_. On the
+  `glob` path it is joined by a second per-entry call, because `FSOption`
+  wants `Dirent`s and `readDirectory` returns names — see the `glob` section.
+  Do not read "one" here as the total there.)
 - **`readDirectory` returns `Array<string>`, not `[name, type]`.** The port
   reads each entry's type off the `withFileTypes` dirent for free; Effect's
   shape forces a `stat` per entry. This is load-bearing, not tuple
@@ -226,8 +229,9 @@ it defaults `remove` to `Effect.void` and `exists` to `false`.
 does not control their inputs. The hole is closable for testing by handing
 `glob` a memfs instance directly. For real wiring the candidates differ:
 **candidate A can serve the five async importers directly; candidate B can
-serve them only through an adapter** that costs one extra syscall per entry
-**and a run boundary for four of the five consumers** (below). Only the three `globSync` callers are closed to both. This paragraph
+serve them only through an adapter** that costs **two** extra filesystem calls
+per entry — a `Dirent` probe plus the symlink test — **and a run boundary for
+four of the five consumers** (below). Only the three `globSync` callers are closed to both. This paragraph
 has been wrong six times in six directions: two importers, then unclosable,
 then independent of R-1, then requiring synchronous methods, then B excluded on
 a correctness objection this note's own §2 disproves, then a lead still calling
@@ -270,8 +274,9 @@ traversal actually calls. So:
   and `:705`, and Effect's `FileSystem` has none — so B must synthesise one
   from the `readLink`-plus-`stat` probe above. An earlier revision called that
   probe incorrect under unrelated failures; §2 now records why that was wrong
-  (the errno survives on `reason.cause`), leaving a syscall per entry as the
-  price. **But an earlier revision also priced only that syscall, and there is
+  (the errno survives on `reason.cause`), leaving the per-entry calls as the
+  price — **two of them**, since `FSOption.readdir` wants `withFileTypes` and
+  Effect's `readDirectory` returns names. **But an earlier revision also priced only that syscall, and there is
   a second cost.** `FSOption.promises.lstat` must return a real `Promise`;
   Effect's `readLink`/`stat`/`readDirectory` return `Effect`s. Bridging them
   needs `runPromise` or an equivalent managed-runtime run **at each consumer**
@@ -298,8 +303,8 @@ traversal actually calls. So:
   which Effect also lacks — and there no adapter exists at all.
 
 So under both candidates the seam closes for the five async callers and stays
-for the three synchronous ones; B pays an extra syscall per entry that A does
-not.
+for the three synchronous ones; B pays **two** extra filesystem calls per entry
+that A does not.
 
 **Three of the eight are synchronous**, which compounds it:
 `latexPreview.ts:78`, `latexindentpt.ts:49` and `platformPaths.ts:47` call
@@ -312,12 +317,31 @@ And Effect's own `glob` is not a route for any of the eight: its signature is
 
 So the honest summary: **under either candidate the five async importers can be
 adapted onto the port and only the three `globSync` callers keep separate
-wiring — B pays a per-entry syscall for the privilege, A does not**.
+wiring — but B pays three things A does not, and two of them were missing from
+earlier revisions of this very sentence**:
 
-This is the third time this section has moved toward B, each time by removing
-an objection I had raised rather than by finding a new capability: first sync
-was not required for the async path, then the tag gap was not a correctness
-problem. What survives is a throughput cost, which is measurable and which R-1
+1. **Two extra filesystem calls per entry, not one.** `FSOption.readdir`
+   demands `withFileTypes: true` and returns `Dirent[]`
+   (`path-scurry@2.0.2/dist/esm/index.d.ts:24-29`, and its own doc comment
+   says the `promises` variant is "Dirent variant only"). Effect's
+   `readDirectory` returns names — the type loss recorded in §2. So B
+   manufactures each `Dirent` by probing the child, then still runs the
+   `readLink`-plus-`stat` symlink test. A's `lstat`-backed port carries the
+   type out of the directory read and pays neither.
+2. **A run boundary.** The `promises` callbacks must return real `Promise`s,
+   so four of the five consumers need adapter construction at an allowed
+   boundary plus injection (above).
+3. The per-entry cost compounds with tree size, which is exactly the shape
+   R-1 measured at ~8×.
+
+**That reverses this section's direction.** Three consecutive revisions moved
+toward B by removing objections I had raised — sync was not required for the
+async path, then the tag gap was not a correctness problem. The last two
+rounds moved it back: the run boundary, and now the second per-entry call.
+Neither was found by re-examining B's feasibility; both were found by pricing
+what B must actually build. **The lesson is not which way the verdict lands,
+it is that feasibility questions were being answered while cost questions went
+unasked.** What survives is a throughput cost, which is measurable and which R-1
 already measured on a different traversal (~8× on 3,096 files, dominated by
 exactly this per-entry `stat`). Whether that verdict transfers to `glob`'s
 workload is untested here. The note prescribes nothing about `glob` beyond
@@ -421,11 +445,26 @@ adopted:
   storage layer: no delivery strategy, no subscriber-completion machinery.
   Most of the eight properties below then have to be re-implemented by hand on
   top of it, which is approximately what `TraceEmitter` already does.
-- **B4-hub — 27 files.** A real `PubSub` needs `PubSub.make` or
-  `PubSub.unbounded`, both effectful, and `TraceEmitter.ts` cannot run them
-  (not a ratchet boundary kind, and the below-boundary register is not an
-  intake). So the hub is built at an `Effect` boundary and injected, and all
-  10 constructor sites change.
+- **B4-hub — 27 files, and that is a floor.** A real `PubSub` needs
+  `PubSub.make` or `PubSub.unbounded`, both effectful, and `TraceEmitter.ts`
+  cannot run them (not a ratchet boundary kind, and the below-boundary
+  register is not an intake). So the hub is built at an `Effect` boundary and
+  injected, and all 10 constructor sites change.
+
+  **Injection does not stop at the constructor — it propagates up every
+  factory chain**, and none of those callers are in the 27, which counts
+  direct seam files only. `createRunTrace` (`src/transcript/runTrace.ts:30`)
+  constructs the emitter synchronously, so it must either take the injected
+  hub or become effectful; either way its callers change:
+  `src/agent/runtime/AgentLaunchContext.ts:416` and
+  `src/tools/delegation/childStream.ts:110` in production, plus
+  `sessionTestUtils.ts:134`, `SessionScope.vitest.ts:36,70` and
+  `RunTraceDispose.vitest.ts:13,29` in the kernel — and two more suites
+  (`AgentLaunchActivation.vitest.ts`, `AgentLaunchContext.vitest.ts`) that
+  _mock_ `createRunTrace` and whose mocks must match the new signature. That
+  is seven files from one factory, before looking at `ModelHandler`'s own
+  construction chain. **B4-hub's real surface has not been measured**; 27 is
+  where counting stopped, not where it ends.
 
 An earlier revision excluded the constructors while pricing the full `PubSub`
 semantics below — combining the cheap route's file count with the expensive
@@ -464,7 +503,8 @@ B4, which is the direction this note has now erred in three separate
 places.
 
 That is the argument against B4, and it is an economic one: **17 files of churn
-for B4-atomic or 27 for B4-hub**, mostly tests and each cheaper than first
+for B4-atomic or **at least** 27 for B4-hub (injection propagates up factory
+chains this count never followed)**, mostly tests and each cheaper than first
 charged, plus the eight behavioural properties below, against the listener
 machinery being replaced — the `subscribers` field (`:47`), `subscribe`
 (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a 217-line class that
@@ -649,15 +689,17 @@ sites stay untouched for B4-atomic (17 files) and change for B4-hub (27).
 **A previous revision said B4-hub "inherits" these eight properties. It does
 not, and that sentence was the most dangerous thing in this note** — an
 implementer following it could ship a hub missing guarantees whose absence
-loses or reorders durable events. A real `PubSub` supplies exactly two of the
-eight: buffering (property 1) and, through its delivery strategy, the
-backpressure behaviour that property presumes. The other six — per-handler
-failures caught **and reported**, synchronous subscription readiness,
-synchronous mid-run detachment, every handler acknowledged before disposal,
-stage stamping on the way in, the handover cap enforced at enqueue, and
-cross-plane ordering against `StreamStatusMachine` — are **adapter work under
-both routes**. B4-hub buys a buffer and a strategy; it does not buy the
-contract. The reason not to do it is that size, not impossibility.
+loses or reorders durable events. A real `PubSub` supplies **property 1 and
+nothing else**: buffering, and the backpressure behaviour its delivery
+strategy provides — both halves of that one property. **Properties 2 through
+8 — all seven — are adapter work under both routes**: per-handler failures
+caught _and reported_, synchronous subscription readiness, every handler
+acknowledged before disposal, stage stamping on the way in, synchronous
+mid-run detachment, the handover cap enforced at enqueue, and cross-plane
+ordering against `StreamStatusMachine`. An intermediate revision said "two of
+eight, six adapter-owned" while enumerating seven items directly beneath it;
+the enumeration was right and the arithmetic was wrong. B4-hub buys one
+property; it does not buy the contract. The reason not to do it is that size, not impossibility.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
 
