@@ -1,12 +1,14 @@
 /**
  * The CLI's install of the process Effect runtime (PRD 7.7).
  *
- * Three CLI entries need one, and any of them may be first: `initCliPlatform`,
+ * Several CLI entries need one, and any of them may be first: `initCliPlatform`,
  * which opens the state and config stores as Effect programs before it wires
  * the platform; `notifyCliUpdate`, which runs before any platform exists and
  * opens the global state store on its own; and `clone`, which never builds a
  * platform at all yet reads and writes its remote's token through
- * `CliSecrets`. Whichever arrives first builds the runtime and the rest run on
+ * `CliSecrets`; and the headless run commands, whose native validation runs
+ * before platform initialization. Whichever arrives first builds the runtime
+ * and the rest run on
  * it, so a normal run still ends with exactly the runtime the platform's
  * shutdown disposes.
  *

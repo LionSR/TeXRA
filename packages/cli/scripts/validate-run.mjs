@@ -110,17 +110,6 @@ function assertSuccess(result, label) {
   );
 }
 
-function readNamedFiles(root, name) {
-  if (!existsSync(root)) return [];
-  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
-    const entryPath = path.join(root, entry.name);
-    if (entry.isDirectory()) return readNamedFiles(entryPath, name);
-    return entry.isFile() && entry.name === name
-      ? [readFileSync(entryPath, 'utf8')]
-      : [];
-  });
-}
-
 function assertUsageError(result, label, expectedText) {
   assert(
     result.status === 2,
@@ -1012,15 +1001,40 @@ prompts:
       workflowCompletedIndex >= 0 && parentResultIndex > workflowCompletedIndex,
       'workflow-script run should wait for and return the terminal child report to the headless parent',
     );
-    const reports = readNamedFiles(home, 'report.json').join('\n');
+    const childId = records[workflowCompletedIndex].payload.streamId.slice(
+      'workflow-script#'.length,
+    );
+    const history = run(
+      process.execPath,
+      [
+        binaryPath,
+        'history',
+        'show',
+        childId,
+        '--cwd',
+        cwd,
+        '--output-format',
+        'json',
+      ],
+      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
+    );
+    assertSuccess(history, 'texra history show workflow-script child');
+    const { report } = parseJson(
+      history.stdout,
+      'workflow-script child history',
+    );
     assert(
-      reports.includes('<workflow-script-result'),
+      typeof report === 'string',
+      'workflow-script child history should contain its saved report',
+    );
+    assert(
+      report.includes('<workflow-script-result'),
       'workflow-script run should persist its terminal child report',
     );
     assert(
-      reports.includes('(±23,±22)') &&
-        reports.includes('det(I+A)=4') &&
-        reports.includes('1/4'),
+      report.includes('(±23,±22)') &&
+        report.includes('det(I+A)=4') &&
+        report.includes('1/4'),
       'workflow-script run should contain all structured mathematical results',
     );
   } finally {

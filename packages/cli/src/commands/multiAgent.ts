@@ -16,6 +16,7 @@ import {
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   cliMultiAgentPresetListRecord,
@@ -330,15 +331,16 @@ const multiAgentRunCommand = withUsageSections(
           'File whose contents are passed before --instruction when both are set',
       },
     },
-    run: (context, ctx) =>
-      effectRuntime().runPromise(
-        runMultiAgentPreset(context, {
-          preset: ctx.args.preset,
-          ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
-          agent: optString(ctx.args.agent),
-          model: optString(ctx.args.model),
-        }),
-      ),
+    run: async (context, ctx) => {
+      const init = {
+        preset: ctx.args.preset,
+        ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
+        agent: optString(ctx.args.agent),
+        model: optString(ctx.args.model),
+      };
+      await installCliProcessRuntime();
+      return effectRuntime().runPromise(runMultiAgentPreset(context, init));
+    },
   }),
   [
     {
