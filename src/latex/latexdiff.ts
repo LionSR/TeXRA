@@ -152,7 +152,7 @@ export class LaTeXdiffService {
   ): Promise<LaTeXdiffResult> {
     try {
       const inputFile = inputLocation.absolutePath;
-      if (!(await this.validateDocumentStructure(inputLocation))) {
+      if (!hasDocumentEnvironment(await AbsoluteFS.read(inputFile))) {
         const message =
           'File missing document environment (must contain \\begin{document} and \\end{document})';
         this.log.error(message);
@@ -246,12 +246,6 @@ export class LaTeXdiffService {
     } catch (err) {
       return this.logDiffError('Error in runDiffBetweenRounds', err);
     }
-  }
-
-  private async validateDocumentStructure(
-    file: FileLocation,
-  ): Promise<boolean> {
-    return hasDocumentEnvironment(await AbsoluteFS.read(file.absolutePath));
   }
 
   private async bothFilesExist(

@@ -249,7 +249,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       ),
     };
     return effectRuntime().runPromise(
-      this.run(context, input, context.session).pipe(
+      this.run(context, input).pipe(
         Effect.catchTag('ExecutionsReadFailed', (error) =>
           Effect.die(error.cause),
         ),
@@ -261,7 +261,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     this: ExecutionsTool,
     context: ExecutionToolContext,
     input: ExecutionsToolInput,
-    session: SessionHandle,
   ) {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
@@ -337,7 +336,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           executionId,
           input.offset,
           input.limit,
-          session,
         );
       }
       case 'todos':
@@ -849,12 +847,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     executionId: ExecutionId,
     offset: number,
     limit: number,
-    session: SessionHandle,
   ) {
     const store = context.inRunScope(() => getExecutionStore(executionId));
     const conversationResult = yield* readCompletedRunConversation(
       executionId,
-      session,
+      context.session,
     ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
     const { conversation, source, streamId } = conversationResult;
     const streamDiagnostics = [`Stream: ${streamId ?? 'none'}`];
