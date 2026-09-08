@@ -20,7 +20,7 @@ describe('seedDisabledToolDefaults', () => {
   it('seeds every toggleable tool as disabled on a genuinely fresh install', async () => {
     await installPlatform({ globalState: {} });
 
-    await seedDisabledToolDefaults(VERSION_KEY);
+    await seedDisabledToolDefaults(platform().globalState, VERSION_KEY);
 
     expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
       EXPECTED_DEFAULTS,
@@ -39,7 +39,7 @@ describe('seedDisabledToolDefaults', () => {
   ])('does not seed for $name', async ({ globalState }) => {
     await installPlatform({ globalState });
 
-    await seedDisabledToolDefaults(VERSION_KEY);
+    await seedDisabledToolDefaults(platform().globalState, VERSION_KEY);
 
     expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
       globalState[GlobalStateKey.DISABLED_TOOLS],
