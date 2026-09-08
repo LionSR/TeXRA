@@ -346,10 +346,32 @@ built deliberately.
    mechanism for ambiguous external effects is unavailable at exactly the
    boundary model and tool calls would sit on.
 2. `Activity`'s default `interruptRetryPolicy` re-runs an interrupted activity
-   **up to 10 times, then dies** (`Activity.js:62-66`). TeXRA cancels model
-   calls via `AbortController`. Wrapping `ModelInvocationNode` naively turns
-   one user cancel into up to ten further provider calls. Overridable per
-   activity, but the default is backwards for this codebase.
+   **up to 10 times, then dies** (`Activity.js:62-66`). Overridable per
+   activity, but the default is backwards for a codebase whose cancellation is
+   an `AbortController`.
+
+   The cost is a defect, not provider traffic. An earlier version of this note
+   claimed a naive `ModelInvocationNode` wrapper would turn one user cancel
+   into up to ten further provider calls; that is wrong, and the mechanism
+   that makes it wrong is worth recording. The signal is run-scoped, not
+   per-attempt — bound once as `this.signal = this.services.runScope.signal`
+   (`ModelInvocationNode.ts:386`) and aborted once by
+   `interrupt: () => runAbortController.abort()`
+   (`AgentLaunchContext.ts:632`) — and `runAttempts` throws before calling
+   `exec` whenever it is already aborted (`ModelInvocationNode.ts:407-410`),
+   with the aborted run routed to `execFallback` (`:441-450`). So each re-run
+   short-circuits and reaches no provider. The schedule also only re-fires
+   `while (meta.attempt <= 10 && Cause.hasInterrupts(meta.input))`
+   (`Activity.js:62`), so a re-run that completes through `execFallback` ends
+   the retry immediately.
+
+   What remains is the real hazard: when cancellation also interrupts the
+   enclosing fiber, each re-run is interrupted again, the policy walks its
+   full schedule (exponential from 400ms, floored against a 10-second
+   spacing), and the activity ends in
+   `Effect.die('Activity "…" interrupted and retry attempts exhausted')`
+   (`Activity.js:65`). A clean user cancel becomes a defect tens of seconds
+   later. **[reproduced]** — the claim as originally written was not.
 
 **Durability is not shipped.** `WorkflowEngine` has exactly one layer in
 `unstable/workflow` — `layerMemory`. The only durable implementation is
