@@ -308,10 +308,10 @@ export const databaseLayer = (
           AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         ORDER BY e."commit"`);
       const executionRecords = db.prepare(`
-        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?1),
+        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?),
         latest AS (
           SELECT aggregate_id, type, MAX(seq) AS seq FROM event
-          WHERE aggregate_id = ?1
+          WHERE aggregate_id = ?
             OR (aggregate_id = (SELECT id FROM own_stream) AND type IN ('run.start.1', 'status.1', 'stream.removed.1'))
           GROUP BY aggregate_id, type
         )
@@ -319,7 +319,7 @@ export const databaseLayer = (
         ORDER BY "commit"
       `);
       const executionChildren = db.prepare(`
-        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?1),
+        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?),
         parent AS (SELECT "commit" AS start FROM event WHERE aggregate_id = (SELECT id FROM own_stream) AND type = 'run.start.1'),
         children AS (SELECT aggregate_id AS id, data FROM event INDEXED BY event_parent_start
           WHERE type = 'run.start.1' AND json_extract(data, '$.parentStartCommit') = (SELECT start FROM parent)),
@@ -705,7 +705,7 @@ export const databaseLayer = (
             listing.all(JSON.stringify(LISTING_TYPES)).map(decodeEvent),
           ),
         readExecutionRecords: (id) =>
-          query(() => executionRecords.all(id).map(decodeEvent)),
+          query(() => executionRecords.all(id, id).map(decodeEvent)),
         readExecutionChildren: (id) =>
           query(() => executionChildren.all(id).map(decodeEvent)),
         readAggregate: (id, fromSeq) =>

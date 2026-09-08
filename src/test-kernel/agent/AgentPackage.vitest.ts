@@ -223,6 +223,7 @@ import { nodePlatform } from '../../../packages/agent/src/node';
 const LIFECYCLE = { onShutdown: vi.fn(), shutdownRan: false };
 const PLATFORM = {
   lifecycle: LIFECYCLE,
+  globalState: { get: () => undefined, update: async () => undefined },
   roots: { storage: '/storage' },
   processes: { selfIdentity: async () => 'test-start' },
 } as unknown as AgentPlatform;
@@ -323,7 +324,10 @@ describe('agent package run lifecycle', () => {
 
     expect(mocks.initPlatform).toHaveBeenCalledWith(PLATFORM);
     expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
-    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledWith(PLATFORM.lifecycle);
+    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledWith(
+      PLATFORM.lifecycle,
+      PLATFORM.globalState,
+    );
     expect(mocks.initNodeAgentRuntime).toHaveBeenCalledTimes(1);
   });
 

@@ -137,7 +137,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // entry's build waits.
     installProcessRuntime(platform.processes.selfIdentity());
     if (!active) {
-      initNodeAgentRuntime(platform.lifecycle);
+      initNodeAgentRuntime(platform.lifecycle, platform.globalState);
     }
     installedHere = true;
   }
