@@ -825,7 +825,7 @@ continuation and has no sub-agents yet). OpenCode does not use
 ## 3. Sequencing: the runtime is lane D of the cutover
 
 The 2026-09-08 owner amendment in the substrate proposal §8 permits a
-smaller, independently safe cleanup and audio-loading release before this
+smaller, independently safe cleanup and audio-loading release (#12124) before this
 runtime work. #12108's metadata replacement remains held until conversion
 preserves existing history and resume access. Lane D continues as a
 follow-up. This changes release sequencing, not its joint replacement

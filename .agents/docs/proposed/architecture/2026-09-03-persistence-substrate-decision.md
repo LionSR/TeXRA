@@ -1002,12 +1002,12 @@ intermediate release so other work can proceed. This supersedes the
 requirement that every stage land in the same merge or release. The smaller
 release is constructed from main and retains its existing metadata readers,
 writers and resume behavior while adding the independent cleanup and audio
-loading corrections. It requires synchronization, validation and review of
+loading corrections in #12124. It requires synchronization, validation and review of
 the actual combined head. It is not completion of the event-table-only
 objective.
 
 #12108 remains held: its event-only metadata readers cannot replace current
-file-backed configuration before faithful conversion preserves history and
+file-backed execution metadata before faithful conversion preserves history and
 resume access, including supported child-run events. The owner explicitly
 rejects temporary loss of that access. The metadata change remains a
 follow-up, not part of this intermediate release.
