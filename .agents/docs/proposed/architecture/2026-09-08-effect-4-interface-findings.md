@@ -150,13 +150,19 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 - **`readDirectory` returns `Array<string>`, not `[name, type]`.** The port
   reads each entry's type off the `withFileTypes` dirent for free; Effect's
   shape forces a `stat` per entry. This is load-bearing, not tuple
-  adaptation: `indentDirectory.ts:82`, `diffOperations.ts:244,266,284` and
-  `memoryFileSystem.ts:252` call `isSymlink(type)` to **reject** symlinks,
-  and `runGeneratedFiles.ts:93` branches on `isDirectory(type)`. Because
-  `stat` follows links (previous bullet), a symlink-to-file classifies as
-  `File` and those walkers would start silently following what they exist to
-  skip. So the cost is a correctness rewrite of each walker, on top of the
-  syscall cost.
+  adaptation. **Eight production walkers** branch on the type bits:
+  `indentDirectory.ts:82`, `diffOperations.ts:244,266,284`,
+  `memoryFileSystem.ts:252`, `runGeneratedFiles.ts:93`,
+  `desktopWorkspaceIpc.ts:261-270`, `workspaceFileListing.ts:37,44`,
+  `executionListing.ts:136`, and `runOutputFiles.ts:70-72,126`. Four of them —
+  `indentDirectory.ts`, `diffOperations.ts`, `memoryFileSystem.ts` and
+  `desktopWorkspaceIpc.ts` — call `isSymlink(type)` to **reject** symlinks; because `stat` follows links
+  (previous bullet), a symlink-to-file classifies as `File` and those walkers
+  would silently start following what they exist to skip. Two —
+  `runOutputFiles.ts:68` and `desktopWorkspaceIpc.ts:149` — additionally call
+  the port's `isSymlink()` directly, which has no Effect equivalent at all.
+  So the cost is a correctness rewrite of each walker, on top of the syscall
+  cost.
 - No `ctime` on `File.Info`.
 - `mtime` is `Option<Date>`. The natural `none → 0` default makes
   `cleanupOldFiles` delete files it should keep.
@@ -266,7 +272,7 @@ below.
    isolation. So it is not an unavoidable regression; it is work the
    replacement must do and that the current code gets for free.
 
-3. **Subscription readiness is synchronous today, and two consumers depend on
+3. **Subscription readiness is synchronous today, and four consumers depend on
    it.** `TraceEmitter.subscribe` is `return this.subscribers.add(subscriber)` —
    registration completes before it returns. `SessionHandle.attachRunTrace`
    (`:496-502`) returns that detach handle directly, and
@@ -275,8 +281,22 @@ below.
    returns a **scoped `Effect`**, so an adapter that acquires or forks the
    subscription after exposing the trace loses every event emitted in between —
    and for `attachRunTrace` that is the durable event plane, so those events are
-   missing from persistence, not merely from a view. A replacement must acquire
-   the subscription **before the run starts** and own its scope until disposal.
+   missing from persistence, not merely from a view.
+
+   Two channel sinks depend on the same guarantee and are easy to miss because
+   they are not on the durable plane. `createRunTrace` calls
+   `attachChannelSubscriber(trace, …)` (`runTrace.ts:37`) **before returning
+   the trace**, so no caller can emit before the sink exists; and
+   `ModelHandler`'s constructor attaches its default `'Agent'` channel
+   (`ModelHandler.ts:280`) immediately after constructing the emitter —
+   deliberately, since the comment above it records that this default is
+   exercised through `createThinkingStream`/`createOutputStream` before
+   `setLogger` swaps in the real per-run trace on some paths. An adapter that
+   exposed either trace before acquiring the scoped subscriber would lose the
+   opening agent logs.
+
+   A replacement must acquire every one of these subscriptions **before the
+   run starts** and own their scopes until disposal.
 
 4. **Disposal is synchronous today, and tail events depend on that too.**
    Acquiring early is necessary but not sufficient. `AgentRunLifecycle.ts:782`
@@ -428,10 +448,18 @@ header documents it as generic read/write for arbitrary keys, and
 `src/agent/node/persistedFlow.ts` already stores arbitrary `flow_<runId>`
 records there — not in the closed `SessionEventDraftSchema` vocabulary.
 
-**Open and load-bearing:** whether `Activity.CurrentAttempt` survives a process
-restart. The attempt-keyed memo argument rests on it; if numbering restarts at
-1 after a crash, memo rows collide. One durable row per attempt is also
-unbounded growth in the retry dimension.
+**Settled, and load-bearing: `Activity.CurrentAttempt` does not survive a
+process restart.** `Activity.js:75` is `let attempt = 1` inside an in-memory
+closure, incremented per retry by
+`Effect.provideService(effect, CurrentAttempt, attempt++)`. After a crash the
+numbering restarts at 1, so attempt-keyed memo rows **collide** — a resumed
+run's first attempt reads the pre-crash first attempt's row. A durable engine
+must therefore derive the attempt from persisted state rather than from
+`CurrentAttempt`, or key its memos on something restart-stable. One durable
+row per attempt is also unbounded growth in the retry dimension.
+
+An earlier revision left this open; it was answered on #12081 and the answer
+belongs here, since this note is meant to be the citable source.
 
 ## 5. `HttpClient` — two references worth knowing about
 
