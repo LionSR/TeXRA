@@ -158,11 +158,15 @@ export function detectStatusText(
   err: unknown,
   statusCode?: number,
 ): string | undefined {
-  const candidates = sdkErrorCandidates(err);
-  const explicit = candidates
-    .map((c) => pickStringField(c, 'statusText'))
-    .find((v) => v !== undefined);
-  if (explicit) return explicit;
+  // A flat `??` reduction, not `.find(v => v !== undefined)`: the original
+  // chain skips `null` at every step too, and a candidate's `statusText` can
+  // legitimately be `null` (e.g. `response.statusText: null` while
+  // `error.statusText` holds the real value).
+  const explicit = sdkErrorCandidates(err).reduce<unknown>(
+    (acc, c) => acc ?? c.statusText,
+    undefined,
+  );
+  if (isString(explicit) && explicit) return explicit;
   return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
 }
 

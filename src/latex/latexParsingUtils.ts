@@ -1,9 +1,7 @@
 /**
- * Shared LaTeX content parsing utilities.
- *
- * Common patterns used by both extractBibliography.ts and
- * extractFileDependencies.ts for comment stripping and
- * bibliography directive matching.
+ * Shared LaTeX content parsing utilities: comment stripping, citation and
+ * bibliography directive matching, and the path resolution the LaTeX
+ * dependency extractors share.
  */
 
 import * as path from 'node:path';

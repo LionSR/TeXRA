@@ -34,6 +34,7 @@ import {
   isPreviousResponseIdError,
   isUserAbort,
 } from '@common/errors/sdkError/errorPatterns';
+import { detectStatusText } from '@common/errors/sdkError/errorInspection';
 import {
   buildErrorLogData,
   formatProviderHttpError,
@@ -88,6 +89,27 @@ function providerAttributedError(body: unknown): Error {
   error.provider = 'openai';
   return error;
 }
+
+describe('detectStatusText', () => {
+  it('applies the nullish-then-truthy check per candidate, not a blank-skipping scan', () => {
+    // A blank direct statusText is non-nullish, so it wins the ?? chain and
+    // then fails the truthy check — falling back to the reason phrase rather
+    // than reading the nested carrier's statusText.
+    expect(
+      detectStatusText(
+        { statusText: '', response: { statusText: 'Teapot Override' } },
+        418,
+      ),
+    ).toBe("I'm a teapot");
+    // A whitespace-only direct statusText is truthy, so it wins outright.
+    expect(
+      detectStatusText({
+        statusText: ' ',
+        response: { statusText: 'Not Found' },
+      }),
+    ).toBe(' ');
+  });
+});
 
 describe('formatProviderHttpError', () => {
   it('matches generic SDK API errors through the prototype chain', () => {
