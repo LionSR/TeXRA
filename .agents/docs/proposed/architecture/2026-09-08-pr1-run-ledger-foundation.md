@@ -1585,7 +1585,12 @@ also the only one that lets `flow.snapshot` freeze.
 
 Every path:line below was opened on 2026-09-08 before it was written down.
 
-Repo (`main` at the worktree's base): `ReflectionFlowStateSchema` at
+Repo line references use the `main` snapshot
+[`77b8866c467cf939e5a84d94cd7682da262393b4`](https://github.com/LionSR/TeXRA/tree/77b8866c467cf939e5a84d94cd7682da262393b4).
+Cutover changes can move these line numbers; the named symbols identify the
+corresponding current code.
+
+`ReflectionFlowStateSchema` at
 `ReflectionFlowState.ts:39-65`, with `workspaceSnapshot` :43, `context` :44,
 `outputLocation` :45, `runStateSnapshot` :47, `roundOutputs` :49,
 `continueRounds`/`endTurn` :51-52, `lastError` :55,
