@@ -18,6 +18,19 @@ Claims marked **[reproduced]** were independently re-derived by a second agent
 or by hand after the run. Unmarked claims come from a single pass and should be
 re-checked before anything depends on them.
 
+**How to read every count in this note.** Each one is a **count of direct
+references** — files that name a symbol, call a function, or import a module —
+and **never includes transitive callers, factory chains, or the boundaries a
+change propagates to**. That is stated once here because it has been the single
+most repeated defect in this document: three separate corrections
+(call sites omitting the file being replaced, seam files omitting factory
+callers, leaf mentions omitting the host boundaries above them) were each fixed
+as an instance rather than as a habit. Where a fan-out has actually been
+followed, the note says so and names the files. **Everywhere else, treat a
+number as a floor whose distance from the truth is unknown**, and note that
+R-1 is the only place this was measured end to end: one converted leaf touched
+17 files.
+
 ## 1. Corrections to open issues
 
 These are the load-bearing ones. Each was asserted somewhere and is wrong.
