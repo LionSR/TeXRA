@@ -45,10 +45,10 @@ function discoveryWith(entries: readonly LatexAgentRunEntry[]): {
   discovery: LatexExecutionDiscoveryPort;
   readStreamId: ReturnType<typeof vi.fn>;
 } {
-  const readStreamId = vi.fn(async () => undefined);
+  const readStreamId = vi.fn(() => Effect.succeed(undefined));
   return {
     discovery: {
-      listAgentRuns: async () => entries,
+      listAgentRuns: () => Effect.succeed(entries),
       readStreamId,
     },
     readStreamId,
@@ -111,7 +111,9 @@ describe('discoverLatestExecutionOutputs', () => {
       matchingExecution('exec-registered'),
     ]);
     // Registered under a stream the agent/model config would NOT derive.
-    readStreamId.mockResolvedValue('polish@earlierModel#exec-registered');
+    readStreamId.mockReturnValue(
+      Effect.succeed('polish@earlierModel#exec-registered'),
+    );
     const rounds = { 0: [] };
     mocks.read.mockReturnValue(Effect.succeed({ outputFilesByRound: rounds }));
 
@@ -195,10 +197,8 @@ describe('outputDiscovery logger seam', () => {
 
   it('propagates an unreadable execution index instead of choosing different outputs', async () => {
     const discovery: LatexExecutionDiscoveryPort = {
-      listAgentRuns: async () => {
-        throw new Error('execution index unreadable');
-      },
-      readStreamId: async () => undefined,
+      listAgentRuns: () => Effect.fail(new Error('execution index unreadable')),
+      readStreamId: () => Effect.succeed(undefined),
     };
     await expect(
       Effect.runPromise(

@@ -5,7 +5,7 @@
  * and reading per-execution KV data (meta.json, config.json).
  */
 
-import pMap from 'p-map';
+import { Effect } from 'effect';
 
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -27,7 +27,7 @@ import type {
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { getExecutionStore } from './ExecutionKVStore';
@@ -115,16 +115,22 @@ export function isUserVisibleExecution(
 }
 
 /**
- * Read a storage directory, returning an empty array if it doesn't exist.
- * Other I/O errors propagate.
+ * Read a storage directory, succeeding with an empty array if it doesn't
+ * exist. Other I/O errors stay on the error channel.
  */
-async function readDirOrEmpty(path: string): Promise<[string, number][]> {
-  try {
-    return await StorageFS.readDir(path);
-  } catch (error) {
-    if (isFileNotFoundError(error)) return [];
-    throw error;
-  }
+function readDirOrEmpty(
+  path: string,
+): Effect.Effect<[string, number][], Error> {
+  return Effect.tryPromise({
+    try: () => StorageFS.readDir(path),
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((error) =>
+      isFileNotFoundError(error)
+        ? Effect.succeed<[string, number][]>([])
+        : Effect.fail(error),
+    ),
+  );
 }
 
 /**
@@ -143,33 +149,42 @@ function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
 // ============================================================================
 
 /**
- * List all executions by scanning the executions/ directory.
- *
- * The storage root is shared by independent CLI, desktop, and extension
- * processes, so every call scans current disk state. A process-local cache
- * cannot observe another host's writes or metadata updates reliably.
+ * Read one execution's row. A row whose read fails warns and drops out of the
+ * listing rather than failing the whole scan.
  */
-export async function listExecutions(): Promise<ExecutionListingEntry[]> {
-  const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
-  const executionDirs = listExecutionDirs(entries);
-
-  // Read meta + config, and stat the checkpoint, with bounded concurrency.
-  // Large histories should not enqueue one storage read burst per execution
-  // all at once.
-  const results = await pMap(
-    executionDirs,
-    async (id): Promise<ExecutionListingEntry | null> => {
-      try {
-        const store = getExecutionStore(id);
-        // The checkpoint probe answers "no" and warns when the `stat` itself
-        // fails: a row whose meta and record are readable still belongs in
-        // history, and the open path re-reads the file anyway.
-        const [meta, record, checkpointPresent] = await Promise.all([
-          store.readMeta(),
-          store.readRunRecord(),
-          checkpointExists(id),
-        ]);
-
+function readListingRow(
+  id: ExecutionId,
+): Effect.Effect<ExecutionListingEntry | null> {
+  return Effect.try({
+    // Store construction resolves the run's storage path, so it belongs
+    // inside the per-row recovery below like every other read.
+    try: () => getExecutionStore(id),
+    catch: ensureError,
+  }).pipe(
+    Effect.flatMap((store) =>
+      // The checkpoint probe answers "no" and warns when the `stat` itself
+      // fails: a row whose meta and record are readable still belongs in
+      // history, and the open path re-reads the file anyway.
+      Effect.all(
+        [
+          Effect.tryPromise({
+            try: () => store.readMeta(),
+            catch: ensureError,
+          }),
+          Effect.tryPromise({
+            try: () => store.readRunRecord(),
+            catch: ensureError,
+          }),
+          Effect.tryPromise({
+            try: () => checkpointExists(id),
+            catch: ensureError,
+          }),
+        ],
+        { concurrency: 'unbounded' },
+      ),
+    ),
+    Effect.map(
+      ([meta, record, checkpointPresent]): ExecutionListingEntry | null => {
         if (!meta) return null;
 
         const base: ExecutionListingBase = {
@@ -193,17 +208,43 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           return { ...base, kind: 'run', identity, record: agentRecord };
         }
         return { ...base, kind: 'run', identity, record };
-      } catch (error) {
+      },
+    ),
+    Effect.catch((error) =>
+      Effect.sync(() => {
         log.warn(`Skipping corrupt execution ${id}: ${toErrorMessage(error)}`);
         return null;
-      }
-    },
-    { concurrency: EXECUTION_STORAGE_CONCURRENCY },
+      }),
+    ),
   );
+}
 
-  return toNewestFirstByTimestamp(
-    results.filter(filterNotNull),
-    (item) => item.timestamp,
+/**
+ * List all executions by scanning the executions/ directory.
+ *
+ * The storage root is shared by independent CLI, desktop, and extension
+ * processes, so every call scans current disk state. A process-local cache
+ * cannot observe another host's writes or metadata updates reliably.
+ */
+export function listExecutions(): Effect.Effect<
+  ExecutionListingEntry[],
+  Error
+> {
+  // Read meta + config, and stat the checkpoint, with bounded concurrency.
+  // Large histories should not enqueue one storage read burst per execution
+  // all at once.
+  return readDirOrEmpty(RUNS_STORAGE_DIR).pipe(
+    Effect.flatMap((entries) =>
+      Effect.forEach(listExecutionDirs(entries), readListingRow, {
+        concurrency: EXECUTION_STORAGE_CONCURRENCY,
+      }),
+    ),
+    Effect.map((results) =>
+      toNewestFirstByTimestamp(
+        results.filter(filterNotNull),
+        (item) => item.timestamp,
+      ),
+    ),
   );
 }
 
@@ -213,18 +254,23 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
  */
 export function createLatexExecutionDiscovery(): LatexExecutionDiscoveryPort {
   return {
-    async listAgentRuns(): Promise<readonly LatexAgentRunEntry[]> {
-      const executions = await listExecutions();
-      return executions.filter(isAgentRunEntry).map((entry) => ({
-        id: entry.id,
-        timestamp: entry.timestamp,
-        agent: entry.record.agent,
-        model: entry.record.model,
-        inputFiles: entry.record.inputFiles,
-      }));
-    },
-    async readStreamId(executionId) {
-      return (await getExecutionStore(executionId).readMeta())?.streamId;
-    },
+    listAgentRuns: () =>
+      listExecutions().pipe(
+        Effect.map((executions) =>
+          executions.filter(isAgentRunEntry).map((entry) => ({
+            id: entry.id,
+            timestamp: entry.timestamp,
+            agent: entry.record.agent,
+            model: entry.record.model,
+            inputFiles: entry.record.inputFiles,
+          })),
+        ),
+      ),
+    readStreamId: (executionId) =>
+      Effect.tryPromise({
+        try: async () =>
+          (await getExecutionStore(executionId).readMeta())?.streamId,
+        catch: ensureError,
+      }),
   };
 }

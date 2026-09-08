@@ -41,10 +41,7 @@ export const discoverLatestExecutionOutputs = Effect.fn(
   } | null,
   Error
 > {
-  const executions = yield* Effect.tryPromise({
-    try: () => discovery.listAgentRuns(),
-    catch: ensureError,
-  });
+  const executions = yield* discovery.listAgentRuns();
   // Normalize both sides so trivial path-format differences (duplicate
   // separators, `./`, mixed forward/backslash) don't silently miss a
   // matching execution.
@@ -68,10 +65,7 @@ export const discoverLatestExecutionOutputs = Effect.fn(
     // The stream stamped on execution metadata addresses its snapshot
     // directly; identity is never rebuilt from agent/model configuration.
     // Records without one go straight to the run-directory scan below.
-    const streamId = yield* Effect.tryPromise({
-      try: () => discovery.readStreamId(candidate.id),
-      catch: ensureError,
-    });
+    const streamId = yield* discovery.readStreamId(candidate.id);
     if (streamId !== undefined) {
       const { outputFilesByRound: rounds } = yield* snapshots.read(streamId);
       if (Object.keys(rounds).length > 0) {
