@@ -213,7 +213,8 @@ The full set of `glob`-package importers outside the test kernel is
 glob discovery with `WorkspaceFS` operations, so a memfs-backed port does not
 control their inputs today.
 
-**This hole is closable, and an earlier revision wrongly said it was not.**
+**Five of the eight are closable without R-1, and an earlier revision wrongly
+said none were.**
 The pinned `glob@13.0.6` takes an `fs?: FSOption` — "an fs implementation to
 override some or all of the defaults" (`glob.d.ts:231-234`) — while keeping
 the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` behaviour these callers
@@ -406,7 +407,9 @@ consumer, that suite protects implementation-only machinery, not a durable or
 user-visible contract — so losing the seam is a consequence of the deletion,
 not an argument against it.
 
-**The accumulator drain is the only real objection**, and it stands on its own.
+**The accumulator drain is the only objection to removing the _listener_**,
+and it stands on its own. A second and independent constraint applies to the
+machinery beneath it:
 
 **The delta machinery is not dead weight, and that question is now settled.**
 An earlier revision left open whether the accumulators and delta computation
