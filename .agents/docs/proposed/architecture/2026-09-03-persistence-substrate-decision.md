@@ -813,7 +813,8 @@ the owner has not yet ratified.
 ### 6.2 Stages
 
 Stages are lanes on one branch. The 2026-09-08 owner ruling in §8 permits
-#12108 to merge as an intermediate step; the remaining stages follow separately.
+independently safe changes to merge as an intermediate step; the remaining
+stages follow separately.
 
 | Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Deletes in the same release                                                                                                                                                              | Companion step |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
@@ -994,13 +995,22 @@ recorded there and in §10.
 
 ## 8. Process: one cutover, no dual system
 
-### Owner amendment, 2026-09-08: intermediate merge of #12108
+### Owner amendment, 2026-09-08: safe intermediate release
 
-The owner authorizes #12108 to merge into main as an intermediate change so
-other work can proceed. This supersedes the requirement that every stage
-land in the same merge or release. The completed metadata and cleanup work
-may land after synchronization, validation and review of the actual combined
-head. It is not completion of the event-table-only objective.
+The owner authorizes independently safe changes to merge into main as an
+intermediate release so other work can proceed. This supersedes the
+requirement that every stage land in the same merge or release. The smaller
+release is constructed from main and retains its existing metadata readers,
+writers and resume behavior while adding the independent cleanup and audio
+loading corrections. It requires synchronization, validation and review of
+the actual combined head. It is not completion of the event-table-only
+objective.
+
+#12108 remains held: its event-only metadata readers cannot replace current
+file-backed configuration before faithful conversion preserves history and
+resume access, including supported child-run events. The owner explicitly
+rejects temporary loss of that access. The metadata change remains a
+follow-up, not part of this intermediate release.
 
 Official Effect SQL adoption (#12102), the coordinated runtime and checkpoint
 replacement (#11869), and the remaining historical-data work (#11867) continue
