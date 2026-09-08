@@ -228,11 +228,12 @@ does not control their inputs. The hole is closable for testing by handing
 **candidate A can serve the five async importers directly; candidate B can
 serve them only through an adapter** that costs one extra syscall per entry
 (below). Only the three `globSync` callers are closed to both. This paragraph
-has been wrong five times in five directions: two importers, then unclosable,
+has been wrong six times in six directions: two importers, then unclosable,
 then independent of R-1, then requiring synchronous methods, then B excluded on
-a correctness objection this note's own §2 disproves — and its summary twice
-survived a correction to its body. Treat its claims as the least reliable in
-this note.
+a correctness objection this note's own §2 disproves, then a lead still calling
+the adapter route impossible while the bullets beneath it priced that very
+route — and its summary twice survived a correction to its body. Treat its
+claims as the least reliable in this note.
 The full set of `glob`-package importers outside the test kernel is
 `src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts`,
 `src/tools/approval/latexPreview.ts`, `src/latex/formatter/latexindentpt.ts`,
