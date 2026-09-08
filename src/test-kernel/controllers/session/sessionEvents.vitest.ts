@@ -14,17 +14,17 @@
 import '@test/support/sessionGraphTestSetup';
 
 // Node imports
-import * as childProcess from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import * as os from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -33,6 +33,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { it } from '@effect/vitest';
 import {
   Clock,
+  Exit,
+  Scope,
   Deferred,
   Effect,
   Fiber,
@@ -44,6 +46,12 @@ import { TestClock } from 'effect/testing';
 import { afterAll, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
+import {
+  closeRoot,
+  openDatabase,
+  openRoot,
+  removeExecutionDirectories,
+} from '@agent/storage/nativeSessionStorage.mjs';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
   forEachLiveSession,
@@ -51,6 +59,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { closeSession, openSession } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import * as SqlDriver from '@controllers/session/SqliteClient';
 import { databaseLayer } from '@controllers/session/Database';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { sessionRequests } from '@controllers/session/SessionRequests';
@@ -80,15 +89,6 @@ import type { SessionView } from '@shared/session/sessionView';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
-
-vi.mock('node:os', async (importOriginal) => ({
-  ...(await importOriginal<typeof os>()),
-  platform: vi.fn(() => process.platform),
-}));
-vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof childProcess>();
-  return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
-});
 
 const SELF = '["test-host",4242,"self-start"]';
 const OTHER = '["test-host",4343,"other-start"]';
@@ -887,29 +887,80 @@ describe('the C1 event table and the C6 publisher', () => {
     return db;
   };
 
-  it.effect('rejects a remote mount before creating the database', () => {
-    const storage = workspace();
-    const resolved = realpathSync.native(storage);
-    const system = vi.mocked(os.platform).mockReturnValue('darwin');
-    const mount = vi
-      .mocked(childProcess.execFileSync)
-      .mockReturnValue(`server:/paper on ${resolved} (nfs, nodev)\n`);
-    return Effect.gen(function* () {
-      const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage))),
+  it.effect('wakes readers when cancellation arrives during commit', () =>
+    Effect.gen(function* () {
+      let writer: Fiber.Fiber<unknown, unknown> | undefined;
+      const original = SqlDriver.makeSqliteClient;
+      const construct = vi
+        .spyOn(SqlDriver, 'makeSqliteClient')
+        .mockImplementation((native, onWriteCommitted) =>
+          original(
+            {
+              ...native,
+              execute: (statement, bindings, options) => {
+                const result = native.execute(statement, bindings, options);
+                if (statement === 'COMMIT') writer?.interruptUnsafe();
+                return result;
+              },
+            },
+            onWriteCommitted,
+          ),
+        );
+      yield* Effect.gen(function* () {
+        const database = yield* Database;
+        const append = yield* Effect.forkChild(
+          Effect.withFiber((fiber) => {
+            writer = fiber;
+            return database.appendAll([olderStart]);
+          }),
+        );
+        const exit = yield* Fiber.await(append);
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(yield* SubscriptionRef.get(database.level)).toBe(1);
+        expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(1);
+        expect(yield* database.readAll(0)).toHaveLength(1);
+      }).pipe(
+        Effect.provide(substrate(workspace())),
+        Effect.ensuring(Effect.sync(() => construct.mockRestore())),
       );
-      expect(failure._tag).toBe('DatabaseOpenFailed');
-      expect(String(failure.cause)).toContain('verified local filesystem');
-      expect(existsSync(join(storage, 'texra.db'))).toBe(false);
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          mount.mockRestore();
-          system.mockRestore();
-        }),
-      ),
-    );
-  });
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect('cancels a queued database append before it starts', () =>
+    Effect.gen(function* () {
+      const captured =
+        yield* Deferred.make<
+          Effect.Success<ReturnType<typeof SqlDriver.makeSqliteClient>>
+        >();
+      const original = SqlDriver.makeSqliteClient;
+      const construct = vi
+        .spyOn(SqlDriver, 'makeSqliteClient')
+        .mockImplementation((...args) =>
+          original(...args).pipe(
+            Effect.tap((client) => Deferred.succeed(captured, client)),
+          ),
+        );
+      yield* Effect.gen(function* () {
+        const database = yield* Database;
+        const sql = yield* Deferred.await(captured);
+        const held = yield* Scope.make();
+        yield* Scope.provide(sql.reserve, held);
+        const waiting = yield* Effect.forkChild(
+          database.appendAll([olderStart]),
+        );
+        yield* Effect.yieldNow;
+        waiting.interruptUnsafe();
+        yield* Effect.yieldNow;
+        yield* Scope.close(held, Exit.succeed(undefined));
+        yield* Fiber.await(waiting);
+        const rows = yield* database.readAll(0);
+        expect(rows).toEqual([]);
+      }).pipe(
+        Effect.provide(substrate(workspace())),
+        Effect.ensuring(Effect.sync(() => construct.mockRestore())),
+      );
+    }).pipe(Effect.scoped),
+  );
 
   it.effect(
     'assigns a dense seq per aggregate and one commit order across them',
@@ -1609,7 +1660,7 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* first.appendAll([
           { type: 'stream.removed', aggregateId: unrelated.aggregateId },
         ]);
-        yield* collectPendingDeletions(first, storage);
+        yield* collectPendingDeletions(first);
         expect(existsSync(join(outside, 'keep.tex'))).toBe(true);
         expect(
           yield* first.aggregateState([unrelated.aggregateId]),
@@ -1629,7 +1680,7 @@ describe('the C1 event table and the C6 publisher', () => {
           writeFileSync(accepted, 'accepted workspace output');
           symlinkSync(accepted, join(generated, 'reference.tex'));
         });
-        yield* collectPendingDeletions(first, storage);
+        yield* collectPendingDeletions(first);
         expect(existsSync(generated)).toBe(false);
         expect(existsSync(sibling)).toBe(true);
         expect(existsSync(accepted)).toBe(true);
@@ -1637,6 +1688,176 @@ describe('the C1 event table and the C6 publisher', () => {
           [],
         );
       }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps replaced storage and queued cleanup confined to the owned directory',
+    async () => {
+      const directory = workspace();
+      const admitted = join(directory, 'admitted');
+      const moved = join(directory, 'moved');
+      const outside = join(directory, 'outside');
+      const generated = join(
+        admitted,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      const replacement = join(
+        outside,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      mkdirSync(generated, { recursive: true });
+      mkdirSync(replacement, { recursive: true });
+      writeFileSync(join(generated, 'output.tex'), 'generated');
+      writeFileSync(join(replacement, 'keep.tex'), 'outside contents');
+      symlinkSync(outside, join(generated, 'reference'));
+      const root = openRoot(realpathSync.native(admitted));
+      renameSync(admitted, moved);
+      symlinkSync(outside, admitted);
+      // SQLite admission and generated cleanup use the same held root even
+      // when its old name changes before the database connection is opened.
+      const connection = openDatabase(root, 'confined.sqlite');
+      try {
+        connection.exec('PRAGMA journal_mode=WAL; CREATE TABLE proof(n);');
+        expect(existsSync(join(moved, 'confined.sqlite'))).toBe(true);
+        expect(existsSync(join(outside, 'confined.sqlite'))).toBe(false);
+      } finally {
+        connection.close();
+      }
+      await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
+        EXECUTION,
+      ]);
+      // A crash after physical removal must permit the same tombstone to retry.
+      await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
+        EXECUTION,
+      ]);
+      expect(
+        existsSync(join(moved, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION)),
+      ).toBe(false);
+      expect(readFileSync(join(replacement, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
+
+      const next = join(moved, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION);
+      mkdirSync(next);
+      writeFileSync(join(next, 'output.tex'), 'generated again');
+      const pending = removeExecutionDirectories(
+        root,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      // The native worker has duplicated the capability before it is queued.
+      // Releasing the caller cannot close or reuse that worker's descriptor.
+      closeRoot(root);
+      await pending;
+      expect(existsSync(next)).toBe(false);
+      expect(readFileSync(join(replacement, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
+    },
+  );
+
+  it.skipIf(
+    process.platform !== 'win32' || !process.env.TEXRA_NATIVE_CLEANUP_UNC_ROOT,
+  )(
+    'confines ephemeral generated cleanup beneath an admitted UNC share',
+    async () => {
+      const directory = mkdtempSync(
+        join(
+          String(process.env.TEXRA_NATIVE_CLEANUP_UNC_ROOT),
+          'texra-cleanup-',
+        ),
+      );
+      roots.push(directory);
+      const generated = join(
+        directory,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      mkdirSync(generated, { recursive: true });
+      writeFileSync(join(generated, 'output.tex'), 'generated');
+      writeFileSync(join(directory, 'keep.tex'), 'retained sibling');
+      const root = openRoot(directory);
+      await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
+        EXECUTION,
+      ]).finally(() => closeRoot(root));
+      expect(existsSync(generated)).toBe(false);
+      expect(readFileSync(join(directory, 'keep.tex'), 'utf8')).toBe(
+        'retained sibling',
+      );
+    },
+  );
+
+  it.skipIf(process.platform !== 'win32')(
+    'keeps Windows junction deletion and renamed storage confined to held handles',
+    async () => {
+      const directory = workspace();
+      const admitted = join(directory, 'admitted');
+      const moved = join(directory, 'moved');
+      const outside = join(directory, 'outside');
+      const runs = join(admitted, WORKSPACE_STORAGE_LAYOUT.runs);
+      mkdirSync(runs, { recursive: true });
+      mkdirSync(outside);
+      writeFileSync(join(outside, 'keep.tex'), 'outside contents');
+      const root = openRoot(admitted);
+      await (async () => {
+        // A generated leaf junction is removed through its own handle.
+        symlinkSync(outside, join(runs, EXECUTION), 'junction');
+        await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
+          EXECUTION,
+        ]);
+        expect(existsSync(join(runs, EXECUTION))).toBe(false);
+        expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
+          'outside contents',
+        );
+
+        // Replacing the generated root with a junction never grants access to
+        // its target, even though the admitted storage handle remains valid.
+        rmSync(runs, { recursive: true });
+        symlinkSync(outside, runs, 'junction');
+        await expect(
+          removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
+            EXECUTION,
+          ]),
+        ).rejects.toMatchObject({ code: 'ELOOP' });
+        expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
+          'outside contents',
+        );
+        rmSync(runs, { recursive: true });
+
+        mkdirSync(join(runs, EXECUTION, 'nested'), { recursive: true });
+        writeFileSync(
+          join(runs, EXECUTION, 'nested', 'generated.tex'),
+          'original',
+        );
+        renameSync(admitted, moved);
+        const replacement = join(
+          admitted,
+          WORKSPACE_STORAGE_LAYOUT.runs,
+          EXECUTION,
+        );
+        mkdirSync(replacement, { recursive: true });
+        writeFileSync(join(replacement, 'keep.tex'), 'replacement contents');
+        const connection = openDatabase(root, 'confined.sqlite');
+        try {
+          connection.exec('PRAGMA journal_mode=WAL; CREATE TABLE proof(n);');
+          expect(existsSync(join(moved, 'confined.sqlite'))).toBe(true);
+          expect(existsSync(join(admitted, 'confined.sqlite'))).toBe(false);
+        } finally {
+          connection.close();
+        }
+        await removeExecutionDirectories(root, WORKSPACE_STORAGE_LAYOUT.runs, [
+          EXECUTION,
+        ]);
+        expect(
+          existsSync(join(moved, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION)),
+        ).toBe(false);
+        expect(readFileSync(join(replacement, 'keep.tex'), 'utf8')).toBe(
+          'replacement contents',
+        );
+      })().finally(() => closeRoot(root));
     },
   );
 

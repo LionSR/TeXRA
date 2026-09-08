@@ -459,7 +459,7 @@ const sessionHandleLayer = (
         Effect.forkScoped,
       );
       // The session owns retries and waits for in-flight removal on close.
-      yield* collectPendingDeletions(eventLog, key.storage).pipe(
+      yield* collectPendingDeletions(eventLog).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
             log.warn(

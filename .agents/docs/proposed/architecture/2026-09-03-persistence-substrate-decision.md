@@ -757,6 +757,18 @@ copied or accepted workspace outputs outside that directory are untouched.
 Deletion paths are confined to the recorded execution directories and never
 follow links outside them.
 
+The database and generated-file cleanup must be admitted under the same
+storage-directory identity, including SQLite's WAL and shared-memory files.
+Resolving one pathname and then opening SQLite and a cleanup directory handle
+separately does not establish this: replacing the directory between the two
+opens leaves SQLite on the original directory while cleanup removes files in
+the replacement. The September 7 native-addon probe reproduced that sequence.
+A held cleanup handle protects later traversal but does not repair mismatched
+initial admission. The native storage connection binds SQLite and cleanup to
+one held directory through an explicit private SQLite VFS. It obtains the
+host engine through SQLite's public extension API, without a second engine.
+Another pathname check or merely reversing the open order is insufficient.
+
 Closed sequence rows, dependent events, and the tombstone remain until that
 filesystem cleanup succeeds. The worker holds the existing C5 claim on the
 closed root while cleaning and verifies the same tombstone before finalizing;
@@ -840,6 +852,18 @@ Rules restated because they are the parts migrations get wrong:
   `StreamLog` delta contract stay fixed. Collapsing the two-step fold (events
   to entries to rows) into one is the view-state PRD's step after the merge.
 
+The normal file-lease deletion in Stage 6 remains coupled to Stage 5 in lane D.
+`ExecutionKVStore` still checks ownership before every physical checkpoint,
+turn-state, and attempt mutation. Host-exit settlement may release ownership
+before a late driver reaches its next write, so checking only at flow admission
+would remove an existing protection. Carrying native checks through the retained
+Promise `PersistedFlow` and its callers would create an intermediate interpreter
+that the runtime proposal §3 explicitly deletes. The replacement engine must
+therefore carry those checks and the file-lease deletion together. Independent
+Stage 6 work does not imply completion of C5. Import-required lease validation
+still remains until Stage 7; this dependency makes no decision about D4 or the
+meaning of existing checkpoints.
+
 ### 6.3 Elimination ledger
 
 The owner's standing rule is cut before add. Sizes are `wc -l` at
@@ -908,34 +932,77 @@ on the same major (`4.0.0-beta.83`) and shows a shape worth copying exactly:
   `Schema.TaggedErrorClass`; named spans via `Effect.fn`. This is exactly the
   code that the cutover would otherwise hand-roll as promise plumbing and
   `p-queue` mutexes.
-- **Directly reusable:** `packages/effect-sqlite-node` (MIT) is an Effect
-  `SqlClient` over `node:sqlite` selected by a `#sqlite` import condition; the
-  vendored Drizzle adapter is about 3.4k lines. Copy, do not depend: OpenCode
-  publishes neither.
+- **Prior client candidate:** `packages/effect-sqlite-node` (MIT) is an Effect
+  `SqlClient` over `node:sqlite` selected by a `#sqlite` import condition;
+  OpenCode publishes neither it nor the vendored Drizzle adapter. The owner
+  subsequently selected Effect's database support, as recorded below; this
+  comparison does not authorize copying or forking a client.
 
 ### Client selection at the approved host floor
 
-The September 6 comparison requested by the
-[delivery plan](2026-09-06-effect-runtime-delivery-plan.md#2-technology-choices-that-can-endure)
-retains the existing `Database` layer. The pinned official
-[`@effect/sql-sqlite-node` client](https://github.com/Effect-TS/effect/blob/effect%404.0.0-rc.112/packages/sql/sqlite-node/src/SqliteClient.ts#L32)
-statically imports `backup` from `node:sqlite`, and its ordinary statement path
-calls `StatementSync.columns()`. Both APIs were added in Node 22.16, after the
-approved 22.13.0 CLI floor. See the versioned Node histories for
-[`backup`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#sqlitebackupsourcedb-destination-options)
-and [`columns`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#statementcolumns).
-Thus the unmodified client cannot serve every supported host. This is a source
-compatibility finding, not a throughput measurement of that client.
+The [September 7 selection](https://github.com/LionSR/TeXRA/issues/11867#issuecomment-5575656772)
+is Effect SQL in place of the custom SQL client and transaction implementation.
+This supersedes the September 6
+[delivery-plan comparison](2026-09-06-effect-runtime-delivery-plan.md#2-technology-choices-that-can-endure)
+that retained the existing client. The domain `Database` service still owns
+C1 to C10; changing its SQL client does not change those contracts. The
+approved Node 22.13.0 floor and Zod payload schemas remain fixed. No vendored
+fork, compatibility shim, or parallel SQL authority is selected. A TeXRA
+connection driver may supply the required native host operations beneath
+Effect SQL; it does not replace Effect SQL's transaction ownership.
 
-Its serialized connection and `BEGIN IMMEDIATE` fit the transaction model,
-but do not remove TeXRA's responsibility for C1 schema, C5 claims, C6 validation
-and redaction, C7 queries, or foreign-process wake detection. It also uses
-synchronous SQLite busy waits, so adopting it would not itself remove event-loop
-blocking. The current layer retains the measured API subset and the existing
-stage 0 contention evidence. No second SQL layer, compatibility shim, vendored
-fork, or further host-floor increase is selected. Scheduling improvements remain
-subject to measurement and C1's nonzero busy-timeout rule; no provider or tool
-work may be retried as a database transaction.
+The implementation must account for two library constraints:
+
+- **Supported host APIs.** The pinned
+  [`@effect/sql-sqlite-node` client](https://github.com/Effect-TS/effect/blob/effect%404.0.0-rc.112/packages/sql/sqlite-node/src/SqliteClient.ts#L32)
+  statically imports `backup` and calls `StatementSync.columns()` on its
+  ordinary statement path. Both APIs were added in Node 22.16, after the
+  approved floor; see the versioned Node histories for
+  [`backup`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#sqlitebackupsourcedb-destination-options)
+  and [`columns`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#statementcolumns).
+  The unmodified client therefore cannot serve every supported host. This
+  finding does not authorize raising the floor or patching the client locally.
+  The native storage driver supplies Effect SQL's connection operations using
+  the approved host engine, without requiring these newer Node APIs.
+- **Failed commit settlement.** The tested Effect SQL transaction owner in
+  `effect@4.0.0-rc.112` and upstream commit
+  `6d00dcca649b6ed717458ad54c25e8b1aa142f7e` does not roll back a failed
+  `COMMIT`. A real Node 22.13.0 deferred-foreign-key violation leaves the
+  uncommitted row visible and the next transaction unable to begin. The
+  upstream correction and existing-suite regression pass locally, but no
+  released correction has been verified. C1 and C6 require the failed
+  transaction to settle before connection reuse; a local fork or an outer
+  retry is not an accepted substitute.
+
+The failed-COMMIT correction remains an implementation gate under the selected
+technology. It does not introduce a new owner policy decision. Effect SQL also does not remove the responsibility for C5
+claims, C6 validation and redaction, C7 indexed reads and foreign-process wake
+detection, or C9's common-root admission requirement. Scheduling changes remain
+subject to measurement and C1's nonzero busy-timeout rule; provider and tool
+work must never be retried as a database transaction.
+
+All production connections move to the rooted driver together. Multiple rooted
+connections in one process and stock SQLite clients in other processes are
+supported. Concurrent stock and rooted connections to the same file in one
+process are outside this design: stock POSIX locks are released by closing
+another descriptor for that file. The production connection boundary enforces
+one opener, and the SDK exposes no raw SQLite connection.
+
+Effect SQL masks transaction acquisition in the tested version. Cancellation
+of a queued append therefore settles after the held connection is released,
+but it inserts no rows. The driver preserves its caller's interruption status
+rather than overriding that mask. A successful commit publishes its wake in
+the acquired transaction scope before releasing the connection, so cancellation
+during commit cannot leave readers asleep after the rows become durable.
+
+The [September 8 journal comparison](https://github.com/LionSR/TeXRA/issues/12080#issuecomment-5581130838)
+retains the C1 tables. Stock `SqlEventJournal` supplies UUID/timestamp entries
+and remote sequences, rather than C1's owner-fenced aggregate sequences and
+global commit ordinal. Its local notification also precedes transaction commit.
+Stock `Migrator` always creates a separate migration-progress table, which
+would add a third application-owned table beside C1's migration aggregate.
+Neither facility preserves the current contract merely by changing table names.
+Their internal schema implementation is not the reason for this conclusion.
 
 Scope in this program:
 
@@ -969,16 +1036,16 @@ Scope in this program:
   commit cursor and settled aggregate sequences. Cold hydration captures
   its anchor before reading and then tails from that anchor. Physical
   retention is observed through the same drain's existence reconciliation.
-- **Zod stays the only data schema; Effect Schema is not used at all.** Event
-  payloads are Zod-validated at the boundary and stored as JSON `data`. Errors
-  are `Data.TaggedError` (verified present in `effect@4.0.0-rc.112`): it gives
-  `_tag`, yieldability, and `catchTag` without Schema; `Schema.TaggedError` is
-  already renamed on Effect main so the pinned name breaks on the next bump;
-  and Schema alone measures about 188 KB minified (56 KB gzipped) in every
-  webview bundle. Error payloads cross host bridges as plain tagged objects
-  under the Zod union. The zod-native campaign, structured output, and the
-  `shared/schemas` ratchets depend on Zod; moving them is a separate campaign
-  with its own accounting, not a rider on this one.
+- **Zod remains the only schema system for TeXRA-defined persisted data,
+  event payloads, and wire contracts.** Event payloads are Zod-validated at
+  the boundary and stored as JSON `data`. The official Effect SQL library's
+  internal `SqlError` representation is not an application data schema;
+  use that native error type rather than duplicating it. TeXRA introduces
+  no Effect Schema definitions or `SqlSchema` pipeline. TeXRA-defined
+  errors use `Data.TaggedError`; error payloads cross host bridges as plain
+  tagged objects under the Zod union. The zod-native campaign, structured
+  output, and the `shared/schemas` ratchets depend on Zod; moving them is
+  a separate campaign with its own accounting.
 - **Two v4 vocabulary traps** (verified against the pinned package):
   `Layer.scoped` does not exist, `Layer.effect` strips `Scope`; and Effect
   code must never call the ALS-backed `currentSession()`, because the

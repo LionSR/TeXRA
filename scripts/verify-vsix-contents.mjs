@@ -5,6 +5,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { verifyNativeCleanupAssets } from './native-cleanup/verify-assets.mjs';
+
 import {
   CATALOG_DERIVED_CONTRIBUTES,
   collectRelativeFiles,
@@ -261,7 +263,10 @@ if (!fs.existsSync(vsixPath)) {
 
 const snapshot = readSnapshot();
 const entries = listVsixEntries(vsixPath);
-const failures = [];
+const failures = await verifyNativeCleanupAssets(
+  [...entries].filter((entry) => entry.startsWith('extension/dist/')),
+  (entry) => readVsixEntry(vsixPath, entry),
+);
 
 verifyManifest(vsixPath, snapshot, failures);
 verifyRequiredPaths(entries, snapshot, failures);

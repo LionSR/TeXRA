@@ -9,11 +9,11 @@
         "src/test-kernel/support/setupFakePlatform.ts",
         "scripts/**/*.mjs!"
       ],
-      "project": ["src/**/*.ts!", "!src/**/*.js", "!src/test-kernel/**!"]
+      "project": ["src/**/*.{ts,mts}!", "!src/**/*.js", "!src/test-kernel/**!"]
     },
     "packages/extension": {
       "entry": ["src/extension.ts!", "src/**/frontend/index.ts!"],
-      "project": ["src/**/*.{ts,tsx}!"]
+      "project": ["src/**/*.{ts,tsx,mts}!"]
     },
     "packages/agent": {
       "entry": [
@@ -23,11 +23,11 @@
         "src/schemas.ts!",
         "scripts/*.mjs!"
       ],
-      "project": ["src/**/*.ts!", "scripts/*.mjs!"]
+      "project": ["src/**/*.{ts,mts}!", "scripts/*.mjs!"]
     },
     "packages/cli": {
       "entry": ["src/bin/texra.ts!", "scripts/**/*.{ts,tsx,mjs}!"],
-      "project": ["src/**/*.{ts,tsx}!"]
+      "project": ["src/**/*.{ts,tsx,mts}!"]
     },
     "packages/desktop": {
       "entry": [
@@ -38,7 +38,7 @@
         "tests/**/*.{ts,tsx}",
         "design-harness/**/*.{ts,mjs}!"
       ],
-      "project": ["src/**/*.{ts,tsx}!"],
+      "project": ["src/**/*.{ts,tsx,mts}!"],
       "ignore": ["src/renderer/vite-env.d.ts"]
     },
     "packages/trace-viewer": {

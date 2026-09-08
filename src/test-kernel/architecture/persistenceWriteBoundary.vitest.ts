@@ -27,14 +27,14 @@ import {
  * the seq and commit assignment of C6 is the whole point of the service, and
  * a second insert site would assign neither.
  *
- * The allowlist is a single entry on purpose. Stage 2 onward adds the C7
- * reads to that same module rather than new writers; an entry here would mean
- * a second owner of the ordinals, which is the dual system the cutover
- * exists to remove.
+ * Each authority has one owner: the native storage module opens the host
+ * SQLite engine, and Database alone assigns event ordinals. Moving connection
+ * ownership does not authorize another module to mutate the C1 tables.
  */
 const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/agent/src'];
 
 const DATABASE_MODULE = 'src/controllers/session/Database.ts';
+const CONNECTION_MODULE = 'src/agent/storage/nativeSessionStorage.mts';
 
 /** `import … from 'node:sqlite'`, `require('node:sqlite')`, and the dynamic
  *  form; the bare `sqlite` specifier too, so a re-export cannot hide it. */
@@ -51,9 +51,9 @@ const SQLITE_IMPORT =
 const EVENT_TABLE_WRITE =
   /\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM|DROP\s+TABLE(?:\s+IF\s+EXISTS)?)\s+(?:"?\w+"?\s*\.\s*)?"?(?:event|event_sequence)"?\b/i;
 
-function offenders(pattern: RegExp): string[] {
+function offenders(pattern: RegExp, owner: string): string[] {
   return PRODUCTION_ROOTS.flatMap(productionFilesUnder)
-    .filter((file) => file !== DATABASE_MODULE)
+    .filter((file) => file !== owner)
     .filter((file) =>
       pattern.test(
         stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
@@ -67,8 +67,8 @@ describe('persistence write boundary', () => {
     expectRealCoverage(PRODUCTION_ROOTS);
   });
 
-  it('opens the substrate in the Database layer and nowhere else', () => {
-    const found = offenders(SQLITE_IMPORT);
+  it('opens SQLite in the native storage module and nowhere else', () => {
+    const found = offenders(SQLITE_IMPORT, CONNECTION_MODULE);
 
     expect(
       found,
@@ -79,7 +79,7 @@ describe('persistence write boundary', () => {
   });
 
   it('writes the C1 tables in the Database layer and nowhere else', () => {
-    const found = offenders(EVENT_TABLE_WRITE);
+    const found = offenders(EVENT_TABLE_WRITE, DATABASE_MODULE);
 
     expect(
       found,
@@ -87,6 +87,19 @@ describe('persistence write boundary', () => {
         ? undefined
         : `Append through Database.appendAll (${DATABASE_MODULE}); it is the only assigner of seq and commit (contract C6).`,
     ).toEqual([]);
+  });
+
+  it('includes and identifies the native connection owner', () => {
+    expect(PRODUCTION_ROOTS.flatMap(productionFilesUnder)).toContain(
+      CONNECTION_MODULE,
+    );
+    expect(
+      SQLITE_IMPORT.test(
+        stripComments(
+          readFileSync(resolve(REPO_ROOT, CONNECTION_MODULE), 'utf8'),
+        ),
+      ),
+    ).toBe(true);
   });
 
   it('keeps the Database layer itself the writer the ratchet names', () => {
@@ -97,7 +110,6 @@ describe('persistence write boundary', () => {
     // A vacuous ratchet is the failure mode these scans have: if the module
     // is renamed or its writes move, the allowlist above silently protects a
     // file that no longer writes anything.
-    expect(SQLITE_IMPORT.test(source)).toBe(true);
     expect(EVENT_TABLE_WRITE.test(source)).toBe(true);
   });
 });

@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { defineConfig } from 'vitest/config';
 
@@ -16,7 +18,7 @@ const quickJsWasmPath = require.resolve(QUICKJS_WASM_ID);
 const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 
 export default defineConfig({
-  plugins: [texTemplatePlugin(), quickJsWasmPlugin()],
+  plugins: [texTemplatePlugin(), quickJsWasmPlugin(), nativeAssetPlugin()],
   resolve: {
     alias: {
       ...aliases,
@@ -67,6 +69,22 @@ function quickJsWasmPlugin() {
         code: `export default Uint8Array.from(Buffer.from(${JSON.stringify(contents.toString('base64'))}, 'base64'));`,
         map: null,
       };
+    },
+  };
+}
+
+/** Source tests use the same native prebuild as the packaged runtime. */
+function nativeAssetPlugin() {
+  return {
+    name: 'native-cleanup-assets',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!source.endsWith('.node') || !importer) return undefined;
+      return resolve(dirname(importer), source);
+    },
+    load(id) {
+      if (!id.endsWith('.node')) return undefined;
+      return `export default ${JSON.stringify(pathToFileURL(id).href)};`;
     },
   };
 }

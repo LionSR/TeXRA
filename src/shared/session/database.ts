@@ -127,6 +127,10 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed | DatabaseWriteFailed
     >;
+    /** Remove recorded generated directories through the scoped storage capability. */
+    readonly cleanupGeneratedDirectories: (
+      executionIds: readonly ExecutionId[],
+    ) => Effect.Effect<void, Error>;
     /** C9: claim a closed root, clean its recorded executions, then cascade
      *  only if the same tombstone and claim still hold. Cleanup failure keeps
      *  the deletion record. The callback runs outside the SQLite transaction. */

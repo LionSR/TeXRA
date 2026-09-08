@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { verifyNativeCleanupAssets } from '../../../scripts/native-cleanup/verify-assets.mjs';
+
 import { isFile, walkFiles } from './fsWalk.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -15,7 +17,9 @@ const rootTsconfig = JSON.parse(
 );
 
 const allFiles = await walkFiles(distRoot);
-const declarationFiles = allFiles.filter((file) => file.endsWith('.d.ts'));
+const nativeFailures = await verifyNativeCleanupAssets(allFiles);
+if (nativeFailures.length) throw new Error(nativeFailures.join('\n'));
+const declarationFiles = allFiles.filter((file) => /\.d\.m?ts$/u.test(file));
 const declarationText = (
   await Promise.all(declarationFiles.map((file) => readFile(file, 'utf8')))
 ).join('\n');
@@ -57,7 +61,7 @@ for (const declaration of declarationFiles) {
   const source = await readFile(declaration, 'utf8');
   for (const match of source.matchAll(moduleSpecifier)) {
     const specifier = match.groups?.specifier;
-    if (specifier?.startsWith('.') && !specifier.endsWith('.js')) {
+    if (specifier?.startsWith('.') && !/\.m?js$/u.test(specifier)) {
       throw new Error(
         `NodeNext declaration specifier lacks a .js extension: ${declaration}: ${specifier}`,
       );
@@ -78,7 +82,7 @@ async function reachableDeclarations(entry) {
       if (!specifier?.startsWith('.')) continue;
       let target = path.resolve(
         path.dirname(declaration),
-        specifier.replace(/\.js$/u, '.d.ts'),
+        specifier.replace(/\.mjs$/u, '.d.mts').replace(/\.js$/u, '.d.ts'),
       );
       if (!(await isFile(target)) && path.extname(target) === '') {
         target = `${target}.d.ts`;
