@@ -2,8 +2,8 @@
 
 Status: proposed
 
-Date: 2026-09-07. Source review of PR #11997, updated after rebasing onto main
-`4d538c5e40253224f37a83f16c69d4ddad28c038`. This assessment identifies remaining
+Updated: 2026-09-08. Source review of PR #11997, updated after rebasing onto main
+`9e3b996853b4ae0f9ebfefa4108965cebc289f7e`. This assessment identifies remaining
 implementation obligations and useful design choices; it does not establish
 live-provider parity or crash-recovery correctness.
 
@@ -85,6 +85,19 @@ and child attempts and delivery also compose through Effect. Their implementatio
 still enter Promise-based graph and storage operations, and `RunContext.ts` still
 uses AsyncLocalStorage. The remaining work is to remove those internal boundaries
 with their consumers, not to repeat the already completed launch conversion.
+
+The shared credential lookup now keeps both cached values and pending reads
+separate for each supplied secret store. One reproduced regression demonstrated
+that concurrent lookups against two stores previously returned the first store's
+key twice. Invalidation retires the store map so older reads cannot refill current
+caches. This protects existing acquisition callers without introducing another
+model factory.
+
+The native editor factory exists in the extension and serves Grant, but the
+host-neutral language-model port still exposes the old request/count interface.
+The connector helper also remains inside the Promise-based reflection program.
+Completing helper acquisition therefore includes those caller and host boundaries;
+an internal Promise adapter would not complete the agreed replacement.
 
 The next implementation should capture route, credentials/account and allowed
 controls together, then convert the helpers with their prompt placement, context

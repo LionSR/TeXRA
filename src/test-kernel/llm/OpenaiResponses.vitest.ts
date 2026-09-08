@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 
 // Third-party imports
+import { it as effectIt } from '@effect/vitest';
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import {
   openaiResponsesContinuation,
@@ -1442,11 +1443,24 @@ describe('native OpenAI Responses protocol', () => {
     async (operationName) => {
       let signal: AbortSignal | null | undefined;
       const cancelBody = vi.fn();
-      const body = new ReadableStream<Uint8Array>({ cancel: cancelBody });
+      let bodyController!: ReadableStreamDefaultController<Uint8Array>;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          bodyController = controller;
+        },
+        cancel: cancelBody,
+      });
       const fetch = vi
         .fn<typeof globalThis.fetch>()
         .mockImplementation(async (_url, init) => {
           signal = init?.signal;
+          if (operationName === 'cancel') {
+            signal?.addEventListener(
+              'abort',
+              () => bodyController.error(signal?.reason),
+              { once: true },
+            );
+          }
           return new Response(body, {
             headers: {
               'content-type':
@@ -1718,6 +1732,87 @@ describe('native OpenAI Responses protocol', () => {
       sendHeaders();
       expect(String(fetch.mock.calls[0]?.[0])).not.toContain('starting_after');
     },
+  );
+
+  effectIt.effect(
+    'joins an interrupted cancellation body and retains its cleanup failure',
+    () =>
+      Effect.gen(function* () {
+        const gate = () => {
+          let release!: () => void;
+          const promise = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          return { promise, release };
+        };
+        const entered = gate();
+        const aborted = gate();
+        const released = gate();
+        const failure = new Error('Late cancellation body failure');
+        const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
+          async (_url, init) =>
+            new Response(
+              new ReadableStream<Uint8Array>(
+                {
+                  start(controller) {
+                    init!.signal!.addEventListener(
+                      'abort',
+                      () => {
+                        aborted.release();
+                        void released.promise.then(() =>
+                          controller.error(failure),
+                        );
+                      },
+                      { once: true },
+                    );
+                  },
+                  pull() {
+                    entered.release();
+                  },
+                },
+                { highWaterMark: 0 },
+              ),
+              {
+                headers: {
+                  'content-type': 'application/json',
+                  'x-request-id': 'cancel_request',
+                },
+              },
+            ),
+        );
+        const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+        assert(model.background);
+        let finished = false;
+        const fiber = yield* model.background.cancel(OPERATION).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              finished = true;
+            }),
+          ),
+          Effect.forkChild,
+        );
+        yield* Effect.promise(() => entered.promise);
+        const interruption = yield* Fiber.interrupt(fiber).pipe(
+          Effect.forkChild,
+        );
+        yield* Effect.promise(() => aborted.promise);
+        const finishedBeforeRelease = finished;
+        released.release();
+        yield* Fiber.join(interruption);
+        const exit = yield* Fiber.await(fiber);
+        expect(finishedBeforeRelease).toBe(false);
+        assert(exit._tag === 'Failure');
+        expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+        expect(
+          exit.cause.reasons.find(Cause.isDieReason)?.defect,
+        ).toMatchObject({
+          cause: failure,
+          operation: OPERATION,
+          responseId: 'resp_1',
+          requestId: 'cancel_request',
+        });
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.each([

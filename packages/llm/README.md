@@ -285,6 +285,10 @@ Only a cancellation response with status `cancelled` confirms remote cancellatio
 A returned terminal status is an observed outcome, without any claim about whether
 it preceded the cancellation request; queued or running remains unconfirmed.
 Interrupting the local HTTP request does not confirm remote cancellation.
+Responses cancellation joins the complete JSON body after abort, using the same
+request ownership as input counting. A distinct cleanup failure retains the known
+operation and request ID; a local interruption never becomes a cancellation
+acknowledgement.
 
 Submission interrupted before an accepted result reaches the caller can leave
 remote work without a delivered operation receipt. Joining the local request does

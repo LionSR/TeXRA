@@ -1137,6 +1137,52 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
   return { turn, parameters };
 });
 
+/** Abort the complete JSON request before joining its exposed body parsing. */
+function ownedJsonRequest<A>(
+  read: (signal: AbortSignal) => Promise<A>,
+  classify: (cause: unknown) => ModelError,
+  cleanupFailure: (cause: unknown) => ModelError,
+): Effect.Effect<A, ModelError> {
+  return Effect.suspend(() => {
+    let request: { signal: AbortSignal; pending: Promise<A> } | undefined;
+    return Effect.tryPromise({
+      try: (signal) => {
+        const pending = read(signal);
+        request = { signal, pending };
+        return pending;
+      },
+      catch: classify,
+    }).pipe(
+      Effect.onExit((exit) => {
+        if (request === undefined) return Effect.void;
+        const { signal, pending } = request;
+        return Effect.tryPromise({
+          try: () => pending,
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.catch((cause) => {
+            const repeated =
+              Exit.isFailure(exit) &&
+              exit.cause.reasons.some(
+                (reason) =>
+                  Cause.isFailReason(reason) &&
+                  reason.error instanceof ModelError &&
+                  reason.error.cause === cause,
+              );
+            return repeated ||
+              cause === signal.reason ||
+              (cause instanceof OpenAI.APIUserAbortError &&
+                cause.cause === signal.reason)
+              ? Effect.void
+              : Effect.die(cleanupFailure(cause));
+          }),
+          Effect.asVoid,
+        );
+      }),
+    );
+  });
+}
+
 /** Counts only the initial text input; the caller owns admission and retry policy. */
 const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
   function* (
@@ -1175,10 +1221,9 @@ const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
         requestId: error.requestId ?? requestId,
         model: error.model ?? origin.requestedModel,
       });
-    let request: { signal: AbortSignal; pending: Promise<unknown> } | undefined;
-    const raw = yield* Effect.tryPromise({
-      try: (signal) => {
-        const pending = client.responses.inputTokens
+    const raw = yield* ownedJsonRequest(
+      (signal) =>
+        client.responses.inputTokens
           .count(
             {
               model: parameters.model,
@@ -1196,11 +1241,8 @@ const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
           .then((response) => {
             requestId = response.headers.get('x-request-id') ?? undefined;
             return response.json() as Promise<unknown>;
-          });
-        request = { signal, pending };
-        return pending;
-      },
-      catch: (cause) =>
+          }),
+      (cause) =>
         enrich(
           cause instanceof SyntaxError
             ? new ModelError({
@@ -1210,42 +1252,14 @@ const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
               })
             : openaiFailure(cause),
         ),
-    }).pipe(
-      // On interruption, tryPromise aborts before this uninterruptible join.
-      Effect.onExit((exit) => {
-        if (request === undefined) return Effect.void;
-        const { signal, pending } = request;
-        return Effect.tryPromise({
-          try: () => pending,
-          catch: (cause) => cause,
-        }).pipe(
-          Effect.catch((cause) => {
-            const repeated =
-              Exit.isFailure(exit) &&
-              exit.cause.reasons.some(
-                (reason) =>
-                  Cause.isFailReason(reason) &&
-                  reason.error instanceof ModelError &&
-                  reason.error.cause === cause,
-              );
-            return repeated ||
-              cause === signal.reason ||
-              (cause instanceof OpenAI.APIUserAbortError &&
-                cause.cause === signal.reason)
-              ? Effect.void
-              : Effect.die(
-                  enrich(
-                    new ModelError({
-                      kind: 'transport',
-                      message:
-                        'The input token count failed while joining its request.',
-                      cause,
-                    }),
-                  ),
-                );
+      (cause) =>
+        enrich(
+          new ModelError({
+            kind: 'transport',
+            message: 'The input token count failed while joining its request.',
+            cause,
           }),
-        );
-      }),
+        ),
     );
     const parsed = z
       .object({
@@ -1884,26 +1898,57 @@ export function openaiResponsesModel(
     'llm.responses.cancel',
   )(function* (input) {
     const operation = yield* boundOperation(input);
+    let requestId: string | undefined;
+    const enrich = (error: ModelError) =>
+      new ModelError({
+        ...error,
+        message: error.message,
+        cause: error.cause,
+        operation,
+        responseId: operation.providerResponseId,
+        requestId: error.requestId ?? requestId,
+      });
     return yield* Effect.gen(function* () {
-      const opened = yield* Effect.tryPromise({
-        try: (signal) =>
+      const raw = yield* ownedJsonRequest(
+        (signal) =>
           client.responses
             .cancel(operation.providerResponseId, { signal })
-            .withResponse(),
-        catch: openaiFailure,
-      });
+            .asResponse()
+            .then((response) => {
+              requestId = response.headers.get('x-request-id') ?? undefined;
+              return response.json() as Promise<unknown>;
+            }),
+        (cause) =>
+          enrich(
+            cause instanceof SyntaxError
+              ? new ModelError({
+                  kind: 'malformed-output',
+                  message: 'Cancellation returned malformed JSON.',
+                  cause,
+                })
+              : openaiFailure(cause),
+          ),
+        (cause) =>
+          enrich(
+            new ModelError({
+              kind: 'transport',
+              message: 'Cancellation failed while joining its request.',
+              cause,
+            }),
+          ),
+      );
       // Cancellation cannot request encrypted output includes. Report status only.
       const parsed = ResponseSchema.pick({
         id: true,
         object: true,
         model: true,
         status: true,
-      }).safeParse(opened.data);
+      }).safeParse(raw);
       if (!parsed.success || parsed.data.id !== operation.providerResponseId)
         return yield* new ModelError({
           kind: 'malformed-output',
           message: 'Cancellation returned invalid response identity or status.',
-          requestId: opened.request_id ?? undefined,
+          requestId,
         });
       const {
         status,
@@ -1932,16 +1977,7 @@ export function openaiResponsesModel(
         status,
       });
     }).pipe(
-      Effect.mapError(
-        (error) =>
-          new ModelError({
-            ...error,
-            message: error.message,
-            cause: error.cause,
-            operation,
-            responseId: operation.providerResponseId,
-          }),
-      ),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, enrich))),
     );
   });
 

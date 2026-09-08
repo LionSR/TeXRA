@@ -24,10 +24,10 @@ of places a normal product change touches. An Effect import count cannot establi
 ## 1. Verified starting point
 
 The census below records the original starting revision. At the integration
-branch's 2026-09-07 rebase onto `4d538c5e40253224f37a83f16c69d4ddad28c038`,
+branch's 2026-09-08 rebase onto `9e3b996853b4ae0f9ebfefa4108965cebc289f7e`,
 main already supplies SQLite-backed `SessionEvents`, Effect-returning launch and
 resume operations, and Effect child attempts and delivery. The migration guard
-passes: 1,563 production files, 126 `platform()` calls, six `setServices()` calls,
+passes: 1,563 production files, 118 `platform()` calls, six `setServices()` calls,
 12 `new AbortController()` sites and 22 internal `Effect.run*` calls in seven files.
 The old graph programs, handler-based helpers, ambient run context and separate
 workflow checkpoints remain. The [updated comparison](2026-09-07-effect-ai-comparison.md)
