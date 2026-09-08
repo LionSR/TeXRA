@@ -38,6 +38,7 @@ import {
   WORKFLOW_AGENT_NAME_DESCRIPTION,
 } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
@@ -409,14 +410,15 @@ export const runWorkflowCommand = defineCliCommand({
         'File whose contents are passed before --instruction when both are set',
     },
   },
-  run: (context, ctx) =>
-    effectRuntime().runPromise(
-      runWorkflowAgent(context, {
-        agent: ctx.args.agent,
-        ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
-        output: optionalStringFlagValue(ctx.rawArgs, 'output'),
-        outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
-        model: optString(ctx.args.model),
-      }),
-    ),
+  run: async (context, ctx) => {
+    const init = {
+      agent: ctx.args.agent,
+      ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
+      output: optionalStringFlagValue(ctx.rawArgs, 'output'),
+      outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
+      model: optString(ctx.args.model),
+    };
+    await installCliProcessRuntime();
+    return effectRuntime().runPromise(runWorkflowAgent(context, init));
+  },
 });

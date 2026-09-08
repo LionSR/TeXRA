@@ -18,6 +18,7 @@ import {
   resolveCliLaunchAgent,
 } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
@@ -151,12 +152,13 @@ export const agentsRunCommand = defineCliCommand({
         'File whose contents are passed before --instruction when both are set',
     },
   },
-  run: (context, ctx) =>
-    effectRuntime().runPromise(
-      runToolUseAgent(context, {
-        agent: ctx.args.name,
-        ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
-        model: optString(ctx.args.model),
-      }),
-    ),
+  run: async (context, ctx) => {
+    const init = {
+      agent: ctx.args.name,
+      ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
+      model: optString(ctx.args.model),
+    };
+    await installCliProcessRuntime();
+    return effectRuntime().runPromise(runToolUseAgent(context, init));
+  },
 });
