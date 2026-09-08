@@ -77,20 +77,35 @@ own `FileSystem` service that the issue does not currently name.
 **none** of `ENOTEMPTY`, `ENOTDIR`, `EISDIR`, `EINVAL`, `ENOSPC`, and
 `PlatformError` exposes no top-level `.code`.
 
-`src/common/errors/errorPredicates.ts` holds **five** code-reading predicates,
-and the split between them is the useful part. Four read the top-level `.code`
-— `isFileNotFoundError` (`:2`), `isFileExistsError` (`:8`),
-`isNotADirectoryError` (`:14`), `isModuleNotFoundError` (`:19`) — and all four,
-along with the `ENOTEMPTY` branch at `src/agent/storage/executionLease.ts:477`,
-read **false** against a raw `PlatformError`. The fifth, `isDiskFullError`
-(`:57`), walks `causeChain(err)` instead, so it still finds `ENOSPC` on a
-wrapped cause.
+`src/common/errors/errorPredicates.ts` exports **five** code-reading predicates,
+but only **four** are filesystem ones. `isModuleNotFoundError` (`:19`) matches
+`ERR_MODULE_NOT_FOUND`/`MODULE_NOT_FOUND`, and its only two consumers
+(`src/tools/claudeAgentImport.ts:50`, `src/tools/codexImport.ts:59`) are
+dynamic-import paths that never receive a filesystem error. It is out of scope
+here and counting it inflates the exposure.
 
-That fifth one is the shape the other four would need. `jsonStore.ts` already
+Of the four filesystem predicates, the split is the useful part:
+
+- **Three read the top-level `.code` and read `false` against a raw
+  `PlatformError`**: `isFileNotFoundError` (`:2`, ENOENT),
+  `isFileExistsError` (`:8`, EEXIST), `isNotADirectoryError` (`:14`, ENOTDIR).
+  The inline `ENOTEMPTY` branch at `src/agent/storage/executionLease.ts:477`
+  is a fourth exposure of the same shape.
+- **`isDiskFullError` (`:57`) already works**, because it walks
+  `causeChain(err)` rather than reading a top-level field. A `PlatformError`
+  whose `cause` carries the underlying Node error still reports ENOSPC
+  correctly.
+
+So the exposure is three predicates plus one inline branch — not five, and
+**ENOSPC is not among them.** The prerequisite claim below should be read as
+scoped to ENOENT/EEXIST/ENOTDIR/ENOTEMPTY; ENOSPC is already recoverable
+through the existing cause-chain path.
+
+`isDiskFullError` is also the shape the other three would need. `jsonStore.ts`
 demonstrates the alternative at a boundary — unwrapping `error.reason.cause`
 back to the Node error identity its callers match. Either every predicate walks
 the chain, or every boundary unwraps; a written errno mapping that says which is
-a prerequisite for any code motion, not a follow-up.
+a prerequisite for code motion touching those four codes.
 
 **`remove`'s contract is ambiguous exactly where the repo depends on it.** One
 `remove` covers both unlink and rmdir, and the interface never says which a
