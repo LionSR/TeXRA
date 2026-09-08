@@ -210,9 +210,9 @@ it defaults `remove` to `Effect.void` and `exists` to `false`.
 
 **Eight production modules bypass the port entirely**, so a memfs-backed port
 does not control their inputs. The hole is closable for testing by handing
-`glob` a memfs instance directly, but **none of the eight can be routed
-through whichever filesystem service wins R-1** — so candidate B keeps a
-second filesystem seam here permanently (below). This paragraph has been
+`glob` a memfs instance directly. For real wiring the candidates differ:
+**candidate A can serve the five async importers, candidate B none of the
+eight** — so B keeps a second filesystem seam here permanently (below). This paragraph has been
 wrong three times in three different directions: it counted two importers,
 then called the set unclosable, then called it independent of R-1. Weigh it
 accordingly.
@@ -225,8 +225,8 @@ The full set of `glob`-package importers outside the test kernel is
 glob discovery with `WorkspaceFS` operations, so a memfs-backed port does not
 control their inputs today.
 
-**All eight are closable for testing without R-1 — but none can use the R-1
-winner.**
+**All eight are closable for testing with memfs; candidate A can serve five
+of them for real, candidate B none.**
 The pinned `glob@13.0.6` takes an `fs?: FSOption` — "an fs implementation to
 override some or all of the defaults" (`glob.d.ts:231-234`) — while keeping
 the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` behaviour these callers
@@ -234,12 +234,25 @@ rely on. Supplying memfs **directly** closes the testability hole for all
 eight, since memfs has the synchronous methods `glob` wants.
 
 What does _not_ work — and an earlier revision proposed it — is routing
-`glob` through whichever filesystem service wins R-1. `FSOption` requires
-`lstatSync`, `readdirSync` and friends (`path-scurry` `index.d.ts:22-48`):
-**synchronous**, and **`lstat`**. Effect's `FileSystem` has neither. So under
-candidate B the repo keeps a second filesystem injection seam for `glob`
-regardless — the selected service cannot satisfy the interface. That is a
-standing cost of B, not a free independent cleanup.
+`glob` through Effect's `FileSystem`. `FSOption` (`path-scurry`
+`index.d.ts:22-42`) carries both a synchronous set — `lstatSync`,
+`readdirSync`, `readlinkSync`, `realpathSync` — and a `promises` sub-object
+with async `lstat`, `readdir`, `readlink`, `realpath`, which is what the async
+traversal actually calls. So:
+
+- **Candidate A can serve the five async callers.** Its `lstat`-backed stat
+  supplies what `promises.lstat` needs, given an adapter shaping the result
+  as Node `Stats`. An earlier revision of this paragraph said `FSOption`
+  requires synchronous methods and so overcharged A; it does not, for the
+  async path.
+- **Candidate B can serve none of them.** Not because of sync — because
+  `path-scurry` wants **`lstat`**, at `:900` and `:705`, and Effect's
+  `FileSystem` has no `lstat` in either form. The three `globSync` callers
+  additionally need the synchronous set, which Effect also lacks.
+
+So under B the repo keeps a second filesystem seam for `glob` permanently;
+under A the seam is closable for the five async callers and stays only for
+the three synchronous ones.
 
 **Three of the eight are synchronous**, which compounds it:
 `latexPreview.ts:78`, `latexindentpt.ts:49` and `platformPaths.ts:47` call
@@ -293,6 +306,20 @@ is `publishUnsafe`, documented to return `false` when a bounded hub is full.
 `src/agent/modelHandlers/ModelHandler.ts:279` does `new TraceEmitter()` in a
 **production class constructor**, and `src/transcript/runTrace.ts:34`
 constructs a second one in a plain function.
+
+**And the hub need not be injected at all.** `Effect.runSync(PubSub.unbounded())`
+succeeds on rc.112 — verified by running it — so `TraceEmitter` can build its
+own hub in its constructor and none of the 19 `new TraceEmitter()` sites has
+to change. That removes most of the construction churn from the estimate
+below; the subscription and lifecycle work remains.
+
+One repo-specific cost attaches to it: `src/agent/trace/TraceEmitter.ts` is
+not one of the ratchet's boundary kinds
+(`packages/{extension,desktop,cli,agent}/src/**` or `src/tools/**/*Tool.ts`),
+so a `runSync` there lands in the `Effect.run*` row as below-boundary debt and
+`--update` refuses it without a `debtLanes` entry naming the lane that removes
+it. Workable, but it converts constructor churn into a tracked debt row rather
+than eliminating it.
 
 **An earlier revision called that constructor "the actual blocker". It is not.**
 Review pointed out that the handler-construction path is reached from inside an
@@ -364,9 +391,16 @@ below.
    given.** `TraceEmitter.emit` try/catches each subscriber and delivers the
    next event. Under a hub each subscriber is a fiber looping on `take`, and a
    naïve loop dies on the first defect, taking that sink dark for the run.
-   **This is recoverable** — wrapping each handler invocation in
-   `Effect.catchAllCause` (or inspecting its `Exit`) restores exactly today's
-   isolation. So it is not an unavoidable regression; it is work the
+   **The isolation is recoverable** — wrapping each handler invocation in
+   `Effect.catchAllCause` (or inspecting its `Exit`) keeps the fiber alive.
+   But `catchAllCause` **alone** silently consumes the failure, and today's
+   `emit` does more than survive it: its catch calls
+   `log.warn("Trace subscriber threw while handling event: …")`
+   (`TraceEmitter.ts:89-91`), with a comment recording that staying quiet
+   would be "the quiet-degradation shape the guardrail forbids". That warning
+   is the only signal when the subscriber that threw is the **durable sink**
+   and an event has therefore been lost. So a replacement must catch _and
+   report_, not merely catch. So it is not an unavoidable regression; it is work the
    replacement must do and that the current code gets for free.
 
 3. **Subscription readiness is synchronous today, and four consumers depend on
@@ -405,7 +439,14 @@ below.
    `schedulePublication` for the later persistence flush. These are a run's
    **final** events — outcome and status — so the loss is silent and lands on
    the durable plane. A replacement needs a drain/ack barrier at disposal, or
-   must keep the subscriber scope alive until its queue is empty.
+   must keep the subscriber scope alive until every published event's handler
+   has **completed**. Waiting for an empty queue is not sufficient and is not
+   a cheaper substitute: a consumer that has already taken the final outcome
+   event but is still inside `SessionHandle.publishRunEvent` leaves the queue
+   empty while the event has not yet reached `schedulePublication`, so closing
+   the scope there interrupts the in-flight handler and loses exactly the tail
+   event this property exists to protect. The barrier has to be an
+   acknowledgement, not a depth check.
 
 5. **`emit` stamps the stage before fan-out, and the transcript groups on
    it.** `TraceEmitter.emit` resolves a missing `stageId` from the emitter's
@@ -623,7 +664,18 @@ both directions. A corrupt persisted row is _present state_, not a transient
 condition: every resume reads the same bytes and parks again, so suspending
 on it is a permanent hang wearing a retry's clothing. Only genuinely
 transient causes may suspend; malformed state has to reach the typed outer
-failure path where someone is told about it. The same applies to the
+failure path where someone is told about it.
+
+**But cause alone is not sufficient either — the phase matters too.** A
+transient failure on a _read_ or a _start marker_ can suspend safely: nothing
+is lost by trying again later. A transient failure on the **completion
+write** cannot. The activity's effect has already run; suspending discards
+the only copy of its result and leaves recovery facing an incomplete marker,
+which is the ambiguous-orphan case above — so a disk-full error while
+persisting a model call's exit can cost the call itself. That phase needs the
+result retained or reconciled before any suspension, not a mapping rule. An
+earlier revision rejected per-operation classification outright; the honest
+rule is cause **and** phase. The same applies to the
 incomplete-attempt marker below — `Suspended` is not the answer there
 either.
 
