@@ -293,13 +293,16 @@ traversal actually calls. So:
   a second cost.** `FSOption.promises.lstat` must return a real `Promise`;
   Effect's `readLink`/`stat`/`readDirectory` return `Effect`s. Bridging them
   needs `runPromise` or an equivalent managed-runtime run **at each consumer**
-  — and four of the five async importers sit at non-boundary paths
-  (`src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts` — not a
-  `*Tool.ts` — `src/housekeeping/clean.ts`, `src/housekeeping/utils.ts`),
-  where the ratchet rejects a new `Effect.run*` exactly as it does for
-  `TraceEmitter.ts`. Only `packages/cli/src/runtime/workflowInputs.ts` is
-  already a boundary kind. So B needs the adapter built at an allowed boundary
-  and injected into four consumers, or a separate native seam for them — the
+  and three of the five async importers sit at non-boundary paths
+  (`src/agent/index/agentYamlScanner.ts`, `src/housekeeping/clean.ts`,
+  `src/housekeeping/utils.ts`), where the ratchet rejects a new `Effect.run*`
+  exactly as it does for `TraceEmitter.ts`. The CLI file
+  `packages/cli/src/runtime/workflowInputs.ts` is already a boundary kind.
+  `GlobTool.execute()` in `src/tools/glob.ts` also qualifies: the ratchet
+  recognizes the tool's `execute()` method regardless of its filename, so
+  an adapter callback constructed there can own the actual Promise boundary.
+  So B needs the adapter built at an allowed boundary and injected into three
+  consumers, or a separate native seam for them: the
   same structural cost this note found for the hub constructor, in a second
   place.
 
