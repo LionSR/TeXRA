@@ -299,31 +299,48 @@ traversal actually calls. So:
   hub construction, the `glob` adapter, and the synchronous `subscribe` facade
   (below) — were all found by accident, while pricing something else.
 
-  **The deferred grep has now been run, and it bounds the exposure rather than
-  counting it** [reproduced]. 22 files consume `platform().fs`. Exactly **one**
-  sits at a ratchet boundary — `packages/desktop/src/main/desktopWorkspaceIpc.ts`.
-  The other **21 do not**: 9 production
-  (`compiledPdfArtifacts.ts`, `platformAgentDirectories.ts`,
-  `workspaceFileOptions.ts`, `runDirOps.ts`, `LatexMediaManager.ts`,
-  `tempFileManager.ts`, `claudeAgentConfig.ts`, `leanServer.ts`,
-  `baseFS.ts`) and 12 test-kernel.
+  **The deferred grep was run and then corrected twice; both corrections
+  matter more than the number.**
 
-  **Read that as an upper bound, not an answer, and the distinction is the
-  whole point.** A non-boundary consumer needs a `run` site only if it must
-  hand a _value_ to something that cannot accept an `Effect`; otherwise the
-  `Effect` propagates upward until it reaches a boundary that can run it. So
-  21 is the ceiling on new run sites, and the floor is however far propagation
-  travels. R-1 supplies the only real datum on that: converting **one** leaf
-  (`workspaceFileOptions.ts`, on this list) touched **17 files**. The likely
-  shape is therefore few run sites and a great deal of propagation — which is
-  a different cost from the one this section was worried about, and worse in a
-  way the ratchet does not measure.
+  The raw grep found 22 files mentioning `platform().fs`, and an earlier
+  revision reported 21 off-boundary — 9 production, 12 test-kernel — as a
+  measured exposure. Both halves were wrong:
 
-  What the grep does settle: the exposure is **21 files, not "unknown"**, and
-  every one is named above. The cost is not "two places"; it
-  is one systematic cost of candidate B, and its extent is now bounded rather
-  than unknown: 22 `platform().fs` consumers, 21 of them off-boundary, all
-  named above. The three `globSync` callers additionally need the synchronous set,
+  - **Three of the nine "production consumers" are comment-only, and the
+    comments say the opposite of what the count assumed.**
+    `tempFileManager.ts:14`, `claudeAgentConfig.ts:111` and
+    `leanServer.ts:428` each mention `platform().fs` only to explain why the
+    file deliberately uses `node:fs/promises` **instead**. They are documented
+    non-consumers. The grep counted textual mentions and the prose called them
+    consumers. **Six** off-boundary production consumers, not nine:
+    `compiledPdfArtifacts.ts`, `platformAgentDirectories.ts`,
+    `workspaceFileOptions.ts`, `runDirOps.ts`, `LatexMediaManager.ts`,
+    `baseFS.ts` — plus the one boundary consumer,
+    `packages/desktop/src/main/desktopWorkspaceIpc.ts`. (The 12 `test-kernel`
+    matches are excluded from a production tally by the ratchet's own
+    `productionFiles()`.)
+  - **"A ceiling on run sites" was the wrong shape entirely.** A converted
+    leaf does not propagate to _one_ boundary; it fans out to **every**
+    independent host boundary above it, each needing its own bridge.
+    `workspaceFileOptions.ts` alone feeds
+    `packages/desktop/src/main/desktopFileSelection.ts:89` and
+    `packages/extension/src/progressView/ProgressViewProvider.ts:156` through
+    `workspaceFileOptions`, and
+    `packages/desktop/src/main/desktopHostRequests.ts:34` through
+    `listWorkspaceFilesOfType` — three files across **two host packages**,
+    none of them on the list. A leaf count cannot bound a fan-out.
+
+  So the honest statement is narrower than the one it replaces: **six
+  off-boundary production consumers are the leaves**, the run sites are at
+  their transitive host boundaries, and **that fan-out is still unmeasured**.
+  R-1 remains the only datum — converting `workspaceFileOptions.ts` alone
+  touched 17 files.
+
+  **The lesson is the one this note keeps relearning.** A grep returns
+  matches; calling them consumers is an inference, and I published the
+  inference as a measurement one round after writing that verified premises do
+  not license unverified steps. Any count here should be treated as a leaf
+  count and nothing more. The three `globSync` callers additionally need the synchronous set,
   which Effect also lacks — and there no adapter exists at all.
 
 So under both candidates the seam closes for the five async callers and stays
@@ -464,11 +481,23 @@ of which **10 only construct** a
 `attachChannelSubscriber`). Whether the 10 count depends on which hub is
 adopted:
 
-- **B4-atomic — 17 files.** `makeAtomicUnbounded` is synchronous, so each
-  constructor builds its own and the 10 are untouched. But this buys the
-  storage layer: no delivery strategy, no subscriber-completion machinery.
-  Most of the eight properties below then have to be re-implemented by hand on
-  top of it, which is approximately what `TraceEmitter` already does.
+- **B4-atomic — 1 file.** An earlier revision charged this route 17 and was
+  importing B4-hub's cost into it. `makeAtomicUnbounded` is synchronous, and
+  so are the `Atomic`'s own `subscribe()` and `publish()` — verified by
+  running them. So `TraceEmitter` builds its own, owns the subscriptions
+  internally, and **keeps its existing synchronous `subscribe`/`emit`/detach
+  facade unchanged**. The 10 constructors are untouched _and so are the 16
+  subscribers_: they need lifecycle and assertion changes only if this route
+  separately chooses asynchronous delivery, which the `Atomic` does not
+  impose. The churn is the emitter implementation itself.
+
+  **Which makes the route nearly free and nearly pointless, and those are the
+  same fact.** What it buys is the storage layer — no delivery strategy, no
+  subscriber-completion machinery — so all seven adapter-owned properties
+  below stay hand-written. That is approximately what `TraceEmitter` already
+  is. B4-atomic swaps a hand-rolled subscriber array for an upstream one and
+  changes nothing else.
+
 - **B4-hub — 27 files, and that is a floor.** A real `PubSub` needs
   `PubSub.make` or `PubSub.unbounded`, both effectful, and `TraceEmitter.ts`
   cannot run them (not a ratchet boundary kind, and the below-boundary
@@ -502,8 +531,8 @@ tree, not as authoritative.
 **Both totals exclude the file being replaced, and should not.** 26 counts
 call sites — constructors and subscribers — but either route rewrites
 `src/agent/trace/TraceEmitter.ts` itself: the `subscribers` field, `subscribe`
-and `emit`. Counting it, the churn is **17 files for B4-atomic and 27 for
-B4-hub**, across **six production files rather than five**. An estimate that
+and `emit`. Counting it, the churn is **1 file for B4-atomic and at least 27
+for B4-hub**, across **six production files rather than five**. An estimate that
 prices a replacement while omitting the thing being replaced understates it by
 construction.
 
@@ -540,9 +569,10 @@ subscriber file for adapter-owned infrastructure inflates the case against
 B4, which is the direction this note has now erred in three separate
 places.
 
-That is the argument against B4, and it is an economic one: **17 files of churn
-for B4-atomic or **at least** 27 for B4-hub (injection propagates up factory
-chains this count never followed)**, mostly tests and each cheaper than first
+That is the argument against B4, and it is an economic one, and the two routes
+are no longer close: **1 file for B4-atomic — which buys almost nothing — or
+at least 27 for B4-hub (injection propagates up factory chains this count
+never followed)**, mostly tests and each cheaper than first
 charged, plus the eight behavioural properties below, against the listener
 machinery being replaced — the `subscribers` field (`:47`), `subscribe`
 (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a 217-line class that
@@ -739,7 +769,8 @@ returns, the handover cap enforced at enqueue rather than in the handler, and
 ordering preserved against the separate status plane.
 Together with the subscription and lifecycle work above, that is the real size
 of B4 — and it is **route-dependent** in file count only: the constructor
-sites stay untouched for B4-atomic (17 files) and change for B4-hub (27).
+sites stay untouched for B4-atomic (1 file, and it buys almost nothing) and
+change for B4-hub (27 at least).
 
 **A previous revision said B4-hub "inherits" these eight properties. It does
 not, and that sentence was the most dangerous thing in this note** — an
