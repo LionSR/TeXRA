@@ -172,9 +172,9 @@ const ROWS = [
 
 const SEMANTICS =
   'Per-file counts of the mechanisms the Effect 4 migration retires (.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. ' +
-  'Scope: *.ts and *.tsx under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
+  'Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
-  "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to — `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
+  "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
   "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. Every file here belongs to the lane named for it in the closed 'debtLanes' register: --update refuses a below-boundary file the register does not already name, never adds a file to a row, and writes the lower of the committed count and the tree's); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator. " +
@@ -266,7 +266,8 @@ function productionFiles() {
   const files = [];
   for (const root of roots) {
     for (const entry of walkFiles(join(rootDir, root), {
-      include: (file) => /\.tsx?$/.test(file) && !/\.vitest\.ts$/.test(file),
+      include: (file) =>
+        /\.(?:tsx?|mts)$/.test(file) && !/\.vitest\.ts$/.test(file),
       prune: (dir) => {
         const name = dir.slice(dir.lastIndexOf('/') + 1);
         return (
