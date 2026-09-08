@@ -79,11 +79,15 @@ async function loadSupabaseAuth() {
   // `vi.resetModules()` gives the module graph a fresh `@platform/processRuntime`
   // whose runtime the shared fake-host install never reached; the module's own
   // `initializeCliSupabaseAuth` installs the auth run edge from it.
-  const [{ initProcessRuntime }, { ManagedRuntime }] = await Promise.all([
-    import('@platform/processRuntime'),
-    import('effect'),
-  ]);
-  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+  const [{ initProcessRuntime }, { Layer, ManagedRuntime }, NodeFileSystem] =
+    await Promise.all([
+      import('@platform/processRuntime'),
+      import('effect'),
+      import('@effect/platform-node/NodeFileSystem'),
+    ]);
+  initProcessRuntime(
+    ManagedRuntime.make(Layer.merge(testHttpClientLayer, NodeFileSystem.layer)),
+  );
   return import('@cli/runtime/supabaseAuth');
 }
 

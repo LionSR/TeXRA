@@ -1,11 +1,10 @@
 // Node imports
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Stream } from 'effect';
+import { Effect, Exit, FileSystem, PlatformError, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -13,6 +12,7 @@ import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   countPinnedMemories,
+  MemoryEntryUnreadable,
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
 import { delay } from '@utils/core';
@@ -42,12 +42,10 @@ function memoryFiles(): [string, number][] {
   );
 }
 
-function readStreamFromText(
-  text: string,
-): ReturnType<typeof StorageFS.createReadStream> {
-  return Readable.from([Buffer.from(text)]) as unknown as ReturnType<
-    typeof StorageFS.createReadStream
-  >;
+const memoryFS = FileSystem.makeNoop({});
+
+function readStreamFromText(text: string) {
+  return Stream.make(Buffer.from(text));
 }
 
 function testFileStat(content: string): FileStat {
@@ -98,7 +96,7 @@ describe('memory filesystem listing', () => {
           return testFileStat(TEST_FRONTMATTER);
         });
 
-        vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
+        vi.spyOn(memoryFS, 'stream').mockImplementation(() =>
           readStreamFromText(TEST_FRONTMATTER),
         );
 
@@ -111,7 +109,7 @@ describe('memory filesystem listing', () => {
         expect(maxActiveMetadataReads).toBeLessThanOrEqual(
           MEMORY_LISTING_CONCURRENCY,
         );
-      }),
+      }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
   );
 
   it.effect(
@@ -135,12 +133,12 @@ describe('memory filesystem listing', () => {
           return testFileStat(PINNED_FRONTMATTER);
         });
         const readStream = vi
-          .spyOn(StorageFS, 'createReadStream')
+          .spyOn(memoryFS, 'stream')
           .mockImplementation(() => readStreamFromText(PINNED_FRONTMATTER));
 
         expect(yield* countPinnedMemories(1)).toBe(1);
         expect(readStream.mock.calls.length).toBeLessThan(files.length);
-      }),
+      }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
   );
 
   it.effect('fails the walk with the filesystem error itself', () =>
@@ -160,6 +158,52 @@ describe('memory filesystem listing', () => {
       expect(failure._tag).toBe('MemoryEntryUnreadable');
       expect(failure.cause).toBe(cause);
       expect(failure.cause).toMatchObject({ code: 'ENOENT' });
-    }),
+    }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
+  );
+
+  it.effect(
+    'retains a close failure when the attribution read also fails',
+    () =>
+      Effect.gen(function* () {
+        const readFailure = new Error('memory read failed');
+        const closeFailure = PlatformError.systemError({
+          _tag: 'Unknown',
+          module: 'FileSystem',
+          method: 'close',
+          cause: new Error('memory close failed'),
+        });
+        vi.spyOn(StorageFS, 'readDir').mockResolvedValue([
+          ['note.md', FileType.File],
+        ]);
+        vi.spyOn(StorageFS, 'stat').mockResolvedValue(
+          testFileStat(TEST_FRONTMATTER),
+        );
+        vi.spyOn(memoryFS, 'stream').mockReturnValue(
+          Stream.fail(
+            PlatformError.systemError({
+              _tag: 'Unknown',
+              module: 'FileSystem',
+              method: 'readAlloc',
+              cause: readFailure,
+            }),
+          ).pipe(Stream.ensuring(Effect.die(closeFailure))),
+        );
+
+        const result = yield* Effect.exit(
+          Stream.runDrain(walkMemoryDirectory(MEMORY_STORAGE_DIR)),
+        );
+        expect(Exit.isFailure(result)).toBe(true);
+        if (Exit.isSuccess(result)) return;
+        expect(result.cause.reasons).toMatchObject([
+          {
+            _tag: 'Fail',
+            error: new MemoryEntryUnreadable({
+              storagePath: path.join(MEMORY_STORAGE_DIR, 'note.md'),
+              cause: readFailure,
+            }),
+          },
+          { _tag: 'Die', defect: closeFailure },
+        ]);
+      }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
   );
 });

@@ -4,8 +4,9 @@ import { dirname, join } from 'node:path';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 
 // Third-party imports
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber, ManagedRuntime } from 'effect';
+import { Cause, Effect, Exit, Fiber, Layer, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -100,7 +101,11 @@ describe('desktop agent directory bootstrap', () => {
       try {
         effectRuntime();
       } catch {
-        initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+        initProcessRuntime(
+          ManagedRuntime.make(
+            Layer.merge(testHttpClientLayer, NodeFileSystem.layer),
+          ),
+        );
       }
       const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
       const [globalStateStore, workspaceStateStore] = yield* Effect.all([

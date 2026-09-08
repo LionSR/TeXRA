@@ -1,4 +1,5 @@
-import { Effect, ManagedRuntime } from 'effect';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
@@ -39,7 +40,9 @@ interface ControllerFixtureOptions {
 }
 
 beforeEach(() => {
-  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+  initProcessRuntime(
+    ManagedRuntime.make(Layer.merge(testHttpClientLayer, NodeFileSystem.layer)),
+  );
 });
 
 function createControllerFixture(options: ControllerFixtureOptions = {}) {

@@ -1,8 +1,8 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
 import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { afterEach, describe, it as plainIt, vi } from 'vitest';
+import { Effect, FileSystem } from 'effect';
+import { afterEach, it as plainIt, vi } from 'vitest';
 
 import { createFakeUIHosts } from '../support/FakeHosts';
 
@@ -61,7 +61,7 @@ function createController(options?: {
   };
 }
 
-describe('SettingsMemoryController', () => {
+it.layer(FileSystem.layerNoop({}))('SettingsMemoryController', (it) => {
   afterEach(() => {
     vi.clearAllMocks();
   });

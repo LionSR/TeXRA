@@ -19,6 +19,7 @@
  * supply durable transcript history; the remaining bridge is removed with
  * the transcript file writer.
  */
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import {
   Context,
   Deferred,
@@ -724,7 +725,11 @@ export function installProcessRuntime(
   const runtime = ManagedRuntime.make(
     Sessions.layer(release, identity).pipe(
       Layer.provideMerge(
-        Layer.mergeAll(effectDiagnosticsLayer, FetchHttpClient.layer),
+        Layer.mergeAll(
+          effectDiagnosticsLayer,
+          FetchHttpClient.layer,
+          NodeFileSystem.layer,
+        ),
       ),
     ),
   );

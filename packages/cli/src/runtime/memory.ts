@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Cause, Effect, type FileSystem, Result } from 'effect';
 
 import { effectRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
@@ -107,10 +107,22 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
  * prints that message.
  */
 export function runCliMemory<A>(
-  program: Effect.Effect<A, MemoryEntryUnreadable>,
+  program: Effect.Effect<A, MemoryEntryUnreadable, FileSystem.FileSystem>,
 ): Promise<A> {
   return effectRuntime().runPromise(
-    Effect.catch(program, (error) => Effect.die(error.cause)),
+    Effect.catchCause(program, (cause) => {
+      const unwrapped = Cause.map(cause, (error) => error.cause);
+      // runPromise otherwise keeps only the first error of a compound cause.
+      if (unwrapped.reasons.length > 1 && !Cause.hasInterruptsOnly(unwrapped)) {
+        return Effect.die(
+          new Error(Cause.pretty(unwrapped), { cause: unwrapped }),
+        );
+      }
+      const error = Cause.findError(unwrapped);
+      return Result.isFailure(error)
+        ? Effect.failCause(error.failure)
+        : Effect.die(error.success);
+    }),
   );
 }
 

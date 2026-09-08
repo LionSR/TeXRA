@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Result } from 'effect';
 
 import { hostPort } from '@common/hostPort';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -43,12 +43,24 @@ interface SettingsViewHostOptions {
  * raised. The memory path has no recovery above
  * this point — the previous `await` chain let the same error reach the host's
  * own error handling — so the host edge's `runPromise` rejects with that
- * instance rather than with a tagged wrapper nobody reads.
+ * instance rather than with a tagged wrapper nobody reads. Compound failures
+ * are reported together, with their complete Cause retained on the error.
  */
 function raiseCause<A, E extends { readonly cause: unknown }, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, never, R> {
-  return Effect.catch(effect, (error) => Effect.die(error.cause));
+  return Effect.catchCause(effect, (cause) => {
+    const unwrapped = Cause.map(cause, (error) => error.cause);
+    if (unwrapped.reasons.length > 1 && !Cause.hasInterruptsOnly(unwrapped)) {
+      return Effect.die(
+        new Error(Cause.pretty(unwrapped), { cause: unwrapped }),
+      );
+    }
+    const error = Cause.findError(unwrapped);
+    return Result.isFailure(error)
+      ? Effect.failCause(error.failure)
+      : Effect.die(error.success);
+  });
 }
 
 interface SettingsViewHostMutationOptions {
@@ -97,10 +109,10 @@ export class SettingsViewHost {
       } = {},
     ) {
       const posted = yield* Effect.exit(
-        this.memoryController.getMemoryPreviewMessage(data.storagePath).pipe(
-          // Unwrap only the memory failure; hostPort preserves the response
-          // error itself, including an error that has its own cause field.
-          Effect.catch((error) => Effect.fail(error.cause)),
+        // Unwrap only memory failures; response errors keep their own cause.
+        raiseCause(
+          this.memoryController.getMemoryPreviewMessage(data.storagePath),
+        ).pipe(
           Effect.flatMap((message) =>
             hostPort(() => this.post(message, options.respond)),
           ),

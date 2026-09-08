@@ -1,4 +1,5 @@
-import { ManagedRuntime } from 'effect';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import { Layer, ManagedRuntime } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const writeMock = vi.hoisted(() => vi.fn());
@@ -90,7 +91,11 @@ describe('CLI clipboard text writer', () => {
       expect(execFileMock).toHaveBeenCalled();
     } finally {
       await disposeProcessRuntime();
-      initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+      initProcessRuntime(
+        ManagedRuntime.make(
+          Layer.merge(testHttpClientLayer, NodeFileSystem.layer),
+        ),
+      );
     }
   });
 

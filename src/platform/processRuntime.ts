@@ -6,11 +6,11 @@
  * Promise-facing methods; inside, cancellation is fiber interruption.
  * Installed like the process roots: exactly once, by the entry.
  */
-import type { ManagedRuntime } from 'effect';
+import type { FileSystem, ManagedRuntime } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
-  HttpClient.HttpClient,
+  HttpClient.HttpClient | FileSystem.FileSystem,
   never
 >;
 
