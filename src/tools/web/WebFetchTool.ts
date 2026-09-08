@@ -19,7 +19,7 @@ import { formatBytes } from '@utils/text/stringUtils';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
-const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MiB
 
 const WebFetchInputSchema = z.strictObject({
   url: z
