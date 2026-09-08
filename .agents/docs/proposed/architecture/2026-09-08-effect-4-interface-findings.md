@@ -183,7 +183,13 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
   So the cost is a correctness rewrite of each walker, on top of the syscall
   cost.
 
-- No `ctime` on `File.Info`.
+- No `ctime` on `File.Info` — **a cost for candidate A only**, and arguably
+  not one at all. A repo-wide search finds `ctime` in the `FileStat`
+  declaration (`interfaces.ts:91`), the Node provider that populates it
+  (`nodeFilesystem.ts:26`), and test fakes satisfying the type. **No
+  production code reads it.** Candidate B deletes the port and so need not
+  emulate it; candidate A keeps supplying a field nobody consumes. Listing
+  this as a gap charged B for preserving dead weight.
 - `mtime` is `Option<Date>`. The natural `none → 0` default makes
   `cleanupOldFiles` delete files it should keep.
 - No `dereference` on `copy`.
@@ -456,10 +462,18 @@ built deliberately.
 **Two costs that no issue currently names:**
 
 1. `Workflow.withCompensation` — listed on #12081 as a reason to adopt — is
-   documented as registering finalizers "only for top-level effects in the
-   workflow" that "do not work for nested activities". The one framework
-   mechanism for ambiguous external effects is unavailable at exactly the
-   boundary model and tool calls would sit on.
+   **rollback for failures the live workflow observes, not protection against
+   abrupt process loss.** It registers finalizers "only for top-level effects
+   in the workflow" that "do not work for nested activities", so it is
+   unavailable at exactly the boundary model and tool calls would sit on. But
+   nesting is not the reason it cannot close the crash window: when a side
+   effect succeeds and the process dies before the result is memoized, **no
+   finalizer runs at all**, top-level or otherwise. Replay then meets an
+   ambiguous incomplete attempt and may repeat the side effect. An earlier
+   revision framed this as compensation being unavailable where it is needed;
+   the accurate framing is that compensation is the wrong tool for this
+   window, and the crash boundary needs **idempotent side effects or durable
+   deduplication** instead.
 2. `Activity`'s default `interruptRetryPolicy` re-runs an interrupted activity
    **up to 10 times, then dies** (`Activity.js:62-66`). Overridable per
    activity, but the default is backwards for a codebase whose cancellation is
@@ -518,7 +532,9 @@ read and write able to fail — malformed JSON, permissions, a full disk — and
 no error channel, an implementer's default is `Effect.orDie`, which converts
 ordinary recoverable storage failures into defects outside TeXRA's normal
 reporting path. Adoption must therefore say which operations can map a
-failure onto `Suspended` (where retrying later is the honest answer) and
+failure onto `Suspended` (where retrying later is the honest answer — though
+see below: `Suspended` must not become the answer for an incomplete attempt
+marker, or the activity parks on every replay) and
 where an outer, typed engine boundary has to surface the rest. That decision
 is not expressible inside the interface and so belongs in the adoption plan.
 
@@ -542,6 +558,19 @@ as generated output in **both** the agent-facing `/executions/{id}/files`
 listing and the CLI's history listing. The recommendation is therefore: give
 the engine an owned key prefix and register it in `isKVFile`, exactly as
 `persistedFlow` does.
+
+**The memo key collides across repeated invocations in one live workflow.**
+The key is `` `${executionId}/${activity.name}/${attempt}` ``
+(`WorkflowEngine.js:347`) and `CurrentAttempt` defaults to 1, advancing only
+under `Activity.retry`. So invoking one named `Activity` **twice in the same
+workflow** — without `Activity.retry` between them — produces the same key
+both times, and the second call returns the first's stored exit without
+executing. This is not the restart case below; it happens in a single live
+process. TeXRA's runs are repeated model and tool calls, so a generic
+activity wrapper needs a deterministic per-invocation identity in the name
+(a step index, a call ordinal), or the adoption plan has to guarantee each
+activity name occurs at most once per workflow. Neither is free, and nothing
+in the interface surfaces the hazard.
 
 **Settled: `Activity.CurrentAttempt` is in-memory, and that is deliberate —
 it is how replay works, not a collision.** `Activity.js:75` is
@@ -571,7 +600,14 @@ The real requirements are narrower and different:
   (`WorkflowEngine.js:356-360`) and falls through to execute when it finds
   one. `layerMemory` makes that moot, but a durable engine persisting the row
   must distinguish an attempt orphaned by a crash — safe to re-run — from one
-  a live process is still executing. Nothing in the interface expresses that.
+  a live process is still executing. Nothing in the interface expresses that,
+  and the distinction cannot be made by suspending: mapping every
+  start-without-completion to `Suspended` parks the activity on every replay,
+  since the marker stays incomplete and the next resume meets the same state.
+  What is needed is an **ownership or lease transition** — a live marker
+  suspends, a stale one is claimed and executed. The repo already has that
+  shape in `executionLease.ts`, which is the natural place to look rather
+  than inventing one.
 - **The interrupt-retry schedule is non-durable state, and it is a different
   counter from `CurrentAttempt`.** `makeExecute` — which reads
   `CurrentAttempt` and performs the memo lookup — wraps `executeWithoutInterrupt`
