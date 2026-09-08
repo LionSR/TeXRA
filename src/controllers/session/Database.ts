@@ -402,7 +402,14 @@ export const databaseLayer = (
               undefined,
             ),
           commit: (connection) =>
-            connection.executeUnprepared('COMMIT', [], undefined),
+            connection.executeUnprepared('COMMIT', [], undefined).pipe(
+              Effect.orDie,
+              Effect.onError(() =>
+                connection
+                  .executeUnprepared('ROLLBACK', [], undefined)
+                  .pipe(Effect.orDie),
+              ),
+            ),
           rollback: (connection) =>
             connection.executeUnprepared('ROLLBACK', [], undefined),
           savepoint: (connection, id) =>

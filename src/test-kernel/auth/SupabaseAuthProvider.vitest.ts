@@ -36,6 +36,18 @@ const testDoubles = vi.hoisted(() => ({
   emitters: [] as Array<{ fire: ReturnType<typeof vi.fn> }>,
   pkceTail: Promise.resolve<unknown>(undefined),
   secrets: new Map<string, string>(),
+  // The secrets port the host composition root now hands the provider at
+  // construction, in place of the ambient `platform().secrets` it read.
+  secretsPort: {
+    get: async (key: string) => testDoubles.secrets.get(key),
+    getStored: providerMocks.secretGetStored,
+    set: async (key: string, value: string) => {
+      testDoubles.secrets.set(key, value);
+    },
+    delete: providerMocks.secretDelete,
+    listStoredKeys: providerMocks.secretListStoredKeys,
+    getEnv: (_name: string): string | undefined => undefined,
+  },
   // Assigned at module scope (after the `effect` import): the `withPkcePermit`
   // double turns its program into a Promise chained on the shared tail, and
   // wraps that chain back into an Effect for `runAuthProgram` to settle.
@@ -82,20 +94,6 @@ vi.mock('vscode', () => ({
       ),
     ),
   },
-}));
-
-vi.mock('@platform/platform', () => ({
-  platform: () => ({
-    secrets: {
-      get: async (key: string) => testDoubles.secrets.get(key),
-      getStored: providerMocks.secretGetStored,
-      set: async (key: string, value: string) => {
-        testDoubles.secrets.set(key, value);
-      },
-      delete: providerMocks.secretDelete,
-      listStoredKeys: providerMocks.secretListStoredKeys,
-    },
-  }),
 }));
 
 vi.mock('@auth/SupabaseAuthCoordinator', () => ({
@@ -193,11 +191,14 @@ function createProvider(options: {
   };
   testDoubles.coordinator = coordinator;
   testDoubles.emitters.length = 0;
-  const provider = new SupabaseAuthProvider({
-    showError,
-    showInfo: vi.fn(),
-    showSignInPrompt,
-  });
+  const provider = new SupabaseAuthProvider(
+    {
+      showError,
+      showInfo: vi.fn(),
+      showSignInPrompt,
+    },
+    testDoubles.secretsPort,
+  );
   const emitter = testDoubles.emitters[0];
   if (!emitter) throw new Error('provider did not create a session emitter');
 

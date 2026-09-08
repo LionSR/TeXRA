@@ -812,7 +812,9 @@ the owner has not yet ratified.
 
 ### 6.2 Stages
 
-Stages are lanes on one branch and ship in one release (§8).
+Stages are lanes on one branch. The 2026-09-08 owner ruling in §8 permits
+independently safe changes to merge as an intermediate step; the remaining
+stages follow separately.
 
 | Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Deletes in the same release                                                                                                                                                              | Companion step |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
@@ -945,11 +947,20 @@ compatibility shim or vendored fork is selected. Scheduling improvements remain
 subject to measurement and C1's nonzero busy-timeout rule; no provider or tool
 work may be retried as a database transaction.
 
-The installed Effect SQL release has a reproduced failed-COMMIT defect: a
-deferred-constraint failure leaves the transaction active when the connection
-is released. Adoption remains a draft until an upstream correction rolls back
-before release and preserves both failures if rollback also fails. The prepared
-upstream regression and correction do not authorize a local transaction patch.
+TeXRA defines commit finalization through the official public
+`SqlClient.makeWithTransaction` callback. If `COMMIT` fails, that callback
+attempts `ROLLBACK` on the same reserved connection before returning the
+failure. It preserves both causes if rollback also fails. Converting the
+commit failure with `Effect.orDie` before attaching `Effect.onError` preserves
+that cause ordering through the constructor's finalization. The official
+constructor still owns transaction nesting, interruption and scope release;
+TeXRA does not replace its transaction engine or modify the dependency.
+
+The application regression uses a real deferred-constraint commit failure,
+verifies that it publishes no rows or notification, and then successfully
+appends through the same database connection. This supported composition
+removes the earlier upstream-adoption gate. No upstream contribution, fork
+or dependency patch is required or authorized.
 
 C9 continues to require confined generated-file deletion. It does not require
 SQLite admission and cleanup to share one physical directory handle. Cleanup
@@ -1011,6 +1022,39 @@ The SQLite PRD §8 non-goal is reversed to this scoped form; the reversal is
 recorded there and in §10.
 
 ## 8. Process: one cutover, no dual system
+
+### Owner amendment, 2026-09-08: safe intermediate release
+
+The owner authorizes independently safe changes to merge into main as an
+intermediate release so other work can proceed. This supersedes the
+requirement that every stage land in the same merge or release. The smaller
+release is constructed from main and retains its existing metadata readers,
+writers and resume behavior while adding the independent cleanup and audio
+loading corrections in #12124. It requires synchronization, validation and review of
+the actual combined head. It is not completion of the event-table-only
+objective.
+
+#12108 remains held: its event-only metadata readers cannot replace current
+file-backed execution metadata before faithful conversion preserves history and
+resume access, including supported child-run events. The owner explicitly
+rejects temporary loss of that access. The metadata change remains a
+follow-up, not part of this intermediate release.
+
+Official Effect SQL adoption (#12102), the coordinated runtime and checkpoint
+replacement (#11869), and the remaining historical-data work (#11867) continue
+as follow-ups. The runtime's separately recorded flow-checkpoint importer
+retirement remains in force. This sequencing ruling does not settle D4 or
+other outstanding data-meaning decisions, authorize dual writes or new
+compatibility adapters, or permit an unsafe intermediate read/write path.
+Each datum retains one authoritative representation; existing checkpoint
+writers and their file-lease fences remain together until their replacement.
+
+The final deletion ledger and combined validation remain obligations of
+#11867. Stage 7's retirement clock begins with the actual release of the
+importer and supported replacement, not this intermediate merge. No
+contribution to Effect's repository or local dependency fork is authorized.
+The original coordinated process below remains the target where it is not
+superseded by this amendment.
 
 The owner's constraint is that the migration be efficient and never run two
 systems. The SQLite PRD as written violates the second: eight stages, each its

@@ -37,6 +37,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { it } from '@effect/vitest';
 import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
+  Cause,
   Clock,
   Deferred,
   Effect,
@@ -938,6 +939,48 @@ describe('the C1 event table and the C6 publisher', () => {
         }),
       ),
     );
+  });
+
+  it.effect('rolls back a failed commit before reusing the connection', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const database = yield* Database;
+      const connection = yield* Effect.acquireRelease(
+        Effect.sync(() => reader(storage)),
+        (opened) => Effect.sync(() => opened.close()),
+      );
+      connection.exec(`
+        CREATE TABLE accepted_execution (id TEXT PRIMARY KEY);
+        INSERT INTO accepted_execution VALUES ('ab12ce');
+        CREATE TABLE committed_execution (
+          id TEXT REFERENCES accepted_execution(id) DEFERRABLE INITIALLY DEFERRED
+        );
+        CREATE TRIGGER validate_execution AFTER INSERT ON event
+        BEGIN
+          INSERT INTO committed_execution VALUES (json_extract(NEW.data, '$.executionId'));
+        END;
+      `);
+
+      const failed = yield* Effect.exit(database.appendAll([runStart]));
+      expect(Exit.isFailure(failed)).toBe(true);
+      if (Exit.isFailure(failed)) {
+        expect(Cause.pretty(failed.cause)).toContain(
+          'FOREIGN KEY constraint failed',
+        );
+      }
+      expect(yield* SubscriptionRef.get(database.level)).toBe(0);
+      expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(0);
+
+      const committed = yield* database.appendAll([olderStart]);
+      expect(committed).toHaveLength(1);
+      expect(committed[0]?.commit).toBe(1);
+      expect(yield* database.readAll(0)).toEqual(committed);
+      expect(
+        connection.prepare('SELECT id FROM committed_execution').all(),
+      ).toEqual([{ id: 'ab12ce' }]);
+      expect(yield* SubscriptionRef.get(database.level)).toBe(1);
+      expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(1);
+    }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
   });
 
   it.effect('wakes readers when cancellation arrives during commit', () =>
