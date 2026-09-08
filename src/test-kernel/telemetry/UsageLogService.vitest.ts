@@ -48,16 +48,17 @@ function stubAccessToken(): void {
   vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue('token');
 }
 
-// ky passes a Request object; read each batch body from it. `beforeRespond`
-// lets a test stall or fail a specific call before the success response.
+// The Effect fetch client passes (url, init); read each batch body from the
+// init. `beforeRespond` lets a test stall or fail a specific call before the
+// success response.
 function stubFetch(
   batches: unknown[],
   beforeRespond: (
     callCount: number,
   ) => void | Response | Promise<void | Response> = () => {},
 ): Mock {
-  const fetchMock = vi.fn(async (request: Request) => {
-    batches.push(await request.json());
+  const fetchMock = vi.fn(async (_url: URL, init: RequestInit) => {
+    batches.push(await new Response(init.body).json());
     const response = await beforeRespond(fetchMock.mock.calls.length);
     return response ?? jsonResponse({ success: true, accepted: 1 });
   });
@@ -187,7 +188,7 @@ describe('UsageLogService', () => {
 
     UsageLogService.log(usageEntry('timer'));
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const request = fetchMock.mock.calls[0]?.[0] as Request;
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
 
     const disposal = effectRuntime().runPromise(Scope.close(owner, Exit.void));
     let disposed = false;
@@ -196,7 +197,7 @@ describe('UsageLogService', () => {
     });
     // Long enough for a dispose that abandons the send to have resolved.
     await vi.advanceTimersByTimeAsync(50);
-    expect(request.signal.aborted).toBe(false);
+    expect(init.signal?.aborted).toBe(false);
     expect(disposed).toBe(false);
 
     releaseFetch();

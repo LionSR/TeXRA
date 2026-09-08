@@ -130,7 +130,7 @@ frozen deep-import lists, not another lint rule.
   - `frontend/media/` - Image and audio handling
 - `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
 - `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
-  - `packages/extension/src/common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
+  - `packages/extension/src/common/webview/` - Base classes (`BundledViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
 - `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly five modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/`: `@utils/core`, `@utils/core/keyedMutex`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`. Those five, and anything they import, must not reach for Node built-ins. There are 65 TypeScript modules under `src/utils/` in the current tree; the other 60 are not browser-reachable today and must not be assumed browser-safe. `scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.
 
   Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the five browser-reachable modules, check that it stays browser-safe.
@@ -512,7 +512,7 @@ travel through the flows are described in `docs/architecture/2026-06-20-pocketfl
 
 **Webviews and UI**
 
-- Generate HTML through `BaseViewContentProvider` (`packages/extension/src/common/webview/BaseViewContentProvider.ts`) and its `buildWebviewHtml` helper. Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
+- Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
 - Use Web Awesome (`<wa-icon>` via `waIcon()` from `@shared/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`) for consistent interactions.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js) local to reduce extension size.
 - Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.
@@ -561,9 +561,8 @@ default to reach for, it's `settingsView`'s pattern specifically:
 - **`progressView`** (the sidebar and editor-tab conversation shell) is
   event-fold, not request/response: `ProgressViewProvider` implements
   `vscode.WebviewViewProvider` directly — composed with
-  `BundledViewContentProvider` (`common/webview/BaseViewContentProvider.ts`;
-  there is no `BaseViewContentProvider` class, despite the file name) for
-  shared webview boilerplate — and routes through `SessionBridge` /
+  `BundledViewContentProvider` (`common/webview/BundledViewContentProvider.ts`)
+  for shared webview boilerplate — and routes through `SessionBridge` /
   `HostDraftRequests` as typed `runtime.request` / `host.request` calls (see
   `.agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md`). Its Lit
   components (`progressView/frontend/components/`) read the `SessionView` fold
