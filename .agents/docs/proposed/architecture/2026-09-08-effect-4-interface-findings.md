@@ -572,9 +572,10 @@ understates it by construction.
 The composition matters more than the total. **6 of the 27 are production** —
 `src/agent/trace/TraceEmitter.ts` itself, plus
 `packages/agent/src/effect/sessions.ts`, `ModelHandler.ts`,
-`SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and 11 are
-test-kernel, most passing a plain synchronous callback to `trace.subscribe`
-and reading events out of a local array on the next line. So the production
+`SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and 21 are
+test-kernel: 11 subscriber files and 10 additional constructor-only files.
+Most subscriber tests pass a plain synchronous callback to `trace.subscribe`
+and read events out of a local array on the next line. So the production
 blast radius is six files.
 
 **The synchronous `subscribe` facade is itself a third run-boundary site, and
@@ -591,7 +592,7 @@ and propagate that through every subscriber — **another injection chain the
 stated above, and the second time the note has held both halves of a fact in
 separate sections without joining them.
 
-**The eleven test files are cheaper than an earlier revision charged them.**
+**The eleven subscriber test files are cheaper than an earlier revision charged them.**
 That revision said each would need "a fiber, a scope and a drain". It would
 not: if `TraceEmitter.subscribe` stays a synchronous facade — possible only
 with the injected runtime just described — the adapter owns each
