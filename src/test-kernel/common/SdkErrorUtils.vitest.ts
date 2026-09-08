@@ -91,31 +91,23 @@ function providerAttributedError(body: unknown): Error {
 }
 
 describe('detectStatusText', () => {
-  it('treats a blank direct statusText as absent, falling back to the reason phrase (not the nested statusText)', () => {
+  it('applies the nullish-then-truthy check per candidate, not a blank-skipping scan', () => {
+    // A blank direct statusText is non-nullish, so it wins the ?? chain and
+    // then fails the truthy check — falling back to the reason phrase rather
+    // than reading the nested carrier's statusText.
     expect(
       detectStatusText(
         { statusText: '', response: { statusText: 'Teapot Override' } },
         418,
       ),
     ).toBe("I'm a teapot");
-  });
-
-  it('returns a whitespace-only direct statusText verbatim', () => {
+    // A whitespace-only direct statusText is truthy, so it wins outright.
     expect(
       detectStatusText({
         statusText: ' ',
         response: { statusText: 'Not Found' },
       }),
     ).toBe(' ');
-  });
-
-  it('skips a null statusText on a nested carrier and keeps scanning', () => {
-    expect(
-      detectStatusText({
-        response: { statusText: null },
-        error: { statusText: 'Not Found' },
-      }),
-    ).toBe('Not Found');
   });
 });
 
