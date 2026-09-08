@@ -1,13 +1,15 @@
 // Node imports
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FileSystem, Stream } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { MemoryTool } from '@tools/memory/MemoryTool';
@@ -49,12 +51,8 @@ function fileStat(size: number): FileStat {
   };
 }
 
-function streamOf(
-  content: string,
-): ReturnType<typeof StorageFS.createReadStream> {
-  return Readable.from([Buffer.from(content)]) as unknown as ReturnType<
-    typeof StorageFS.createReadStream
-  >;
+function streamOf(content: string) {
+  return Stream.make(Buffer.from(content));
 }
 
 function viewMemory(path?: string) {
@@ -62,6 +60,10 @@ function viewMemory(path?: string) {
 }
 
 describe('MemoryTool view with an omitted path', () => {
+  let memoryFS: FileSystem.FileSystem;
+  beforeEach(() => {
+    memoryFS = effectRuntime().runSync(FileSystem.FileSystem);
+  });
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -91,7 +93,7 @@ describe('MemoryTool view with an omitted path', () => {
       target === MEMORY_STORAGE_DIR ? [['notes.md', FileType.File]] : [],
     );
     vi.spyOn(StorageFS, 'read').mockResolvedValue(TEST_FRONTMATTER);
-    vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
+    vi.spyOn(memoryFS, 'stream').mockImplementation(() =>
       streamOf(TEST_FRONTMATTER),
     );
 
@@ -175,8 +177,12 @@ describe('MemoryTool view with an omitted path', () => {
       }
       return dirStat();
     });
-    vi.spyOn(StorageFS, 'createReadStream').mockImplementation((target) =>
-      streamOf(target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER),
+    vi.spyOn(memoryFS, 'stream').mockImplementation((target) =>
+      streamOf(
+        path.relative(workspaceRoots().storage, target) === pinnedPath
+          ? PINNED_FRONTMATTER
+          : TEST_FRONTMATTER,
+      ),
     );
 
     const result = await viewMemory(MEMORY_DISPLAY_ROOT);

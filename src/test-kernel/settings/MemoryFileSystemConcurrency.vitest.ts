@@ -1,11 +1,10 @@
 // Node imports
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Stream } from 'effect';
+import { Effect, FileSystem, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -42,12 +41,10 @@ function memoryFiles(): [string, number][] {
   );
 }
 
-function readStreamFromText(
-  text: string,
-): ReturnType<typeof StorageFS.createReadStream> {
-  return Readable.from([Buffer.from(text)]) as unknown as ReturnType<
-    typeof StorageFS.createReadStream
-  >;
+const memoryFS = FileSystem.makeNoop({});
+
+function readStreamFromText(text: string) {
+  return Stream.make(Buffer.from(text));
 }
 
 function testFileStat(content: string): FileStat {
@@ -98,7 +95,7 @@ describe('memory filesystem listing', () => {
           return testFileStat(TEST_FRONTMATTER);
         });
 
-        vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
+        vi.spyOn(memoryFS, 'stream').mockImplementation(() =>
           readStreamFromText(TEST_FRONTMATTER),
         );
 
@@ -111,7 +108,7 @@ describe('memory filesystem listing', () => {
         expect(maxActiveMetadataReads).toBeLessThanOrEqual(
           MEMORY_LISTING_CONCURRENCY,
         );
-      }),
+      }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
   );
 
   it.effect(
@@ -135,12 +132,12 @@ describe('memory filesystem listing', () => {
           return testFileStat(PINNED_FRONTMATTER);
         });
         const readStream = vi
-          .spyOn(StorageFS, 'createReadStream')
+          .spyOn(memoryFS, 'stream')
           .mockImplementation(() => readStreamFromText(PINNED_FRONTMATTER));
 
         expect(yield* countPinnedMemories(1)).toBe(1);
         expect(readStream.mock.calls.length).toBeLessThan(files.length);
-      }),
+      }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
   );
 
   it.effect('fails the walk with the filesystem error itself', () =>
@@ -160,6 +157,6 @@ describe('memory filesystem listing', () => {
       expect(failure._tag).toBe('MemoryEntryUnreadable');
       expect(failure.cause).toBe(cause);
       expect(failure.cause).toMatchObject({ code: 'ENOENT' });
-    }),
+    }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
   );
 });

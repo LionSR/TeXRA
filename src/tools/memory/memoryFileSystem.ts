@@ -12,9 +12,10 @@
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 
-import { Data, Effect, Semaphore, Stream } from 'effect';
+import { Cause, Data, Effect, FileSystem, Semaphore, Stream } from 'effect';
 
 import { debug } from '@logger/logUtils';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import {
@@ -41,6 +42,13 @@ import {
 const FRONTMATTER_SCAN_BYTES = 16 * 1024;
 const PREVIEW_SCAN_BYTES = 64 * 1024;
 const MEMORY_LISTING_CONCURRENCY = 8;
+
+/** Resolve relative memory paths against the calling session's storage root. */
+function absoluteMemoryPath(storagePath: string): string {
+  return path.isAbsolute(storagePath)
+    ? storagePath
+    : path.join(workspaceRoots().storage, storagePath);
+}
 
 /** Options controlling how far and how much {@link walkMemoryDirectory} descends. */
 export interface MemoryWalkOptions {
@@ -136,22 +144,33 @@ const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
     if (fileStats.size === 0) {
       return { text: '', truncated: false };
     }
-    const end = Math.min(maxBytes, fileStats.size) - 1;
-    const chunks = yield* Stream.unwrap(
-      Effect.try({
-        try: () =>
-          Stream.fromAsyncIterable(
-            StorageFS.createReadStream(storagePath, { start: 0, end }),
-            (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+    const fs = yield* FileSystem.FileSystem;
+    const chunks = yield* fs
+      .stream(absoluteMemoryPath(storagePath), {
+        bytesToRead: Math.min(maxBytes, fileStats.size),
+      })
+      .pipe(
+        // Finish an admitted read before the stream's scope closes its fd.
+        // Cancellation remains available between filesystem pulls.
+        (stream) =>
+          Stream.transformPull(stream, (pull) =>
+            Effect.succeed(Effect.uninterruptible(pull)),
           ),
-        catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
-      }),
-    ).pipe(Stream.runCollect);
-    const text = Buffer.concat(
-      chunks.map((chunk) =>
-        Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk),
-      ),
-    ).toString('utf-8');
+        Stream.runCollect,
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(
+              cause,
+              (error) =>
+                new MemoryEntryUnreadable({
+                  storagePath,
+                  cause: error.reason.cause ?? error,
+                }),
+            ),
+          ),
+        ),
+      );
+    const text = Buffer.concat(chunks).toString('utf-8');
     return {
       text: normalizeLineEndings(text),
       truncated: fileStats.size > maxBytes,
@@ -240,7 +259,11 @@ function walkLevel(
   depth: number,
   options: MemoryWalkOptions,
   permits: Semaphore.Semaphore,
-): Stream.Stream<MemoryWalkEntry, MemoryEntryUnreadable> {
+): Stream.Stream<
+  MemoryWalkEntry,
+  MemoryEntryUnreadable,
+  FileSystem.FileSystem
+> {
   return Stream.fromEffect(
     Effect.tryPromise({
       try: () => StorageFS.readDir(storagePath),
@@ -298,7 +321,11 @@ export function walkMemoryDirectory(
   storagePath: string,
   relativeRoot = '',
   options: MemoryWalkOptions = {},
-): Stream.Stream<MemoryWalkEntry, MemoryEntryUnreadable> {
+): Stream.Stream<
+  MemoryWalkEntry,
+  MemoryEntryUnreadable,
+  FileSystem.FileSystem
+> {
   return Stream.unwrap(
     Effect.map(Semaphore.make(MEMORY_LISTING_CONCURRENCY), (permits) =>
       walkLevel(storagePath, relativeRoot, 0, options, permits),
@@ -379,10 +406,22 @@ type SetMemoryPinnedResult =
  */
 export const setMemoryPinned = Effect.fn('memoryFileSystem.setMemoryPinned')(
   function* (storagePath: string, pinned: boolean) {
-    const raw = yield* Effect.tryPromise({
-      try: () => StorageFS.read(storagePath),
-      catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
-    });
+    const fs = yield* FileSystem.FileSystem;
+    const bytes = yield* fs.readFile(absoluteMemoryPath(storagePath)).pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(
+            cause,
+            (error) =>
+              new MemoryEntryUnreadable({
+                storagePath,
+                cause: error.reason.cause ?? error,
+              }),
+          ),
+        ),
+      ),
+    );
+    const raw = normalizeLineEndings(Buffer.from(bytes).toString('utf-8'));
     const { meta, content } = parseFrontmatter(raw);
 
     const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
