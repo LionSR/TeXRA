@@ -448,18 +448,44 @@ header documents it as generic read/write for arbitrary keys, and
 `src/agent/node/persistedFlow.ts` already stores arbitrary `flow_<runId>`
 records there — not in the closed `SessionEventDraftSchema` vocabulary.
 
-**Settled, and load-bearing: `Activity.CurrentAttempt` does not survive a
-process restart.** `Activity.js:75` is `let attempt = 1` inside an in-memory
-closure, incremented per retry by
-`Effect.provideService(effect, CurrentAttempt, attempt++)`. After a crash the
-numbering restarts at 1, so attempt-keyed memo rows **collide** — a resumed
-run's first attempt reads the pre-crash first attempt's row. A durable engine
-must therefore derive the attempt from persisted state rather than from
-`CurrentAttempt`, or key its memos on something restart-stable. One durable
-row per attempt is also unbounded growth in the retry dimension.
+**Settled: `Activity.CurrentAttempt` is in-memory, and that is deliberate —
+it is how replay works, not a collision.** `Activity.js:75` is
+`let attempt = 1` inside a closure, incremented per retry by
+`Effect.provideService(effect, CurrentAttempt, attempt++)`, and
+`CurrentAttempt` defaults to 1. `makeExecute` passes it straight through as
+`engine.activityExecute(activity, attempt)` (`Activity.js:126,130`), and the
+engine keys on `` `${executionId}/${activity.name}/${attempt}` ``, returning a
+stored exit rather than re-executing (`WorkflowEngine.js:347,354`).
 
-An earlier revision left this open; it was answered on #12081 and the answer
-belongs here, since this note is meant to be the citable source.
+So a resumed run restarting at attempt 1 **reads its own prior result**: the
+workflow re-executes from the top, each completed activity short-circuits to
+its memoized exit, and `attempt++` walks the stored rows in order until it
+reaches the first unmemoized or suspended one. That is deterministic replay,
+and it is the mechanism a durable engine depends on.
+
+**An earlier revision of this note got that backwards**, calling the reuse a
+collision and prescribing that a durable engine derive the attempt from
+persisted state. That prescription is actively harmful: starting at attempt
+_N_ would skip rows 1…*N*−1, bypassing prior activity results and changing
+the replayed workflow's control flow.
+
+The real requirements are narrower and different:
+
+- **How an incomplete attempt is represented.** The engine inserts a state row
+  with `exit: undefined` _before_ running the activity
+  (`WorkflowEngine.js:356-360`) and falls through to execute when it finds
+  one. `layerMemory` makes that moot, but a durable engine persisting the row
+  must distinguish an attempt orphaned by a crash — safe to re-run — from one
+  a live process is still executing. Nothing in the interface expresses that.
+- **The retry budget resets across a restart.** Because the counter is
+  in-memory, an activity that had consumed eight of its ten retries before a
+  crash resumes with a fresh ten. That consequence of `Activity.js:75` does
+  survive, and it is unbounded in the retry dimension: one durable row per
+  attempt, with the ceiling reset by every restart.
+
+This was left open in an earlier revision, answered on #12081 in the
+collision form, and corrected here after review. The correction on #12081
+follows.
 
 ## 5. `HttpClient` — two references worth knowing about
 
