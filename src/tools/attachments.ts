@@ -12,6 +12,7 @@ import { isNonEmptyString } from '@utils/core';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toPosixPath } from '@utils/core/pathCore';
+import { formatBytes } from '@utils/text/stringUtils';
 
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */
@@ -117,9 +118,8 @@ export async function buildFileAttachment({
   );
 
   if (stats.size > ATTACHMENT_MAX_BYTES) {
-    const limitMb = (ATTACHMENT_MAX_BYTES / (1024 * 1024)).toFixed(1);
     throw new ToolError(
-      `Attachment ${display} exceeds maximum size of ${limitMb} MiB.`,
+      `Attachment ${display} exceeds maximum size of ${formatBytes(ATTACHMENT_MAX_BYTES)}.`,
     );
   }
 

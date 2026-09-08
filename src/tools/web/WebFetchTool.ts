@@ -15,10 +15,11 @@ import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
+import { formatBytes } from '@utils/text/stringUtils';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
-const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MiB
 
 const WebFetchInputSchema = z.strictObject({
   url: z
@@ -63,7 +64,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
         // Permanent: not retried.
         return yield* Effect.fail(
           new Error(
-            `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
+            `Response too large (${lengthHeader} bytes); maximum is ${formatBytes(MAX_CONTENT_BYTES)}.`,
           ),
         );
       }
@@ -90,7 +91,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
           if (total > MAX_CONTENT_BYTES) {
             return Effect.fail(
               new Error(
-                `Response too large (exceeds ${MAX_CONTENT_BYTES / (1024 * 1024)} MB maximum).`,
+                `Response too large (exceeds ${formatBytes(MAX_CONTENT_BYTES)} maximum).`,
               ),
             );
           }

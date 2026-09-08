@@ -20,6 +20,7 @@ import {
 import { parseOAuthJson, postOAuth } from '@auth/oauth/oauthRequest';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { isObject } from '@utils/core';
+import { isTransientHttpStatus } from '@utils/core/httpStatus';
 
 const DEVICE_AUTH_REQUEST_TIMEOUT_MS = 30000;
 
@@ -194,7 +195,7 @@ const pollOnce = Effect.fn('supabaseAuthDeviceCode.pollOnce')(function* (
         message: 'Sign-in was denied in the browser.',
       });
     default:
-      if (response.status === 429 || response.status >= 500) {
+      if (isTransientHttpStatus(response.status)) {
         return yield* transient(
           new DeviceSignInError({
             reason: 'poll',
