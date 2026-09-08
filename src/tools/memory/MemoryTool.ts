@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
+import { Cause, Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -200,16 +200,38 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
    * The two filesystem failures are re-raised as their own causes so a
    * caller still sees the error the filesystem raised, exactly as the
    * previous `await` chain did; a `ToolError` stays a typed failure and
-   * `runPromise` rejects with that instance.
+   * `runPromise` rejects with that instance. A compound failure retains all
+   * reasons in one error before the public tool result formats its message.
    */
   protected execute(input: MemoryToolInput): Promise<ToolResult> {
     return effectRuntime().runPromise(
-      this.run(input).pipe(
-        Effect.catchTags({
-          MemoryEntryUnreadable: (error) => Effect.die(error.cause),
-          MemoryFileUnwritable: (error) => Effect.die(error.cause),
-        }),
-      ),
+      Effect.catchCause(this.run(input), (cause) => {
+        const unwrapped = Cause.map(cause, (error) =>
+          '_tag' in error &&
+          (error._tag === 'MemoryEntryUnreadable' ||
+            error._tag === 'MemoryFileUnwritable')
+            ? error.cause
+            : error,
+        );
+        if (
+          unwrapped.reasons.length > 1 &&
+          !Cause.hasInterruptsOnly(unwrapped)
+        ) {
+          return Effect.die(
+            new Error(Cause.pretty(unwrapped), { cause: unwrapped }),
+          );
+        }
+        const reason = cause.reasons[0];
+        if (
+          reason?._tag === 'Fail' &&
+          '_tag' in reason.error &&
+          (reason.error._tag === 'MemoryEntryUnreadable' ||
+            reason.error._tag === 'MemoryFileUnwritable')
+        ) {
+          return Effect.die(reason.error.cause);
+        }
+        return Effect.failCause(cause);
+      }),
     );
   }
 

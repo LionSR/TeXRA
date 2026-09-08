@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Stream } from 'effect';
+import { Effect, Exit, FileSystem, PlatformError, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -12,6 +12,7 @@ import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   countPinnedMemories,
+  MemoryEntryUnreadable,
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
 import { delay } from '@utils/core';
@@ -158,5 +159,51 @@ describe('memory filesystem listing', () => {
       expect(failure.cause).toBe(cause);
       expect(failure.cause).toMatchObject({ code: 'ENOENT' });
     }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
+  );
+
+  it.effect(
+    'retains a close failure when the attribution read also fails',
+    () =>
+      Effect.gen(function* () {
+        const readFailure = new Error('memory read failed');
+        const closeFailure = PlatformError.systemError({
+          _tag: 'Unknown',
+          module: 'FileSystem',
+          method: 'close',
+          cause: new Error('memory close failed'),
+        });
+        vi.spyOn(StorageFS, 'readDir').mockResolvedValue([
+          ['note.md', FileType.File],
+        ]);
+        vi.spyOn(StorageFS, 'stat').mockResolvedValue(
+          testFileStat(TEST_FRONTMATTER),
+        );
+        vi.spyOn(memoryFS, 'stream').mockReturnValue(
+          Stream.fail(
+            PlatformError.systemError({
+              _tag: 'Unknown',
+              module: 'FileSystem',
+              method: 'readAlloc',
+              cause: readFailure,
+            }),
+          ).pipe(Stream.ensuring(Effect.die(closeFailure))),
+        );
+
+        const result = yield* Effect.exit(
+          Stream.runDrain(walkMemoryDirectory(MEMORY_STORAGE_DIR)),
+        );
+        expect(Exit.isFailure(result)).toBe(true);
+        if (Exit.isSuccess(result)) return;
+        expect(result.cause.reasons).toMatchObject([
+          {
+            _tag: 'Fail',
+            error: new MemoryEntryUnreadable({
+              storagePath: path.join(MEMORY_STORAGE_DIR, 'note.md'),
+              cause: readFailure,
+            }),
+          },
+          { _tag: 'Die', defect: closeFailure },
+        ]);
+      }).pipe(Effect.provideService(FileSystem.FileSystem, memoryFS)),
   );
 });

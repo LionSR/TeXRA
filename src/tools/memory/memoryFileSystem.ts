@@ -185,11 +185,15 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
         Effect.try({
           try: () => parseFrontmatter(text).meta,
           catch: (cause) => new MemoryMetaUnreadable({ storagePath, cause }),
-        }),
+        }).pipe(Effect.catch(skipAttribution)),
       ),
-      Effect.catchTags({
-        MemoryMetaUnreadable: skipAttribution,
-        MemoryEntryUnreadable: skipAttribution,
+      Effect.catchCause((cause) => {
+        const reason = cause.reasons[0];
+        // An unreadable head may omit attribution, but a failed close must
+        // remain visible even when the read failed as well.
+        return cause.reasons.length === 1 && reason?._tag === 'Fail'
+          ? skipAttribution(reason.error)
+          : Effect.failCause(cause);
       }),
     ),
 );
