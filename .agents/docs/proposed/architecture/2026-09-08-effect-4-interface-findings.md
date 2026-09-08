@@ -286,20 +286,24 @@ forbid replacing `TraceEmitter`. The honest characterisation is construction
 and injection work: threading a hub through `createModelHandler`'s `async`
 signature and into every construction site.
 
-So nothing here is impossible. What remains is the size of the job. Counted
-at the measured tree rather than estimated: **24 files** touch the seam — 19
-construct `new TraceEmitter()` and 10 subscribe to a trace or attach a
-channel sink, overlapping to 24. An earlier revision said "roughly sixteen",
-which was an undercount.
+So nothing here is impossible. What remains is the size of the job. **26
+files** touch the seam: 19 construct `new TraceEmitter()`, 14 call
+`.subscribe(...)` on a trace, logger or emitter, and 7 do both.
 
-The composition matters more than the total, and cuts both ways. Only **4 of
-the 24 are production**; the other 20 are test-kernel, most of them passing a
-plain synchronous callback to `trace.subscribe` and reading events out of a
-local array on the next line. So the production blast radius is small, and
-the cost is concentrated in rewriting tests that would each need a fiber, a
-scope and a drain to observe what a callback observes today.
+This figure moved twice under review — "roughly sixteen" was an estimate, and
+a recount that reported 24 used too narrow a subscription pattern. Treat it
+as measured at this tree, not as authoritative.
 
-That is the argument against B4, and it is an economic one: 24 files of
+The composition matters more than the total, and cuts both ways. **5 of the
+26 are production** — `packages/agent/src/effect/sessions.ts`,
+`ModelHandler.ts`, `SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and
+the other 21 are test-kernel, most passing a plain synchronous callback to
+`trace.subscribe` and reading events out of a local array on the next line.
+So the production blast radius is small, and the cost is concentrated in
+rewriting tests that would each need a fiber, a scope and a drain to observe
+what a callback observes today.
+
+That is the argument against B4, and it is an economic one: 26 files of
 churn, mostly tests, plus the five behavioural properties below, against the
 listener machinery being replaced — the `subscribers` field (`:47`),
 `subscribe` (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a
