@@ -210,13 +210,16 @@ export async function initializeElectronPlatform(
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the
   // extension's ordering (extension.ts) — same key, same seeding function.
-  await seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION);
+  await seedDisabledToolDefaults(
+    globalStateStore,
+    GlobalStateKey.LAST_KNOWN_VERSION,
+  );
 
   const resourcesPath = resolveResourcesPath(mainDirname);
 
   // Register the shared Node-host agent runtime: memory + goal tool injections
   // and the direct Lean language services (lake env lean --server).
-  initNodeAgentRuntime(lifecycle);
+  initNodeAgentRuntime(lifecycle, globalStateStore);
   // Goal continuation and follow-up polish read the same bundled templates as
   // the extension; one call registers every row of the prompt table, so
   // desktop cannot wire one prompt and forget another the way it once did.

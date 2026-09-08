@@ -14,7 +14,7 @@ import { registerAgentFeatures } from '@agent/features';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local file imports
-import type { LifecycleHost } from '../interfaces';
+import type { LifecycleHost, StateStore } from '../interfaces';
 
 /**
  * Register the singleton agent runtime for a Node host after `initPlatform`.
@@ -25,11 +25,17 @@ import type { LifecycleHost } from '../interfaces';
  * `registerAgentFeatures`, silently losing the memory and goal tool
  * injections.
  *
+ * `globalState` is the same store the caller handed `initPlatform`; the memory
+ * injection predicate reads it.
+ *
  * Call exactly once per process: `registerAgentFeatures` and
  * `registerDirectLeanLanguageServices` register a singleton / shutdown handler
  * that throws or double-registers on a second call.
  */
-export function initNodeAgentRuntime(lifecycle: LifecycleHost): void {
-  registerAgentFeatures();
+export function initNodeAgentRuntime(
+  lifecycle: LifecycleHost,
+  globalState: StateStore,
+): void {
+  registerAgentFeatures(globalState);
   registerDirectLeanLanguageServices(lifecycle);
 }

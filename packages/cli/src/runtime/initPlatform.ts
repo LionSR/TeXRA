@@ -375,6 +375,7 @@ export async function initCliPlatform(
     // extension/desktop ordering — same seeding function, CLI's own version
     // key since the CLI tracks its bundled-agent version independently.
     await seedDisabledToolDefaults(
+      stateStores.globalState,
       GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
     );
 
@@ -384,7 +385,7 @@ export async function initCliPlatform(
     // Register the shared Node-host agent runtime: memory + goal tool
     // injections and the direct Lean language services (errors surface via the
     // Tools dashboard if `lake` isn't on PATH).
-    initNodeAgentRuntime(lifecycle);
+    initNodeAgentRuntime(lifecycle, stateStores.globalState);
 
     // Kill agent-spawned OS children before the process dies, exactly as the
     // extension and desktop hosts do. Background `bash` runs are spawned
