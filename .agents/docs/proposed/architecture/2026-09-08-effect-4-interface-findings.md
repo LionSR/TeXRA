@@ -338,19 +338,36 @@ is `publishUnsafe`, documented to return `false` when a bounded hub is full.
 **production class constructor**, and `src/transcript/runTrace.ts:34`
 constructs a second one in a plain function.
 
-**And the hub need not be injected at all.** `Effect.runSync(PubSub.unbounded())`
-succeeds on rc.112 — verified by running it — so `TraceEmitter` can build its
-own hub in its constructor and none of the 19 `new TraceEmitter()` sites has
-to change. That removes most of the construction churn from the estimate
-below; the subscription and lifecycle work remains.
-
-One repo-specific cost attaches to it: `src/agent/trace/TraceEmitter.ts` is
-not one of the ratchet's boundary kinds
+**The hub need not be injected — but not by the route this note first gave.**
+`Effect.runSync(PubSub.unbounded())` does succeed on rc.112. It is
+nonetheless **barred here**, and a `debtLanes` entry does not rescue it:
+`src/agent/trace/TraceEmitter.ts` is not one of the ratchet's boundary kinds
 (`packages/{extension,desktop,cli,agent}/src/**` or `src/tools/**/*Tool.ts`),
-so a `runSync` there lands in the `Effect.run*` row as below-boundary debt and
-`--update` refuses it without a `debtLanes` entry naming the lane that removes
-it. Workable, but it converts constructor churn into a tracked debt row rather
-than eliminating it.
+and `check-effect-migration-ratchet.mjs:1175-1188` refuses **any** file
+entering the below-boundary register that the committed baseline does not
+already name — "the register records the debt that already existed when it was
+written; it is not an intake" — then exits 1. An earlier revision of this
+paragraph called that "workable, a tracked debt row". It is not workable; it
+is rejected.
+
+**The route that does work is `PubSub.makeAtomicUnbounded`, and it is
+synchronous end to end** [reproduced]. It returns an `UnboundedPubSub` value
+rather than an `Effect`, and on that value `subscribe()` returns a
+subscription object and `publish(x)` returns a boolean — all verified by
+running them. No `Effect.run*`, so no ratchet row at all. `PubSub.make`, which
+wraps an atomic in a delivery strategy, _is_ effectful
+(`Effect.Effect<PubSub<A>>`) and would land back on `runSync`.
+
+**But notice what that buys, because it cuts against the conclusion it
+rescues.** `Atomic` is the low-level storage layer: no delivery strategy, no
+subscriber-completion machinery, none of the semantics `PubSub` layers on top.
+A `TraceEmitter` holding an `Atomic` and calling its synchronous
+`publish`/`subscribe` is **closer to the hand-rolled listener set B4 exists to
+replace** than to the hub whose semantics justified replacing it. So the
+ratchet-legal in-place construction is available, and taking it gives up most
+of the reason to migrate. Either the hub is built at an existing `Effect`
+boundary — which is injection, the thing this paragraph set out to avoid — or
+B4 adopts a queue and calls it a hub.
 
 **An earlier revision called that constructor "the actual blocker". It is not.**
 Review pointed out that the handler-construction path is reached from inside an
@@ -358,9 +375,11 @@ Review pointed out that the handler-construction path is reached from inside an
 `Effect.tryPromise` around `createModelHandler` — so a caller can yield
 `PubSub.unbounded()` there and pass the hub into the synchronous constructor.
 What the constructor forbids is a **drop-in field initializer**; it does not
-forbid replacing `TraceEmitter`. And since the hub can be built in place (see
-above), threading one through `createModelHandler`'s `async` signature is not
-required either — an earlier revision prescribed that, and it is withdrawn.
+forbid replacing `TraceEmitter`. And since a hub can be built in place (see
+above — via `makeAtomicUnbounded`, the only ratchet-legal route, at the price
+of adopting the storage layer rather than the strategy), threading one through
+`createModelHandler`'s `async` signature is not required either — an earlier
+revision prescribed that, and it is withdrawn.
 
 So nothing here is impossible. What remains is the size of the job, and it is
 smaller than earlier revisions of this note claimed. 26 files touch the seam
@@ -378,12 +397,24 @@ The composition matters more than the total. **5 of the 16 are production** —
 `SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and the other 11 are
 test-kernel, most passing a plain synchronous callback to `trace.subscribe`
 and reading events out of a local array on the next line. So the production
-blast radius is five files, and the cost is concentrated in rewriting eleven
-test files that would each need a fiber, a scope and a drain to observe what
-a callback observes today.
+blast radius is five files.
 
-That is the argument against B4, and it is an economic one: 16 files of
-churn, mostly tests, plus the eight behavioural properties below, against the
+**The eleven test files are cheaper than an earlier revision charged them.**
+That revision said each would need "a fiber, a scope and a drain". It would
+not: if `TraceEmitter.subscribe` stays a synchronous facade — which it must
+anyway, for properties 3 and 6 — the adapter owns each subscription's fiber
+and scope internally and exposes one drain barrier. What each test then needs
+is to _await that barrier_ before asserting on its array, not to build the
+machinery itself. Price the assertion and lifecycle change; charging every
+subscriber file for adapter-owned infrastructure inflates the case against
+B4, which is the direction this note has now erred in three separate
+places.
+
+That is the argument against B4, and it is an economic one — and it has shrunk
+in every round that examined it, which is worth stating plainly rather than
+restating the conclusion at a smaller number each time: 16 files of
+churn, mostly tests and each cheaper than first charged, plus the eight
+behavioural properties below, against the
 listener machinery being replaced — the `subscribers` field (`:47`),
 `subscribe` (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a
 217-line class that does much else besides. Not impossibility — price.
@@ -551,8 +582,11 @@ event stage-stamped on the way in, detachment stopping delivery before it
 returns, the handover cap enforced at enqueue rather than in the handler, and
 ordering preserved against the separate status plane.
 Together with the subscription and lifecycle work above — but not
-the constructor sites, which can build their own hub — that is the real size
-of B4, and the reason not to do it is that size, not impossibility.
+the constructor sites, which can build their own storage-layer hub without
+tripping the ratchet — that is the real size of B4. The reason not to do it is
+that size, not impossibility. Read that verdict with the trend in mind: the
+size has fallen in each of the last three rounds, every time because an
+objection of mine failed rather than because a new capability appeared.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
 
