@@ -297,10 +297,33 @@ traversal actually calls. So:
   Effect-to-Promise bridge **is a `run` site**, and the ratchet decides whether
   it may live where the consumer lives. The three instances found so far —
   hub construction, the `glob` adapter, and the synchronous `subscribe` facade
-  (below) — were all found by accident, while pricing something else. The cost is not "two places"; it
-  is one systematic cost of candidate B whose extent nobody has measured. A
-  grep for B's prospective consumers against the boundary kinds is the
-  measurement, and it has not been run. The three `globSync` callers additionally need the synchronous set,
+  (below) — were all found by accident, while pricing something else.
+
+  **The deferred grep has now been run, and it bounds the exposure rather than
+  counting it** [reproduced]. 22 files consume `platform().fs`. Exactly **one**
+  sits at a ratchet boundary — `packages/desktop/src/main/desktopWorkspaceIpc.ts`.
+  The other **21 do not**: 9 production
+  (`compiledPdfArtifacts.ts`, `platformAgentDirectories.ts`,
+  `workspaceFileOptions.ts`, `runDirOps.ts`, `LatexMediaManager.ts`,
+  `tempFileManager.ts`, `claudeAgentConfig.ts`, `leanServer.ts`,
+  `baseFS.ts`) and 12 test-kernel.
+
+  **Read that as an upper bound, not an answer, and the distinction is the
+  whole point.** A non-boundary consumer needs a `run` site only if it must
+  hand a _value_ to something that cannot accept an `Effect`; otherwise the
+  `Effect` propagates upward until it reaches a boundary that can run it. So
+  21 is the ceiling on new run sites, and the floor is however far propagation
+  travels. R-1 supplies the only real datum on that: converting **one** leaf
+  (`workspaceFileOptions.ts`, on this list) touched **17 files**. The likely
+  shape is therefore few run sites and a great deal of propagation — which is
+  a different cost from the one this section was worried about, and worse in a
+  way the ratchet does not measure.
+
+  What the grep does settle: the exposure is **21 files, not "unknown"**, and
+  every one is named above. The cost is not "two places"; it
+  is one systematic cost of candidate B, and its extent is now bounded rather
+  than unknown: 22 `platform().fs` consumers, 21 of them off-boundary, all
+  named above. The three `globSync` callers additionally need the synchronous set,
   which Effect also lacks — and there no adapter exists at all.
 
 So under both candidates the seam closes for the five async callers and stays
