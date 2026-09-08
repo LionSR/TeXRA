@@ -75,11 +75,22 @@ own `FileSystem` service that the issue does not currently name.
 
 **The errno taxonomy is lossy.** `SystemErrorTag` has 11 members and contains
 **none** of `ENOTEMPTY`, `ENOTDIR`, `EISDIR`, `EINVAL`, `ENOSPC`, and
-`PlatformError` exposes no top-level `.code`. The four predicates in
-`src/common/errors/errorPredicates.ts`, plus the `ENOTEMPTY` branch at
-`src/agent/storage/executionLease.ts:477`, all read **false** against a raw
-`PlatformError`. A written errno mapping is a prerequisite for any code motion,
-not a follow-up.
+`PlatformError` exposes no top-level `.code`.
+
+`src/common/errors/errorPredicates.ts` holds **five** code-reading predicates,
+and the split between them is the useful part. Four read the top-level `.code`
+— `isFileNotFoundError` (`:2`), `isFileExistsError` (`:8`),
+`isNotADirectoryError` (`:14`), `isModuleNotFoundError` (`:19`) — and all four,
+along with the `ENOTEMPTY` branch at `src/agent/storage/executionLease.ts:477`,
+read **false** against a raw `PlatformError`. The fifth, `isDiskFullError`
+(`:57`), walks `causeChain(err)` instead, so it still finds `ENOSPC` on a
+wrapped cause.
+
+That fifth one is the shape the other four would need. `jsonStore.ts` already
+demonstrates the alternative at a boundary — unwrapping `error.reason.cause`
+back to the Node error identity its callers match. Either every predicate walks
+the chain, or every boundary unwraps; a written errno mapping that says which is
+a prerequisite for any code motion, not a follow-up.
 
 **`remove`'s contract is ambiguous exactly where the repo depends on it.** One
 `remove` covers both unlink and rmdir, and the interface never says which a
