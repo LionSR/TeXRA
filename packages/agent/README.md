@@ -11,7 +11,7 @@ Node program and consume its trace as an async stream.
 
 ## Install
 
-Requires Node.js 22.16.0 or later.
+Requires Node.js 22.16.0 or later in 22.x, or Node.js 24 or later.
 
 Not on the registry yet. Inside this workspace, depend on it by name:
 

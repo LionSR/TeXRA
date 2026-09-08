@@ -1080,9 +1080,10 @@ function payloadOf(draft: SessionEventDraft): string {
 /**
  * Bring the official driver's scoped connection to the state C1 requires.
  *
- * The pragma order is load-bearing, not stylistic. `PRAGMA busy_timeout` is
- * the first statement on every connection because `PRAGMA journal_mode = WAL`
- * itself takes an exclusive lock: the stage 0 spike killed a writer outright
+ * The official driver sets `PRAGMA busy_timeout` before enabling WAL; this
+ * function verifies the resulting journal mode. That order is load-bearing
+ * because `PRAGMA journal_mode = WAL` itself takes an exclusive lock: the
+ * stage 0 spike killed a writer outright
  * with `SQLITE_BUSY_RECOVERY` when a second process opened the same database
  * while the timeout was still unset, and setting it first removed the failure
  * entirely. With the timeout set, a second writer blocks and then commits;

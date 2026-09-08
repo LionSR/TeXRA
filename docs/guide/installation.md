@@ -43,7 +43,7 @@ You can also install TeXRA in your preferred editor through a protocol link:
 ### CLI
 
 The standalone `texra` command is published to npm. Install it globally (requires
-Node.js >=22.16.0):
+Node.js 22.16.0 or later in 22.x, or Node.js 24 or later):
 
 ```bash
 npm install -g @texra-ai/cli

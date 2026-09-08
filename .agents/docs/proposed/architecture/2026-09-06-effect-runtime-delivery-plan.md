@@ -96,7 +96,9 @@ competing database layer or discard its in-progress implementation. Compare the 
 client against that implementation at the integration head and retain one implementation.
 The schema and transaction invariants remain unchanged.
 The September 8 owner ruling selects the official client and approves Node
-22.16.0 as the CLI and SDK floor. This supersedes the earlier decision to retain
+22.16.0 as the CLI and SDK floor. The supported range is
+`^22.16.0 || >=24.0.0`: Node 23 lacks the driver's required
+`setReturnArrays()` API. This supersedes the earlier decision to retain
 the handwritten client at Node 22.13.0. The substrate's
 [client comparison](2026-09-03-persistence-substrate-decision.md#client-selection-at-the-approved-host-floor)
 records the required APIs and the reproduced upstream failed-COMMIT adoption
