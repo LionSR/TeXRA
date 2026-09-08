@@ -286,13 +286,26 @@ forbid replacing `TraceEmitter`. The honest characterisation is construction
 and injection work: threading a hub through `createModelHandler`'s `async`
 signature and into every construction site.
 
-So nothing here is impossible. What remains is the size of the job — roughly
-sixteen files, including about ten test call sites that pass plain synchronous
-callbacks to `trace.subscribe` and read events out of a local array
-immediately — against a 29-line listener set that works. That is the argument
-against B4, and it is an economic one.
+So nothing here is impossible. What remains is the size of the job. Counted
+at the measured tree rather than estimated: **24 files** touch the seam — 19
+construct `new TraceEmitter()` and 10 subscribe to a trace or attach a
+channel sink, overlapping to 24. An earlier revision said "roughly sixteen",
+which was an undercount.
 
-Beyond construction, three behavioural properties a replacement must reproduce.
+The composition matters more than the total, and cuts both ways. Only **4 of
+the 24 are production**; the other 20 are test-kernel, most of them passing a
+plain synchronous callback to `trace.subscribe` and reading events out of a
+local array on the next line. So the production blast radius is small, and
+the cost is concentrated in rewriting tests that would each need a fiber, a
+scope and a drain to observe what a callback observes today.
+
+That is the argument against B4, and it is an economic one: 24 files of
+churn, mostly tests, plus the five behavioural properties below, against the
+listener machinery being replaced — the `subscribers` field (`:47`),
+`subscribe` (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a
+217-line class that does much else besides. Not impossibility — price.
+
+Beyond construction, five behavioural properties a replacement must reproduce.
 An earlier revision listed the first two as objections that "survive even an
 unbounded hub"; review showed that overstates them, and the corrected form is
 below.
@@ -457,8 +470,10 @@ does not have.
 `cause`, `Activity.js:130-133` parks the run on it, and
 `WorkflowEngine.js:350-352` deliberately does **not** memoize a `Suspended`
 result. `Workflow.SuspendOnFailure` routes errors there too. A repo-owned
-engine writes its own start marker and maps start-without-completion to
-`Suspended`. The residual hazard is real and is the engine's to solve: on
+engine writes its own start marker, but **must not map every
+start-without-completion to `Suspended`** — that parks the activity on every
+resume, for the reason set out under the storage-error path below. Only a
+_live_ marker suspends; a stale one has to be claimed and re-run. The residual hazard is real and is the engine's to solve: on
 resume a `Suspended` activity re-runs, so double-effect protection must be
 built deliberately.
 
