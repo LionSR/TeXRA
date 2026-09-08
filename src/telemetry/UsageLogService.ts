@@ -28,7 +28,10 @@ import {
   TELEMETRY_ENABLED_KEY,
 } from '@shared/schemas';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  extractErrorMessage,
+  toErrorMessage,
+} from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
@@ -483,7 +486,11 @@ class UsageLogServiceImpl {
         Effect.scoped,
         Effect.mapError((error) => {
           if (!HttpClientError.isHttpClientError(error)) {
-            return undelivered(toErrorMessage(error));
+            // `bodyJson` fails with `HttpBodyError`, which carries `reason`
+            // and `cause` but no message, so `toErrorMessage` renders it as
+            // the empty string — an undelivered billing batch with a blank
+            // reason. Fall back to the tag so this can never be silent.
+            return undelivered(extractErrorMessage(error) ?? String(error));
           }
           // The wrapper's message names the request that failed; only its
           // cause names the transport failure (a refused connection, a reset
