@@ -150,12 +150,15 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 - **`readDirectory` returns `Array<string>`, not `[name, type]`.** The port
   reads each entry's type off the `withFileTypes` dirent for free; Effect's
   shape forces a `stat` per entry. This is load-bearing, not tuple
-  adaptation. **Twelve production consumers** branch on the type bits:
+  adaptation. **At least twelve production consumers** branch on the type bits
+  — a floor rather than a total, since this count has grown at each of three
+  review passes (two, then eight, then twelve):
   `indentDirectory.ts:82`, `diffOperations.ts:244,266,284`,
   `memoryFileSystem.ts:252`, `runGeneratedFiles.ts:93`,
   `desktopWorkspaceIpc.ts:261-270`, `workspaceFileListing.ts:37,44`,
   `executionListing.ts:136`, `runOutputFiles.ts:70-72,126`,
-  `relativeFS.ts:74` (`cleanupOldFiles` keeps only files),
+  `relativeFS.ts:74` (`cleanupOldFiles` keeps only files — note this is a
+  **deletion** path, where a misclassification is unrecoverable),
   `ArxivDownloadTool.ts:23-42` (renders file-vs-directory identity),
   `externalInquiryStorage.ts:456` (accepts only directories), and
   `KVStore.ts:102` (accepts only `.json` files). Four of them —
