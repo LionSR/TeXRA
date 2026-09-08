@@ -80,7 +80,7 @@ interface PreparedWorkflowInputExpansion {
   readonly stdinInputFile?: () => Promise<string>;
 }
 
-export type StdinWorkflowInputMaterializer = (() => Promise<string>) & {
+type StdinWorkflowInputMaterializer = (() => Promise<string>) & {
   cleanup: () => Promise<void>;
 };
 
