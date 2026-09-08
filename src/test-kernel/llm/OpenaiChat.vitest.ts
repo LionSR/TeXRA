@@ -293,6 +293,8 @@ describe('native OpenAI Chat protocol', () => {
             kind: 'local-call',
             providerCallId: 'call_0',
             name: 'search',
+            // The exact concatenation of both tool-call argument deltas.
+            argumentsText: '{"query":"x"}',
             arguments: { query: 'x' },
             evidence: { kind: 'minimax-function-call', index: 0 },
           },
@@ -622,6 +624,7 @@ describe('native OpenAI Chat protocol', () => {
           kind: 'local-call',
           providerCallId: 'call_0',
           name: 'search',
+          argumentsText: '{"query":"first"}',
           arguments: { query: 'first' },
           evidence: { kind: 'minimax-function-call', index: 9 },
         },
@@ -1059,6 +1062,7 @@ describe('native OpenAI Chat protocol', () => {
                 kind: 'local-call',
                 providerCallId: 'original-call',
                 name: 'search',
+                argumentsText: '{"query":"x"}',
                 arguments: { query: 'x' },
               },
             ],
@@ -2240,12 +2244,14 @@ describe('native OpenAI Chat protocol', () => {
           kind: 'local-call',
           providerCallId: 'call_0',
           name: 'search',
+          argumentsText: '{"query":"a"}',
           arguments: { query: 'a' },
         },
         {
           kind: 'local-call',
           providerCallId: 'call_1',
           name: 'fetch',
+          argumentsText: '{"query":"b"}',
           arguments: { query: 'b' },
         },
       ]);
@@ -2831,7 +2837,6 @@ describe('native OpenAI Chat protocol', () => {
     'Kimi tool media',
     'GLM tool media',
     'reasoning',
-    'missing call ID',
     'text after calls',
     'reasoning control',
     'service-tier control',
@@ -2866,8 +2871,9 @@ describe('native OpenAI Chat protocol', () => {
       content: [
         {
           kind: 'local-call',
-          providerCallId: scenario === 'missing call ID' ? null : 'call_0',
+          providerCallId: 'call_0',
           name: 'search',
+          argumentsText: '{}',
           arguments: {},
         },
         ...(scenario === 'text after calls'

@@ -984,6 +984,14 @@ describe('canonical Google Interactions protocol', () => {
           deployment: { credentialScope: 'test-account' },
         },
         finishReason: 'tool-calls',
+        // The finish reason is now read off the wire status rather than
+        // synthesized from the presence of calls, and the status Google sent
+        // is carried verbatim.
+        finishEvidence: {
+          kind: 'google-interactions',
+          status: 'requires_action',
+          terminalReason: null,
+        },
         content: [
           {
             kind: 'reasoning',

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, type Effect, type Stream } from 'effect';
+import { Data, Result, type Effect, type Stream } from 'effect';
 import { z } from 'zod';
 
 const TextPartSchema = z
@@ -252,10 +252,63 @@ const MessagePartSchema = z.strictObject({
     ])
     .optional(),
 });
-const LocalCallPartSchema = z.strictObject({
+/**
+ * `argumentsText` and `arguments` are two representations of one value on
+ * purpose, not a dual system. A JSON.parse then JSON.stringify round trip is
+ * not byte exact: it truncates integers past 2^53, rewrites 1.0 as 1,
+ * collapses duplicate keys and reorders integer-like keys, and that loss
+ * happens in the codec, before anything durable is written. So the exact
+ * provider bytes and the parsed form callers read are both carried, and this
+ * refinement keeps the pair one value.
+ */
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  // `Object.is`, not `===`: JSON.parse keeps -0 while re-encoding the parsed
+  // value writes 0, so `===` would call a drifted pair one value.
+  if (Object.is(left, right)) return true;
+  if (
+    typeof left !== 'object' ||
+    typeof right !== 'object' ||
+    left === null ||
+    right === null ||
+    Array.isArray(left) !== Array.isArray(right)
+  ) {
+    return false;
+  }
+  const entries = Object.entries(left);
+  return (
+    entries.length === Object.keys(right).length &&
+    entries.every(
+      ([key, value]) =>
+        Object.hasOwn(right, key) &&
+        sameJsonValue(value, (right as Record<string, unknown>)[key]),
+    )
+  );
+}
+
+function validateLocalCallArguments(
+  part: { readonly argumentsText: string; readonly arguments: unknown },
+  ctx: z.RefinementCtx,
+): void {
+  const parsed = Result.try((): unknown => JSON.parse(part.argumentsText));
+  if (
+    Result.isFailure(parsed) ||
+    !sameJsonValue(parsed.success, part.arguments)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['argumentsText'],
+      message:
+        'Returned argument bytes must parse to exactly the reported arguments.',
+    });
+  }
+}
+
+const LocalCallFieldsSchema = z.strictObject({
   kind: z.literal('local-call'),
-  providerCallId: z.string().min(1).nullable(),
+  providerCallId: z.string().min(1),
   name: z.string().min(1),
+  /** The provider's exact returned bytes; `arguments` is their parse. */
+  argumentsText: z.string(),
   arguments: JsonObjectSchema,
   evidence: z
     .discriminatedUnion('kind', [
@@ -275,6 +328,9 @@ const LocalCallPartSchema = z.strictObject({
     ])
     .optional(),
 });
+const LocalCallPartSchema = LocalCallFieldsSchema.superRefine(
+  validateLocalCallArguments,
+);
 
 const OutputPartSchema = z.discriminatedUnion('kind', [
   OpenRouterFileAnnotationSchema,
@@ -338,17 +394,15 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
   LocalCallPartSchema.readonly(),
 ]);
 
-const ContentSchema = z.array(OutputPartSchema).readonly();
+export const ContentSchema = z.array(OutputPartSchema).readonly();
 const EditorContentSchema = z
   .array(
     z.discriminatedUnion('kind', [
       MessagePartSchema.omit({ evidence: true })
         .extend({ content: z.array(TextPartSchema).readonly() })
         .readonly(),
-      LocalCallPartSchema.omit({ evidence: true })
-        .extend({
-          providerCallId: LocalCallPartSchema.shape.providerCallId.unwrap(),
-        })
+      LocalCallFieldsSchema.omit({ evidence: true })
+        .superRefine(validateLocalCallArguments)
         .readonly(),
     ]),
   )
@@ -427,7 +481,7 @@ function validateAssistantContent(
       }
       itemIds.add(evidence.itemId);
     }
-    if (part.kind !== 'local-call' || part.providerCallId === null) continue;
+    if (part.kind !== 'local-call') continue;
     if (ids.has(part.providerCallId)) {
       ctx.addIssue({
         code: 'custom',
@@ -439,7 +493,7 @@ function validateAssistantContent(
   }
 }
 
-const AssistantMessageSchema = z
+export const AssistantMessageSchema = z
   .strictObject({
     role: z.literal('assistant'),
     origin: ModelOriginSchema,
@@ -457,8 +511,9 @@ const AssistantMessageSchema = z
     validateAssistantContent(message.origin, message.content, ctx);
   })
   .readonly();
+export type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
 
-const MessageSchema = z.discriminatedUnion('role', [
+export const MessageSchema = z.discriminatedUnion('role', [
   z
     .strictObject({
       role: z.literal('user'),
@@ -486,7 +541,7 @@ const MessageSchema = z.discriminatedUnion('role', [
 ]);
 
 // A completed assistant can precede settlement; only the next request requires it.
-const PreparedHistorySchema = z
+export const PreparedHistorySchema = z
   .array(MessageSchema)
   .min(1)
   .superRefine((messages, ctx) => {
@@ -571,13 +626,13 @@ const ResponsesContinuationSchema = PrefixSchema.extend({
   origin: OriginSchema.extend({
     protocol: z.literal('openai-responses'),
   }).readonly(),
-  anchor: z.discriminatedUnion('kind', [
-    ResponsesAnchorSchema.extend({ kind: z.literal('stored') }).readonly(),
-    ResponsesAnchorSchema.extend({
-      kind: z.literal('connection'),
-      connectionId: z.uuid(),
-    }).readonly(),
-  ]),
+  // Only a stored anchor is durable. A connection-scoped anchor named a single
+  // websocket, so it was dead the moment the process exited, and reusing a dead
+  // one failed the whole turn rather than dropping the acceleration. Keeping it
+  // representable here would let a persisted value carry it.
+  anchor: ResponsesAnchorSchema.extend({
+    kind: z.literal('stored'),
+  }).readonly(),
 }).readonly();
 /** Provider acceleration of an exact prefix, never the conversation authority. */
 export const ContinuationSchema = z.union([
@@ -1243,6 +1298,34 @@ const HttpTurnResultSchema = z
         MiniMaxDetectionSchema.extend({
           kind: z.literal('minimax'),
         }).readonly(),
+        z
+          .strictObject({
+            kind: z.literal('google-interactions'),
+            // Reported verbatim: the interaction status vocabulary is open, so
+            // an unrecognized status is preserved rather than dropped.
+            status: z.string().min(1),
+            // Null when the interaction reports no reason for ending, which is
+            // every status Google returns today.
+            terminalReason: z.string().min(1).nullable(),
+          })
+          .readonly(),
+        z
+          .strictObject({
+            kind: z.literal('openai-responses'),
+            status: z.enum([
+              'queued',
+              'in_progress',
+              'completed',
+              'failed',
+              'cancelled',
+              'incomplete',
+            ]),
+            // Present only on an incomplete response.
+            incompleteReason: z
+              .enum(['max_output_tokens', 'content_filter'])
+              .nullable(),
+          })
+          .readonly(),
       ])
       .optional(),
     refusalEvidence: z
@@ -1294,7 +1377,11 @@ const HttpTurnResultSchema = z
         result.requestedOrigin.protocol !== 'openrouter-chat') ||
       ((result.usage?.providerUsage?.kind === 'minimax' ||
         result.finishEvidence?.kind === 'minimax') &&
-        result.requestedOrigin.protocol !== 'minimax-chat')
+        result.requestedOrigin.protocol !== 'minimax-chat') ||
+      (result.finishEvidence?.kind === 'google-interactions' &&
+        result.requestedOrigin.protocol !== 'google-interactions') ||
+      (result.finishEvidence?.kind === 'openai-responses' &&
+        result.requestedOrigin.protocol !== 'openai-responses')
     ) {
       ctx.addIssue({
         code: 'custom',
@@ -1353,6 +1440,17 @@ export const TurnResultSchema = z.union([
   EditorTurnResultSchema,
 ]);
 export type TurnResult = z.infer<typeof TurnResultSchema>;
+
+/** The assistant message a completed turn contributes to canonical history. */
+export function assistantMessageFromResult(
+  result: TurnResult,
+): AssistantMessage {
+  return {
+    role: 'assistant',
+    origin: result.requestedOrigin,
+    content: result.content,
+  };
+}
 
 // Identity evidence is neither background acceptance nor cancellation.
 const IdentifiedEventSchema = IdentitySchema.extend({

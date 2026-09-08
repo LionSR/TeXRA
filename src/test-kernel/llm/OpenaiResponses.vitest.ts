@@ -513,7 +513,7 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.each(['stop', 'length'] as const)(
-    'owns one WebSocket reader through a %s continuation and rejects old connection anchors',
+    'owns one WebSocket reader across a second %s turn without a chaining anchor',
     async (outcome) => {
       const requests: Record<string, unknown>[] = [];
       const countFetch = vi
@@ -590,11 +590,7 @@ describe('native OpenAI Responses protocol', () => {
             expect(turn.transport.kind).toBe('websocket');
             const first = yield* model.generateTurn(turn);
             assert(first.providerResponseId !== null);
-            assert(first.continuation?.origin.protocol === 'openai-responses');
-            expect(first.continuation.anchor).toMatchObject({
-              kind: 'connection',
-              responseId: 'resp_1',
-            });
+            expect(first.continuation).toBeUndefined();
             const nextRequest: TurnRequest = {
               ...REQUEST,
               messages: [
@@ -620,7 +616,6 @@ describe('native OpenAI Responses protocol', () => {
                   ],
                 },
               ],
-              continuation: first.continuation,
             };
             const next = yield* model.prepareTurn(nextRequest);
             assert(next.mode === 'foreground');
@@ -641,15 +636,7 @@ describe('native OpenAI Responses protocol', () => {
             assert(second.providerResponseId !== null);
             expect(second.providerResponseId).toBe('resp_2');
             expect(second.finishReason).toBe(outcome);
-            if (outcome === 'stop')
-              expect(second.continuation?.anchor).toMatchObject({
-                kind: 'connection',
-                responseId: 'resp_2',
-              });
-            else expect(second.continuation).toBeUndefined();
-            expect(yield* Effect.flip(model.generateTurn(next))).toMatchObject({
-              kind: 'invalid-request',
-            });
+            expect(second.continuation).toBeUndefined();
             const http = modelWith(vi.fn(), configuration);
             expect(yield* Effect.flip(http.generateTurn(turn))).toMatchObject({
               kind: 'unsupported',
@@ -666,17 +653,36 @@ describe('native OpenAI Responses protocol', () => {
       });
       expect(requests[0]).not.toHaveProperty('stream');
       expect(requests[0]).not.toHaveProperty('background');
-      expect(requests[1]).toMatchObject({
-        previous_response_id: 'resp_1',
-        input: [
-          { type: 'function_call_output', call_id: 'call_1', output: 'a' },
-          {
-            type: 'function_call_output',
-            call_id: 'call_2',
-            output: 'Error: b',
-          },
-        ],
-      });
+      // The websocket lane carries no chaining anchor, so the second turn
+      // replays the whole prefix. The lowered calls must carry the provider's
+      // own argument bytes, not a re-encoding of their parse.
+      expect(requests[1]).not.toHaveProperty('previous_response_id');
+      expect(
+        (requests[1] as { input: Record<string, unknown>[] }).input.slice(-4),
+      ).toEqual([
+        {
+          type: 'function_call',
+          call_id: 'call_1',
+          name: 'read_file',
+          arguments: '{"path":"a"}',
+          id: 'fc_1',
+          status: 'completed',
+        },
+        {
+          type: 'function_call',
+          call_id: 'call_2',
+          name: 'read_file',
+          arguments: '{"path":"b"}',
+          id: 'fc_2',
+          status: 'completed',
+        },
+        { type: 'function_call_output', call_id: 'call_1', output: 'a' },
+        {
+          type: 'function_call_output',
+          call_id: 'call_2',
+          output: 'Error: b',
+        },
+      ]);
     },
   );
 
@@ -1867,7 +1873,7 @@ describe('native OpenAI Responses protocol', () => {
             summary: REASONING.summary,
             content: REASONING.content,
           },
-          { ...CALLS[0], arguments: '{ "path" : "a" }' },
+          CALLS[0]!,
         ],
         {
           usage: { input_tokens: 12, output_tokens: 3, total_tokens: 15 },
@@ -2280,6 +2286,13 @@ describe('native OpenAI Responses protocol', () => {
       name: 'invalid local-call arguments',
       final: snapshot([{ ...CALLS[0], arguments: '{' }]),
       output: [{ ...CALLS[0], arguments: '{' }],
+    },
+    {
+      // Reconciliation compares the provider's exact bytes, so a terminal
+      // snapshot that re-spaces the same arguments is a conflict, not a match.
+      name: 'respaced local-call arguments',
+      final: snapshot([{ ...CALLS[0], arguments: '{ "path" : "a" }' }]),
+      output: [CALLS[0]!],
     },
     {
       name: 'changed local-call ID',

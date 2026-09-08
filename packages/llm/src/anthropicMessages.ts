@@ -269,7 +269,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       const content: ToolResultBlockParam[] = [];
       for (const result of message.results) {
         const call = calls[result.callOrdinal];
-        if (!call?.providerCallId)
+        if (call === undefined)
           return yield* new ModelError({
             kind: 'unsupported',
             message:
@@ -296,11 +296,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
               });
             content.push({ type: 'text', text: child.text });
           }
-        } else if (
-          part.kind === 'local-call' &&
-          part.evidence === undefined &&
-          part.providerCallId !== null
-        ) {
+        } else if (part.kind === 'local-call' && part.evidence === undefined) {
           calls.push(part);
           content.push({
             type: 'tool_use',
@@ -821,20 +817,21 @@ export function anthropicMessagesModel(
                     },
                   });
                 else {
-                  const argumentsText = open.argumentsText;
-                  const argumentsValue =
-                    argumentsText === undefined
-                      ? block.input
-                      : yield* Effect.try({
-                          try: () => JSON.parse(argumentsText),
-                          catch: (cause) =>
-                            new ModelError({
-                              kind: 'malformed-output',
-                              message:
-                                'Anthropic returned incomplete function argument JSON.',
-                              cause,
-                            }),
-                        });
+                  // content_block_start rejects a nonempty streamed argument
+                  // placeholder, so a tool_use block that received no
+                  // input_json_delta carries no arguments, and '{}' is that
+                  // empty object's exact text.
+                  const argumentsText = open.argumentsText ?? '{}';
+                  const argumentsValue = yield* Effect.try({
+                    try: () => JSON.parse(argumentsText),
+                    catch: (cause) =>
+                      new ModelError({
+                        kind: 'malformed-output',
+                        message:
+                          'Anthropic returned incomplete function argument JSON.',
+                        cause,
+                      }),
+                  });
                   const argumentsResult =
                     JsonObjectSchema.safeParse(argumentsValue);
                   if (!argumentsResult.success)
@@ -848,6 +845,7 @@ export function anthropicMessagesModel(
                     kind: 'local-call',
                     providerCallId: block.id,
                     name: block.name,
+                    argumentsText,
                     arguments: argumentsResult.data,
                   });
                 }

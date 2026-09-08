@@ -461,16 +461,15 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
         reasoning = part.content![0].text;
       } else if (part.kind === 'local-call') {
         if (
-          part.providerCallId === null ||
-          (part.evidence !== undefined &&
-            (origin.protocol !== 'minimax-chat' ||
-              part.evidence.kind !== 'minimax-function-call' ||
-              !sameModelOrigin(message.origin, origin)))
+          part.evidence !== undefined &&
+          (origin.protocol !== 'minimax-chat' ||
+            part.evidence.kind !== 'minimax-function-call' ||
+            !sameModelOrigin(message.origin, origin))
         ) {
           return yield* new ModelError({
             kind: 'unsupported',
             message:
-              'Chat tool history requires original call IDs without foreign item evidence.',
+              'Chat tool history requires calls without foreign item evidence.',
           });
         }
         calls.push({
@@ -481,8 +480,9 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
             ? { index: part.evidence.index }
             : {}),
           function: {
+            // The provider's own bytes, not a re-encoding of their parse.
             name: part.name,
-            arguments: JSON.stringify(part.arguments),
+            arguments: part.argumentsText,
           },
         });
       } else if (
@@ -1294,6 +1294,7 @@ export function openaiChatModel(
                 kind: 'local-call',
                 providerCallId: call.id,
                 name: call.function.name,
+                argumentsText: call.function.arguments,
                 arguments: parsedArguments.data,
                 ...(call.index !== undefined
                   ? {
@@ -1908,6 +1909,7 @@ export function openaiChatModel(
                   kind: 'local-call',
                   providerCallId: call.id,
                   name: call.name,
+                  argumentsText: call.arguments,
                   arguments: args,
                   ...(turn.protocol === 'minimax-chat'
                     ? {
