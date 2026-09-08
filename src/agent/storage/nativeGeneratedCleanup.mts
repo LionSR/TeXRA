@@ -47,16 +47,17 @@ function linuxLibc(): string {
   return report.header.glibcVersionRuntime ? 'gnu' : 'musl';
 }
 
-const target =
-  process.platform === 'linux'
-    ? `${process.platform}-${process.arch}-${linuxLibc()}`
-    : `${process.platform}-${process.arch}`;
-const binary = binaries[target];
-if (!binary)
-  throw new Error(`Native generated-file cleanup is unavailable for ${target}`);
-const binaryPath = fileURLToPath(new URL(binary, import.meta.url));
-
 function binding(): NativeCleanupBinding {
+  const target =
+    process.platform === 'linux'
+      ? `${process.platform}-${process.arch}-${linuxLibc()}`
+      : `${process.platform}-${process.arch}`;
+  const binary = binaries[target];
+  if (!binary)
+    throw new Error(
+      `Native generated-file cleanup is unavailable for ${target}`,
+    );
+  const binaryPath = fileURLToPath(new URL(binary, import.meta.url));
   return require(binaryPath) as NativeCleanupBinding;
 }
 

@@ -97,8 +97,20 @@ jobs:
             await rm(storage, { recursive: true, force: true });
           }
           JS
-      - name: Install test dependencies
-        if: runner.os != 'Linux' || matrix.target == 'linux-x64-gnu'
+      - name: Retain the native test executable
+        if: matrix.target == 'win32-ia32'
+        shell: bash
+        run: node -e 'require("node:fs").appendFileSync(process.env.GITHUB_ENV, `TEXRA_TEST_NODE=${process.execPath}\n`)'
+      - uses: actions/setup-node@v5
+        if: matrix.target == 'win32-ia32'
+        with:
+          node-version: '22.16.0'
+          architecture: x64
+      - name: Install native test dependencies
+        if: matrix.target == 'win32-ia32'
+        run: pnpm --filter texra-workspace --filter @texra-ai/agent install --frozen-lockfile
+      - name: Install test and Electron dependencies
+        if: matrix.target != 'win32-ia32' && (runner.os != 'Linux' || matrix.target == 'linux-x64-gnu')
         run: pnpm install --frozen-lockfile
       - name: Load the same binary in Electron
         if: matrix.target != 'win32-ia32' && (runner.os != 'Linux' || matrix.target == 'linux-x64-gnu')
@@ -148,6 +160,8 @@ jobs:
           "TEXRA_NATIVE_CLEANUP_SMB_DIRECTORY=$directory" >> $env:GITHUB_ENV
       - name: Exercise durable cleanup on the actual host
         if: runner.os != 'Linux' || matrix.target == 'linux-x64-gnu'
+        env:
+          NATIVE_TARGET: ${{ matrix.target }}
         run: npm test -- src/test-kernel/controllers/session/sessionEvents.vitest.ts
       - name: Remove temporary SMB share
         if: always() && runner.os == 'Windows'

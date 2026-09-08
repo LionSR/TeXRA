@@ -44,7 +44,7 @@ import {
 } from 'effect';
 import { TestClock } from 'effect/testing';
 
-import { afterAll, describe, expect, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { removeExecutionDirectories } from '@agent/storage/nativeGeneratedCleanup.mjs';
@@ -200,6 +200,20 @@ function drawnSequence(states: Iterable<ReturnType<typeof drawn>>) {
   }
   return seen;
 }
+
+// The native CI coordinator may use a different CPU architecture from its worker.
+beforeAll(() => {
+  if (process.env.NATIVE_TARGET) {
+    expect(`${process.platform}-${process.arch}`).toBe(
+      process.env.NATIVE_TARGET.split('-').slice(0, 2).join('-'),
+    );
+  }
+  if (process.env.TEXRA_TEST_NODE) {
+    expect(realpathSync(process.execPath)).toBe(
+      realpathSync(process.env.TEXRA_TEST_NODE),
+    );
+  }
+});
 
 describe('session events and view', () => {
   it.effect(
