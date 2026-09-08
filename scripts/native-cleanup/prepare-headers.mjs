@@ -33,7 +33,8 @@ for (const name of [
   );
   await writeFile(file, bytes);
   if (name.endsWith('.gz')) {
-    const result = spawnSync('tar', ['-xzf', file, '-C', destination], {
+    const result = spawnSync('tar', ['-xzf', 'headers.tar.gz'], {
+      cwd: destination,
       stdio: 'inherit',
     });
     if (result.error) throw result.error;
