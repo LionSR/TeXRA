@@ -67,8 +67,9 @@ type Step = Interactions.Step;
  *
  * The poll loop is driven with vi.useFakeTimers(): the `node:timers/promises`
  * mock above routes the poll sleep through the faked global timers, so
- * advancing the clock by BACKGROUND_POLL_INTERVAL_MS resolves each poll wait. A non-streaming capturing client records create() params and
- * serves a scripted sequence of get() results.
+ * advancing the clock by BACKGROUND_POLL_INTERVAL_MS resolves each poll wait.
+ * A non-streaming capturing client records create() params and serves a
+ * scripted sequence of get() results.
  *
  * Real-key SMOKE-TEST items (cannot be unit-tested offline):
  * - S-BG1: the initial status of a background:true create (expected in_progress).
