@@ -262,9 +262,12 @@ const MessagePartSchema = z.strictObject({
  * refinement keeps the pair one value.
  */
 function sameJsonValue(left: unknown, right: unknown): boolean {
-  // `Object.is`, not `===`: JSON.parse keeps -0 while re-encoding the parsed
-  // value writes 0, so `===` would call a drifted pair one value.
-  if (Object.is(left, right)) return true;
+  // `===`, not `Object.is`: -0 and 0 are one JSON number. No encoder can write
+  // -0 back out, so a row that carries it always reads back as 0 in
+  // `arguments` while `argumentsText` still says -0. Demanding the distinction
+  // would make every such row unloadable and would reject the two producers
+  // below that have no provider bytes and must encode their own.
+  if (left === right) return true;
   if (
     typeof left !== 'object' ||
     typeof right !== 'object' ||
