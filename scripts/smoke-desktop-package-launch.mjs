@@ -1,5 +1,5 @@
 // Node.js imports
-import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -118,6 +118,15 @@ async function createIsolation(root) {
   };
   await Promise.all(
     Object.values(paths).map((path) => mkdir(path, { recursive: true })),
+  );
+  // Desktop startup restores remembered papers from the isolated profile.
+  // There is no workspace launch flag.
+  const stateDirectory = join(paths.userData, 'state');
+  await mkdir(stateDirectory, { recursive: true });
+  await writeFile(
+    join(stateDirectory, 'global.json'),
+    JSON.stringify({ 'texra.desktop.openPapers': [paths.workspace] }),
+    'utf8',
   );
   return paths;
 }
@@ -261,7 +270,6 @@ try {
   phase = 'launching packaged Electron app';
   application = await electron.launch({
     executablePath,
-    args: ['--texra-workspace-path', paths.workspace],
     cwd: paths.workspace,
     env: buildDesktopSmokeEnvironment(process.env, paths),
     timeout: READINESS_TIMEOUT_MS,

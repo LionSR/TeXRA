@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
-import { chmod } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import console from 'node:console';
+import process from 'node:process';
+import { chmod, readdir } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+import { verifyNativeCleanupAssets } from '../../../scripts/native-cleanup/verify-assets.mjs';
+import { fileURLToPath, URL } from 'node:url';
 
 const reactDevtoolsStub = fileURLToPath(
   new URL('./react-devtools-core-stub.mjs', import.meta.url),
@@ -10,8 +15,13 @@ const internalValidationModelStub = fileURLToPath(
   new URL('./internal-validation-model-stub.mjs', import.meta.url),
 );
 
-const outfile =
-  process.env.TEXRA_CLI_BUNDLE_OUTFILE?.trim() || 'dist/bin/texra.js';
+const configuredOutfile = process.env.TEXRA_CLI_BUNDLE_OUTFILE?.trim();
+const outfile = configuredOutfile || 'dist/bin/texra.js';
+// The published bin directory contains only the executable. Custom outputs
+// keep their assets beneath their own directory, without writing to its parent.
+const nativeAssetDirectory = configuredOutfile
+  ? 'native-cleanup'
+  : '../native-cleanup';
 const includeInternalValidationModel =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 
@@ -36,7 +46,8 @@ try {
     // those file-relative lookups against the real `node_modules/clipboardy`
     // install that ships alongside `dist` as a declared dependency.
     external: ['fsevents', 'clipboardy'],
-    loader: { '.wasm': 'binary' },
+    assetNames: `${nativeAssetDirectory}/[name]`,
+    loader: { '.wasm': 'binary', '.node': 'file' },
     define: {
       'process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL': JSON.stringify(
         includeInternalValidationModel ? '1' : '',
@@ -92,6 +103,11 @@ try {
     },
   });
 
+  const outputDir = join(dirname(outfile), nativeAssetDirectory);
+  const nativeFailures = await verifyNativeCleanupAssets(
+    (await readdir(outputDir)).map((file) => join(outputDir, file)),
+  );
+  if (nativeFailures.length) throw new Error(nativeFailures.join('\n'));
   await chmod(outfile, 0o755);
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);

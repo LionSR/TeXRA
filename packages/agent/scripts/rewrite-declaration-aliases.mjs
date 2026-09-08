@@ -33,6 +33,7 @@ async function resolveSource(specifier) {
       );
       for (const source of [
         candidate,
+        candidate.replace(/\.mjs$/u, '.mts'),
         `${candidate}.ts`,
         `${candidate}.tsx`,
         `${candidate}.d.ts`,
@@ -51,7 +52,8 @@ function emittedPath(sourcePath) {
   return path
     .join(outputRoot, relative)
     .replace(/\.d\.ts$/u, '.d.ts')
-    .replace(/\.tsx?$/u, '.d.ts');
+    .replace(/\.tsx?$/u, '.d.ts')
+    .replace(/\.mts$/u, '.d.mts');
 }
 
 const moduleSpecifier =
@@ -62,7 +64,7 @@ async function resolveDeclarationSpecifier(specifier, declaration) {
   if (specifier.startsWith('.')) {
     const candidate = path.resolve(
       path.dirname(declaration),
-      specifier.replace(/\.js$/u, '.d.ts'),
+      specifier.replace(/\.mjs$/u, '.d.mts').replace(/\.js$/u, '.d.ts'),
     );
     emitted = (await isFile(candidate))
       ? candidate
@@ -80,12 +82,15 @@ async function resolveDeclarationSpecifier(specifier, declaration) {
     );
   }
   let relative = path.relative(path.dirname(declaration), emitted);
-  relative = relative.replaceAll(path.sep, '/').replace(/\.d\.ts$/u, '.js');
+  relative = relative
+    .replaceAll(path.sep, '/')
+    .replace(/\.d\.ts$/u, '.js')
+    .replace(/\.d\.mts$/u, '.mjs');
   return relative.startsWith('.') ? relative : `./${relative}`;
 }
 
 for (const declaration of await walkFiles(outputRoot, (name) =>
-  name.endsWith('.d.ts'),
+  /\.d\.m?ts$/u.test(name),
 )) {
   const original = await readFile(declaration, 'utf8');
   let rewritten = '';

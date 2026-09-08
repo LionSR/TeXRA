@@ -67,10 +67,12 @@ function runKnip({ production = false } = {}) {
 function findStrayBuildArtifacts(findings) {
   const artifacts = new Map();
   for (const finding of findings) {
-    if (finding.category !== 'files' || !/\.tsx?$/.test(finding.file)) {
+    if (finding.category !== 'files' || !/\.(?:tsx?|mts)$/.test(finding.file)) {
       continue;
     }
-    const artifact = finding.file.replace(/\.tsx?$/, '.js');
+    const artifact = finding.file.replace(/\.(tsx?|mts)$/, (_, extension) =>
+      extension === 'mts' ? '.mjs' : '.js',
+    );
     if (existsSync(path.join(rootDir, artifact))) {
       artifacts.set(artifact, { artifact, source: finding.file });
     }
