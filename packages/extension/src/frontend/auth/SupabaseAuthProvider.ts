@@ -32,7 +32,6 @@ import {
 import { classifyAuthFailureStatus } from '@auth/TokenProvider';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import * as logger from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -82,7 +81,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private uriHandler: SupabaseUriHandler | null = null;
   private uriHandlerSubscription: vscode.Disposable | null = null;
   private readonly sessionCoordinator: SupabaseSessionCoordinator;
-  private readonly secrets: PlatformSecrets;
   // The two p-queue serializers this class used to carry, as the auth
   // subsystem's own construct: commits serialize session storage writes (and
   // give `awaitIdle` as the drain barrier), claims serialize callback claims
@@ -91,16 +89,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private readonly callbackClaims = new SerializedWrites();
   private activeAttempt: ExtensionAuthAttempt | undefined;
 
-  constructor(private readonly notifier: AuthNotifier) {
+  constructor(
+    private readonly notifier: AuthNotifier,
+    private readonly secrets: PlatformSecrets,
+  ) {
     // The auth subsystem's run edge lives at this host entry (PRD R1): every
     // Promise-facing auth surface settles on the process runtime from here.
     installAuthProgramEdge((program) =>
       effectRuntime().runPromiseExit(program),
     );
-    const hostPlatform = platform();
-    this.secrets = hostPlatform.secrets;
     this.sessionCoordinator = createHostAuthCoordinator({
-      secrets: hostPlatform.secrets,
+      secrets,
       whenReady: async () => {
         if (!this.uriHandler) {
           throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);

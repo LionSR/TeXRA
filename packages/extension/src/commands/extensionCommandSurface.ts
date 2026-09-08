@@ -48,6 +48,7 @@ import {
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping/clean';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
@@ -62,6 +63,7 @@ export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
   settingsViewProvider: SettingsViewProvider,
   progressViewProvider: ProgressViewProvider,
+  secrets: PlatformSecrets,
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
@@ -106,13 +108,13 @@ export function createExtensionCommandActions(
     getTeXCount: latexGetTeXCount,
     extractTikzFigures: latexExtractTikzFigures,
     compileTikzFigures: latexCompileTikzFigures,
-    cloneOverleafProject: gitCloneOverleafProject,
-    removeApiKey: () => apiRemoveApiKey(refreshAfterProviderKeyChange),
+    cloneOverleafProject: () => gitCloneOverleafProject(secrets),
+    removeApiKey: () => apiRemoveApiKey(secrets, refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
     toggleView: () => progressViewProvider.toggleDrawer(),
     showProgressView: progressShowProgressView,
     setApiKey: (provider) =>
-      apiSetApiKey(refreshAfterProviderKeyChange, provider),
+      apiSetApiKey(secrets, refreshAfterProviderKeyChange, provider),
     createAgentWithAI: (category) =>
       agentHandleCreateAgentWithAI(context, category),
     // Without a configuration the command is the composer's accelerator
