@@ -52,9 +52,25 @@ Three dependencies, and `redis` is a **non-optional** peer
 `NodeChildProcessSpawner.d.ts` is a one-line re-export of
 `@effect/platform-node-shared`, which pulls `ws`.
 
-This matters beyond one issue: `cutover/native-runtime-llm-20260907` already
-adds `@effect/platform-node`, so that branch likely carries an unmet `redis`
-peer warning. Worth checking there.
+**[reproduced]** This matters beyond one issue, and an earlier revision guessed
+the failure mode wrong. It predicted an _unmet peer warning_ on
+`cutover/native-runtime-llm-20260907`. There is no warning: `pnpm-lock.yaml:4`
+sets `autoInstallPeers: true`, so pnpm silently installs the peer instead of
+complaining.
+
+What actually happens on that branch, verified in its lockfile:
+`@effect/platform-node` is declared in **`dependencies`**, `redis` is declared
+nowhere, and the lockfile nonetheless carries `redis@6.2.1(@opentelemetry/api@1.9.1)`
+with the root importer resolving
+`@effect/platform-node@4.0.0-rc.112(effect@4.0.0-rc.112)(redis@6.2.1(...))`.
+
+So `pnpm install` pulls a full Redis client into the production install graph to
+satisfy a peer of a package that branch uses for `NodeFileSystem` and `NodePath`
+only. Nothing bundles it — esbuild includes only what is imported — so the cost
+is install weight and supply-chain surface, on a product that ships a VS Code
+extension, desktop installers and a published CLI. The cheapest escape is to take
+`FileSystem` and `Path` from `effect` core and supply the two layers directly,
+since those are the only pieces in use.
 
 **Do not generalize this to the sibling packages.** `@effect/sql-sqlite-node`
 at the same version genuinely has **zero dependencies**, one peer (`effect`),
@@ -203,13 +219,14 @@ callbacks to `trace.subscribe` and read events out of a local array
 immediately — against a 29-line listener set that works. That is the argument
 against B4, and it is an economic one.
 
-Beyond construction, two behavioural differences a replacement must reproduce.
-An earlier
-revision claimed both "survive even an unbounded hub"; review showed that
-overstates them, and the corrected form is below.
+Beyond construction, three behavioural properties a replacement must reproduce.
+An earlier revision listed the first two as objections that "survive even an
+unbounded hub"; review showed that overstates them, and the corrected form is
+below.
 
-1. **A `PubSub` couples subscribers into one shared buffer; a listener set
-   keeps them independent.** `AgentTrace.emit` returns `void`, so the only
+1. **A `PubSub` puts every subscriber behind one shared buffer, which changes
+   how the existing coupling fails — it does not introduce coupling.**
+   `AgentTrace.emit` returns `void`, so the only
    usable publish is `publishUnsafe`, which returns `false` when a bounded hub
    is full — dropping the event for _every_ subscriber at once, including the
    durable event plane. **This is a bounded-hub failure and does not apply to
@@ -232,9 +249,23 @@ overstates them, and the corrected form is below.
    isolation. So it is not an unavoidable regression; it is work the
    replacement must do and that the current code gets for free.
 
-Neither point alone rejects `PubSub`. The constructor problem above is what
-actually blocks it for `TraceEmitter`; these two say what a replacement would
-have to reproduce.
+3. **Subscription readiness is synchronous today, and two consumers depend on
+   it.** `TraceEmitter.subscribe` is `return this.subscribers.add(subscriber)` —
+   registration completes before it returns. `SessionHandle.attachRunTrace`
+   (`:496-502`) returns that detach handle directly, and
+   `packages/agent/src/effect/sessions.ts:402-413` subscribes and only then
+   signals admission via `Deferred.doneUnsafe(admitted, ...)`. `PubSub.subscribe`
+   returns a **scoped `Effect`**, so an adapter that acquires or forks the
+   subscription after exposing the trace loses every event emitted in between —
+   and for `attachRunTrace` that is the durable event plane, so those events are
+   missing from persistence, not merely from a view. A replacement must acquire
+   the subscription **before the run starts** and own its scope until disposal.
+
+**None of these three rejects `PubSub`.** They are the contract a replacement
+has to reproduce: bounded-vs-unbounded chosen deliberately, per-handler fault
+isolation added explicitly, and the subscription acquired before the first
+emit. Together with the injection work above, that is the real size of B4 —
+and the reason not to do it is that size, not impossibility.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
 
