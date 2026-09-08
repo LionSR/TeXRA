@@ -481,22 +481,37 @@ of which **10 only construct** a
 `attachChannelSubscriber`). Whether the 10 count depends on which hub is
 adopted:
 
-- **B4-atomic — 1 file.** An earlier revision charged this route 17 and was
-  importing B4-hub's cost into it. `makeAtomicUnbounded` is synchronous, and
-  so are the `Atomic`'s own `subscribe()` and `publish()` — verified by
-  running them. So `TraceEmitter` builds its own, owns the subscriptions
-  internally, and **keeps its existing synchronous `subscribe`/`emit`/detach
-  facade unchanged**. The 10 constructors are untouched _and so are the 16
-  subscribers_: they need lifecycle and assertion changes only if this route
-  separately chooses asynchronous delivery, which the `Atomic` does not
-  impose. The churn is the emitter implementation itself.
+- **B4-atomic — the cheap route does not exist.** Two revisions were wrong
+  here in sequence. The first charged it 17 files by importing B4-hub's
+  asynchronous-consumer cost. The second corrected that to 1 file, reasoning
+  that because `makeAtomicUnbounded`, `subscribe()` and `publish()` are all
+  synchronous, `TraceEmitter` could keep its facade and change nothing else.
+  **That inference was wrong, and running it shows why** [reproduced]:
 
-  **Which makes the route nearly free and nearly pointless, and those are the
-  same fact.** What it buys is the storage layer — no delivery strategy, no
-  subscriber-completion machinery — so all seven adapter-owned properties
-  below stay hand-written. That is approximately what `TraceEmitter` already
-  is. B4-atomic swaps a hand-rolled subscriber array for an upstream one and
-  changes nothing else.
+  ```
+  subscribe() -> UnboundedPubSubSubscription
+    methods: isEmpty, size, poll, pollUpTo, unsubscribe
+  publish("event-1") -> true;  pubsub size = 1;  no callback invoked
+  ```
+
+  The subscription is a **queue you pull from**, not a callback registration,
+  and the `Atomic` has no delivery strategy — `publish` enqueues and invokes
+  nothing. So `TraceEmitter.subscribe((event) => …)` cannot be served by the
+  `Atomic` alone, and the route forks into two dead ends:
+
+  - **Keep the callback registry and iterate it on `emit`.** Delivery works
+    and stays synchronous — but the `subscribers` field is still there, so
+    **the listener set has not been replaced**. The `Atomic` becomes a queue
+    nobody reads. (Polling each subscription inside `emit` collapses to the
+    same thing with extra steps: you still need the registry to know which
+    callback owns which subscription.)
+  - **Start consumers to drain the subscriptions.** Now the listener set is
+    genuinely gone — and delivery is asynchronous, which brings back the
+    subscriber lifecycle and assertion changes this route existed to avoid,
+    plus a run site to start the consumers.
+
+  **So there is no one-file B4.** The cheap number came from checking that the
+  primitives were synchronous and never checking that they _deliver_.
 
 - **B4-hub — 27 files, and that is a floor.** A real `PubSub` needs
   `PubSub.make` or `PubSub.unbounded`, both effectful, and `TraceEmitter.ts`
@@ -523,20 +538,22 @@ An earlier revision excluded the constructors while pricing the full `PubSub`
 semantics below — combining the cheap route's file count with the expensive
 route's capabilities. That estimate was for a candidate that does not exist.
 
-This figure has moved four times: "roughly sixteen" estimated, 24 from too
+This figure has moved five times: "roughly sixteen" estimated, 24 from too
 narrow a grep, 26 counted as the union, 16 once constructor sites fell out,
-and now 16 **or** 26 depending on the route. Treat it as measured at this
-tree, not as authoritative.
+16-or-26 by route, and now — once the atomic route turned out not to exist —
+**26 direct seam files plus `TraceEmitter.ts` plus an uncounted transitive
+fan-out, with no cheap alternative**. Treat it as measured at this tree, not
+as authoritative.
 
-**Both totals exclude the file being replaced, and should not.** 26 counts
-call sites — constructors and subscribers — but either route rewrites
+**The count excludes the file being replaced, and should not.** 26 counts
+call sites — constructors and subscribers — but the migration rewrites
 `src/agent/trace/TraceEmitter.ts` itself: the `subscribers` field, `subscribe`
-and `emit`. Counting it, the churn is **1 file for B4-atomic and at least 27
-for B4-hub**, across **six production files rather than five**. An estimate that
-prices a replacement while omitting the thing being replaced understates it by
-construction.
+and `emit`. Counting it, **at least 27 files**, across **six production files
+rather than five**, plus the transitive injection fan-out nobody has measured.
+An estimate that prices a replacement while omitting the thing being replaced
+understates it by construction.
 
-The composition matters more than the total. **6 of the 17 are production** —
+The composition matters more than the total. **6 of the 27 are production** —
 `src/agent/trace/TraceEmitter.ts` itself, plus
 `packages/agent/src/effect/sessions.ts`, `ModelHandler.ts`,
 `SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and 11 are
@@ -570,9 +587,10 @@ B4, which is the direction this note has now erred in three separate
 places.
 
 That is the argument against B4, and it is an economic one, and the two routes
-are no longer close: **1 file for B4-atomic — which buys almost nothing — or
-at least 27 for B4-hub (injection propagates up factory chains this count
-never followed)**, mostly tests and each cheaper than first
+collapse to one: **at least 27 files (injection propagates up factory chains
+this count never followed), because the cheap atomic route does not deliver to
+callbacks and so is not a replacement at all**, mostly tests and each cheaper
+than first
 charged, plus the eight behavioural properties below, against the listener
 machinery being replaced — the `subscribers` field (`:47`), `subscribe`
 (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a 217-line class that
@@ -769,8 +787,8 @@ returns, the handover cap enforced at enqueue rather than in the handler, and
 ordering preserved against the separate status plane.
 Together with the subscription and lifecycle work above, that is the real size
 of B4 — and it is **route-dependent** in file count only: the constructor
-sites stay untouched for B4-atomic (1 file, and it buys almost nothing) and
-change for B4-hub (27 at least).
+sites change: the atomic route that would have left them untouched cannot
+deliver to callbacks, so 27 at least.
 
 **A previous revision said B4-hub "inherits" these eight properties. It does
 not, and that sentence was the most dangerous thing in this note** — an
