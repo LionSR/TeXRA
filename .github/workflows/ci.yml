@@ -27,6 +27,11 @@ concurrency:
 # gated off `schedule` rather than re-validating an unchanged tree nightly
 # (the macOS webview smoke bills at 10x Linux rates).
 jobs:
+  native-cleanup:
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+    uses: ./.github/workflows/native-cleanup.yml
+
   changes:
     name: detect changes
     runs-on: ubuntu-latest
@@ -139,7 +144,7 @@ jobs:
 
   checks:
     name: static checks (linux)
-    needs: changes
+    needs: [changes, native-cleanup]
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     # Typecheck, lint, formatting, and the cheap invariant scripts — everything
     # that needs neither the test runner nor a build. Runs in parallel with the
@@ -150,6 +155,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Download native prebuilds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: native-cleanup-*
+          path: scripts/native-cleanup/prebuilds
+          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -278,7 +290,7 @@ jobs:
     # Keep the pre-existing `linux` / `windows` labels rather than the raw
     # runner image: these strings are the check names branch protection pins.
     name: kernel tests (${{ matrix.os == 'windows-latest' && 'windows' || 'linux' }}, shard ${{ matrix.shard }}/2)
-    needs: changes
+    needs: [changes, native-cleanup]
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -305,6 +317,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Download native prebuilds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: native-cleanup-*
+          path: scripts/native-cleanup/prebuilds
+          merge-multiple: true
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
@@ -327,7 +346,7 @@ jobs:
 
   build:
     name: build artifacts (linux)
-    needs: changes
+    needs: [changes, native-cleanup]
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -335,6 +354,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Download native prebuilds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: native-cleanup-*
+          path: scripts/native-cleanup/prebuilds
+          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -396,7 +422,7 @@ jobs:
 
   webview-smoke:
     name: webview smoke (macOS)
-    needs: changes
+    needs: [changes, native-cleanup]
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     # macOS-only because the smoke renders the packaged webviews in Electron on
     # the macOS runner. It needs just the Vite webview bundles
@@ -410,6 +436,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Download native prebuilds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: native-cleanup-*
+          path: scripts/native-cleanup/prebuilds
+          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -442,6 +475,7 @@ jobs:
           retention-days: 14
 
   runtime-validation:
+    needs: native-cleanup
     name: runtime validation (linux)
     # Runs on push to main, the nightly schedule (whose whole purpose is this
     # timing run), merge groups, and manual dispatch; never on PRs.
@@ -452,6 +486,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Download native prebuilds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: native-cleanup-*
+          path: scripts/native-cleanup/prebuilds
+          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -535,6 +576,7 @@ jobs:
     needs:
       - changes
       - checks
+      - native-cleanup
       - guidance-refs
       - test
       - build
@@ -567,6 +609,7 @@ jobs:
             exit 1
           fi
           for result in \
+            'native-cleanup:${{ needs.native-cleanup.result }}' \
             'checks:${{ needs.checks.result }}' \
             'test:${{ needs.test.result }}' \
             'build:${{ needs.build.result }}' \

@@ -1,5 +1,10 @@
+import { fork } from 'node:child_process';
+import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 import { defineConfig } from 'vitest/config';
 
@@ -16,7 +21,7 @@ const quickJsWasmPath = require.resolve(QUICKJS_WASM_ID);
 const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 
 export default defineConfig({
-  plugins: [texTemplatePlugin(), quickJsWasmPlugin()],
+  plugins: [texTemplatePlugin(), quickJsWasmPlugin(), nativeAssetPlugin()],
   resolve: {
     alias: {
       ...aliases,
@@ -28,6 +33,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    ...(process.env.TEXRA_TEST_NODE
+      ? { pool: executablePool(process.env.TEXRA_TEST_NODE) }
+      : {}),
     include: ['src/test-kernel/**/*.vitest.ts'],
     passWithNoTests: false,
     setupFiles: ['src/test-kernel/support/setupFakePlatform.ts'],
@@ -66,6 +74,68 @@ function quickJsWasmPlugin() {
       return {
         code: `export default Uint8Array.from(Buffer.from(${JSON.stringify(contents.toString('base64'))}, 'base64'));`,
         map: null,
+      };
+    },
+  };
+}
+
+/** Source tests use the same native prebuild as the packaged runtime. */
+function nativeAssetPlugin() {
+  return {
+    name: 'native-cleanup-assets',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!source.endsWith('.node') || !importer) return undefined;
+      return resolve(dirname(importer), source);
+    },
+    load(id) {
+      if (!id.endsWith('.node')) return undefined;
+      return `export default ${JSON.stringify(pathToFileURL(id).href)};`;
+    },
+  };
+}
+
+/** Transform on the tool host and execute the unchanged suite on the requested Node host. */
+function executablePool(execPath) {
+  return {
+    name: 'node-executable',
+    createPoolWorker(options) {
+      let child;
+      return {
+        name: 'node-executable',
+        async start() {
+          child = fork(resolve(options.distPath, 'workers/forks.js'), [], {
+            execPath,
+            execArgv: options.execArgv,
+            env: options.env,
+            serialization: 'advanced',
+            stdio: 'pipe',
+          });
+          child.stdout.pipe(options.project.vitest.logger.outputStream, {
+            end: false,
+          });
+          child.stderr.pipe(options.project.vitest.logger.errorStream, {
+            end: false,
+          });
+        },
+        on(event, listener) {
+          child.on(event, listener);
+        },
+        off(event, listener) {
+          child.off(event, listener);
+        },
+        send(message) {
+          child.send(message);
+        },
+        deserialize(value) {
+          return value;
+        },
+        async stop() {
+          if (child.exitCode !== null || child.signalCode !== null) return;
+          const exited = once(child, 'exit');
+          child.kill();
+          await exited;
+        },
       };
     },
   };
