@@ -145,8 +145,15 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 
 **Six further gaps:**
 
-- No `lstat` at all, so `isSymlink` needs a `readLink`-plus-errno probe — the
-  silent-degradation shape CLAUDE.md forbids.
+- No `lstat` at all. `isSymlink` would need a `readLink`-plus-errno probe:
+  call `readLink`, read success as "symlink" and `EINVAL` as "not one". An
+  earlier revision called that "the silent-degradation shape CLAUDE.md
+  forbids", which overstates it — this is error-as-control-flow, not a masked
+  failure. The real objection is narrower and worse: **`SystemErrorTag` has no
+  `EINVAL` member** (above), so the probe must read whatever lossy tag a layer
+  maps it to — `InvalidData` in a hand-written one — and that tag covers more
+  than `EINVAL`. An unrelated failure then reads as "not a symlink": a wrong
+  answer rather than a loud one.
 - **`readDirectory` returns `Array<string>`, not `[name, type]`.** The port
   reads each entry's type off the `withFileTypes` dirent for free; Effect's
   shape forces a `stat` per entry. This is load-bearing, not tuple
@@ -212,10 +219,11 @@ it defaults `remove` to `Effect.void` and `exists` to `false`.
 does not control their inputs. The hole is closable for testing by handing
 `glob` a memfs instance directly. For real wiring the candidates differ:
 **candidate A can serve the five async importers, candidate B none of the
-eight** — so B keeps a second filesystem seam here permanently (below). This paragraph has been
-wrong three times in three different directions: it counted two importers,
-then called the set unclosable, then called it independent of R-1. Weigh it
-accordingly.
+eight** in practice — so B keeps a second filesystem seam here (below; a
+`readLink`-based adapter exists in principle and is a bad trade). This paragraph has been wrong four times in four
+directions: two importers, then unclosable, then independent of R-1, then
+requiring synchronous methods — and its summary twice survived a correction to
+its body. Treat its claims as the least reliable in this note.
 The full set of `glob`-package importers outside the test kernel is
 `src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts`,
 `src/tools/approval/latexPreview.ts`, `src/latex/formatter/latexindentpt.ts`,
@@ -245,12 +253,16 @@ traversal actually calls. So:
   as Node `Stats`. An earlier revision of this paragraph said `FSOption`
   requires synchronous methods and so overcharged A; it does not, for the
   async path.
-- **Candidate B can serve none of them.** Not because of sync — because
-  `path-scurry` wants **`lstat`**, at `:900` and `:705`, and Effect's
-  `FileSystem` has no `lstat` in either form. The three `globSync` callers
-  additionally need the synchronous set, which Effect also lacks.
+- **Candidate B can serve none of them in practice.** Not because of sync —
+  because `path-scurry` wants **`lstat`**, at `:900` and `:705`, and Effect's
+  `FileSystem` has none. An adapter could synthesise one from the
+  `readLink`-plus-`stat` probe above, so this is a cost rather than a wall;
+  but that probe misreads unrelated failures as "not a symlink" and adds a
+  syscall per entry, which is a poor trade for a unified seam. The three
+  `globSync` callers additionally need the synchronous set, which Effect also
+  lacks — and there no adapter exists at all.
 
-So under B the repo keeps a second filesystem seam for `glob` permanently;
+So under B the repo keeps a second filesystem seam for `glob` in practice;
 under A the seam is closable for the five async callers and stays only for
 the three synchronous ones.
 
@@ -265,9 +277,17 @@ And Effect's own `glob` is not a route for any of the eight: its signature is
 
 So the honest summary: **under candidate A the five async importers can be
 adapted onto the port and only the three `globSync` callers keep separate
-wiring; under candidate B all eight keep it**, because Effect's `FileSystem`
-offers no `lstat` in either form. The second seam is a cost B carries and A
-mostly does not.
+wiring; under candidate B all eight keep it in practice**.
+
+B is not _categorically_ excluded from the five. `path-scurry` needs
+`promises.lstat`, and an adapter could synthesise one from the
+`readLink`-plus-`stat` probe described in §2. But that probe rests on an errno
+tag which does not isolate `EINVAL`, so an unrelated failure reads as "not a
+symlink"; and it adds a second syscall per entry to a traversal already paying
+one. That buys a unified seam at the price of a symlink test that is silently
+wrong under unrelated failures — a worse trade than keeping separate wiring.
+So the note prescribes separate wiring for B on cost, not on impossibility.
+The second seam is a cost B carries and A mostly does not.
 
 ### A method note, because the obvious experiment was run wrong once
 
@@ -354,12 +374,12 @@ test files that would each need a fiber, a scope and a drain to observe what
 a callback observes today.
 
 That is the argument against B4, and it is an economic one: 16 files of
-churn, mostly tests, plus the six behavioural properties below, against the
+churn, mostly tests, plus the seven behavioural properties below, against the
 listener machinery being replaced — the `subscribers` field (`:47`),
 `subscribe` (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a
 217-line class that does much else besides. Not impossibility — price.
 
-Beyond construction, six behavioural properties a replacement must reproduce.
+Beyond construction, seven behavioural properties a replacement must reproduce.
 An earlier revision listed the first two as objections that "survive even an
 unbounded hub"; review showed that overstates them, and the corrected form is
 below.
@@ -479,13 +499,27 @@ below.
    events at whole-run disposal; this is about ending one subscription early,
    mid-run.
 
-**None of these six rejects `PubSub`.** They are the contract a replacement
+7. **The handover cap counts in the subscriber callback, so async delivery
+   breaks its bound.** `sessions.ts:403-411` does
+   `if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS)` **inside** the
+   subscribed callback, then `Queue.offerUnsafe`. Because `emit` is
+   synchronous today, that counter moves in lockstep with emission and the cap
+   fires at exactly 512. Under a hub the subscriber is a fiber taking from a
+   queue: a run emitting faster than the fiber drains accumulates arbitrarily
+   many events in the hub before `buffered` reaches the threshold, so the
+   bound this safeguard exists to enforce is already exceeded when it fires.
+   Property 6's synchronous detach does not rescue it either — the backlog
+   accrued before detachment began. A replacement needs an **enqueue-time**
+   per-subscription bound, or synchronous accounting for this sink.
+
+**None of these seven rejects `PubSub`.** They are the contract a replacement
 has to reproduce: bounded-vs-unbounded chosen deliberately, per-handler
 failures **caught and reported** (isolation alone silently consumes them),
 the subscription acquired before the first emit, **every published event's
 handler acknowledged** before disposal (an empty queue is not that), each
 event stage-stamped on the way in, and detachment stopping delivery before it
-returns. Together with the subscription and lifecycle work above — but not
+returns, and the handover cap enforced at enqueue rather than in the handler.
+Together with the subscription and lifecycle work above — but not
 the constructor sites, which can build their own hub — that is the real size
 of B4, and the reason not to do it is that size, not impossibility.
 
