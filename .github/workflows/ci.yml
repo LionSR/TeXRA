@@ -609,6 +609,7 @@ jobs:
             exit 1
           fi
           for result in \
+            'native-cleanup:${{ needs.native-cleanup.result }}' \
             'checks:${{ needs.checks.result }}' \
             'test:${{ needs.test.result }}' \
             'build:${{ needs.build.result }}' \
