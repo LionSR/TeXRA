@@ -43,7 +43,7 @@ CLAUDE.md
 # included by default with no unignore needed at all.
 resources/traceViewerShared/**
 
-# Webview HTML entry points (loaded by BundledViewContentProvider)
+# Webview HTML entry points (loaded by BaseViewContentProvider)
 !src/progressView/*.html
 !src/settingsView/*.html
 

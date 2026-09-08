@@ -154,3 +154,9 @@ declare module 'which' {
   const which: Which;
   export default which;
 }
+
+/** Native assets are packaged beside the executable JavaScript. */
+declare module '*.node' {
+  const location: string;
+  export default location;
+}

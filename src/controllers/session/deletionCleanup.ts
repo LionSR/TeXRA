@@ -1,9 +1,9 @@
 /** C9 generated-file cleanup, driven only by committed deletion records. */
-import { lstat, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { realpathSync } from 'node:fs';
 
 import { Effect, type Context } from 'effect';
 
+import * as nativeCleanup from '@agent/storage/nativeGeneratedCleanup.mjs';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
@@ -13,25 +13,28 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 const log = createLog('DeletionCleanup');
 
-/** Delete whole generated directories. rm removes links within a directory
- *  without following them; the common parent must itself be a directory. */
+/** Confine each deletion to its held storage root and join the native worker. */
 const removeExecutionDirectories = (
   storage: string,
   executionIds: readonly ExecutionId[],
 ) =>
-  Effect.tryPromise({
-    try: async () => {
-      const runs = join(storage, WORKSPACE_STORAGE_LAYOUT.runs);
-      const parent = await lstat(runs);
-      if (!parent.isDirectory()) {
-        throw new Error(`Generated-run storage is not a directory: ${runs}`);
-      }
-      for (const id of executionIds) {
-        await rm(join(runs, id), { recursive: true, force: true });
-      }
-    },
-    catch: ensureError,
-  }).pipe(Effect.catchIf(isFileNotFoundError, () => Effect.void));
+  Effect.acquireUseRelease(
+    Effect.try({
+      try: () => nativeCleanup.openRoot(realpathSync.native(storage)),
+      catch: ensureError,
+    }),
+    (root) =>
+      Effect.tryPromise({
+        try: () =>
+          nativeCleanup.removeExecutionDirectories(
+            root,
+            WORKSPACE_STORAGE_LAYOUT.runs,
+            executionIds,
+          ),
+        catch: ensureError,
+      }).pipe(Effect.uninterruptible),
+    (root) => Effect.sync(() => nativeCleanup.closeRoot(root)),
+  ).pipe(Effect.catchIf(isFileNotFoundError, () => Effect.void));
 
 /** One indexed pass. A failed record stays closed and available for retry. */
 export const collectPendingDeletions = Effect.fn('collectPendingDeletions')(
