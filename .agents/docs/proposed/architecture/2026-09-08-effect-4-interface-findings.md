@@ -227,7 +227,7 @@ does not control their inputs. The hole is closable for testing by handing
 `glob` a memfs instance directly. For real wiring the candidates differ:
 **candidate A can serve the five async importers directly; candidate B can
 serve them only through an adapter** that costs one extra syscall per entry
-(below). Only the three `globSync` callers are closed to both. This paragraph
+**and a run boundary for four of the five consumers** (below). Only the three `globSync` callers are closed to both. This paragraph
 has been wrong six times in six directions: two importers, then unclosable,
 then independent of R-1, then requiring synchronous methods, then B excluded on
 a correctness objection this note's own §2 disproves, then a lead still calling
@@ -265,15 +265,26 @@ traversal actually calls. So:
   as Node `Stats`. An earlier revision of this paragraph said `FSOption`
   requires synchronous methods and so overcharged A; it does not, for the
   async path.
-- **Candidate B can serve the same five, but only through an adapter.**
-  `path-scurry` wants **`lstat`**, at `:900` and `:705`, and Effect's
-  `FileSystem` has none — so B must synthesise one from the
-  `readLink`-plus-`stat` probe above. An earlier revision called that probe
-  incorrect under unrelated failures; §2 now records why that was wrong (the
-  errno survives on `reason.cause`). What is left is real but only a price:
-  a second syscall per entry on a traversal already paying one. The three
-  `globSync` callers additionally need the synchronous set, which Effect also
-  lacks — and there no adapter exists at all.
+- **Candidate B can serve the same five, but only through an adapter, and the
+  adapter needs a run boundary.** `path-scurry` wants **`lstat`**, at `:900`
+  and `:705`, and Effect's `FileSystem` has none — so B must synthesise one
+  from the `readLink`-plus-`stat` probe above. An earlier revision called that
+  probe incorrect under unrelated failures; §2 now records why that was wrong
+  (the errno survives on `reason.cause`), leaving a syscall per entry as the
+  price. **But an earlier revision also priced only that syscall, and there is
+  a second cost.** `FSOption.promises.lstat` must return a real `Promise`;
+  Effect's `readLink`/`stat`/`readDirectory` return `Effect`s. Bridging them
+  needs `runPromise` or an equivalent managed-runtime run **at each consumer**
+  — and four of the five async importers sit at non-boundary paths
+  (`src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts` — not a
+  `*Tool.ts` — `src/housekeeping/clean.ts`, `src/housekeeping/utils.ts`),
+  where the ratchet rejects a new `Effect.run*` exactly as it does for
+  `TraceEmitter.ts`. Only `packages/cli/src/runtime/workflowInputs.ts` is
+  already a boundary kind. So B needs the adapter built at an allowed boundary
+  and injected into four consumers, or a separate native seam for them — the
+  same structural cost this note found for the hub constructor, in a second
+  place. The three `globSync` callers additionally need the synchronous set,
+  which Effect also lacks — and there no adapter exists at all.
 
 So under both candidates the seam closes for the five async callers and stays
 for the three synchronous ones; B pays an extra syscall per entry that A does
@@ -388,17 +399,18 @@ So nothing here is impossible. What remains is the size of the job — and it is
 **two different sizes, because the construction finding above splits B4 into
 two candidates that earlier revisions of this note quietly averaged.**
 
-26 files touch the seam in total, of which **10 only construct** a
+26 files touch the seam in total (27 counting `TraceEmitter.ts` itself, below),
+of which **10 only construct** a
 `TraceEmitter` and 16 subscribe (directly or through
 `attachChannelSubscriber`). Whether the 10 count depends on which hub is
 adopted:
 
-- **B4-atomic — 16 files.** `makeAtomicUnbounded` is synchronous, so each
+- **B4-atomic — 17 files.** `makeAtomicUnbounded` is synchronous, so each
   constructor builds its own and the 10 are untouched. But this buys the
   storage layer: no delivery strategy, no subscriber-completion machinery.
   Most of the eight properties below then have to be re-implemented by hand on
   top of it, which is approximately what `TraceEmitter` already does.
-- **B4-hub — 26 files.** A real `PubSub` needs `PubSub.make` or
+- **B4-hub — 27 files.** A real `PubSub` needs `PubSub.make` or
   `PubSub.unbounded`, both effectful, and `TraceEmitter.ts` cannot run them
   (not a ratchet boundary kind, and the below-boundary register is not an
   intake). So the hub is built at an `Effect` boundary and injected, and all
@@ -413,12 +425,21 @@ narrow a grep, 26 counted as the union, 16 once constructor sites fell out,
 and now 16 **or** 26 depending on the route. Treat it as measured at this
 tree, not as authoritative.
 
-The composition matters more than the total. **5 of the 16 are production** —
+**Both totals exclude the file being replaced, and should not.** 26 counts
+call sites — constructors and subscribers — but either route rewrites
+`src/agent/trace/TraceEmitter.ts` itself: the `subscribers` field, `subscribe`
+and `emit`. Counting it, the churn is **17 files for B4-atomic and 27 for
+B4-hub**, across **six production files rather than five**. An estimate that
+prices a replacement while omitting the thing being replaced understates it by
+construction.
+
+The composition matters more than the total. **6 of the 17 are production** —
+`src/agent/trace/TraceEmitter.ts` itself, plus
 `packages/agent/src/effect/sessions.ts`, `ModelHandler.ts`,
-`SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and the other 11 are
+`SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and 11 are
 test-kernel, most passing a plain synchronous callback to `trace.subscribe`
 and reading events out of a local array on the next line. So the production
-blast radius is five files.
+blast radius is six files.
 
 **The eleven test files are cheaper than an earlier revision charged them.**
 That revision said each would need "a fiber, a scope and a drain". It would
@@ -431,8 +452,8 @@ subscriber file for adapter-owned infrastructure inflates the case against
 B4, which is the direction this note has now erred in three separate
 places.
 
-That is the argument against B4, and it is an economic one: **16 files of churn
-for B4-atomic or 26 for B4-hub**, mostly tests and each cheaper than first
+That is the argument against B4, and it is an economic one: **17 files of churn
+for B4-atomic or 27 for B4-hub**, mostly tests and each cheaper than first
 charged, plus the eight behavioural properties below, against the listener
 machinery being replaced — the `subscribers` field (`:47`), `subscribe`
 (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a 217-line class that
@@ -611,10 +632,21 @@ event stage-stamped on the way in, detachment stopping delivery before it
 returns, the handover cap enforced at enqueue rather than in the handler, and
 ordering preserved against the separate status plane.
 Together with the subscription and lifecycle work above, that is the real size
-of B4 — and it is **route-dependent**: the constructor sites stay untouched
-only for B4-atomic, which reproduces these eight properties by hand rather
-than inheriting them. B4-hub inherits them and changes all 26 files. The
-reason not to do it is that size, not impossibility.
+of B4 — and it is **route-dependent** in file count only: the constructor
+sites stay untouched for B4-atomic (17 files) and change for B4-hub (27).
+
+**A previous revision said B4-hub "inherits" these eight properties. It does
+not, and that sentence was the most dangerous thing in this note** — an
+implementer following it could ship a hub missing guarantees whose absence
+loses or reorders durable events. A real `PubSub` supplies exactly two of the
+eight: buffering (property 1) and, through its delivery strategy, the
+backpressure behaviour that property presumes. The other six — per-handler
+failures caught **and reported**, synchronous subscription readiness,
+synchronous mid-run detachment, every handler acknowledged before disposal,
+stage stamping on the way in, the handover cap enforced at enqueue, and
+cross-plane ordering against `StreamStatusMachine` — are **adapter work under
+both routes**. B4-hub buys a buffer and a strategy; it does not buy the
+contract. The reason not to do it is that size, not impossibility.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
 
@@ -764,6 +796,26 @@ free of externally visible effects, and inventory which of TeXRA's current
 between-step emissions must either become activities or acquire stable
 deduplication keys. For a run whose progress events are the user-visible
 transcript, that inventory is not small.
+
+**Determinism of the body is necessary and not sufficient, because the body
+can be replaced between suspend and resume.** `resume` runs whatever body is
+installed _now_, while the memo key is
+`` `${executionId}/${activity.name}/${attempt}` `` — it carries no identity
+for the definition that produced those rows. A deterministic body is still a
+different body after an application update. Renaming an activity orphans its
+stored exit and **re-runs an effect that already happened**; reordering or
+renumbering ordinal-named activities binds a stored exit to a _different_
+invocation, which is worse because it succeeds silently with the wrong value;
+changing control flow around an activity creates a key that never existed and
+repeats its external effect. A user updating TeXRA with a suspended run on
+disk is the ordinary case, not an exotic one.
+
+So adoption needs a **persisted definition identity** — a version or a hash of
+the activity sequence — checked on resume, with an incompatible journal
+**rejected loudly** rather than translated. Silent translation of an old
+journal onto a new body is the failure this whole section is about, arriving
+by a different route. That check does not exist in the engine; it is TeXRA's
+to add.
 
 **The Effect-Schema boundary can be held, but not by validating inside the
 activity alone.** An `Activity` with `success: Schema.Unknown` round-trips a
