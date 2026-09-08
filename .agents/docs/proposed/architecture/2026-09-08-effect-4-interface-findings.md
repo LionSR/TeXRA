@@ -741,7 +741,8 @@ The real requirements are narrower and different:
   (`WorkflowEngine.js:356-360`) and falls through to execute when it finds
   one. `layerMemory` makes that moot, but a durable engine persisting the row
   must distinguish an attempt orphaned by a crash from one a live process is
-  still executing. Nothing in the interface expresses that,
+  still executing. (One way such a marker is created: a completion write that
+  failed transiently and suspended — see the storage-error path above.) Nothing in the interface expresses that,
   and the distinction cannot be made by suspending: mapping every
   start-without-completion to `Suspended` parks the activity on every replay,
   since the marker stays incomplete and the next resume meets the same state.
