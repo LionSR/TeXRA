@@ -83,7 +83,6 @@ function lowerMessages(
           } else if (
             part.kind === 'local-call' &&
             part.evidence === undefined &&
-            part.providerCallId !== null &&
             config.supportsToolCalling
           ) {
             content.push(
@@ -116,7 +115,7 @@ function lowerMessages(
         const content: vscode.LanguageModelToolResultPart[] = [];
         for (const result of message.results) {
           const call = calls[result.callOrdinal];
-          if (!call || call.providerCallId === null) {
+          if (call === undefined) {
             return yield* new ModelError({
               kind: 'unsupported',
               message: 'Editor tool results require the original call ID.',

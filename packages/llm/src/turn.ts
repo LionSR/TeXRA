@@ -262,7 +262,9 @@ const MessagePartSchema = z.strictObject({
  * refinement keeps the pair one value.
  */
 function sameJsonValue(left: unknown, right: unknown): boolean {
-  if (left === right) return true;
+  // `Object.is`, not `===`: JSON.parse keeps -0 while re-encoding the parsed
+  // value writes 0, so `===` would call a drifted pair one value.
+  if (Object.is(left, right)) return true;
   if (
     typeof left !== 'object' ||
     typeof right !== 'object' ||
