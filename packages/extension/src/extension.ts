@@ -522,7 +522,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
   );
-  registerAgentFeatures();
+  registerAgentFeatures(context.globalState);
   // The same Node-host skill wiring the CLI and desktop use, so
   // `AVAILABLE_SKILLS` is actually populated for tool-use agents in VS Code —
   // without this call `loadRuntimeSkillCatalog` always sees zero sources and
@@ -537,7 +537,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
-  await seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION);
+  await seedDisabledToolDefaults(
+    context.globalState,
+    GlobalStateKey.LAST_KNOWN_VERSION,
+  );
 
   // Onboarding-funnel backfill (PRD: agent-native onboarding): upgraders who
   // already have a credential or run history must never see the welcome card
