@@ -973,8 +973,10 @@ compresses when the phase ceremony goes. `output/` (3,482) and
    as in §3; record the R4 and 13.C reversal in the migration PRD; add the
    six row types to the one-fold PRD §6 durable set; state the retention
    rule.
-1. Foundation: `RunLedger` service over `SessionEvents`, the six
-   `AgentEvent` arms with Zod schemas, `foldRunState` in `src/shared`, the
+1. Foundation: `RunLedger` service over `SessionEvents`, the Zod row
+   vocabulary and `SessionEventDraftSchema` placement specified by the
+   [PR 1 foundation proposal](./2026-09-08-pr1-run-ledger-foundation.md#28-the-arms-in-sessioneventts),
+   `foldRunState` in `src/shared`, the
    in-memory ledger layer, one ledger test and one fold test. Nothing
    deleted yet; nothing in production calls it yet.
 2. Both families on the ledger, one PR: `ModelInvoker`, `Tools`,
