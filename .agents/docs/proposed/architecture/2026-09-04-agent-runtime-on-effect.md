@@ -824,6 +824,12 @@ continuation and has no sub-agents yet). OpenCode does not use
 
 ## 3. Sequencing: the runtime is lane D of the cutover
 
+The 2026-09-08 owner amendment in the substrate proposal §8 permits #12108's
+completed metadata and cleanup changes to merge before this runtime work.
+Lane D continues as a follow-up. This changes release sequencing, not its
+joint replacement obligations or the outstanding D4 decision; checkpoint
+writers and their file-lease fences remain together until replaced.
+
 The owner's rule is no intermediate projectors or adapters, only the target
 architecture. The first draft of this section had two intermediates: a
 release-N `checkpoint` column that the old `persistedFlow.ts` would update

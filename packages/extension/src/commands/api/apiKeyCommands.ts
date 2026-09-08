@@ -12,6 +12,7 @@ import {
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import type { PlatformSecrets } from '@platform/secrets';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   getProviderDisplayName,
@@ -77,10 +78,12 @@ async function promptForApiKey(
 }
 
 async function pickApiProvider(
+  secrets: PlatformSecrets,
   placeHolder: string,
   prompt: string,
 ): Promise<ApiProvider | undefined> {
-  const providerItems = await SecretManager.getApiProviderQuickPickItems();
+  const providerItems =
+    await SecretManager.getApiProviderQuickPickItems(secrets);
   const providerPick =
     await vscode.window.showQuickPick<ApiProviderQuickPickItem>(providerItems, {
       placeHolder,
@@ -95,12 +98,14 @@ async function pickApiProvider(
  * optional `provider` is parsed at the dispatch boundary.
  */
 export async function setApiKey(
+  secrets: PlatformSecrets,
   refreshAfterKeyChange: (provider: string) => Promise<void>,
   provider?: ApiProvider,
 ): Promise<void> {
   const target =
     provider ??
     (await pickApiProvider(
+      secrets,
       'Select API provider',
       "Keys are stored in VS Code's encrypted secret store, never on disk.",
     ));
@@ -121,9 +126,11 @@ export async function setApiKey(
  * command registry in #3781 batch 4.
  */
 export async function removeApiKey(
+  secrets: PlatformSecrets,
   refreshAfterKeyChange: (provider: string) => Promise<void>,
 ): Promise<void> {
   const provider = await pickApiProvider(
+    secrets,
     'Select API provider to remove key',
     'Only removes the key from TeXRA — does not delete it from the provider.',
   );

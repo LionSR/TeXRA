@@ -812,7 +812,8 @@ the owner has not yet ratified.
 
 ### 6.2 Stages
 
-Stages are lanes on one branch and ship in one release (§8).
+Stages are lanes on one branch. The 2026-09-08 owner ruling in §8 permits
+#12108 to merge as an intermediate step; the remaining stages follow separately.
 
 | Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Deletes in the same release                                                                                                                                                              | Companion step |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
@@ -992,6 +993,30 @@ The SQLite PRD §8 non-goal is reversed to this scoped form; the reversal is
 recorded there and in §10.
 
 ## 8. Process: one cutover, no dual system
+
+### Owner amendment, 2026-09-08: intermediate merge of #12108
+
+The owner authorizes #12108 to merge into main as an intermediate change so
+other work can proceed. This supersedes the requirement that every stage
+land in the same merge or release. The completed metadata and cleanup work
+may land after synchronization, validation and review of the actual combined
+head. It is not completion of the event-table-only objective.
+
+Official Effect SQL adoption (#12102), the coordinated runtime and checkpoint
+replacement (#11869), and the remaining historical-data work (#11867) continue
+as follow-ups. The runtime's separately recorded flow-checkpoint importer
+retirement remains in force. This sequencing ruling does not settle D4 or
+other outstanding data-meaning decisions, authorize dual writes or new
+compatibility adapters, or permit an unsafe intermediate read/write path.
+Each datum retains one authoritative representation; existing checkpoint
+writers and their file-lease fences remain together until their replacement.
+
+The final deletion ledger and combined validation remain obligations of
+#11867. Stage 7's retirement clock begins with the actual release of the
+importer and supported replacement, not this intermediate merge. No
+contribution to Effect's repository or local dependency fork is authorized.
+The original coordinated process below remains the target where it is not
+superseded by this amendment.
 
 The owner's constraint is that the migration be efficient and never run two
 systems. The SQLite PRD as written violates the second: eight stages, each its
