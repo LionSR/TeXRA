@@ -146,14 +146,21 @@ serve `removeEmptyDirectory` **corrupted `delete`** in the prototype.
 **Six further gaps:**
 
 - No `lstat` at all. `isSymlink` would need a `readLink`-plus-errno probe:
-  call `readLink`, read success as "symlink" and `EINVAL` as "not one". An
-  earlier revision called that "the silent-degradation shape CLAUDE.md
-  forbids", which overstates it — this is error-as-control-flow, not a masked
-  failure. The real objection is narrower and worse: **`SystemErrorTag` has no
-  `EINVAL` member** (above), so the probe must read whatever lossy tag a layer
-  maps it to — `InvalidData` in a hand-written one — and that tag covers more
-  than `EINVAL`. An unrelated failure then reads as "not a symlink": a wrong
-  answer rather than a loud one.
+  call `readLink`, read success as "symlink" and `EINVAL` as "not one". Two
+  successive revisions overcharged this. The first called it "the
+  silent-degradation shape CLAUDE.md forbids", which overstates it — this is
+  error-as-control-flow, not a masked failure. The second said **`SystemErrorTag`
+  has no `EINVAL` member** (above) and concluded the probe must therefore read a
+  lossy tag, so an unrelated failure reads as "not a symlink". The tag fact is
+  true; the conclusion does not follow, and **§2 above disproves it**:
+  `PlatformError` preserves the Node error at `reason.cause`, which is exactly
+  how `isDiskFullError` recovers ENOSPC and how `spawnFailure`
+  (`leanServer.ts:168`) recovers an error identity the tags never carried. An
+  adapter reads `EINVAL` off the preserved cause the same way and propagates
+  every other failure loudly. So the probe is **correct but expensive**: the
+  cost is one extra syscall per entry on a traversal already paying one, plus
+  a dependency on `reason.cause` surviving whichever layer produces the error.
+  Not a correctness objection.
 - **`readDirectory` returns `Array<string>`, not `[name, type]`.** The port
   reads each entry's type off the `withFileTypes` dirent for free; Effect's
   shape forces a `stat` per entry. This is load-bearing, not tuple
@@ -218,12 +225,14 @@ it defaults `remove` to `Effect.void` and `exists` to `false`.
 **Eight production modules bypass the port entirely**, so a memfs-backed port
 does not control their inputs. The hole is closable for testing by handing
 `glob` a memfs instance directly. For real wiring the candidates differ:
-**candidate A can serve the five async importers, candidate B none of the
-eight** in practice — so B keeps a second filesystem seam here (below; a
-`readLink`-based adapter exists in principle and is a bad trade). This paragraph has been wrong four times in four
-directions: two importers, then unclosable, then independent of R-1, then
-requiring synchronous methods — and its summary twice survived a correction to
-its body. Treat its claims as the least reliable in this note.
+**candidate A can serve the five async importers directly; candidate B can
+serve them only through an adapter** that costs one extra syscall per entry
+(below). Only the three `globSync` callers are closed to both. This paragraph
+has been wrong five times in five directions: two importers, then unclosable,
+then independent of R-1, then requiring synchronous methods, then B excluded on
+a correctness objection this note's own §2 disproves — and its summary twice
+survived a correction to its body. Treat its claims as the least reliable in
+this note.
 The full set of `glob`-package importers outside the test kernel is
 `src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts`,
 `src/tools/approval/latexPreview.ts`, `src/latex/formatter/latexindentpt.ts`,
@@ -233,8 +242,8 @@ The full set of `glob`-package importers outside the test kernel is
 glob discovery with `WorkspaceFS` operations, so a memfs-backed port does not
 control their inputs today.
 
-**All eight are closable for testing with memfs; candidate A can serve five
-of them for real, candidate B none.**
+**All eight are closable for testing with memfs; five of them are servable for
+real by either candidate, A directly and B through an adapter.**
 The pinned `glob@13.0.6` takes an `fs?: FSOption` — "an fs implementation to
 override some or all of the defaults" (`glob.d.ts:231-234`) — while keeping
 the `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` behaviour these callers
@@ -253,18 +262,19 @@ traversal actually calls. So:
   as Node `Stats`. An earlier revision of this paragraph said `FSOption`
   requires synchronous methods and so overcharged A; it does not, for the
   async path.
-- **Candidate B can serve none of them in practice.** Not because of sync —
-  because `path-scurry` wants **`lstat`**, at `:900` and `:705`, and Effect's
-  `FileSystem` has none. An adapter could synthesise one from the
-  `readLink`-plus-`stat` probe above, so this is a cost rather than a wall;
-  but that probe misreads unrelated failures as "not a symlink" and adds a
-  syscall per entry, which is a poor trade for a unified seam. The three
+- **Candidate B can serve the same five, but only through an adapter.**
+  `path-scurry` wants **`lstat`**, at `:900` and `:705`, and Effect's
+  `FileSystem` has none — so B must synthesise one from the
+  `readLink`-plus-`stat` probe above. An earlier revision called that probe
+  incorrect under unrelated failures; §2 now records why that was wrong (the
+  errno survives on `reason.cause`). What is left is real but only a price:
+  a second syscall per entry on a traversal already paying one. The three
   `globSync` callers additionally need the synchronous set, which Effect also
   lacks — and there no adapter exists at all.
 
-So under B the repo keeps a second filesystem seam for `glob` in practice;
-under A the seam is closable for the five async callers and stays only for
-the three synchronous ones.
+So under both candidates the seam closes for the five async callers and stays
+for the three synchronous ones; B pays an extra syscall per entry that A does
+not.
 
 **Three of the eight are synchronous**, which compounds it:
 `latexPreview.ts:78`, `latexindentpt.ts:49` and `platformPaths.ts:47` call
@@ -275,19 +285,18 @@ And Effect's own `glob` is not a route for any of the eight: its signature is
 `(pattern, {root?, exclude?})` and accepts none of the
 `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` options these callers pass.
 
-So the honest summary: **under candidate A the five async importers can be
+So the honest summary: **under either candidate the five async importers can be
 adapted onto the port and only the three `globSync` callers keep separate
-wiring; under candidate B all eight keep it in practice**.
+wiring — B pays a per-entry syscall for the privilege, A does not**.
 
-B is not _categorically_ excluded from the five. `path-scurry` needs
-`promises.lstat`, and an adapter could synthesise one from the
-`readLink`-plus-`stat` probe described in §2. But that probe rests on an errno
-tag which does not isolate `EINVAL`, so an unrelated failure reads as "not a
-symlink"; and it adds a second syscall per entry to a traversal already paying
-one. That buys a unified seam at the price of a symlink test that is silently
-wrong under unrelated failures — a worse trade than keeping separate wiring.
-So the note prescribes separate wiring for B on cost, not on impossibility.
-The second seam is a cost B carries and A mostly does not.
+This is the third time this section has moved toward B, each time by removing
+an objection I had raised rather than by finding a new capability: first sync
+was not required for the async path, then the tag gap was not a correctness
+problem. What survives is a throughput cost, which is measurable and which R-1
+already measured on a different traversal (~8× on 3,096 files, dominated by
+exactly this per-entry `stat`). Whether that verdict transfers to `glob`'s
+workload is untested here. The note prescribes nothing about `glob` beyond
+that measurement being the thing to run.
 
 ### A method note, because the obvious experiment was run wrong once
 
@@ -374,12 +383,12 @@ test files that would each need a fiber, a scope and a drain to observe what
 a callback observes today.
 
 That is the argument against B4, and it is an economic one: 16 files of
-churn, mostly tests, plus the seven behavioural properties below, against the
+churn, mostly tests, plus the eight behavioural properties below, against the
 listener machinery being replaced — the `subscribers` field (`:47`),
 `subscribe` (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a
 217-line class that does much else besides. Not impossibility — price.
 
-Beyond construction, seven behavioural properties a replacement must reproduce.
+Beyond construction, eight behavioural properties a replacement must reproduce.
 An earlier revision listed the first two as objections that "survive even an
 unbounded hub"; review showed that overstates them, and the corrected form is
 below.
@@ -512,13 +521,35 @@ below.
    accrued before detachment began. A replacement needs an **enqueue-time**
    per-subscription bound, or synchronous accounting for this sink.
 
-**None of these seven rejects `PubSub`.** They are the contract a replacement
+8. **Ordering holds across two publication planes, and one lifecycle comment
+   depends on it.** The seven above are all within-plane; this one is not, and
+   no per-subscriber FIFO supplies it. `AgentRunLifecycle.ts:656-661` emits
+   `run.config` through `ctx.logger` — the trace plane — and `:670` then calls
+   `transitionRunStart(ctx)`, which publishes `RUNNING` through
+   `StreamStatusMachine` (`:336-348`, `session.status.transition`). Two
+   different publishers, and the comment at `:651-655` states the requirement
+   in as many words: publish the config first "so progress backends can create
+   the initial `StreamExecutionState` with the real category when the
+   transition-owned run-start side effects fire". Synchronous `emit` makes the
+   ordering free — the config has reached every subscriber before `emit`
+   returns. Under a hub, `emit` returns once the event is published, so
+   `RUNNING` can be transitioned while `run.config` is still queued, and a
+   progress backend builds its initial state with the wrong category. A
+   replacement needs a cross-plane barrier, or both facts routed through one
+   ordered path. **Note the shape**: this is the second finding in two rounds
+   where synchronous `emit` was silently supplying an ordering guarantee that
+   nothing declares. Assume there are more, and that a grep for `emit`
+   followed by a non-`emit` publish on the next few lines is the way to find
+   them, not reasoning about the contract.
+
+**None of these eight rejects `PubSub`.** They are the contract a replacement
 has to reproduce: bounded-vs-unbounded chosen deliberately, per-handler
 failures **caught and reported** (isolation alone silently consumes them),
 the subscription acquired before the first emit, **every published event's
 handler acknowledged** before disposal (an empty queue is not that), each
-event stage-stamped on the way in, and detachment stopping delivery before it
-returns, and the handover cap enforced at enqueue rather than in the handler.
+event stage-stamped on the way in, detachment stopping delivery before it
+returns, the handover cap enforced at enqueue rather than in the handler, and
+ordering preserved against the separate status plane.
 Together with the subscription and lifecycle work above — but not
 the constructor sites, which can build their own hub — that is the real size
 of B4, and the reason not to do it is that size, not impossibility.
@@ -725,6 +756,19 @@ either.
 header documents it as generic read/write for arbitrary keys, and
 `src/agent/node/persistedFlow.ts` already stores arbitrary `flow_<runId>`
 records there — not in the closed `SessionEventDraftSchema` vocabulary.
+
+**That store validates nothing, so "route storage errors to a typed failure"
+does not cover the corruption that matters.** `KVStore.read<T>`
+(`src/common/storage/KVStore.ts:55-62`) is `JSON.parse(raw) as T` — an
+unchecked cast. A missing file and unparseable JSON both fail loudly, but a
+row that is _valid JSON of the wrong shape_ — the shape contract drift
+actually produces — is returned as if it were a `T`, and the engine consumes
+it as runnable workflow state. Whatever the adoption does about storage
+failures, the marker, ownership and completion records need a runtime schema
+parsed at this boundary; the repo's own rule already says so, and says which
+way to fail (`.catch(default)` on persisted data is the anti-pattern, not the
+fix). This is the storage-side twin of the `mtime` `Option` hazard in §2: the
+loss is not the read failing, it is the read succeeding with something wrong.
 
 **But an arbitrary key is not automatically internal metadata, and the
 `flow_` precedent is precisely what shows the missing half.** `isKVFile`
