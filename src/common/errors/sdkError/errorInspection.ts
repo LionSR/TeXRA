@@ -158,11 +158,11 @@ export function detectStatusText(
   err: unknown,
   statusCode?: number,
 ): string | undefined {
-  const candidates = sdkErrorCandidates(err);
-  const explicit = candidates
-    .map((c) => pickStringField(c, 'statusText'))
-    .find((v) => v !== undefined);
-  if (explicit) return explicit;
+  const [direct, ...nested] = sdkErrorCandidates(err);
+  const explicit =
+    direct?.statusText ??
+    nested.map((c) => c.statusText).find((v) => v !== undefined);
+  if (isString(explicit) && explicit) return explicit;
   return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
 }
 
