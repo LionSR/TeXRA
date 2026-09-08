@@ -5,7 +5,7 @@ plan. It specifies PR 1 of lane D of the runtime cutover
 ([the agent runtime on Effect](./2026-09-04-agent-runtime-on-effect.md), §5
 PR plan), stacked on `cutover/native-runtime-llm-20260907`. The review found
 real defects and this document carries their corrections rather than the
-original text: six of the seven §0.1 boundary obligations came back **partial**,
+original text: five of the six §0.1 boundary values came back **partial**,
 and the one that came back clean (`RemoteOperationSchema`, usable verbatim
 inside a runtime envelope) is clean only because PR 1 carries the attempt and
 the deadline itself. The `packages/llm` edits L1-L6 below are a **precondition,
@@ -510,6 +510,10 @@ export const ModelMessagePayloadSchema = z
       return;
     }
     const ids = new Set(p.calls.map((c) => c.callId));
+    // A duplicate has a primary to reuse, so it names a call that precedes it
+    // and is not itself a duplicate. Membership in `ids` alone would admit a
+    // call naming itself, which can never settle.
+    const earlierPrimaries = new Set<string>();
     p.calls.forEach((call, index) => {
       if (
         call.ordinal !== index ||
@@ -522,13 +526,15 @@ export const ModelMessagePayloadSchema = z
             'Dispatch facts follow the response call order and identity.',
         });
       }
-      if (call.duplicateOf != null && !ids.has(call.duplicateOf)) {
+      if (call.duplicateOf != null && !earlierPrimaries.has(call.duplicateOf)) {
         ctx.addIssue({
           code: 'custom',
           path: ['calls', index, 'duplicateOf'],
-          message: 'A duplicate names a call of this same response.',
+          message:
+            'A duplicate names an earlier non-duplicate call of this same response.',
         });
       }
+      if (call.duplicateOf == null) earlierPrimaries.add(call.callId);
     });
     if (ids.size !== p.calls.length) {
       ctx.addIssue({
@@ -576,16 +582,19 @@ export const SettledAttachmentSchema = z.strictObject({
  * BigInt.
  *
  * `SettledFileSchema` is derived from `ToolFileAttachmentSchema`
- * (toolResult.ts:23-27) with its two binary fields omitted, NOT rebuilt as a
- * `strictObject` over `FileReferenceSchema.shape`. `FileReferenceSchema` is a
- * `z.looseObject` (toolResult.ts:9-15) and real attachments carry
- * `base64Data`/`bytes` plus whatever extra keys a tool attached, so a strict
- * rebuild would refuse every executed result that has an attachment.
+ * (toolResult.ts:23-27), NOT rebuilt as a `strictObject` over
+ * `FileReferenceSchema.shape`. `FileReferenceSchema` is a `z.looseObject`
+ * (toolResult.ts:9-15) and real attachments carry `base64Data`/`bytes` plus
+ * whatever extra keys a tool attached, so a strict rebuild would refuse every
+ * executed result that has an attachment. That same looseness is why the two
+ * binary fields go through a transform rather than `.omit()`: on a loose
+ * object an omitted key is only undeclared, so `base64Data` and the
+ * `Uint8Array` in `bytes` would pass through as unknown keys and land in the
+ * row anyway, the second expanded into a numeric-key object.
  */
-const SettledFileSchema = ToolFileAttachmentSchema.omit({
-  base64Data: true,
-  bytes: true,
-});
+const SettledFileSchema = ToolFileAttachmentSchema.transform(
+  ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
+);
 export const SettledToolResultSchema = z.discriminatedUnion('status', [
   ExecutedToolResultSchema.omit({ files: true }).extend({
     files: z.array(SettledFileSchema).optional(),
@@ -991,11 +1000,13 @@ export class RunLedger extends Context.Service<
     ) => Effect.Effect<void, RunLedgerRefused | DatabaseReadFailed>;
 
     /**
-     * Fold a run's rows into its state. `null` when the execution aggregate
-     * holds no `flow.snapshot`. A run that never committed initial state is
-     * not resumable, which is the loop's fresh-run branch and, for a pre-0.41
-     * run with zero execution rows, the honest "recorded before the run
-     * ledger" answer, distinct from "checkpoint corrupt". PR 1 reads both
+     * Fold a run's rows into its state. `null` only when the execution
+     * aggregate is empty: that is the loop's fresh-run branch and, for a
+     * pre-0.41 run, the honest "recorded before the run ledger" answer,
+     * distinct from "checkpoint corrupt". Execution rows without an initial
+     * `flow.snapshot` are not that case. They are a malformed aggregate and
+     * fail `inconsistent`, because folding an `attempt` or a `response` into
+     * a fresh run is how a paid invocation gets issued twice. PR 1 reads both
      * aggregates in full; the snapshot-anchored read is PR 2's optimization,
      * and `foldRunState`'s `state` parameter is what makes it a drop-in
      * rather than a second fold.
@@ -1017,11 +1028,13 @@ export class RunLedger extends Context.Service<
      *     `response` row that used it, when both are present;
      *   - a `model.message` `append` naming `sourceResponse` requires that
      *     response to be the current pending response, and its first message
-     *     to be a tool group whose `results.length` equals that response's
-     *     local-call count. This is the settlement-to-provider join: the
-     *     canonical tool message binds results to calls positionally
-     *     (`callOrdinal`), the ledger keys them by `callId`, and this is
-     *     where the two are checked against each other.
+     *     to be a tool group carrying, at the `callOrdinal` of each of that
+     *     response's dispatch facts, the committed settlement for that
+     *     `callId`. This is the settlement-to-provider join: the canonical
+     *     tool message binds results to calls positionally, the ledger keys
+     *     them by `callId`, and this is where the two are checked against
+     *     each other. A count alone would admit a delivery whose settlements
+     *     never committed, and the delivery is what clears them.
      */
     readonly appendBatch: (
       run: RunAggregates,
@@ -1033,9 +1046,15 @@ export class RunLedger extends Context.Service<
 ```
 
 `RunLedgerDraft` is defined in `runStateFold.ts` as the discriminated union of
-the six drafts the ledger accepts, narrowed from `SessionEventDraft` by type.
-It is not `SessionEventDraft` itself, or `appendBatch` would accept a
-`tool.start`. The original spec used the name without ever defining it.
+the six ledger arms plus the named stream-aggregate arms a batch has to commit
+atomically with them: `tool.end`, which settles with its `tool.result`, and
+`approval.requested` / `approval.resolved`, whose recovery binding is the
+snapshot committed in the same batch. Publishing those companions separately
+is the crash window where a settled tool keeps an active card, or an approval
+survives with nothing to recover it by. The union is still that explicit list
+narrowed from `SessionEventDraft`, not `SessionEventDraft` itself, or
+`appendBatch` would accept a `tool.start`. The original spec used the name
+without ever defining it.
 
 **Deliberately absent.** No `append` (a one-row case is a one-element batch; a
 second entry point is the dual system). No `messages()` (the folded state holds
@@ -1101,10 +1120,11 @@ fallback:
    assertion over the imported schema, not a second declaration of it. Never a
    `?? null`.
 2. **Endpoint hygiene.** Every `deployment.endpoint` reaching an execution row
-   is asserted to carry no userinfo and no query string, failing
-   `unsafe-endpoint`. `z.url()` permits `?api-key=`, this row is never scrubbed
-   and lives until explicit user deletion; the assertion is the only thing
-   between a mistyped base URL and a permanent plaintext credential.
+   is asserted to carry no userinfo, no query string and no fragment, failing
+   `unsafe-endpoint`. `z.url()` permits `?api-key=` and `#api-key=` alike, this
+   row is never scrubbed and lives until explicit user deletion; the assertion
+   is the only thing between a mistyped base URL and a permanent plaintext
+   credential.
 
 Plus one refusal: a `response` row whose `turn` contains a local call with a
 null `providerCallId` fails `null-call-id` rather than being given a
@@ -1235,23 +1255,23 @@ and the unresolved approvals with their recovery bindings resolved.
 
 ### 4.3 Transitions
 
-| Row                                                  | Rule                                                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model.message` **`attempt`**                        | sets the open attempt; sets `phase: 'model.submitted'`. A second `attempt` for the same invocation at a higher attempt replaces it; a lower one is `out-of-order`.                                                                                                                                        |
-| `model.message` **`identified`**                     | sets the open attempt's `providerResponseId`. `dangling-binding` if no open attempt matches the invocation.                                                                                                                                                                                               |
-| `model.message` **`accepted`**                       | sets the open attempt's acceptance. The commit barrier: `observe` may be called only after this row is committed.                                                                                                                                                                                         |
-| `model.message` **`response`**, `calls` empty        | appends `assistantMessageFromResult(turn)`; sets the continuation from the HTTP arm's `continuation` (the editor arm has none, L6); clears the open attempt and the pending retry.                                                                                                                        |
-| `model.message` **`response`**, `calls` non-empty    | sets the pending response with an empty settled map; installs **no** provider message; same continuation, attempt and retry effects.                                                                                                                                                                      |
-| `model.message` **`append`**, `sourceResponse: null` | appends `messages`.                                                                                                                                                                                                                                                                                       |
-| `model.message` **`append`**, `sourceResponse` set   | must equal the pending response's id, else `mismatched-delivery`. Appends `assistantMessageFromResult` of the pending response's turn, then the row's `messages`; clears the pending response, its settlements and their pending intents. **This is where the paid assistant turn enters history, once.** |
-| `model.compaction`                                   | `messages := [...messages.slice(0, keepPrefix), ...row.messages]`; continuation from the row. The only row that shortens history. **See §2.5: nothing here checks the result is a preparable history.**                                                                                                   |
-| `tool.intent`                                        | upserts one pending intent per call id at the row's attempt. A higher attempt supersedes; a lower one is `out-of-order`.                                                                                                                                                                                  |
-| `tool.result`                                        | requires a pending response holding the call id, else `orphan-settlement`. Records the settlement; removes the pending intent **only when the attempt matches**; applies `stateMutation` in array order, exactly once.                                                                                    |
-| `flow.step`                                          | sets the step and each coordinate it carries (asserted non-decreasing); records the halt outcome on `'halted'`.                                                                                                                                                                                           |
-| `flow.snapshot`                                      | §4.4.                                                                                                                                                                                                                                                                                                     |
-| `approval.requested` / `approval.resolved`           | maintain the approval map by request id. A `model-retry` binding must match the pending retry's request id; a `tool-outcome` binding must match a pending intent's `approvalRequestId`. An inconsistent binding is `dangling-binding`, a resume refusal with a diagnostic, never consent.                 |
-| every other stream-aggregate type                    | ignored by an explicit named list.                                                                                                                                                                                                                                                                        |
-| an unrecognized type on the **execution** aggregate  | `unknown-execution-row`.                                                                                                                                                                                                                                                                                  |
+| Row                                                  | Rule                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `model.message` **`attempt`**                        | sets the open attempt; sets `phase: 'model.submitted'`. A second `attempt` for the same invocation at a higher attempt replaces it; a lower one is `out-of-order`.                                                                                                                                                                                     |
+| `model.message` **`identified`**                     | sets the open attempt's `providerResponseId`. `dangling-binding` if no open attempt matches the invocation.                                                                                                                                                                                                                                            |
+| `model.message` **`accepted`**                       | sets the open attempt's acceptance. The commit barrier: `observe` may be called only after this row is committed.                                                                                                                                                                                                                                      |
+| `model.message` **`response`**, `calls` empty        | requires the row's invocation to be the open attempt, else `dangling-binding`; appends `assistantMessageFromResult(turn)`; sets the continuation from the HTTP arm's `continuation` (the editor arm has none, L6); clears the open attempt and the pending retry.                                                                                      |
+| `model.message` **`response`**, `calls` non-empty    | same invocation requirement, which is what stops a replayed row from replacing an unrelated pending response; sets the pending response with an empty settled map; installs **no** provider message; same continuation, attempt and retry effects.                                                                                                     |
+| `model.message` **`append`**, `sourceResponse: null` | appends `messages`.                                                                                                                                                                                                                                                                                                                                    |
+| `model.message` **`append`**, `sourceResponse` set   | must equal the pending response's id, else `mismatched-delivery`. Appends `assistantMessageFromResult` of the pending response's turn, then the row's `messages`; clears the pending response, its settlements and their pending intents. **This is where the paid assistant turn enters history, once.**                                              |
+| `model.compaction`                                   | `messages := [...messages.slice(0, keepPrefix), ...row.messages]`; continuation from the row. The only row that shortens history. **See §2.5: nothing here checks the result is a preparable history.**                                                                                                                                                |
+| `tool.intent`                                        | requires the row's `responseId` to be the pending response and every call id to name one of its non-`parallelSafe` dispatch facts, else `dangling-binding`; a row naming neither leaves the real barrier unprotected. Upserts one pending intent per call id at the row's attempt. A higher attempt supersedes; a lower one is `out-of-order`.         |
+| `tool.result`                                        | requires a pending response holding the call id and no settlement yet recorded for that call at that attempt, else `orphan-settlement`; that is what makes the mutations exactly-once rather than once per replayed row. Records the settlement; removes the pending intent **only when the attempt matches**; applies `stateMutation` in array order. |
+| `flow.step`                                          | sets the step and each coordinate it carries (asserted non-decreasing, so a round-end step is emitted before the snapshot that opens the next round, never after it); records the halt outcome on `'halted'`.                                                                                                                                          |
+| `flow.snapshot`                                      | §4.4.                                                                                                                                                                                                                                                                                                                                                  |
+| `approval.requested` / `approval.resolved`           | maintain the approval map by request id. A `model-retry` binding must match the pending retry's request id; a `tool-outcome` binding must match a pending intent's `approvalRequestId`. An inconsistent binding is `dangling-binding`, a resume refusal with a diagnostic, never consent.                                                              |
+| every other stream-aggregate type                    | ignored by an explicit named list.                                                                                                                                                                                                                                                                                                                     |
+| an unrecognized type on the **execution** aggregate  | `unknown-execution-row`.                                                                                                                                                                                                                                                                                                                               |
 
 That last pair is the design: display rows are ignored _by name_; anything
 unrecognized on the execution aggregate is a failure, never a `default: return

@@ -542,8 +542,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (start) {
         const next = finishRound(s, out, shouldContinue(s, out));
         return yield* ledger.appendBatch([
           ...out.facts, // output/compile facts settle once with the phase
+          step('round.end', s.round, out), // before the snapshot: a step's coordinates never regress
           snapshot(next), // includes next round/phase, or done; never repeats a settled round
-          step('round.end', s.round, out),
         ]);
       }),
     );
@@ -875,9 +875,14 @@ with a reader, three mapping cases that each need their own correctness
 argument, and a retirement nobody will remember to perform. The behaviour
 instead is breaking and stated: a run whose only durable state is a
 `flow_<id>.json` record is reported as not resumable under the named
-release. The record is renamed to `flow_<id>.json.superseded` before that
-run's first ledger append, so a reverted release cannot resume from a stale
-cursor, and it is left on disk for the single-owner D8 sweep to delete.
+release, and its record is left readable: a reverted release resuming that
+run repeats nothing, because nothing about it was written to the ledger.
+The rename to `flow_<id>.json.superseded` covers the other case, the one
+the PRD's rollout section names. The first time a run appends a ledger row
+while a `flow_<id>.json` for it still exists, it renames the record before
+that append, so a reverted release cannot resume from a cursor the ledger
+has already moved past. Either way the file stays on disk for the
+single-owner D8 sweep to delete.
 Nothing below this note is struck: the deletions in the next paragraph, the
 substrate Stage 5 replacement, and the §8 freeze all stand as written.
 
@@ -925,22 +930,22 @@ docs PR (this document and the Stage 5 rewrite), and nothing under
 
 Deleted (with the replacement in the same PR, R10):
 
-| Path                                                                                                                               | LoC         | Replaced by                                                                    |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------ |
-| `src/agent/node/index.ts`                                                                                                          | 158         | nothing                                                                        |
-| `src/agent/node/persistedFlow.ts`                                                                                                  | 531         | `RunLedger` + `foldRunState`                                                   |
-| `reflection/RoundPersistedFlow.ts`                                                                                                 | 270         | round loop + `shouldContinue`                                                  |
-| `reflection/ResponseCycleFlow.ts` (nodes and graph)                                                                                | 593         | continuation loop                                                              |
-| `reflection/nodes/*` as classes                                                                                                    | 751         | functions; bodies move                                                         |
-| `reflection/ReflectionFlowState.ts` latches                                                                                        | 68          | `flow.snapshot`                                                                |
-| `tooluse/ToolUseRoundFlow.ts`, `nodes/*`, `toolUseRound/*` as classes                                                              | ~1,650      | `runToolUse`, dispatch functions; bodies move                                  |
-| `tooluse/runToolUseFlow.ts` graph rebuild, disposition ladder, attachment and startup-window code                                  | ~500 of 719 | loop + scope finalizers                                                        |
-| `core/flows/ModelInvocationNode.ts`                                                                                                | 846         | `ModelInvoker` (~500; the retry, gate, and credential logic does not shrink)   |
-| `core/flows/{FlowTransitions,CycleServices,BaseFlowServices}.ts`                                                                   | 122         | Context services                                                               |
-| `src/agent/storage/resumability.ts` full-checkpoint parse                                                                          | 120         | latest-of-type index read (`flow.snapshot` present) plus the C5 liveness probe |
-| `SessionResumeRetrieval.ts` checkpoint read                                                                                        | ~170 of 234 | fold; model id from the latest `flow.snapshot`                                 |
-| `runtime/persistedCompileRejection.ts`                                                                                             | 46          | snapshot field                                                                 |
-| Tests: `PocketFlowNode`, `PersistedFlow`, `ReflectionFlowStateRecovery` suites; 13 record-format pins reduced to importer fixtures | ~900        | fold test, ledger test, repair-policy test (~400)                              |
+| Path                                                                                                                                        | LoC         | Replaced by                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------ |
+| `src/agent/node/index.ts`                                                                                                                   | 158         | nothing                                                                        |
+| `src/agent/node/persistedFlow.ts`                                                                                                           | 531         | `RunLedger` + `foldRunState`                                                   |
+| `reflection/RoundPersistedFlow.ts`                                                                                                          | 270         | round loop + `shouldContinue`                                                  |
+| `reflection/ResponseCycleFlow.ts` (nodes and graph)                                                                                         | 593         | continuation loop                                                              |
+| `reflection/nodes/*` as classes                                                                                                             | 751         | functions; bodies move                                                         |
+| `reflection/ReflectionFlowState.ts` latches                                                                                                 | 68          | `flow.snapshot`                                                                |
+| `tooluse/ToolUseRoundFlow.ts`, `nodes/*`, `toolUseRound/*` as classes                                                                       | ~1,650      | `runToolUse`, dispatch functions; bodies move                                  |
+| `tooluse/runToolUseFlow.ts` graph rebuild, disposition ladder, attachment and startup-window code                                           | ~500 of 719 | loop + scope finalizers                                                        |
+| `core/flows/ModelInvocationNode.ts`                                                                                                         | 846         | `ModelInvoker` (~500; the retry, gate, and credential logic does not shrink)   |
+| `core/flows/{FlowTransitions,CycleServices,BaseFlowServices}.ts`                                                                            | 122         | Context services                                                               |
+| `src/agent/storage/resumability.ts` full-checkpoint parse                                                                                   | 120         | latest-of-type index read (`flow.snapshot` present) plus the C5 liveness probe |
+| `SessionResumeRetrieval.ts` checkpoint read                                                                                                 | ~170 of 234 | fold; model id from the latest `flow.snapshot`                                 |
+| `runtime/persistedCompileRejection.ts`                                                                                                      | 46          | snapshot field                                                                 |
+| Tests: `PocketFlowNode`, `PersistedFlow`, `ReflectionFlowStateRecovery` suites; the 13 record-format pins, deleted with the format they pin | ~900        | fold test, ledger test, repair-policy test (~400)                              |
 
 Rewired, not deleted (the refuters' missing list): `AgentLaunchContext.ts`
 (compat key from snapshot row), `executionLifecycle.ts`,
