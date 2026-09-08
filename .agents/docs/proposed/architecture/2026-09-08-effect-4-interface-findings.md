@@ -263,9 +263,11 @@ And Effect's own `glob` is not a route for any of the eight: its signature is
 `(pattern, {root?, exclude?})` and accepts none of the
 `cwd`/`dot`/`nodir`/`absolute`/`signal`/`follow` options these callers pass.
 
-So the honest summary is that `glob` stays on its own filesystem wiring under
-either candidate. Under A that is unremarkable — the port is already separate
-from `glob`. Under B it is a second seam that adoption does not remove.
+So the honest summary: **under candidate A the five async importers can be
+adapted onto the port and only the three `globSync` callers keep separate
+wiring; under candidate B all eight keep it**, because Effect's `FileSystem`
+offers no `lstat` in either form. The second seam is a cost B carries and A
+mostly does not.
 
 ### A method note, because the obvious experiment was run wrong once
 
@@ -327,28 +329,31 @@ Review pointed out that the handler-construction path is reached from inside an
 `Effect.tryPromise` around `createModelHandler` — so a caller can yield
 `PubSub.unbounded()` there and pass the hub into the synchronous constructor.
 What the constructor forbids is a **drop-in field initializer**; it does not
-forbid replacing `TraceEmitter`. The honest characterisation is construction
-and injection work: threading a hub through `createModelHandler`'s `async`
-signature and into every construction site.
+forbid replacing `TraceEmitter`. And since the hub can be built in place (see
+above), threading one through `createModelHandler`'s `async` signature is not
+required either — an earlier revision prescribed that, and it is withdrawn.
 
-So nothing here is impossible. What remains is the size of the job. **26
-files** touch the seam: 19 construct `new TraceEmitter()`, 14 call
-`.subscribe(...)` on a trace, logger or emitter, and 7 do both.
+So nothing here is impossible. What remains is the size of the job, and it is
+smaller than earlier revisions of this note claimed. 26 files touch the seam
+in total, but **10 of them only construct** a `TraceEmitter` — and a
+constructor that builds its own hub leaves those unchanged. The migration
+surface is the **16 files that subscribe**, directly or through
+`attachChannelSubscriber`.
 
-This figure moved twice under review — "roughly sixteen" was an estimate, and
-a recount that reported 24 used too narrow a subscription pattern. Treat it
-as measured at this tree, not as authoritative.
+This figure has moved three times: "roughly sixteen" estimated, 24 from too
+narrow a grep, 26 counted as the union, and now 16 once constructor sites fall
+out. Treat it as measured at this tree, not as authoritative.
 
-The composition matters more than the total, and cuts both ways. **5 of the
-26 are production** — `packages/agent/src/effect/sessions.ts`,
-`ModelHandler.ts`, `SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and
-the other 21 are test-kernel, most passing a plain synchronous callback to
-`trace.subscribe` and reading events out of a local array on the next line.
-So the production blast radius is small, and the cost is concentrated in
-rewriting tests that would each need a fiber, a scope and a drain to observe
-what a callback observes today.
+The composition matters more than the total. **5 of the 16 are production** —
+`packages/agent/src/effect/sessions.ts`, `ModelHandler.ts`,
+`SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and the other 11 are
+test-kernel, most passing a plain synchronous callback to `trace.subscribe`
+and reading events out of a local array on the next line. So the production
+blast radius is five files, and the cost is concentrated in rewriting eleven
+test files that would each need a fiber, a scope and a drain to observe what
+a callback observes today.
 
-That is the argument against B4, and it is an economic one: 26 files of
+That is the argument against B4, and it is an economic one: 16 files of
 churn, mostly tests, plus the six behavioural properties below, against the
 listener machinery being replaced — the `subscribers` field (`:47`),
 `subscribe` (`:66-68`) and `emit` (`:70-94`), about 29 lines inside a
@@ -475,11 +480,14 @@ below.
    mid-run.
 
 **None of these six rejects `PubSub`.** They are the contract a replacement
-has to reproduce: bounded-vs-unbounded chosen deliberately, per-handler fault
-isolation added explicitly, the subscription acquired before the first emit,
-its queue drained before disposal, each event stage-stamped on the way in,
-and detachment stopping delivery before it returns. Together with the injection work above, that is the real size of B4 —
-and the reason not to do it is that size, not impossibility.
+has to reproduce: bounded-vs-unbounded chosen deliberately, per-handler
+failures **caught and reported** (isolation alone silently consumes them),
+the subscription acquired before the first emit, **every published event's
+handler acknowledged** before disposal (an empty queue is not that), each
+event stage-stamped on the way in, and detachment stopping delivery before it
+returns. Together with the subscription and lifecycle work above — but not
+the constructor sites, which can build their own hub — that is the real size
+of B4, and the reason not to do it is that size, not impossibility.
 
 ### `StreamLogStore.onChange` is dead in production but is **not** a three-file deletion
 
@@ -658,7 +666,7 @@ failure onto `Suspended` and
 where an outer, typed engine boundary has to surface the rest. That decision
 is not expressible inside the interface and so belongs in the adoption plan.
 
-**Classify by cause, not by operation.** Grouping malformed JSON with
+**Classify by cause _and_ by phase.** Grouping malformed JSON with
 permission and disk failures and then deciding per operation gets it wrong in
 both directions. A corrupt persisted row is _present state_, not a transient
 condition: every resume reads the same bytes and parks again, so suspending
