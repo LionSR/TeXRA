@@ -9,7 +9,9 @@
 
 import { request as octokitRequest } from '@octokit/request';
 import { RequestError } from '@octokit/request-error';
+import { Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
+import { hostPort } from '@common/hostPort';
 import { isNonEmptyString } from '@utils/core';
 
 import { getGitHubToken } from './githubAuth';
@@ -78,11 +80,11 @@ function escapeOctokitLegacyTemplate(path: string): string {
   return path.replaceAll(/:([a-z]\w+)/g, '%3A$1');
 }
 
-export async function ghGet<T>(
+export const ghGet = Effect.fn('ghGet')(function* <T>(
   path: string,
   etag?: string,
-): Promise<ConditionalResponse<T>> {
-  const token = await getGitHubToken();
+): Effect.fn.Return<ConditionalResponse<T>, unknown> {
+  const token = yield* hostPort(() => getGitHubToken());
   const headers: Record<string, string> = {
     'X-GitHub-Api-Version': API_VERSION,
     'user-agent': 'TeXRA-Extension',
@@ -90,82 +92,120 @@ export async function ghGet<T>(
   if (token) headers.authorization = `Bearer ${token}`;
   if (etag) headers['if-none-match'] = etag;
 
-  const signal = AbortSignal.timeout(TIMEOUT_MS);
-  try {
-    const res = await octokitRequest(
-      `GET ${escapeOctokitLegacyTemplate(path)}`,
-      {
+  const timeout = AbortSignal.timeout(TIMEOUT_MS);
+  let signal: AbortSignal | undefined;
+  let pending: ReturnType<typeof octokitRequest> | undefined;
+  let primary: { error: unknown } | undefined;
+  return yield* Effect.tryPromise({
+    try: (interruption) => {
+      signal = AbortSignal.any([interruption, timeout]);
+      pending = octokitRequest(`GET ${escapeOctokitLegacyTemplate(path)}`, {
         headers,
         request: { signal },
-      },
-    );
-    return { status: 200, data: res.data as T, etag: res.headers.etag };
-  } catch (err) {
-    if (err instanceof RequestError) {
-      const status = err.status;
-      const responseHeaders = err.response?.headers;
-      const responseData = err.response?.data;
+      });
+      return pending;
+    },
+    catch: (error) => error,
+  }).pipe(
+    Effect.map((res): ConditionalResponse<T> => ({
+      status: 200,
+      data: res.data as T,
+      etag: res.headers.etag,
+    })),
+    Effect.catch((err): Effect.Effect<ConditionalResponse<T>, unknown> => {
+      primary = { error: err };
+      return Effect.try({
+        try: () => {
+          if (err instanceof RequestError) {
+            const status = err.status;
+            const responseHeaders = err.response?.headers;
+            const responseData = err.response?.data;
 
-      // 304 Not Modified comes through as an error in octokit. Surface it as
-      // the cached/unchanged response so callers can distinguish from 4xx.
-      if (status === StatusCodes.NOT_MODIFIED) return { status: 304 };
+            // 304 Not Modified comes through as an error in octokit. Surface it as
+            // the cached/unchanged response so callers can distinguish from 4xx.
+            if (status === StatusCodes.NOT_MODIFIED) {
+              return { status: 304 };
+            }
 
-      if (
-        status === StatusCodes.UNAUTHORIZED ||
-        status === StatusCodes.FORBIDDEN
-      ) {
-        // Primary rate limit: x-ratelimit-remaining hits 0 with an
-        // epoch-seconds reset timestamp. Only applies when credentials were
-        // otherwise valid.
-        const remaining = responseHeaders?.['x-ratelimit-remaining'];
-        const reset = responseHeaders?.['x-ratelimit-reset'];
-        if (remaining === '0' && typeof reset === 'string') {
-          throw new GitHubRateLimitError(Number(reset));
-        }
-        // Secondary / abuse rate limit: 403 with a Retry-After header
-        // (seconds from now). Primary-limit headers may still read
-        // "non-zero remaining". Without this branch we'd misclassify as an
-        // auth error and stop the subscription permanently.
-        const retryAfter = responseHeaders?.['retry-after'];
-        if (
-          status === StatusCodes.FORBIDDEN &&
-          typeof retryAfter === 'string'
-        ) {
-          const secs = Number(retryAfter);
-          if (Number.isFinite(secs) && secs > 0) {
-            throw new GitHubRateLimitError(
-              Math.floor(Date.now() / 1000) + Math.ceil(secs),
+            if (
+              status === StatusCodes.UNAUTHORIZED ||
+              status === StatusCodes.FORBIDDEN
+            ) {
+              // Primary rate limit: x-ratelimit-remaining hits 0 with an
+              // epoch-seconds reset timestamp. Only applies when credentials were
+              // otherwise valid.
+              const remaining = responseHeaders?.['x-ratelimit-remaining'];
+              const reset = responseHeaders?.['x-ratelimit-reset'];
+              if (remaining === '0' && typeof reset === 'string') {
+                throw new GitHubRateLimitError(Number(reset));
+              }
+              // Secondary / abuse rate limit: 403 with a Retry-After header
+              // (seconds from now). Primary-limit headers may still read
+              // "non-zero remaining". Without this branch we'd misclassify as an
+              // auth error and stop the subscription permanently.
+              const retryAfter = responseHeaders?.['retry-after'];
+              if (
+                status === StatusCodes.FORBIDDEN &&
+                typeof retryAfter === 'string'
+              ) {
+                const secs = Number(retryAfter);
+                if (Number.isFinite(secs) && secs > 0) {
+                  throw new GitHubRateLimitError(
+                    Math.floor(Date.now() / 1000) + Math.ceil(secs),
+                  );
+                }
+              }
+              throw new GitHubAuthError(
+                `GitHub returned ${status}: ${extractApiMessage(responseData, err.message)}`,
+              );
+            }
+            // Permanent HTTP failures — retrying won't help; surface immediately so
+            // callers can halt rather than burning a slot for 24 h.
+            if (
+              status === StatusCodes.NOT_FOUND ||
+              status === StatusCodes.GONE ||
+              status === StatusCodes.UNPROCESSABLE_ENTITY
+            ) {
+              throw new GitHubPermanentError(
+                status,
+                `GitHub returned ${status}: ${extractApiMessage(responseData, err.message)}`,
+              );
+            }
+          }
+          // Network-level errors (timeout, connection refused, DNS failure) reach
+          // here without a response. Re-throw a plain Error with a human-readable
+          // message so callers and the follow-up queue never see SDK internals.
+          if (timeout.aborted) {
+            throw new Error(
+              `GitHub request failed (TIMEOUT): request exceeded ${TIMEOUT_MS}ms`,
             );
           }
-        }
-        throw new GitHubAuthError(
-          `GitHub returned ${status}: ${extractApiMessage(responseData, err.message)}`,
-        );
-      }
-      // Permanent HTTP failures — retrying won't help; surface immediately so
-      // callers can halt rather than burning a slot for 24 h.
-      if (
-        status === StatusCodes.NOT_FOUND ||
-        status === StatusCodes.GONE ||
-        status === StatusCodes.UNPROCESSABLE_ENTITY
-      ) {
-        throw new GitHubPermanentError(
-          status,
-          `GitHub returned ${status}: ${extractApiMessage(responseData, err.message)}`,
-        );
-      }
-    }
-    // Network-level errors (timeout, connection refused, DNS failure) reach
-    // here without a response. Re-throw a plain Error with a human-readable
-    // message so callers and the follow-up queue never see SDK internals.
-    if (signal.aborted) {
-      throw new Error(
-        `GitHub request failed (TIMEOUT): request exceeded ${TIMEOUT_MS}ms`,
-      );
-    }
-    if (err instanceof Error) {
-      throw new Error(`GitHub request failed: ${err.message}`);
-    }
-    throw err;
-  }
-}
+          if (err instanceof Error) {
+            throw new Error(`GitHub request failed: ${err.message}`);
+          }
+          throw err;
+        },
+        catch: (error) => error,
+      });
+    }),
+    // Effect aborts the request before this uninterruptible join. Octokit's
+    // public promise includes body consumption; errors it hides stay hidden.
+    Effect.onExit(() => {
+      const request = pending;
+      return request === undefined
+        ? Effect.void
+        : Effect.tryPromise({
+            try: () => request,
+            catch: (error) => error,
+          }).pipe(
+            Effect.asVoid,
+            Effect.catch((error) =>
+              (primary !== undefined && error === primary.error) ||
+              (signal?.aborted === true && error === signal.reason)
+                ? Effect.void
+                : Effect.die(error),
+            ),
+          );
+    }),
+  );
+});

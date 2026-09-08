@@ -11,6 +11,10 @@ import { flowKey } from '@agent/node/persistedFlow';
 
 import { createLog } from '@logger/logUtils';
 import {
+  runWithWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
+import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   WorkflowExecutionSnapshotSchema,
@@ -351,4 +355,41 @@ export async function writeSessionDescription(
       `Failed to persist session description for ${executionId}: ${toErrorMessage(err)}`,
     );
   }
+}
+
+/**
+ * The execution→stream foreign key: the `streamId` stamped on execution
+ * metadata at registration. A row without one has no persisted stream, so
+ * archive readers never fall back to re-deriving a stream from names or
+ * sidecar scans. This is the ONE resolution site; completed-run readers
+ * and the trace assembler share it instead of each re-deriving
+ * `readMeta() → meta.streamId`.
+ *
+ * The resolved branch carries the already-read `meta` so a caller that also
+ * needs other metadata fields (the trace assembler) does not pay a second
+ * `readMeta()`. Absence is a plain `null`: no execution metadata at all and
+ * metadata predating stamped streams are the same answer to every caller.
+ */
+export async function resolveStreamForExecution(
+  executionId: ExecutionId,
+  roots: WorkspaceRoots,
+): Promise<{
+  readonly streamId: StreamTabId;
+  readonly meta: ExecutionMeta;
+} | null> {
+  const meta = await runWithWorkspaceRoots(roots, () =>
+    getExecutionStore(executionId).readMeta(),
+  );
+  if (!meta?.streamId) return null;
+  return { streamId: meta.streamId, meta };
+}
+
+/** Read the registered run configuration in its owning workspace. */
+export function readExecutionRunRecord(
+  executionId: ExecutionId,
+  roots: WorkspaceRoots,
+): Promise<RunRecord | null> {
+  return runWithWorkspaceRoots(roots, () =>
+    getExecutionStore(executionId).readRunRecord(),
+  );
 }

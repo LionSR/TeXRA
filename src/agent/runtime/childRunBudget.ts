@@ -12,7 +12,7 @@
  */
 import * as os from 'node:os';
 
-import PQueue from 'p-queue';
+import { Effect, Semaphore } from 'effect';
 
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
@@ -21,16 +21,17 @@ import {
 } from '@shared/schemas';
 import { getValidatedConfig } from '@utils/config/configUtils';
 
+import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
 
-const budgets = new WeakMap<SessionHandle, PQueue>();
+const budgets = new WeakMap<SessionHandle, Semaphore.Semaphore>();
 
 /**
  * The configured budget with the `auto` sentinel resolved to this machine's
  * core count, clamped to the schema range. Model conversations are network
  * bound, so the core count is a floor for useful parallelism rather than a
  * ceiling — which is why the setting stays overridable up to `max`. This is
- * the one host-side owner of the number: the session queue below and the
+ * the one host-side owner of the number: the session semaphore below and the
  * workflow engine's per-run semaphore (`workflowScriptStrategy`) both read
  * it here. Resolved host-side because `src/shared` is loaded by the settings
  * webview and must stay free of `node:os`.
@@ -54,18 +55,20 @@ export function resolveChildRunConcurrencyBudget(): number {
  * The session's shared child-run budget, created at the configured value on
  * first call and re-pinned to it on every later call. A mid-session settings
  * change therefore takes effect on the next call to `childRunBudgetFor` (the
- * next child-run launch for that session); existing loops sharing that queue
+ * next child-run launch for that session); existing loops sharing that semaphore
  * then pick up the new limit on their subsequent turns, without replacing
  * queued work.
  */
-export function childRunBudgetFor(session: SessionHandle): PQueue {
-  const configured = resolveChildRunConcurrencyBudget();
+export const childRunBudgetFor = Effect.fn('childRunBudgetFor')(function* (
+  session: SessionHandle,
+) {
+  const configured = runInSession(session, resolveChildRunConcurrencyBudget);
   const existing = budgets.get(session);
   if (existing) {
-    existing.concurrency = configured;
+    yield* existing.resize(configured);
     return existing;
   }
-  const queue = new PQueue({ concurrency: configured });
-  budgets.set(session, queue);
-  return queue;
-}
+  const budget = Semaphore.makeUnsafe(configured);
+  budgets.set(session, budget);
+  return budget;
+});

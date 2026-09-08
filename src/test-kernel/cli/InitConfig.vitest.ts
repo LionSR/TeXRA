@@ -108,15 +108,11 @@ describe('setWorkspaceCliChatAgent', () => {
           agent: 'builtInToolUse:review',
           model: 'deepseekT',
         });
-        const withAgent = yield* Effect.promise(() =>
-          loadWorkspaceCliConfig(workspace),
-        );
+        const withAgent = yield* loadWorkspaceCliConfig(workspace);
         expect(withAgent.values.chat?.agent).toBe('builtInToolUse:review');
 
         yield* setWorkspaceCliChatAgent(workspace, undefined);
-        const cleared = yield* Effect.promise(() =>
-          loadWorkspaceCliConfig(workspace),
-        );
+        const cleared = yield* loadWorkspaceCliConfig(workspace);
         expect(cleared.values.chat).toEqual({ model: 'deepseekT' });
       }),
   );

@@ -30,11 +30,12 @@ import {
   LayerMap,
   ManagedRuntime,
   Option,
-  Queue,
+  Schedule,
   RcMap,
   Stream,
   SubscriptionRef,
   Fiber,
+  Scope,
 } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
 
@@ -62,6 +63,7 @@ import {
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   aggregateId as qualifyAggregateId,
+  aggregateTarget,
   ownerIdentity,
   type OwnerId,
   type SessionCloseReport,
@@ -71,14 +73,15 @@ import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import {
-  isRunningStreamingTextEntry,
-  type StreamLogDelta,
-} from '@shared/session/traceEntries';
+
 import { Database } from '@shared/session/database';
-import type { StreamLogStore } from '@transcript/StreamLogStore';
+import { StreamLogStore } from '@transcript/StreamLogStore';
+import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { databaseLayer } from './Database';
+import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
+import { sweepLeftoverStreams } from './sweepLeftoverStreams';
+import { applyCommittedStreamRemoval } from './applyCommittedStreamRemoval';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -160,6 +163,14 @@ const ownerLiveness = Layer.effectDiscard(
       );
       const dead: OwnerId[] = [];
       for (const owner of owners) {
+        // The one thing `proveOwnerLiveness` awaits is
+        // `ProcessesPort.identity`, declared `Promise<string | undefined>`
+        // with unreadable meaning undefined, and the `kill(pid, 0)` beside it
+        // catches its own throw. A rejection here would end this prober's
+        // stream for the life of the process, so that total contract is the
+        // thing to keep. Note `Database.ts` wraps the same call in
+        // `Effect.tryPromise` with a `writeFailed` catch: there the caller has
+        // an error channel to put a failure in, here it has none.
         const liveness = yield* Effect.promise(() =>
           proveOwnerLiveness(ownerIdentity(owner)),
         );
@@ -193,64 +204,6 @@ const ownerLiveness = Layer.effectDiscard(
 );
 
 /**
- * The transcript bridge, until the cutover: the root's transcript store's
- * change feed supplies only the in-flight text level of its streaming rows.
- * Source trace facts now supply durable transcript history directly.
- */
-const transcriptBridge = (transcripts: StreamLogStore) =>
-  Layer.effectDiscard(
-    Effect.gen(function* () {
-      const chunks = yield* TextChunkSource;
-      const deltas = yield* Queue.unbounded<{
-        readonly streamId: StreamTabId;
-        readonly delta: StreamLogDelta;
-      }>();
-      yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          transcripts.onChange((streamId, delta) => {
-            Queue.offerUnsafe(deltas, { streamId, delta });
-          }),
-        ),
-        (detach) => Effect.sync(detach),
-      );
-      yield* Effect.forkScoped(
-        Stream.runForEach(Stream.fromQueue(deltas), ({ streamId, delta }) =>
-          Effect.gen(function* () {
-            const rows = delta.reset
-              ? (transcripts.get(streamId)?.getRange(0) ?? [])
-              : [...delta.appended, ...delta.dirtied];
-            if (rows.length === 0 && delta.textChunks.length === 0) return;
-            yield* SubscriptionRef.update(chunks.ref, (held) => {
-              const next = new Map(held);
-              for (const entry of rows) {
-                const key = `${streamId}/${entry.id}`;
-                if (isRunningStreamingTextEntry(entry)) {
-                  const text = entry.text ?? '';
-                  next.set(key, {
-                    previous: undefined,
-                    text,
-                    length: text.length,
-                  });
-                } else next.delete(key);
-              }
-              for (const chunk of delta.textChunks) {
-                const key = `${streamId}/${chunk.id}`;
-                const previous = next.get(key);
-                next.set(key, {
-                  previous,
-                  text: chunk.appendText,
-                  length: (previous?.length ?? 0) + chunk.appendText.length,
-                });
-              }
-              return next;
-            });
-          }),
-        ),
-      );
-    }),
-  );
-
-/**
  * The handle of one root, over the root's graph: the last layer of the
  * entry, so it is the first thing unwound when the entry closes and the
  * graph outlives every publisher above it. Every release goes through the
@@ -269,11 +222,41 @@ const sessionHandleLayer = (
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
       const inputs = yield* SessionInputs;
+      const chunks = yield* TextChunkSource;
       const subscriptions = yield* TranscriptSubscriptions;
       const delivered = yield* SubscriptionRef.make(0);
       const tailEnded = yield* Deferred.make<void>();
+      const settledCursor = () =>
+        Math.min(
+          SubscriptionRef.getUnsafe(view.ref).cursor,
+          SubscriptionRef.getUnsafe(delivered),
+        );
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
+        publishText: (streamId, id, text) =>
+          SubscriptionRef.update(chunks.ref, (held) => {
+            const next = new Map(held);
+            const key = `${streamId}/${id}`;
+            const previous = next.get(key);
+            next.set(key, {
+              previous,
+              text,
+              length: (previous?.length ?? 0) + text.length,
+            });
+            return next;
+          }),
+        readText: (streamId, id) => {
+          let chunk = SubscriptionRef.getUnsafe(chunks.ref).get(
+            `${streamId}/${id}`,
+          );
+          if (chunk === undefined) return undefined;
+          const pieces: string[] = [];
+          while (chunk !== undefined) {
+            pieces.push(chunk.text);
+            chunk = chunk.previous;
+          }
+          return pieces.reverse().join('');
+        },
         publish: (events) =>
           Effect.gen(function* () {
             const rows = yield* publish(events);
@@ -312,9 +295,8 @@ const sessionHandleLayer = (
           }),
         view: view.ref,
         viewChanges: view.changes,
-        // The plane's tail woken by the view's cursor instead of the log's
-        // level: the same rows `events.all` delivers, none before the fold
-        // has landed the state it produced.
+        // Release rows only once both the view fold and local reconciliation
+        // have applied them. Readers can then query either state consistently.
         folded: (fromCommit) =>
           tailFrom(
             (from) =>
@@ -322,12 +304,11 @@ const sessionHandleLayer = (
                 eventLog.readAll(from).pipe(Effect.orDie),
               ),
             {
-              get: SubscriptionRef.get(view.ref).pipe(
-                Effect.map((v) => v.cursor),
-              ),
-              changes: SubscriptionRef.changes(view.ref).pipe(
-                Stream.map((v) => v.cursor),
-              ),
+              get: Effect.sync(settledCursor),
+              changes: Stream.merge(
+                SubscriptionRef.changes(view.ref),
+                SubscriptionRef.changes(delivered),
+              ).pipe(Stream.map(settledCursor)),
             },
             fromCommit,
           ),
@@ -342,18 +323,102 @@ const sessionHandleLayer = (
       // Capture before constructing the handle: constructor publications and
       // commits preceding subscription are covered by the tail's first read.
       const anchor = yield* eventLog.currentCommit.pipe(Effect.orDie);
+      // Register the consumer's scope first so handle teardown can publish and
+      // drain while both this tail and the underlying view are still alive.
+      const consumerScope = yield* Effect.acquireRelease(
+        Scope.make(),
+        (scope, exit) => Scope.close(scope, exit),
+      );
+      // Capture the startup cohort before callers can publish new launches.
+      const initialListing = yield* eventLog.readListing().pipe(Effect.orDie);
+      const transcripts = yield* StreamLogStore.open(
+        eventLog,
+        initialListing,
+        key.open.transcriptMode,
+      ).pipe(Effect.orDie);
       const session = yield* Effect.acquireRelease(
-        Effect.sync(() => new SessionHandle({ ...key.open, graph })),
-        (session) => Effect.sync(() => session.unwind()),
+        Effect.sync(
+          () =>
+            new SessionHandle({
+              ...key.open,
+              transcripts,
+              snapshots: new StreamSnapshotStore(eventLog),
+              graph,
+            }),
+        ),
+        (session) =>
+          Effect.sync(() => session.unwind()).pipe(
+            // Settlement reports what the session's own publications left
+            // behind. The release still has to finish, so that report is
+            // logged here rather than escaping `Scope.close` and failing the
+            // `invalidate` or `close` that asked for the release.
+            Effect.ensuring(
+              Effect.tryPromise({
+                try: () => session.settlePublications(),
+                catch: (error) => error,
+              }).pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    log.warn(
+                      `Session ${key.storage} left a failed publication behind as it closed.`,
+                      { data: error },
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ),
       );
       yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor).pipe(
         Stream.runForEach((event) =>
-          Effect.sync(() => session.receiveCommittedEvent(event)).pipe(
+          session.receiveCommittedEvent(event).pipe(
+            Effect.andThen(() =>
+              event.type === 'stream.removed'
+                ? applyCommittedStreamRemoval(
+                    session,
+                    aggregateTarget(event.aggregateId).id,
+                  )
+                : Effect.void,
+            ),
+            Effect.andThen(
+              event.type === 'stream.end'
+                ? SubscriptionRef.update(chunks.ref, (held) => {
+                    const next = new Map(held);
+                    next.delete(
+                      `${aggregateTarget(event.aggregateId).id}/${event.id}`,
+                    );
+                    return next;
+                  })
+                : Effect.void,
+            ),
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
           ),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
+        Effect.forkIn(consumerScope),
+      );
+      yield* sweepLeftoverStreams(session, initialListing).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() =>
+            log.warn('Background-shell cleanup failed.', {
+              data: error,
+            }),
+          ),
+        ),
+        Effect.forkScoped,
+      );
+      // The session owns retries and waits for in-flight removal on close.
+      yield* collectPendingDeletions(eventLog, key.storage).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            log.warn(
+              'Deletion records could not be read; cleanup remains pending.',
+              { data: error },
+            );
+          }),
+        ),
+        Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
       );
       return session;
@@ -363,21 +428,15 @@ const sessionHandleLayer = (
 /** The runtime graph of one root (PRD 7.3): the root-scoped services the
  *  handle is built over. */
 const sessionGraphLayer = (key: SessionKey) => {
-  if (key.open.transcripts.mode.kind === 'read-only') {
-    throw new Error(
-      'SessionHandle requires a writable transcript store; read-only stores are reserved for call-scoped readers.',
-    );
-  }
-  return Layer.mergeAll(
-    ownerLiveness,
-    transcriptBridge(key.open.transcripts),
-  ).pipe(
+  return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(
       sessionEventsLayer.pipe(
         Layer.provideMerge(
-          databaseLayer(key.open.transcripts.mode.kind).pipe(Layer.orDie),
+          databaseLayer(key.open.transcriptMode?.kind ?? 'persistent').pipe(
+            Layer.orDie,
+          ),
         ),
       ),
     ),
@@ -555,7 +614,9 @@ const closeSession = (root: string, signal?: AbortSignal) =>
         }
       }),
     );
-    // Ends at the actual settlement, or when interrupted.
+    // Ends at the actual settlement, or when interrupted. Non-rejecting:
+    // `untilSettled` awaits only `waitForAnyChange`, whose executor resolves
+    // on a registry listener or on the abort and never rejects.
     const settled = Effect.promise(
       (interrupt) =>
         runInSession(session, () =>
@@ -589,6 +650,14 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // The release is the flush's finalizer: the entry goes, or its release
     // is armed on the settlement, whatever the flush's exit, and a flush
     // that fails still fails this close.
+    //
+    // `flushArtifacts` does reject when a trace or shared artifact writer
+    // fails, and `Effect.promise` is deliberate rather than an oversight:
+    // `close` answers a `SessionCloseReport` and names no error, so the
+    // defect is the channel a failed flush travels on, and `ProcessHold.release`
+    // (packages/agent/src/effect/runtime.ts) documents the embedder seeing
+    // exactly that. Widening it into a typed failure is a contract change,
+    // not a conversion.
     yield* Effect.race(
       Effect.promise(
         () =>
@@ -641,6 +710,9 @@ export function installProcessRuntime(
       ? Layer.effect(
           ProcessIdentity,
           Effect.map(
+            // Non-rejecting by port contract: the one caller that passes a
+            // pending read passes `ProcessesPort.selfIdentity()`, declared as
+            // `string | undefined`, unreadable being undefined.
             Effect.promise(() => processStart),
             (start) => ({ ownerId: processOwnerId(start) }),
           ),

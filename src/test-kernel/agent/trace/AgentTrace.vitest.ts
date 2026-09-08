@@ -8,7 +8,8 @@ import {
   TraceEmitter,
 } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import { createRunTrace, StreamLogStore } from '@transcript';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import { StreamLogStore } from '@transcript';
 
 /** Collect every event a fresh trace emits while `act` runs. */
 function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
@@ -149,7 +150,7 @@ describe('logFileCategory', () => {
   beforeEach(async () => {
     store = StreamLogStore.ephemeral('test');
     await store.clear();
-    const runTrace = createRunTrace('TestFileListLogger', store);
+    const runTrace = createTestRunTrace('TestFileListLogger', store);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
   });

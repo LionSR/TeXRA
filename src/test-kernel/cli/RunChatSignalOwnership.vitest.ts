@@ -14,6 +14,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootStreamId as rootStreamIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
+import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -257,11 +258,15 @@ describe('runChat signal ownership wiring', () => {
     await installFakeHost(await createTempDirPlatform('texra-chat-', tempDirs));
     vi.clearAllMocks();
     mocks.callOrder.length = 0;
+    // Both inits now hand back the services the composition root holds; the
+    // fake host installed above is that platform here.
     mocks.initCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initCliPlatform');
+      return platform();
     });
     mocks.initInteractiveCliPlatform.mockImplementation(async () => {
       mocks.callOrder.push('initInteractiveCliPlatform');
+      return platform();
     });
     mocks.handOffCliShutdownSignalHandlers.mockImplementation(() => {
       mocks.callOrder.push('handOffCliShutdownSignalHandlers');
@@ -507,7 +512,7 @@ describe('runChat signal ownership wiring', () => {
     }
   }, 20_000);
 
-  it('drops only the current conversation on /clear and keeps hydrated history', async () => {
+  it('releases only the current conversation on /clear and preserves history', async () => {
     const exitTui = createDeferred();
     mocks.waitUntilExit.mockReturnValue(exitTui.promise);
     const restoreAgentRegistry = await stubAgentRegistry();
@@ -543,17 +548,17 @@ describe('runChat signal ownership wiring', () => {
         expect(currentView().streams.has(ownRoot)).toBe(true),
       );
       rootStreamIdSignal.set(ownRoot);
-      const deleted = vi
-        .spyOn(session.transcripts, 'delete')
-        .mockResolvedValue(undefined);
+      const released = vi.spyOn(session.transcripts, 'requestEviction');
 
       const { getSlashCommandContext } =
         mocks.createChatSessionController.mock.calls[0]![0];
       getSlashCommandContext().resetSession();
 
-      expect(deleted.mock.calls.map(([streamId]) => streamId)).toEqual([
-        ownRoot,
-      ]);
+      await vi.waitFor(() =>
+        expect(released.mock.calls.map(([streamId]) => streamId)).toEqual([
+          ownRoot,
+        ]),
+      );
     } finally {
       exitTui.resolve();
       await runPromise;

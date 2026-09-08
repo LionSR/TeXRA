@@ -1,6 +1,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,10 +9,6 @@ import {
   finalizeRun,
   getExecutionStore,
 } from '@agent/storage';
-import {
-  deleteAllExecutions,
-  deleteExecution,
-} from '@agent/storage/executionListing';
 import {
   ExecutionLeaseActiveError,
   ExecutionLeaseLostError,
@@ -110,18 +107,6 @@ beforeEach(() => {
 });
 
 describe('cross-process execution leases', () => {
-  it('protects a freshly leased execution from single deletion', async () => {
-    const executionId = 'a8644a' as ExecutionId;
-    await writeExecution(executionId);
-    await writeForeignLease(executionId);
-
-    await expect(deleteExecution(executionId)).resolves.toMatchObject({
-      status: 'active',
-      executionId,
-    });
-    expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
-  });
-
   it('takes over an orphaned lease whose owner is provably dead', async () => {
     const executionId = 'b8644b' as ExecutionId;
     await writeOrphanedLease(executionId);
@@ -133,41 +118,6 @@ describe('cross-process execution leases', () => {
 
     await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
       status: 'owned',
-    });
-  });
-
-  it('fails closed when present lease state is malformed', async () => {
-    const executionId = 'c8644c' as ExecutionId;
-    await writeExecution(executionId);
-    await StorageFS.ensureDir(executionLeaseDir(executionId));
-    await StorageFS.writeAtomic(
-      executionLeasePath(executionId),
-      '{"version":3}',
-    );
-
-    await expect(deleteExecution(executionId)).rejects.toThrow(
-      'Failed to parse JSON',
-    );
-    expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
-  });
-
-  it('retires a heartbeat (v1) tombstone on contact', async () => {
-    const executionId = 'c8644d' as ExecutionId;
-    await writeExecution(executionId);
-    await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
-    await StorageFS.writeAtomic(
-      legacyExecutionLeasePath(executionId),
-      '{"version":1,"executionId":"c8644d","ownerToken":"00000000-0000-4000-8000-000000000009","acquiredAt":1,"heartbeatAt":1}',
-    );
-
-    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'free',
-    });
-    expect(await StorageFS.exists(legacyExecutionLeasePath(executionId))).toBe(
-      false,
-    );
-    await expect(deleteExecution(executionId)).resolves.toMatchObject({
-      status: 'deleted',
     });
   });
 
@@ -227,46 +177,6 @@ describe('cross-process execution leases', () => {
     ).toEqual([]);
   });
 
-  it('proves a presence-socket (v2) record by pid: dead is freed, live is kept', async () => {
-    const deadId = 'c8644e' as ExecutionId;
-    const liveId = 'c8644f' as ExecutionId;
-    await writeExecution(deadId);
-    await writeLegacyPresenceLease(deadId, await deadOwner());
-    const foreign = await startForeignInstance();
-    try {
-      await writeLegacyPresenceLease(liveId, foreign.owner);
-
-      await expect(inspectExecutionLease(deadId)).resolves.toEqual({
-        status: 'free',
-      });
-      await expect(deleteExecution(deadId)).resolves.toMatchObject({
-        status: 'deleted',
-      });
-      expect(await StorageFS.exists(legacyExecutionLeasePath(deadId))).toBe(
-        false,
-      );
-
-      // No identity was ever recorded for a v2 owner, so a running pid is
-      // unprovable: every automatic path refuses it while the pid exists.
-      await expect(inspectExecutionLease(liveId)).resolves.toEqual({
-        status: 'held',
-        owner: { ...foreign.owner, processStart: null },
-      });
-      await expect(acquireResumedExecutionLease(liveId)).rejects.toMatchObject({
-        name: 'ExecutionLeaseActiveError',
-        owner: { pid: foreign.owner.pid },
-      });
-      expect(await StorageFS.exists(legacyExecutionLeasePath(liveId))).toBe(
-        true,
-      );
-    } finally {
-      await foreign.shutdown();
-    }
-    await expect(inspectExecutionLease(liveId)).resolves.toEqual({
-      status: 'free',
-    });
-  });
-
   it('classifies a live pid whose identity differs from the record as orphaned', async () => {
     const executionId = 'b8644e' as ExecutionId;
     const foreign = await startForeignInstance();
@@ -314,40 +224,26 @@ describe('cross-process execution leases', () => {
         return { pid: process.pid, processStart: '1', hostname: os.hostname() };
       },
     },
-  ])(
-    'treats $label as held until the user deletes the run',
-    async ({ owner }) => {
-      const executionId = 'b8644f' as ExecutionId;
-      const record = await owner();
-      await writeExecution(executionId);
-      await writeForeignLease(executionId, undefined, record);
-      const operation = vi.fn(async () => 'removed');
+  ])('treats $label as held without a death proof', async ({ owner }) => {
+    const executionId = 'b8644f' as ExecutionId;
+    const record = await owner();
+    await writeExecution(executionId);
+    await writeForeignLease(executionId, undefined, record);
+    const operation = vi.fn(async () => 'removed');
 
-      await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-        status: 'held',
-        owner: record,
-      });
-      await expect(
-        runWithInactiveExecutionLease(executionId, operation),
-      ).resolves.toEqual({ status: 'active', owner: record });
-      expect(operation).not.toHaveBeenCalled();
-      await expect(acquireResumedExecutionLease(executionId)).rejects.toThrow(
-        `Execution ${executionId} is held by another TeXRA process (pid ${record.pid} on ${record.hostname}).`,
-      );
-      expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(
-        true,
-      );
-
-      // Only the user's explicit deletion reaps an unprovable owner.
-      await expect(deleteExecution(executionId)).resolves.toMatchObject({
-        status: 'deleted',
-      });
-      expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(
-        false,
-      );
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
-    },
-  );
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'held',
+      owner: record,
+    });
+    await expect(
+      runWithInactiveExecutionLease(executionId, operation),
+    ).resolves.toEqual({ status: 'active', owner: record });
+    expect(operation).not.toHaveBeenCalled();
+    await expect(acquireResumedExecutionLease(executionId)).rejects.toThrow(
+      `Execution ${executionId} is held by another TeXRA process (pid ${record.pid} on ${record.hostname}).`,
+    );
+    expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(true);
+  });
 
   it('lets exactly one of two concurrent fresh claims win, with no lock directory', async () => {
     const executionId = 'b86452' as ExecutionId;
@@ -520,20 +416,30 @@ describe('cross-process execution leases', () => {
     let resumeStarted = false;
 
     try {
-      const first = registry.launchExecution(executionId, async () => {
-        await acquireFreshExecutionLease(executionId);
-        await disposing.promise;
-        await releaseOwnedExecutionLease(executionId);
-      });
+      const first = Effect.runPromise(
+        registry.launchExecution(
+          executionId,
+          Effect.promise(async () => {
+            await acquireFreshExecutionLease(executionId);
+            await disposing.promise;
+            await releaseOwnedExecutionLease(executionId);
+          }),
+        ),
+      );
       await vi.waitFor(() =>
         expect(ownsExecutionLease(executionId)).toBe(true),
       );
       const firstToken = await readToken();
 
-      const second = registry.launchExecution(executionId, async () => {
-        resumeStarted = true;
-        return acquireResumedExecutionLease(executionId);
-      });
+      const second = Effect.runPromise(
+        registry.launchExecution(
+          executionId,
+          Effect.promise(async () => {
+            resumeStarted = true;
+            return acquireResumedExecutionLease(executionId);
+          }),
+        ),
+      );
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       // The first generation is still disposing: the resume waits and the
@@ -708,76 +614,5 @@ describe('cross-process execution leases', () => {
       runWithInactiveExecutionLease(executionId, operation),
     ).resolves.toMatchObject({ status: 'active' });
     expect(operation).not.toHaveBeenCalled();
-  });
-
-  it('lets maintenance clear an orphaned displaced local owner', async () => {
-    const executionId = 'f86441' as ExecutionId;
-    await writeExecution(executionId);
-    await acquire(executionId);
-    await displaceLease(
-      executionId,
-      '00000000-0000-4000-8000-000000000005',
-      await deadOwner(),
-    );
-
-    await expect(deleteExecution(executionId)).resolves.toMatchObject({
-      status: 'deleted',
-    });
-    expect(ownsExecutionLease(executionId)).toBe(false);
-    ownedExecutionIds.delete(executionId);
-  });
-
-  it('reports deleted, missing races, and protected IDs in bulk', async () => {
-    const deletedId = 'a86440' as ExecutionId;
-    const activeId = 'a86441' as ExecutionId;
-    const beforeDelete = vi.fn(async () => {});
-    await writeExecution(deletedId);
-    await writeExecution(activeId);
-    await writeForeignLease(activeId);
-
-    await expect(deleteAllExecutions({ beforeDelete })).resolves.toEqual({
-      deleted: [deletedId],
-      active: [activeId],
-      failed: [],
-    });
-    expect(beforeDelete).toHaveBeenCalledOnce();
-    expect(beforeDelete).toHaveBeenCalledWith(deletedId);
-  });
-
-  it('preflights every lease before bulk deletion mutates storage', async () => {
-    const validId = 'a86442' as ExecutionId;
-    const malformedId = 'a86443' as ExecutionId;
-    await writeExecution(validId);
-    await writeExecution(malformedId);
-    await StorageFS.ensureDir(executionLeaseDir(malformedId));
-    await StorageFS.writeAtomic(
-      executionLeasePath(malformedId),
-      '{"version":3}',
-    );
-
-    await expect(deleteAllExecutions()).rejects.toThrow('Failed to parse JSON');
-    expect(await StorageFS.exists(`executions/${validId}`)).toBe(true);
-    expect(await StorageFS.exists(`executions/${malformedId}`)).toBe(true);
-  });
-
-  it('reports ordinary bulk deletion failures alongside successful ids', async () => {
-    const deletedId = 'a86444' as ExecutionId;
-    const failedId = 'a86445' as ExecutionId;
-    await writeExecution(deletedId);
-    await writeExecution(failedId);
-    const fs = platform().fs;
-    const originalDelete = fs.delete.bind(fs);
-    vi.spyOn(fs, 'delete').mockImplementation((target, options) => {
-      if (target.includes(path.join('executions', failedId))) {
-        return Promise.reject(new Error('permission denied'));
-      }
-      return originalDelete(target, options);
-    });
-
-    await expect(deleteAllExecutions()).resolves.toEqual({
-      deleted: [deletedId],
-      active: [],
-      failed: [{ executionId: failedId, message: 'permission denied' }],
-    });
   });
 });

@@ -372,9 +372,7 @@ export class LatexMediaManager {
 
     let entries: string[];
     try {
-      entries = (await platform().fs.readDirectory(projectDir)).map(
-        ([name]) => name,
-      );
+      entries = (await AbsoluteFS.readDir(projectDir)).map(([name]) => name);
     } catch (error) {
       this.logger.debug('Unable to scan project siblings', {
         data: { path: projectDir, error },
@@ -400,7 +398,7 @@ export class LatexMediaManager {
       (absolutePath) => absolutePath,
       'Unable to mirror project sibling',
       async (absolutePath) => {
-        const stats = await platform().fs.stat(absolutePath);
+        const stats = await AbsoluteFS.stat(absolutePath);
         if (!isFile(stats.type)) return;
         await fileService.mirrorWorkspaceFile(pathToLocation(absolutePath));
       },

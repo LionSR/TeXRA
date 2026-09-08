@@ -5,6 +5,8 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import pDefer from 'p-defer';
+import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
@@ -39,6 +41,7 @@ import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagem
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
   RUN_OUTCOME,
+  aggregateId,
   STREAM_PHASE,
   type ExecResult,
   type StreamTabId,
@@ -55,9 +58,10 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { BashTool } from '@tools/bash';
 import * as bashDelivery from '@tools/delegation/bashDelivery';
-import { createRunTrace, StreamLogStore } from '@transcript';
+import { StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import * as execUtils from '@utils/system/execUtils';
 
@@ -250,14 +254,11 @@ const DONE_EXEC_RESULT: ExecResult = {
  * (mocked) process settles.
  */
 function holdCommand(): (result: ExecResult) => void {
-  let resolve: ((result: ExecResult) => void) | undefined;
+  const command = pDefer<ExecResult>();
   vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-    () =>
-      new Promise((resolvePromise) => {
-        resolve = resolvePromise;
-      }),
+    () => command.promise,
   );
-  return (result) => resolve?.(result);
+  return command.resolve;
 }
 
 /**
@@ -265,11 +266,14 @@ function holdCommand(): (result: ExecResult) => void {
  * return a `dispose` that undoes both the subscription and the trace itself.
  */
 function traceWithEvents(streamId: StreamTabId): {
-  trace: ReturnType<typeof createRunTrace>['trace'];
+  trace: ReturnType<typeof createTestRunTrace>['trace'];
   events: AgentEvent[];
   dispose: () => void;
 } {
-  const runTrace = createRunTrace(streamId, StreamLogStore.ephemeral('test'));
+  const runTrace = createTestRunTrace(
+    streamId,
+    StreamLogStore.ephemeral('test'),
+  );
   const events: AgentEvent[] = [];
   const unsubscribe = runTrace.trace.subscribe((event) => events.push(event));
   return {
@@ -371,8 +375,10 @@ describe('BashTool', () => {
 
     const options = roundServices({
       toolName: 'bash',
-      logger: createRunTrace('BashToolTest', StreamLogStore.ephemeral('test'))
-        .trace,
+      logger: createTestRunTrace(
+        'BashToolTest',
+        StreamLogStore.ephemeral('test'),
+      ).trace,
       streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
     });
@@ -666,7 +672,7 @@ describe('BashTool', () => {
 
     const submitFollowUpSpy = vi
       .spyOn(toolUseFollowUp, 'submitFollowUp')
-      .mockResolvedValue({ status: 'sent' });
+      .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
     const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
     const parentLease = defaultSession().followUps.claimLive(
@@ -854,8 +860,13 @@ describe('BashTool', () => {
 
     await vi.waitFor(() => {
       assert.equal(
-        defaultSession().status.get(childStreamId),
-        STREAM_PHASE.FAILED,
+        recorded.events.some(
+          (event) =>
+            event.type === 'status' &&
+            event.aggregateId === aggregateId('stream', childStreamId) &&
+            event.phase === STREAM_PHASE.FAILED,
+        ),
+        true,
       );
     });
     assert.equal(defaultSession().executions.getHandle(executionId), undefined);

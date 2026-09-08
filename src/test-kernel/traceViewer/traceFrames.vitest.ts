@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
@@ -6,6 +7,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -20,6 +22,7 @@ import {
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import { emptySessionView } from '@shared/session/sessionView';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -209,7 +212,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       timestamp: '2026-07-06T00:00:00.000Z',
       streamId,
     });
-    const store = await StreamLogStore.open();
+    const store = StreamLogStore.ephemeral('legacy trace import fixture');
     appendTranscriptEntry(store, streamId, {
       id: 'terminal-stage',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
@@ -223,9 +226,14 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       data: { status: 'error', endTime: 200 },
     });
-    await store.flush();
 
-    const result = await assembleTrace(executionId);
+    const result = await Effect.runPromise(
+      assembleTrace(executionId, {
+        roots: processWorkspaceRoots(),
+        snapshots: createTestSession().snapshots,
+        transcripts: store,
+      }),
+    );
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
     expect(result.trace.meta?.outcome).toBeUndefined();

@@ -72,7 +72,6 @@ import type {
   StreamView as RuntimeStreamView,
   TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -391,69 +390,73 @@ function start(
     // outside the mask covers the rest, the boundary included: an interrupt
     // that lands while the tail runs is raised the moment the mask lifts,
     // with a `Run` built that reaches no one.
+    const interruptLaunch = ():
+      Pick<RuntimeAgentRunHandle, 'interrupt'> | undefined => {
+      const current = handle ?? session.executions.getHandle(executionId);
+      current?.interrupt();
+      return current;
+    };
     const spawned: Fiber.Fiber<unknown, unknown>[] = [];
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(
-          Effect.tryPromise({
-            try: (signal) =>
-              runValidatedAgent(
-                { kind: 'fresh', config, executionId },
-                {
-                  approvalPromptsUnavailable: true,
-                  launchSignal: signal,
-                  onRun: (live) => {
-                    handle = live;
-                  },
-                  onStreamResolved: (streamId, runTrace) => {
-                    detach = runTrace.subscribe((event) => {
-                      if (traceOverflow) return;
-                      const measured = Result.try(() =>
-                        sessionMessageBytes(event),
-                      );
-                      const bytes = Result.isSuccess(measured)
-                        ? measured.success
-                        : 0;
-                      let failure: Error | undefined;
-                      if (Result.isFailure(measured)) {
-                        failure = new Error(
-                          `Trace reader for run ${executionId} could not encode an event. The run continues; read its session view or canonical events to recover.`,
-                        );
-                      } else if (
-                        bufferedBytes + bytes > TRACE_BUFFER_BYTES ||
-                        !Queue.offerUnsafe(trace, { event, bytes })
-                      ) {
-                        failure = new Error(
-                          `Trace reader for run ${executionId} exceeded its unread event budget. The run continues; read its session view or canonical events to recover.`,
-                        );
-                      }
-                      if (failure) {
-                        traceOverflow = true;
-                        log.warn(failure.message);
-                        Queue.failCauseUnsafe(
-                          trace,
-                          Cause.fail(
-                            new RunFailure({
-                              cause: failure,
-                              message: failure.message,
-                            }),
-                          ),
-                        );
-                        release();
-                        return;
-                      }
-                      bufferedBytes += bytes;
-                    });
-                    Deferred.doneUnsafe(admitted, Effect.succeed(streamId));
-                  },
-                  session,
-                  stopAfterCycle: true,
-                  tools: input.tools,
-                },
-              ),
-            catch: (cause) =>
-              new RunFailure({ cause, message: toErrorMessage(cause) }),
-          }).pipe(Effect.onExit(settle)),
+          runValidatedAgent(
+            { kind: 'fresh', config, executionId },
+            {
+              approvalPromptsUnavailable: true,
+              onRun: (live) => {
+                handle = live;
+              },
+              onStreamResolved: (streamId, runTrace) => {
+                detach = runTrace.subscribe((event) => {
+                  if (traceOverflow) return;
+                  const measured = Result.try(() => sessionMessageBytes(event));
+                  const bytes = Result.isSuccess(measured)
+                    ? measured.success
+                    : 0;
+                  let failure: Error | undefined;
+                  if (Result.isFailure(measured)) {
+                    failure = new Error(
+                      `Trace reader for run ${executionId} could not encode an event. The run continues; read its session view or canonical events to recover.`,
+                    );
+                  } else if (
+                    bufferedBytes + bytes > TRACE_BUFFER_BYTES ||
+                    !Queue.offerUnsafe(trace, { event, bytes })
+                  ) {
+                    failure = new Error(
+                      `Trace reader for run ${executionId} exceeded its unread event budget. The run continues; read its session view or canonical events to recover.`,
+                    );
+                  }
+                  if (failure) {
+                    traceOverflow = true;
+                    log.warn(failure.message);
+                    Queue.failCauseUnsafe(
+                      trace,
+                      Cause.fail(
+                        new RunFailure({
+                          cause: failure,
+                          message: failure.message,
+                        }),
+                      ),
+                    );
+                    release();
+                    return;
+                  }
+                  bufferedBytes += bytes;
+                });
+                Deferred.doneUnsafe(admitted, Effect.succeed(streamId));
+              },
+              session,
+              stopAfterCycle: true,
+              tools: input.tools,
+            },
+          ).pipe(
+            Effect.mapError(
+              (cause) =>
+                new RunFailure({ cause, message: toErrorMessage(cause) }),
+            ),
+            Effect.onExit(settle),
+          ),
           { startImmediately: true },
         );
         spawned.push(runFiber);
@@ -546,17 +549,18 @@ function start(
             ),
           ),
           interrupt: Effect.suspend(() =>
-            handle
-              ? Effect.sync(() => {
-                  handle?.interrupt();
-                })
-              : Fiber.interrupt(runFiber),
+            interruptLaunch() ? Effect.void : Fiber.interrupt(runFiber),
           ),
         };
       }),
     ).pipe(
       Effect.onExit((exit) =>
-        Exit.isSuccess(exit) ? Effect.void : Fiber.interruptAll(spawned),
+        Exit.isSuccess(exit)
+          ? Effect.void
+          : Effect.suspend(() => {
+              interruptLaunch();
+              return Fiber.interruptAll(spawned);
+            }),
       ),
     );
   });
@@ -596,7 +600,10 @@ export function makeSessions(
         Effect.suspend(() =>
           openSessionEffect({
             roots: roots ?? runtime.roots,
-            transcripts: StreamLogStore.ephemeral('npm package consumer'),
+            transcriptMode: {
+              kind: 'ephemeral',
+              reason: 'npm package consumer',
+            },
             interactions: HEADLESS_HOST,
           }),
         ),

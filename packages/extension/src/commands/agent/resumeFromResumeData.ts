@@ -7,6 +7,7 @@ import {
 } from '@agent/runtime';
 import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -35,22 +36,24 @@ export async function tryResumeFromResumeData(
     return cancellationRequested;
   };
   try {
-    return await resumeStreamWithRefusalNotice(
-      streamId,
-      {
-        session,
-        recovery,
-        isCancellationRequested,
-        executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
-          runExecuteCommand({
-            config,
-            executionId: id,
-            modelHandlerCompatibilityKey,
-          }),
-      },
-      (failure) => {
-        logger.warn(`Stream ${streamId} was not resumed: ${failure}`);
-      },
+    return await effectRuntime().runPromise(
+      resumeStreamWithRefusalNotice(
+        streamId,
+        {
+          session,
+          recovery,
+          isCancellationRequested,
+          executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+            runExecuteCommand({
+              config,
+              executionId: id,
+              modelHandlerCompatibilityKey,
+            }),
+        },
+        (failure) => {
+          logger.warn(`Stream ${streamId} was not resumed: ${failure}`);
+        },
+      ),
     );
   } catch (error) {
     if (isCancellationRequested()) return false;

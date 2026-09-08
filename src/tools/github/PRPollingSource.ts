@@ -11,7 +11,7 @@
  * layer above.
  */
 
-import { Clock, Effect } from 'effect';
+import { Cause, Clock, Effect } from 'effect';
 
 import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
@@ -67,9 +67,8 @@ import {
   DedupedResource,
   MAX_SEEN_IDS,
   type PollEventListener,
-  type PollHookRejected,
+  PollHookRejected,
   PollingSourceBase,
-  pollRequest,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -278,7 +277,13 @@ export class PRPollingSource extends PollingSourceBase<
     key: string,
     state: PRSubscriptionState,
   ): Effect.Effect<void, PollHookRejected> {
-    return this.pollPr(key, state);
+    return this.pollPr(key, state).pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
+        ),
+      ),
+    );
   }
 
   private readonly pollPr = Effect.fn('PRPollingSource.pollPr')(function* (
@@ -312,30 +317,19 @@ export class PRPollingSource extends PollingSourceBase<
       { response: checksRes, stagedCache: stagedCheckRunsCache },
     ] = yield* Effect.all(
       [
-        pollRequest(() =>
-          ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
-        ),
-        pollRequest(() =>
-          ghGet<GhReviewComment[]>(
-            reviewCommentsUrl,
-            state.etags.reviewComments,
-          ),
-        ),
-        pollRequest(() =>
-          ghGet<GhReview[]>(
-            `${prPath}/reviews?per_page=100`,
-            state.etags.reviews,
-          ),
+        ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
+        ghGet<GhReviewComment[]>(reviewCommentsUrl, state.etags.reviewComments),
+        ghGet<GhReview[]>(
+          `${prPath}/reviews?per_page=100`,
+          state.etags.reviews,
         ),
         state.currentShaState?.sha
-          ? pollRequest(() =>
-              fetchAllCheckRunsClient(
-                pr.owner,
-                pr.repo,
-                state.currentShaState!.sha,
-                state.currentShaState!.checkRunsCache,
-                this.logger,
-              ),
+          ? fetchAllCheckRunsClient(
+              pr.owner,
+              pr.repo,
+              state.currentShaState.sha,
+              state.currentShaState.checkRunsCache,
+              this.logger,
             )
           : Effect.succeed({
               response: { status: 304 as const },
@@ -432,9 +426,7 @@ export class PRPollingSource extends PollingSourceBase<
     prPath: string,
   ) {
     const { pr } = state;
-    const prRes = yield* pollRequest(() =>
-      ghGet<GhPullRequest>(prPath, state.etags.pr),
-    );
+    const prRes = yield* ghGet<GhPullRequest>(prPath, state.etags.pr);
     if (prRes.status !== 200) return true;
 
     // Validate the state-driving PR payload non-throwingly (never throw on
@@ -731,9 +723,12 @@ export class PRPollingSource extends PollingSourceBase<
         // typed failure here; a defect stays a defect and ends the round.
         const drained = yield* this.drainNextAnnotationRun(state, at).pipe(
           Effect.map((value) => ({ ok: true as const, value })),
-          Effect.catchTag('PollHookRejected', (failure) =>
-            Effect.succeed({ ok: false as const, failure }),
-          ),
+          Effect.catchCause((cause) => {
+            const reason = cause.reasons[0];
+            return cause.reasons.length === 1 && reason?._tag === 'Fail'
+              ? Effect.succeed({ ok: false as const, failure: reason.error })
+              : Effect.failCause(cause);
+          }),
         );
         if (!drained.ok) {
           // The failure time, not the round's start: draining can run a slow
@@ -811,20 +806,26 @@ export class PRPollingSource extends PollingSourceBase<
     const run = state.currentShaState?.pendingAnnotationRuns[0];
     if (!run) return true;
     const { pr } = state;
-    const fetched = yield* pollRequest(() =>
-      fetchAnnotationsClient(
-        pr.owner,
-        pr.repo,
-        run.id,
-        this.logger,
-        SharedAnnotationFetchBudget,
-        now,
-      ),
+    const fetched = yield* fetchAnnotationsClient(
+      pr.owner,
+      pr.repo,
+      run.id,
+      this.logger,
+      SharedAnnotationFetchBudget,
+      now,
     ).pipe(
-      Effect.map((annotations) => ({ ok: true as const, annotations })),
-      Effect.catchTag('PollHookRejected', (failure) =>
-        Effect.succeed({ ok: false as const, failure }),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
+        ),
       ),
+      Effect.map((annotations) => ({ ok: true as const, annotations })),
+      Effect.catchCause((cause) => {
+        const reason = cause.reasons[0];
+        return cause.reasons.length === 1 && reason?._tag === 'Fail'
+          ? Effect.succeed({ ok: false as const, failure: reason.error })
+          : Effect.failCause(cause);
+      }),
     );
     if (fetched.ok) {
       this.removePendingAnnotationRun(state, run.id);

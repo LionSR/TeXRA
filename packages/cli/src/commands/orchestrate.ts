@@ -9,7 +9,6 @@ import {
 } from '@common/teams/TeamPlan';
 import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
@@ -131,14 +130,17 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // nothing and return instead — the platform's own handler, still installed
   // by initInteractiveCliPlatform, covers those the same way it would a
   // headless command.
-  await initInteractiveCliPlatform({ ...context, quietLogs: true });
+  const services = await initInteractiveCliPlatform({
+    ...context,
+    quietLogs: true,
+  });
   // First-run gate: a credential-less interactive user picks sign-in or a key
   // here instead of landing on a launcher full of "login required" models. On
   // success the models read below re-reads the freshly-set credentials
   // in-process — the key paths invalidate the relevant caches — so no
   // relaunch is needed.
   const { maybeRunCliOnboarding } = await import('../onboarding/runOnboarding');
-  const onboarding = await maybeRunCliOnboarding(context);
+  const onboarding = await maybeRunCliOnboarding(services, context);
   if (onboarding.declined) {
     // The user saw the picker and chose "Skip for now"; the skip summary already
     // printed. Exit cleanly instead of dropping into a launcher full of
@@ -153,7 +155,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // only explicit agent pin this entry point honors.
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
-    firstRunDone: getFirstRunDone(platform().globalState),
+    firstRunDone: getFirstRunDone(services.globalState),
     pinnedAgent: context.envAgent,
   });
   if (setupAgentOverride) {
@@ -336,7 +338,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
               writeTextStdout(
                 subscriptionSignOutOutcomeMessage(
                   action.provider,
-                  await signOutCliSubscription(action.provider),
+                  await effectRuntime().runPromise(
+                    signOutCliSubscription(action.provider),
+                  ),
                 ),
               );
             } else {

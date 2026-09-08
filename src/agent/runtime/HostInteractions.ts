@@ -430,8 +430,8 @@ type PermissionPayloadFor<K extends SettledInteractionKind> = Extract<
 /**
  * The durable copy of a request payload. A retry carries the provider error,
  * whose body can echo the request URL or an `Authorization` header: the
- * transcript rail scrubs those fields at record time
- * (`TexraTranscriptRecorder`), and the fact rail scrubs them here, at its one
+ * transcript fold redacts these fields, and canonical publication scrubs
+ * request payloads here, at their one
  * emission point, dropping the raw body outright. Bash commands and question
  * text are what the user typed and stay as they are.
  */
@@ -721,6 +721,16 @@ export class SessionHostInteractions implements HostInteractions {
       }
     }
     return undefined;
+  }
+
+  /** Settle a removed stream's local requests without appending to its closed aggregate. */
+  discardStream(streamId: StreamTabId): void {
+    for (const pending of this.pending) {
+      if (pending.streamId !== streamId) continue;
+      this.pending.delete(pending);
+      pending.cancellationRequested = true;
+      pending.settle(pending.cancellationResult('Stream removed.'));
+    }
   }
 
   cancel(selector: HostInteractionCancelSelector = {}): void {

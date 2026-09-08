@@ -10,8 +10,8 @@ import {
 import { appSignals } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
-import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -89,6 +89,12 @@ export interface DesktopSettingsIpcOptions {
   toolingSettingsController: DesktopToolingSettingsController;
   /** Main-process global store, threaded in by the caller (see mainViewIpc). */
   globalState: StateStore;
+  /**
+   * Main-process secret store, threaded in by the caller. Backs the Git tab's
+   * personal access token: read for its status, written when set, deleted when
+   * removed.
+   */
+  secrets: PlatformSecrets;
   ui: DesktopSettingsUiHost;
   /**
    * The session of the paper this settings surface serves. Its roots supply
@@ -314,7 +320,7 @@ export function createDesktopSettingsIpc(
   async function postGitHubTokenStatus(): Promise<void> {
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
-      status: await resolveGitHubTokenSource(platform().secrets),
+      status: await resolveGitHubTokenSource(options.secrets),
     });
   }
 
@@ -332,7 +338,7 @@ export function createDesktopSettingsIpc(
       prompt: GITHUB_TOKEN_PROMPT,
     });
     if (token == null) return;
-    await storeCredential(platform().secrets, {
+    await storeCredential(options.secrets, {
       secretName: GITHUB_TOKEN_STORAGE_KEY,
       value: token,
       kind: 'github',
@@ -343,7 +349,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function removeGitHubToken(): Promise<void> {
-    await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+    await options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
     await options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
     await postGitHubTokenStatus();
     await refreshToolAvailability();

@@ -1,3 +1,5 @@
+import { Effect, Result } from 'effect';
+
 /**
  * The one resume entry point. Every host continues a persisted run through
  * it: the extension toolbar, the desktop bridge, the CLI `/resume` command and
@@ -36,7 +38,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   isWaitingFlowResult,
@@ -134,20 +136,18 @@ export interface ResumeRunOptions extends Pick<
 
 /**
  * Resume a stream through the single host entry path. Recovery is claimed
- * synchronously, before the stream-to-execution index can perform disk I/O.
+ * when the program starts, before the stream-to-execution index performs I/O.
  */
-export async function resumeStream(
+export const resumeStream = Effect.fn('resumeStream')(function* (
   streamId: StreamTabId,
   options: ResumeRunOptions,
-): Promise<ResumeRunResult> {
+): Effect.fn.Return<ResumeRunResult, Error> {
   const session = options.session ?? defaultSession();
   if (
     options.isCancellationRequested?.() === true ||
     session.executions.isActiveOrResuming(streamId)
-  ) {
+  )
     return REFUSED;
-  }
-
   const recovery = options.recovery
     ? session.followUps.useRecovery(options.recovery)
     : session.followUps.claimRecovery(streamId, true);
@@ -155,25 +155,23 @@ export async function resumeStream(
     if (recovery) session.followUps.release(recovery, 'recoverable');
     return REFUSED;
   }
-
-  try {
-    const executionId = await lookupStreamExecutionId(streamId, session);
-    if (!executionId) {
-      releaseUnstartedRecovery(session, recovery, options.recovery == null);
-      return REFUSED;
-    }
-    return resumeRunWithRecoveryProvenance(
-      executionId,
-      { ...options, session, recovery },
-      options.recovery == null,
-    );
-  } catch (error) {
+  const executionId = yield* lookupStreamExecutionId(streamId, session).pipe(
+    Effect.onError(() =>
+      Effect.sync(() =>
+        releaseUnstartedRecovery(session, recovery, options.recovery == null),
+      ),
+    ),
+  );
+  if (!executionId) {
     releaseUnstartedRecovery(session, recovery, options.recovery == null);
-    throw error;
+    return REFUSED;
   }
-}
-
-export { lookupStreamExecutionId } from '@agent/followUp/ToolUseFollowUp';
+  return yield* resumeRunWithRecoveryProvenance(
+    executionId,
+    { ...options, session, recovery },
+    options.recovery == null,
+  );
+}, Effect.uninterruptible);
 
 const log = createLog('ResumeRun');
 
@@ -202,175 +200,128 @@ function namesUnusableCheckpoint(error: unknown): boolean {
   return false;
 }
 
-export async function resumeRun(
+// The existing host cancellation predicate controls the Promise-based launch.
+// Keep its queue owner until that launch and its cleanup have settled.
+export const resumeRun = Effect.fn('resumeRun')(function* (
   executionId: ExecutionId,
   options: ResumeRunOptions,
-): Promise<ResumeRunResult> {
-  return resumeRunWithRecoveryProvenance(executionId, options, false);
-}
+) {
+  return yield* resumeRunWithRecoveryProvenance(executionId, options, false);
+}, Effect.uninterruptible);
 
-async function resumeRunWithRecoveryProvenance(
+/** Resume preparation is one ordered program; checkpoint interpretation is unchanged. */
+const resumeRunWithRecoveryProvenance = Effect.fn(
+  'resumeRunWithRecoveryProvenance',
+)(function* (
   executionId: ExecutionId,
   options: ResumeRunOptions,
   recoveryIsProvisional: boolean,
-): Promise<ResumeRunResult> {
+): Effect.fn.Return<ResumeRunResult, Error> {
   const session = options.session ?? defaultSession();
-  const isCancellationRequested = (): boolean =>
-    options.isCancellationRequested?.() === true;
-
+  const cancelled = () => options.isCancellationRequested?.() === true;
   const suppliedRecovery = options.recovery
     ? session.followUps.useRecovery(options.recovery)
     : undefined;
-  /** Give the caller-supplied recovery back on every path that never starts. */
   const abandonSupplied = (provisional = recoveryIsProvisional): void => {
-    if (suppliedRecovery) {
+    if (suppliedRecovery)
       releaseUnstartedRecovery(session, suppliedRecovery, provisional);
-    }
   };
-
   const store = getExecutionStore(executionId);
-  let config: Awaited<ReturnType<typeof store.readConfig>>;
-  let meta: Awaited<ReturnType<typeof store.readMeta>>;
-  try {
-    [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
-  } catch (error) {
-    abandonSupplied();
-    throw error;
-  }
-  // FK-first: the stream id stamped at registration is the reproduction
-  // contract. A row without one has no persisted stream to continue.
+  const [config, meta] = yield* Effect.tryPromise({
+    try: () => Promise.all([store.readConfig(), store.readMeta()]),
+    catch: ensureError,
+  }).pipe(Effect.onError(() => Effect.sync(() => abandonSupplied())));
   const streamId = meta?.streamId;
   if (!config || !streamId) {
     abandonSupplied();
     return REFUSED;
   }
   if (suppliedRecovery && suppliedRecovery.streamId !== streamId) {
-    // A stream mismatch is never provisional: the entry belongs to another
-    // stream, so it stays recoverable there.
     abandonSupplied(false);
     return REFUSED;
   }
-  // A stream that is already running or resuming in this process is refused,
-  // not queued on the lane: a workflow run holds no follow-up queue consumer
-  // and a queued resume would otherwise rerun it after it finishes.
-  if (
-    isCancellationRequested() ||
-    session.executions.isActiveOrResuming(streamId)
-  ) {
+  if (cancelled() || session.executions.isActiveOrResuming(streamId)) {
     abandonSupplied();
     return REFUSED;
   }
-
-  // Claim recovery before the asynchronous retrieval: a follow-up submitted
-  // meanwhile joins this resume's queue instead of starting a second one.
+  // Claim before retrieval so concurrent follow-ups join this attempt's queue.
   let queueLease: FollowUpRecoveryLease | undefined;
   if (config.agentCategory === AgentCategory.ToolUse) {
     queueLease = options.recovery
       ? session.followUps.useRecovery(options.recovery)
       : session.followUps.claimRecovery(streamId, true);
-    if (!queueLease) return REFUSED;
-  } else {
-    // Workflow runs have no follow-up consumer. An empty entry created only
-    // for lookup can be terminalized; caller-supplied or raced input remains
-    // recoverable so no user message or release observer is lost.
-    abandonSupplied();
   }
-
-  let resume: Awaited<ReturnType<typeof retrieveSessionResumeData>>;
-  try {
-    const snapshots = session.snapshots;
-    if (
-      snapshots.getRunMetadata(streamId, { quiet: true }).executionId ===
-      undefined
-    ) {
-      await snapshots.preload([streamId]);
-    }
-    resume = await retrieveSessionResumeData(streamId, executionId, config, {
-      parentStreamId: snapshots.getParentStreamId(streamId),
-    });
-  } catch (error) {
+  if (config.agentCategory === AgentCategory.ToolUse && !queueLease)
+    return REFUSED;
+  if (config.agentCategory !== AgentCategory.ToolUse) abandonSupplied();
+  const releaseQueue = (): void => {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
-    // A checkpoint that is on disk but cannot be turned into resume state (a
-    // malformed envelope, an unsupported record) throws here. That is a
-    // refusal to word for the row that advertised it; anything else that
-    // failed on the way is the storage error it has always been.
-    if (!namesUnusableCheckpoint(error)) throw error;
+  };
+  const retrieved = yield* Effect.result(
+    Effect.gen(function* () {
+      const snapshots = session.snapshots;
+      if (snapshots.getRunMetadata(streamId).executionId === undefined)
+        yield* snapshots.preload([streamId]);
+      return yield* Effect.tryPromise({
+        try: () =>
+          retrieveSessionResumeData(streamId, executionId, config, {
+            parentStreamId: snapshots.getParentStreamId(streamId),
+          }),
+        catch: ensureError,
+      });
+    }),
+  );
+  if (Result.isFailure(retrieved)) {
+    releaseQueue();
+    if (!namesUnusableCheckpoint(retrieved.failure))
+      return yield* Effect.fail(retrieved.failure);
     log.warn(
-      `Refusing to resume ${executionId}: its checkpoint holds no resumable state: ${toErrorMessage(error)}`,
-      { data: error },
+      `Refusing to resume ${executionId}: its checkpoint holds no resumable state: ${toErrorMessage(retrieved.failure)}`,
+      { data: retrieved.failure },
     );
     return { failed: 'unusable_checkpoint' };
   }
-  if (
-    isCancellationRequested() ||
-    // Re-check after the retrieval await: a launch of this stream may have
-    // been admitted meanwhile, and the lane would queue, not refuse, this one.
-    session.executions.isActiveOrResuming(streamId)
-  ) {
-    if (queueLease) session.followUps.release(queueLease, 'recoverable');
+  const resume = retrieved.success;
+  if (cancelled() || session.executions.isActiveOrResuming(streamId)) {
+    releaseQueue();
     return REFUSED;
   }
   if (!resume) {
-    if (queueLease) session.followUps.release(queueLease, 'recoverable');
-    // Nothing came back, which is several facts in one `null`: the checkpoint
-    // is gone, the record could not be read — a torn read of the rewrite the
-    // process that owns this run is making right now parses as absent — or the
-    // file is there and holds no state this category can resume. Ownership is
-    // what the lease alone settles, so the refusal is decided first by
-    // `classifyRun` and recorded through the same mapping the follow-up path
-    // uses: a run held elsewhere refreshes the hold instead of dropping it and
-    // being reported finished.
-    const classification = await classifyRun(executionId);
+    releaseQueue();
+    const classification = yield* Effect.tryPromise({
+      try: () => classifyRun(executionId),
+      catch: ensureError,
+    });
     const failed = recordRunRefusal(streamId, session, classification);
     if (
       classification.kind === 'held_elsewhere' ||
       classification.kind === 'owned_here'
-    ) {
+    )
       return { failed };
-    }
-    // Nobody holds it, so the checkpoint file is what is left to word from.
-    // History listings advertise a row from that file alone (one `stat`,
-    // never a parse), so a record this category rejected and a malformed one
-    // both meet a refusal worded as unusable state rather than as a run that
-    // finished. Only `checkpoint-malformed` names the file itself; every
-    // other fault is a read that says nothing about it.
     const unusable =
       classification.kind === 'unclassified'
         ? classification.fault === 'checkpoint-malformed'
-        : await checkpointExists(executionId);
+        : yield* Effect.tryPromise({
+            try: () => checkpointExists(executionId),
+            catch: ensureError,
+          });
     if (!unusable) return { failed };
     log.warn(
       `Refusing to resume ${executionId}: its checkpoint holds no resumable state.`,
     );
     return { failed: 'unusable_checkpoint' };
   }
-  // Both branches below launch only when the checkpoint's category and the
-  // queue lease agree; a disagreement refuses, so no host rearranges for it.
   const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
-  // One lease read per open, taken before the hold below is touched: a read
-  // that fails leaves the earlier refusal's hold standing, since this attempt
-  // learned nothing that disproves it. The hook is where a host rearranges
-  // itself onto the resumed run, so a row another TeXRA process is live on
-  // must refuse before that, not after the launch's own acquire raises
-  // `ExecutionLeaseActiveError` onto a cleared window. The acquire still
-  // settles the race this read cannot see.
   const lease =
     willLaunch && options.onResumeResolved
-      ? await inspectExecutionLease(executionId).catch((error: unknown) => {
-          if (queueLease) session.followUps.release(queueLease, 'recoverable');
-          throw error;
-        })
+      ? yield* Effect.tryPromise({
+          try: () => inspectExecutionLease(executionId),
+          catch: ensureError,
+        }).pipe(Effect.onError(() => Effect.sync(releaseQueue)))
       : undefined;
-  // The run is about to be opened for write, its checkpoint just re-read. A
-  // hold recorded by an earlier refusal describes facts this
-  // attempt has now re-read, so it goes, and the phase it retained goes with
-  // it — a failed tool-use resume rolls the stream back to WAITING before the
-  // hold is written, and this read has disproved that WAITING. An attempt
-  // refused below writes the current reason; one that acquires leaves the
-  // phase it lands on.
   session.status.clearHold(streamId, { discardRetainedPhase: true });
   if (lease?.status === 'held') {
-    if (queueLease) session.followUps.release(queueLease, 'recoverable');
+    releaseQueue();
     session.status.markUnavailableOrLog(
       streamId,
       streamHeldMessage(lease.owner.pid),
@@ -379,39 +330,41 @@ async function resumeRunWithRecoveryProvenance(
     return { failed: 'owned_elsewhere' };
   }
   if (willLaunch && options.onResumeResolved) {
-    try {
-      await options.onResumeResolved();
-    } catch (error) {
-      if (queueLease) session.followUps.release(queueLease, 'recoverable');
-      throw error;
-    }
-    if (
-      isCancellationRequested() ||
-      session.executions.isActiveOrResuming(streamId)
-    ) {
-      if (queueLease) session.followUps.release(queueLease, 'recoverable');
+    const onResumeResolved = options.onResumeResolved;
+    yield* Effect.tryPromise({
+      try: async () => onResumeResolved(),
+      catch: ensureError,
+    }).pipe(Effect.onError(() => Effect.sync(releaseQueue)));
+    if (cancelled() || session.executions.isActiveOrResuming(streamId)) {
+      releaseQueue();
       return REFUSED;
     }
   }
   if (resume.type === 'toolUse' && queueLease) {
-    return resumeQueuedToolUse(session, resume, queueLease, options);
+    return yield* resumeQueuedToolUse(session, resume, queueLease, options);
   }
   if (resume.type === 'workflow' && !queueLease) {
-    try {
-      await options.executeWorkflow(
-        resume.agentConfig,
-        resume.executionId,
-        resume.modelHandlerCompatibilityKey,
-      );
-    } catch (error) {
-      return refusalFor(error, session, streamId) ?? Promise.reject(error);
+    const launched = yield* Effect.result(
+      Effect.tryPromise({
+        try: () =>
+          options.executeWorkflow(
+            resume.agentConfig,
+            resume.executionId,
+            resume.modelHandlerCompatibilityKey,
+          ),
+        catch: ensureError,
+      }),
+    );
+    if (Result.isFailure(launched)) {
+      const refused = refusalFor(launched.failure, session, streamId);
+      if (refused) return refused;
+      return yield* Effect.fail(launched.failure);
     }
     return WORKFLOW_STARTED;
   }
-  // The persisted config and checkpoint disagree on the category.
-  if (queueLease) session.followUps.release(queueLease, 'recoverable');
+  releaseQueue();
   return REFUSED;
-}
+});
 
 function releaseUnstartedRecovery(
   session: SessionHandle,
@@ -463,12 +416,12 @@ function refusalFor(
  * the follow-ups and re-notify, and always return the stream to WAITING if
  * the resume never reached the run lifecycle.
  */
-async function resumeQueuedToolUse(
+const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
   resume: ToolUseResumeData,
   queueLease: FollowUpRecoveryLease,
   options: ResumeRunOptions,
-): Promise<ResumeRunResult> {
+): Effect.fn.Return<ResumeRunResult, Error> {
   const { streamId } = resume;
   const streamStatus = session.status;
   const followUpsQueue = session.followUps;
@@ -488,7 +441,6 @@ async function resumeQueuedToolUse(
   let followUps: readonly FollowUpQueueInput[] = seed;
   let cancelledAtFlowAttachment = false;
   let followUpsRestored = false;
-  let resumeError: { error: unknown } | undefined;
   let runResult: AgentRuntimeFlowResult | undefined;
   const notifyQueued = (): void => {
     session.publish([
@@ -505,73 +457,85 @@ async function resumeQueuedToolUse(
     followUpsQueue.queue(queueLease).restore(followUps);
     if (followUps.length > 0) notifyQueued();
   };
-  try {
-    options.onFollowUpQueueReady?.(queueLease);
-    followUps = [...seed, ...followUpsQueue.queue(queueLease).drainItems()];
-    notifyQueued();
+  const resumed = yield* Effect.result(
+    Effect.gen(function* () {
+      yield* Effect.try({
+        try: () => {
+          options.onFollowUpQueueReady?.(queueLease);
+          followUps = [
+            ...seed,
+            ...followUpsQueue.queue(queueLease).drainItems(),
+          ];
+          notifyQueued();
+        },
+        catch: ensureError,
+      });
 
-    // The drained batch must reach the resumed flow through the direct
-    // `drainedFollowUps` handoff, not by re-queuing: a subagent's WAITING
-    // cursor suspends again before ever reading the stream queue (see
-    // `ToolUseWaitNode`; only its child-run loop's queue wait consumes it),
-    // so re-queued items would sit unconsumed until the next wake. A root
-    // cursor accepts either route; the handoff works for both.
-    runResult = await resumeToolUseFromResumeData(resume, {
-      session: options.session,
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-      parentStreamId: resume.parentStreamId,
-      onFollowUpConsumed: () => {
-        followUps = [];
-      },
-      isCancellationRequested: options.isCancellationRequested,
-      onCancellationAtFlowAttachment: () => {
-        cancelledAtFlowAttachment = true;
-      },
-      drainedFollowUps: followUps.map(toFollowUpBatchItem),
-      // The first call closes the gap between the initial drain and live-flow
-      // attachment. Later calls occur after a subagent parks at WAITING. A
-      // native child loop owns that queue boundary when registered; otherwise
-      // this host resume must claim the late batch so input accepted by the
-      // live context cannot remain dormant.
-      takePendingFollowUps: () => {
-        const raced = followUpsQueue.queue(queueLease).drainItems();
-        followUps = [...followUps, ...raced];
-        return raced.map(toFollowUpBatchItem);
-      },
-    });
-    if (followUps.length > 0) restoreFollowUps();
-  } catch (error) {
-    resumeError = { error };
-    // A rejection before the wait node acknowledges consumption must replay
-    // the drained batch. A callback failure after that acknowledgement must
-    // not enqueue the same user input again.
-    if (followUps.length > 0) restoreFollowUps();
-  } finally {
-    // Early failures leave the stream RESUMING. Startup cancellation can
-    // instead reach lifecycle terminalization before the queue owner regains
-    // control. In both cases, restored input makes WAITING the durable state.
-    if (
-      cancelledAtFlowAttachment ||
-      followUpsRestored ||
-      streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING
-    ) {
-      streamStatus.transitionToWaiting(streamId, 'wait');
-    }
-    followUpsQueue.release(
-      queueLease,
-      !runResult || isWaitingFlowResult(runResult) || followUpsRestored
-        ? 'recoverable'
-        : 'terminal',
-    );
-  }
-
-  if (resumeError) {
-    return (
-      refusalFor(resumeError.error, session, streamId) ??
-      Promise.reject(resumeError.error)
-    );
+      // The drained batch must reach the resumed flow through the direct
+      // `drainedFollowUps` handoff, not by re-queuing: a subagent's WAITING
+      // cursor suspends again before ever reading the stream queue (see
+      // `ToolUseWaitNode`; only its child-run loop's queue wait consumes it),
+      // so re-queued items would sit unconsumed until the next wake. A root
+      // cursor accepts either route; the handoff works for both.
+      return yield* resumeToolUseFromResumeData(resume, {
+        session,
+        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: options.onApprovalPolicyDenial,
+        runtimeUnavailableTools: options.runtimeUnavailableTools,
+        parentStreamId: resume.parentStreamId,
+        onFollowUpConsumed: () => {
+          followUps = [];
+        },
+        isCancellationRequested: options.isCancellationRequested,
+        onCancellationAtFlowAttachment: () => {
+          cancelledAtFlowAttachment = true;
+        },
+        drainedFollowUps: followUps.map(toFollowUpBatchItem),
+        // The first call closes the gap between the initial drain and live-flow
+        // attachment. Later calls occur after a subagent parks at WAITING. A
+        // native child loop owns that queue boundary when registered; otherwise
+        // this host resume must claim the late batch so input accepted by the
+        // live context cannot remain dormant.
+        takePendingFollowUps: () => {
+          const raced = followUpsQueue.queue(queueLease).drainItems();
+          followUps = [...followUps, ...raced];
+          return raced.map(toFollowUpBatchItem);
+        },
+      });
+    }),
+  ).pipe(
+    Effect.tap((result) =>
+      Effect.sync(() => {
+        if (Result.isSuccess(result)) runResult = result.success;
+        // Replay only input the resumed flow has not acknowledged.
+        if (followUps.length > 0) restoreFollowUps();
+      }),
+    ),
+    Effect.ensuring(
+      Effect.sync(() => {
+        // Early failures leave the stream RESUMING. Startup cancellation can
+        // instead reach lifecycle terminalization before the queue owner regains
+        // control. In both cases, restored input makes WAITING the durable state.
+        if (
+          cancelledAtFlowAttachment ||
+          followUpsRestored ||
+          streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING
+        ) {
+          streamStatus.transitionToWaiting(streamId, 'wait');
+        }
+        followUpsQueue.release(
+          queueLease,
+          !runResult || isWaitingFlowResult(runResult) || followUpsRestored
+            ? 'recoverable'
+            : 'terminal',
+        );
+      }),
+    ),
+  );
+  if (Result.isFailure(resumed)) {
+    const refusal = refusalFor(resumed.failure, session, streamId);
+    if (refusal) return refusal;
+    return yield* Effect.fail(resumed.failure);
   }
   // Cancellation at flow attachment means the run was never reached; a replay
   // means it ran and returned with the batch back on the stream queue.
@@ -581,7 +545,7 @@ async function resumeQueuedToolUse(
     delivered: !followUpsRestored,
     outcome: runResult?.outcome,
   };
-}
+});
 
 function toFollowUpBatchItem(item: FollowUpQueueInput): FollowUpQueueBatchItem {
   return {

@@ -12,7 +12,11 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { STREAM_PHASE, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  DEFAULT_TOOL_CONFIG,
+  aggregateId,
+} from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import {
@@ -21,12 +25,12 @@ import {
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
-import { createTestSession } from '@test/support/sessionTestUtils';
-import { snapshotFacts } from '@test/support/storeTestDrivers';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { withTempDir } from '@test/support/tempDirPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { StreamSnapshotStore } from '@transcript';
-import { streamDataDir } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
 const tempDirs = useTempDirs();
@@ -42,15 +46,14 @@ const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
 }));
 
-vi.mock('@agent/storage', async () => {
-  const actual =
-    await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
+vi.mock('@agent/storage/ExecutionKVStore', async () => {
+  const actual = await vi.importActual<
+    typeof import('@agent/storage/ExecutionKVStore')
+  >('@agent/storage/ExecutionKVStore');
   return {
     ...actual,
     getExecutionStore: vi.fn(() => ({
       readConfig: mocks.readConfig,
-      // The tool reads the record; this suite's fixtures are all agent-arm,
-      // so the record IS the config.
       readRunRecord: mocks.readConfig,
       readMeta: mocks.readMeta,
       readChildren: mocks.readChildren,
@@ -59,8 +62,13 @@ vi.mock('@agent/storage', async () => {
       readTurnState: mocks.readTurnState,
       readWorkspaceFiles: mocks.readWorkspaceFiles,
     })),
-    listExecutions: mocks.listExecutions,
   };
+});
+
+vi.mock('@agent/storage', async () => {
+  const actual =
+    await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
+  return { ...actual, listExecutions: mocks.listExecutions };
 });
 
 const config = {
@@ -95,25 +103,6 @@ async function withTempStorage(run: () => Promise<void>): Promise<void> {
     );
     await run();
   });
-}
-
-/** Writes a stream sidecar work plan for the run and returns its stream id. */
-async function writeSidecarTodos(
-  executionId: ExecutionId,
-  todos: TodoItem[],
-): Promise<StreamTabId> {
-  const streamId = `codex#${executionId}` as StreamTabId;
-  const snapshots = new StreamSnapshotStore();
-  snapshotFacts(snapshots).setTodos(streamId, todos);
-  await snapshots.flush();
-  await StorageFS.write(
-    path.join(streamDataDir(streamId), 'meta.json'),
-    JSON.stringify({
-      schemaVersion: 1,
-      executionId,
-    }),
-  );
-  return streamId;
 }
 
 describe('ExecutionsTool', () => {
@@ -230,7 +219,6 @@ describe('ExecutionsTool', () => {
         'delivered automatically',
       );
     } finally {
-      await session.snapshots.flush();
       session.dispose();
     }
   });
@@ -249,18 +237,27 @@ describe('ExecutionsTool', () => {
       });
 
       try {
+        publishTestRunStart(session, parentStreamId);
+        publishTestRunStart(session, childStreamId, executionId);
+        await session.settlePublications();
         session.executions.track(handle);
         seedStreamStatusForTest(session.status, childStreamId, {
           phase: STREAM_PHASE.RUNNING,
         });
-        snapshotFacts(session.snapshots).setTodos(childStreamId, [
+        session.publish([
           {
-            content: 'Read live snapshot state',
-            status: 'in_progress',
-            activeForm: 'Reading live snapshot state',
+            type: 'updateTodos',
+            aggregateId: aggregateId('stream', childStreamId),
+            todos: [
+              {
+                content: 'Read live snapshot state',
+                status: 'in_progress',
+                activeForm: 'Reading live snapshot state',
+              },
+            ],
           },
         ]);
-        await session.snapshots.flush();
+        await session.settlePublications();
         mocks.readMeta.mockResolvedValue(toolUseMeta);
 
         const [summary, todos] = await withRunContext(
@@ -376,27 +373,40 @@ describe('ExecutionsTool', () => {
   });
 
   // The advertised /executions/{id}/todos endpoint must resolve a task list
-  // exactly as the completed summary does, sidecar first (#7300).
+  // exactly as the completed summary does, from the same committed stream fold.
   it.each([
     { label: 'completed summary', toolPath: '/executions/abc123' },
     { label: 'todos endpoint', toolPath: '/executions/abc123/todos' },
   ])(
-    'reads completed todos from stream sidecars via the $label',
+    'reads completed todos from committed stream events via the $label',
     async ({ toolPath }) => {
       await withTempStorage(async () => {
         const executionId = 'abc123' as ExecutionId;
-        const streamId = await writeSidecarTodos(executionId, [
+        const session = createTestSession();
+        const streamId = `codex#${executionId}` as StreamTabId;
+        publishTestRunStart(session, streamId, executionId);
+        session.publish([
           {
-            content: 'Read the sidecar work plan',
-            status: 'in_progress',
-            activeForm: 'Reading the sidecar work plan',
+            type: 'updateTodos',
+            aggregateId: aggregateId('stream', streamId),
+            todos: [
+              {
+                content: 'Read the committed task list',
+                status: 'in_progress',
+                activeForm: 'Reading the committed task list',
+              },
+            ],
           },
         ]);
+        await session.settlePublications();
         mocks.readMeta.mockResolvedValue({ ...toolUseMeta, streamId });
         mocks.readConfig.mockResolvedValue(config);
-        const result = await new ExecutionsTool().call({ path: toolPath });
+        const result = await withRunContext(
+          createRunContext({ streamId, session }),
+          () => new ExecutionsTool().call({ path: toolPath }),
+        );
 
-        expect(result.output).toContain('Read the sidecar work plan');
+        expect(result.output).toContain('Read the committed task list');
       });
     },
   );

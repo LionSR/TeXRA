@@ -6,8 +6,16 @@
  * overlap while unrelated executions proceed in parallel.
  */
 
+import { Data, Effect } from 'effect';
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
+
+import { ensureError } from '@utils/errors/errorMessage';
+
+/** A local generation or its retained handle still owns the execution. */
+export class ExecutionBusy extends Data.TaggedError('ExecutionBusy')<{
+  readonly executionId: string;
+}> {}
 
 /**
  * The serial lifecycle lane of one execution id. Launch, resume, delete and
@@ -39,27 +47,66 @@ function settled(promise: Promise<unknown>): Promise<void> {
 export class ExecutionLanes {
   private readonly lanes = new Map<string, ExecutionLane>();
 
-  /**
-   * Run one lifecycle step of `executionId`; the lane stays held until the
-   * step's own promise settles. See `ExecutionRegistry.runExecutionStep`.
-   */
-  enqueue<T>(executionId: string, step: () => Promise<T>): Promise<T> {
-    return this.enqueueLaneStep(executionId, () => {
-      const result = step();
-      return { result, hold: result };
-    });
+  /** Acquire an idle execution slot, refusing competing local ownership. */
+  withInactiveStep<A, E, R>(
+    executionId: string,
+    hasRetainedOwner: () => boolean,
+    operation: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | Error, R> {
+    return Effect.scoped(
+      Effect.gen({ self: this }, function* () {
+        const held = yield* Effect.acquireRelease(
+          Effect.sync(() => pDefer<void>()),
+          (held) => Effect.sync(() => held.resolve()),
+        );
+        yield* Effect.tryPromise({
+          try: () => {
+            // The ownership check and enqueue are synchronous. A launch either
+            // owns the slot already or queues after this operation's hold.
+            const lane = this.lanes.get(executionId);
+            if (
+              hasRetainedOwner() ||
+              (lane !== undefined &&
+                (lane.live !== undefined ||
+                  lane.queue.size > 0 ||
+                  lane.queue.pending > 0))
+            ) {
+              throw new ExecutionBusy({ executionId });
+            }
+            return this.enqueueLaneStep(executionId, () => ({
+              result: Promise.resolve(),
+              hold: held.promise,
+            }));
+          },
+          catch: ensureError,
+        });
+        return yield* operation;
+      }),
+    );
   }
 
-  /**
-   * Launch a generation of `executionId`: its promise becomes the generation
-   * later steps wait on. See `ExecutionRegistry.launchExecution`.
-   */
-  launch<T>(executionId: string, start: () => Promise<T>): Promise<T> {
-    return this.enqueueLaneStep(executionId, (lane) => {
-      const result = start();
-      lane.live = settled(result);
-      return { result, hold: undefined };
-    });
+  /** Hold a generation's lane until its Effect and finalizers settle. */
+  launch<A, E, R>(
+    executionId: string,
+    operation: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | Error, R> {
+    return Effect.scoped(
+      Effect.gen({ self: this }, function* () {
+        const held = yield* Effect.acquireRelease(
+          Effect.sync(() => pDefer<void>()),
+          (held) => Effect.sync(() => held.resolve()),
+        );
+        yield* Effect.tryPromise({
+          try: () =>
+            this.enqueueLaneStep(executionId, () => ({
+              result: Promise.resolve(),
+              hold: held.promise,
+            })),
+          catch: ensureError,
+        });
+        return yield* operation;
+      }),
+    );
   }
 
   /**
@@ -108,15 +155,11 @@ export class ExecutionLanes {
         await lane.live;
         // A disposal during the wait already refused this step.
         if (!lane.waiting.delete(refuse)) return;
-        let run: ReturnType<typeof step>;
-        try {
-          run = step(lane);
-        } catch (error) {
-          settle(Promise.reject(error));
-          return;
-        }
-        settle(run.result);
-        if (run.hold) await settled(run.hold);
+        // The caller receives step failures through result; the queue only
+        // waits for settlement and remains available to later steps.
+        const run = Promise.resolve().then(() => step(lane));
+        settle(run.then(({ result }) => result));
+        await settled(run.then(({ hold }) => hold));
       })
       .finally(() => this.forgetIdleLane(executionId, lane));
     return handedOut.promise.then((result) => result);

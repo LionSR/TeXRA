@@ -32,7 +32,6 @@ import {
 import { codexThreadsFor } from '@tools/agentCliSessionStores';
 import {
   createChildStream,
-  createRehydratedChildStream,
   type ChildStream,
 } from '@tools/delegation/childStream';
 
@@ -68,23 +67,27 @@ const config = {
 } as unknown as AgentConfig;
 
 function startBashChild(executionId: ExecutionId) {
-  return createChildStream(executionId, parentStreamId, {
-    streamPrefix: 'bash',
-    run: { kind: 'process', tool: 'bash' },
-    userFollowUpSupport: 'unsupported',
-    description: 'Run a background bash command',
-    config,
-  });
+  return Effect.runPromise(
+    createChildStream(defaultSession(), executionId, parentStreamId, {
+      streamPrefix: 'bash',
+      run: { kind: 'process', tool: 'bash' },
+      userFollowUpSupport: 'unsupported',
+      description: 'Run a background bash command',
+      config,
+    }),
+  );
 }
 
 function startCodexChild(executionId: ExecutionId, description: string) {
-  return createChildStream(executionId, parentStreamId, {
-    streamPrefix: 'codex',
-    run: { kind: 'agent', agent: 'codex', tool: 'codex' },
-    userFollowUpSupport: 'terminalBacked',
-    description,
-    config,
-  });
+  return Effect.runPromise(
+    createChildStream(defaultSession(), executionId, parentStreamId, {
+      streamPrefix: 'codex',
+      run: { kind: 'agent', agent: 'codex', tool: 'codex' },
+      userFollowUpSupport: 'terminalBacked',
+      description,
+      config,
+    }),
+  );
 }
 
 describe('child stream progress events', () => {
@@ -102,10 +105,12 @@ describe('child stream progress events', () => {
 
     expect(childStream.childStreamId).toBe(childStreamId);
 
-    await childStream.finalize({
-      outcome: RUN_OUTCOME.COMPLETED,
-      autoClose: true,
-    });
+    await Effect.runPromise(
+      childStream.finalize({
+        outcome: RUN_OUTCOME.COMPLETED,
+        autoClose: true,
+      }),
+    );
 
     expect(eventsOfType(recorded.events, 'run.start')).toContainEqual(
       expect.objectContaining({
@@ -182,41 +187,45 @@ describe('child stream progress events', () => {
         parentStreamId,
       }),
     );
-    expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
-      expect.objectContaining({
-        aggregateId: qualifyAggregateId('stream', childStreamId),
-      }),
-    );
+    expect(eventsOfType(recorded.events, 'stream.removed')).toEqual([]);
   });
 
   it('marks a deterministic child-stream relaunch as running', async () => {
-    const firstRun = await createChildStream(
-      workflowRelaunchExecutionId,
-      parentStreamId,
-      {
-        streamPrefix: 'workflow-script',
-        run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
-        userFollowUpSupport: 'unsupported',
-        description: 'Run a named child task',
-        config,
-      },
+    const firstRun = await Effect.runPromise(
+      createChildStream(
+        defaultSession(),
+        workflowRelaunchExecutionId,
+        parentStreamId,
+        {
+          streamPrefix: 'workflow-script',
+          run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
+          userFollowUpSupport: 'unsupported',
+          description: 'Run a named child task',
+          config,
+        },
+      ),
     );
-    await firstRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
+    await Effect.runPromise(
+      firstRun.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
+    );
     expect(defaultSession().status.get(workflowRelaunchChildStreamId)).toBe(
       STREAM_PHASE.COMPLETED,
     );
 
     const recorded = recordSessionEvents(defaultSession());
-    const relaunched = await createRehydratedChildStream(
-      workflowRelaunchExecutionId,
-      parentStreamId,
-      {
-        streamPrefix: 'workflow-script',
-        run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
-        userFollowUpSupport: 'unsupported',
-        description: 'Resume the named child task',
-        config,
-      },
+    const relaunched = await Effect.runPromise(
+      createChildStream(
+        defaultSession(),
+        workflowRelaunchExecutionId,
+        parentStreamId,
+        {
+          streamPrefix: 'workflow-script',
+          run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
+          userFollowUpSupport: 'unsupported',
+          description: 'Resume the named child task',
+          config,
+        },
+      ),
     );
 
     try {
@@ -244,7 +253,9 @@ describe('child stream progress events', () => {
         }),
       );
     } finally {
-      await relaunched.finalize({ outcome: RUN_OUTCOME.COMPLETED });
+      await Effect.runPromise(
+        relaunched.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
+      );
     }
   });
 
@@ -268,10 +279,13 @@ describe('child stream progress events', () => {
 
     try {
       await expect(
-        createRehydratedChildStream(
-          setupRetryExecutionId,
-          parentStreamId,
-          options,
+        Effect.runPromise(
+          createChildStream(
+            defaultSession(),
+            setupRetryExecutionId,
+            parentStreamId,
+            options,
+          ),
         ),
       ).rejects.toThrow('execution setup failed');
       expect(
@@ -289,10 +303,13 @@ describe('child stream progress events', () => {
         }),
       );
 
-      const retried = await createRehydratedChildStream(
-        setupRetryExecutionId,
-        parentStreamId,
-        options,
+      const retried = await Effect.runPromise(
+        createChildStream(
+          defaultSession(),
+          setupRetryExecutionId,
+          parentStreamId,
+          options,
+        ),
       );
       expect(retried.childStreamId).toBe(setupRetryChildStreamId);
       expect(
@@ -309,7 +326,9 @@ describe('child stream progress events', () => {
             qualifyAggregateId('stream', setupRetryChildStreamId),
         ),
       ).toHaveLength(2);
-      await retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
+      await Effect.runPromise(
+        retried.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
+      );
     } finally {
       trackExecution.mockRestore();
     }
@@ -323,19 +342,22 @@ describe('child stream progress events', () => {
       agentCategory: AgentCategory.Workflow,
     };
 
-    const childStream = await createChildStream(
-      workflowRelaunchExecutionId,
-      parentStreamId,
-      {
-        streamPrefix: 'workflow-script',
-        run: {
-          kind: 'multiAgentWorkflow',
-          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+    const childStream = await Effect.runPromise(
+      createChildStream(
+        defaultSession(),
+        workflowRelaunchExecutionId,
+        parentStreamId,
+        {
+          streamPrefix: 'workflow-script',
+          run: {
+            kind: 'multiAgentWorkflow',
+            workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          },
+          userFollowUpSupport: 'unsupported',
+          description: 'Audit the repository without editing',
+          config: workerConfig,
         },
-        userFollowUpSupport: 'unsupported',
-        description: 'Audit the repository without editing',
-        config: workerConfig,
-      },
+      ),
     );
 
     expect(eventsOfType(recorded.events, 'run.start')).toContainEqual(
@@ -355,7 +377,9 @@ describe('child stream progress events', () => {
       category: AgentCategory.Workflow,
     });
 
-    await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
+    await Effect.runPromise(
+      childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
+    );
   });
 
   it('publishes child stream existence as a run fact without direct host emission', async () => {
@@ -374,46 +398,51 @@ describe('child stream progress events', () => {
       }),
     ]);
 
-    await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
+    await Effect.runPromise(
+      childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED }),
+    );
   });
 
-  it('publishes child stream auto-close as a session fact without direct host emission', async () => {
+  it('releases completed child presentation without direct host emission', async () => {
     const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession());
 
     const childStream = await startBashChild(noProjectionAutoCloseExecutionId);
 
-    await childStream.finalize({
-      outcome: RUN_OUTCOME.COMPLETED,
-      autoClose: true,
-    });
-
-    expect(active.events).toEqual([]);
-    expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
-      expect.objectContaining({
-        aggregateId: qualifyAggregateId(
-          'stream',
-          noProjectionAutoCloseChildStreamId,
-        ),
+    await Effect.runPromise(
+      childStream.finalize({
+        outcome: RUN_OUTCOME.COMPLETED,
+        autoClose: true,
       }),
     );
+
+    expect(active.events).toEqual([]);
+    expect(eventsOfType(recorded.events, 'stream.removed')).toEqual([]);
+    expect(
+      defaultSession().transcripts.has(noProjectionAutoCloseChildStreamId),
+    ).toBe(true);
   });
 
-  it('emits removeStream for child stream auto-close', async () => {
+  it('retains completed command history after automatic presentation release', async () => {
     const recorded = recordSessionEvents(defaultSession());
 
     const childStream = await startBashChild(executionId);
+    childStream.logger.info('retained command output');
 
-    await childStream.finalize({
-      outcome: RUN_OUTCOME.COMPLETED,
-      autoClose: true,
-    });
-
-    expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
-      expect.objectContaining({
-        aggregateId: qualifyAggregateId('stream', childStreamId),
+    await Effect.runPromise(
+      childStream.finalize({
+        outcome: RUN_OUTCOME.COMPLETED,
+        autoClose: true,
       }),
     );
+
+    expect(eventsOfType(recorded.events, 'stream.removed')).toEqual([]);
+    const entries = await Effect.runPromise(
+      defaultSession().transcripts.readEntries(childStreamId),
+    );
+    expect(
+      entries.some((entry) => entry.text === 'retained command output'),
+    ).toBe(true);
   });
 
   it.effect(
@@ -435,6 +464,7 @@ describe('child stream progress events', () => {
           const defect = yield* Effect.flip(
             reraiseAgentCliCallFailure(
               launchAgentCliSession({
+                session: defaultSession(),
                 parentStreamId,
                 parentExecutionId: undefined,
                 agentName: 'codex',
@@ -502,7 +532,9 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    await childStream.finalize({ outcome: RUN_OUTCOME.FAILED });
+    await Effect.runPromise(
+      childStream.finalize({ outcome: RUN_OUTCOME.FAILED }),
+    );
 
     expect(
       eventsOfType(recorded.events, 'status')
@@ -555,7 +587,9 @@ describe('child stream progress events', () => {
     childStream.waitForInput();
     childStream.beginTurn();
     childStream.failTurn();
-    await childStream.finalize({ outcome: RUN_OUTCOME.FAILED });
+    await Effect.runPromise(
+      childStream.finalize({ outcome: RUN_OUTCOME.FAILED }),
+    );
 
     expect(defaultSession().status.get(stoppedChildStreamId)).toBe(
       STREAM_PHASE.CANCELLED,
@@ -585,7 +619,9 @@ describe('child stream progress events', () => {
     );
     expect(handle).toBeDefined();
 
-    await childStream.finalize({ outcome: RUN_OUTCOME.CANCELLED });
+    await Effect.runPromise(
+      childStream.finalize({ outcome: RUN_OUTCOME.CANCELLED }),
+    );
 
     await expect(handle?.result).resolves.toMatchObject({
       type: 'result',
@@ -604,10 +640,12 @@ describe('child stream progress events', () => {
       defaultSession().executions.getAgentHandleByStream(failedChildStreamId);
     expect(handle).toBeDefined();
 
-    await childStream.finalize({
-      outcome: RUN_OUTCOME.FAILED,
-      error: new Error('child process exited 1'),
-    });
+    await Effect.runPromise(
+      childStream.finalize({
+        outcome: RUN_OUTCOME.FAILED,
+        error: new Error('child process exited 1'),
+      }),
+    );
 
     expect(defaultSession().status.get(failedChildStreamId)).toBe(
       STREAM_PHASE.FAILED,

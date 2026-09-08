@@ -108,33 +108,6 @@ describe('terminal result event', () => {
     }
   });
 
-  it('emits exactly one completed result even if terminal stream-status cleanup throws', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    // A status port that throws on the terminal (COMPLETED) transition, not
-    // the initial RUNNING one. The session isolates its ports, so the run's
-    // completed result remains the sole terminal result.
-    const off = ctx.runScope.session.attachRunTrace(
-      {
-        trace: new TraceEmitter(),
-        handleStatus: ({ phase }) => {
-          if (phase === STREAM_PHASE.COMPLETED) {
-            throw new Error('status subscriber boom');
-          }
-        },
-      },
-      ctx.runScope.streamId,
-    );
-    try {
-      await expect(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-      expectSingleResult(results, ctx, { outcome: 'completed' });
-    } finally {
-      off();
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
-
   it('emits the completed result even if ending the parent stage throws', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
     vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
@@ -216,31 +189,6 @@ describe('terminal result event', () => {
 
       expectSingleResult(results, ctx, { outcome: 'failed' });
     } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
-
-  it('emits the failed result before terminal error status subscribers run', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    const off = ctx.runScope.session.attachRunTrace(
-      {
-        trace: new TraceEmitter(),
-        handleStatus: ({ phase }) => {
-          if (phase === STREAM_PHASE.FAILED) {
-            throw new Error('status subscriber boom');
-          }
-        },
-      },
-      ctx.runScope.streamId,
-    );
-    try {
-      await expect(runFlowWithLifecycle(ctx, explodedRun)).rejects.toThrow(
-        'model exploded',
-      );
-
-      expectSingleResult(results, ctx, { outcome: 'failed' });
-    } finally {
-      off();
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }
   });
@@ -342,7 +290,7 @@ describe('terminal result event', () => {
       ctx.runScope.executionId,
     );
     const detach = session.attachRunTrace(
-      { trace: logger, handleStatus: () => {} },
+      { trace: logger },
       ctx.runScope.streamId,
     );
     session.onResult(onResult);
@@ -350,6 +298,7 @@ describe('terminal result event', () => {
       await runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
         isSubagent: true,
       });
+      await session.settlePublications();
       expect(onResult).toHaveBeenCalledOnce();
       expect(onResult.mock.calls[0][0]).toMatchObject({
         type: 'result',

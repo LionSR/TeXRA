@@ -17,12 +17,7 @@ export type {
   StatusEvent,
 } from './events';
 
-export type {
-  AgentTrace,
-  AgentTraceSubscriber,
-  StageHandle,
-  StreamHandle,
-} from './AgentTrace';
+export type { AgentTrace, StageHandle, StreamHandle } from './AgentTrace';
 
 export { TraceEmitter } from './TraceEmitter';
 export { noopTrace } from './noopTrace';

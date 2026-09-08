@@ -1,7 +1,6 @@
 # TeXRA agent architecture: own the LLM package, replace the graph
 
 Status: proposed
-Archived: 2026-09-06
 
 Date: 2026-09-06. Status: research and recommended design, not an implemented migration or a change to the binding PRDs.
 

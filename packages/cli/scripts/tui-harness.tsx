@@ -89,7 +89,7 @@ import {
 import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
-import { createRunTrace, StreamLogStore } from '@transcript';
+import { createRunTrace } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -406,7 +406,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
   });
 }
 const harnessRuntimeSession = initializeDefaultSession({
-  transcripts: await StreamLogStore.open(),
+  transcriptMode: { kind: 'persistent' },
   responseTextProcessing: createTexraResponseTextProcessing(
     agentResponseTextConnector,
   ),
@@ -1305,7 +1305,7 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();
 }
 
-function seedRunningWorkflow(): void {
+async function seedRunningWorkflow(): Promise<void> {
   const executionId = 'aaaa0002f10e' as ExecutionId;
   const childStreamId = 'workflow-script#aaaa0002f10e' as StreamTabId;
   const firstAgentStreamId = RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID;
@@ -1322,7 +1322,10 @@ function seedRunningWorkflow(): void {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childStreamId, STREAM_PHASE.RUNNING);
-  const runTrace = createRunTrace(childStreamId, session().transcripts);
+  const residency = await effectRuntime().runPromise(
+    session().transcripts.loadAndAcquireWriter(childStreamId, executionId),
+  );
+  const runTrace = createRunTrace(childStreamId, residency);
   const detachRunTrace = session().attachRunTrace(runTrace, childStreamId);
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
@@ -1563,7 +1566,7 @@ if (SHOW_EDIT_APPROVAL) {
 // The running workflow exists before its agent asks below: a request names
 // a stream the fold already holds, the way a real run's does.
 if (SHOW_WORKFLOW_RUNNING) {
-  seedRunningWorkflow();
+  await seedRunningWorkflow();
 }
 
 if (SHOW_BASH_APPROVAL) {

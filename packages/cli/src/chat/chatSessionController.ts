@@ -3,7 +3,7 @@
 // Host-neutral (no Ink/TUI rendering dependencies): the Ink component
 // consumes narrow commands exposed here.
 
-import { Effect, Option, Stream, SubscriptionRef } from 'effect';
+import { Cause, Effect, Option, Stream, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
@@ -13,7 +13,6 @@ import {
   attachTerminalResultToast,
   describeFollowUpFailure,
   detachSubagentsOnStop,
-  lookupStreamExecutionId,
   resumeRun,
   runAgent,
   type AgentConfig,
@@ -42,6 +41,7 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
+import { hostPort } from '@common/hostPort';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
@@ -131,6 +131,26 @@ interface AutoResumeOptions {
 // ---------------------------------------------------------------------------
 // Controller
 // ---------------------------------------------------------------------------
+
+/**
+ * The recovery tail every run/resume program below shares. A typed failure
+ * from a `hostPort` leaf and a throw from the imperative body alike reach
+ * `recover` with the original value, which is exactly what the `try`/`catch`
+ * around these bodies did before they became programs. Interruption is not
+ * folded in: a fiber the runtime is tearing down is not a run failure to
+ * report, and the caller's own settlement still sees it.
+ */
+const recoverRun = <A, E, R>(
+  program: Effect.Effect<A, E, R>,
+  recover: (error: unknown) => A,
+): Effect.Effect<A, E, R> =>
+  program.pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterrupts(cause)
+        ? Effect.failCause(cause)
+        : Effect.sync(() => recover(Cause.squash(cause))),
+    ),
+  );
 
 /**
  * Narrow commands the chat-session controller exposes to the Ink component.
@@ -437,7 +457,7 @@ export function createChatSessionController(
     });
   };
 
-  // Shared tail of the run/resume `.catch()` handlers: surface the error to
+  // Shared tail of the run/resume failure recovery: surface the error to
   // the local transcript unless the run was stopped intentionally, and set
   // the exit code accordingly.
   const reportRunFailure = (error: unknown): void => {
@@ -488,6 +508,9 @@ export function createChatSessionController(
   // process lifetime.
   const liveOwnerships = new Set<{ readonly release: () => void }>();
   disposables.add(() => {
+    // The raw catch stays: this is a synchronous dispose callback that cannot
+    // return an Effect (PRD R7's permitted synchronous callback), and a
+    // teardown path must not depend on the process runtime it may outlive.
     const failures: unknown[] = [];
     for (const ownership of liveOwnerships) {
       try {
@@ -570,51 +593,66 @@ export function createChatSessionController(
     ownExecution(executionId);
     session.executionId = executionId;
 
-    const runPromise = Promise.resolve()
-      .then(() => AgentConfigSchema.parse(config))
-      .then((registeredConfig) =>
-        runAgent(
-          { kind: 'fresh', config: registeredConfig, executionId },
-          {
-            enforceCategory: true,
-            approvalPromptsUnavailable: approvalsUnavailable,
-            onApprovalPolicyDenial: () =>
-              warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-            runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-            onStreamResolved: (resolvedStreamId) => {
-              // Each chat round mints a fresh root StreamTabId (new
-              // executionId), so bash/tool-edit/super-YOLO bypass, which is
-              // keyed per stream, would otherwise reset every round even
-              // though the user is continuing the same conversation. Link the
-              // new round's stream to the previous one so bypass resolution
-              // (see `registerStreamParent`) falls through to whatever the
-              // prior round had, unless this round sets its own explicit value.
-              const previousRootStreamId = rootStreamId.get();
-              if (
-                previousRootStreamId &&
-                previousRootStreamId !== resolvedStreamId
-              ) {
-                runtimeSession.approvals.registerStreamParent(
-                  resolvedStreamId,
-                  previousRootStreamId,
-                );
-              }
-              session.streamId = resolvedStreamId;
-              rootStreamId.set(resolvedStreamId);
-              moveLocalTranscriptToStream(resolvedStreamId);
-              focusStream(resolvedStreamId);
-              if (session.stopRequested) interruptActiveRun();
-            },
-          },
+    const {
+      promise: claimedRunPromise,
+      resolve: resolveRunPromise,
+      reject: rejectRunPromise,
+    } = pDefer<void>();
+    // Native launch may resolve its stream on this turn. Claim first so
+    // marking the run pending cannot erase that stream or a reentrant stop.
+    session.markRunPending(claimedRunPromise);
+    void effectRuntime()
+      .runPromise(
+        recoverRun(
+          Effect.try(() => AgentConfigSchema.parse(config)).pipe(
+            Effect.flatMap((registeredConfig) =>
+              runAgent(
+                { kind: 'fresh', config: registeredConfig, executionId },
+                {
+                  session: runtimeSession,
+                  enforceCategory: true,
+                  approvalPromptsUnavailable: approvalsUnavailable,
+                  onApprovalPolicyDenial: () =>
+                    warnApprovalDenied(sessionContext, 'Tool or edit approval'),
+                  runtimeUnavailableTools:
+                    getDefaultUnavailableToolNames('cli'),
+                  onStreamResolved: (resolvedStreamId) => {
+                    // Each chat round mints a fresh root StreamTabId (new
+                    // executionId), so bash/tool-edit/super-YOLO bypass, which is
+                    // keyed per stream, would otherwise reset every round even
+                    // though the user is continuing the same conversation. Link the
+                    // new round's stream to the previous one so bypass resolution
+                    // (see `registerStreamParent`) falls through to whatever the
+                    // prior round had, unless this round sets its own explicit value.
+                    const previousRootStreamId = rootStreamId.get();
+                    if (
+                      previousRootStreamId &&
+                      previousRootStreamId !== resolvedStreamId
+                    ) {
+                      runtimeSession.approvals.registerStreamParent(
+                        resolvedStreamId,
+                        previousRootStreamId,
+                      );
+                    }
+                    session.streamId = resolvedStreamId;
+                    rootStreamId.set(resolvedStreamId);
+                    moveLocalTranscriptToStream(resolvedStreamId);
+                    focusStream(resolvedStreamId);
+                    if (session.stopRequested) interruptActiveRun();
+                  },
+                },
+              ),
+            ),
+            Effect.map((result) => {
+              session.runExitCode = runOutcomeExitCode(result.outcome);
+              notify('agentFinished');
+            }),
+          ),
+          reportRunFailure,
         ),
       )
-      .then((result) => {
-        session.runExitCode = runOutcomeExitCode(result.outcome);
-        notify('agentFinished');
-      })
-      .catch(reportRunFailure)
-      .finally(finalize);
-    session.markRunPending(runPromise);
+      .finally(finalize)
+      .then(resolveRunPromise, rejectRunPromise);
   };
 
   // -----------------------------------------------------------------------
@@ -643,15 +681,15 @@ export function createChatSessionController(
     const supersededRecovery = supersedeInterruptedRecovery();
     let recovery: FollowUpRecoveryLease | undefined;
     let recoveryHandedOff = false;
-    try {
+    const attemptResume = Effect.gen(function* () {
       // The durable record names the stream (FK stamped at registration) and
       // the config the TUI adopts before the run. Workflow runs resume
       // headless through `texra resume`, not inside a chat.
       const store = getExecutionStore(id);
-      const [config, meta] = await Promise.all([
-        store.readConfig(),
-        store.readMeta(),
-      ]);
+      const [config, meta] = yield* Effect.all(
+        [hostPort(() => store.readConfig()), hostPort(() => store.readMeta())],
+        { concurrency: 'unbounded' },
+      );
       const streamId = meta?.streamId;
       let failure: string | undefined;
       if (!config || !streamId) {
@@ -710,16 +748,11 @@ export function createChatSessionController(
         // marks recoverable.
         if (session.stopRequested) interruptActiveRun();
 
-        await runtimeSession.transcripts.ensureLoaded(streamId);
-        // `load` evicts every other record synchronously before its async
-        // seed, and the store reports no provenance for an evicted record, so
-        // nothing projects an evicted/unseeded stream (or re-emits
-        // warnIfUnseeded) mid-seed without any marker bookkeeping here. A
-        // previously seeded retained root deliberately keeps its provenance
-        // during reseeding: this keeps its canonical pre-resume projection
-        // visible at the cost of bounded warnIfUnseeded notices until the seed
-        // completes.
-        await snapshotStore.load([streamId]);
+        await effectRuntime().runPromise(
+          runtimeSession.transcripts
+            .ensureLoaded(streamId)
+            .pipe(Effect.andThen(snapshotStore.load([streamId]))),
+        );
         // The load re-establishes this stream's work-plan provenance in the
         // store, which is what an open `/plan` reader re-reads to clear its
         // failure-time mask. The transcript itself is the fold's: the TUI
@@ -734,31 +767,34 @@ export function createChatSessionController(
       // cleared the interrupted stream, so the follow-ups typed during the
       // interruption are lost unless both go back where they came from.
       let followUpQueueReady = false;
-      const runChain = Promise.resolve()
-        .then(() => {
-          recoveryHandedOff = true;
-          return resumeRun(id, {
-            ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
-            recovery,
-            extraFollowUps: supersededRecovery?.followUps,
-            onResumeResolved: adoptResumedStream,
-            onFollowUpQueueReady: () => {
-              followUpQueueReady = true;
-            },
-            isCancellationRequested: () => session.stopRequested,
-          });
-        })
-        .then((result) => {
-          if ('started' in result) {
-            settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
-          } else if (session.stopRequested) {
-            session.runExitCode = CliExitCode.Interrupted;
-          } else {
-            appendLocalErrorTranscript(describeFollowUpFailure(result.failed));
-            session.runExitCode = CliExitCode.Usage;
-          }
-        })
-        .catch(reportRunFailure)
+      const runChain = effectRuntime()
+        .runPromise(
+          Effect.gen(function* () {
+            recoveryHandedOff = true;
+            const result = yield* resumeRun(id, {
+              ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+              recovery,
+              extraFollowUps: supersededRecovery?.followUps,
+              onResumeResolved: adoptResumedStream,
+              onFollowUpQueueReady: () => {
+                followUpQueueReady = true;
+              },
+              isCancellationRequested: () => session.stopRequested,
+            });
+            if ('started' in result) {
+              settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+            } else if (session.stopRequested) {
+              session.runExitCode = CliExitCode.Interrupted;
+            } else {
+              appendLocalErrorTranscript(
+                describeFollowUpFailure(result.failed),
+              );
+              session.runExitCode = CliExitCode.Usage;
+            }
+          }).pipe(
+            Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
+          ),
+        )
         .finally(() => {
           handBackUnusedRecovery(recovery, recoveryHandedOff);
           if (!followUpQueueReady) {
@@ -774,13 +810,16 @@ export function createChatSessionController(
       // settles here, before the run finishes, fire-and-forget per the
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
-    } catch (error: unknown) {
-      handBackUnusedRecovery(recovery, recoveryHandedOff);
-      restoreInterruptedRecovery(supersededRecovery);
-      reportRunFailure(error);
-      session.markRunCompleted();
-      resolveRunPromise();
-    }
+    });
+    await effectRuntime().runPromise(
+      recoverRun(attemptResume, (error) => {
+        handBackUnusedRecovery(recovery, recoveryHandedOff);
+        restoreInterruptedRecovery(supersededRecovery);
+        reportRunFailure(error);
+        session.markRunCompleted();
+        resolveRunPromise();
+      }),
+    );
   };
 
   /**
@@ -827,21 +866,30 @@ export function createChatSessionController(
       let finalize = (): void => session.markRunCompleted();
       let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
-      try {
+      const attempt = Effect.gen(function* () {
         recovery = options.recovery
           ? runtimeSession.followUps.useRecovery(options.recovery)
           : runtimeSession.followUps.claimRecovery(streamId, true);
         if (!recovery) return false;
-        await snapshotStore.preload([streamId]);
+        // Transfer accepted input before hydration yields. A waiting admission
+        // must see the new queue owner before it can attempt a second resume.
+        if (!options.onFollowUpQueueReady) {
+          const previous = supersedeInterruptedRecovery();
+          runtimeSession.followUps
+            .queue(recovery)
+            .restore(previous?.followUps ?? []);
+          if (previous?.followUps.length)
+            runtimeSession.followUps.notifySent(recovery.streamId);
+        }
+
+        yield* snapshotStore.preload([streamId]);
         const runMetadata = snapshotStore.getRunMetadata(streamId);
-        const executionId =
-          runMetadata.executionId ??
-          (await lookupStreamExecutionId(streamId, runtimeSession));
+        const executionId = runMetadata.executionId;
         if (!executionId) return false;
 
         const config =
           runMetadata.config ??
-          (await getExecutionStore(executionId).readConfig());
+          (yield* hostPort(() => getExecutionStore(executionId).readConfig()));
         if (!config) return false;
         if (isCancellationRequested()) return false;
         const parentStreamId = snapshotStore.getParentStreamId(streamId);
@@ -865,27 +913,14 @@ export function createChatSessionController(
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 
-        const result = await setCliHelperModel(config.model).then(() => {
-          recoveryHandedOff = true;
-          return resumeRun(executionId, {
-            ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
-            recovery,
-            extraFollowUps: options.extraFollowUps,
-            onFollowUpQueueReady: (lease) => {
-              if (options.onFollowUpQueueReady) {
-                options.onFollowUpQueueReady(lease);
-                return;
-              }
-              const recovery = supersedeInterruptedRecovery();
-              runtimeSession.followUps
-                .queue(lease)
-                .restore(recovery?.followUps ?? []);
-              if (recovery?.followUps.length) {
-                runtimeSession.followUps.notifySent(lease.streamId);
-              }
-            },
-            isCancellationRequested,
-          });
+        yield* hostPort(() => setCliHelperModel(config.model));
+        recoveryHandedOff = true;
+        const result = yield* resumeRun(executionId, {
+          ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+          recovery,
+          extraFollowUps: options.extraFollowUps,
+          onFollowUpQueueReady: options.onFollowUpQueueReady,
+          isCancellationRequested,
         });
 
         if ('started' in result && result.delivered) {
@@ -896,16 +931,23 @@ export function createChatSessionController(
           session.runExitCode = CliExitCode.Interrupted;
         }
         return false;
-      } catch (error: unknown) {
-        reportRunFailure(error);
-        return false;
-      } finally {
-        handBackUnusedRecovery(recovery, recoveryHandedOff);
-        finalize();
-        if (activeAutoResumeCancellation === attemptCancellation) {
-          activeAutoResumeCancellation = undefined;
-        }
-      }
+      });
+      return effectRuntime().runPromise(
+        recoverRun(attempt, (error) => {
+          reportRunFailure(error);
+          return false;
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              handBackUnusedRecovery(recovery, recoveryHandedOff);
+              finalize();
+              if (activeAutoResumeCancellation === attemptCancellation) {
+                activeAutoResumeCancellation = undefined;
+              }
+            }),
+          ),
+        ),
+      );
     };
 
     void runResume().then(resolveRun, rejectRun);
@@ -937,7 +979,13 @@ export function createChatSessionController(
     };
     pendingInterruptedFollowUps = [];
     batch.completion = (async () => {
-      await session.runPromise?.catch(() => undefined);
+      // Best-effort settle-wait on the interrupted run: its outcome (including
+      // any failure) is already reported by the run's own recovery.
+      await effectRuntime().runPromise(
+        Effect.ignoreCause(
+          hostPort(() => session.runPromise ?? Promise.resolve()),
+        ),
+      );
       if (batch.superseded) return true;
       let followUpQueueReady = false;
       try {
@@ -999,49 +1047,56 @@ export function createChatSessionController(
     followUpQueue.clear();
     session.executionId = undefined;
     let started = false;
-    const pendingStart = Promise.resolve().then(async (): Promise<void> => {
-      try {
-        const meta = sessionMetaSignal.get();
-        const currentAgent = meta.agent || initialAgent;
-        const currentModel = meta.model || initialModel;
-        const selection = await selectCliRunnableModel(currentModel, {
-          fallbackReason: meta.model ? meta.modelSource : initialModelSource,
-          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-            CHAT_API_MODE_MODEL_RECOVERY,
-          ),
-        });
-        await setCliHelperModel(selection.model);
-        if (session.stopRequested) {
+    const pendingStart = effectRuntime().runPromise(
+      recoverRun(
+        Effect.gen(function* () {
+          const meta = sessionMetaSignal.get();
+          const currentAgent = meta.agent || initialAgent;
+          const currentModel = meta.model || initialModel;
+          const selection = yield* hostPort(() =>
+            selectCliRunnableModel(currentModel, {
+              fallbackReason: meta.model
+                ? meta.modelSource
+                : initialModelSource,
+              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                CHAT_API_MODE_MODEL_RECOVERY,
+              ),
+            }),
+          );
+          yield* hostPort(() => setCliHelperModel(selection.model));
+          if (session.stopRequested) {
+            session.markRunCompleted();
+            return;
+          }
+          startRootRun({
+            agent: currentAgent,
+            model: selection.model,
+            instruction,
+            ...(displayInstruction !== undefined ? { displayInstruction } : {}),
+            agentCategory: AgentCategory.ToolUse,
+            workingDirectory: cwd,
+            ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
+            ...(meta.cliMultiAgentPresetId
+              ? { cli: { multiAgentPresetId: meta.cliMultiAgentPresetId } }
+              : {}),
+            ...(meta.delegationAgentScope
+              ? { delegationAgentScope: meta.delegationAgentScope }
+              : {}),
+          });
+          started = true;
+        }),
+        (error) => {
+          if (!session.stopRequested) {
+            appendLocalUserTranscript(displayInstruction ?? instruction);
+            appendLocalErrorTranscript(toErrorMessage(error));
+          }
+          session.runExitCode = session.stopRequested
+            ? CliExitCode.Success
+            : CliExitCode.AgentError;
           session.markRunCompleted();
-          return;
-        }
-        startRootRun({
-          agent: currentAgent,
-          model: selection.model,
-          instruction,
-          ...(displayInstruction !== undefined ? { displayInstruction } : {}),
-          agentCategory: AgentCategory.ToolUse,
-          workingDirectory: cwd,
-          ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-          ...(meta.cliMultiAgentPresetId
-            ? { cli: { multiAgentPresetId: meta.cliMultiAgentPresetId } }
-            : {}),
-          ...(meta.delegationAgentScope
-            ? { delegationAgentScope: meta.delegationAgentScope }
-            : {}),
-        });
-        started = true;
-      } catch (error: unknown) {
-        if (!session.stopRequested) {
-          appendLocalUserTranscript(displayInstruction ?? instruction);
-          appendLocalErrorTranscript(toErrorMessage(error));
-        }
-        session.runExitCode = session.stopRequested
-          ? CliExitCode.Success
-          : CliExitCode.AgentError;
-        session.markRunCompleted();
-      }
-    });
+        },
+      ),
+    );
     session.markRunPending(pendingStart);
     await pendingStart;
     return started;

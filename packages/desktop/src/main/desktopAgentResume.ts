@@ -1,3 +1,5 @@
+import { Cause, Effect, Exit } from 'effect';
+
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { runInSession, type SessionHandle } from '@agent/runtime';
@@ -7,9 +9,10 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
 
@@ -75,47 +78,54 @@ export class DesktopProcessResumeOwner {
     // since it was loaded. Read the store before resuming: neither the lease
     // (a deleted stream holds none) nor the execution lane (in-process only)
     // sees that fact.
-    if (!(await session.transcripts.hasAuthoritativeStream(streamId))) {
-      return false;
-    }
     if (isCancellationRequested()) return false;
-    try {
-      return await resumeStreamWithRefusalNotice(streamId, {
-        session,
-        recovery,
-        runtimeUnavailableTools: (
-          await import('@tools/registry')
-        ).getDefaultUnavailableToolNames('desktop'),
-        isCancellationRequested,
-        executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
-          launchDesktopAgent(
-            { kind: 'resume', config, executionId: id },
-            { session },
-            { modelHandlerCompatibilityKey },
-          ),
+    const result = await effectRuntime().runPromise(
+      Effect.exit(
+        Effect.gen(function* () {
+          const { getDefaultUnavailableToolNames } = yield* Effect.tryPromise({
+            try: () => import('@tools/registry'),
+            catch: ensureError,
+          });
+          const exists =
+            yield* session.transcripts.hasAuthoritativeStream(streamId);
+          if (!exists) return false;
+          return yield* resumeStreamWithRefusalNotice(streamId, {
+            session,
+            recovery,
+            runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
+            isCancellationRequested,
+            executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+              launchDesktopAgent(
+                { kind: 'resume', config, executionId: id },
+                { session },
+                { modelHandlerCompatibilityKey },
+              ),
+          });
+        }),
+      ),
+    );
+    if (Exit.isSuccess(result)) return result.value;
+    const error = Cause.squash(result.cause);
+    if (isCancellationRequested()) return false;
+    this.logger.error(`Failed to resume desktop stream ${streamId}`, {
+      data: toLogData(error),
+    });
+    const primaryError = primaryAgentError(error);
+    const presentation = agentErrorPresentation({
+      kind: classifyAgentError(primaryError),
+      message: `Resume failed: ${toErrorMessage(primaryError)}`,
+    });
+    if (presentation?.type === 'instruction') {
+      session.interactions.emit(
+        'requestShowInstruction',
+        presentation.payload,
+        { replayWhenAttached: true },
+      );
+    } else if (presentation?.type === 'error') {
+      session.interactions.emit('requestShowError', presentation.payload, {
+        replayWhenAttached: true,
       });
-    } catch (error) {
-      if (isCancellationRequested()) return false;
-      this.logger.error(`Failed to resume desktop stream ${streamId}`, {
-        data: toLogData(error),
-      });
-      const primaryError = primaryAgentError(error);
-      const presentation = agentErrorPresentation({
-        kind: classifyAgentError(primaryError),
-        message: `Resume failed: ${toErrorMessage(primaryError)}`,
-      });
-      if (presentation?.type === 'instruction') {
-        session.interactions.emit(
-          'requestShowInstruction',
-          presentation.payload,
-          { replayWhenAttached: true },
-        );
-      } else if (presentation?.type === 'error') {
-        session.interactions.emit('requestShowError', presentation.payload, {
-          replayWhenAttached: true,
-        });
-      }
-      return false;
     }
+    return false;
   }
 }

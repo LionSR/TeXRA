@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { Effect } from 'effect';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -7,6 +8,7 @@ import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -18,6 +20,7 @@ import {
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
@@ -30,6 +33,7 @@ const TEMPLATE =
   '</head><body></body></html>';
 
 const tempDirs = useTempDirs();
+let transcripts: StreamLogStore;
 
 async function installStoragePlatform(): Promise<void> {
   const tempDir = await makeTempDir('texra-html-export-', tempDirs);
@@ -79,7 +83,7 @@ async function persistTranscriptEntry(
   agent: string,
 ): Promise<StreamTabId> {
   const streamId = getStreamTabId(agent, { executionId });
-  const store = await StreamLogStore.open();
+  const store = transcripts;
   appendTranscriptEntry(store, streamId, {
     id: 'entry-1',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -88,19 +92,32 @@ async function persistTranscriptEntry(
     messageType: MESSAGE_TYPES.USER_MESSAGE,
     text: 'hello',
   });
-  await store.flush();
+
   return streamId;
 }
 
 describe('ChatExportController.exportAsHtml', () => {
-  const controller = new ChatExportController({ latexPreamble: '' });
+  let controller: ChatExportController;
 
-  beforeEach(installStoragePlatform);
+  beforeEach(async () => {
+    await installStoragePlatform();
+    transcripts = StreamLogStore.ephemeral('chat export fixture');
+    controller = new ChatExportController({
+      latexPreamble: '',
+      session: {
+        roots: processWorkspaceRoots(),
+        snapshots: createTestSession().snapshots,
+        transcripts,
+      },
+    });
+  });
 
   it('returns config_missing when nothing is stored', async () => {
     const templatePath = await writeTemplate();
 
-    const outcome = await controller.exportAsHtml('missing', templatePath);
+    const outcome = await Effect.runPromise(
+      controller.exportAsHtml('missing', templatePath),
+    );
 
     expect(outcome).toEqual({ status: 'config_missing' });
   });
@@ -117,7 +134,9 @@ describe('ChatExportController.exportAsHtml', () => {
       streamId,
     });
 
-    const outcome = await controller.exportAsHtml(executionId, templatePath);
+    const outcome = await Effect.runPromise(
+      controller.exportAsHtml(executionId, templatePath),
+    );
 
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') return;
@@ -146,18 +165,33 @@ describe('ChatExportController.exportAsHtml', () => {
     });
 
     await expect(
-      controller.exportAsHtml(executionId, '/nonexistent/index.html'),
+      Effect.runPromise(
+        controller.exportAsHtml(executionId, '/nonexistent/index.html'),
+      ),
     ).rejects.toThrow(/Trace-viewer standalone bundle missing/);
   });
 });
 
 describe('ChatExportController.buildExportInput', () => {
-  const controller = new ChatExportController({ latexPreamble: '' });
+  let controller: ChatExportController;
 
-  beforeEach(installStoragePlatform);
+  beforeEach(async () => {
+    await installStoragePlatform();
+    transcripts = StreamLogStore.ephemeral('chat export fixture');
+    controller = new ChatExportController({
+      latexPreamble: '',
+      session: {
+        roots: processWorkspaceRoots(),
+        snapshots: createTestSession().snapshots,
+        transcripts,
+      },
+    });
+  });
 
   it('reports config_missing when nothing is stored', async () => {
-    await expect(controller.buildExportInput('missing')).resolves.toEqual({
+    await expect(
+      Effect.runPromise(controller.buildExportInput('missing')),
+    ).resolves.toEqual({
       status: 'config_missing',
     });
   });
@@ -172,7 +206,7 @@ describe('ChatExportController.buildExportInput', () => {
     });
 
     await expect(
-      controller.buildExportInput(executionId),
+      Effect.runPromise(controller.buildExportInput(executionId)),
     ).resolves.toMatchObject({
       status: 'ok',
     });
@@ -182,7 +216,9 @@ describe('ChatExportController.buildExportInput', () => {
     const executionId = 'exec-no-chat' as ExecutionId;
     await getExecutionStore(executionId).writeRunRecord(config());
 
-    await expect(controller.buildExportInput(executionId)).resolves.toEqual({
+    await expect(
+      Effect.runPromise(controller.buildExportInput(executionId)),
+    ).resolves.toEqual({
       status: 'conversation_missing',
     });
   });

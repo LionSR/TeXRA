@@ -50,6 +50,7 @@ import {
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { SDK_RETRIES_DISABLED } from '../support/auxiliaryRetry';
 import { contentToText } from './openAIResponseContent';
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
@@ -300,7 +301,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
         baseURL: CODEX_BACKEND_BASE_URL,
         defaultHeaders,
         fetch: this.codexFetch,
-        maxRetries: 0,
+        maxRetries: SDK_RETRIES_DISABLED,
       }),
       'chatgpt-subscription',
       apiKey,

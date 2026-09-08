@@ -3,11 +3,17 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export';
+import { openSessionEffect } from '@agent/runtime';
 import { listExecutions } from '@agent/storage';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
+import { effectRuntime } from '@platform/processRuntime';
 import { type ExecutionId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
-import { assembleTrace, injectStandaloneTrace } from '@transcript';
+import {
+  assembleTrace,
+  injectStandaloneTrace,
+  StreamLogStore,
+} from '@transcript';
 import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -29,6 +35,7 @@ import {
   type CliHistoryDeleteResult,
 } from '../runtime/history';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
+import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 import {
   writeErrorStderr,
   writeRawStdout,
@@ -136,7 +143,10 @@ export async function runHistoryExport(
     return CliExitCode.Success;
   }
 
-  const traceResult = await assembleTrace(id);
+  const session = await effectRuntime().runPromise(openSessionEffect({}));
+  const traceResult = await effectRuntime().runPromise(
+    assembleTrace(id, session),
+  );
   if (traceResult.status !== 'ok') {
     switch (traceResult.status) {
       case 'config_missing':
@@ -222,7 +232,10 @@ async function runHistoryDelete(
 
   let result: CliHistoryDeleteResult;
   try {
-    result = await deleteCliHistory(options);
+    const session = await initializeCliTranscriptSession();
+    result = await effectRuntime().runPromise(
+      deleteCliHistory(session, options),
+    );
   } catch (error) {
     writeErrorStderr(error);
     return CliExitCode.Usage;

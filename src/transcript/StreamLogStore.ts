@@ -1,138 +1,33 @@
-import * as path from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
-import pMap from 'p-map';
-import PQueue from 'p-queue';
+/** Resident transcript entries, hydrated from the session's event table. */
+import { Effect, Semaphore, type Context } from 'effect';
 
-import { isFileNotFoundError } from '@common/errors';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { KVStore } from '@common/storage/KVStore';
-import { createLog } from '@logger/logUtils';
 import {
-  END_GROUP_STATUS,
-  ExecutionIdSchema,
-  MESSAGE_TYPES,
-  RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
-  interruptedWorkflowCall,
-  type RunOutcome,
+  aggregateId,
+  aggregateTarget,
+  isTranscriptEvent,
+  type SessionEvent,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import type { Database } from '@shared/session/database';
 import {
-  isRunningGroupEntry,
-  isRunningStreamingTextEntry,
-  nonterminalWorkflowCall,
   StreamLog,
   type StreamLogAppendInput,
   type StreamLogDelta,
   type StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
-import { createFlushableDebounce, isObject } from '@utils/core';
+import { createTranscriptFold } from '@shared/session/traceFold';
 import { createListenerSet } from '@utils/core/listenerSet';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { StorageFS } from '@utils/files/storageFS';
-import { formatResultCount } from '@utils/text/stringUtils';
-
 import { ResidentStreamRegistry } from './ResidentStreamRegistry';
-import {
-  parseSummaryShape,
-  StreamSummaryCacheStore,
-  toSummary,
-  type ParsedPersistedEntries,
-  type StreamLogSummary,
-  type StreamSummaryCacheHost,
-  type StreamSummaryMeta,
-} from './StreamSummaryCacheStore';
 
-const SAVE_MAX_WAIT_MS = 300;
-export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
-export const STREAM_LOG_SUMMARIES_DIR =
-  WORKSPACE_STORAGE_LAYOUT.streamLogSummaries;
-const STREAM_LOG_LOAD_CONCURRENCY = 8;
-const log = createLog('StreamLogStore');
-
-/**
- * A deletion guard decided the stream was re-claimed while the delete was
- * committed. Thrown inside {@link StreamLogStore.delete} so the caller can
- * roll adjacent snapshot staging back instead of discarding a fresh
- * incarnation's buffered writes.
- */
-export class StreamDeletionSupersededError extends Error {
-  constructor(readonly subject?: string) {
-    super(
-      subject === undefined
-        ? 'Stream deletion superseded'
-        : `Stream deletion superseded for ${subject}`,
-    );
-    this.name = 'StreamDeletionSupersededError';
-  }
-}
-
-export interface StreamLogDeleteOptions {
-  /**
-   * Re-checked inside the serialized deletion: once after pending writes drain
-   * and again after the durable transcript delete but before in-memory state is
-   * forgotten. Returning `false` aborts the delete.
-   */
-  readonly shouldDelete?: () => boolean;
-}
-
+type TranscriptDatabase = Pick<
+  Context.Service.Shape<typeof Database>,
+  'readAggregate' | 'readListing'
+>;
 type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
-
-type StreamLogStoreMode =
+export type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
-  | { readonly kind: 'read-only' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
-
-/**
- * Delete one known persisted transcript without opening or parsing the
- * transcript registry. History cleanup already resolved the stream from the
- * execution metadata, so hydrating every unrelated transcript would add work
- * and let unrelated corruption block deletion of the requested execution.
- */
-export async function deletePersistedStreamLog(
-  streamId: StreamTabId,
-): Promise<void> {
-  await new KVStore(STREAM_LOGS_DIR, { compactJson: true }).delete(streamId);
-  try {
-    await new KVStore(STREAM_LOG_SUMMARIES_DIR, {
-      compactJson: true,
-    }).delete(streamId);
-  } catch (error) {
-    log.warn(
-      `Failed to delete derived transcript summary for ${streamId}; continuing after authoritative log deletion: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-  }
-}
-
-/**
- * Clear one known stream's parent-edge from its always-resident summary
- * mirror, without opening the transcript registry. `StreamSnapshotStore` is
- * the parent-edge authority and republishes this mirror on every live
- * mutation (#9947), but a targeted cleanup path with no attached
- * `summaryMetaSink` (history delete without a live session) can durably
- * detach a child in its sidecar while this mirror — what the progress rail
- * actually reads — keeps pointing at the deleted parent. Callers already
- * know the exact child stream ids to patch, so this stays a single-key
- * read-modify-write, not a registry sweep. The write-back re-serializes the
- * schema-parsed `StreamLogSummarySchema` shape, so a field a newer build
- * added to the schema and an older build doesn't know is stripped here —
- * acceptable for this derived-tier cache under the discard-and-rebuild
- * contract (#9434), which never promises byte-for-byte forward compat.
- */
-export async function clearPersistedSummaryParentStream(
-  streamId: StreamTabId,
-): Promise<void> {
-  const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
-    compactJson: true,
-  });
-  const summary = parseSummaryShape(await summaries.read<unknown>(streamId));
-  if (!summary?.meta?.parentStreamId) return;
-  const { parentStreamId: _parentStreamId, ...meta } = summary.meta;
-  await summaries.write(streamId, { ...summary, meta });
-}
 
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
@@ -143,456 +38,263 @@ export interface TranscriptWriter {
   appendText(id: string, text: string): StreamLogEntry | undefined;
   close(): void;
 }
-
 interface StreamWriterOwnership {
   readonly ownerKey: string;
   readonly tokens: Set<symbol>;
 }
-
-type TranscriptResidencyLeaseReason = 'writer' | 'focus' | 'flush';
-
-/** Exact presentation ownership of one resident transcript. */
+type TranscriptResidencyLeaseReason = 'writer' | 'focus';
 export interface TranscriptPresentationLease {
   readonly streamId: StreamTabId;
   close(): void;
 }
-
-/**
- * Every per-stream field that shares the resident stream lifecycle, keyed by
- * stream id in ONE map (`streams`, a {@link ResidentStreamRegistry}) instead
- * of parallel hand-synced maps/sets. Because every field for a stream lives
- * on the same object, dropping a stream's resident state is one
- * `streams.delete(id)` — every field disappears with it BY CONSTRUCTION,
- * which is what lets `forgetStreamState` / `forgetAllStreamState` collapse to
- * a single delete/clear. When an individual field is cleared,
- * `pruneStreamState` removes the record once no field remains, preserving
- * the old "absent from every collection" memory footprint.
- *
- * `summaries` (deliberately OUTLIVES per-stream eviction so sidebar metadata
- * survives when heavy `log` entries are dropped) and `writeTombstones` (a
- * short-lived delete/clear guard that `forgetStreamState` intentionally does
- * NOT touch, and only `replaceSummaries` clears) stay as their own maps on the
- * store — they do not share this lifecycle.
- */
 interface StreamState {
-  /**
-   * Heavy in-memory entries. Dropped on eviction (`requestEviction`) while the
-   * on-disk copy stays authoritative; the summary in `summaries` survives so
-   * the stream remains a known, listable stream. `undefined` = released.
-   */
   log?: StreamLog;
-  /**
-   * Everything currently keeping the heavy transcript resident: lifecycle
-   * reasons (writer, focus, flush) and the exact tokens of open presentation
-   * leases. One set, because residency asks one question — is anything
-   * pinning this — and only `requestEviction` cares which member it drops.
-   */
+  fold?: ReturnType<typeof createTranscriptFold>;
+  seq?: number;
   pins?: Set<TranscriptResidencyLeaseReason | symbol>;
-  /**
-   * Membership flag: this stream's rehydrate read from disk failed. While set,
-   * saves skip it so we never overwrite the authoritative disk copy with a
-   * fresh empty-log-plus-new-appends that would drop persisted history.
-   * Cleared when an explicit `ensureLoaded` retry succeeds; appends reject
-   * while it remains set.
-   */
-  loadFailed?: boolean;
-  /** In-flight `ensureLoaded`; deduplicates concurrent calls for one stream. */
-  pendingLoad?: Promise<void>;
-  /** Exact mutation capabilities currently keeping a stream resident. */
   writer?: StreamWriterOwnership;
 }
 
-/**
- * The ONE app-side read boundary for legacy `GROUP_START`/`GROUP_END`
- * `data.status` wire values (see
- * .agents/docs/archived/architecture/2026-07-03-session-scoped-runtime-architecture.md §8.3). Every live
- * producer now writes canonical `StreamPhase`/`RunOutcome` values directly
- * through `append()` (§8.2), so this only backfills rows that were already
- * persisted to disk before the cutover — `'running'` (row 1) is
- * string-identical to `StreamPhase.RUNNING`, so it passes through unchanged;
- * `'stopped'`/`'error'` (the pre-cutover 2-value `EndGroupStatus`) are
- * upgraded to the `RunOutcome` they folded. `'stopped'` -> `COMPLETED` is a
- * documented lossy default: the old 2-value fold already could not
- * distinguish completed from cancelled, and `COMPLETED` matches today's
- * neutral "Stopped" rendering, so no historical transcript's displayed label
- * changes — only its typed value does. `data` stays `z.unknown()` in
- * `StreamLogEntrySchema` (Tier 3 — opaque, pattern-matched by
- * display code), so this is a value transform layered on top of the existing
- * parse, not a schema change, and needs no persisted format-version bump.
- * Any other value (already-canonical post-cutover write, or malformed data)
- * passes through unchanged.
- */
-function normalizeGroupStatusEntry(entry: StreamLogEntry): StreamLogEntry {
-  if (
-    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
-    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
-  ) {
-    return entry;
+/** Every entry is derived with the same projection used by the live recorder. */
+function foldEntries(events: readonly SessionEvent[]): StreamState | undefined {
+  if (events.length === 0 || events.at(-1)?.type === 'stream.removed') return;
+  if (events[0]?.type !== 'run.start' || events[0].seq !== 1) {
+    throw new Error('A transcript read must begin with its creation row.');
   }
-  if (!isObject(entry.data) || typeof entry.data.status !== 'string') {
-    return entry;
+  const entries = new StreamLog();
+  const fold = createTranscriptFold(entries);
+  for (const event of events) {
+    if (event.type === 'transcript.entry') entries.record(event.entry);
+    else if (event.type === 'status') fold.status(event.phase);
+    else if (isTranscriptEvent(event)) {
+      fold.record(event, {
+        at: event.at,
+        id: JSON.stringify([event.aggregateId, event.seq]),
+        debug: event.transcriptDebug ?? false,
+      });
+    }
   }
-  switch (entry.data.status) {
-    case END_GROUP_STATUS.STOPPED:
-      return {
-        ...entry,
-        data: { ...entry.data, status: RUN_OUTCOME.COMPLETED },
-      };
-    case END_GROUP_STATUS.ERROR:
-      return { ...entry, data: { ...entry.data, status: RUN_OUTCOME.FAILED } };
-    default:
-      return entry;
-  }
-}
-
-/**
- * A persisted summary needs its stream force-loaded before the recovery
- * sweep can finalize anything left running — either an orphaned task group
- * or an orphaned thinking/scratchpad/model-response stream (#7276: these can
- * close independently, e.g. an error path that ends the group without also
- * finalizing an in-flight nested stream).
- */
-function hasSomethingRunning(summary: StreamLogSummary | undefined): boolean {
-  return (
-    summary?.hasRunningGroup === true ||
-    summary?.hasRunningStreamingText === true ||
-    summary?.hasNonterminalWorkflowCall === true
-  );
+  entries.drainEmission();
+  return { log: entries, fold, seq: events.at(-1)!.seq };
 }
 
 export class StreamLogStore {
-  readonly mode: StreamLogStoreMode;
-
-  /**
-   * All per-stream resident state (heavy log, leases, load failure, pending
-   * release/load, active writer) in one record per stream. See
-   * {@link StreamState}. `summaries`, `writeTombstones`, `releaseRequests`,
-   * and `dirtyIds` are deliberately kept separate because they do not share
-   * this lifecycle.
-   */
   private readonly streams = new ResidentStreamRegistry<
     StreamTabId,
     StreamState
   >(() => ({}));
-  /**
-   * Streams with unsaved changes awaiting `executeWrite`, kept as a dedicated
-   * set (not a `StreamState` field) so the `save()` hot path can test
-   * dirtiness in O(1) via `.size`/`.has` instead of scanning every record.
-   * A dirty stream always has a resident `log` (or a deferred `loadFailed`/
-   * `pendingLoad` record), so its `StreamState` is never pruned while it is
-   * still listed here — see `pruneStreamState`.
-   */
-  private readonly dirtyIds = new Set<StreamTabId>();
-  /**
-   * Streams that return to cold storage whenever their leases drain. This
-   * policy outlives resident state so a terminal stream remains cold after a
-   * late writer; direct focus clears it.
-   */
+  private readonly known = new Set<StreamTabId>();
   private readonly releaseRequests = new Set<StreamTabId>();
   private readonly listeners = createListenerSet<StreamLogListener>();
-  /**
-   * Handle over the authoritative transcript directory (the derived summary
-   * cache's KV lives in {@link StreamSummaryCacheStore}). A handle holds only
-   * the storage-root-relative directory, and every operation re-resolves the
-   * root.
-   */
-  private readonly logsKv = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
+  private readonly gate = Semaphore.makeUnsafe(1);
 
-  /**
-   * Lightweight summary per stream (first/last timestamp). Populated at open
-   * and refreshed on append/update. Survives eviction so sidebar
-   * metadata stays available for streams whose heavy entries have been evicted.
-   */
-  private readonly summaries = new Map<StreamTabId, StreamLogSummary>();
+  private constructor(
+    readonly mode: StreamLogStoreMode,
+    private readonly database?: TranscriptDatabase,
+  ) {}
 
-  /**
-   * Max-wait throttle for the persistence path: the first dirty mutation in a
-   * window starts the timer and later mutations join it without resetting it
-   * (`scheduleSave`'s `pending` guard), so sustained sub-window appends still
-   * produce a durable write every SAVE_MAX_WAIT_MS instead of starving a
-   * trailing debounce. A crash mid-stream loses at most one window.
-   */
-  private readonly saveThrottle = createFlushableDebounce(
-    () => void this.executeWrite(),
-    SAVE_MAX_WAIT_MS,
-  );
-  /**
-   * Serializes write batches: a throttle window, a flush, or a delete that
-   * starts a write while one is still in flight queues behind it instead of
-   * racing it, so two batches can never persist the same stream out of order.
-   */
-  private readonly writeQueue = new PQueue({ concurrency: 1 });
-  private readonly writeTombstones = new Set<StreamTabId>();
-  private clearing = false;
-  /**
-   * The summary disk-cache lane (`streamLogSummaries/`, derived tier #9434).
-   * It reaches this store only through {@link StreamSummaryCacheHost}; the
-   * resident `summaries` map and the hot-path `refreshSummary` stay here.
-   */
-  private readonly summaryCache: StreamSummaryCacheStore;
-  /**
-   * Streams whose durable write has already been reported as failing. The
-   * throttled save retries indefinitely, so the cause is warned once per
-   * stream and re-armed by the next successful write.
-   */
-  private readonly writeFailureWarned = new Set<StreamTabId>();
-
-  private constructor(mode: StreamLogStoreMode) {
-    this.mode = Object.freeze(mode);
-    this.summaryCache = new StreamSummaryCacheStore(
-      {
-        listPersistedStreamIds: () => this.logsKv.listKeys(),
-        readLogEntries: (streamId) => this.logsKv.read<unknown[]>(streamId),
-        logModifiedAt: (streamId) => this.logsKv.modifiedAt(streamId),
-        parsePersistedEntries: (streamId, rawEntries) =>
-          this.parsePersistedEntries(streamId, rawEntries),
-      } satisfies StreamSummaryCacheHost,
-      mode.kind === 'persistent',
-    );
-  }
-
-  // -- StreamState record access -------------------------------------------
-  // The `streams` map holds one record per resident stream. Field reads are
-  // done inline (`this.streams.get(id)?.field`); only get-or-create, the
-  // empty-record prune, the dirty-id snapshot, and the reload check are
-  // factored out.
-
-  private ensureStreamState(streamId: StreamTabId): StreamState {
-    return this.streams.getOrCreate(streamId);
-  }
-
-  /**
-   * Drop a record once none of its fields hold state, so an idle stream costs
-   * no memory. Dirtiness lives in the separate `dirtyIds` set and is
-   * intentionally NOT consulted here: a dirty stream always retains a `log`
-   * (or a `loadFailed`/`pendingLoad` deferral record), so the field checks
-   * below already keep its record alive.
-   */
-  private pruneStreamState(streamId: StreamTabId): void {
-    this.streams.pruneIfEmpty(
-      streamId,
-      (s) =>
-        s.log === undefined &&
-        (s.pins === undefined || s.pins.size === 0) &&
-        !s.loadFailed &&
-        s.pendingLoad === undefined &&
-        s.writer === undefined,
-    );
-  }
-
-  /** Snapshot of streams with unsaved changes (list form of `dirtyIds`). */
-  private dirtyStreamIds(): StreamTabId[] {
-    return [...this.dirtyIds];
-  }
-
-  /**
-   * True when a stream's persisted entries are not usable in memory: either
-   * never rehydrated, or rehydrated into a log whose disk read failed.
-   */
-  private needsReload(streamId: StreamTabId): boolean {
-    const state = this.streams.get(streamId);
-    return state?.log === undefined || state.loadFailed === true;
-  }
-
-  /** Open and validate the persistent transcript store before exposing it. */
-  static async open(): Promise<StreamLogStore> {
-    const store = new StreamLogStore({ kind: 'persistent' });
-    await StorageFS.ensureDir(STREAM_LOGS_DIR);
-    await store.summaryCache.prepareSummaryCache();
-    store.replaceSummaries(await store.summaryCache.readPersistentSummaries());
-    return store;
-  }
-
-  /**
-   * Open persisted transcripts for reading ONE known stream, seeding only
-   * that stream's summary — `listKeys` plus a summary read and mtime stats
-   * for just that stream, so archive consumers that already know which
-   * stream they need (via the execution→stream mapping) pay O(1) instead of
-   * a whole-directory scan. (The scan-all `openReadOnly` variant was deleted
-   * with #9947's surface-neutral rework: it had no production caller.)
-   * An unknown `streamId` yields a store that simply has no such stream, so
-   * `ensureLoaded` no-ops and `get` returns `undefined` exactly as with a
-   * full open that did not find the stream.
-   */
-  static async openReadOnlyForStream(
-    streamId: StreamTabId,
-  ): Promise<StreamLogStore> {
-    const store = new StreamLogStore({ kind: 'read-only' });
-    const result = await store.summaryCache.loadStreamSummary(streamId);
-    if (result) store.summaries.set(result.streamId, result.summary);
-    return store;
-  }
-
-  /** Create an explicitly non-persistent transcript store. */
-  static ephemeral(reason: string): StreamLogStore {
-    const normalizedReason = reason.trim();
-    if (!normalizedReason) {
-      throw new Error('An ephemeral transcript store requires a reason.');
-    }
-    return new StreamLogStore({
-      kind: 'ephemeral',
-      reason: normalizedReason,
+  /** Construct the root's resident store from its indexed existence facts. */
+  static open(
+    database: TranscriptDatabase,
+    listing?: readonly SessionEvent[],
+    mode: StreamLogStoreMode = { kind: 'persistent' },
+  ) {
+    return Effect.gen(function* () {
+      const store = new StreamLogStore(mode, database);
+      for (const event of listing ?? (yield* database.readListing())) {
+        const target = aggregateTarget(event.aggregateId);
+        if (target.kind !== 'stream') continue;
+        const id = target.id;
+        if (event.type === 'run.start') store.known.add(id);
+        else if (event.type === 'stream.removed') store.known.delete(id);
+      }
+      return store;
     });
+  }
+
+  /** Explicitly memory-only transcripts for ephemeral session roots. */
+  static ephemeral(reason: string): StreamLogStore {
+    const normalized = reason.trim();
+    if (!normalized)
+      throw new Error('An ephemeral transcript store requires a reason.');
+    return new StreamLogStore({ kind: 'ephemeral', reason: normalized });
   }
 
   onChange(listener: StreamLogListener): () => void {
     return this.listeners.add(listener);
   }
-
   get(streamId: StreamTabId): StreamLog | undefined {
     return this.streams.get(streamId)?.log;
   }
-
-  /** Read a transcript once without adding it to the resident set. */
-  async readEntries(streamId: StreamTabId): Promise<StreamLogEntry[]> {
-    const resident = this.streams.get(streamId)?.log;
-    if (resident) return resident.toJSON();
-    if (this.mode.kind === 'ephemeral' || !this.summaries.has(streamId)) {
-      return [];
-    }
-    const raw = await this.logsKv.read<unknown[]>(streamId);
-    const parsed = await this.hydratePersistedEntries(streamId, raw);
-    return new StreamLog(parsed.entries, parsed.preservedRawEntries).toJSON();
-  }
-
   has(streamId: StreamTabId): boolean {
-    // `summaries` is the authoritative registry of known streams and is
-    // always a superset of resident logs (every entry we ever write to a
-    // stream's `log` also lands in `summaries`; eviction drops the log but
-    // keeps the summary).
-    return this.summaries.has(streamId);
+    return this.known.has(streamId);
   }
 
-  /**
-   * Recheck the authoritative transcript source rather than this instance's
-   * cached summary. Desktop resume admission reads this before resuming, so a
-   * stream another process deleted is not recreated from a stale in-memory
-   * store.
-   */
-  async hasAuthoritativeStream(streamId: StreamTabId): Promise<boolean> {
-    if (this.mode.kind === 'ephemeral') return this.has(streamId);
-    return this.logsKv.exists(streamId);
+  /** Read a complete event prefix without changing residency. */
+  readEntries(streamId: StreamTabId) {
+    return this.database === undefined
+      ? Effect.sync(() => this.get(streamId)?.toJSON() ?? [])
+      : this.database
+          .readAggregate(aggregateId('stream', streamId), 0)
+          .pipe(
+            Effect.map((events) => foldEntries(events)?.log?.toJSON() ?? []),
+          );
   }
 
-  keys(): StreamTabId[] {
-    return [...this.summaries.keys()];
-  }
-
-  /**
-   * Whether this stream's transcript was left with something running — a task
-   * group, a streaming text block, or a nonterminal workflow call. Answered
-   * from the always-resident summary, so the read-time phase rule and the
-   * row-open settle beside it each ask for one stream, without loading the
-   * log and without a scan of the whole set.
-   */
-  hasUnfinishedOutput(streamId: StreamTabId): boolean {
-    return hasSomethingRunning(this.summaries.get(streamId));
-  }
-
-  /**
-   * The snapshot-owned display metadata mirrored into this stream's summary,
-   * or `undefined` for a stream whose summary predates the mirror (legacy
-   * rows backfill lazily on their next sidecar hydration).
-   */
-  getSummaryMeta(streamId: StreamTabId): StreamSummaryMeta | undefined {
-    return this.summaries.get(streamId)?.meta;
-  }
-
-  /**
-   * Record the snapshot store's current metadata for a stream in its
-   * always-resident summary (memory now, summary cache asynchronously).
-   * Whole-object replacement — the publisher owns field lifecycles — and a
-   * deep-equal no-op gate, so the startup hydration sweep republishing
-   * unchanged metadata for every stream costs no writes. Run facts may
-   * legitimately project before the stream's first append, so an unknown
-   * stream is registered here: `ensureStream` no-ops for known streams, and
-   * run facts only project for streams whose run genuinely started, so
-   * registering at projection cannot mint a phantom tab.
-   */
-  recordSummaryMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
-    // Writability is asserted before `ensureStream`, so a read-only open can
-    // never reach the registration below.
-    this.assertWritableStore('record stream summary metadata');
-    this.ensureStream(streamId);
-    const summary = this.summaries.get(streamId);
-    if (summary === undefined || isDeepStrictEqual(summary.meta, meta)) return;
-    summary.meta = meta;
-    // Share the transcript queue so flush() drains this write. Re-read at
-    // execution time, and let a dirty transcript's own write carry the
-    // metadata: persisting its newer log-derived summary fields before the
-    // authoritative log would make a crash-time cache look more durable
-    // than it is.
-    void this.writeQueue.add(async () => {
-      if (this.dirtyIds.has(streamId)) return;
-      const current = this.summaries.get(streamId);
-      if (current)
-        await this.summaryCache.maintainSummaryCache(streamId, { ...current });
-    });
+  hasAuthoritativeStream(streamId: StreamTabId) {
+    return this.database === undefined
+      ? Effect.sync(() => this.has(streamId))
+      : this.database
+          .readAggregate(aggregateId('stream', streamId), 0)
+          .pipe(
+            Effect.map(
+              (events) =>
+                events.length > 0 && events.at(-1)?.type !== 'stream.removed',
+            ),
+          );
   }
 
   ensureStream(streamId: StreamTabId): void {
-    this.assertWritableStore('ensure a transcript stream');
-    // No-op if the stream is already known — either resident (`log`) or
-    // released with metadata in `summaries`. Creating a fresh empty log here
-    // for a released stream would shadow the on-disk copy from
-    // `ensureLoaded`, leaving switches to that stream showing an empty view.
-    if (
-      this.streams.get(streamId)?.log !== undefined ||
-      this.summaries.has(streamId)
-    )
-      return;
+    if (this.known.has(streamId)) return;
+    this.known.add(streamId);
     this.ensureStreamState(streamId).log = new StreamLog();
-    this.summaries.set(streamId, {});
-    if (this.mode.kind === 'persistent') {
-      this.markDirty(streamId);
-      this.scheduleSave();
-    }
   }
 
-  /**
-   * Drop heavy entries from memory while keeping the on-disk copy authoritative.
-   * If there are pending writes, queue the release so `executeWrite` can flush
-   * first and actually evict afterwards; otherwise releases immediately.
-   * Subsequent access must go through `ensureLoaded` to rehydrate.
-   */
   requestEviction(streamId: StreamTabId): void {
-    // Ephemeral entries have no durable copy from which they could be restored.
     if (this.mode.kind === 'ephemeral') return;
-
-    const state = this.streams.get(streamId);
-    if (!state && !this.summaries.has(streamId)) return;
     this.releaseRequests.add(streamId);
+    const state = this.streams.get(streamId);
     if (state) this.unpin(state, 'focus');
     this.tryRelease(streamId);
   }
 
-  /**
-   * Rehydrate a stream and grant mutation authority to one logical execution.
-   * Exact tokens make close idempotent and prevent an obsolete handle from
-   * releasing a newer writer.
-   */
   acquireWriter(streamId: StreamTabId, ownerKey: string): TranscriptWriter {
     return this.createWriter(streamId, ownerKey, false);
   }
 
-  /**
-   * Reserve mutation authority before rehydrating a released stream. The
-   * reservation keeps a concurrent eviction request pending until the caller
-   * receives and later closes the writer, so load and writer acquisition form
-   * one ownership transition instead of two raceable calls.
-   */
-  async loadAndAcquireWriter(
+  loadAndAcquireWriter(streamId: StreamTabId, ownerKey: string) {
+    return this.gate.withPermit(
+      Effect.gen({ self: this }, function* () {
+        const writer = this.createWriter(streamId, ownerKey, true);
+        yield* this.loadEntries(streamId).pipe(
+          Effect.onError(() => Effect.sync(() => writer.close())),
+        );
+        return writer;
+      }),
+    );
+  }
+
+  ensureLoaded(
     streamId: StreamTabId,
-    ownerKey: string,
-  ): Promise<TranscriptWriter> {
-    const writer = this.createWriter(streamId, ownerKey, true);
-    try {
-      await this.hydrateStream(streamId, 'writer');
-      return writer;
-    } catch (error) {
-      writer.close();
-      throw error;
-    }
+    options: { retainForPresentation: true },
+  ): Effect.Effect<TranscriptPresentationLease, Error>;
+  ensureLoaded(streamId: StreamTabId): Effect.Effect<void, Error>;
+  ensureLoaded(
+    streamId: StreamTabId,
+    options?: { retainForPresentation: true },
+  ): Effect.Effect<void | TranscriptPresentationLease, Error> {
+    return Effect.gen({ self: this }, function* () {
+      if (!options?.retainForPresentation) {
+        this.acquireLease(streamId, 'focus');
+        this.releaseRequests.delete(streamId);
+        yield* this.gate.withPermit(this.loadEntries(streamId));
+        return;
+      }
+      const token = Symbol(streamId);
+      const state = this.ensureStreamState(streamId);
+      state.pins ??= new Set();
+      state.pins.add(token);
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        const current = this.streams.get(streamId);
+        if (current) this.unpin(current, token);
+        this.requestEviction(streamId);
+        this.pruneStreamState(streamId);
+      };
+      yield* this.gate
+        .withPermit(this.loadEntries(streamId))
+        .pipe(Effect.onError(() => Effect.sync(close)));
+      return { streamId, close };
+    });
+  }
+
+  private loadEntries(streamId: StreamTabId) {
+    return Effect.gen({ self: this }, function* () {
+      if (this.get(streamId) !== undefined || this.database === undefined)
+        return;
+      const entries = foldEntries(
+        yield* this.database.readAggregate(aggregateId('stream', streamId), 0),
+      );
+      if (entries === undefined) {
+        this.known.delete(streamId);
+        return;
+      }
+      this.known.add(streamId);
+      Object.assign(this.ensureStreamState(streamId), entries);
+      this.notify(streamId, true);
+    });
+  }
+
+  /** Apply the ordered committed tail under the same permit as cold hydration. */
+  acceptCommitted(event: SessionEvent) {
+    return this.gate.withPermit(
+      Effect.sync(() => {
+        const target = aggregateTarget(event.aggregateId);
+        if (target.kind !== 'stream') return;
+        const streamId = target.id;
+        if (event.type === 'run.start') this.known.add(streamId);
+        if (event.type === 'stream.removed') {
+          this.streams.delete(streamId);
+          this.known.delete(streamId);
+          this.releaseRequests.delete(streamId);
+          return;
+        }
+        const state = this.streams.get(streamId);
+        if (
+          state === undefined ||
+          (state.log === undefined && state.writer === undefined)
+        )
+          return;
+        // Hydration may already include this tail row. Aggregate sequence is
+        // the prefix boundary, independent of when its wake was delivered.
+        if (event.seq <= (state.seq ?? 0)) return;
+        state.log ??= new StreamLog();
+        state.fold ??= createTranscriptFold(state.log);
+        if (event.type === 'transcript.entry') state.log.record(event.entry);
+        else if (event.type === 'status') state.fold.status(event.phase);
+        else if (isTranscriptEvent(event))
+          state.fold.record(event, {
+            at: event.at,
+            id: JSON.stringify([event.aggregateId, event.seq]),
+            debug: event.transcriptDebug ?? false,
+          });
+        state.seq = event.seq;
+        this.notify(streamId);
+      }),
+    );
+  }
+
+  /** Forget only the resident projection after committed deletion. */
+  delete(streamId: StreamTabId) {
+    return this.gate.withPermit(
+      Effect.sync(() => {
+        this.streams.delete(streamId);
+        this.known.delete(streamId);
+        this.releaseRequests.delete(streamId);
+      }),
+    );
+  }
+
+  clear() {
+    return this.gate.withPermit(
+      Effect.sync(() => {
+        this.streams.clear();
+        this.known.clear();
+        this.releaseRequests.clear();
+      }),
+    );
   }
 
   private createWriter(
@@ -600,7 +302,6 @@ export class StreamLogStore {
     ownerKey: string,
     allowReleased: boolean,
   ): TranscriptWriter {
-    this.assertWritableStore('acquire a transcript writer');
     if (!ownerKey.trim()) {
       throw new Error('A transcript writer requires a non-empty owner key.');
     }
@@ -608,11 +309,11 @@ export class StreamLogStore {
     if (
       !allowReleased &&
       this.mode.kind === 'persistent' &&
-      this.summaries.has(streamId) &&
+      this.known.has(streamId) &&
       this.streams.get(streamId)?.log === undefined
     ) {
       throw new Error(
-        `Cannot acquire a writer for released stream ${streamId}. Await ensureLoaded() first.`,
+        `Cannot acquire a writer for released stream ${streamId}. Run ensureLoaded() first.`,
       );
     }
 
@@ -673,598 +374,42 @@ export class StreamLogStore {
     };
   }
 
-  async ensureLoaded(
-    streamId: StreamTabId,
-    options: { retainForPresentation: true },
-  ): Promise<TranscriptPresentationLease>;
-  async ensureLoaded(streamId: StreamTabId): Promise<void>;
-  /**
-   * Async reload entries from disk if they were released. No-op when already
-   * resident or when the stream is unknown. A presentation may request an
-   * exact lease so closing an obsolete selection cannot release a newer one.
-   */
-  async ensureLoaded(
-    streamId: StreamTabId,
-    options?: { retainForPresentation: true },
-  ): Promise<void | TranscriptPresentationLease> {
-    if (!options?.retainForPresentation) {
-      await this.hydrateStream(streamId, 'focus');
-      return;
-    }
-    if (
-      this.mode.kind === 'ephemeral' ||
-      (this.streams.get(streamId) === undefined &&
-        !this.summaries.has(streamId))
-    ) {
-      return { streamId, close: () => undefined };
-    }
-
-    const token = Symbol(streamId);
-    const state = this.ensureStreamState(streamId);
-    state.pins ??= new Set();
-    state.pins.add(token);
-    let closed = false;
-    const close = (): void => {
-      if (closed) return;
-      closed = true;
-      const current = this.streams.get(streamId);
-      if (current) this.unpin(current, token);
-      // A presentation lease makes a historical transcript resident. Once
-      // the final exact owner leaves, request eviction even when no lifecycle
-      // status event previously did so.
-      this.requestEviction(streamId);
-      this.pruneStreamState(streamId);
-    };
-
-    try {
-      await this.hydrateStream(streamId, 'presentation');
-      return { streamId, close };
-    } catch (error) {
-      close();
-      throw error;
-    }
+  private ensureStreamState(streamId: StreamTabId): StreamState {
+    return this.streams.getOrCreate(streamId);
   }
-
-  private async hydrateStream(
-    streamId: StreamTabId,
-    reason: 'focus' | 'presentation' | 'writer',
-  ): Promise<void> {
-    if (this.mode.kind === 'ephemeral') return;
-
-    const reserved = this.streams.get(streamId);
-    if (!reserved && !this.summaries.has(streamId)) return;
-    if (reason === 'focus') {
-      this.acquireLease(streamId, 'focus');
-      this.releaseRequests.delete(streamId);
-    }
-    // Normally skip when already resident. A concurrent append may have
-    // populated a fresh log before a rehydrate failed, so a retry must still
-    // reunite it with persisted history before saves are re-enabled.
-    const state = this.streams.get(streamId);
-    if (state?.log !== undefined && state.loadFailed !== true) return;
-    if (!this.summaries.has(streamId)) return;
-    if (state?.pendingLoad) return state.pendingLoad;
-    const work = (async () => {
-      try {
-        const raw = await this.logsKv.read<unknown[]>(streamId);
-        const diskEntries = await this.hydratePersistedEntries(streamId, raw);
-        // If `delete` or `clear` ran during the read, don't resurrect it.
-        if (
-          this.clearing ||
-          this.writeTombstones.has(streamId) ||
-          !this.summaries.has(streamId)
-        ) {
-          return;
-        }
-        const live = this.streams.get(streamId)?.log;
-        if (live && live.head > 0) {
-          // A concurrent `append` populated the log during the disk read.
-          // Merge disk (history) before the live appends so `save()` writes
-          // the union instead of clobbering the authoritative disk copy
-          // with just the new entries. StreamLog's constructor re-numbers
-          // seqNos so the merged view stays contiguous.
-          const merged = new StreamLog(
-            [...diskEntries.entries, ...live.toJSON()],
-            diskEntries.preservedRawEntries,
-          );
-          this.ensureStreamState(streamId).log = merged;
-          this.refreshSummary(streamId, merged);
-          this.markDirty(streamId);
-          this.scheduleSave();
-          // The merge renumbered seqNos under a fresh log instance, so
-          // fold-state consumers must rebuild rather than apply a delta.
-          this.notify(streamId, { reset: true });
-        } else {
-          const logInstance = new StreamLog(
-            diskEntries.entries,
-            diskEntries.preservedRawEntries,
-          );
-          const state = this.ensureStreamState(streamId);
-          state.log = logInstance;
-          this.refreshSummary(streamId, logInstance);
-          // An eviction request that arrived while the load was in flight gets
-          // queued; honor it now (unless a reactivation cleared the intent).
-          this.tryRelease(streamId);
-        }
-        // Load recovered — saves can persist this stream again. If a save
-        // was deferred while the load was in flight (dirty stream re-queued
-        // by executeWrite), flush it now so we don't wait for another
-        // append to unblock it.
-        const recovered = this.streams.get(streamId);
-        if (recovered) recovered.loadFailed = false;
-        if (this.dirtyIds.has(streamId)) this.scheduleSave();
-      } catch (err) {
-        // Keep the disk copy authoritative and surface the failed read. A
-        // caller may retry `ensureLoaded`, but no append is accepted until a
-        // retry succeeds and reunites the in-memory view with persisted data.
-        this.ensureStreamState(streamId).loadFailed = true;
-        log.warn(
-          `Failed to reload stream ${streamId} from disk: ` +
-            toErrorMessage(err),
-        );
-        throw err;
-      }
-    })();
-    this.ensureStreamState(streamId).pendingLoad = work;
-    try {
-      await work;
-    } finally {
-      const state = this.streams.get(streamId);
-      if (state) {
-        state.pendingLoad = undefined;
-        this.tryRelease(streamId);
-      }
-    }
+  private pruneStreamState(streamId: StreamTabId): void {
+    this.streams.pruneIfEmpty(
+      streamId,
+      (state) =>
+        state.log === undefined &&
+        (state.pins?.size ?? 0) === 0 &&
+        state.writer === undefined,
+    );
   }
-
-  // -- Transcript mutation -------------------------------------------------
-  // Row mutation is writer-only (#9590 Stage 5): every mutator below is
-  // private and reachable solely through the `TranscriptWriter` closures
-  // minted by `acquireWriter`/`loadAndAcquireWriter`, so one logical
-  // execution holds mutation authority per stream.
-
   private appendEntry(
     streamId: StreamTabId,
     entry: StreamLogAppendInput,
     settled: boolean,
   ): StreamLogEntry {
-    this.assertWritableStream(streamId);
     const state = this.ensureStreamState(streamId);
-    let logInstance = state.log;
-    if (!logInstance) {
-      logInstance = new StreamLog();
-      state.log = logInstance;
-      if (!this.summaries.has(streamId)) {
-        this.summaries.set(streamId, {});
-      }
-    }
+    state.log ??= new StreamLog();
+    this.known.add(streamId);
     const appended = settled
-      ? logInstance.appendSettled(entry)
-      : logInstance.append(entry);
-    this.commitChange(streamId, logInstance);
-    this.scheduleSave();
+      ? state.log.appendSettled(entry)
+      : state.log.append(entry);
+    this.notify(streamId);
     return appended;
   }
-
-  /**
-   * Shared body of the entry mutators: guard writability, resolve the resident
-   * log, apply the mutation, and commit only when the log reports a change.
-   * The three writer-scoped mutators differ solely in which `StreamLog` method runs.
-   */
   private mutateEntry(
     streamId: StreamTabId,
     apply: (log: StreamLog) => StreamLogEntry | undefined,
   ): StreamLogEntry | undefined {
-    this.assertWritableStream(streamId);
-    const logInstance = this.streams.get(streamId)?.log;
-    if (!logInstance) return undefined;
-
-    const updated = apply(logInstance);
-    if (!updated) return undefined;
-
-    this.commitChange(streamId, logInstance);
-    this.scheduleSave();
+    const log = this.get(streamId);
+    if (log === undefined) return;
+    const updated = apply(log);
+    if (updated !== undefined) this.notify(streamId);
     return updated;
   }
-
-  getTimestampRange(streamId: StreamTabId): {
-    first: number | undefined;
-    last: number | undefined;
-  } {
-    const residentLog = this.streams.get(streamId)?.log;
-    const summary = this.summaries.get(streamId);
-    return {
-      first: residentLog?.firstTimestamp ?? summary?.firstTimestamp,
-      last: residentLog?.lastTimestamp ?? summary?.lastTimestamp,
-    };
-  }
-
-  async delete(
-    streamId: StreamTabId,
-    options?: StreamLogDeleteOptions,
-  ): Promise<void> {
-    this.assertWritableStore('delete a transcript stream');
-    this.writeTombstones.add(streamId);
-    this.saveThrottle.cancel();
-    let retrySave = false;
-    let releasedEntries: ParsedPersistedEntries | undefined;
-
-    try {
-      await this.executeWrite();
-      // A re-claim may have landed while pending writes drained. Refuse before
-      // the irreversible durable delete so its transcript is never erased.
-      if (options?.shouldDelete && !options.shouldDelete()) {
-        throw new StreamDeletionSupersededError(streamId);
-      }
-      if (this.mode.kind !== 'ephemeral') {
-        // A released stream has no resident log for the failure path to
-        // re-persist. Preserve its authoritative entries across the delete's
-        // commit window so a concurrent identity re-claim cannot turn the
-        // durable delete into permanent transcript loss.
-        if (
-          options?.shouldDelete &&
-          this.streams.get(streamId)?.log === undefined &&
-          this.summaries.has(streamId)
-        ) {
-          const raw = await this.logsKv.read<unknown[]>(streamId);
-          if (raw !== undefined) {
-            releasedEntries = await this.hydratePersistedEntries(streamId, raw);
-          }
-          if (!options.shouldDelete()) {
-            throw new StreamDeletionSupersededError(streamId);
-          }
-        }
-        log.info(`Deleting stream: ${streamId}`);
-        await this.logsKv.delete(streamId);
-        await this.summaryCache.deleteSummaryCache(streamId);
-      }
-      // The durable delete is irreversible. Re-check again before forgetting
-      // in-memory state: a re-claim that landed while the KV delete was in
-      // flight kept its resident transcript alive, and `forgetStreamState`
-      // must not drop it.
-      if (options?.shouldDelete && !options.shouldDelete()) {
-        if (this.streams.get(streamId)?.log === undefined && releasedEntries) {
-          const restored = new StreamLog(
-            releasedEntries.entries,
-            releasedEntries.preservedRawEntries,
-          );
-          this.ensureStreamState(streamId).log = restored;
-          this.refreshSummary(streamId, restored);
-        }
-        throw new StreamDeletionSupersededError(streamId);
-      }
-      // The summaries map is the progress tab registry. Commit its removal
-      // only after durable deletion succeeds so callers can retain and retry a
-      // stream whose transcript cleanup failed.
-      this.forgetStreamState(streamId);
-    } catch (error) {
-      // executeWrite() drains dirty ids while the tombstone suppresses writes.
-      // Restore the retry marker if deletion fails and a resident log remains.
-      if (this.streams.get(streamId)?.log !== undefined) {
-        this.markDirty(streamId);
-        retrySave = true;
-      }
-      throw error;
-    } finally {
-      this.writeTombstones.delete(streamId);
-      if (retrySave) this.scheduleSave();
-    }
-  }
-
-  async clear(): Promise<void> {
-    this.assertWritableStore('clear transcript streams');
-    const count = this.summaries.size;
-    this.clearing = true;
-    this.saveThrottle.cancel();
-    this.forgetAllStreamState();
-
-    try {
-      await this.writeQueue.onIdle();
-      this.forgetAllStreamState();
-      if (this.mode.kind === 'ephemeral') return;
-
-      log.info(`Clearing all ${count} streams`);
-      await this.logsKv.deleteDir();
-      await this.summaryCache.clearSummaryCache();
-    } finally {
-      this.writeTombstones.clear();
-      this.clearing = false;
-    }
-  }
-
-  async endRunningGroupsForStreams(
-    streamIds: readonly StreamTabId[],
-    now: number = Date.now(),
-    status: RunOutcome = RUN_OUTCOME.FAILED,
-  ): Promise<StreamTabId[]> {
-    this.assertWritableStore('finalize running transcript groups');
-    if (streamIds.length === 0) return [];
-    const streamsToLoad = streamIds.filter(
-      (id) =>
-        this.needsReload(id) && hasSomethingRunning(this.summaries.get(id)),
-    );
-    if (streamsToLoad.length > 0) {
-      await pMap(streamsToLoad, (id) => this.ensureLoaded(id), {
-        concurrency: STREAM_LOG_LOAD_CONCURRENCY,
-      });
-    }
-
-    const affected = this.endRunningEntriesInLoadedLogs(
-      now,
-      new Set(streamIds),
-      status,
-    );
-    if (affected.length > 0) {
-      this.scheduleSave();
-    }
-    // Preserve logs that were resident before this call; only release the
-    // cold logs loaded specifically for recovery.
-    for (const streamId of streamsToLoad) {
-      this.requestEviction(streamId);
-    }
-
-    return affected;
-  }
-
-  private endRunningEntriesInLoadedLogs(
-    now: number,
-    streamIds: ReadonlySet<StreamTabId>,
-    status: RunOutcome,
-  ): StreamTabId[] {
-    const affected: StreamTabId[] = [];
-    for (const [streamId, state] of this.streams) {
-      const logInstance = state.log;
-      if (!logInstance) continue;
-      if (!streamIds.has(streamId)) continue;
-      let updatedAny = false;
-      for (const entry of logInstance.getRange(0)) {
-        if (isRunningGroupEntry(entry)) {
-          const existingData = isObject(entry.data) ? entry.data : {};
-          const updated = logInstance.settle(entry.id, {
-            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-            data: { ...existingData, status, endTime: now },
-          });
-          if (updated) updatedAny = true;
-          continue;
-        }
-
-        // A thinking/scratchpad/model-response stream that never got a
-        // `stream.end` (run cancelled/crashed/reloaded mid-stream) — finalize
-        // it so it renders as its normal completed banner instead of being
-        // stuck rendering as an in-progress entry forever (#7276).
-        if (isRunningStreamingTextEntry(entry)) {
-          const existingData = isObject(entry.data) ? entry.data : {};
-          const updated = logInstance.settle(entry.id, {
-            data: { ...existingData, status: 'completed' },
-          });
-          if (updated) updatedAny = true;
-          continue;
-        }
-
-        const call = nonterminalWorkflowCall(entry);
-        if (call) {
-          // The shared vocabulary for an interrupted card, so this persisted
-          // settlement and the read-time repaint agree.
-          const recoveredCall = interruptedWorkflowCall(call);
-          const updated = logInstance.settle(entry.id, {
-            level: recoveredCall.status === 'failed' ? 'error' : 'info',
-            data: recoveredCall,
-          });
-          if (updated) updatedAny = true;
-        }
-      }
-
-      if (updatedAny) {
-        affected.push(streamId);
-        this.commitChange(streamId, logInstance);
-      }
-    }
-
-    return affected;
-  }
-
-  /**
-   * Throttled internal persistence trigger; every mutator schedules it.
-   * Fire-and-forget by design: only `flush()` is awaitable, and it drains,
-   * retries, and throws.
-   */
-  private scheduleSave(): void {
-    this.assertWritableStore('save transcripts');
-    if (this.mode.kind === 'ephemeral' || this.dirtyIds.size === 0) return;
-    // Throttle, not debounce: only start a window when none is open, so a
-    // sustained stream of mutations cannot keep pushing the write out.
-    if (!this.saveThrottle.pending) this.saveThrottle.schedule();
-  }
-
-  async flush(): Promise<void> {
-    this.assertWritableStore('flush transcripts');
-    if (this.mode.kind === 'ephemeral') return;
-
-    // Drain iteratively: executeWrite may re-queue streams that are still
-    // rehydrating (a resident `pendingLoad`) or whose prior load failed. Wait
-    // for those to resolve and then re-run the save, so shutdown doesn't lose
-    // appends that landed on a resumed stream. Bound the loop by the set
-    // of streams that could still make progress — if the only dirty
-    // entries are persistently `loadFailed`, we can't persist them.
-    // Cap the write retries so a persistent write error (disk full, perm
-    // denied) doesn't hang shutdown forever — `executeWrite`'s catch
-    // re-marks failed streams dirty, which would otherwise spin.
-    const MAX_WRITE_RETRIES = 3;
-    let writeAttempts = 0;
-    while (true) {
-      // In-flight `ensureLoaded` promises across every resident stream.
-      const loads: Promise<void>[] = [];
-      for (const state of this.streams.values()) {
-        if (state.pendingLoad) loads.push(state.pendingLoad);
-      }
-      if (this.saveThrottle.pending) {
-        this.saveThrottle.cancel();
-        await this.executeWrite();
-        writeAttempts++;
-      } else if (this.writeQueue.size > 0 || this.writeQueue.pending > 0) {
-        await this.writeQueue.onIdle();
-      } else if (loads.length > 0) {
-        await Promise.allSettled(loads);
-      } else {
-        // No in-flight work. Decide whether anything deferred can still
-        // be persisted in another save cycle.
-        const dirty = this.dirtyStreamIds();
-        const canRetry = dirty.some(
-          (id) => this.streams.get(id)?.loadFailed !== true,
-        );
-        if (!canRetry) {
-          if (dirty.length > 0) {
-            throw new Error(
-              `Cannot flush ${dirty.length} stream(s) whose persisted transcripts failed to load.`,
-            );
-          }
-          return;
-        }
-        if (writeAttempts >= MAX_WRITE_RETRIES) {
-          throw new Error(
-            `Transcript flush failed after ${MAX_WRITE_RETRIES} retries; ` +
-              `${dirty.length} stream(s) remain dirty.`,
-          );
-        }
-        await this.executeWrite();
-        writeAttempts++;
-      }
-    }
-  }
-
-  private assertWritableStream(streamId: StreamTabId): void {
-    this.assertWritableStore('modify transcript entries');
-    if (this.streams.get(streamId)?.loadFailed !== true) return;
-    throw new Error(
-      `Cannot modify stream ${streamId} after its persisted transcript failed to load. Retry ensureLoaded() first.`,
-    );
-  }
-
-  /** Shared post-mutation bookkeeping for append/update/appendText/group-end. */
-  private commitChange(streamId: StreamTabId, logInstance: StreamLog): void {
-    this.refreshSummary(streamId, logInstance);
-    if (this.mode.kind === 'persistent') this.markDirty(streamId);
-    this.notify(streamId);
-  }
-
-  private refreshSummary(streamId: StreamTabId, logInstance: StreamLog): void {
-    // Mutate in place — no observer watches summary object identity, and
-    // this runs on the per-append hot path (~200/s during streaming), so
-    // avoiding the per-call allocation is worthwhile.
-    const existing = this.summaries.get(streamId);
-    if (existing) {
-      existing.firstTimestamp = logInstance.firstTimestamp;
-      existing.lastTimestamp = logInstance.lastTimestamp;
-      existing.hasRunningGroup = logInstance.hasRunningGroup;
-      existing.hasRunningStreamingText = logInstance.hasRunningStreamingText;
-      if (logInstance.hasNonterminalWorkflowCall) {
-        existing.hasNonterminalWorkflowCall = true;
-      } else {
-        delete existing.hasNonterminalWorkflowCall;
-      }
-    } else {
-      this.summaries.set(streamId, toSummary(logInstance));
-    }
-  }
-
-  private replaceSummaries(
-    summaries: ReadonlyMap<StreamTabId, StreamLogSummary>,
-  ): void {
-    // One clear drops every resident per-stream field (log, leases,
-    // loadFailed, pendingLoad, writer). `summaries`, `releaseRequests`,
-    // `writeTombstones`, and `dirtyIds` do not share the record's lifecycle
-    // and are cleared separately.
-    this.streams.clear();
-    this.dirtyIds.clear();
-    this.releaseRequests.clear();
-    this.summaries.clear();
-    for (const [streamId, summary] of summaries) {
-      this.summaries.set(streamId, summary);
-    }
-    this.writeTombstones.clear();
-    this.clearing = false;
-
-    log.info(`Loaded ${this.summaries.size} stream summaries (file-backed)`);
-  }
-
-  private async writeStream(
-    streamId: StreamTabId,
-    logInstance: StreamLog,
-  ): Promise<void> {
-    if (this.shouldSkipWrite(streamId)) return;
-    await this.logsKv.write(streamId, logInstance.toPersistedEntries());
-    if (this.shouldSkipWrite(streamId)) {
-      await this.logsKv.delete(streamId);
-      await this.summaryCache.deleteSummaryCache(streamId);
-      return;
-    }
-
-    // Carry the snapshot-owned `meta` block forward: `toSummary` only knows
-    // log-derived fields, and persisting it bare would strip the metadata
-    // mirror `recordSummaryMeta` last wrote for this stream.
-    const meta = this.summaries.get(streamId)?.meta;
-    await this.summaryCache.maintainSummaryCache(streamId, {
-      ...toSummary(logInstance),
-      ...(meta !== undefined && { meta }),
-    });
-    if (this.shouldSkipWrite(streamId)) {
-      await this.logsKv.delete(streamId);
-      await this.summaryCache.deleteSummaryCache(streamId);
-    }
-  }
-
-  /**
-   * Whether an in-flight write batch must drop this stream. `clearing` is the
-   * single owner of "a clear is in progress": it is set synchronously before
-   * `clear()` awaits `writeQueue.onIdle()`, and the queue has concurrency 1,
-   * so every batch that could still be carrying pre-clear data runs while it
-   * is true.
-   */
-  private shouldSkipWrite(streamId: StreamTabId): boolean {
-    return (
-      this.clearing ||
-      this.writeTombstones.has(streamId) ||
-      !this.summaries.has(streamId)
-    );
-  }
-
-  private forgetStreamState(streamId: StreamTabId): void {
-    // Dropping the record removes every resident field for this stream at
-    // once. `summaries` (a separate registry) and `dirtyIds` (the separate
-    // dirtiness set) are cleared here too; the in-flight `writeTombstones`
-    // guard is intentionally left untouched — its lifetime is owned by
-    // `delete()`'s try/finally, not by this cascade.
-    this.streams.delete(streamId);
-    this.dirtyIds.delete(streamId);
-    this.releaseRequests.delete(streamId);
-    this.summaries.delete(streamId);
-    this.writeFailureWarned.delete(streamId);
-  }
-
-  private forgetAllStreamState(): void {
-    // Same single-drop as `forgetStreamState`, store-wide. `writeTombstones`
-    // is deliberately not cleared here — `clear()` owns and clears it in its
-    // own finally block.
-    this.streams.clear();
-    this.dirtyIds.clear();
-    this.releaseRequests.clear();
-    this.summaries.clear();
-    this.writeFailureWarned.clear();
-  }
-
-  private assertWritableStore(operation: string): void {
-    if (this.mode.kind !== 'read-only') return;
-    throw new Error(`Cannot ${operation} with a read-only transcript store.`);
-  }
-
-  private markDirty(streamId: StreamTabId): void {
-    // Callers always hold a resident record for this stream (a fresh log, a
-    // merge, or a deferred loadFailed/pendingLoad record), so dirtiness only
-    // needs to be recorded in the set — see the `dirtyIds` field note.
-    this.dirtyIds.add(streamId);
-    this.acquireLease(streamId, 'flush');
-  }
-
   private acquireLease(
     streamId: StreamTabId,
     reason: TranscriptResidencyLeaseReason,
@@ -1273,7 +418,6 @@ export class StreamLogStore {
     state.pins ??= new Set();
     state.pins.add(reason);
   }
-
   private releaseLease(
     streamId: StreamTabId,
     reason: TranscriptResidencyLeaseReason,
@@ -1284,7 +428,6 @@ export class StreamLogStore {
     this.tryRelease(streamId);
     this.pruneStreamState(streamId);
   }
-
   private unpin(
     state: StreamState,
     pin: TranscriptResidencyLeaseReason | symbol,
@@ -1292,235 +435,24 @@ export class StreamLogStore {
     state.pins?.delete(pin);
     if (state.pins?.size === 0) state.pins = undefined;
   }
-
   private tryRelease(streamId: StreamTabId): void {
-    if (this.mode.kind === 'ephemeral') return;
     const state = this.streams.get(streamId);
     if (
+      this.mode.kind === 'ephemeral' ||
       !state ||
       !this.releaseRequests.has(streamId) ||
-      (state.pins?.size ?? 0) > 0 ||
-      this.dirtyIds.has(streamId) ||
-      state.pendingLoad
-    ) {
+      (state.pins?.size ?? 0) > 0
+    )
       return;
-    }
-    if (state.log) {
-      this.refreshSummary(streamId, state.log);
-      state.log = undefined;
-    }
+    state.log = undefined;
+    state.fold = undefined;
+    state.seq = undefined;
     this.pruneStreamState(streamId);
   }
-
-  /**
-   * Drain the log's pending entry-level changes once per notification and
-   * pass the delta to each listener. A reset requires rereading `getRange(0)`.
-   */
-  private notify(
-    streamId: StreamTabId,
-    options: { readonly reset?: boolean } = {},
-  ): void {
-    const logInstance = this.streams.get(streamId)?.log;
-    if (!logInstance) return;
-    const delta: StreamLogDelta = {
-      ...logInstance.drainEmission(),
-      reset: options.reset === true,
-    };
-    for (const listener of this.listeners) {
-      listener(streamId, delta);
-    }
-  }
-
-  /**
-   * Retained file-backed histories can contain pre-0.41 spill references.
-   * Inline them at hydration so every renderer/export receives full content.
-   * Keep this reader until the cutover history importer has converted these
-   * rows; retire it with that importer (three months after its release).
-   * Missing artifacts retain the preview with an unavailable notice; invalid
-   * paths and other I/O failures reject hydration. Summary reads skip spills.
-   */
-  private async hydratePersistedEntries(
-    streamId: StreamTabId,
-    raw: unknown,
-  ): Promise<ParsedPersistedEntries> {
-    const parsed = this.parsePersistedEntries(streamId, raw);
-    parsed.entries = await pMap(
-      parsed.entries,
-      async (entry) => {
-        if (
-          entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
-          (entry.messageType !== MESSAGE_TYPES.TOOL_USE &&
-            entry.messageType !== MESSAGE_TYPES.MODEL_RESPONSE &&
-            entry.messageType !== MESSAGE_TYPES.THINKING &&
-            entry.messageType !== MESSAGE_TYPES.SCRATCHPAD)
-        )
-          return entry;
-        const spillPath = entry.data?.spillPath;
-        if (spillPath === undefined) return entry;
-        // Preserve the old reader's confinement to recorder-owned artifacts.
-        const segments = spillPath.replaceAll('\\', '/').split('/');
-        if (
-          segments.length !== 4 ||
-          segments[0] !== WORKSPACE_STORAGE_LAYOUT.runs ||
-          segments[2] !== 'toolOutput' ||
-          path.posix.isAbsolute(spillPath) ||
-          path.win32.isAbsolute(spillPath) ||
-          segments.some(
-            (part) => part === '..' || part === '.' || part === '',
-          ) ||
-          !segments[3]?.endsWith('.txt') ||
-          !ExecutionIdSchema.safeParse(segments[1]).success
-        )
-          throw new Error(`Stream ${streamId}: invalid transcript spill path.`);
-        let full: string | undefined;
-        try {
-          full = await StorageFS.read(segments.join('/'));
-        } catch (error) {
-          if (!isFileNotFoundError(error)) throw error;
-        }
-        let preview = entry.text ?? '';
-        if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
-          preview =
-            typeof entry.data.output === 'string'
-              ? entry.data.output
-              : (JSON.stringify(entry.data.output) ?? '');
-        }
-        const notice =
-          '[Full output unavailable: the retained artifact was deleted.]';
-        const content =
-          full ??
-          (preview.endsWith(notice) ? preview : `${preview}\n\n${notice}`);
-        // Keep a missing attachment's reference and preview for a possible
-        // restore; repeated hydration must not multiply the notice.
-        if (full !== undefined && entry.data) delete entry.data.spillPath;
-        if (entry.messageType === MESSAGE_TYPES.TOOL_USE)
-          entry.data.output = content;
-        else entry.text = content;
-        return entry;
-      },
-      { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
-    );
-    return parsed;
-  }
-
-  private parsePersistedEntries(
-    streamId: StreamTabId,
-    rawEntries: unknown,
-  ): ParsedPersistedEntries {
-    const parsed: ParsedPersistedEntries = {
-      entries: [],
-      preservedRawEntries: [],
-    };
-    // A missing file reads as `undefined` (KVStore's quiet-missing contract):
-    // an empty log, nothing to warn about. Anything else that isn't an array
-    // is corrupt persisted data — throw so both callers route through the
-    // same failure path as unparseable JSON (`ensureLoaded` marks the load
-    // failed, which blocks saves from overwriting the on-disk file; startup
-    // opening rejects). Returning an empty log here would
-    // let a later save() destructively rewrite the corrupt source (#7464).
-    if (rawEntries === undefined) return parsed;
-    if (!Array.isArray(rawEntries)) {
-      // `typeof null` is 'object', which would misreport a persisted null.
-      const got = rawEntries === null ? 'null' : typeof rawEntries;
-      throw new Error(
-        `Stream ${streamId}: persisted log is not an array (got ${got}).`,
-      );
-    }
-
-    for (const raw of rawEntries) {
-      const result = StreamLogEntrySchema.safeParse(raw);
-      if (result.success) {
-        parsed.entries.push(normalizeGroupStatusEntry(result.data));
-      } else {
-        parsed.preservedRawEntries.push({
-          beforeTypedIndex: parsed.entries.length,
-          raw,
-        });
-      }
-    }
-
-    // Loud read (#7464): unparseable rows are invisible to the typed view,
-    // so say they exist — but they are preserved verbatim and reinserted on
-    // save, never silently deleted from disk.
-    if (parsed.preservedRawEntries.length > 0) {
-      const count = parsed.preservedRawEntries.length;
-      log.warn(
-        `Stream ${streamId}: ${formatResultCount(count, 'persisted transcript entry')} did not parse; ` +
-          `preserving raw for round-trip on save.`,
-      );
-    }
-
-    return parsed;
-  }
-
-  private executeWrite(): Promise<void> {
-    // One batch at a time: a save window that fires while a batch is still
-    // writing queues behind it, so two batches can never interleave `kv`
-    // writes for the same stream (the later batch could otherwise persist
-    // the older snapshot last). The batch snapshots `dirtyIds` when it
-    // starts, so a queued batch picks up mutations made during its
-    // predecessor; a batch that finds nothing dirty is a no-op.
-    return this.writeQueue.add(() => this.runWriteBatch());
-  }
-
-  private async runWriteBatch(): Promise<void> {
-    // Skip streams whose rehydrate is pending or errored — writing now
-    // would clobber the authoritative on-disk history with a fresh
-    // empty-plus-new-appends log before `ensureLoaded` merges disk entries
-    // back in. Keep them dirty so the next save retries after the load
-    // resolves.
-    const allDirty = this.dirtyStreamIds();
-    this.dirtyIds.clear();
-    const toWrite: StreamTabId[] = [];
-    for (const streamId of allDirty) {
-      const state = this.streams.get(streamId);
-      if (state?.loadFailed || state?.pendingLoad !== undefined) {
-        this.markDirty(streamId);
-      } else {
-        toWrite.push(streamId);
-      }
-    }
-
-    if (toWrite.length === 0) return;
-
-    log.debug(`Writing ${toWrite.length} dirty stream(s)`);
-
-    // Write streams one at a time. Each KV write serializes the stream's full
-    // transcript to JSON before the filesystem await; starting every dirty
-    // stream together retains all of those large JSON strings simultaneously.
-    // Sequential writes keep peak memory proportional to one serialized
-    // transcript while preserving independent per-stream failure handling.
-    try {
-      for (const streamId of toWrite) {
-        const logInstance = this.streams.get(streamId)?.log;
-        if (!logInstance) continue;
-        try {
-          await this.writeStream(streamId, logInstance);
-          this.writeFailureWarned.delete(streamId);
-        } catch (error) {
-          // Failed writes re-mark their stream dirty so the next save retries.
-          // Continue draining the batch so one unavailable file does not
-          // prevent unrelated transcripts from becoming durable. The cause is
-          // recorded once per stream: without it a full disk or a permission
-          // error means the transcript never becomes durable and nothing says
-          // why until flush() throws at session close.
-          if (!this.writeFailureWarned.has(streamId)) {
-            this.writeFailureWarned.add(streamId);
-            log.warn(
-              `Failed to persist the transcript for stream ${streamId}; it stays dirty and the next save retries: ${toErrorMessage(error)}`,
-              { data: error },
-            );
-          }
-          if (this.streams.get(streamId)?.log !== undefined)
-            this.markDirty(streamId);
-        }
-      }
-    } finally {
-      for (const streamId of toWrite) {
-        const state = this.streams.get(streamId);
-        if (state && !this.dirtyIds.has(streamId))
-          this.releaseLease(streamId, 'flush');
-      }
-    }
+  private notify(streamId: StreamTabId, reset = false): void {
+    const log = this.get(streamId);
+    if (log === undefined) return;
+    const delta = { ...log.drainEmission(), reset };
+    for (const listener of this.listeners) listener(streamId, delta);
   }
 }

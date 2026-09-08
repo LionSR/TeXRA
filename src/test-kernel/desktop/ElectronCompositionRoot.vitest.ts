@@ -76,7 +76,6 @@ describe('desktop composition root and launch environment', () => {
     // the process's session owner.
     expect(source).not.toMatch(/openSession\(/u);
     expect(papersSource.match(/openSession\(/gu)).toHaveLength(1);
-    expect(papersSource.match(/StreamLogStore\.open\(\)/gu)).toHaveLength(1);
     expect(source).toMatch(/createWindow\(\{[\s\S]*?\bpapers,[\s\S]*?\}\)/u);
     // Every open paper is bound to the window: one backend with this
     // window's port (the framer's), one host snapshot, one presentation each.
@@ -119,19 +118,9 @@ describe('desktop composition root and launch environment', () => {
     expect(source).not.toContain('createDesktopDiffHostDisposeQueue');
     expectOrderedAfter(
       source,
-      'const current = desktopDiffHost.dispose().catch(reportBackgroundError)',
-      ['diffHostDisposeQueue.add(() => current)'],
+      'const settled = awaitOrReport(desktopDiffHost.dispose())',
+      ['diffHostDisposeQueue.add(() => settled)'],
     );
-  });
-
-  it('imports process-store initialization directly from its owner', async () => {
-    const source = await readFile(
-      desktopSourcePath('main', 'desktopPapers.ts'),
-      'utf8',
-    );
-    expect(
-      namedImportSources(source, 'initializeDesktopProcessStores'),
-    ).toContain('./desktopProcessStores.js');
   });
 
   it('keeps platform initialization in the Electron composition root', async () => {

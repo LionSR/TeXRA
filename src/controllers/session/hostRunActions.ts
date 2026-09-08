@@ -38,6 +38,7 @@ import { LaunchSurfaceSchema } from '@shared/session/surface';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { submitProgressFollowUp } from '../progressView/progressFollowUpSubmit';
 import { applyFollowUpPlan } from '../progressView/followUpApply';
@@ -71,8 +72,8 @@ export interface HostRunActionPorts {
 }
 
 export interface HostRunActions {
-  resume(streamId: StreamTabId): Promise<void>;
-  runNew(streamId: StreamTabId): Promise<void>;
+  resume(streamId: StreamTabId): Effect.Effect<void, Error>;
+  runNew(streamId: StreamTabId): Effect.Effect<void, Error>;
   runCompileFixer(streamId: StreamTabId): Promise<void>;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
@@ -80,13 +81,13 @@ export interface HostRunActions {
     request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
   ): Effect.Effect<void, unknown>;
   /** The launcher's form of a settled run's saved setup. */
-  restoreState(streamId: StreamTabId): Promise<AgentConfig>;
-  /** The shared sidecar readers used by the workflow controllers. */
+  restoreState(streamId: StreamTabId): Effect.Effect<AgentConfig, Error>;
+  /** The hydrated stream state used by the workflow controllers. */
   readonly snapshotPort: ProgressFollowUpState & {
     getKnownWorkspaceOutputPaths(streamId: StreamTabId): Set<string>;
   };
   restoreProposal(proposal: unknown): AgentConfig;
-  sendFollowUp(streamId: StreamTabId, text: string): Promise<void>;
+  sendFollowUp(streamId: StreamTabId, text: string): Effect.Effect<void>;
 }
 
 export function createHostRunActions(
@@ -113,35 +114,40 @@ export function createHostRunActions(
       snapshots.getCompileFailures(streamId),
     getKnownWorkspaceOutputPaths: (streamId: StreamTabId) =>
       snapshots.getKnownFilePaths(streamId, { workspaceOnly: true }),
-    preload: (streamId: StreamTabId) => snapshots.preload([streamId]),
   };
 
   /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
-  async function nativeAgentRun(
+  const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(function* (
     streamId: StreamTabId,
     action: string,
-  ): Promise<RunMetadata & { config: AgentConfig }> {
+  ) {
     if (!view().streams.has(streamId)) {
-      throw new Unavailable({
-        streamId,
-        reason: 'The stream is no longer open.',
-      });
+      return yield* Effect.fail(
+        new Unavailable({
+          streamId,
+          reason: 'The stream is no longer open.',
+        }),
+      );
     }
-    await snapshots.preload([streamId]);
+    yield* snapshots.preload([streamId]);
     const metadata = getRunMetadata(streamId);
     if (!isPlainAgentIdentity(metadata.identity)) {
-      throw new Rejected({
-        reason: `Only TeXRA agent runs can be ${action} from here; this stream's run is not one.`,
-      });
+      return yield* Effect.fail(
+        new Rejected({
+          reason: `Only TeXRA agent runs can be ${action} from here; this stream's run is not one.`,
+        }),
+      );
     }
     const { config } = metadata;
     if (!config) {
-      throw new Rejected({
-        reason: `This run's configuration was not saved, so it cannot be ${action}.`,
-      });
+      return yield* Effect.fail(
+        new Rejected({
+          reason: `This run's configuration was not saved, so it cannot be ${action}.`,
+        }),
+      );
     }
     return { ...metadata, config };
-  }
+  });
 
   const isRetryPending = (streamId: StreamTabId, requestId: string) =>
     view().approvals.some(
@@ -266,7 +272,7 @@ export function createHostRunActions(
           return;
         }
       }
-      yield* hostPort(() => snapshots.preload([streamId]));
+      yield* snapshots.preload([streamId]);
       const { config } = snapshots.getRunMetadata(streamId);
       if (!config) {
         yield* hostPort(() =>
@@ -325,15 +331,15 @@ export function createHostRunActions(
       }
       return parsed.data;
     },
-    async sendFollowUp(streamId, text) {
-      await submitProgressFollowUp({
+    sendFollowUp(streamId, text) {
+      return submitProgressFollowUp({
         session,
         streamId,
         input: { text },
         // Programmatic file feedback has no composer to acknowledge.
         acknowledge: () => {},
         showInfo: ports.showWarning,
-      });
+      }).pipe(Effect.asVoid);
     },
     /**
      * Resume the run behind a stream: a workflow relaunches through the
@@ -341,21 +347,34 @@ export function createHostRunActions(
      * canonical session state, so it goes through the resume port that
      * restores it instead of starting a fresh run.
      */
-    async resume(streamId) {
-      const { config, executionId } = await nativeAgentRun(streamId, 'resumed');
+    resume: Effect.fn('HostRunActions.resume')(function* (streamId) {
+      const { config, executionId } = yield* nativeAgentRun(
+        streamId,
+        'resumed',
+      );
       if (config.agentCategory !== AgentCategory.Workflow) {
-        await platform().agentResume.tryResumeStream(streamId);
+        yield* Effect.tryPromise({
+          try: () => platform().agentResume.tryResumeStream(streamId),
+          catch: ensureError,
+        });
         return;
       }
-      await ports.runExecutionRequest({
-        config,
-        ...(executionId && { executionId }),
+      yield* Effect.tryPromise({
+        try: () =>
+          ports.runExecutionRequest({
+            config,
+            ...(executionId && { executionId }),
+          }),
+        catch: ensureError,
       });
-    },
-    async runNew(streamId) {
-      const { config } = await nativeAgentRun(streamId, 're-run');
-      await ports.runExecutionRequest({ config });
-    },
+    }),
+    runNew: Effect.fn('HostRunActions.runNew')(function* (streamId) {
+      const { config } = yield* nativeAgentRun(streamId, 're-run');
+      yield* Effect.tryPromise({
+        try: () => ports.runExecutionRequest({ config }),
+        catch: ensureError,
+      });
+    }),
     async runCompileFixer(streamId) {
       if (!view().streams.has(streamId)) {
         throw new Unavailable({
@@ -392,10 +411,12 @@ export function createHostRunActions(
         kimiCodeRoutedOnFailure: request.kimiCodeRoutedOnFailure ?? undefined,
       });
     },
-    async restoreState(streamId) {
-      const { config } = await nativeAgentRun(streamId, 'restored');
-      return config;
-    },
+    restoreState: Effect.fn('HostRunActions.restoreState')(
+      function* (streamId) {
+        const { config } = yield* nativeAgentRun(streamId, 'restored');
+        return config;
+      },
+    ),
   };
 }
 

@@ -1,20 +1,14 @@
-/**
- * Assembles a {@link TraceDocument} — everything a static trace-viewer needs
- * to replay one finished execution — from the same on-disk data the
- * interactive hosts already read: `ExecutionKVStore` (config/meta),
- * `StreamLogStore` (the round/thinking/tool-call timeline), and
- * `StreamSnapshotStore` (todos/plan/usage sidecars).
- *
- * Host-neutral, following `ChatExportController.buildExportInput`'s
- * discriminated-status pattern so callers can show a precise error instead of
- * a generic failure.
- */
-import { getExecutionStore } from '@agent/storage';
-import type { ExecutionId } from '@shared/schemas';
+/** Assemble a static trace from execution metadata, transcript entries and the root's folded stream state. */
+import { Effect } from 'effect';
+import {
+  readExecutionRunRecord,
+  resolveStreamForExecution,
+} from '@agent/storage/executionLifecycle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
-import { resolveStreamForExecution } from './completedRunArchive';
-import { StreamLogStore } from './StreamLogStore';
-import { StreamSnapshotStore } from './StreamSnapshotStore';
+import type { ExecutionId } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
+
 import type { TraceDocument } from './traceDocumentSchema';
 
 export type AssembleTraceResult =
@@ -26,31 +20,32 @@ export type AssembleTraceResult =
  * available: the run predates transcript persistence, or its metadata
  * carries no stamped stream id.
  */
-export async function assembleTrace(
+export const assembleTrace = Effect.fn('assembleTrace')(function* (
   executionId: ExecutionId,
-): Promise<AssembleTraceResult> {
-  const executionStore = getExecutionStore(executionId);
-  const [resolution, config] = await Promise.all([
-    resolveStreamForExecution(executionId),
-    executionStore.readRunRecord(),
-  ]);
+  session: Pick<SessionHandle, 'roots' | 'snapshots' | 'transcripts'>,
+): Effect.fn.Return<AssembleTraceResult, Error> {
+  const [resolution, config] = yield* Effect.tryPromise({
+    try: () =>
+      Promise.all([
+        resolveStreamForExecution(executionId, session.roots),
+        readExecutionRunRecord(executionId, session.roots),
+      ]),
+    catch: ensureError,
+  });
   if (!config) return { status: 'config_missing' };
   if (!resolution) return { status: 'streamLogs_missing' };
   const { streamId, meta } = resolution;
-  const snapshotStore = new StreamSnapshotStore();
-
-  // A call-scoped read-only store seeded with just this stream avoids
-  // reloading a live host's session, scanning the whole streamLogs
-  // directory, or mutating persistence while reading the transcript files.
-  const streamLogStore = await StreamLogStore.openReadOnlyForStream(streamId);
-  if (!streamLogStore.has(streamId)) return { status: 'streamLogs_missing' };
-  const [entries, snapshot] = await Promise.all([
-    streamLogStore.readEntries(streamId),
-    snapshotStore.read(streamId),
-  ]);
-
+  if (!(yield* session.transcripts.hasAuthoritativeStream(streamId)))
+    return { status: 'streamLogs_missing' };
+  const [entries, snapshot] = yield* Effect.all(
+    [
+      session.transcripts.readEntries(streamId),
+      session.snapshots.read(streamId),
+    ],
+    { concurrency: 2 },
+  );
   return {
     status: 'ok',
     trace: { executionId, streamId, config, meta, entries, snapshot },
   };
-}
+});

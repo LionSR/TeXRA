@@ -30,6 +30,8 @@ import type {
   SessionEvent,
   TranscriptSubscription,
 } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
+import type { DeletionMode } from '@shared/session/database';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
@@ -43,6 +45,13 @@ export interface SessionGraph {
    *  below), so nothing holding a session can append past its bookkeeping. */
   readonly events: Omit<SessionEventsShape, 'publish'>;
   readonly publish: SessionEventsShape['publish'];
+  /** Transient text shares the existing session-input source, never the event table. */
+  readonly publishText: (
+    streamId: StreamTabId,
+    id: string,
+    text: string,
+  ) => Effect.Effect<void>;
+  readonly readText: (streamId: StreamTabId, id: string) => string | undefined;
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
@@ -50,7 +59,8 @@ export interface SessionGraph {
   readonly viewChanges: Stream.Stream<SessionView>;
   /** The plane's tail as `view` has folded it (PRD 7.2): every row above
    *  `fromCommit`, released once the view holds the state that folded it,
-   *  for a reader that reads the view beside each row. */
+   *  and local reconciliation has completed, for a reader that queries the
+   *  resulting state beside each row. */
   readonly folded: (fromCommit: CommitOrdinal) => Stream.Stream<SessionEvent>;
   /** This process's local truth; the status machine writes `unreadable`. */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
@@ -66,6 +76,12 @@ export interface SessionGraph {
   /** The one handler of every request a surface issues to this session
    *  (PRD 7.6, 8.2): answered exactly once, an outcome or a request error. */
   readonly requests: {
+    /** Internal deletion policies share the same admission and transaction as user requests. */
+    readonly removeStream: (
+      streamId: StreamTabId,
+      mode: DeletionMode,
+      expectedStartCommit: CommitOrdinal,
+    ) => Effect.Effect<Outcome, RequestError>;
     readonly request: (
       req: RuntimeRequest,
     ) => Effect.Effect<Outcome, RequestError>;

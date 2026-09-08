@@ -59,6 +59,7 @@
 
 import {
   aggregateTarget,
+  mergeRounds,
   aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
@@ -449,12 +450,7 @@ function streamIdDisplayName(streamId: StreamTabId): string {
   return separator <= 0 ? streamId : streamId.slice(0, separator);
 }
 
-/**
- * A stream with no rounds recorded yet. Not `EMPTY_ROUND_INDEXED`: that is
- * the store's readonly view type (`ReadonlyRoundIndexed<never>`, numeric
- * keys, readonly arrays), which the schema-inferred round-keyed fields of
- * `StreamView` (`Record<string, T[]>`) do not accept.
- */
+/** A stream with no rounds recorded yet. */
 const NO_ROUNDS = Object.freeze({});
 
 /** A stream in its initial shape, minted by its `run.start` alone. */
@@ -1330,27 +1326,6 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
 // ---------------------------------------------------------------------------
 // Durable events
 // ---------------------------------------------------------------------------
-
-/**
- * Round-keyed merge, mirroring `StreamSnapshotStore`'s field normalizers: an
- * empty round drops the key for files and compile failures (the tab shows no
- * empty round), and overwrites for missing outputs (an empty list clears the
- * round's missing set).
- */
-function mergeRounds<T>(
-  current: RoundIndexed<T>,
-  incoming: RoundIndexed<T>,
-  emptyRound: 'drop' | 'keep',
-): RoundIndexed<T> {
-  const next: RoundIndexed<T> = { ...current };
-  for (const key of Object.keys(incoming)) {
-    const round = Number(key);
-    const files = incoming[round];
-    if (emptyRound === 'drop' && files.length === 0) delete next[round];
-    else next[round] = files;
-  }
-  return next;
-}
 
 /** A tool-use fact on a stream whose arm cannot hold it is a publisher or
  *  category defect, made loud at the fold's boundary. */

@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
@@ -18,6 +19,7 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
+  aggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -68,15 +70,20 @@ async function launchBackgroundRun(
     release = resolve;
   });
 
+  let emitted!: () => void;
+  const outputEmitted = new Promise<void>((resolve) => {
+    emitted = resolve;
+  });
   vi.spyOn(execUtils, 'executeCommand').mockImplementation(
     async (_command, options = {}) => {
       emit(options);
+      emitted();
       return processExit;
     },
   );
   const followUp = vi
     .spyOn(toolUseFollowUp, 'submitFollowUp')
-    .mockResolvedValue({ status: 'sent' });
+    .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
   const { host } = createRecordingHost();
   const recorded = recordSessionEvents(defaultSession());
@@ -94,6 +101,8 @@ async function launchBackgroundRun(
   );
 
   assert.equal(launched.status, 'executed');
+  await outputEmitted;
+  await defaultSession().settlePublications();
   const executionId = /Execution ID: (\S+)/.exec(launched.output ?? '')?.[1];
   assert.ok(executionId, 'Background launch should report its execution ID');
 
@@ -117,10 +126,11 @@ async function launchBackgroundRun(
   };
 }
 
-function readOutput(
+async function readOutput(
   executionId: string,
   viewRange?: [number, number],
 ): Promise<{ status: string; output?: string; error?: string }> {
+  await defaultSession().settlePublications();
   return new ExecutionsTool().call({
     path: `/executions/${executionId}/output`,
     ...(viewRange ? { view_range: viewRange } : {}),
@@ -226,7 +236,10 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     const result = await readOutput(run.executionId);
     const output = result.output ?? '';
 
-    assert.ok(output.includes('tail without newline\nTurn completed in '));
+    assert.ok(
+      output.includes('tail without newline\nTurn completed in '),
+      output,
+    );
     assert.ok(!output.includes('tail without newlineTurn completed in '));
   });
 
@@ -287,22 +300,29 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   it('renders consecutive untagged legacy rows standalone', async () => {
     const { executionId, streamId } =
       await registerProcessExecution('legacy command');
-    const transcripts = defaultSession().transcripts;
-    transcripts.ensureStream(streamId);
-    const writer = transcripts.acquireWriter(streamId, 'legacy-output-test');
+    const session = defaultSession();
+    publishTestRunStart(session, streamId, executionId);
+    let seqNo = 0;
     const append = (
       id: string,
       text: string,
       level: typeof LOG_LEVELS.INFO | typeof LOG_LEVELS.WARN = LOG_LEVELS.INFO,
     ): void => {
-      writer.append({
-        id,
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        timestamp: Date.now(),
-        text,
-      });
+      session.publish([
+        {
+          type: 'transcript.entry',
+          aggregateId: aggregateId('stream', streamId),
+          entry: {
+            seqNo: ++seqNo,
+            id,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level,
+            messageType: MESSAGE_TYPES.DEFAULT,
+            timestamp: Date.now(),
+            text,
+          },
+        },
+      ]);
     };
     append('legacy-one', 'legacy one');
     append('legacy-two', 'legacy two');
@@ -311,7 +331,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       'legacy warning\r\n\rlegacy tail\r',
       LOG_LEVELS.WARN,
     );
-    writer.close();
 
     const result = await readOutput(executionId);
     const output = result.output ?? '';
@@ -386,7 +405,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     const output = result.output ?? '';
 
     assert.equal(result.status, 'executed');
-    assert.ok(output.includes('compiling'));
+    assert.ok(output.includes('compiling'), output);
     assert.ok(output.includes('done'));
     assert.ok(output.includes('[finished'));
     assert.ok(

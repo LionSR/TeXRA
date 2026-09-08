@@ -133,6 +133,8 @@ export function createDesktopDiffHost(
       if (inFlightFallbacks.size === 0) {
         if (observedEmpty) return;
         observedEmpty = true;
+        // A microtask yield so a registration racing the first empty
+        // observation is seen; `Promise.resolve()` cannot reject.
         yield* Effect.promise(() => Promise.resolve());
         continue;
       }

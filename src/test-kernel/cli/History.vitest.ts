@@ -1,26 +1,28 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { Effect } from 'effect';
+import { it as effectIt } from '@effect/vitest';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { KVStore } from '@common/storage/KVStore';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import {
-  LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { GoalStore } from '@tools/goal';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -31,8 +33,6 @@ const mocks = vi.hoisted(() => ({
   readReport: vi.fn(),
   exists: vi.fn(),
   listExecutions: vi.fn(),
-  deleteExecution: vi.fn(),
-  deleteAllExecutions: vi.fn(),
   readCliResumedModel: vi.fn(),
   assembleTrace: vi.fn(),
 }));
@@ -55,8 +55,6 @@ vi.mock('@agent/storage', async () => {
       }),
     ),
     listExecutions: mocks.listExecutions,
-    deleteExecution: mocks.deleteExecution,
-    deleteAllExecutions: mocks.deleteAllExecutions,
   };
 });
 
@@ -78,14 +76,20 @@ vi.mock('@transcript', async () => {
   return {
     ...actual,
     assembleTrace: mocks.assembleTrace,
-    readCompletedRunConversation: vi.fn(async (...args: unknown[]) => {
-      const conversation = await mocks.readConversation();
-      return conversation === null
-        ? actual.readCompletedRunConversation(
-            ...(args as Parameters<typeof actual.readCompletedRunConversation>),
-          )
-        : { conversation, source: 'streamLog' };
-    }),
+    readCompletedRunConversation: vi.fn((...args: unknown[]) =>
+      Effect.gen(function* () {
+        const conversation = yield* Effect.promise(() =>
+          mocks.readConversation(),
+        );
+        return conversation === null
+          ? yield* actual.readCompletedRunConversation(
+              ...(args as Parameters<
+                typeof actual.readCompletedRunConversation
+              >),
+            )
+          : { conversation, source: 'streamLog' };
+      }),
+    ),
   };
 });
 
@@ -103,17 +107,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import {
-  StreamLogStore,
-  StreamSnapshotStore,
-  STREAM_LOG_SUMMARIES_DIR,
-  STREAM_LOGS_DIR,
-  type TraceDocument,
-} from '@transcript';
-import {
-  cleanupExecutionAdjacentStreamState,
-  resolveAdjacentStreamCleanup,
-} from '@transcript/adjacentStreamCleanup';
+import type { TraceDocument } from '@transcript';
 import {
   cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
@@ -129,10 +123,6 @@ import {
   readCliHistoryStandaloneTemplate,
   stageCliHistoryTraceViewerAssets,
 } from '@cli/runtime/history';
-import {
-  appendTranscriptEntry,
-  snapshotFacts,
-} from '@test/support/storeTestDrivers';
 
 const config = AgentConfigSchema.parse({
   agent: 'correct',
@@ -216,30 +206,6 @@ function runListEntry(
   };
 }
 
-// Two orchestrator snapshot rows pointing at `executionId` — session
-// bookkeeping only, never transcript evidence (Axis T).
-async function seedSidecarOnlySnapshots(
-  executionId: ExecutionId,
-): Promise<void> {
-  const snapshots = new StreamSnapshotStore();
-  for (const tag of ['old', 'new']) {
-    snapshotFacts(snapshots).setRunConfig(
-      `orchestrator@${tag}#${executionId}` as StreamTabId,
-      config,
-      executionId,
-    );
-  }
-  await snapshots.flush();
-}
-
-function mockBulkDelete(deleted: string[]): void {
-  mocks.deleteAllExecutions.mockResolvedValue({
-    deleted,
-    active: [],
-    failed: [],
-  });
-}
-
 // The durable facts that make a listing row resumable: a checkpoint on disk
 // and the stream id stamped at registration.
 const RESUMABLE_ROW_FACTS = {
@@ -274,7 +240,11 @@ describe('CLI history runtime', () => {
     );
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const { initializeDefaultSession, teardownDefaultSession } =
+      await import('@agent/runtime/SessionHandle');
+    teardownDefaultSession();
+    initializeDefaultSession({});
     vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
@@ -482,30 +452,19 @@ describe('CLI history runtime', () => {
     ).resolves.toBeNull();
   });
 
-  it('treats sidecar-only associations as not found in history details', async () => {
-    // The sidecar FK maps a stream to an execution for session bookkeeping;
-    // since Axis T it is NOT existence evidence for an execution whose
-    // metadata carries no stamped stream and whose transcript is empty.
-    const executionId = 'a11ce5a11ce5' as ExecutionId;
-    await seedSidecarOnlySnapshots(executionId);
-    mockNothingPersisted();
-
-    await expect(readCliHistoryDetails(executionId)).resolves.toBeNull();
-  });
-
   it('finds a stamped diagnostic-only root in CLI history details', async () => {
     const executionId = 'a11ce7a11ce7' as ExecutionId;
     const root = `orchestrator@model#${executionId}` as StreamTabId;
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(logs, root, {
-      id: 'diagnostic-only-root',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1000,
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    const session = defaultSession();
+    publishTestRunStart(session, root, executionId);
+    session.publishRunEvent(root, {
+      type: 'log',
+      level: 'info',
+      message: 'Root status only',
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      text: 'Root status only',
     });
-    await logs.flush();
+    await session.settlePublications();
     mockNothingPersisted();
     // The streamId stamped on execution metadata at registration is the one
     // execution→stream mapping; the diagnostic-only transcript row proves
@@ -1046,193 +1005,37 @@ describe('CLI history runtime', () => {
     expect(details?.files).toEqual([]);
   });
 
-  it('reports not-found deletion through the structured result', async () => {
-    mocks.deleteExecution.mockResolvedValue({
-      status: 'not-found',
-      executionId: 'abc123',
-    });
-
-    await expect(
-      deleteCliHistory({ id: 'abc123' as ExecutionId }),
-    ).resolves.toEqual({
-      deleted: 'one',
-      id: 'abc123',
-      found: false,
-      status: 'not-found',
-    });
-  });
-
-  it('drops the goal owned by a deleted execution', async () => {
-    const streamId = 'chat@deepseek#a1' as StreamTabId;
-    await GoalStore.start(streamId, 'finish the cleanup');
-    mocks.deleteExecution.mockResolvedValue({
-      status: 'deleted',
-      executionId: 'a1',
-    });
-
-    await expect(
-      deleteCliHistory({ id: 'a1' as ExecutionId }),
-    ).resolves.toEqual({
-      deleted: 'one',
-      id: 'a1',
-      found: true,
-      status: 'deleted',
-    });
-
-    expect(GoalStore.getForStream(streamId)).toBeNull();
-  });
-
-  it('deletes one execution sidecar set despite an unrelated corrupt transcript', async () => {
-    const executionId = 'a1' as ExecutionId;
-    const streamId = 'chat@deepseek#a1' as StreamTabId;
-    const unrelated = 'chat@deepseek#corrupt' as StreamTabId;
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(logs, streamId, {
-      id: 'target-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1000,
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      text: 'Target transcript',
-    });
-    await logs.flush();
-    const persistedLogs = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
-    await persistedLogs.write(unrelated, { invalid: 'transcript' });
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
-    await snapshots.flush();
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      streamId,
-    });
-
-    await cleanupExecutionAdjacentStreamState(
-      executionId,
-      resolveAdjacentStreamCleanup(undefined),
-    );
-
-    await expect(persistedLogs.exists(streamId)).resolves.toBe(false);
-    await expect(persistedLogs.exists(unrelated)).resolves.toBe(true);
-    const reopened = new StreamSnapshotStore();
-    await reopened.preload([streamId]);
-    expect(reopened.getRunMetadata(streamId).executionId).toBeUndefined();
-  });
-
-  it('clears a deleted parent from its child stream summary mirror', async () => {
-    const executionId = 'a1' as ExecutionId;
-    const parentStream = 'chat@deepseek#a1' as StreamTabId;
-    const childStream = 'chat@deepseek#child' as StreamTabId;
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(logs, parentStream, {
-      id: 'parent-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1000,
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      text: 'Parent transcript',
-    });
-    appendTranscriptEntry(logs, childStream, {
-      id: 'child-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1000,
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      text: 'Child transcript',
-    });
-    await logs.flush();
-    // The always-resident summary mirror the progress rail reads — seeded
-    // as if a live session had published it while the parent still existed.
-    const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
-      compactJson: true,
-    });
-    const childSummary = await summaries.read<{ meta?: object }>(childStream);
-    await summaries.write(childStream, {
-      ...childSummary,
-      meta: { ...childSummary?.meta, parentStreamId: parentStream },
-    });
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(parentStream, config, executionId);
-    snapshotFacts(snapshots).setParentStream(childStream, parentStream);
-    await snapshots.flush();
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      streamId: parentStream,
-    });
-
-    await cleanupExecutionAdjacentStreamState(
-      executionId,
-      resolveAdjacentStreamCleanup(undefined),
-    );
-
-    const updatedChildSummary = await summaries.read<{
-      meta?: { parentStreamId?: string };
-    }>(childStream);
-    expect(updatedChildSummary?.meta?.parentStreamId).toBeUndefined();
-  });
-
-  it('reports a sidecar cleanup failure before deleting execution storage', async () => {
-    const executionId = 'a1' as ExecutionId;
-    const streamId = 'chat@deepseek#a1' as StreamTabId;
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      streamId,
-    });
-
-    await expect(
-      cleanupExecutionAdjacentStreamState(executionId, {
-        deleteAdjacentStreamState: async () => {
-          throw new Error('snapshot permission denied');
-        },
-      }),
-    ).rejects.toThrow(
-      "Execution a1's transcript/snapshot sidecars could not be cleaned up: snapshot permission denied",
-    );
-  });
+  effectIt.live(
+    'deletes indexed executions and reports a later missing lookup',
+    () =>
+      Effect.acquireUseRelease(
+        Effect.sync(createTestSession),
+        (session) =>
+          Effect.gen(function* () {
+            const id = 'aabbcc' as ExecutionId;
+            publishTestRunStart(session, 'history-deletion' as StreamTabId, id);
+            yield* Effect.promise(() => session.settlePublications());
+            expect(yield* deleteCliHistory(session, { all: true })).toEqual({
+              deleted: 'all',
+              count: 1,
+              active: [],
+              failed: [],
+            });
+            expect(yield* deleteCliHistory(session, { id })).toEqual({
+              deleted: 'one',
+              id,
+              found: false,
+              status: 'not-found',
+            });
+            expect(mocks.listExecutions).not.toHaveBeenCalled();
+          }),
+        (session) => Effect.sync(() => session.dispose()),
+      ),
+  );
 
   it('validates execution id shape before command handlers use storage', () => {
     expect(parseCliHistoryId('abc123')).toBe('abc123');
     expect(parseCliHistoryId('../abc123')).toBeUndefined();
-  });
-
-  it('surfaces the bulk-delete count in the structured result', async () => {
-    mockBulkDelete(['a1', 'b2', 'c3', 'd4']);
-
-    await expect(deleteCliHistory({ all: true })).resolves.toEqual({
-      deleted: 'all',
-      count: 4,
-      active: [],
-      failed: [],
-    });
-  });
-
-  it('uses the authoritative deleted count without re-listing', async () => {
-    mockBulkDelete(['a1']);
-
-    await expect(deleteCliHistory({ all: true })).resolves.toEqual({
-      deleted: 'all',
-      count: 1,
-      active: [],
-      failed: [],
-    });
-
-    // listExecutions must not be called when the count was passed in.
-    expect(mocks.listExecutions).not.toHaveBeenCalled();
-  });
-
-  it('drops only goals owned by deleted executions in the bulk path', async () => {
-    const deletedA = 'chat@deepseek#a1' as StreamTabId;
-    const deletedB = 'review@deepseek#b2' as StreamTabId;
-    const live = 'chat@deepseek#live' as StreamTabId;
-    await GoalStore.start(deletedA, 'delete a');
-    await GoalStore.start(deletedB, 'delete b');
-    await GoalStore.start(live, 'keep me');
-    mockBulkDelete(['a1', 'b2']);
-
-    await deleteCliHistory({ all: true });
-
-    expect(GoalStore.getForStream(deletedA)).toBeNull();
-    expect(GoalStore.getForStream(deletedB)).toBeNull();
-    expect(GoalStore.getForStream(live)?.objective).toBe('keep me');
   });
 
   describe('history export (--export / --assets-dir)', () => {
@@ -1287,19 +1090,6 @@ describe('CLI history runtime', () => {
       await expect(
         readCliHistoryExportInput('missing' as ExecutionId),
       ).resolves.toEqual({ status: 'not_found' });
-    });
-
-    it('reports sidecar-only associations as not found for markdown export', async () => {
-      // Since Axis T the sidecar FK is session bookkeeping, not transcript
-      // evidence: without meta, config, a stamped stream, or a conversation,
-      // the id resolves to nothing at all.
-      const executionId = 'a11ce6a11ce6' as ExecutionId;
-      await seedSidecarOnlySnapshots(executionId);
-      mockNothingPersisted();
-
-      await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
-        status: 'not_found',
-      });
     });
 
     it('reports "incomplete" (not "not_found") when config exists but conversation does not', async () => {
@@ -1482,7 +1272,9 @@ describe('CLI history runtime', () => {
       beforeEach(() => {
         stdout = '';
         stderr = '';
-        mocks.assembleTrace.mockResolvedValue({ status: 'ok', trace });
+        mocks.assembleTrace.mockReturnValue(
+          Effect.succeed({ status: 'ok', trace }),
+        );
         stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
           stdout += chunk;
         });
@@ -1506,7 +1298,9 @@ describe('CLI history runtime', () => {
       }
 
       it('reports missing replayable roots without an empty sidecar list', async () => {
-        mocks.assembleTrace.mockResolvedValue({ status: 'streamLogs_missing' });
+        mocks.assembleTrace.mockReturnValue(
+          Effect.succeed({ status: 'streamLogs_missing' }),
+        );
 
         const exitCode = await runHistoryExport(
           makeContext('/resources'),
@@ -1580,8 +1374,12 @@ describe('CLI history runtime', () => {
         const firstTrace = makeTrace('abc123');
         const secondTrace = makeTrace('def456');
         mocks.assembleTrace
-          .mockResolvedValueOnce({ status: 'ok', trace: firstTrace })
-          .mockResolvedValueOnce({ status: 'ok', trace: secondTrace });
+          .mockReturnValueOnce(
+            Effect.succeed({ status: 'ok', trace: firstTrace }),
+          )
+          .mockReturnValueOnce(
+            Effect.succeed({ status: 'ok', trace: secondTrace }),
+          );
 
         const firstExit = await runHistoryExport(
           makeContext(resourcesPath),

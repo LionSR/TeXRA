@@ -317,12 +317,11 @@ function latestWorkflowAttemptId(
 }
 
 /**
- * One unsettled card as a run nothing can still settle leaves it, in the
- * producer's own vocabulary: `interruptedWorkflowCall` is the same function
- * `StreamLogStore.endRunningGroupsForStreams` settles the persisted row with,
- * so a card repainted here and one the write side already settled read
- * identically — a launched call as `failed` with the one interrupted-call
- * error, an unlaunched one as `skipped`/`not-reached`.
+ * Describe an unsettled card after its run has stopped. Host-exit settlement
+ * uses the same interruptedWorkflowCall function when publishing a canonical
+ * workflow.call fact, so replay and this read-time projection agree: a
+ * launched call is failed with the interrupted-call error; an unlaunched call
+ * is skipped with the not-reached reason.
  *
  * The status and every piece of copy derived from it are re-read through the
  * shared formatters, so the card, its status word, its explanatory line, the

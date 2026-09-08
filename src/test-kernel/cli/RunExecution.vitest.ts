@@ -46,24 +46,26 @@ const tempDirs = useTempDirs();
 async function installFreshDefaultSession(): Promise<void> {
   await installStoragePlatform();
   await import('@test/support/sessionGraphTestSetup');
-  const [
-    { initializeDefaultSession, teardownDefaultSession },
-    { StreamLogStore },
-  ] = await Promise.all([
-    import('@agent/runtime/SessionHandle'),
-    import('@transcript'),
-  ]);
+  const { initializeDefaultSession, teardownDefaultSession } =
+    await import('@agent/runtime/SessionHandle');
   teardownDefaultSession();
-  initializeDefaultSession({ transcripts: await StreamLogStore.open() });
+  initializeDefaultSession({});
 }
 
 async function installStoragePlatform(): Promise<void> {
   await installFakeHost(await createTempDirPlatform('texra-run-', tempDirs));
 }
 
-vi.mock('@agent/runtime/runAgent', () => ({
-  runAgent: mocks.runAgent,
-}));
+vi.mock('@agent/runtime/runAgent', async () => {
+  const { Effect } = await import('effect');
+  return {
+    runAgent: (...args: unknown[]) =>
+      Effect.tryPromise({
+        try: () => mocks.runAgent(...args),
+        catch: (error) => error,
+      }),
+  };
+});
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
@@ -198,11 +200,13 @@ function stubHangingRun(handleOptions: (options: LeaseOptions) => void): {
   return { resolve: (result: unknown) => resolveRun(result) };
 }
 
-/** Spies on the default session's transcript store flush. */
-async function spyOnTranscriptFlush() {
+/** Observe the session's terminal artifact drain. */
+async function spyOnArtifactFlush() {
   const { defaultSession } = await import('@agent/runtime/SessionHandle');
   const store = defaultSession().transcripts;
-  const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+  const flushSpy = vi
+    .spyOn(defaultSession(), 'flushArtifacts')
+    .mockResolvedValue(undefined);
   return { store, flushSpy };
 }
 
@@ -497,113 +501,10 @@ describe('executeCliRequest', () => {
     });
   });
 
-  it('persists headless stream sidecars from session events', async () => {
+  it('uses a persistent session and drains its artifacts after the run', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const streamId = 'stream-1' as StreamTabId;
-    const parentStreamId = 'parent-stream' as StreamTabId;
-    const executionId = 'b1c2d3e4' as ExecutionId;
-    const todo: TodoItem = {
-      content: 'Write the introduction',
-      status: 'in_progress',
-      activeForm: 'Writing the introduction',
-    };
-
-    mocks.runAgent.mockImplementationOnce(async () => {
-      const { getExecutionStore } = await import('@agent/storage');
-      const { AgentConfigSchema } =
-        await import('@agent/core/definition/AgentConfig');
-      const { defaultSession } = await import('@agent/runtime/SessionHandle');
-      const config = AgentConfigSchema.parse(toolUseConfig());
-
-      defaultSession().publish([
-        {
-          type: 'run.start',
-          aggregateId: qualifyAggregateId('stream', streamId),
-          executionId,
-          identity: { kind: 'agent', agent: 'chat' },
-          userFollowUpSupport: 'unsupported',
-          category: 'toolUse',
-          isRemote: false,
-        },
-      ]);
-      await getExecutionStore(executionId).writeRunRecord(config);
-      // Emitter contract (#9590 A4/Stage 6): the authority write to
-      // `ExecutionMeta.description` lands before the display event below.
-      await getExecutionStore(executionId).writeMeta({
-        timestamp: new Date(0).toISOString(),
-        description: 'chat / gpt54',
-      });
-      defaultSession().publishRunEvent(streamId, {
-        type: 'run.config',
-        streamId,
-        executionId,
-        config,
-      });
-      defaultSession().publishRunEvent(streamId, {
-        type: 'updateTodos',
-        streamId,
-        todos: [todo],
-      });
-      defaultSession().publishRunEvent(streamId, {
-        type: 'usage',
-        payload: {
-          streamId,
-          storageKey: executionId,
-          usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-        },
-      });
-      defaultSession().publish([
-        {
-          type: 'updateStreamDescription',
-          aggregateId: qualifyAggregateId('stream', streamId),
-          description: 'chat / gpt54',
-        },
-        {
-          type: 'setParentStream',
-          aggregateId: qualifyAggregateId('stream', streamId),
-          parentStreamId,
-        },
-      ]);
-      return {
-        category: 'toolUse',
-        executionId: 'exec-1',
-        status: 'completed',
-        streamId,
-      };
-    });
-
-    await executeCliRequest(request, cliContext());
-
-    const { StreamSnapshotStore } = await import('@transcript');
-    const reader = new StreamSnapshotStore();
-    await reader.load([streamId]);
-    const snapshot = await reader.read(streamId);
-    expect(snapshot.todos).toEqual([todo]);
-    expect(snapshot.runUsage[executionId]).toMatchObject({
-      inputTokens: 100,
-      outputTokens: 20,
-      cost: 0.5,
-    });
-    expect(snapshot.executionId).toBe(executionId);
-    // Current records read the description via ExecutionMeta (#9590 Stage 6).
-    expect(reader.getRunMetadata(streamId).description).toBe('chat / gpt54');
-    const { getExecutionStore } = await import('@agent/storage');
-    expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
-      'chat / gpt54',
-    );
-    expect(snapshot.parentStreamId).toBe(parentStreamId);
-    expect(reader.getRunMetadata(streamId).config).toMatchObject({
-      agent: 'chat',
-      model: 'gpt54',
-      agentCategory: 'toolUse',
-    });
-  });
-
-  it('uses an opened persistent store and flushes it after the run', async () => {
-    const { executeCliRequest } = await loadRunExecution();
-    const request = baseRequest();
-    const { store, flushSpy } = await spyOnTranscriptFlush();
+    const { store, flushSpy } = await spyOnArtifactFlush();
     const callOrder: string[] = [];
     flushSpy.mockImplementation(async () => {
       callOrder.push('flush');
@@ -624,10 +525,10 @@ describe('executeCliRequest', () => {
     expect(callOrder).toEqual(['runAgent', 'flush']);
   });
 
-  it('flushes the stream log store even when the run throws', async () => {
+  it('drains session artifacts even when the run throws', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const { flushSpy } = await spyOnTranscriptFlush();
+    const { flushSpy } = await spyOnArtifactFlush();
     mocks.runAgent.mockRejectedValueOnce(new AgentError('boom'));
 
     // #7645: a classified run failure resolves to a non-zero exit code
@@ -646,7 +547,7 @@ describe('executeCliRequest', () => {
   it('rethrows a non-AgentError rejection instead of swallowing it into an exit code', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const { flushSpy } = await spyOnTranscriptFlush();
+    const { flushSpy } = await spyOnArtifactFlush();
     // An unclassified failure (e.g. registerExecution disk I/O,
     // workspaceState.update) is genuinely unexpected — it must keep
     // propagating so bin/texra.ts's crash handler reports it, instead of
@@ -664,7 +565,7 @@ describe('executeCliRequest', () => {
 
   it('preserves a run failure when the final artifact flush also fails', async () => {
     const { executeCliRequest } = await loadRunExecution();
-    const { flushSpy } = await spyOnTranscriptFlush();
+    const { flushSpy } = await spyOnArtifactFlush();
     const runError = new Error('provider transport failed');
     const flushError = new Error('transcript flush failed');
     mocks.runAgent.mockRejectedValueOnce(runError);
@@ -737,46 +638,6 @@ describe('executeCliRequest', () => {
     expect(runOutcomeExitCode('failed')).toBe(CliExitCode.AgentError);
   });
 
-  it('closes the runtime host when sidecar flush fails', async () => {
-    vi.resetModules();
-    const flushError = new Error('flush failed');
-    // The session owns the sidecar store, so the stub has to replace the
-    // module `SessionHandle` imports (not the `@transcript` barrel).
-    vi.doMock('@transcript/StreamSnapshotStore', () => ({
-      StreamSnapshotStore: class {
-        attachSessionEvents = vi.fn(() => vi.fn());
-
-        handleProgressEvent = vi.fn();
-
-        load = vi.fn(async () => undefined);
-
-        preload = vi.fn(async () => undefined);
-
-        getExecutionIdMap = vi.fn(() => new Map());
-
-        flush = vi.fn(async () => {
-          throw flushError;
-        });
-      },
-    }));
-
-    try {
-      await installFreshDefaultSession();
-      const { executeCliRequest } = await loadRunExecution();
-      const request = baseRequest();
-
-      await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
-        flushError,
-      );
-
-      expect(mocks.close).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.doUnmock('@transcript/StreamSnapshotStore');
-      vi.resetModules();
-      await installFreshDefaultSession();
-    }
-  });
-
   it.each([
     { label: 'fresh', kind: 'fresh' },
     { label: 'resumed', kind: 'resume' },
@@ -784,7 +645,7 @@ describe('executeCliRequest', () => {
     'marks $label owned executions interrupted during platform shutdown',
     async ({ kind }) => {
       const { platform, executeCliRequest } = await installFakePlatform();
-      const { flushSpy } = await spyOnTranscriptFlush();
+      const { flushSpy } = await spyOnArtifactFlush();
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
       const killSpy = vi.spyOn(defaultSession().executions, 'kill');
       mocks.releaseExecutionLeaseAfterArtifacts.mockImplementationOnce(

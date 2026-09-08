@@ -5,6 +5,9 @@
  * executions.
  */
 
+// Node imports
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 // Third-party imports
 import { Data, Deferred, Duration, Effect } from 'effect';
 
@@ -27,12 +30,10 @@ import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   getRunContextExecutionId,
   getRunContextStreamId,
-  tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   ExecutionIdSchema,
   ToolError,
@@ -125,12 +126,20 @@ class ExecutionsReadFailed extends Data.TaggedError('ExecutionsReadFailed')<{
   readonly cause: unknown;
 }> {}
 
+interface ExecutionToolContext {
+  readonly session: SessionHandle;
+  readonly executionId: string | undefined;
+  readonly streamId: string | undefined;
+  readonly inRunScope: <A>(operation: () => A) => A;
+}
+
 /** The one wrap of this tool's Promise collaborators. */
 const executionsRead = <A>(
+  context: ExecutionToolContext,
   read: () => Promise<A>,
 ): Effect.Effect<A, ExecutionsReadFailed> =>
   Effect.tryPromise({
-    try: read,
+    try: () => context.inRunScope(read),
     catch: (cause) => new ExecutionsReadFailed({ cause }),
   });
 
@@ -147,6 +156,7 @@ const executionsRead = <A>(
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   function* (
+    context: ExecutionToolContext,
     timeoutSeconds: number,
     executionIds: string[],
     settled: () => boolean,
@@ -154,14 +164,18 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     const followUp = yield* Deferred.make<void>();
     yield* Effect.acquireRelease(
       Effect.sync(() =>
-        listenForFollowUp(() => {
-          Deferred.doneUnsafe(followUp, Effect.void);
-        }),
+        context.inRunScope(() =>
+          listenForFollowUp(() => {
+            Deferred.doneUnsafe(followUp, Effect.void);
+          }),
+        ),
       ),
       (stop) => Effect.sync(stop),
     );
+    // Non-rejecting: `waitForAnyChange`'s executor resolves on a registry
+    // listener or on the abort and never rejects.
     const statusChange = Effect.promise((signal) =>
-      currentSession().executions.waitForAnyChange(executionIds, signal),
+      context.session.executions.waitForAnyChange(executionIds, signal),
     );
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
@@ -226,8 +240,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * `ToolError` stays a typed failure and `runPromise` rejects with it.
    */
   protected execute(input: ExecutionsToolInput): Promise<ToolResult> {
+    const context: ExecutionToolContext = {
+      session: currentSession(),
+      executionId: getRunContextExecutionId(),
+      streamId: getRunContextStreamId(),
+      inRunScope: AsyncLocalStorage.bind(<A>(operation: () => A): A =>
+        operation(),
+      ),
+    };
     return effectRuntime().runPromise(
-      this.run(input).pipe(
+      this.run(context, input, context.session).pipe(
         Effect.catchTag('ExecutionsReadFailed', (error) =>
           Effect.die(error.cause),
         ),
@@ -237,7 +259,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly run = Effect.fn('ExecutionsTool.run')(function* (
     this: ExecutionsTool,
+    context: ExecutionToolContext,
     input: ExecutionsToolInput,
+    session: SessionHandle,
   ) {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
@@ -258,25 +282,25 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
       if (input.action === 'wait') {
-        yield* this.waitForAnyChange(input.timeout, input.ids);
+        yield* this.waitForAnyChange(context, input.timeout, input.ids);
       }
-      return yield* this.listExecutions(input.offset, input.limit);
+      return yield* this.listExecutions(context, input.offset, input.limit);
     }
 
-    const executionId = yield* this.resolveExecutionId(id);
+    const executionId = yield* this.resolveExecutionId(context, id);
 
     // /executions/{id} - execution summary or actions
     if (!resource) {
       switch (input.action) {
         case 'kill':
-          return yield* this.handleKill(executionId);
+          return yield* this.handleKill(context, executionId);
         case 'wait':
-          yield* this.waitForChange(executionId, input.timeout);
-          return yield* this.showSummary(executionId, {
+          yield* this.waitForChange(context, executionId, input.timeout);
+          return yield* this.showSummary(context, executionId, {
             suppressAutoDeliveredSubagentReport: true,
           });
         case 'view':
-          return yield* this.showSummary(executionId, {
+          return yield* this.showSummary(context, executionId, {
             suppressAutoDeliveredSubagentReport: false,
           });
         default:
@@ -299,7 +323,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     switch (resource) {
       case 'config':
-        return yield* this.showConfig(executionId);
+        return yield* this.showConfig(context, executionId);
       case 'conversation': {
         if (viewRange) {
           return yield* Effect.fail(
@@ -309,31 +333,39 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           );
         }
         return yield* this.showConversation(
+          context,
           executionId,
           input.offset,
           input.limit,
+          session,
         );
       }
       case 'todos':
-        return yield* this.showTodos(executionId);
+        return yield* this.showTodos(context, executionId);
       case 'report':
-        return yield* this.showReport(executionId);
+        return yield* this.showReport(context, executionId);
       case 'result':
-        return yield* this.showResultMeta(executionId);
+        return yield* this.showResultMeta(context, executionId);
       case 'children':
-        return yield* this.showChildren(executionId);
+        return yield* this.showChildren(context, executionId);
       case 'output':
-        return yield* this.showOutput(executionId, viewRange);
+        return yield* this.showOutput(context, executionId, viewRange);
       case 'files':
         if (rest.length === 0) {
-          return yield* this.listFiles(executionId);
+          return yield* this.listFiles(context, executionId);
         }
-        return yield* this.readFile(executionId, rest.join('/'), viewRange);
+        return yield* this.readFile(
+          context,
+          executionId,
+          rest.join('/'),
+          viewRange,
+        );
       case 'workspace-files':
         if (rest.length === 0) {
-          return yield* this.listWorkspaceFiles(executionId);
+          return yield* this.listWorkspaceFiles(context, executionId);
         }
         return yield* this.readWorkspaceFile(
+          context,
           executionId,
           rest.join('/'),
           viewRange,
@@ -348,10 +380,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   });
 
   private resolveExecutionId(
+    context: ExecutionToolContext,
     id: string,
   ): Effect.Effect<ExecutionId, ToolError> {
     if (id === 'current') {
-      const executionId = getRunContextExecutionId();
+      const executionId = context.executionId;
       if (!executionId) {
         return Effect.fail(
           new ToolError(
@@ -375,33 +408,43 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   /** Wait for executions to change status, with timeout. */
   private readonly waitForAnyChange = Effect.fn(
     'ExecutionsTool.waitForAnyChange',
-  )(function* (timeout: number, ids?: readonly string[] | null) {
+  )(function* (
+    context: ExecutionToolContext,
+    timeout: number,
+    ids?: readonly string[] | null,
+  ) {
     const candidateIds = ids?.length
       ? unique(ids)
-      : currentSession().executions.getActiveIds();
+      : context.session.executions.getActiveIds();
     // Exclude executions that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
-    const pendingIds = candidateIds.filter((id) => !shouldSkipWait(id));
+    const pendingIds = candidateIds.filter(
+      (id) => !context.inRunScope(() => shouldSkipWait(id)),
+    );
     if (pendingIds.length === 0) return;
 
-    yield* awaitStatusChange(timeout, pendingIds, () =>
-      pendingIds.every(shouldSkipWait),
+    yield* awaitStatusChange(context, timeout, pendingIds, () =>
+      pendingIds.every((id) => context.inRunScope(() => shouldSkipWait(id))),
     );
   });
 
   /** Wait for a specific execution to change status, with timeout. */
   private readonly waitForChange = Effect.fn('ExecutionsTool.waitForChange')(
-    function* (executionId: ExecutionId, timeout: number) {
-      if (shouldSkipWait(executionId)) return;
-      yield* awaitStatusChange(timeout, [executionId], () =>
-        shouldSkipWait(executionId),
+    function* (
+      context: ExecutionToolContext,
+      executionId: ExecutionId,
+      timeout: number,
+    ) {
+      if (context.inRunScope(() => shouldSkipWait(executionId))) return;
+      yield* awaitStatusChange(context, timeout, [executionId], () =>
+        context.inRunScope(() => shouldSkipWait(executionId)),
       );
     },
   );
 
   private readonly listExecutions = Effect.fn('ExecutionsTool.listExecutions')(
-    function* (offset: number, limit: number) {
-      const entries = yield* executionsRead(() => listExecutions());
+    function* (context: ExecutionToolContext, offset: number, limit: number) {
+      const entries = yield* executionsRead(context, () => listExecutions());
 
       if (entries.length === 0) {
         return executed('No execution history found.');
@@ -415,7 +458,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // One page, not one directory — see DURABLE_READ_CONCURRENCY.
       const lines = yield* Effect.forEach(
         page,
-        (entry) => executionsRead(() => formatListingLine(entry)),
+        (entry) => executionsRead(context, () => formatListingLine(entry)),
         { concurrency: DURABLE_READ_CONCURRENCY },
       );
 
@@ -428,23 +471,24 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly showSummary = Effect.fn('ExecutionsTool.showSummary')(
     function* (
       this: ExecutionsTool,
+      context: ExecutionToolContext,
       executionId: ExecutionId,
       options: ExecutionSummaryOptions = {},
     ) {
       // Check in-memory handle first (free) — running executions have everything we need
-      const session = currentSession();
+      const session = context.session;
       const handle = session.executions.getHandle(executionId);
 
       if (handle) {
         // Running execution: agent/status and task state are session-owned;
         // fetch only the remaining durable details from execution storage.
-        const store = getExecutionStore(executionId);
+        const store = context.inRunScope(() => getExecutionStore(executionId));
         const todos = getRunningTodos(session, handle);
         const [meta, children, report] = yield* Effect.all(
           [
-            executionsRead(() => store.readMeta()),
-            executionsRead(() => store.readChildren()),
-            executionsRead(() => store.readReport()),
+            executionsRead(context, () => store.readMeta()),
+            executionsRead(context, () => store.readChildren()),
+            executionsRead(context, () => store.readReport()),
           ],
           { concurrency: 3 },
         );
@@ -466,6 +510,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
 
         yield* this.appendSummaryTail(
+          context,
           lines,
           executionId,
           category,
@@ -485,20 +530,22 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
 
       // Completed execution: full KV fetch
-      const store = getExecutionStore(executionId);
+      const store = context.inRunScope(() => getExecutionStore(executionId));
       const [meta, record, children, todos, report] = yield* Effect.all(
         [
-          executionsRead(() => store.readMeta()),
-          executionsRead(() => store.readRunRecord()),
-          executionsRead(() => store.readChildren()),
-          executionsRead(() => readCompletedRunTodos(executionId)),
-          executionsRead(() => store.readReport()),
+          executionsRead(context, () => store.readMeta()),
+          executionsRead(context, () => store.readRunRecord()),
+          executionsRead(context, () => store.readChildren()),
+          readCompletedRunTodos(executionId, session).pipe(
+            Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
+          ),
+          executionsRead(context, () => store.readReport()),
         ],
         { concurrency: 5 },
       );
 
       if (!meta && !record) {
-        const resumability = yield* executionsRead(() =>
+        const resumability = yield* executionsRead(context, () =>
           deriveResumability(executionId),
         );
         if (resumability.kind !== 'checkpoint') {
@@ -521,7 +568,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
       const category = executionDisplayCategory(identity, record);
-      const info = yield* executionsRead(() =>
+      const info = yield* executionsRead(context, () =>
         getExecutionStatusInfo(executionId, meta),
       );
       const lines = buildCompletedSummaryLines(
@@ -534,6 +581,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
 
       yield* this.appendSummaryTail(
+        context,
         lines,
         executionId,
         category,
@@ -555,6 +603,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     'ExecutionsTool.appendSummaryTail',
   )(function* (
     this: ExecutionsTool,
+    context: ExecutionToolContext,
     lines: string[],
     executionId: ExecutionId,
     category: ExecutionDisplayCategory | undefined,
@@ -575,7 +624,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
     if (children.length > 0) {
       lines.push('', `Children (${children.length}):`);
-      const formatted = yield* this.formatChildren(children);
+      const formatted = yield* this.formatChildren(context, children);
       lines.push(...formatted.map((line) => `  ${line}`));
     }
     lines.push(
@@ -595,11 +644,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * listing page (DURABLE_READ_CONCURRENCY).
    */
   private readonly formatChildren = Effect.fn('ExecutionsTool.formatChildren')(
-    (children: ChildRecord[]) =>
+    (context: ExecutionToolContext, children: ChildRecord[]) =>
       Effect.forEach(
         children,
         (child) =>
-          executionsRead(async () =>
+          executionsRead(context, async () =>
             formatChildLine(
               child,
               await getExecutionStore(child.id).readMeta(),
@@ -610,17 +659,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly handleKill = Effect.fn('ExecutionsTool.handleKill')(
-    function* (executionId: ExecutionId) {
-      const ctx = tryUseRunContext();
-      const callerStreamId = getRunContextStreamId(ctx);
+    function* (context: ExecutionToolContext, executionId: ExecutionId) {
+      const callerStreamId = context.streamId;
 
-      if (getRunContextExecutionId(ctx) === executionId) {
+      if (context.executionId === executionId) {
         return yield* Effect.fail(
           new ToolError(`Cannot kill your own execution (${executionId}).`),
         );
       }
 
-      const target = currentSession().executions.getHandle(executionId);
+      const target = context.session.executions.getHandle(executionId);
       if (!target) {
         return yield* Effect.fail(
           new ToolError(
@@ -643,10 +691,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       warnAbandonedSlotValue(
         GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
         'workspaceState',
-        workspaceRoots().workspaceState,
+        context.session.roots.workspaceState,
       );
       if (
-        !readPlatformSetting<boolean>(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL)
+        !context.inRunScope(() =>
+          readPlatformSetting<boolean>(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL),
+        )
       ) {
         return yield* Effect.fail(
           new ToolError(
@@ -655,8 +705,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      const success = currentSession().executions.kill(executionId, {
-        detachActiveChildren: detachSubagentsOnStop(),
+      const success = context.session.executions.kill(executionId, {
+        detachActiveChildren: context.inRunScope(() => detachSubagentsOnStop()),
       });
       if (success) {
         return executed(`Execution ${executionId} terminated.`);
@@ -675,13 +725,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * summary about which tasks are still pending.
    */
   private readonly showTodos = Effect.fn('ExecutionsTool.showTodos')(function* (
+    context: ExecutionToolContext,
     executionId: ExecutionId,
   ) {
-    const session = currentSession();
+    const session = context.session;
     const handle = session.executions.getHandle(executionId);
     const todos = handle
       ? getRunningTodos(session, handle)
-      : yield* executionsRead(() => readCompletedRunTodos(executionId));
+      : yield* readCompletedRunTodos(executionId, session).pipe(
+          Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
+        );
 
     if (todos.length === 0) {
       return executed(`No task list found for execution ${executionId}.`);
@@ -694,12 +747,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   });
 
   private readonly showReport = Effect.fn('ExecutionsTool.showReport')(
-    function* (executionId: ExecutionId) {
-      const store = getExecutionStore(executionId);
+    function* (context: ExecutionToolContext, executionId: ExecutionId) {
+      const store = context.inRunScope(() => getExecutionStore(executionId));
       const [report, note] = yield* Effect.all(
         [
-          executionsRead(() => store.readReport()),
-          executionsRead(() => turnAttributionNote(store)),
+          executionsRead(context, () => store.readReport()),
+          executionsRead(context, () => turnAttributionNote(store)),
         ],
         { concurrency: 2 },
       );
@@ -717,12 +770,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * later stage without parsing the prose report.
    */
   private readonly showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(
-    function* (executionId: ExecutionId) {
-      const store = getExecutionStore(executionId);
+    function* (context: ExecutionToolContext, executionId: ExecutionId) {
+      const store = context.inRunScope(() => getExecutionStore(executionId));
       const [resultMeta, note] = yield* Effect.all(
         [
-          executionsRead(() => store.readResultMeta()),
-          executionsRead(() => turnAttributionNote(store)),
+          executionsRead(context, () => store.readResultMeta()),
+          executionsRead(context, () => turnAttributionNote(store)),
         ],
         { concurrency: 2 },
       );
@@ -742,15 +795,19 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly showChildren = Effect.fn('ExecutionsTool.showChildren')(
-    function* (this: ExecutionsTool, executionId: ExecutionId) {
-      const children = yield* executionsRead(() =>
+    function* (
+      this: ExecutionsTool,
+      context: ExecutionToolContext,
+      executionId: ExecutionId,
+    ) {
+      const children = yield* executionsRead(context, () =>
         getExecutionStore(executionId).readChildren(),
       );
       if (children.length === 0) {
         return executed(`No child executions found for ${executionId}.`);
       }
 
-      const lines = yield* this.formatChildren(children);
+      const lines = yield* this.formatChildren(context, children);
       return executed(
         `Children of ${executionId} (${children.length}):\n\n${lines.join('\n')}`,
       );
@@ -758,9 +815,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly showConfig = Effect.fn('ExecutionsTool.showConfig')(
-    function* (executionId: ExecutionId) {
-      const store = getExecutionStore(executionId);
-      const record = yield* executionsRead(() => store.readRunRecord());
+    function* (context: ExecutionToolContext, executionId: ExecutionId) {
+      const store = context.inRunScope(() => getExecutionStore(executionId));
+      const record = yield* executionsRead(context, () =>
+        store.readRunRecord(),
+      );
 
       if (!record) {
         return yield* Effect.fail(
@@ -771,7 +830,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Filter out fields irrelevant to this agent's category. Identity comes
       // only from the stamped execution row; a pre-identity row (reader retired
       // per #9590 Stage 7) degrades to the config-derived category, loudly.
-      const meta = yield* executionsRead(() => store.readMeta());
+      const meta = yield* executionsRead(context, () => store.readMeta());
       const identity = meta?.identity;
       if (meta && !identity) {
         log.warn(
@@ -785,19 +844,26 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly showConversation = Effect.fn(
     'ExecutionsTool.showConversation',
-  )(function* (executionId: ExecutionId, offset: number, limit: number) {
-    const store = getExecutionStore(executionId);
-    const conversationResult = yield* executionsRead(() =>
-      readCompletedRunConversation(executionId),
-    );
+  )(function* (
+    context: ExecutionToolContext,
+    executionId: ExecutionId,
+    offset: number,
+    limit: number,
+    session: SessionHandle,
+  ) {
+    const store = context.inRunScope(() => getExecutionStore(executionId));
+    const conversationResult = yield* readCompletedRunConversation(
+      executionId,
+      session,
+    ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
     const { conversation, source, streamId } = conversationResult;
     const streamDiagnostics = [`Stream: ${streamId ?? 'none'}`];
 
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
       // when the shared storage decision says it is resumable.
-      const meta = yield* executionsRead(() => store.readMeta());
-      const resumability = yield* executionsRead(() =>
+      const meta = yield* executionsRead(context, () => store.readMeta());
+      const resumability = yield* executionsRead(context, () =>
         deriveResumability(executionId),
       );
       const exists =
@@ -851,11 +917,15 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * renders properly.
    */
   private readonly showOutput = Effect.fn('ExecutionsTool.showOutput')(
-    function* (executionId: ExecutionId, viewRange?: [number, number]) {
+    function* (
+      context: ExecutionToolContext,
+      executionId: ExecutionId,
+      viewRange?: [number, number],
+    ) {
       // The handle names the live child stream; liveness itself is resolved
       // below, from facts that outlive this process.
-      const handle = currentSession().executions.getHandle(executionId);
-      const meta = yield* executionsRead(() =>
+      const handle = context.session.executions.getHandle(executionId);
+      const meta = yield* executionsRead(context, () =>
         getExecutionStore(executionId).readMeta(),
       );
       if (!meta && !handle) {
@@ -870,7 +940,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      const transcripts = currentSession().transcripts;
+      const transcripts = context.session.transcripts;
       // The stream is the one stamped on execution metadata at registration.
       const streamId = handle?.childStreamId ?? meta?.streamId;
       if (!streamId || !transcripts.has(streamId)) {
@@ -879,15 +949,15 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             `Use /executions/${executionId}/report for the result summary.`,
         );
       }
-      const entries = yield* executionsRead(() =>
-        transcripts.readEntries(streamId),
-      );
+      const entries = yield* transcripts
+        .readEntries(streamId)
+        .pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
 
       const { lines, chars } = projectProcessOutput(entries);
       // No snapshot: `meta` was read before the transcript, and a command that
       // finished during that read must not be judged against the row as it
       // looked beforehand. One read of one execution can afford a fresh one.
-      const liveness = yield* executionsRead(() =>
+      const liveness = yield* executionsRead(context, () =>
         resolveExecutionLiveness(executionId),
       );
       const info = statusInfoFromLiveness(liveness);
@@ -967,9 +1037,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
+    context: ExecutionToolContext,
     executionId: ExecutionId,
   ) {
-    const files = yield* executionsRead(() =>
+    const files = yield* executionsRead(context, () =>
       listRunGeneratedFiles(executionId),
     );
     if (files.length === 0) {
@@ -984,13 +1055,14 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   });
 
   private readonly readFile = Effect.fn('ExecutionsTool.readFile')(function* (
+    context: ExecutionToolContext,
     executionId: ExecutionId,
     filePath: string,
     viewRange?: [number, number],
   ) {
     const displayPath = `/executions/${executionId}/files/${filePath}`;
     assertNoParentTraversal(filePath);
-    const fullPath = yield* executionsRead(() =>
+    const fullPath = yield* executionsRead(context, () =>
       findExistingRunStoragePath(executionId, filePath),
     );
     if (!fullPath) {
@@ -999,7 +1071,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    return yield* readFileContent(StorageFS, fullPath, {
+    return yield* readFileContent(context, StorageFS, fullPath, {
       directoryErrorPath: displayPath,
       resultPath: displayPath,
       viewRange,
@@ -1008,16 +1080,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly listWorkspaceFiles = Effect.fn(
     'ExecutionsTool.listWorkspaceFiles',
-  )(function* (executionId: ExecutionId) {
-    const store = getExecutionStore(executionId);
+  )(function* (context: ExecutionToolContext, executionId: ExecutionId) {
+    const store = context.inRunScope(() => getExecutionStore(executionId));
     const [record, paths] = yield* Effect.all(
       [
-        executionsRead(() => store.readRunRecord()),
-        executionsRead(() => store.readWorkspaceFiles()),
+        executionsRead(context, () => store.readRunRecord()),
+        executionsRead(context, () => store.readWorkspaceFiles()),
       ],
       { concurrency: 2 },
     );
-    const entries = yield* executionsRead(() =>
+    const entries = yield* executionsRead(context, () =>
       listExecutionWorkspaceFiles(record, paths),
     );
 
@@ -1038,15 +1110,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly readWorkspaceFile = Effect.fn(
     'ExecutionsTool.readWorkspaceFile',
   )(function* (
+    context: ExecutionToolContext,
     executionId: ExecutionId,
     filePath: string,
     viewRange?: [number, number],
   ) {
-    const store = getExecutionStore(executionId);
+    const store = context.inRunScope(() => getExecutionStore(executionId));
     const [record, paths] = yield* Effect.all(
       [
-        executionsRead(() => store.readRunRecord()),
-        executionsRead(() => store.readWorkspaceFiles()),
+        executionsRead(context, () => store.readRunRecord()),
+        executionsRead(context, () => store.readWorkspaceFiles()),
       ],
       { concurrency: 2 },
     );
@@ -1081,7 +1154,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    return yield* readFileContent(AbsoluteFS, resolved.absolutePath, {
+    return yield* readFileContent(context, AbsoluteFS, resolved.absolutePath, {
       directoryErrorPath: `/executions/${executionId}/workspace-files/${filePath}`,
       resultPath: `/executions/${executionId}/workspace-files/${resolved.path}`,
       viewRange,
@@ -1102,6 +1175,7 @@ interface FileBackend {
 }
 
 const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
+  context: ExecutionToolContext,
   fs: FileBackend,
   fullPath: string,
   {
@@ -1114,7 +1188,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     viewRange: [number, number] | undefined;
   },
 ) {
-  const stats = yield* executionsRead(() => fs.stat(fullPath));
+  const stats = yield* executionsRead(context, () => fs.stat(fullPath));
   if (isDirectory(stats.type)) {
     return yield* Effect.fail(
       new ToolError(
@@ -1123,7 +1197,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     );
   }
 
-  const content = yield* executionsRead(() => fs.read(fullPath));
+  const content = yield* executionsRead(context, () => fs.read(fullPath));
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),

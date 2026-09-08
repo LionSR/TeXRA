@@ -76,13 +76,9 @@ import {
 import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { StreamView } from '@shared/session/sessionView';
+import { DatabaseReadFailed } from '@shared/session/database';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { snapshotFacts } from '@test/support/storeTestDrivers';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
-import {
-  StreamSnapshotPreloadError,
-  type WorkPlanProvenance,
-} from '@transcript';
 import {
   bindTestSessionView,
   makeStreamView,
@@ -247,11 +243,10 @@ function workPlanSnapshots(
     readonly plan: Plan | null;
     readonly todos: readonly TodoItem[];
   },
-  preload: StreamArtifactReader['preload'] = async () => undefined,
+  preload: StreamArtifactReader['preload'] = () => Effect.void,
 ): StreamArtifactReader {
   return {
     preload: vi.fn(preload),
-    workPlanProvenance: () => ({ plan: false, todos: false }),
     getWorkPlan: (streamId) => {
       const { plan, todos } = read(streamId);
       return { plan, todos: [...todos], planSummary: null };
@@ -290,9 +285,11 @@ function mockSignOuts(): {
     .mockResolvedValue(undefined);
   const signOutChatGpt = vi
     .spyOn(subscriptionLogin, 'signOutCliSubscription')
-    .mockResolvedValue({
-      preferenceUpdate: { effective: false, target: 'global' },
-    });
+    .mockReturnValue(
+      Effect.succeed({
+        preferenceUpdate: { effective: false, target: 'global' as const },
+      }),
+    );
   mockModelAccessOverview();
   return { signOutSupabase, signOutChatGpt };
 }
@@ -372,7 +369,12 @@ describe('handleTuiSlashCommand', () => {
           plan: { objective: 'Hydrated historical objective.' },
           todos: [],
         }),
-        () => preload,
+        () =>
+          Effect.tryPromise({
+            try: () => preload,
+            catch: (cause) =>
+              new DatabaseReadFailed({ path: ':memory:', cause }),
+          }),
       ),
     });
     ensureStream(streamId);
@@ -402,10 +404,13 @@ describe('handleTuiSlashCommand', () => {
           ? { plan: { objective: 'Plan B.' }, todos: [] }
           : { plan: null, todos: [] };
       },
-      async ([streamId]) =>
-        new Promise<void>((resolve) => {
-          resolvers.set(streamId, resolve);
-        }),
+      ([streamId]) =>
+        Effect.promise(
+          () =>
+            new Promise<void>((resolve) => {
+              resolvers.set(streamId!, resolve);
+            }),
+        ),
     );
     registerBuiltinSlashCommands({ workPlanSnapshots: snapshots });
     ensureStream(streamA);
@@ -444,7 +449,12 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
         () => ({ plan: { objective: 'Late plan.' }, todos: [] }),
-        () => preload,
+        () =>
+          Effect.tryPromise({
+            try: () => preload,
+            catch: (cause) =>
+              new DatabaseReadFailed({ path: ':memory:', cause }),
+          }),
       ),
     });
     ensureStream(streamId);
@@ -468,7 +478,12 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
         () => ({ plan: { objective: 'Late plan.' }, todos: [] }),
-        () => preload,
+        () =>
+          Effect.tryPromise({
+            try: () => preload,
+            catch: (cause) =>
+              new DatabaseReadFailed({ path: ':memory:', cause }),
+          }),
       ),
     });
     ensureStream(streamId);
@@ -490,7 +505,12 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
         () => ({ plan: null, todos: [] }),
-        () => preload,
+        () =>
+          Effect.tryPromise({
+            try: () => preload,
+            catch: (cause) =>
+              new DatabaseReadFailed({ path: ':memory:', cause }),
+          }),
       ),
     });
     ensureStream(streamId);
@@ -506,73 +526,6 @@ describe('handleTuiSlashCommand', () => {
       'Could not load workflow artifacts: historical sidecar unreadable',
     );
   });
-
-  it.each([
-    {
-      label: 'plan',
-      workPlan: {
-        plan: { objective: 'Use the accepted live plan.' },
-        todos: [],
-      },
-      provenance: { todos: false, plan: true },
-    },
-    {
-      label: 'todos',
-      workPlan: {
-        plan: null,
-        todos: [
-          {
-            content: 'Use the accepted live todo',
-            activeForm: 'Using the accepted live todo',
-            status: 'in_progress',
-          },
-        ],
-      },
-      provenance: { todos: true, plan: false },
-    },
-  ] satisfies readonly {
-    label: string;
-    workPlan: {
-      readonly plan: Plan | null;
-      readonly todos: readonly TodoItem[];
-    };
-    provenance: WorkPlanProvenance;
-  }[])(
-    'opens accepted in-memory $label state when historical preload fails',
-    async ({ workPlan, provenance }) => {
-      const { promise: preload, reject: rejectPreload } = deferred<void>();
-      const streamId = 'live-plan-after-load-error' as StreamTabId;
-      registerBuiltinSlashCommands({
-        workPlanSnapshots: workPlanSnapshots(
-          () => workPlan,
-          () => preload,
-        ),
-      });
-      ensureStream(streamId);
-      activeStreamId.set(streamId);
-
-      const dispatched = handleTuiSlashCommand('/plan', createContext());
-      rejectPreload(
-        new StreamSnapshotPreloadError(
-          new Error('historical sidecar unreadable'),
-          streamId,
-          false,
-          provenance,
-        ),
-      );
-      await dispatched;
-
-      // The reader records only what this load could vouch for; the fields it
-      // could not are re-asked of the store on every repaint, so nothing
-      // promotes this snapshot afterwards.
-      expect(foregroundReader.get()).toEqual({
-        kind: 'workPlan',
-        streamId,
-        provenanceAtOpen: provenance,
-      });
-      expect(transientNotice.get()).toBeUndefined();
-    },
-  );
 
   it('opens memory list and preview output in the reference pane', async () => {
     vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockReturnValue(
@@ -900,8 +853,8 @@ describe('handleTuiSlashCommand', () => {
   it('reports successful TeXRA sign-out when ChatGPT logout fails', async () => {
     registerBuiltinSlashCommands();
     vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
-    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockRejectedValue(
-      new Error('Codex logout failed'),
+    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
+      Effect.fail(new Error('Codex logout failed')),
     );
     mockModelAccessOverview();
 
@@ -916,9 +869,9 @@ describe('handleTuiSlashCommand', () => {
   it('reports ChatGPT sign-out success when only preference cleanup fails', async () => {
     registerBuiltinSlashCommands();
     vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
-    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockResolvedValue({
-      preferenceError: 'Config write failed',
-    });
+    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
+      Effect.succeed({ preferenceError: 'Config write failed' }),
+    );
     mockModelAccessOverview();
 
     const handled = await handleTuiSlashCommand('/logout all', createContext());

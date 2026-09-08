@@ -176,9 +176,10 @@ vi.mock('@agent/index', async () => {
   return { loadAgents: () => Effect.void };
 });
 
-vi.mock('@agent/runtime/runAgent', () => ({
-  runAgent: () => Promise.resolve(),
-}));
+vi.mock('@agent/runtime/runAgent', async () => {
+  const { Effect } = await import('effect');
+  return { runAgent: () => Effect.void };
+});
 
 vi.mock('@logger/logUtils', () => ({
   createChannelWriter: () => () => {},

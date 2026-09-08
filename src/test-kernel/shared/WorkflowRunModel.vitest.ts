@@ -207,8 +207,8 @@ describe('workflow run model', () => {
   });
 
   it("settles an interrupted run's cards in the producer's vocabulary", () => {
-    // The write side (`StreamLogStore.endRunningGroupsForStreams`) rewrites a
-    // launched call as `failed` and an unlaunched one as `skipped`/
+    // Host-exit settlement publishes a canonical workflow.call fact with a
+    // launched call marked `failed` and an unlaunched one as `skipped`/
     // `not-reached`. The read-side repaint must say the same thing, or the
     // same run reads differently before and after its transcript is settled.
     const model = modelOf(

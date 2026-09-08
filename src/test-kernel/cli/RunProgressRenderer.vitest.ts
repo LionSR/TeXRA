@@ -1026,7 +1026,7 @@ describe('CLI run progress renderer', () => {
     expect(output).not.toContain('\r\x1b[2K');
   });
 
-  it('writes one status line when a run-scope status fact accompanies the session fact', async () => {
+  it('writes one status line for a committed completion', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const session = createTestSession();
       const host = createCliRuntimeHost(
@@ -1037,11 +1037,8 @@ describe('CLI run progress renderer', () => {
         }),
       );
       const detach = host.attachRunProgressRenderer(session);
-      // The session's graph is fresh: let its fold subscribe before the
-      // facts land, so each fact paints as its own level.
-      await settle();
-
       await publishRun(session, { streamId: 'status-line-stream' });
+      await session.settlePublications();
       // Status travels only as a session fact (run-scope status is no longer
       // representable), so exactly one line renders for the transition.
       session.publishStatus({
@@ -1050,17 +1047,15 @@ describe('CLI run progress renderer', () => {
         phase: STREAM_PHASE.COMPLETED,
         cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
       });
-      await settle();
+      await session.settlePublications();
 
       detach();
       await host.close();
     });
 
-    // The committed launch batch paints with its inputs. Completion emits
-    // exactly one further line.
-    expect(output).toBe(
-      'polish paper.tex · 0s\n' + 'polish paper.tex · Completed · 0s\n',
-    );
+    expect(
+      output.split('\n').filter((line) => line.includes('Completed')),
+    ).toEqual(['polish paper.tex · Completed · 0s']);
   });
 
   it('preserves the live progress line before interactive prompts', async () => {

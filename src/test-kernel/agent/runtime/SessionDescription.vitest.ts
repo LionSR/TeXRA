@@ -101,6 +101,7 @@ describe('session description helpers', () => {
   it('uses the exact workflow-agent description carried by launch context', async () => {
     const session = createTestSession();
     publishTestRunStart(session, 'stream-workflow', 'a0b0c1' as ExecutionId);
+    await session.settlePublications();
     const recorded = recordSessionEvents(session);
     const handler = mockToolUseAnswer('Correcting derivation signs');
 
@@ -119,6 +120,7 @@ describe('session description helpers', () => {
       'a0b0c1',
       'Correcting derivation signs',
     );
+    await session.settlePublications();
     expect(recorded.events).toMatchObject([
       {
         type: 'updateStreamDescription',
@@ -162,6 +164,7 @@ describe('session description helpers', () => {
   it('keeps generating compact descriptions for tool-use runs', async () => {
     const session = createTestSession();
     publishTestRunStart(session, 'stream-tool', 'a0b0c2' as ExecutionId);
+    await session.settlePublications();
     const recorded = recordSessionEvents(session);
     mockToolUseAnswer('Fixing proof typos');
 
@@ -171,6 +174,7 @@ describe('session description helpers', () => {
       'a0b0c2',
       'Fixing proof typos',
     );
+    await session.settlePublications();
     expect(recorded.events).toMatchObject([
       {
         type: 'updateStreamDescription',

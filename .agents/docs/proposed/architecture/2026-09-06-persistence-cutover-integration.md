@@ -66,7 +66,7 @@ Review repairs in this integration:
 The contract is
 [substrate decision §6.1–§8](2026-09-03-persistence-substrate-decision.md).
 The newer owner rulings in
-[Effect migration PRD, Phase 2](../prds/2026-08-26-effect-4-runtime-migration.md#phase-2--the-agent-runtime-on-the-ledger-lane-d-of-the-cutover)
+[Effect migration PRD, Phase 2](./2026-08-26-effect-4-runtime-migration.md#phase-2--the-agent-runtime-on-the-ledger-lane-d-of-the-cutover)
 override its old checkpoint-import requirement. The following is the remaining
 work at this integration, distinguished from foundations already present.
 

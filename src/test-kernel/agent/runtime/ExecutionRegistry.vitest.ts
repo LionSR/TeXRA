@@ -1,4 +1,6 @@
 // Third-party imports
+import { it as effectIt } from '@effect/vitest';
+import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -10,6 +12,7 @@ import type {
 } from '@agent/runtime/ExecutionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { ExecutionBusy } from '@agent/runtime/executionLanes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { statusDraft } from '@agent/runtime/SessionEvents';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -1704,3 +1707,72 @@ describe('executionRegistry', () => {
     expect(eventsOfType(recorded.events, 'status')).toHaveLength(1);
   });
 });
+
+effectIt.effect(
+  'refuses owned executions and reserves an idle deletion before a competing launch',
+  () =>
+    Effect.gen(function* () {
+      const { registry } = createRegistry();
+      const executionId = 'abcd12';
+      const started = createDeferred<void>();
+      const finish = createDeferred<void>();
+      const generation = yield* Effect.forkChild(
+        registry.launchExecution(
+          executionId,
+          Effect.promise(async () => {
+            started.resolve();
+            await finish.promise;
+          }),
+        ),
+        { startImmediately: true },
+      );
+      const remove = vi.fn();
+      const removal = registry.withInactiveExecutionStep(
+        executionId,
+        Effect.sync(remove),
+      );
+      try {
+        // Admission before the launch callback begins must already see its slot.
+        expect(yield* Effect.flip(removal)).toBeInstanceOf(ExecutionBusy);
+        yield* Effect.promise(() => started.promise);
+        expect(yield* Effect.flip(removal)).toBeInstanceOf(ExecutionBusy);
+        expect(remove).not.toHaveBeenCalled();
+      } finally {
+        finish.resolve();
+      }
+      yield* Fiber.join(generation);
+      yield* Effect.yieldNow;
+
+      // A parked turn may have no running generation, but its handle retains ownership.
+      const parked = createHandle(executionId, 'parent', 'child');
+      registry.track(parked);
+      expect(yield* Effect.flip(removal)).toBeInstanceOf(ExecutionBusy);
+      registry.untrack(executionId);
+
+      const admitted = yield* Deferred.make<void>();
+      const collected = yield* Deferred.make<void>();
+      const deleting = yield* Effect.forkChild(
+        registry.withInactiveExecutionStep(
+          executionId,
+          Effect.gen(function* () {
+            yield* Deferred.succeed(admitted, undefined);
+            yield* Deferred.await(collected);
+            remove();
+          }),
+        ),
+      );
+      yield* Deferred.await(admitted);
+      const launch = vi.fn(async () => {});
+      const next = yield* Effect.forkChild(
+        registry.launchExecution(executionId, Effect.promise(launch)),
+        { startImmediately: true },
+      );
+      expect(launch).not.toHaveBeenCalled();
+      yield* Deferred.succeed(collected, undefined);
+      yield* Fiber.join(deleting);
+      yield* Fiber.join(next);
+      expect(remove).toHaveBeenCalledOnce();
+      expect(launch).toHaveBeenCalledOnce();
+      registry.dispose();
+    }),
+);

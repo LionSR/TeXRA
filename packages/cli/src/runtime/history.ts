@@ -1,12 +1,10 @@
 import { cp, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Result, Stream } from 'effect';
 
 import {
   checkpointExists,
-  deleteAllExecutions,
-  deleteExecution,
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
@@ -14,14 +12,14 @@ import {
   unwrapResultMeta,
   type AgentExecutionListingEntry,
 } from '@agent/storage';
-import { tryDefaultSession, type AgentConfig } from '@agent/runtime';
+import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { createSessionStores } from '@controllers/session/createSessionStores';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   ExecutionIdSchema,
+  aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
   resolveHistoryRunStatus,
@@ -30,7 +28,6 @@ import {
   type HistoryRunStatus,
 } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
-import { GoalStore } from '@tools/goal';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
@@ -39,13 +36,10 @@ import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
-import {
-  cleanupExecutionAdjacentStreamState,
-  resolveAdjacentStreamCleanup,
-} from '@transcript/adjacentStreamCleanup';
 import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { initializeCliTranscriptSession } from './transcriptSession';
 import { CliUsageError } from './cliContext';
 import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
 import {
@@ -175,6 +169,7 @@ export async function readCliHistoryDetails(
   id: ExecutionId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
+  const session = await initializeCliTranscriptSession();
   const store = getExecutionStore(id);
   const [
     meta,
@@ -190,8 +185,7 @@ export async function readCliHistoryDetails(
     store.readConfig(),
     store.readResultMeta(),
     store.readReport(),
-    // Transcript sidecar owns completed-run display (#7246 Decision 1).
-    readCompletedRunConversation(id),
+    effectRuntime().runPromise(readCompletedRunConversation(id, session)),
     store.readWorkspaceFiles(),
     listRunGeneratedFiles(id),
     checkpointExists(id),
@@ -290,8 +284,9 @@ type CliHistoryExportInputResult =
 export async function readCliHistoryExportInput(
   id: ExecutionId,
 ): Promise<CliHistoryExportInputResult> {
+  const session = await initializeCliTranscriptSession();
   const { meta, config, conversation, hasTranscriptEvidence, exportInput } =
-    await loadChatExportInput(id);
+    await effectRuntime().runPromise(loadChatExportInput(id, session));
   if (exportInput) return { status: 'ok', exportInput };
   if (!meta && !config && !conversation && !hasTranscriptEvidence) {
     return { status: 'not_found' };
@@ -397,48 +392,67 @@ export async function stageCliHistoryTraceViewerAssets(params: {
   );
 }
 
-export async function deleteCliHistory(options: {
-  id?: ExecutionId;
-  all?: boolean;
-}): Promise<CliHistoryDeleteResult> {
-  // A live session (rare for the one-shot `history` command, but not
-  // impossible) supplies the canonical lifecycle callbacks for cleanup.
-  const liveSession = tryDefaultSession();
-  const cleanup = resolveAdjacentStreamCleanup(
-    liveSession?.transcripts.mode.kind === 'persistent'
-      ? createSessionStores(liveSession)
-      : undefined,
+/** Delete indexed run lifetimes through the session's claim transaction. */
+export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
+  session: SessionHandle,
+  options: { id?: ExecutionId; all?: boolean },
+) {
+  if (!options.all && !options.id) {
+    return yield* Effect.fail(new Error('Expected an execution id, or --all.'));
+  }
+  const rows = yield* Stream.runCollect(session.events.listing());
+  const removed = new Set(
+    rows
+      .filter((row) => row.type === 'stream.removed')
+      .map((row) => row.aggregateId),
   );
-  if (options.all) {
-    const result = await deleteAllExecutions({
-      beforeDelete: (executionId) =>
-        cleanupExecutionAdjacentStreamState(executionId, cleanup),
-    });
-    await GoalStore.forgetByExecutionIds(result.deleted);
+  const starts = rows
+    .filter((row) => row.type === 'run.start')
+    .filter((row) => !removed.has(row.aggregateId));
+  const selected = options.all
+    ? starts
+    : starts.filter((row) => row.executionId === options.id);
+  const deleted: ExecutionId[] = [];
+  const active: ExecutionId[] = [];
+  const failed: { executionId: ExecutionId; message: string }[] = [];
+  for (const start of selected) {
+    const result = yield* Effect.result(
+      session.requests.removeStream(
+        aggregateTarget(start.aggregateId).id,
+        options.all ? 'bulk' : 'single',
+        start.commit,
+      ),
+    );
+    if (Result.isSuccess(result)) {
+      deleted.push(start.executionId);
+    } else if (result.failure._tag === 'NotOwner') {
+      active.push(start.executionId);
+    } else {
+      if (!options.all) return yield* Effect.fail(result.failure);
+      failed.push({
+        executionId: start.executionId,
+        message: toErrorMessage(result.failure),
+      });
+    }
+  }
+  if (options.all)
     return {
       deleted: 'all',
-      count: result.deleted.length,
-      active: result.active,
-      failed: result.failed,
-    };
-  }
-  if (!options.id) {
-    throw new Error('Expected an execution id, or --all.');
-  }
-  const id = options.id;
-  const result = await deleteExecution(id, {
-    beforeDelete: () => cleanupExecutionAdjacentStreamState(id, cleanup),
-  });
-  if (result.status === 'deleted') {
-    await GoalStore.forgetByExecutionIds([id]);
-  }
+      count: deleted.length,
+      active,
+      failed,
+    } satisfies CliHistoryDeleteResult;
+  const id = options.id!;
+  let status: 'deleted' | 'active' | 'not-found' = 'not-found';
+  if (deleted.length > 0) status = 'deleted';
+  else if (active.length > 0) status = 'active';
   return {
     deleted: 'one',
     id,
-    found: result.status !== 'not-found',
-    status: result.status,
-  };
-}
+    found: selected.length > 0,
+    status,
+  } satisfies CliHistoryDeleteResult;
+});
 
 export function formatCliHistoryText(
   entries: readonly CliHistoryEntry[],

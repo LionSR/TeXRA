@@ -1,9 +1,11 @@
+import { Effect } from 'effect';
+import { runInSession } from '@agent/runtime/RunContext';
 /** Tool-use follow-up routing and continuation ownership. */
+
 import {
   classifyRun,
   type RunClassification,
 } from '@agent/runtime/runClassification';
-import { listExecutionStreamReferences } from '@agent/storage/executionListing';
 import {
   currentSession,
   type SessionHandle,
@@ -16,8 +18,8 @@ import {
   streamHeldMessage,
   streamUnreadableMessage,
 } from '@shared/streams/streamStatusDisplay';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { FollowUpQueueInput } from './FollowUpQueue';
-import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -54,7 +56,7 @@ type FollowUpPresentation =
   { severity: 'none' } | { severity: 'info' | 'warning'; message: string };
 
 interface SubmitFollowUpOptions {
-  readonly session?: SessionHandle;
+  readonly session: SessionHandle;
   readonly resumePort?: Pick<AgentResumePort, 'tryResumeStream'>;
   /**
    * Notifications never revive a persisted cursor. A child delivery is an
@@ -112,9 +114,19 @@ export function notifyFollowUpSent(
   (session ?? currentSession()).followUps.notifySent(streamId);
 }
 
+/** Queue transient progress using the current stream and live queue owners. */
+export function enqueueLiveFollowUp(
+  streamId: StreamTabId,
+  followUp: FollowUpQueueInput,
+  session: SessionHandle,
+): void {
+  const target = session.executions.getToolUseFollowUpTarget(streamId);
+  if (target.kind === 'no_session') return;
+  session.followUps.submit(streamId, followUp, 'live_owner');
+}
+
 interface PendingResume {
   readonly resume: Promise<boolean>;
-  readonly recovery: FollowUpRecoveryLease;
 }
 
 type Admission =
@@ -176,30 +188,24 @@ function admitFollowUp(
   }
 
   const recovery = submission.lease;
-  const resume = (options.resumePort ?? platform().agentResume).tryResumeStream(
-    streamId,
-    recovery,
-  );
-  return { resume, recovery };
+  // The Promise resume port owns its settlement even if the submitting fiber
+  // stops waiting. A declined wake must release its claim for the next attempt.
+  const resume = (options.resumePort ?? platform().agentResume)
+    .tryResumeStream(streamId, recovery)
+    .then((resumed) => {
+      if (!resumed) ownerSession.followUps.release(recovery, 'recoverable');
+      return resumed;
+    });
+  return { resume };
 }
 
-/**
- * The execution a stream currently belongs to. Prefer the resident snapshot
- * record for a live session: `run.start` updates it synchronously. A stream
- * whose run metadata is not resident (after a host restart, or evicted from
- * the snapshot store) resolves through the authored `meta.streamId` index.
- */
-export async function lookupStreamExecutionId(
-  streamId: StreamTabId,
-  session: SessionHandle,
-): Promise<ExecutionId | undefined> {
-  return (
-    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await listExecutionStreamReferences()).references.findLast(
-      (reference) => reference.streamId === streamId,
-    )?.executionId
-  );
-}
+/** Read the authored execution identity from the stream's committed prefix. */
+export const lookupStreamExecutionId = Effect.fn('lookupStreamExecutionId')(
+  function* (streamId: StreamTabId, session: SessionHandle) {
+    yield* session.snapshots.preload([streamId]);
+    return session.snapshots.getRunMetadata(streamId).executionId;
+  },
+);
 
 /**
  * The one mapping from a run classification to what the user's stream shows
@@ -267,57 +273,68 @@ export function recordRunRefusal(
  * the failure path; an unreadable fact is `not_resumable`. Only the one run
  * the user acted on is inspected.
  */
-async function classifyRefusal(
+const classifyRefusal = Effect.fn('classifyRefusal')(function* (
   streamId: StreamTabId,
   session: SessionHandle,
-): Promise<FollowUpFailureReason> {
-  let executionId: ExecutionId | undefined;
-  try {
-    executionId = await lookupStreamExecutionId(streamId, session);
-  } catch (error) {
-    logger.warn(
-      `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,
-      { data: { streamId, error } },
-    );
-    return 'not_resumable';
-  }
+): Effect.fn.Return<FollowUpFailureReason, Error> {
+  const executionId = yield* lookupStreamExecutionId(streamId, session).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        logger.warn(
+          `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,
+          { data: { streamId, error } },
+        );
+        return undefined;
+      }),
+    ),
+  );
   if (!executionId) return 'not_resumable';
-  return recordRunRefusal(streamId, session, await classifyRun(executionId));
-}
+  const classification = yield* Effect.tryPromise({
+    try: async () => runInSession(session, () => classifyRun(executionId)),
+    catch: ensureError,
+  });
+  return recordRunRefusal(streamId, session, classification);
+});
 
-export async function submitFollowUp(
+export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   streamId: StreamTabId,
   followUp: FollowUpQueueInput | string,
-  options: SubmitFollowUpOptions = {},
-): Promise<SubmitFollowUpResult> {
-  const ownerSession = options.session ?? currentSession();
+  options: SubmitFollowUpOptions,
+): Effect.fn.Return<SubmitFollowUpResult, Error> {
+  const ownerSession = options.session;
   const item = typeof followUp === 'string' ? { text: followUp } : followUp;
   // A host callback must not be able to strand the recovery lease below:
   // its failure is the host's to log, never this boundary's to propagate.
-  const notifyAdmitted = (admitted: boolean): void => {
-    try {
-      options.onAdmitted?.(admitted);
-    } catch (error) {
-      logger.warn(`onAdmitted callback failed for stream ${streamId}`, {
-        data: { streamId, error: String(error) },
-      });
-    }
-  };
+  const notifyAdmitted = (admitted: boolean) =>
+    Effect.try({
+      try: () => options.onAdmitted?.(admitted),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          logger.warn(`onAdmitted callback failed for stream ${streamId}`, {
+            data: { streamId, error: String(error) },
+          });
+        }),
+      ),
+    );
   const dispatch = admitFollowUp(streamId, item, options, ownerSession);
   if ('resume' in dispatch) {
-    notifyAdmitted(true);
-    const resumed = await dispatch.resume;
+    yield* notifyAdmitted(true);
+    const resumed = yield* Effect.tryPromise({
+      try: () => dispatch.resume,
+      catch: ensureError,
+    });
     if (resumed) return { status: 'queued' };
-    ownerSession.followUps.release(dispatch.recovery, 'recoverable');
     return { status: 'queued', wake: 'failed' };
   }
   if (dispatch.status === 'no_session') {
-    notifyAdmitted(false);
+    yield* notifyAdmitted(false);
     return {
       status: 'failed',
-      reason: await classifyRefusal(streamId, ownerSession),
+      reason: yield* classifyRefusal(streamId, ownerSession),
     };
   }
-  notifyAdmitted(dispatch.status !== 'failed');
+  yield* notifyAdmitted(dispatch.status !== 'failed');
   return dispatch;
-}
+});

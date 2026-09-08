@@ -12,12 +12,12 @@ import { isFileNotFoundError } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { debug, warn } from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   type FileLocation,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createExternalLocation,
   createWorkspaceLocation,
@@ -61,14 +61,12 @@ async function silentDelete(
   targetPath: string,
   kind: 'file' | 'dir',
 ): Promise<void> {
-  await platform()
-    .fs.delete(targetPath)
-    .catch((error) => {
-      // Best-effort temp cleanup; the target may already be gone.
-      debug('latexPreview', `Failed to delete temp ${kind} ${targetPath}`, {
-        data: error,
-      });
+  await AbsoluteFS.delete(targetPath).catch((error) => {
+    // Best-effort temp cleanup; the target may already be gone.
+    debug('latexPreview', `Failed to delete temp ${kind} ${targetPath}`, {
+      data: error,
     });
+  });
 }
 
 /** Clean up LaTeX auxiliary files for a given base path */
@@ -132,9 +130,8 @@ async function readFileWithFallback(
   uri: { fsPath: string },
   fallback: string,
 ): Promise<string> {
-  return platform()
-    .fs.readFile(uri.fsPath)
-    .then((bytes) => Buffer.from(bytes).toString('utf8'))
+  return AbsoluteFS.readBytes(uri.fsPath)
+    .then((bytes) => bytes.toString('utf8'))
     .catch((error) => {
       if (!isFileNotFoundError(error)) {
         warn(
@@ -175,7 +172,7 @@ async function createTempFileWithCleanup(
   let tempDir: string;
   if (location === 'workspaceTemp') {
     tempDir = path.join(workspacePath, TEXRA_TEMP_DIR);
-    await platform().fs.createDirectory(tempDir);
+    await AbsoluteFS.createDir(tempDir);
   } else {
     const resolvedPath = path.isAbsolute(originalPath)
       ? originalPath
@@ -184,7 +181,7 @@ async function createTempFileWithCleanup(
   }
 
   const tempPath = path.join(tempDir, tempFileName);
-  await platform().fs.writeFile(tempPath, Buffer.from(content, 'utf8'));
+  await AbsoluteFS.write(tempPath, content);
 
   registerCleanup(entry, async () => {
     await silentDelete(tempPath, 'file');

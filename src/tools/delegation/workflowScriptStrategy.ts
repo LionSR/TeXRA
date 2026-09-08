@@ -1,3 +1,5 @@
+import { Cause, Effect, Exit } from 'effect';
+
 /**
  * Workflow-script child-run strategy over the shared `childRunLoop`.
  *
@@ -17,9 +19,12 @@ import type {
   WorkflowAgentRunner,
   WorkflowJournalEntry,
   WorkflowScriptRunResult,
+  WorkflowScriptRunOptions,
 } from '@agent/workflowScript';
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionKVStore } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
@@ -36,7 +41,7 @@ import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { truncateSummary } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   formatChildRunDelivery,
   formatChildRunError,
@@ -47,7 +52,6 @@ import {
   createWorkflowAttemptCostTracker,
   runPersistedWorkflowScriptWithProgress,
 } from './workflowScriptRun';
-import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunner';
 
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
@@ -106,6 +110,10 @@ function formatWorkflowResult(result: unknown): string {
 }
 
 export interface WorkflowScriptStrategyParams {
+  readonly session: SessionHandle;
+  readonly fingerprintAgentDependencies: NonNullable<
+    WorkflowScriptRunOptions['fingerprintAgentDependencies']
+  >;
   /** The detached run's execution id — echoed on the delivery envelope. */
   readonly executionId: ExecutionId;
   /** The run's child-stream trace — where phase/log progress projects. */
@@ -240,102 +248,109 @@ export function createWorkflowScriptStrategy(
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
-    launch: async (ports, signal) => {
-      startedAt = Date.now();
-      // Physical-attempt callbacks are the current-invocation boundary: replay
-      // and stable recovery emit none, while every model attempt emits one.
-      const attemptCost = createWorkflowAttemptCostTracker();
-      const attemptJournalByKey = new Map<string, WorkflowJournalEntry>();
-      const attemptJournal = (): WorkflowJournalEntry[] =>
-        [...attemptJournalByKey.values()].toSorted(
-          (left, right) => left.index - right.index,
-        );
-      // Settle only entries consumed by this invocation: the durable union may
-      // hold superseded or malformed untouched recovery history, and baseline
-      // history is irrelevant to this invocation's cost and delivered files.
-      const settleAttempt = (
-        snapshot: WorkflowExecutionSnapshot | undefined,
-      ): void => {
-        const journal = attemptJournal();
-        const costUsd = attemptCost.total(journal);
-        ports.recordCost(costUsd);
-        settleSummary({ journal, snapshot }, costUsd);
-      };
-      const runAgent = params.createRunAgent({
-        onCost: (invocation, totalCostUsd) => {
-          ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
-        },
-      });
-
-      let unregisterControls: (() => void) | undefined;
-      // The engine flushes its terminal snapshot before it rethrows, so the
-      // last one *persisted* is the run's own final account of what ran — the
-      // only source the failure path has for phase and task tallies, and by
-      // construction never newer than the durable execution record.
-      let lastSnapshot: WorkflowExecutionSnapshot | undefined;
-      let run: WorkflowScriptRunResult;
-      try {
-        run = await runPersistedWorkflowScriptWithProgress(params.logger, {
-          store: params.store,
-          checkpointId: params.checkpointId,
-          ...(params.initialSnapshot !== undefined && {
-            initialSnapshot: params.initialSnapshot,
-          }),
-          script: params.script,
-          ...(params.args != null && { args: params.args }),
-          ...(params.files !== undefined && {
-            files: params.files,
-          }),
-          signal,
-          // The session's child-run budget is the one owner of "how many at
-          // once": the engine's own default is a library fallback only.
-          concurrency: resolveChildRunConcurrencyBudget(),
-          runAgent,
-          fingerprintAgentDependencies: (options) =>
-            fingerprintWorkflowAgentDependencies(params.executionId, options),
-          onActivity: runLog.add,
-          // This invocation's consumed results are the only entries its cost
-          // and delivery summary may claim. The engine fires after durable
-          // commit for live results and after validation for cache hits.
-          onJournalEntryConsumed: (entry) => {
-            attemptJournalByKey.set(entry.key, entry);
-          },
-          onSnapshot: async (snapshot) => {
-            // Persist first: only a durably written snapshot may feed the
-            // delivery summary, otherwise a failed write leaves the summary
-            // reporting a newer state than /executions/{id} keeps.
-            await params.onSnapshot?.(snapshot);
-            lastSnapshot = snapshot;
-          },
-          // The engine's control is already keyed by the grandchild execution
-          // id a host targets, so the run registers it as-is.
-          onControl: (control) => {
-            unregisterControls = params.workflowControls.register(control);
+    launch: (ports, signal) =>
+      Effect.gen(function* () {
+        startedAt = Date.now();
+        // Physical-attempt callbacks are the current-invocation boundary: replay
+        // and stable recovery emit none, while every model attempt emits one.
+        const attemptCost = createWorkflowAttemptCostTracker();
+        const attemptJournalByKey = new Map<string, WorkflowJournalEntry>();
+        const attemptJournal = (): WorkflowJournalEntry[] =>
+          [...attemptJournalByKey.values()].toSorted(
+            (left, right) => left.index - right.index,
+          );
+        // Settle only entries consumed by this invocation: the durable union may
+        // hold superseded or malformed untouched recovery history, and baseline
+        // history is irrelevant to this invocation's cost and delivered files.
+        const settleAttempt = (
+          snapshot: WorkflowExecutionSnapshot | undefined,
+        ): void => {
+          const journal = attemptJournal();
+          const costUsd = attemptCost.total(journal);
+          ports.recordCost(costUsd);
+          settleSummary({ journal, snapshot }, costUsd);
+        };
+        const runAgent = params.createRunAgent({
+          onCost: (invocation, totalCostUsd) => {
+            ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
           },
         });
-      } catch (runError) {
-        try {
-          settleAttempt(lastSnapshot);
-        } catch (settlementError) {
-          // The run error is what the caller must see, so settlement cannot
-          // rethrow. Live candidates recorded through the loop remain billed;
-          // report when the final attempt-local reconciliation could not land.
-          params.logger.warn(
-            `Workflow script '${params.name}' failed and its cost could not be settled from this attempt's journal: ${toErrorMessage(settlementError)}`,
-            { data: settlementError },
-          );
-        }
-        throw runError;
-      } finally {
-        // The control handle outlives no in-flight call; drop the registration
-        // the moment the run settles so a later host request cannot reach a
-        // dead engine control.
-        unregisterControls?.();
-      }
 
-      settleAttempt(run.snapshot);
-      return run;
-    },
+        let unregisterControls: (() => void) | undefined;
+        // The engine flushes its terminal snapshot before it rethrows, so the
+        // last one *persisted* is the run's own final account of what ran; the
+        // only source the failure path has for phase and task tallies, and by
+        // construction never newer than the durable execution record.
+        let lastSnapshot: WorkflowExecutionSnapshot | undefined;
+        const result = yield* Effect.exit(
+          Effect.tryPromise({
+            try: () =>
+              runInSession(params.session, () =>
+                runPersistedWorkflowScriptWithProgress(params.logger, {
+                  store: params.store,
+                  checkpointId: params.checkpointId,
+                  ...(params.initialSnapshot !== undefined && {
+                    initialSnapshot: params.initialSnapshot,
+                  }),
+                  script: params.script,
+                  ...(params.args != null && { args: params.args }),
+                  ...(params.files !== undefined && {
+                    files: params.files,
+                  }),
+                  signal,
+                  // The session's child-run budget is the one owner of "how many at
+                  // once": the engine's own default is a library fallback only.
+                  concurrency: resolveChildRunConcurrencyBudget(),
+                  runAgent,
+                  fingerprintAgentDependencies:
+                    params.fingerprintAgentDependencies,
+                  onActivity: runLog.add,
+                  // This invocation's consumed results are the only entries its cost
+                  // and delivery summary may claim. The engine fires after durable
+                  // commit for live results and after validation for cache hits.
+                  onJournalEntryConsumed: (entry) => {
+                    attemptJournalByKey.set(entry.key, entry);
+                  },
+                  onSnapshot: async (snapshot) => {
+                    // Persist first: only a durably written snapshot may feed the
+                    // delivery summary, otherwise a failed write leaves the summary
+                    // reporting a newer state than /executions/{id} keeps.
+                    await params.onSnapshot?.(snapshot);
+                    lastSnapshot = snapshot;
+                  },
+                  // The engine's control is already keyed by the grandchild execution
+                  // id a host targets, so the run registers it as-is.
+                  onControl: (control) => {
+                    unregisterControls =
+                      params.workflowControls.register(control);
+                  },
+                }),
+              ),
+            catch: ensureError,
+          }).pipe(Effect.ensuring(Effect.sync(() => unregisterControls?.()))),
+        );
+        if (Exit.isFailure(result)) {
+          const settlement = yield* Effect.exit(
+            Effect.try({
+              try: () => settleAttempt(lastSnapshot),
+              catch: ensureError,
+            }),
+          );
+          if (Exit.isFailure(settlement)) {
+            const settlementError = Cause.squash(settlement.cause);
+            params.logger.warn(
+              `Workflow script '${params.name}' failed and its cost could not be settled from this attempt's journal: ${toErrorMessage(settlementError)}`,
+              { data: settlementError },
+            );
+          }
+          return yield* Effect.failCause(result.cause);
+        }
+        yield* Effect.try({
+          try: () => settleAttempt(result.value.snapshot),
+          catch: ensureError,
+        });
+        return result.value;
+      }),
 
     isTerminal: () => true,
 

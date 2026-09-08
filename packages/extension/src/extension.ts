@@ -33,7 +33,6 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -500,9 +499,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     languageModel.onDidChange(invalidateLanguageModels),
   );
-  const transcripts = await StreamLogStore.open();
   const runtimeSession = initializeDefaultSession({
-    transcripts,
     responseTextProcessing: createTexraResponseTextProcessing(
       agentResponseTextConnector,
     ),
@@ -511,6 +508,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
   registerRuntimeShutdownHandlers(lifecycle, {
+    runSettlement: (settlement) => effectRuntime().runPromise(settlement),
     afterAgentShutdown: [
       () => killActiveRecording(),
       () => effectRuntime().runPromise(UsageLogService.dispose()),
@@ -604,10 +602,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
         log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
       }
     })(),
-    (async () => {
-      try {
-        const { currentVersion, previousVersion, skipped, messages } =
-          await refreshModelListAndLog(context.globalState);
+    effectRuntime()
+      .runPromise(refreshModelListAndLog(context.globalState))
+      .then(({ currentVersion, previousVersion, skipped, messages }) => {
         if (!skipped) {
           if (previousVersion !== currentVersion) {
             log.info(
@@ -617,10 +614,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
           log.info('Model list refresh completed successfully');
         }
         for (const message of messages) log.info(message);
-      } catch (err) {
+      })
+      .catch((err) => {
         log.error(`Failed to refresh model list: ${toErrorMessage(err)}`);
-      }
-    })(),
+      }),
   ]);
 
   registerSupabaseAuth(context);
@@ -657,11 +654,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(), 0);
   registerCommands(context, progressViewProvider);
-  // The leftover-stream sweep reads the whole storage root, so it runs after
-  // the commands and views are wired rather than in front of them; nothing
-  // here awaits it, and deactivation cancels it if it has not started.
-  const cancelLeftoverStreamSweep = scheduleLeftoverStreamSweep(runtimeSession);
-  context.subscriptions.push({ dispose: cancelLeftoverStreamSweep });
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context);
 

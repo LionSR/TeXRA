@@ -42,7 +42,6 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { effectRuntime } from '@platform/processRuntime';
 import { DisposableStore } from '@platform/disposable';
-import { platform } from '@platform/platform';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
@@ -171,18 +170,19 @@ export async function runChat(
   // it immediately before this function installs its own process.on pair, so
   // exactly one owner is ever registered for a given signal; see
   // initInteractiveCliPlatform's doc comment for the full handoff design.
-  await initInteractiveCliPlatform({ ...context, quietLogs: true });
+  const services = await initInteractiveCliPlatform({
+    ...context,
+    quietLogs: true,
+  });
   const initialResume = init.initialResume;
-  const runtimeSession = await initializeCliTranscriptSession(
-    initialResume ? { delayMs: 0 } : {},
-  );
+  const runtimeSession = await initializeCliTranscriptSession();
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model
   // resolution below then see the freshly-set credentials in the same process.
   const { maybeRunCliOnboarding } =
     await import('@cli/onboarding/runOnboarding');
-  const onboarding = await maybeRunCliOnboarding(context);
+  const onboarding = await maybeRunCliOnboarding(services, context);
   if (onboarding.declined) {
     // The user saw the picker and chose "Skip for now"; the skip summary already
     // told them how to set up later. Exit cleanly instead of falling through to
@@ -197,7 +197,7 @@ export async function runChat(
   const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
-    firstRunDone: getFirstRunDone(platform().globalState),
+    firstRunDone: getFirstRunDone(services.globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
   await effectRuntime().runPromise(loadAgents());
@@ -427,21 +427,14 @@ export async function runChat(
     chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
     session.clearRunState();
-    // StreamLogStore entries outlive resetCliState (which only clears the
-    // React/signal view). Drop them so transcript projection can't replay
-    // the cleared conversation into the fresh `<Static>` scrollback.
-    // Only this chat's conversation goes: the root run and its descendants.
-    // The view also holds every earlier run hydrated from the transcript
-    // summary; those are history, not this chat, and stay.
+    // Release this conversation's resident transcripts when their remaining
+    // readers and writers leave. Clearing the terminal does not delete history.
     const store = runtimeSession.transcripts;
     for (const streamId of descendantStreamIds(
       currentView(),
       rootStreamIdSignal.get(),
     )) {
-      store.delete(streamId).catch(() => {
-        // Best-effort: a KV failure leaves the log on disk, but the run
-        // is already torn down, nothing actionable to surface here.
-      });
+      store.requestEviction(streamId);
     }
     resetCliState(meta);
     clearTerminalScrollback();
@@ -548,6 +541,7 @@ export async function runChat(
   const exitController = createSessionExitController({
     ink,
     session,
+    lifecycle: services.lifecycle,
     commandName: context.commandName,
     cwd: context.cwd,
     disposables,

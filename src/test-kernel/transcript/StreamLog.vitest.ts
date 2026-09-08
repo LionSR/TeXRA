@@ -283,9 +283,9 @@ describe('StreamLog', () => {
     for (const { entry, text } of snapshots) {
       expect(entry.text).toBe(text);
     }
-    // The save path (JSON serialization) sees the same materialized text.
+    // Export serialization sees the same materialized text.
     const persisted = JSON.parse(
-      JSON.stringify(log.toPersistedEntries()),
+      JSON.stringify(log.toJSON()),
     ) as StreamLogEntry[];
     for (const entry of persisted) {
       expect(entry.text).toBe(oracle.get(entry.id));

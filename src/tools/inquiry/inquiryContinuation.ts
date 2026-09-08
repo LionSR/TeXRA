@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+import { runInSession } from '@agent/runtime/RunContext';
 /**
  * Inquiry continuation injector.
  *
@@ -16,10 +18,7 @@ import {
   lookupStreamExecutionId,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
@@ -29,6 +28,7 @@ import {
   type InquiryResumeOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   formatRelativeTime,
   previewLabel,
@@ -109,62 +109,67 @@ export function buildContinuationText(params: {
   return lines.join('\n');
 }
 
-async function emitInquiryThreadUpdate(
+const emitInquiryThreadUpdate = Effect.fn('emitInquiryThreadUpdate')(function* (
   threadId: InquiryThreadId,
   extra: { resumeOutcome: InquiryResumeOutcome },
-  session?: SessionHandle,
-): Promise<void> {
-  const summary = await getThreadSummary(threadId);
+  session: SessionHandle,
+): Effect.fn.Return<void, Error> {
+  const summary = yield* Effect.tryPromise({
+    try: async () => runInSession(session, () => getThreadSummary(threadId)),
+    catch: ensureError,
+  });
   if (!summary) return;
   const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
-  (session ?? currentSession()).publish([
+  session.publish([
     {
       type: 'inquiryThreadUpdated',
       aggregateId: qualifyAggregateId('inquiry', payload.threadId),
       ...payload,
     },
   ]);
-}
+});
 
 /** Archive a thread that has nothing to continue: emit the summary update. */
-async function archiveAsParentFinished(
+const archiveAsParentFinished = Effect.fn('archiveAsParentFinished')(function* (
   threadId: InquiryThreadId,
-  session?: SessionHandle,
-): Promise<InjectionOutcome> {
-  await emitInquiryThreadUpdate(
+  session: SessionHandle,
+): Effect.fn.Return<InjectionOutcome, Error> {
+  yield* emitInquiryThreadUpdate(
     threadId,
     { resumeOutcome: 'parent_finished' },
     session,
   );
   return 'archived';
-}
+});
 
-async function deliverContinuation(params: {
-  parentStreamId: StreamTabId;
-  text: string;
-  threadId: InquiryThreadId;
-  session?: SessionHandle;
-}): Promise<InjectionOutcome> {
-  const result = await submitFollowUp(params.parentStreamId, params.text, {
-    session: params.session,
-  });
+const deliverContinuation = Effect.fn('deliverContinuation')(
+  function* (params: {
+    parentStreamId: StreamTabId;
+    text: string;
+    threadId: InquiryThreadId;
+    session: SessionHandle;
+  }): Effect.fn.Return<InjectionOutcome, Error> {
+    const result = yield* submitFollowUp(params.parentStreamId, params.text, {
+      session: params.session,
+    });
 
-  // A queued continuation whose wake failed is still queued; an explicit
-  // Resume delivers it. A refusal has nothing left to continue.
-  if (result.status === 'failed') {
-    logger.warn(
-      `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} refused it (${result.reason}).`,
+    // A queued continuation whose wake failed is still queued; an explicit
+    // Resume delivers it. A refusal has nothing left to continue.
+    if (result.status === 'failed') {
+      logger.warn(
+        `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} refused it (${result.reason}).`,
+      );
+      return yield* archiveAsParentFinished(params.threadId, params.session);
+    }
+
+    yield* emitInquiryThreadUpdate(
+      params.threadId,
+      { resumeOutcome: result.status },
+      params.session,
     );
-    return archiveAsParentFinished(params.threadId, params.session);
-  }
-
-  await emitInquiryThreadUpdate(
-    params.threadId,
-    { resumeOutcome: result.status },
-    params.session,
-  );
-  return result.status;
-}
+    return result.status;
+  },
+);
 
 /**
  * Shared body of the answered / dropped injectors: resolve the manifest,
@@ -173,13 +178,19 @@ async function deliverContinuation(params: {
  * parent stream, or a parent stream since re-run under another execution),
  * then build and deliver the continuation.
  */
-async function injectContinuation(
+const injectContinuation = Effect.fn('injectContinuation')(function* (
   event: 'answered' | 'dropped',
   threadId: InquiryThreadId,
-  manifestHint?: ExternalInquiryThreadManifest,
-  session?: SessionHandle,
-): Promise<InjectionOutcome> {
-  const manifest = manifestHint ?? (await readExternalInquiryThread(threadId));
+  manifestHint: ExternalInquiryThreadManifest | undefined,
+  session: SessionHandle,
+): Effect.fn.Return<InjectionOutcome, Error> {
+  const manifest =
+    manifestHint ??
+    (yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(session, () => readExternalInquiryThread(threadId)),
+      catch: ensureError,
+    }));
   if (!manifest) return 'archived';
 
   const lastTurn = manifest.turns.at(-1);
@@ -189,31 +200,38 @@ async function injectContinuation(
     logger.warn(
       `Inquiry continuation for ${threadId}: manifest has no turns; archiving.`,
     );
-    return archiveAsParentFinished(threadId, session);
+    return yield* archiveAsParentFinished(threadId, session);
   }
   if (event === 'answered' && lastTurn.kind !== 'answered') return 'archived';
   if (manifest.parentStreamId == null) {
-    return archiveAsParentFinished(threadId, session);
+    return yield* archiveAsParentFinished(threadId, session);
   }
   // The answer is addressed to the execution that asked. A manifest written
   // before the field existed names none and is delivered by stream alone.
   if (manifest.parentExecutionId != null) {
-    const current = await lookupStreamExecutionId(
+    const current = yield* lookupStreamExecutionId(
       manifest.parentStreamId,
-      session ?? currentSession(),
+      session,
     );
     if (current !== manifest.parentExecutionId) {
       logger.warn(
         `Inquiry continuation for ${threadId}: parent stream ${manifest.parentStreamId} now runs execution ${current ?? 'none'}, not ${manifest.parentExecutionId}; archiving.`,
       );
-      return archiveAsParentFinished(threadId, session);
+      return yield* archiveAsParentFinished(threadId, session);
     }
   }
 
-  const stillOpen = await listThreadsByStatus({
-    status: 'open',
-    scope: 'stream',
-    streamId: manifest.parentStreamId,
+  const parentStreamId = manifest.parentStreamId;
+  const stillOpen = yield* Effect.tryPromise({
+    try: async () =>
+      runInSession(session, () =>
+        listThreadsByStatus({
+          status: 'open',
+          scope: 'stream',
+          streamId: parentStreamId,
+        }),
+      ),
+    catch: ensureError,
   });
   const text = buildContinuationText({
     event,
@@ -226,13 +244,13 @@ async function injectContinuation(
     stillOpen,
   });
 
-  return deliverContinuation({
+  return yield* deliverContinuation({
     parentStreamId: manifest.parentStreamId,
     text,
     threadId,
     session,
   });
-}
+});
 
 export function injectContinuationForAnsweredThread(
   threadId: InquiryThreadId,
@@ -242,9 +260,9 @@ export function injectContinuationForAnsweredThread(
    * stream could flip `answered → open` between the write and the
    * re-read, which would otherwise drop the continuation as archived.
    */
-  manifestHint?: ExternalInquiryThreadManifest,
-  session?: SessionHandle,
-): Promise<InjectionOutcome> {
+  manifestHint: ExternalInquiryThreadManifest | undefined,
+  session: SessionHandle,
+): Effect.Effect<InjectionOutcome, Error> {
   return injectContinuation('answered', threadId, manifestHint, session);
 }
 
@@ -256,8 +274,8 @@ export function injectContinuationForDroppedThread(
    * thread from another stream could flip status away from `dropped`
    * before a fresh read, which would mislabel the continuation.
    */
-  manifestHint?: ExternalInquiryThreadManifest,
-  session?: SessionHandle,
-): Promise<InjectionOutcome> {
+  manifestHint: ExternalInquiryThreadManifest | undefined,
+  session: SessionHandle,
+): Effect.Effect<InjectionOutcome, Error> {
   return injectContinuation('dropped', threadId, manifestHint, session);
 }

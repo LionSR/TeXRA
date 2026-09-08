@@ -44,8 +44,8 @@ export interface StreamLogDelta {
    */
   readonly textChunks: readonly StreamLogTextDelta[];
   /**
-   * The stream's log instance was replaced (disk history merged under live
-   * appends), renumbering seqNos. Consumers must resync, not fold.
+   * The resident log instance was replaced by an event-prefix fold.
+   * Consumers must reread entries before applying further deltas.
    */
   readonly reset: boolean;
 }
@@ -94,11 +94,6 @@ function entryWithLazyText(
   return Object.defineProperties({}, descriptors) as StreamLogEntry;
 }
 
-export interface StreamLogPreservedRawEntry {
-  readonly beforeTypedIndex: number;
-  readonly raw: unknown;
-}
-
 export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START) return false;
   const data = isObject(entry.data) ? entry.data : {};
@@ -145,7 +140,6 @@ export function nonterminalWorkflowCall(
 
 export class StreamLog {
   private entries: StreamLogEntry[] = [];
-  private readonly preservedRawEntries: StreamLogPreservedRawEntry[] = [];
   private readonly indexById = new Map<string, number>();
   /**
    * Per-entry chunk accumulators for in-flight streaming text. An entry whose
@@ -168,24 +162,8 @@ export class StreamLog {
   private runningStreamingTextCount = 0;
   private nonterminalWorkflowCallCount = 0;
 
-  constructor(
-    entries: readonly StreamLogEntry[] = [],
-    preservedRawEntries: readonly StreamLogPreservedRawEntry[] = [],
-  ) {
-    this.preservedRawEntries = [...preservedRawEntries];
-
-    if (entries.length === 0) {
-      return;
-    }
-
-    // Re-number seqNos sequentially (1-based) to close gaps from entries
-    // that were filtered out by safeParse during schema upgrades.
-    // This keeps the invariant: seqNo === array index + 1, which
-    // getRange() relies on when using seqNo as an array-index proxy.
-    this.entries = entries.map((entry, i) => {
-      const seqNo = i + 1;
-      return entry.seqNo === seqNo ? entry : { ...entry, seqNo };
-    });
+  constructor(entries: readonly StreamLogEntry[] = []) {
+    this.entries = [...entries];
     // The settlement head is never below the entry count; one pass over the
     // entries raises it to the highest order already allocated on disk while
     // building the id index and the running-state counters.
@@ -286,6 +264,27 @@ export class StreamLog {
 
   get hasNonterminalWorkflowCall(): boolean {
     return this.nonterminalWorkflowCallCount > 0;
+  }
+
+  /** Fold a canonical recorded entry without allocating new entry coordinates. */
+  record(entry: StreamLogEntry): void {
+    const index = this.indexById.get(entry.id);
+    if (index === undefined) {
+      this.indexById.set(entry.id, this.entries.length);
+      this.entries.push(entry);
+      this.pendingAppendedIds.push(entry.id);
+    } else {
+      this.countEntry(this.entries[index], -1);
+      this.entries[index] = entry;
+      this.streamingText.delete(entry.id);
+      this.pendingDirtiedIds.add(entry.id);
+    }
+    this.countEntry(entry, 1);
+    this.settlementSeqCounter = Math.max(
+      this.settlementSeqCounter,
+      entry.settlementSeqNo ?? 0,
+      this.entries.length,
+    );
   }
 
   append(entry: StreamLogAppendInput): StreamLogEntry {
@@ -417,36 +416,5 @@ export class StreamLog {
 
   toJSON(): StreamLogEntry[] {
     return [...this.entries];
-  }
-
-  /**
-   * Internal persistence view. Callers must treat the returned array as
-   * immutable; avoiding a defensive copy matters on the stream-log save path.
-   */
-  toPersistedEntries(): readonly unknown[] {
-    if (this.preservedRawEntries.length === 0) return this.entries;
-
-    const preservedByIndex = new Map<number, unknown[]>();
-    for (const preserved of this.preservedRawEntries) {
-      const index = Math.min(
-        Math.max(0, preserved.beforeTypedIndex),
-        this.entries.length,
-      );
-      const bucket = preservedByIndex.get(index);
-      if (bucket) {
-        bucket.push(preserved.raw);
-      } else {
-        preservedByIndex.set(index, [preserved.raw]);
-      }
-    }
-
-    const persisted: unknown[] = [];
-    for (let index = 0; index <= this.entries.length; index += 1) {
-      const preserved = preservedByIndex.get(index);
-      if (preserved) persisted.push(...preserved);
-      const entry = this.entries[index];
-      if (entry) persisted.push(entry);
-    }
-    return persisted;
   }
 }

@@ -130,13 +130,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
               data: { key, streamId, err },
             });
           });
-        return Effect.tryPromise({
-          try: () =>
-            submitFollowUp(streamId, text, {
-              session: owner,
-              mode: 'live_notification',
-            }),
-          catch: (err) => err,
+        return submitFollowUp(streamId, text, {
+          session: owner,
+          mode: 'live_notification',
         }).pipe(
           Effect.flatMap((result) => {
             if (result.status !== 'sent' && result.status !== 'queued') {

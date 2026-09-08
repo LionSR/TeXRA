@@ -1,19 +1,15 @@
-/**
- * Completed-run archive reads (#7246 Decision 1): once a run finishes, its
- * durable display/export data is owned by the transcript sidecars
- * (`streamLogs/{stream}.json` + `streamData/{stream}/*`), keyed through the
- * execution→stream mapping.
- */
-import { getExecutionStore } from '@agent/storage';
+/** Completed-run display reads, keyed by the registered execution-to-stream link. */
+import { Effect } from 'effect';
+import { resolveStreamForExecution } from '@agent/storage/executionLifecycle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
-import { KVStore } from '@common/storage/KVStore';
+
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   ToolResultSchema,
   type ExecutionId,
-  type ExecutionMeta,
   type StreamLogEntry,
   type StreamLogEntryOf,
   type StreamTabId,
@@ -21,51 +17,23 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
-import { StreamLogStore } from './StreamLogStore';
-import { streamDataDir } from './streamDataPaths';
-import { readWorkPlan } from './streamSnapshotRead';
-
-/**
- * The execution→stream foreign key: the `streamId` stamped on execution
- * metadata at registration. A row without one has no persisted stream, so
- * archive readers never fall back to re-deriving a stream from names or
- * sidecar scans. This is the ONE resolution site — completed-run readers
- * and the trace assembler share it instead of each re-deriving
- * `readMeta() → meta.streamId`.
- *
- * The resolved branch carries the already-read `meta` so a caller that also
- * needs other metadata fields (the trace assembler) does not pay a second
- * `readMeta()`. Absence is a plain `null`: no execution metadata at all and
- * metadata predating stamped streams are the same answer to every caller.
- */
-export async function resolveStreamForExecution(
-  executionId: ExecutionId,
-): Promise<{
-  readonly streamId: StreamTabId;
-  readonly meta: ExecutionMeta;
-} | null> {
-  const meta = await getExecutionStore(executionId).readMeta();
-  if (!meta?.streamId) return null;
-  return { streamId: meta.streamId, meta };
-}
-
-/**
- * Read the archived task list for a completed run from the durable stream
- * sidecar (`streamData/{stream}/workPlan.json`), keyed through
- * {@link resolveStreamForExecution}. An unresolved execution, a missing
- * sidecar and an empty one all read as `[]` — no consumer distinguished them.
- */
-export async function readCompletedRunTodos(
-  executionId: ExecutionId,
-): Promise<readonly TodoItem[]> {
-  const resolution = await resolveStreamForExecution(executionId);
-  if (!resolution) return [];
-  const workPlan = await readWorkPlan(
-    new KVStore(streamDataDir(resolution.streamId)),
-  );
-  return workPlan.todos;
-}
+/** Read completed tasks from the session's committed stream fold. */
+export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
+  function* (
+    executionId: ExecutionId,
+    session: Pick<SessionHandle, 'roots' | 'snapshots'>,
+  ): Effect.fn.Return<readonly TodoItem[], Error> {
+    const resolution = yield* Effect.tryPromise({
+      try: () => resolveStreamForExecution(executionId, session.roots),
+      catch: ensureError,
+    });
+    if (!resolution) return [];
+    const snapshot = yield* session.snapshots.read(resolution.streamId);
+    return snapshot.todos;
+  },
+);
 
 // ============================================================================
 // Conversation
@@ -318,26 +286,23 @@ function streamLogEntriesToConversation(
   );
 }
 
-/**
- * Read the archived conversation for a completed run from the transcript
- * sidecar (`streamLogs/{stream}.json`), reconstructed into provider-agnostic
- * messages.
- */
-export async function readCompletedRunConversation(
+/** Read completed-run display messages from the canonical transcript fold. */
+export const readCompletedRunConversation = Effect.fn(
+  'readCompletedRunConversation',
+)(function* (
   executionId: ExecutionId,
-): Promise<CompletedRunConversationReadResult> {
-  const resolution = await resolveStreamForExecution(executionId);
+  session: Pick<SessionHandle, 'roots' | 'transcripts'>,
+): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
+  const resolution = yield* Effect.tryPromise({
+    try: () => resolveStreamForExecution(executionId, session.roots),
+    catch: ensureError,
+  });
   if (!resolution) return { conversation: null, source: 'none' };
   const { streamId } = resolution;
-
-  // A call-scoped read-only store seeded with just this stream, so this
-  // reader neither reloads a live store nor scans the whole streamLogs
-  // directory, and never mutates persistence.
-  const streamLogStore = await StreamLogStore.openReadOnlyForStream(streamId);
   const conversation = streamLogEntriesToConversation(
-    await streamLogStore.readEntries(streamId),
+    yield* session.transcripts.readEntries(streamId),
   );
   return conversation.length > 0
     ? { conversation, source: 'streamLog', streamId }
     : { conversation: null, source: 'none', streamId };
-}
+});
