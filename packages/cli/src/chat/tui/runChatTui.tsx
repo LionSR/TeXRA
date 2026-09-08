@@ -42,7 +42,6 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { effectRuntime } from '@platform/processRuntime';
 import { DisposableStore } from '@platform/disposable';
-import { platform } from '@platform/platform';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
@@ -171,7 +170,10 @@ export async function runChat(
   // it immediately before this function installs its own process.on pair, so
   // exactly one owner is ever registered for a given signal; see
   // initInteractiveCliPlatform's doc comment for the full handoff design.
-  await initInteractiveCliPlatform({ ...context, quietLogs: true });
+  const services = await initInteractiveCliPlatform({
+    ...context,
+    quietLogs: true,
+  });
   const initialResume = init.initialResume;
   const runtimeSession = await initializeCliTranscriptSession();
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
@@ -181,7 +183,7 @@ export async function runChat(
   const { maybeRunCliOnboarding } =
     await import('@cli/onboarding/runOnboarding');
   const onboarding = await effectRuntime().runPromise(
-    maybeRunCliOnboarding(context),
+    maybeRunCliOnboarding(services, context),
   );
   if (onboarding.declined) {
     // The user saw the picker and chose "Skip for now"; the skip summary already
@@ -197,7 +199,7 @@ export async function runChat(
   const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
-    firstRunDone: getFirstRunDone(platform().globalState),
+    firstRunDone: getFirstRunDone(services.globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
   await effectRuntime().runPromise(loadAgents());
@@ -547,6 +549,7 @@ export async function runChat(
   const exitController = createSessionExitController({
     ink,
     session,
+    lifecycle: services.lifecycle,
     commandName: context.commandName,
     cwd: context.cwd,
     disposables,

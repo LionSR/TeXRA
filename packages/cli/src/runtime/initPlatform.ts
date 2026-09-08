@@ -15,7 +15,7 @@ import { installTexraAccountProbes } from '@controllers/modelAccess/installTexra
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
-import { initPlatform, tryPlatform } from '@platform/platform';
+import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { DisposableStore } from '@platform/disposable';
@@ -68,6 +68,19 @@ type CliPlatformInitOptions = Pick<
   readonly installSignalHandlers?: boolean;
   readonly storageRoot?: string;
 };
+
+/**
+ * The platform services the CLI entry points read immediately after init.
+ *
+ * `initCliPlatform` already holds the whole `Platform` it just built (or the
+ * one an earlier init installed), so it hands these three back instead of
+ * leaving each caller to re-enter the ambient `platform()` singleton for a
+ * value the composition root was holding all along.
+ */
+export type CliPlatformServices = Pick<
+  Platform,
+  'globalState' | 'secrets' | 'lifecycle'
+>;
 
 function logAt(
   level: 'debug' | 'info' | 'warn' | 'error',
@@ -209,8 +222,8 @@ export async function setCliHelperModel(
  */
 export async function initLocalCliPlatform(
   context: CliPlatformInitOptions,
-): Promise<void> {
-  await initCliPlatform({
+): Promise<CliPlatformServices> {
+  return initCliPlatform({
     ...context,
     quietLogs: true,
   });
@@ -242,20 +255,24 @@ export async function initLocalCliPlatform(
 export async function initInteractiveCliPlatform(
   context: Omit<CliPlatformInitOptions, 'installSignalHandlers'> &
     Pick<CliContext, 'quietLogs'>,
-): Promise<void> {
-  await initCliPlatform(context);
+): Promise<CliPlatformServices> {
+  return initCliPlatform(context);
 }
 
 export async function initCliPlatform(
   context: CliPlatformInitOptions & Pick<CliContext, 'quietLogs'>,
-): Promise<void> {
+): Promise<CliPlatformServices> {
   quietPlatformLogs = context.quietLogs;
   setOutputChannelFactory(
     quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
     { trusted: true },
   );
 
-  if (!tryPlatform()) {
+  // Double init is the normal path (every command calls one of these), so the
+  // already-installed platform is the value returned on the second and later
+  // calls; the first call keeps the one it builds below.
+  let services = tryPlatform();
+  if (!services) {
     // The one Effect runtime of this process (PRD 7.7) comes first: the
     // stores below open as Effect programs, and the session graph and every
     // Promise-facing fiber run on it. Disposed after the default session has
@@ -299,23 +316,22 @@ export async function initCliPlatform(
       channel: 'cli',
       customDirectoryStore: { get: () => undefined },
     });
-    initPlatform(
-      createNodePlatform({
-        globalState: stateStores.globalState,
-        storage: stateStores.storage,
-        secrets: getCliSecrets(context.storageRoot),
-        lifecycle,
-        agentResume: {
-          tryResumeStream: async (streamId, recovery) =>
-            (await cliResumeHandler?.(streamId, recovery)) ?? false,
-        },
-        agentDirectories,
-        toolAvailability: {
-          isTexraCliEntrypoint: () =>
-            isTexraCliEntrypointPath(readCliEntrypointPath()),
-        },
-      }),
-    );
+    services = createNodePlatform({
+      globalState: stateStores.globalState,
+      storage: stateStores.storage,
+      secrets: getCliSecrets(context.storageRoot),
+      lifecycle,
+      agentResume: {
+        tryResumeStream: async (streamId, recovery) =>
+          (await cliResumeHandler?.(streamId, recovery)) ?? false,
+      },
+      agentDirectories,
+      toolAvailability: {
+        isTexraCliEntrypoint: () =>
+          isTexraCliEntrypointPath(readCliEntrypointPath()),
+      },
+    });
+    initPlatform(services);
     // One process, one paper: the process roots are the `--cwd` workspace.
     const roots = createNodeWorkspaceRoots({
       workspacePath: context.cwd,
@@ -435,4 +451,10 @@ export async function initCliPlatform(
     resourcesPath: context.resourcesPath,
     skillSourceOptions: context.skillSourceOptions,
   });
+
+  return {
+    globalState: services.globalState,
+    secrets: services.secrets,
+    lifecycle: services.lifecycle,
+  };
 }

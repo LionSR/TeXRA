@@ -12,6 +12,7 @@ import type {
 import { attachSdkRequestBaseURL } from '@common/errors/sdkError/sdkRequestEndpoint';
 
 // Local file imports
+import { SDK_RETRIES_DISABLED } from '../support/auxiliaryRetry';
 import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
 import { tagOpenAISdkError } from './openAISdkError';
 
@@ -72,7 +73,7 @@ export abstract class OpenAICompatibleModelHandler<
       apiKey: credential.apiKey,
       baseURL: credential.baseUrl,
       fetch: this.longRunningModelFetch,
-      maxRetries: 0,
+      maxRetries: SDK_RETRIES_DISABLED,
     });
     logOpenAICompatibleClientConfig(
       this.logger,
