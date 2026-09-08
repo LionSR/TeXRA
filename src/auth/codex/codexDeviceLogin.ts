@@ -31,7 +31,7 @@ import { pollDeviceToken, requestDeviceUserCode } from './codexOAuthClient';
 const DEVICE_TIMEOUT_FALLBACK_MS = 15 * 60 * 1000;
 
 /** The usercode endpoint answered without a code to show the user. */
-export class DeviceCodeMissing extends Data.TaggedError('DeviceCodeMissing')<{
+class DeviceCodeMissing extends Data.TaggedError('DeviceCodeMissing')<{
   readonly message: string;
 }> {}
 
