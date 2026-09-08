@@ -7,10 +7,9 @@
  * opens the global state store on its own; and `clone`, which never builds a
  * platform at all yet reads and writes its remote's token through
  * `CliSecrets`; and the headless run commands, whose native validation runs
- * before platform initialization. Whichever arrives first builds the runtime
- * and the rest run on
- * it, so a normal run still ends with exactly the runtime the platform's
- * shutdown disposes.
+ * before platform initialization. Whichever arrives first builds the
+ * runtime and the rest run on it, so a normal run still ends with exactly
+ * the runtime the platform's shutdown disposes.
  *
  * Whether one is installed is asked of `@platform/processRuntime`, which owns
  * the reference, rather than tracked in a latch here: a boolean set beside the
