@@ -11,7 +11,11 @@ import {
   Scope,
   Semaphore,
 } from 'effect';
-import ky from 'ky';
+import {
+  HttpClient,
+  HttpClientError,
+  HttpClientRequest,
+} from 'effect/unstable/http';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
@@ -254,7 +258,15 @@ class UsageLogServiceImpl {
       // Run before the sender's interruption finalizer. Closing this child on
       // dispose also removes its parent finalizer, so reinitialization neither
       // retains old shutdown callbacks nor changes the drain-before-stop order.
-      yield* Scope.addFinalizer(lifetime, this.shutdown());
+      // A scope finalizer runs with no context of its own, so the drain it
+      // performs carries the client this initialization was given.
+      const client = yield* HttpClient.HttpClient;
+      yield* Scope.addFinalizer(
+        lifetime,
+        this.shutdown().pipe(
+          Effect.provideService(HttpClient.HttpClient, client),
+        ),
+      );
     }
 
     if (isTelemetryDisabledByEnv()) {
@@ -451,25 +463,38 @@ class UsageLogServiceImpl {
         batchId: batch.batchId,
         entries: batch.entries.map(({ entry }) => entry),
       };
-      // ky's `timeout` only guards until response headers arrive (it clears
-      // the timer once fetch settles), so a server that stalls mid-body would
-      // hang the `.json()` read indefinitely, wedging the flush lane and
-      // dispose(). The body read therefore sits inside the same timed effect
-      // as the request: the timeout interrupts it, and the interruption
-      // reaches fetch through the signal.
-      const { httpResponse, data } = yield* Effect.tryPromise({
-        try: async (signal) => {
-          const httpResponse = await ky.post(USAGE_LOG_ENDPOINT, {
-            json: wire,
-            headers: { Authorization: `Bearer ${token}` },
-            timeout: false,
-            signal,
-            throwHttpErrors: false,
-          });
-          return { httpResponse, data: await httpResponse.json<unknown>() };
-        },
-        catch: (error) => undelivered(toErrorMessage(error)),
+      const client = yield* HttpClient.HttpClient;
+      // One request is one fiber. The body read sits inside the same timed
+      // effect as the request, because a server that answers headers and then
+      // stalls mid-body would otherwise hang the read indefinitely, wedging
+      // the flush lane and dispose(). The timeout interrupts the effect, and
+      // `HttpClient.withScope` turns that interruption — and a dispose that
+      // interrupts the sender — into an abort on the underlying fetch.
+      // A non-2xx status is not a failure here: the endpoint answers a
+      // rejection with a body the acknowledgement checks below read.
+      const { status, data } = yield* Effect.gen(function* () {
+        const request = yield* HttpClientRequest.post(USAGE_LOG_ENDPOINT, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).pipe(HttpClientRequest.bodyJson(wire));
+        const response = yield* HttpClient.withScope(client).execute(request);
+        const data = yield* response.json;
+        return { status: response.status, data };
       }).pipe(
+        Effect.scoped,
+        Effect.mapError((error) => {
+          if (!HttpClientError.isHttpClientError(error)) {
+            return undelivered(toErrorMessage(error));
+          }
+          // The wrapper's message names the request that failed; only its
+          // cause names the transport failure (a refused connection, a reset
+          // socket). A billing warning is worth both.
+          const { cause } = error.reason;
+          return undelivered(
+            cause === undefined
+              ? error.message
+              : `${error.message}: ${toErrorMessage(cause)}`,
+          );
+        }),
         Effect.timeoutOrElse({
           duration: Duration.millis(REQUEST_TIMEOUT_MS),
           orElse: () =>
@@ -488,9 +513,9 @@ class UsageLogServiceImpl {
         if (response.retryable === false) return response;
         return yield* undelivered(response.error ?? 'Usage batch was rejected');
       }
-      if (!httpResponse.ok) {
+      if (status < 200 || status >= 300) {
         return yield* undelivered(
-          `Usage endpoint returned HTTP ${httpResponse.status} with a success acknowledgement`,
+          `Usage endpoint returned HTTP ${status} with a success acknowledgement`,
         );
       }
       if (response.accepted !== wire.entries.length) {
@@ -503,7 +528,7 @@ class UsageLogServiceImpl {
   );
 
   /** Close the active process child, draining its sender before interruption. */
-  dispose(): Effect.Effect<void> {
+  dispose(): Effect.Effect<void, never, HttpClient.HttpClient> {
     return Effect.suspend(() =>
       this.lifetime ? Scope.close(this.lifetime, Exit.void) : this.shutdown(),
     );
