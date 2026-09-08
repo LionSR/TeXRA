@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initProcessRuntime } from '@platform/processRuntime';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
-import { testProcessRuntimeLayer } from '@test/support/fetchTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => ({
   deleteFile: vi.fn(async () => undefined),
@@ -141,7 +141,7 @@ const APPLY_AGENT_MODE_PRESET = {
 describe('AgentHandlers custom-agent file actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    initProcessRuntime(ManagedRuntime.make(testProcessRuntimeLayer));
+    initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
   });
 
   it('logs notification failures after applying a team preset', async () => {

@@ -23,8 +23,10 @@ function toBuffer(content: string | Uint8Array): Uint8Array {
 /**
  * Shared filesystem helpers backed by a platform-agnostic FileSystemProvider.
  *
- * By default uses Node.js fs/promises. In VS Code, the provider is replaced
- * with one backed by vscode.workspace.fs at activation via initPlatform().
+ * Every host installs `nodeFilesystem` through `createNodePlatform()`, the
+ * port's only production implementation — the extension included. It does not
+ * swap in a `vscode.workspace.fs`-backed provider, deliberately: that API
+ * reports symlinks unreliably across platforms (see `nodeFilesystem`).
  *
  * Subclasses customize how incoming paths are resolved and validated by
  * overriding {@link resolvePath} and {@link validateResolvedPath}.

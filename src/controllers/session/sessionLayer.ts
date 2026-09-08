@@ -61,7 +61,6 @@ import {
   tryProcessRuntime,
 } from '@platform/processRuntime';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
-import { effectNodeFileSystemLayer } from '@platform/defaults/effectNodeFileSystem';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -725,11 +724,7 @@ export function installProcessRuntime(
   const runtime = ManagedRuntime.make(
     Sessions.layer(release, identity).pipe(
       Layer.provideMerge(
-        Layer.mergeAll(
-          effectDiagnosticsLayer,
-          FetchHttpClient.layer,
-          effectNodeFileSystemLayer,
-        ),
+        Layer.mergeAll(effectDiagnosticsLayer, FetchHttpClient.layer),
       ),
     ),
   );

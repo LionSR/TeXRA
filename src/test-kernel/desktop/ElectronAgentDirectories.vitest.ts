@@ -24,7 +24,7 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { testProcessRuntimeLayer } from '@test/support/fetchTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -100,7 +100,7 @@ describe('desktop agent directory bootstrap', () => {
       try {
         effectRuntime();
       } catch {
-        initProcessRuntime(ManagedRuntime.make(testProcessRuntimeLayer));
+        initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
       }
       const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
       const [globalStateStore, workspaceStateStore] = yield* Effect.all([

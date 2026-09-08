@@ -59,7 +59,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { effectRuntime, initProcessRuntime },
     { installAuthProgramEdge },
     { ManagedRuntime },
-    { testProcessRuntimeLayer },
+    { testHttpClientLayer },
   ] = await Promise.all([
     import('@platform/platform'),
     import('@platform/workspaceRoots'),
@@ -79,7 +79,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   try {
     effectRuntime();
   } catch {
-    initProcessRuntime(ManagedRuntime.make(testProcessRuntimeLayer));
+    initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
   }
   // The auth run edge, unconditionally: a suite that reset modules gets a
   // fresh `@auth/authProgram` instance, and this install must land on it.

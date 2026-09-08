@@ -4,10 +4,7 @@ import { Effect, Exit, Fiber } from 'effect';
 import { beforeEach, describe, expect, type Mock, vi } from 'vitest';
 
 // Local imports
-import {
-  testHttpClientLayer,
-  testProcessRuntimeLayer,
-} from '@test/support/fetchTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => {
   const authCoordinator = {
@@ -86,7 +83,7 @@ async function loadSupabaseAuth() {
     import('@platform/processRuntime'),
     import('effect'),
   ]);
-  initProcessRuntime(ManagedRuntime.make(testProcessRuntimeLayer));
+  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
   return import('@cli/runtime/supabaseAuth');
 }
 

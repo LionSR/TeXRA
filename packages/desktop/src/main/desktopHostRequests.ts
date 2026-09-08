@@ -180,15 +180,10 @@ export function createDesktopHostRequests(
   const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
     const workspacePath = options.workspacePath;
     if (!workspacePath) return [];
-    const files = await effectRuntime().runPromise(
-      Effect.map(
-        Effect.all([
-          listWorkspaceFilesOfType('input', workspacePath),
-          listWorkspaceFilesOfType('context', workspacePath),
-        ]),
-        ([input, context]) => [...input, ...context],
-      ),
-    );
+    const files = [
+      ...(await listWorkspaceFilesOfType('input', workspacePath)),
+      ...(await listWorkspaceFilesOfType('context', workspacePath)),
+    ];
     return files.map((file) => path.resolve(workspacePath, file));
   };
 

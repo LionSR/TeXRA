@@ -13,7 +13,6 @@ import {
   planMainViewDroppedFileAttachments,
 } from '@controllers/mainView/MainViewDroppedFilesController';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
-import { effectRuntime } from '@platform/processRuntime';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { DocumentFileType, FileOptions } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
@@ -87,8 +86,7 @@ export function createDesktopFileSelection(
 ): DesktopFileSelection {
   const { workspacePath } = options;
   return {
-    fileOptions: () =>
-      effectRuntime().runPromise(workspaceFileOptions(workspacePath)),
+    fileOptions: () => workspaceFileOptions(workspacePath),
     async pickFiles(fileType, currentFile) {
       if (!workspacePath) return null;
       const listConfig = getFileListConfig(fileType, loadFileListSettings());
