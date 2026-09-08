@@ -13,7 +13,7 @@ import {
 } from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
-import { splitContentLines } from '@utils/text/stringUtils';
+import { formatBytes, splitContentLines } from '@utils/text/stringUtils';
 import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
@@ -155,7 +155,7 @@ export class ReadFileTool extends defineTool({
       const stats = await WorkspaceFS.stat(filePath);
       if (stats.size > MAX_EML_BYTES) {
         throw new ToolError(
-          `EML file exceeds maximum size of ${MAX_EML_BYTES / (1024 * 1024)} MiB.`,
+          `EML file exceeds maximum size of ${formatBytes(MAX_EML_BYTES)}.`,
         );
       }
       const raw = await WorkspaceFS.read(filePath);
