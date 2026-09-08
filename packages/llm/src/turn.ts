@@ -1120,6 +1120,13 @@ const UsageSchema = z
       .discriminatedUnion('kind', [
         z
           .strictObject({
+            kind: z.literal('google'),
+            /** Reported tool-use prompt count; absence does not mean zero. */
+            toolUsePromptTokens: z.int().nonnegative().nullable(),
+          })
+          .readonly(),
+        z
+          .strictObject({
             kind: z.literal('minimax'),
             totalCharacters: z.int().nonnegative(),
           })
@@ -1276,6 +1283,8 @@ const HttpTurnResultSchema = z
       (result.refusalEvidence !== undefined &&
         result.requestedOrigin.protocol !== 'anthropic-messages') ||
       (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
+      (result.usage?.providerUsage?.kind === 'google' &&
+        result.requestedOrigin.protocol !== 'google-interactions') ||
       (result.usage?.providerUsage?.kind === 'anthropic' &&
         result.requestedOrigin.protocol !== 'anthropic-messages') ||
       (result.usage?.providerUsage?.kind === 'xai' &&

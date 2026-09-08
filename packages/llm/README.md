@@ -18,6 +18,14 @@ its cache-creation breakdown and returned tier and geography. OpenRouter retains
 reported billing, cache, server-tool and service-tier evidence. Further provider
 usage categories remain incomplete, and pricing remains runtime-owned.
 
+Google keeps the reported input, output, thinking, cache and total counters
+unchanged, and retains `total_tool_use_tokens` separately as
+`providerUsage.toolUsePromptTokens`. An omitted count stays null, including in a
+partial receipt. The [Interactions reference](https://ai.google.dev/api/interactions-api?hl=en)
+and [token guide](https://ai.google.dev/gemini-api/docs/tokens) describe separate
+output, thinking and tool-use prompt categories. The provider package preserves
+these observations without summing them into inferred billable counts.
+
 Unsupported content fails explicitly; a protocol does not silently discard
 reasoning or media that it cannot represent. Assistant content retains its originating
 model binding, and a later request requires one ordered result per local call.

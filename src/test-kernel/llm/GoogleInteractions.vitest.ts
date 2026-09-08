@@ -113,7 +113,10 @@ function request(): TurnRequest {
   };
 }
 
-function signedEvents(includeSummary = true): Array<Record<string, unknown>> {
+function signedEvents(
+  includeSummary = true,
+  toolUseTokens?: number,
+): Array<Record<string, unknown>> {
   return [
     {
       event_type: 'interaction.created',
@@ -191,7 +194,11 @@ function signedEvents(includeSummary = true): Array<Record<string, unknown>> {
       interaction: {
         id: 'int_1',
         status: 'requires_action',
-        usage: { total_input_tokens: 12, total_thought_tokens: 3 },
+        usage: {
+          total_input_tokens: 12,
+          total_thought_tokens: 3,
+          total_tool_use_tokens: toolUseTokens,
+        },
       },
     },
   ];
@@ -323,6 +330,7 @@ describe('canonical Google Interactions protocol', () => {
               total_tokens: 20,
               total_cached_tokens: 3,
               total_thought_tokens: 2,
+              total_tool_use_tokens: 5,
             },
           }),
         );
@@ -349,6 +357,7 @@ describe('canonical Google Interactions protocol', () => {
             totalTokens: 20,
             cachedInputTokens: 3,
             reasoningTokens: 2,
+            providerUsage: { kind: 'google', toolUsePromptTokens: 5 },
           },
         });
         expect(completed.result.continuation).toBeUndefined();
@@ -887,13 +896,13 @@ describe('canonical Google Interactions protocol', () => {
   );
 
   it.each([
-    { store: true, includeSummary: true },
-    { store: false, includeSummary: false },
+    { store: true, includeSummary: true, toolUseTokens: 0 },
+    { store: false, includeSummary: false, toolUseTokens: undefined },
   ])(
     'preserves a signed two-call exchange with store=$store and readable summary=$includeSummary',
-    async ({ store, includeSummary }) => {
+    async ({ store, includeSummary, toolUseTokens }) => {
       fetchModel.mockImplementationOnce(async () =>
-        response(signedEvents(includeSummary)),
+        response(signedEvents(includeSummary, toolUseTokens)),
       );
       vi.stubEnv('GOOGLE_GENAI_USE_ENTERPRISE', 'true');
       const configured = model(store);
@@ -1007,6 +1016,10 @@ describe('canonical Google Interactions protocol', () => {
           totalTokens: null,
           cachedInputTokens: null,
           reasoningTokens: 3,
+          providerUsage: {
+            kind: 'google',
+            toolUsePromptTokens: toolUseTokens ?? null,
+          },
         },
       });
       if (store)

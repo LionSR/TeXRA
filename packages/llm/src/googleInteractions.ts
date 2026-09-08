@@ -62,6 +62,7 @@ const WireUsageSchema = z.object({
   total_tokens: z.int().nonnegative().optional(),
   total_cached_tokens: z.int().nonnegative().optional(),
   total_thought_tokens: z.int().nonnegative().optional(),
+  total_tool_use_tokens: z.int().nonnegative().optional(),
 });
 const WireInteractionSchema = z.object({
   id: z.string().min(1),
@@ -549,6 +550,10 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
               totalTokens: usage.total_tokens ?? null,
               cachedInputTokens: usage.total_cached_tokens ?? null,
               reasoningTokens: usage.total_thought_tokens ?? null,
+              providerUsage: {
+                kind: 'google',
+                toolUsePromptTokens: usage.total_tool_use_tokens ?? null,
+              },
             },
     });
     if (!result.success) {
