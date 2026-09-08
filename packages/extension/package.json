@@ -1118,7 +1118,7 @@
     "@vscode/vsce": "^3.9.2",
     "concurrently": "^10.0.5",
     "esbuild": "^0.28.2",
-    "eslint": "^10.9.1",
+    "eslint": "^10.10.0",
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-unicorn": "^74.0.0",
     "globals": "^17.12.0",
