@@ -1,10 +1,11 @@
 import { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
 
 /**
- * Every host (VS Code, Electron, the exported trace viewer) installs its
- * bridge at `globalThis[HOST_BRIDGE_API_KEY]` before this bundle loads — see
- * `BundledViewContentProvider.buildWebviewHtml` (VS Code), `installElectronHostBridge`
- * (desktop), and `installTraceHostBridge` (trace viewer).
+ * Every host installs its bridge at `globalThis[HOST_BRIDGE_API_KEY]` before
+ * this bundle loads. VS Code uses the module-level `buildWebviewHtml` in
+ * `packages/extension/src/common/webview/BundledViewContentProvider.ts`;
+ * desktop uses `installElectronHostBridge`, and the exported trace viewer
+ * uses `installTraceHostBridge`.
  */
 function resolveHostBridgeApi(): HostBridgeApi {
   const existing = (
