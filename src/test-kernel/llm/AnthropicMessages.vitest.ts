@@ -578,12 +578,15 @@ describe('canonical Anthropic Messages protocol', () => {
             kind: 'local-call',
             providerCallId: 'call_0',
             name: 'search',
+            // The exact concatenation of both input_json_delta fragments.
+            argumentsText: '{"q":"x"}',
             arguments: { q: 'x' },
           },
           {
             kind: 'local-call',
             providerCallId: 'call_1',
             name: 'fetch',
+            argumentsText: '{"q":"x"}',
             arguments: { q: 'x' },
           },
         ]);

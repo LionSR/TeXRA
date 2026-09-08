@@ -540,6 +540,12 @@ export const acquireVscodeLanguageModel = Effect.fn(
                     kind: 'local-call',
                     providerCallId: call.callId,
                     name: call.name,
+                    // The editor hands over `input` already parsed and never
+                    // exposes the model's raw argument bytes, so there are no
+                    // provider bytes to retain here. This serialization is not
+                    // a re-encode of a parse whose original was dropped: the
+                    // object is the only representation this source ever had.
+                    argumentsText: JSON.stringify(args.data),
                     arguments: args.data,
                   });
                   if (phaseOpen)

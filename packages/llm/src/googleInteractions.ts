@@ -185,7 +185,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
     } else if (message.role === 'tool') {
       for (const result of message.results) {
         const call = calls[result.callOrdinal];
-        if (!call?.providerCallId) {
+        if (call === undefined) {
           return yield* new ModelError({
             kind: 'unsupported',
             message:
@@ -257,11 +257,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
             });
             break;
           case 'local-call':
-            if (
-              !part.providerCallId ||
-              ids.has(part.providerCallId) ||
-              part.evidence !== undefined
-            ) {
+            if (ids.has(part.providerCallId) || part.evidence !== undefined) {
               return yield* new ModelError({
                 kind: 'unsupported',
                 message:
@@ -350,7 +346,6 @@ function ownedRequest<A>(
           catch: (cause) => cause,
         }).pipe(
           Effect.catch((cause) => {
-            if (deadline) console.log('JOINDEBUG', cause, exit);
             if (
               Exit.isFailure(exit) &&
               (exit.cause.reasons.some(
@@ -466,10 +461,19 @@ function createInput(
   >;
 }
 
+/**
+ * A completed step carrying the exact argument bytes when they were observed.
+ * The stream delivers tool arguments as text deltas, so it keeps them; a
+ * background snapshot returns only the SDK's parse of them and keeps none.
+ */
+type ObservedStep = z.infer<typeof WireCompletedStepSchema> & {
+  readonly argumentsText?: string;
+};
+
 const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
   function* (
     interaction: z.infer<typeof WireInteractionSchema>,
-    responseSteps: readonly z.infer<typeof WireCompletedStepSchema>[],
+    responseSteps: readonly ObservedStep[],
     origin: ModelOrigin,
   ) {
     const usage = interaction.usage;
@@ -517,6 +521,9 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
           kind: 'local-call',
           providerCallId: step.id,
           name: step.name,
+          // A background snapshot hands back the SDK's parse with no bytes
+          // behind it, so its text is re-encoded from that parse.
+          argumentsText: step.argumentsText ?? JSON.stringify(step.arguments),
           arguments: step.arguments,
         });
       } else {
@@ -540,7 +547,15 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
       returnedModel: interaction.model ?? null,
       modelFingerprint: null,
       content,
-      finishReason: callIds.size > 0 ? 'tool-calls' : 'stop',
+      finishReason:
+        interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
+      finishEvidence: {
+        kind: 'google-interactions',
+        status: interaction.status,
+        // The Interactions resource reports no reason for ending, so the
+        // status is the whole of what Google says about the outcome.
+        terminalReason: null,
+      },
       usage:
         usage === undefined
           ? null
@@ -997,7 +1012,7 @@ export function googleInteractionsModel(
               const ordered = [...pending.entries()].toSorted(
                 ([left], [right]) => left - right,
               );
-              const responseSteps: z.infer<typeof WireStepSchema>[] = [];
+              const responseSteps: ObservedStep[] = [];
               for (const [index, slot] of ordered) {
                 if (!slot.stopped || index !== responseSteps.length) {
                   return yield* new ModelError({
@@ -1005,19 +1020,25 @@ export function googleInteractionsModel(
                     message: 'Google ended with an incomplete step sequence.',
                   });
                 }
+                const argumentsText = slot.argumentsText;
                 if (
                   slot.step.type === 'function_call' &&
-                  slot.argumentsText !== undefined
+                  argumentsText !== undefined
                 ) {
-                  slot.step.arguments = yield* Effect.try({
-                    try: () => JSON.parse(slot.argumentsText!),
-                    catch: (cause) =>
-                      new ModelError({
-                        kind: 'malformed-output',
-                        message: 'Google emitted malformed tool arguments.',
-                        cause,
-                      }),
+                  responseSteps.push({
+                    ...slot.step,
+                    arguments: yield* Effect.try({
+                      try: () => JSON.parse(argumentsText),
+                      catch: (cause) =>
+                        new ModelError({
+                          kind: 'malformed-output',
+                          message: 'Google emitted malformed tool arguments.',
+                          cause,
+                        }),
+                    }),
+                    argumentsText,
                   });
+                  continue;
                 }
                 responseSteps.push(slot.step);
               }

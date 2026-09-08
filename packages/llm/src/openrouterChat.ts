@@ -456,8 +456,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       } else if (
         part.kind === 'local-call' &&
         part.evidence === undefined &&
-        annotations.length === 0 &&
-        part.providerCallId !== null
+        annotations.length === 0
       )
         calls.push(part);
       else if (
@@ -539,7 +538,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
               type: 'function',
               function: {
                 name: call.name,
-                arguments: JSON.stringify(call.arguments),
+                arguments: call.argumentsText,
               },
             })),
           }
@@ -1207,6 +1206,9 @@ export function openrouterChatModel(
                   kind: 'local-call',
                   providerCallId: call.id,
                   name: call.name,
+                  // The accumulated delta bytes, which `arguments` above is the
+                  // parse of, so the pair holds by construction.
+                  argumentsText: call.arguments,
                   arguments: parsedArgs.data,
                 });
               }

@@ -144,7 +144,7 @@ function agreesWithCompleted(
     return (
       completed.providerCallId === candidate.providerCallId &&
       completed.name === candidate.name &&
-      isDeepStrictEqual(completed.arguments, candidate.arguments) &&
+      completed.argumentsText === candidate.argumentsText &&
       (candidate.evidence?.itemId === undefined ||
         completed.evidence?.itemId === candidate.evidence.itemId) &&
       (candidate.evidence?.status === undefined ||
@@ -255,6 +255,7 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
         kind: 'local-call',
         providerCallId: item.call_id,
         name: item.name,
+        argumentsText: item.arguments,
         arguments: args,
         evidence: {
           kind: 'openai-responses-function-call',
@@ -302,6 +303,11 @@ const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
       modelFingerprint: null,
       content,
       finishReason,
+      finishEvidence: {
+        kind: 'openai-responses',
+        status: response.status,
+        incompleteReason: response.incomplete_details?.reason ?? null,
+      },
       usage: response.usage
         ? {
             inputTokens: response.usage.input_tokens,
@@ -456,14 +462,13 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
         }
         case 'local-call': {
           if (
-            part.providerCallId === null ||
-            (part.evidence !== undefined &&
-              part.evidence.kind !== 'openai-responses-function-call')
+            part.evidence !== undefined &&
+            part.evidence.kind !== 'openai-responses-function-call'
           ) {
             return yield* new ModelError({
               kind: 'unsupported',
               message:
-                'Responses tool history requires original call IDs without foreign evidence.',
+                'Responses tool history requires local calls without foreign evidence.',
             });
           }
           callIds.push(part.providerCallId);
@@ -471,7 +476,7 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
             type: 'function_call',
             call_id: part.providerCallId,
             name: part.name,
-            arguments: JSON.stringify(part.arguments),
+            arguments: part.argumentsText,
             ...(part.evidence?.itemId !== undefined
               ? { id: part.evidence.itemId }
               : {}),
@@ -1078,11 +1083,7 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
       !config.allowedReasoningEfforts.includes(
         turn.controls.reasoning.effort,
       )) ||
-    (turn.continuation !== undefined &&
-      (!config.supportsResponseChaining ||
-        (turn.continuation.anchor.kind === 'connection' &&
-          (transport.kind !== 'websocket' ||
-            turn.continuation.anchor.connectionId !== transport.connectionId))))
+    (turn.continuation !== undefined && !config.supportsResponseChaining)
   )
     return yield* new ModelError({
       kind: 'unsupported',
@@ -2398,48 +2399,19 @@ export const openaiResponsesWebSocketModel = Effect.fn(
                       'The Responses connection buffered data beyond its terminal event.',
                   });
                 latestResponseId = event.result.providerResponseId ?? undefined;
-                let continuation = yield* openaiResponsesContinuation(
+                const continuation = yield* openaiResponsesContinuation(
                   config,
                   turn,
                   event.result,
                 );
+                // Eligibility stays on the connection: a response this lane can
+                // chain from is never stamped into a value that outlives it.
                 if (
                   config.supportsResponseChaining &&
                   (event.result.finishReason === 'stop' ||
                     event.result.finishReason === 'tool-calls')
-                ) {
+                )
                   eligibleResponseId = latestResponseId;
-                  if (!continuation) {
-                    const prefix: ResolvedTurn['messages'] = [
-                      ...turn.messages,
-                      {
-                        role: 'assistant',
-                        origin,
-                        content: event.result.content,
-                      },
-                    ];
-                    const encoded = yield* lowerInput({
-                      ...turn,
-                      messages: prefix,
-                    });
-                    continuation = ContinuationSchema.parse({
-                      origin,
-                      coveredMessages: prefix.length,
-                      prefixFingerprint: prefixFingerprint(
-                        'texra-openai-responses-prefix-v1',
-                        origin,
-                        turn.system,
-                        prefix,
-                      ),
-                      anchor: {
-                        kind: 'connection',
-                        connectionId: transport.connectionId,
-                        responseId: latestResponseId,
-                        coveredItems: encoded.length,
-                      },
-                    });
-                  }
-                }
                 completed = true;
                 return {
                   ...event,
