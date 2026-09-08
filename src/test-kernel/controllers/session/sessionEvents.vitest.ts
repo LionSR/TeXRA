@@ -35,10 +35,14 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
+import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
+  Cause,
   Clock,
   Deferred,
   Effect,
+  Exit,
+  Scope,
   Fiber,
   Layer,
   Stream,
@@ -47,6 +51,12 @@ import {
 import { TestClock } from 'effect/testing';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
+
+vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@effect/sql-sqlite-node/SqliteClient')
+  >()),
+}));
 
 import { TraceEmitter } from '@agent/trace';
 import { removeExecutionDirectories } from '@agent/storage/nativeGeneratedCleanup.mjs';
@@ -930,6 +940,133 @@ describe('the C1 event table and the C6 publisher', () => {
       ),
     );
   });
+
+  it.effect('rolls back a failed commit before reusing the connection', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const database = yield* Database;
+      const connection = yield* Effect.acquireRelease(
+        Effect.sync(() => reader(storage)),
+        (opened) => Effect.sync(() => opened.close()),
+      );
+      connection.exec(`
+        CREATE TABLE accepted_execution (id TEXT PRIMARY KEY);
+        INSERT INTO accepted_execution VALUES ('ab12ce');
+        CREATE TABLE committed_execution (
+          id TEXT REFERENCES accepted_execution(id) DEFERRABLE INITIALLY DEFERRED
+        );
+        CREATE TRIGGER validate_execution AFTER INSERT ON event
+        BEGIN
+          INSERT INTO committed_execution VALUES (json_extract(NEW.data, '$.executionId'));
+        END;
+      `);
+
+      const failed = yield* Effect.exit(database.appendAll([runStart]));
+      expect(Exit.isFailure(failed)).toBe(true);
+      if (Exit.isFailure(failed)) {
+        expect(Cause.pretty(failed.cause)).toContain(
+          'FOREIGN KEY constraint failed',
+        );
+      }
+      expect(yield* SubscriptionRef.get(database.level)).toBe(0);
+      expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(0);
+
+      const committed = yield* database.appendAll([olderStart]);
+      expect(committed).toHaveLength(1);
+      expect(committed[0]?.commit).toBe(1);
+      expect(yield* database.readAll(0)).toEqual(committed);
+      expect(
+        connection.prepare('SELECT id FROM committed_execution').all(),
+      ).toEqual([{ id: 'ab12ce' }]);
+      expect(yield* SubscriptionRef.get(database.level)).toBe(1);
+      expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(1);
+    }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
+  });
+
+  it.effect('wakes readers when cancellation arrives during commit', () =>
+    Effect.gen(function* () {
+      let writer: Fiber.Fiber<unknown, unknown> | undefined;
+      const original = SqlDriver.make;
+      const construct = vi
+        .spyOn(SqlDriver, 'make')
+        .mockImplementation((options) =>
+          original(options).pipe(
+            Effect.map((client) =>
+              Object.assign(client, {
+                reserve: client.reserve.pipe(
+                  Effect.map((connection) => ({
+                    ...connection,
+                    executeUnprepared: (
+                      ...args: Parameters<typeof connection.executeUnprepared>
+                    ) =>
+                      connection.executeUnprepared(...args).pipe(
+                        Effect.tap(() =>
+                          Effect.sync(() => {
+                            if (args[0] === 'COMMIT') writer?.interruptUnsafe();
+                          }),
+                        ),
+                      ),
+                  })),
+                ),
+              }),
+            ),
+          ),
+        );
+      yield* Effect.gen(function* () {
+        const database = yield* Database;
+        const append = yield* Effect.forkChild(
+          Effect.withFiber((fiber) => {
+            writer = fiber;
+            return database.appendAll([olderStart]);
+          }),
+        );
+        const exit = yield* Fiber.await(append);
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(yield* SubscriptionRef.get(database.level)).toBe(1);
+        expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(1);
+        expect(yield* database.readAll(0)).toHaveLength(1);
+      }).pipe(
+        Effect.provide(substrate(workspace())),
+        Effect.ensuring(Effect.sync(() => construct.mockRestore())),
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect('cancels a queued database append before it starts', () =>
+    Effect.gen(function* () {
+      const captured =
+        yield* Deferred.make<
+          Effect.Success<ReturnType<typeof SqlDriver.make>>
+        >();
+      const original = SqlDriver.make;
+      const construct = vi
+        .spyOn(SqlDriver, 'make')
+        .mockImplementation((...args) =>
+          original(...args).pipe(
+            Effect.tap((client) => Deferred.succeed(captured, client)),
+          ),
+        );
+      yield* Effect.gen(function* () {
+        const database = yield* Database;
+        const sql = yield* Deferred.await(captured);
+        const held = yield* Scope.make();
+        yield* Scope.provide(sql.reserve, held);
+        const waiting = yield* Effect.forkChild(
+          database.appendAll([olderStart]),
+        );
+        yield* Effect.yieldNow;
+        waiting.interruptUnsafe();
+        yield* Effect.yieldNow;
+        yield* Scope.close(held, Exit.succeed(undefined));
+        yield* Fiber.await(waiting);
+        const rows = yield* database.readAll(0);
+        expect(rows).toEqual([]);
+      }).pipe(
+        Effect.provide(substrate(workspace())),
+        Effect.ensuring(Effect.sync(() => construct.mockRestore())),
+      );
+    }).pipe(Effect.scoped),
+  );
 
   it.effect(
     'assigns a dense seq per aggregate and one commit order across them',

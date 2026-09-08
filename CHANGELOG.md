@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### CLI and Agent SDK
+
+#### Breaking Changes
+
+- Node.js 22.16.0 or later in 22.x, or Node.js 24 or later is required.
+
 ## [0.40.10] - 2026-09-06
 
 ### Shared (all surfaces)

@@ -55,7 +55,7 @@ async function loadDatabaseFixture(
     format: 'esm',
     loader: { '.node': 'file' },
     assetNames: '[name]',
-    target: 'node22.13',
+    target: 'node22.16',
     tsconfig: join(root, 'tsconfig.json'),
     banner: {
       js: "import { createRequire as __texraCreateRequire } from 'node:module'; const require = __texraCreateRequire(import.meta.url);",

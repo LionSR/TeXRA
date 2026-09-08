@@ -36,10 +36,10 @@ const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/agent/src'];
 
 const DATABASE_MODULE = 'src/controllers/session/Database.ts';
 
-/** `import … from 'node:sqlite'`, `require('node:sqlite')`, and the dynamic
- *  form; the bare `sqlite` specifier too, so a re-export cannot hide it. */
+/** Both the official SQLite driver and raw SQLite imports create storage
+ * authority. Imports, requires, and dynamic imports obey the same boundary. */
 const SQLITE_IMPORT =
-  /\b(?:from|import|require)\s*\(?\s*['"](?:node:)?sqlite['"]/;
+  /\b(?:from|import|require)\s*\(?\s*['"](?:(?:node:)?sqlite|@effect\/sql-sqlite-node(?:\/[^'"]*)?)['"]/;
 
 /** A statement naming either C1 table that could change its rows: the plain
  *  `INSERT INTO`, every `INSERT OR <conflict>` and `REPLACE INTO` upsert form
