@@ -127,7 +127,7 @@ static DWORD open_child(HANDLE parent, WCHAR *name, USHORT bytes, BOOL deleting,
   IO_STATUS_BLOCK status_block;
   ACCESS_MASK access = SYNCHRONIZE | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY;
   if (deleting)
-    access |= DELETE;
+    access |= DELETE | FILE_WRITE_ATTRIBUTES;
   NTSTATUS status = NtCreateFile(
       out, access, &attributes, &status_block, NULL, 0, sharing, FILE_OPEN,
       FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
@@ -355,7 +355,16 @@ memory:
   return fail(error, ERROR_NOT_ENOUGH_MEMORY);
 }
 
-static int dispose(HANDLE handle, cleanup_error *error) {
+static int dispose(HANDLE handle, DWORD attributes, cleanup_error *error) {
+  if (attributes & FILE_ATTRIBUTE_READONLY) {
+    FILE_BASIC_INFO basic = {0};
+    /* Match Node's deletion semantics without reopening a pathname. Zero time
+     * fields preserve timestamps; ARCHIVE keeps the attribute update nonzero. */
+    basic.FileAttributes =
+        (attributes & ~FILE_ATTRIBUTE_READONLY) | FILE_ATTRIBUTE_ARCHIVE;
+    if (!SetFileInformationByHandle(handle, FileBasicInfo, &basic, sizeof(basic)))
+      return fail(error, GetLastError());
+  }
   FILE_DISPOSITION_INFO disposition = {TRUE};
   if (!SetFileInformationByHandle(handle, FileDispositionInfo, &disposition,
                                   sizeof(disposition)))
@@ -387,7 +396,7 @@ static int remove_tree(HANDLE initial, cleanup_error *error) {
         break;
     }
     if (!directory || frame->next == frame->count) {
-      if (dispose(frame->handle, error) != 0)
+      if (dispose(frame->handle, attributes.FileAttributes, error) != 0)
         break;
       DWORD number = close_frame(frame);
       --depth;

@@ -16,6 +16,7 @@ import '@test/support/sessionGraphTestSetup';
 // Node imports
 import * as childProcess from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
@@ -23,6 +24,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -1733,6 +1735,35 @@ describe('the C1 event table and the C6 publisher', () => {
       expect(readFileSync(join(directory, 'keep.tex'), 'utf8')).toBe(
         'retained sibling',
       );
+    },
+  );
+
+  it.skipIf(process.platform !== 'win32')(
+    'removes read-only generated Windows files without changing a retained sibling',
+    async () => {
+      const directory = workspace();
+      const generated = join(
+        directory,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      const nested = join(generated, 'nested');
+      const output = join(nested, 'output.tex');
+      const retained = join(directory, 'accepted.tex');
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(output, 'generated');
+      writeFileSync(retained, 'accepted workspace output');
+      chmodSync(output, 0o444);
+      chmodSync(retained, 0o444);
+      expect(statSync(output).mode & 0o200).toBe(0);
+      await removeExecutionDirectories(
+        directory,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      expect(existsSync(generated)).toBe(false);
+      expect(readFileSync(retained, 'utf8')).toBe('accepted workspace output');
+      expect(statSync(retained).mode & 0o200).toBe(0);
     },
   );
 
