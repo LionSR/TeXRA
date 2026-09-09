@@ -12,7 +12,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
-import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
+import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import type {
   ClaudeAgentEffort,
@@ -238,7 +238,7 @@ export async function buildClaudeAgentEnv(
     },
   );
   if (managed) {
-    env[apiKeyVar] = managed;
+    env[apiKeyVar] = exposeApiKey(managed);
   }
 
   return env;

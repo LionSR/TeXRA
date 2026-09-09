@@ -456,7 +456,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       streamId,
       executionId,
     );
-    const rawRunTrace = createRunTrace(streamId, residency);
+    const rawRunTrace = createRunTrace(residency);
     // The composed trace enters the store BEFORE session attachment, so a
     // failed attachment still disposes the raw trace through the store.
     const attachment: { detach?: () => void } = {};
@@ -475,7 +475,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       try: () => input.signal?.throwIfAborted(),
       catch: ensureError,
     });
-    attachment.detach = session.attachRunTrace(rawRunTrace, streamId);
+    attachment.detach = session.attachRunTrace(rawRunTrace.trace, streamId);
 
     const agentLogger = runTrace.trace;
     modelHandler.setAgentCategory(setting.agentCategory);

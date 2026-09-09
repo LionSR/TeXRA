@@ -63,9 +63,11 @@ import {
   getInlineCommentProvider,
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
+import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { createLog, setOutputChannelFactory } from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
+import { setLogSink } from '@logger/logSink';
 import { redactSecrets } from '@logger/redaction';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
@@ -473,7 +475,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
   agentDirectories.initialize(context.globalState);
-  setOutputChannelFactory((name) => vscode.window.createOutputChannel(name));
+  setLogSink(createVsCodeLogSink());
+  // Deactivation releases the output channels with the sink, so a reload does
+  // not leave a disposed host surface installed.
+  context.subscriptions.push({ dispose: () => setLogSink(null) });
   initializeBundledPrompts(path.join(context.extensionPath, 'resources'));
   const workspaceState = gitRepoRoot
     ? new WorktreeStateStore(

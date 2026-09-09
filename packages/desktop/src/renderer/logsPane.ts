@@ -11,10 +11,12 @@ import { formatTimestamp, truncateSummary } from '@utils/text/stringUtils';
 import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
 import {
   DESKTOP_LOG_COMMANDS,
+  DesktopLogLineSchema,
+  desktopLogLineText,
   type DesktopSetLogMessage,
 } from '../shared/desktopLogMessages';
 
-type DesktopLogLevel = 'debug' | 'error' | 'info' | 'log' | 'warn' | 'unknown';
+type DesktopLogLevel = 'debug' | 'error' | 'info' | 'warn' | 'unknown';
 
 interface DesktopLogEntry {
   readonly id: string;
@@ -30,13 +32,6 @@ interface LogViewerState {
   entries: readonly DesktopLogEntry[];
   status: 'loading' | 'ready';
   meta: string;
-}
-
-interface DesktopLogEntryDraft {
-  readonly level: DesktopLogLevel;
-  readonly messageLines: string[];
-  readonly rawLines: string[];
-  readonly timestamp?: string;
 }
 
 interface LogsPaneOptions {
@@ -62,15 +57,21 @@ interface LogsPaneController {
   rerenderViewer(): void;
 }
 
-const LOG_LINE_PATTERN =
-  /^(?<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) \[(?<level>debug|error|info|log|warn)\](?: (?<message>.*))?$/u;
+/** Effect's level names as the rows this viewer paints. */
+const LEVEL_PRESENTATION_KEY: Record<string, DesktopLogLevel> = {
+  TRACE: 'debug',
+  DEBUG: 'debug',
+  INFO: 'info',
+  WARN: 'warn',
+  ERROR: 'error',
+  FATAL: 'error',
+};
 const LOG_SUMMARY_MAX_LENGTH = 180;
 const LOG_AUTO_REFRESH_INTERVAL_MS = 5_000;
 const LOG_LEVEL_PRESENTATION = {
   debug: { icon: 'code', label: 'Debug' },
   error: { icon: 'circle-xmark', label: 'Error' },
   info: { icon: 'circle-info', label: 'Info' },
-  log: { icon: 'terminal', label: 'Log' },
   unknown: { icon: 'file-lines', label: 'Partial' },
   warn: { icon: 'triangle-exclamation', label: 'Warning' },
 } as const satisfies Record<
@@ -79,55 +80,26 @@ const LOG_LEVEL_PRESENTATION = {
 >;
 
 /**
- * Splits the redacted desktop log excerpt at its timestamped entry boundaries.
- * Stack traces and other continuation lines remain attached to the entry that
- * emitted them. IDs derive from entry contents, so keyed details rows preserve
+ * Reads the redacted desktop log excerpt, one JSON entry per line. Severity and
+ * time are fields the writer put there, so nothing is recovered from formatted
+ * text; a line that does not parse — a truncated head, or output from a process
+ * that wrote to the file directly — is kept verbatim as a partial row rather
+ * than dropped. IDs derive from entry contents, so keyed details rows preserve
  * their expanded state across automatic refreshes.
  */
 export function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
-  const drafts: DesktopLogEntryDraft[] = [];
-  let current: DesktopLogEntryDraft | undefined;
   const lines = text
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')
-    .split('\n');
-  if (lines.at(-1) === '') lines.pop();
-
-  for (const line of lines) {
-    const match = LOG_LINE_PATTERN.exec(line);
-    const timestamp = match?.groups?.timestamp;
-    const level = match?.groups?.level as DesktopLogLevel | undefined;
-    if (timestamp && level) {
-      if (current) drafts.push(current);
-      const message = match?.groups?.message ?? '';
-      current = {
-        level,
-        messageLines: [message],
-        rawLines: [line],
-        timestamp,
-      };
-      continue;
-    }
-
-    if (current) {
-      current.messageLines.push(line);
-      current.rawLines.push(line);
-      continue;
-    }
-
-    if (line.trim().length > 0) {
-      current = {
-        level: 'unknown',
-        messageLines: [line],
-        rawLines: [line],
-      };
-    }
-  }
-  if (current) drafts.push(current);
+    .split('\n')
+    .filter((line) => line.trim().length > 0);
 
   const duplicateIds = new Map<string, number>();
-  return drafts.map((draft) => {
-    const raw = draft.rawLines.join('\n');
+  return lines.map((raw) => {
+    const parsed = DesktopLogLineSchema.safeParse(safeParseJson(raw));
+    const line = parsed.success ? parsed.data : undefined;
+    const message = line ? desktopLogLineText(line) : raw;
+
     let hash = 2_166_136_261;
     // charCodeAt is intentional: the same UTF-16 log contents must keep the same
     // row key across refreshes, including content outside the basic plane.
@@ -138,20 +110,30 @@ export function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
     const duplicateCount = duplicateIds.get(baseId) ?? 0;
     duplicateIds.set(baseId, duplicateCount + 1);
 
-    const message = draft.messageLines.join('\n');
+    const timestamp = line?.timestamp;
     return {
       id: duplicateCount === 0 ? baseId : `${baseId}-${duplicateCount + 1}`,
-      level: draft.level,
+      level: line
+        ? (LEVEL_PRESENTATION_KEY[line.level] ?? 'unknown')
+        : 'unknown',
       message,
       raw,
       summary:
         truncateSummary(message, LOG_SUMMARY_MAX_LENGTH) || '(no message)',
-      ...(draft.timestamp ? { timestamp: draft.timestamp } : {}),
-      timestampLabel: draft.timestamp
-        ? formatTimestamp(draft.timestamp)
-        : 'Partial entry',
+      ...(timestamp ? { timestamp } : {}),
+      timestampLabel: timestamp ? formatTimestamp(timestamp) : 'Partial entry',
     };
   });
+}
+
+function safeParseJson(line: string): unknown {
+  try {
+    return JSON.parse(line);
+  } catch {
+    // A partial or foreign line is shown verbatim, not dropped: the schema
+    // rejects the result below and the row is marked partial.
+    return undefined;
+  }
 }
 
 export function createLogsPane(

@@ -105,7 +105,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
     childStreamId,
     executionId,
   );
-  const runTrace = createRunTrace(childStreamId, residency);
+  const runTrace = createRunTrace(residency);
   const handle = new AgentExecutionHandle(
     {
       streamId: childStreamId,
@@ -121,7 +121,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
   const setup = yield* Effect.exit(
     Effect.gen(function* () {
       // Attach the run's canonical event publication before activation.
-      detachSessionTrace = session.attachRunTrace(runTrace, childStreamId);
+      detachSessionTrace = session.attachRunTrace(runTrace.trace, childStreamId);
       const disposeTrace = () => {
         detachSessionTrace?.();
         runTrace.dispose();

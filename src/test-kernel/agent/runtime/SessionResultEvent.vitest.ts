@@ -306,10 +306,7 @@ describe('terminal result event', () => {
       ctx.runScope.streamId,
       ctx.runScope.executionId,
     );
-    const detach = session.attachRunTrace(
-      { trace: logger },
-      ctx.runScope.streamId,
-    );
+    const detach = session.attachRunTrace(logger, ctx.runScope.streamId);
     session.onResult(onResult);
     try {
       await Effect.runPromise(

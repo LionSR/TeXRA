@@ -29,7 +29,7 @@ import type {
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
 import { isObject } from '@utils/core';
-import { redactToolInputForLog, redactLogData } from './traceRedaction';
+import { redactLogData } from './traceRedaction';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -171,7 +171,7 @@ export function createTranscriptFold(
         // callers can lookup with store.get(streamId).find(e => e.id === logId).
         const data = {
           toolName: event.toolName,
-          input: redactToolInputForLog(event.toolName, event.input),
+          input: event.input,
           status: TOOL_USE_STATUS.IN_PROGRESS,
         } satisfies ToolUseLog;
         writer.append({
@@ -191,20 +191,13 @@ export function createTranscriptFold(
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
         const result = (event.result ?? {}) as Partial<ToolUseLog>;
-        const redactedResult =
-          typeof result.toolName === 'string'
-            ? {
-                ...result,
-                input: redactToolInputForLog(result.toolName, result.input),
-              }
-            : result;
         // Omit groupId on update: undefined would clobber the canonical
         // value stamped at tool.start (deferred tools never copy the
         // resolved id back into their ref).
         const patch = {
           messageType: MESSAGE_TYPES.TOOL_USE,
           data: {
-            ...redactedResult,
+            ...result,
             status: event.status,
           } as ToolUseLog,
         } satisfies StreamLogUpdatePatch;

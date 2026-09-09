@@ -131,7 +131,7 @@ export function createTestRunTrace(
   streamId: StreamTabId,
   log: StreamLog = new StreamLog(),
 ) {
-  const run = createRunTrace(streamId);
+  const run = createRunTrace();
   const projection = attachTestTranscriptFold(run.trace, streamId, log);
   return {
     trace: run.trace,

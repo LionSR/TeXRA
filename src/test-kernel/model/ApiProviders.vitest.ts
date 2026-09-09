@@ -1,3 +1,4 @@
+import { Redacted } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -196,12 +197,20 @@ describe('API provider key caches', () => {
     const secondKey = getApiKey(second, 'openai');
     firstRead.resolve('first-store-key');
 
-    await expect(Promise.all([firstKey, secondKey])).resolves.toEqual([
-      'first-store-key',
-      'second-store-key',
+    const [firstResolved, secondResolved] = await Promise.all([
+      firstKey,
+      secondKey,
     ]);
-    await expect(getApiKey(first, 'openai')).resolves.toBe('first-store-key');
-    await expect(getApiKey(second, 'openai')).resolves.toBe('second-store-key');
+    // Keys leave the boundary sealed; unwrapping is explicit at every use.
+    expect(String(firstResolved)).toBe('<redacted:openai>');
+    expect(Redacted.value(firstResolved)).toBe('first-store-key');
+    expect(Redacted.value(secondResolved)).toBe('second-store-key');
+    await expect(getApiKey(first, 'openai').then(Redacted.value)).resolves.toBe(
+      'first-store-key',
+    );
+    await expect(
+      getApiKey(second, 'openai').then(Redacted.value),
+    ).resolves.toBe('second-store-key');
     expect(first.get).toHaveBeenCalledTimes(1);
     expect(secondRead).toHaveBeenCalledTimes(1);
   });

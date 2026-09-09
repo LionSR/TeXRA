@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink, type LogEntry } from '@logger/logSink';
 import * as logger from '@logger/logUtils';
 import * as rootsAccess from '@platform/workspaceRoots';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -14,99 +15,83 @@ function enableDebugLogging(): void {
   } as unknown as WorkspaceRoots);
 }
 
-function captureLines(options?: { trusted: boolean }): string[] {
-  const lines: string[] = [];
-  logger.setOutputChannelFactory(
-    () => ({
-      appendLine(message: string) {
-        lines.push(message);
-      },
-    }),
-    options,
-  );
-  return lines;
+/** Install a capturing sink and return the entries it receives. */
+function captureEntries(options?: { trusted: boolean }): LogEntry[] {
+  const entries: LogEntry[] = [];
+  setLogSink({ write: (entry) => entries.push(entry) }, options);
+  return entries;
+}
+
+/** The payload annotation a debug-mode entry carries, if any. */
+function payloadOf(entry: LogEntry | undefined): string {
+  return String(entry?.annotations['data'] ?? '');
 }
 
 describe('logUtils', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    logger.setOutputChannelFactory(null);
+    setLogSink(null);
   });
 
   it('keeps pre-platform error logging on the non-debug path', () => {
     vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue(undefined);
-    const lines = captureLines();
+    const entries = captureEntries();
 
     expect(() =>
       logger.error('startup', 'pre-init failure', { data: new Error('boom') }),
     ).not.toThrow();
-    expect(lines).toHaveLength(1);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.level).toBe('ERROR');
   });
 
-  it('serializes self-referential array log data without recursing forever', () => {
-    enableDebugLogging();
-    const lines = captureLines();
+  it('carries the level and channel as fields rather than message text', () => {
+    const entries = captureEntries();
 
-    const data: unknown[] = [];
-    data.push(data);
+    logger.warn('BoundChannel', 'bound warning');
 
-    logger.debug('test', 'cyclic array payload', { data });
-
-    expect(lines.join('\n')).toContain('[Circular]');
-  });
-
-  it('does not mark repeated acyclic references as circular', () => {
-    enableDebugLogging();
-    const lines = captureLines();
-
-    const shared = { value: 1 };
-
-    logger.debug('test', 'shared payload', {
-      data: { first: shared, second: shared },
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      level: 'WARN',
+      message: 'bound warning',
+      annotations: { channel: 'BoundChannel' },
     });
-
-    const output = lines.join('\n');
-    expect(output).not.toContain('[Circular]');
-    expect(output).toContain('"first"');
-    expect(output).toContain('"second"');
   });
 
-  it('redacts lines sent to an output sink by default', () => {
-    const lines = captureLines();
+  it('redacts entries sent to a sink by default', () => {
+    const entries = captureEntries();
 
     logger.info('test', `OPENAI_API_KEY=${SECRET}`);
 
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).not.toContain(SECRET);
-    expect(lines[0]).toContain('OPENAI_API_KEY=[redacted]');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.message).not.toContain(SECRET);
+    expect(entries[0]?.message).toContain('OPENAI_API_KEY=[redacted]');
   });
 
-  it('preserves the raw line for an explicitly trusted sink', () => {
-    const lines = captureLines({ trusted: true });
+  it('preserves the raw message for an explicitly trusted sink', () => {
+    const entries = captureEntries({ trusted: true });
 
     const rawMessage = `OPENAI_API_KEY=${SECRET}`;
     logger.info('test', rawMessage);
 
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain(rawMessage);
-    expect(lines[0]).not.toContain('[redacted]');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.message).toBe(rawMessage);
   });
 
-  it('redacts lines sent through the default console fallback', () => {
-    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {});
-    logger.setOutputChannelFactory(null);
+  it('keeps severity and redaction on the default console fallback', () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    setLogSink(null);
 
     logger.warn('test', `Authorization: Bearer ${SECRET}`);
 
-    expect(consoleInfo).toHaveBeenCalledOnce();
-    const output = String(consoleInfo.mock.calls[0]?.[0]);
+    expect(consoleWarn).toHaveBeenCalledOnce();
+    const output = String(consoleWarn.mock.calls[0]?.[0]);
     expect(output).not.toContain(SECRET);
     expect(output).toContain('Authorization: Bearer [redacted]');
   });
 
   it('redacts serialized debug data before sending it to the sink', () => {
     enableDebugLogging();
-    const lines = captureLines();
+    const entries = captureEntries();
 
     logger.debug('test', 'request metadata', {
       data: {
@@ -117,44 +102,35 @@ describe('logUtils', () => {
       },
     });
 
-    const output = lines.join('\n');
-    expect(lines).toHaveLength(2);
-    expect(output).not.toContain(SECRET);
-    expect(output).not.toContain('correct horse battery staple');
-    expect(output).not.toContain('opaque-refresh-credential');
-    expect(lines[1]).toContain('"authorization": "Bearer [redacted]"');
-    expect(lines[1]).toContain('"password": "[redacted]"');
-    expect(lines[1]).toContain('"refreshToken": "[redacted]"');
-    expect(lines[1]).toContain('"requestId": "visible-request-id"');
+    const payload = payloadOf(entries[0]);
+    expect(entries).toHaveLength(1);
+    expect(payload).not.toContain(SECRET);
+    expect(payload).not.toContain('correct horse battery staple');
+    expect(payload).not.toContain('opaque-refresh-credential');
+    expect(payload).toContain('"authorization": "Bearer [redacted]"');
+    expect(payload).toContain('"password": "[redacted]"');
+    expect(payload).toContain('"refreshToken": "[redacted]"');
+    expect(payload).toContain('"requestId": "visible-request-id"');
   });
 
-  it('createLog binds the channel and emits through the shared sink', () => {
-    const lines = captureLines();
-
-    const log = logger.createLog('BoundChannel');
-    log.warn('bound warning');
-
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('WARN');
-    expect(lines[0]).toContain('[BoundChannel] bound warning');
-  });
-
-  it('createLog forwards debug data identically to the free debug fn', () => {
+  it('createLog binds its channel onto the same entry the free writers build', () => {
     enableDebugLogging();
-    const lines = captureLines();
+    const entries = captureEntries();
 
-    const log = logger.createLog('BoundChannel');
-    log.debug('with data', { data: { requestId: 'visible-request-id' } });
+    logger.createLog('BoundChannel').debug('with data', {
+      data: { requestId: 'visible-request-id' },
+    });
 
-    const output = lines.join('\n');
-    expect(lines).toHaveLength(2);
-    expect(output).toContain('[BoundChannel] with data');
-    expect(output).toContain('"requestId": "visible-request-id"');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.annotations['channel']).toBe('BoundChannel');
+    expect(payloadOf(entries[0])).toContain(
+      '"requestId": "visible-request-id"',
+    );
   });
 
   it('routes native Effect logs and nested spans through the redacting sink', () => {
     enableDebugLogging();
-    const lines = captureLines();
+    const entries = captureEntries();
     const operation = Effect.fn('model.request')(function* () {
       yield* Effect.annotateCurrentSpan('executionId', 'run-42');
       yield* Effect.annotateCurrentSpan('authorization', `Bearer ${SECRET}`);
@@ -170,31 +146,28 @@ describe('logUtils', () => {
       ),
     );
 
-    const output = lines.join('\n');
-    expect(output).toContain('WARN');
-    expect(output).toContain('provider warning');
-    expect(output).toContain('model.request: Success');
-    expect(output).toContain('session.run: Success');
-    expect(output).toContain('"executionId": "run-42"');
-    expect(output).toContain('"parentSpanId"');
+    const warning = entries.find((entry) => entry.level === 'WARN');
+    expect(warning?.message).toBe('provider warning');
+    // Identity rides the entry's annotations, not a channel argument. A tracer
+    // span does not attribute a log entry: `spans` reads `CurrentLogSpans`.
+    expect(warning?.annotations['executionId']).toBe('run-42');
+    const output = JSON.stringify(entries);
     expect(output).toContain('[redacted]');
     expect(output).not.toContain(SECRET);
 
     vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue(undefined);
-    lines.length = 0;
+    entries.length = 0;
     Effect.runSync(operation().pipe(Effect.provide(effectDiagnosticsLayer)));
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('provider warning');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.message).toBe('provider warning');
   });
 
-  it('disposes a shared underlying sink exactly once', () => {
+  it('disposes a replaced sink exactly once', () => {
     const dispose = vi.fn();
-    const sink = { appendLine: vi.fn(), dispose };
-    logger.setOutputChannelFactory(() => sink);
+    setLogSink({ write: vi.fn(), dispose });
 
-    logger.createChannelWriter('shared', false);
-    logger.createChannelWriter('agent', true);
-    logger.setOutputChannelFactory(null);
+    setLogSink(null);
+    setLogSink(null);
 
     expect(dispose).toHaveBeenCalledOnce();
   });

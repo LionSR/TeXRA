@@ -60,6 +60,7 @@ function spyOnSignalRegistration(): {
 }
 
 const mocks = vi.hoisted(() => ({
+  consoleLogSink: { write: vi.fn() },
   signInCliSupabase: vi.fn(),
   bootstrapNodeAgentDirectories: vi.fn(),
   createPlatformAgentDirectories: vi.fn(() => ({
@@ -95,8 +96,12 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
   signInCliSupabase: mocks.signInCliSupabase,
 }));
 
+vi.mock('@logger/logSink', () => ({
+  consoleLogSink: mocks.consoleLogSink,
+  setLogSink: vi.fn(),
+}));
+
 vi.mock('@logger/logUtils', () => ({
-  createChannelWriter: vi.fn(() => vi.fn()),
   createLog: vi.fn(() => ({
     debug: vi.fn(),
     info: vi.fn(),
@@ -107,7 +112,6 @@ vi.mock('@logger/logUtils', () => ({
   error: vi.fn(),
   info: vi.fn(),
   isDebugModeEnabled: vi.fn(() => false),
-  setOutputChannelFactory: vi.fn(),
   warn: vi.fn(),
 }));
 

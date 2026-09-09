@@ -1,5 +1,5 @@
 import { createLog } from '@logger/logUtils';
-import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
+import { hasUsableApiKey, API_PROVIDERS } from '@model/apiProviders';
 import {
   isCodexSubscriptionActive,
   isXaiSubscriptionActive,
@@ -71,7 +71,7 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
     }
     const hasApiKey = await probeSetupCredential(
       `${provider} API key`,
-      async () => isNonEmptyString(await lookupApiKey(secrets, provider)),
+      () => hasUsableApiKey(secrets, provider),
       credentialLog.warn,
     );
     if (hasApiKey) return model;
@@ -100,7 +100,7 @@ export async function resolveSetupLaunchModel(
   const useOpenRouter = getUseOpenRouter();
   const hasOpenRouterKey = await probeSetupCredential(
     'OpenRouter API key',
-    async () => isNonEmptyString(await lookupApiKey(secrets, 'openRouter')),
+    () => hasUsableApiKey(secrets, 'openRouter'),
     credentialLog.warn,
   );
   const openRouterModel = hasOpenRouterKey

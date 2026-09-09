@@ -1327,8 +1327,11 @@ async function seedRunningWorkflow(): Promise<void> {
   const residency = await effectRuntime().runPromise(
     session().transcripts.acquireRunResidency(childStreamId, executionId),
   );
-  const runTrace = createRunTrace(childStreamId, residency);
-  const detachRunTrace = session().attachRunTrace(runTrace, childStreamId);
+  const runTrace = createRunTrace(residency);
+  const detachRunTrace = session().attachRunTrace(
+    runTrace.trace,
+    childStreamId,
+  );
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {

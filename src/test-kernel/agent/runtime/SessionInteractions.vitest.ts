@@ -9,7 +9,7 @@ import {
   type ProposalResult,
   type SettledInteractionKind,
 } from '@agent/runtime/HostInteractions';
-import { setOutputChannelFactory } from '@logger/logUtils';
+import { setLogSink, type LogEntry } from '@logger/logSink';
 import {
   AgentCategory,
   type AgentProposal,
@@ -217,13 +217,16 @@ function requestProposal(
   });
 }
 
-/** Routes appendLine output into a returned array; reset with `setOutputChannelFactory(null)`. */
-function captureOutputLines(): string[] {
-  const lines: string[] = [];
-  setOutputChannelFactory(() => ({
-    appendLine: (message: string) => lines.push(message),
-  }));
-  return lines;
+/** Routes diagnostic entries into a returned array; reset with `setLogSink(null)`. */
+function captureLogEntries(): LogEntry[] {
+  const entries: LogEntry[] = [];
+  setLogSink({ write: (entry) => entries.push(entry) });
+  return entries;
+}
+
+/** The captured entries whose message mentions `text`. */
+function matching(entries: readonly LogEntry[], text: string): LogEntry[] {
+  return entries.filter((entry) => String(entry.message).includes(text));
 }
 
 describe('session.interactions immediate capabilities', () => {
@@ -547,18 +550,19 @@ describe('session.interactions request bookkeeping', () => {
   });
 
   it('warns once when a request parks unattached, then redispatches it', async () => {
-    const lines = captureOutputLines();
+    const entries = captureLogEntries();
     const session = createTestSession();
     const adapter = createControllablePlanAdapter();
-    const parkWarnings = (): string[] =>
-      lines.filter((line) => line.includes('No interaction host is attached'));
+    const parkWarnings = (): LogEntry[] =>
+      matching(entries, 'No interaction host is attached');
     try {
       const pending = requestPlan(session, 'approval:parked-warning');
 
       expect(parkWarnings()).toHaveLength(1);
-      expect(parkWarnings()[0]).toContain('WARN');
-      expect(parkWarnings()[0]).toContain('planApproval');
-      expect(parkWarnings()[0]).toContain(streamId);
+      // Severity is a field on the entry, not text inside the message.
+      expect(parkWarnings()[0]?.level).toBe('WARN');
+      expect(String(parkWarnings()[0]?.message)).toContain('planApproval');
+      expect(String(parkWarnings()[0]?.message)).toContain(streamId);
 
       // Parking stays load-bearing: a host attaching later still replays the
       // request exactly once (this is how a webview reload recovers a prompt).
@@ -571,16 +575,16 @@ describe('session.interactions request bookkeeping', () => {
       expect(parkWarnings()).toHaveLength(1);
     } finally {
       session.dispose();
-      setOutputChannelFactory(null);
+      setLogSink(null);
     }
   });
 
   it('keeps a parked request pending when the diagnostic sink throws', async () => {
-    setOutputChannelFactory(() => ({
-      appendLine: () => {
+    setLogSink({
+      write: () => {
         throw new Error('diagnostic sink failed');
       },
-    }));
+    });
     const session = createTestSession();
     const adapter = createControllablePlanAdapter();
     try {
@@ -600,7 +604,7 @@ describe('session.interactions request bookkeeping', () => {
       });
     } finally {
       session.dispose();
-      setOutputChannelFactory(null);
+      setLogSink(null);
     }
   });
 
@@ -635,7 +639,7 @@ describe('session.interactions request bookkeeping', () => {
   });
 
   it('keeps a pending request across adapter detach and reattach', async () => {
-    const lines = captureOutputLines();
+    const entries = captureLogEntries();
     const session = createTestSession();
     const first = createControllablePlanAdapter();
     const second = createControllablePlanAdapter();
@@ -645,11 +649,9 @@ describe('session.interactions request bookkeeping', () => {
       detach();
       await Promise.resolve();
       expect(first.dispose).toHaveBeenCalledOnce();
-      expect(
-        lines.filter((line) =>
-          line.includes('No interaction host is attached'),
-        ),
-      ).toHaveLength(1);
+      expect(matching(entries, 'No interaction host is attached')).toHaveLength(
+        1,
+      );
 
       session.interactions.use(second.interactions);
       expect(second.requests).toHaveLength(1);
@@ -659,7 +661,7 @@ describe('session.interactions request bookkeeping', () => {
       await expect(pending).resolves.toEqual({ action: 'approve' });
     } finally {
       session.dispose();
-      setOutputChannelFactory(null);
+      setLogSink(null);
     }
   });
 

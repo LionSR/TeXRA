@@ -1,12 +1,16 @@
 // Node imports
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Local imports
+import { setLogSink } from '@logger/logSink';
+import { warn } from '@logger/logUtils';
 
 // Local imports - test support
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -35,6 +39,7 @@ describe('desktop app log', () => {
   const tempDirs = useTempDirs();
 
   afterEach(async () => {
+    setLogSink(null);
     resetElectronTestStub();
     vi.restoreAllMocks();
   });
@@ -50,6 +55,30 @@ describe('desktop app log', () => {
     configureElectronTestStub({ userDataPath });
     return { root };
   }
+
+  it('records a core warning at its own severity, one JSON entry per line', async () => {
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
+    const userDataPath = join(root, 'userData');
+    configureElectronTestStub({ userDataPath });
+    const { installDesktopAppLog } = await loadDesktopAppLogModule();
+
+    const logPath = installDesktopAppLog();
+    warn('DesktopTest', 'workspace write failed');
+
+    expect(logPath).toBeDefined();
+    const lines = (await readFile(logPath ?? '', 'utf8'))
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as { level: string; message: unknown });
+    // Before the desktop installed a sink these fell to the console fallback
+    // and reached the file stamped `info`, with the real level readable only
+    // inside the message text (#12134).
+    expect(lines.at(-1)).toMatchObject({
+      level: 'WARN',
+      message: 'workspace write failed',
+    });
+    expect(lines[0]?.level).toBe('INFO');
+  });
 
   it('does not abort startup when the logs directory cannot be created', async () => {
     const root = await makeTempDir('texra-electron-log-', tempDirs);

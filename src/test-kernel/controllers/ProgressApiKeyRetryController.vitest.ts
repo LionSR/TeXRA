@@ -1,3 +1,4 @@
+import { Redacted } from 'effect';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber } from 'effect';
@@ -91,7 +92,12 @@ function createHarness(options: HarnessOptions = {}): {
     retries,
     controller: new ProgressApiKeyRetryController({
       providers: PROVIDERS,
-      readKey: async (provider) => keys.get(provider),
+      readKey: async (provider) => {
+        // The fixture keeps plain strings; the port hands out sealed values,
+        // which compare by value so a re-entered identical key reads unchanged.
+        const key = keys.get(provider);
+        return key === undefined ? undefined : Redacted.make(key);
+      },
       hasUsableKey: async (provider) =>
         (keys.get(provider)?.trim().length ?? 0) > 0,
       promptForApiKey: async (provider) => {

@@ -54,7 +54,7 @@ import {
   resolveModelSource,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
-import { getApiKey, type ApiProvider } from '@model/apiProviders';
+import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type {
@@ -275,7 +275,7 @@ export abstract class ModelHandler<
     // before `setLogger` swaps in the real per-run trace in some paths, so it
     // needs the full `TraceEmitter`, not a log-only closure.
     this.logger = new TraceEmitter();
-    attachChannelSubscriber(this.logger, { channel: 'Agent', isAgent: false });
+    attachChannelSubscriber(this.logger, 'Agent');
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
       getCapabilities: () => this.capabilities,
       isOpenAIProvider: () => this.config.provider === ModelProvider.OPENAI,
@@ -466,7 +466,7 @@ export abstract class ModelHandler<
     errorMessage: string,
   ): Promise<string> {
     try {
-      return await getApiKey(platform().secrets, provider);
+      return exposeApiKey(await getApiKey(platform().secrets, provider));
     } catch (cause) {
       const error = new Error(errorMessage, { cause });
       attachMissingApiKeyError(error);
