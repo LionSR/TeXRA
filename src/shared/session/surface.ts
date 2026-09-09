@@ -241,11 +241,16 @@ type StreamKeyedMapField = {
 }[keyof Surface];
 
 /**
- * The surface fields keyed by `StreamTabId`, in one place so `pruneSurface`
- * can never fall out of sync with the record: a field added here is pruned,
- * a field left off keeps a deleted stream's entry forever. `inquiryDrafts`
- * is deliberately absent — it is keyed by `${InquiryThreadId}#${turn}`, not
- * by stream, so no stream leaving the view can retire one.
+ * The single list `pruneSurface` reads: the per-stream maps it retains over.
+ * `StreamKeyedMapField` refuses any entry that is not a stream-keyed map, so a
+ * typo or a non-map field fails here at the list. It does not enforce the
+ * reverse — the type system cannot, since `StreamTabId` is `string` and so a
+ * stream-keyed map is indistinguishable from any other string-keyed one — so a
+ * new per-stream field added to `Surface` but left off this list still keeps a
+ * deleted stream's entry forever, and adding such a field means adding it here.
+ * `inquiryDrafts` is that indistinguishable case made deliberate: it is a
+ * string-keyed map too, but keyed by `${InquiryThreadId}#${turn}`, not by
+ * stream, so no stream leaving the view can retire one and it stays off.
  */
 const PER_STREAM_MAPS = [
   'drafts',
