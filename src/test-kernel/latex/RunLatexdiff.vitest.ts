@@ -64,8 +64,12 @@ const baseRequest = {
 describe('runLatexdiffForExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.runLatexdiffFromMetadata.mockResolvedValue(METADATA_OUTCOME);
-    mocks.runLatexdiffViaWorkspaceScan.mockResolvedValue(SCAN_OUTCOME);
+    mocks.runLatexdiffFromMetadata.mockReturnValue(
+      Effect.succeed(METADATA_OUTCOME),
+    );
+    mocks.runLatexdiffViaWorkspaceScan.mockReturnValue(
+      Effect.succeed(SCAN_OUTCOME),
+    );
   });
 
   it('uses caller-supplied outputs without any discovery', async () => {
@@ -86,7 +90,7 @@ describe('runLatexdiffForExecution', () => {
   });
 
   it('scopes a valid runId to a run-dir scan before metadata discovery', async () => {
-    mocks.scanRunDirForOutputs.mockResolvedValue(roundMap());
+    mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
 
     const result = await Effect.runPromise(
       runLatexdiffForExecution({
@@ -109,7 +113,7 @@ describe('runLatexdiffForExecution', () => {
   });
 
   it('does not fall back to auto-discovery when a pinned runId scan misses', async () => {
-    mocks.scanRunDirForOutputs.mockResolvedValue(null);
+    mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(null));
 
     const result = await Effect.runPromise(
       runLatexdiffForExecution({
@@ -188,8 +192,12 @@ describe('runLatexdiffForExecution', () => {
 describe('runLatexdiffForExecution logger seam', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.runLatexdiffFromMetadata.mockResolvedValue(METADATA_OUTCOME);
-    mocks.runLatexdiffViaWorkspaceScan.mockResolvedValue(SCAN_OUTCOME);
+    mocks.runLatexdiffFromMetadata.mockReturnValue(
+      Effect.succeed(METADATA_OUTCOME),
+    );
+    mocks.runLatexdiffViaWorkspaceScan.mockReturnValue(
+      Effect.succeed(SCAN_OUTCOME),
+    );
   });
 
   afterEach(() => {
@@ -197,7 +205,7 @@ describe('runLatexdiffForExecution logger seam', () => {
   });
 
   it('logs the run-dir scan resolution on the latexdiff runtime channel', async () => {
-    mocks.scanRunDirForOutputs.mockResolvedValue(roundMap());
+    mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
     const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
 
     const result = await Effect.runPromise(

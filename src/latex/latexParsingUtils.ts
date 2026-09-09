@@ -6,9 +6,12 @@
 
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { ensureError } from '@utils/errors/errorMessage';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 const log = createLog('LatexParsing');
@@ -71,57 +74,70 @@ const BIB_DIRECTIVE_PATTERN = new RegExp(
  * inside a file mirrored into run storage resolve against the workspace.
  * Falls back to the literal dirname if the file can't be realpath'd.
  */
-export async function resolveLatexDir(absolutePath: string): Promise<string> {
-  const resolved = await platform()
-    .fs.realPath(absolutePath)
-    .catch((error: unknown) => {
-      log.debug(
-        `realPath failed for ${absolutePath}; falling back to literal dirname`,
-        { data: error },
-      );
-      return absolutePath;
-    });
+export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
+  absolutePath: string,
+) {
+  const resolved = yield* Effect.tryPromise({
+    try: () => platform().fs.realPath(absolutePath),
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        log.debug(
+          `realPath failed for ${absolutePath}; falling back to literal dirname`,
+          { data: error },
+        );
+        return absolutePath;
+      }),
+    ),
+  );
   return path.dirname(resolved);
-}
+});
 
 /**
  * Return `absolutePath` if it exists on disk, otherwise null. Centralizes
  * the `AbsoluteFS.exists(...)` boilerplate used by the various LaTeX
  * dependency resolvers.
  */
-export async function existingExternalPath(
-  absolutePath: string,
-): Promise<string | null> {
-  if (await AbsoluteFS.exists(absolutePath)) {
-    return absolutePath;
-  }
-  return null;
-}
+export const existingExternalPath = Effect.fn('latex.existingExternalPath')(
+  function* (absolutePath: string) {
+    const exists = yield* Effect.tryPromise({
+      try: () => AbsoluteFS.exists(absolutePath),
+      catch: ensureError,
+    });
+    return exists ? absolutePath : null;
+  },
+);
 
 /**
- * Search `searchPaths × extensions` for the first existing file and return
+ * Search `searchPaths x extensions` for the first existing file and return
  * its normalized absolute path, or null if nothing exists.
  *
  * - `relativePath` is joined against each entry in `searchPaths`.
  * - Each `extensions` entry is appended to the joined path; pass `''` to test
  *   the path as-is.
  * - The search is ordered: outer loop over `searchPaths`, inner over
- *   `extensions`. The first hit wins.
+ *   `extensions`. The first hit wins, and the candidates after it are never
+ *   probed, so the walk stays sequential rather than a concurrent race.
  */
-export async function findExistingLatexPath(
-  relativePath: string,
-  searchPaths: string[],
-  extensions: string[],
-): Promise<string | null> {
-  for (const basePath of searchPaths) {
-    const joined = path.normalize(path.join(basePath, relativePath));
-    for (const ext of extensions) {
-      const hit = await existingExternalPath(ext ? `${joined}${ext}` : joined);
-      if (hit !== null) return hit;
+export const findExistingLatexPath = Effect.fn('latex.findExistingLatexPath')(
+  function* (
+    relativePath: string,
+    searchPaths: readonly string[],
+    extensions: readonly string[],
+  ) {
+    for (const basePath of searchPaths) {
+      const joined = path.normalize(path.join(basePath, relativePath));
+      for (const ext of extensions) {
+        const hit = yield* existingExternalPath(
+          ext ? `${joined}${ext}` : joined,
+        );
+        if (hit !== null) return hit;
+      }
     }
-  }
-  return null;
-}
+    return null;
+  },
+);
 
 /**
  * Match `pattern` against `content` and split each match's first capture

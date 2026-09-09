@@ -1,6 +1,9 @@
+import { Effect } from 'effect';
+
 import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { getTeXCountStats } from '@latex/texcount';
+import { effectRuntime } from '@platform/processRuntime';
 import type { FileLocation } from '@shared/schemas';
 
 import { getFilesForRound } from '../helpers';
@@ -26,7 +29,12 @@ export class TeXCountNode extends BaseNode<
     if (!config.toolConfig.attachTeXCount || files.length === 0) {
       return null;
     }
-    return getTeXCountStats(files.map((f) => f.absolutePath));
+    // The one Promise seam left in this node: texcount is Effect below this
+    // line and the flow engine above it is not. The run goes when the
+    // reflection flow itself becomes a plain Effect loop (PRD R4).
+    return effectRuntime().runPromise(
+      getTeXCountStats(files.map((f) => f.absolutePath)),
+    );
   }
 
   override async execFallback(

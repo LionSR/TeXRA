@@ -1,9 +1,11 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - latex utilities
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getTeXCount } from '@latex/texcount';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
@@ -27,6 +29,37 @@ const TexcountInputSchema = z.strictObject({
 
 type TexcountInput = z.infer<typeof TexcountInputSchema>;
 
+const texcount = Effect.fn('TexcountTool.execute')(function* (
+  input: TexcountInput,
+): Effect.fn.Return<ToolResult, ToolError> {
+  const files = ensureArray(input.files)
+    .map((file) => file.trim())
+    .filter((file) => file.length > 0);
+  if (files.length === 0) {
+    return yield* Effect.fail(
+      new ToolError('No LaTeX files provided for texcount.'),
+    );
+  }
+
+  const { output, errors } = yield* getTeXCount(files, { mode: input.mode });
+
+  if (!output) {
+    return yield* Effect.fail(
+      new ToolError(
+        errors.join('\n') ||
+          'texcount did not return any output. Ensure the files exist.',
+      ),
+    );
+  }
+
+  return executed(
+    input.format === 'stats'
+      ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
+      : output,
+    `Analyzed: ${formatResultCount(files.length, 'file')}`,
+  );
+});
+
 export class TexcountTool extends defineTool({
   name: 'texcount',
   parallelSafe: true,
@@ -34,33 +67,11 @@ export class TexcountTool extends defineTool({
     'Run texcount on one or more LaTeX files. Use mode="separate" (default) for individual files, "include" to follow \\input/\\include, or "sum" to aggregate independent sources.',
   schema: TexcountInputSchema,
 }) {
-  protected async execute(input: TexcountInput): Promise<ToolResult> {
-    const files = ensureArray(input.files)
-      .map((file) => file.trim())
-      .filter((file) => file.length > 0);
-    if (files.length === 0) {
-      throw new ToolError('No LaTeX files provided for texcount.');
-    }
-
-    // Thread the tool call's abort signal to the texcount subprocess so a
-    // cancelled parallel batch terminates it instead of waiting it out.
-    const { output, errors } = await getTeXCount(files, {
-      mode: input.mode,
+  protected execute(input: TexcountInput): Promise<ToolResult> {
+    // Cancelling a parallel batch interrupts this fiber, and the texcount
+    // subprocesses abort with it — no signal is threaded through by hand.
+    return effectRuntime().runPromise(texcount(input), {
       signal: getCurrentToolCallContext()?.signal,
     });
-
-    if (!output) {
-      throw new ToolError(
-        errors.join('\n') ||
-          'texcount did not return any output. Ensure the files exist.',
-      );
-    }
-
-    return executed(
-      input.format === 'stats'
-        ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
-        : output,
-      `Analyzed: ${formatResultCount(files.length, 'file')}`,
-    );
   }
 }

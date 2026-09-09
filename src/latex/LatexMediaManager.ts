@@ -2,17 +2,16 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import pMap from 'p-map';
+import { Effect } from 'effect';
 
 // Local imports
-import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { isFile } from '@utils/files/fsEntryType';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 
@@ -67,6 +66,10 @@ export interface LatexTrace {
   error(message: string, options?: LatexLogOptions): void;
 }
 
+/** Run `effect`, reading a filesystem promise as a typed failure. */
+const fsCall = <A>(thunk: () => Promise<A>): Effect.Effect<A, Error> =>
+  Effect.tryPromise({ try: thunk, catch: ensureError });
+
 /**
  * Handles LaTeX related media extraction and compilation for agents.
  */
@@ -80,163 +83,189 @@ export class LatexMediaManager {
    * Run `task` over `items` at the LaTeX concurrency limit, keeping going when
    * an individual item fails. Mirroring is best-effort by design — a deleted
    * figure or a dependency outside the workspace must not take the surviving
-   * files down with it — so the failure is swallowed, and logged here with the
-   * offending path rather than at each call site.
+   * files down with it — so an item's typed failure is recovered here and
+   * logged with the offending path rather than at each call site. Defects and
+   * interruption still propagate: a bug or a cancelled run is not a skipped
+   * file.
    */
-  private async forEachFile<T>(
+  private forEachFile<T, E>(
     items: readonly T[],
     pathOf: (item: T) => string,
     failureMessage: string,
-    task: (item: T) => Promise<unknown>,
-  ): Promise<void> {
-    await pMap(
+    task: (item: T) => Effect.Effect<unknown, E>,
+  ): Effect.Effect<void> {
+    return Effect.forEach(
       items,
-      async (item) => {
-        try {
-          await task(item);
-        } catch (error) {
-          this.logger.debug(failureMessage, {
-            data: { path: pathOf(item), error },
-          });
-        }
-      },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+      (item) =>
+        task(item).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              this.logger.debug(failureMessage, {
+                data: { path: pathOf(item), error },
+              });
+            }),
+          ),
+        ),
+      { concurrency: LATEX_CONCURRENCY, discard: true },
     );
   }
 
-  private async mirrorFigureDependencies(
+  private mirrorFigureDependencies(
     latexFile: FileLocation,
-    figures: string[],
+    figures: readonly string[],
     baseDir?: string,
-  ): Promise<void> {
-    const fileService = this.fileService;
-    if (!fileService || figures.length === 0) {
-      return;
-    }
-
-    // Resolve against the workspace directory so figure paths from a
-    // run-storage symlink map back to real workspace files (otherwise
-    // mirrorWorkspaceFile would classify them as external and skip).
-    // Callers that already resolved this for their own purposes (e.g.
-    // extractFiguresFromFiles) pass it in to avoid a redundant async lookup.
-    const resolvedBaseDir =
-      baseDir ?? (await resolveLatexDir(latexFile.absolutePath));
-    const absolutePaths = new Set<string>();
-    for (const relative of figures) {
-      const trimmed = relative.trim();
-      if (trimmed) {
-        absolutePaths.add(path.normalize(path.join(resolvedBaseDir, trimmed)));
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const fileService = this.fileService;
+      if (!fileService || figures.length === 0) {
+        return;
       }
-    }
 
-    if (absolutePaths.size === 0) {
-      return;
-    }
+      // Resolve against the workspace directory so figure paths from a
+      // run-storage symlink map back to real workspace files (otherwise
+      // mirrorWorkspaceFile would classify them as external and skip).
+      // Callers that already resolved this for their own purposes (e.g.
+      // extractFiguresFromFiles) pass it in to avoid a redundant lookup.
+      const resolvedBaseDir =
+        baseDir ?? (yield* resolveLatexDir(latexFile.absolutePath));
+      const absolutePaths = new Set<string>();
+      for (const relative of figures) {
+        const trimmed = relative.trim();
+        if (trimmed) {
+          absolutePaths.add(
+            path.normalize(path.join(resolvedBaseDir, trimmed)),
+          );
+        }
+      }
 
-    await this.forEachFile(
-      [...absolutePaths],
-      (absolutePath) => absolutePath,
-      'Unable to mirror figure dependency',
-      (absolutePath) =>
-        fileService.mirrorWorkspaceFile(pathToLocation(absolutePath)),
-    );
+      if (absolutePaths.size === 0) {
+        return;
+      }
+
+      yield* this.forEachFile(
+        [...absolutePaths],
+        (absolutePath) => absolutePath,
+        'Unable to mirror figure dependency',
+        (absolutePath) =>
+          fsCall(() =>
+            fileService.mirrorWorkspaceFile(pathToLocation(absolutePath)),
+          ),
+      );
+    });
+  }
+
+  /**
+   * Compile one LaTeX file to PDF, returning the PDF's location or `undefined`
+   * when the compile, the write, or the size check disqualifies it.
+   */
+  private compileOnePdf(
+    file: FileLocation,
+  ): Effect.Effect<FileLocation | undefined, Error> {
+    return Effect.gen({ self: this }, function* () {
+      const buildDir = path.join(path.dirname(file.absolutePath), 'build');
+      yield* fsCall(() => AbsoluteFS.ensureDir(buildDir));
+      const compiled = yield* fsCall(() =>
+        compileLatex2Pdf(file, { outputDirectory: buildDir }),
+      );
+      if (!compiled.ok) {
+        this.logger.warn(
+          `Failed to compile LaTeX to PDF:\n${compiled.logTail}`,
+          {
+            data: { sourceFile: file.absolutePath, logTail: compiled.logTail },
+          },
+        );
+        return undefined;
+      }
+
+      const pdfLocation = pathToLocation(compiled.pdfPath);
+      const written = yield* fsCall(() =>
+        AbsoluteFS.exists(pdfLocation.absolutePath),
+      );
+      if (!written) {
+        this.logger.warn(
+          'LaTeX reported success but no PDF was written; skipping',
+          {
+            data: {
+              sourceFile: file.absolutePath,
+              pdfFile: pdfLocation.absolutePath,
+            },
+          },
+        );
+        return undefined;
+      }
+
+      // Stat failures are noisier than other compile failures because an
+      // existing-but-unreadable PDF likely indicates a permissions/IO bug.
+      const stats = yield* fsCall(() =>
+        AbsoluteFS.stat(pdfLocation.absolutePath),
+      ).pipe(
+        Effect.catch((err) =>
+          Effect.sync(() => {
+            this.logger.error(
+              `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
+              { data: { path: pdfLocation.absolutePath, error: err } },
+            );
+            return undefined;
+          }),
+        ),
+      );
+      if (!stats) return undefined;
+      if (stats.size === 0) {
+        this.logger.warn('Compiled PDF is empty', {
+          data: {
+            sourceFile: file.absolutePath,
+            pdfFile: pdfLocation.absolutePath,
+          },
+        });
+        return undefined;
+      }
+
+      this.logger.info('Compiled PDF', {
+        data: {
+          sourceFile: file.absolutePath,
+          pdfFile: pdfLocation.absolutePath,
+        },
+      });
+      return pdfLocation;
+    });
   }
 
   /**
    * Compile LaTeX files to PDF and add them to the tool state.
    */
-  private async compilePdfs(
-    files: FileLocation[],
+  private compilePdfs(
+    files: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
-  ): Promise<void> {
-    const texFiles = files.filter((file) =>
-      hasExtension(file.absolutePath, '.tex'),
-    );
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const texFiles = files.filter((file) =>
+        hasExtension(file.absolutePath, '.tex'),
+      );
 
-    const compileResults = await pMap(
-      texFiles,
-      async (file): Promise<FileLocation | undefined> => {
-        try {
-          const buildDir = path.join(path.dirname(file.absolutePath), 'build');
-          await AbsoluteFS.ensureDir(buildDir);
-          const compiled = await compileLatex2Pdf(file, {
-            outputDirectory: buildDir,
-          });
-          if (!compiled.ok) {
-            this.logger.warn(
-              `Failed to compile LaTeX to PDF:\n${compiled.logTail}`,
-              {
-                data: {
-                  sourceFile: file.absolutePath,
-                  logTail: compiled.logTail,
-                },
-              },
-            );
-            return undefined;
-          }
+      const compileResults = yield* Effect.forEach(
+        texFiles,
+        (file) =>
+          // The build-directory and existence-probe I/O (and path resolution)
+          // fail here; a compile that merely returns { ok: false } is logged
+          // inside compileOnePdf. Either way the remaining files continue.
+          this.compileOnePdf(file).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                this.logger.warn(
+                  `Skipping PDF compile for ${file.absolutePath}: ${toErrorMessage(error)}`,
+                  { data: { sourceFile: file.absolutePath, error } },
+                );
+                return undefined;
+              }),
+            ),
+          ),
+        { concurrency: LATEX_CONCURRENCY },
+      );
 
-          const pdfLocation = pathToLocation(compiled.pdfPath);
-          if (!(await AbsoluteFS.exists(pdfLocation.absolutePath))) {
-            this.logger.warn(
-              'LaTeX reported success but no PDF was written; skipping',
-              {
-                data: {
-                  sourceFile: file.absolutePath,
-                  pdfFile: pdfLocation.absolutePath,
-                },
-              },
-            );
-            return undefined;
-          }
-
-          // Stat failures are noisier than other compile failures because an
-          // existing-but-unreadable PDF likely indicates a permissions/IO bug.
-          const stats = await AbsoluteFS.stat(pdfLocation.absolutePath).catch(
-            (err) => {
-              this.logger.error(
-                `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
-                { data: { path: pdfLocation.absolutePath, error: err } },
-              );
-              return undefined;
-            },
-          );
-          if (!stats) return undefined;
-          if (stats.size === 0) {
-            this.logger.warn('Compiled PDF is empty', {
-              data: {
-                sourceFile: file.absolutePath,
-                pdfFile: pdfLocation.absolutePath,
-              },
-            });
-            return undefined;
-          }
-
-          this.logger.info('Compiled PDF', {
-            data: {
-              sourceFile: file.absolutePath,
-              pdfFile: pdfLocation.absolutePath,
-            },
-          });
-          return pdfLocation;
-        } catch (error) {
-          // Compile failures do not land here: compileLatex2Pdf returns
-          // { ok: false } and is logged above. This arm catches the
-          // build-directory and existence-probe I/O (and path resolution),
-          // so it must be loud; pMap's stopOnError: false then carries on
-          // to the remaining files.
-          this.logger.warn(
-            `Skipping PDF compile for ${file.absolutePath}: ${toErrorMessage(error)}`,
-            { data: { sourceFile: file.absolutePath, error } },
-          );
-          return undefined;
-        }
-      },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
-    );
-
-    for (const result of compileResults.filter(filterNotNullish)) {
-      workspaceState.media.addMediaFiles([result]);
-    }
+      for (const result of compileResults.filter(filterNotNullish)) {
+        workspaceState.media.addMediaFiles([result]);
+      }
+    });
   }
 
   /**
@@ -248,71 +277,70 @@ export class LatexMediaManager {
    * that transitive includes (e.g. main.tex → chapters/ch1.tex →
    * chapters/figures/fig1.tex) are all brought along.
    */
-  private async mirrorLatexFileDependencies(
-    files: FileLocation[],
-  ): Promise<void> {
-    const fileService = this.fileService;
-    if (!fileService || files.length === 0) {
-      return;
-    }
+  private mirrorLatexFileDependencies(
+    files: readonly FileLocation[],
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const fileService = this.fileService;
+      if (!fileService || files.length === 0) {
+        return;
+      }
 
-    const texFiles = files.filter((file) =>
-      hasExtension(file.absolutePath, '.tex'),
-    );
-    if (texFiles.length === 0) return;
-
-    const visited = new Set<string>();
-    const worklist: FileLocation[] = [...texFiles];
-
-    // Sweep siblings of every root input file up front. Resolve the real
-    // path first so a mirrored symlink inside run storage points back to
-    // the original workspace tree — otherwise project-local .cls/.sty/.bst/
-    // latexmkrc files that live beside the real source are invisible.
-    await pMap(
-      texFiles,
-      async (file) => {
-        let siblingDir = path.dirname(file.absolutePath);
-        try {
-          siblingDir = path.dirname(
-            await platform().fs.realPath(file.absolutePath),
-          );
-        } catch (error) {
-          this.logger.debug('Unable to resolve real path', {
-            data: { path: file.absolutePath, error },
-          });
-        }
-        await this.mirrorProjectSiblings(siblingDir);
-      },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
-    );
-
-    while (worklist.length > 0) {
-      const file = worklist.shift()!;
-      if (visited.has(file.absolutePath)) continue;
-      visited.add(file.absolutePath);
-
-      const deps = await this.collectDependencies(file);
-      if (deps.length === 0) continue;
-
-      await this.forEachFile(
-        deps,
-        (absolutePath) => absolutePath,
-        'Unable to mirror LaTeX dependency',
-        async (absolutePath) => {
-          const depLocation = pathToLocation(absolutePath);
-          const isTex = hasExtension(absolutePath, '.tex');
-          await fileService.mirrorWorkspaceFile(depLocation, {
-            snapshot: isTex,
-          });
-          if (isTex) {
-            worklist.push(depLocation);
-          }
-        },
+      const texFiles = files.filter((file) =>
+        hasExtension(file.absolutePath, '.tex'),
       );
-      this.logger.debug('Mirrored LaTeX dependencies', {
-        data: { count: deps.length, from: file.absolutePath },
-      });
-    }
+      if (texFiles.length === 0) return;
+
+      const visited = new Set<string>();
+      const worklist: FileLocation[] = [...texFiles];
+
+      // Sweep siblings of every root input file up front. `resolveLatexDir`
+      // follows the symlink first, so a mirrored .tex inside run storage
+      // points back at the original workspace tree — otherwise project-local
+      // .cls/.sty/.bst/latexmkrc files that live beside the real source are
+      // invisible — and falls back to the literal dirname when it can't.
+      yield* Effect.forEach(
+        texFiles,
+        (file) =>
+          resolveLatexDir(file.absolutePath).pipe(
+            Effect.flatMap((siblingDir) =>
+              this.mirrorProjectSiblings(siblingDir),
+            ),
+          ),
+        { concurrency: LATEX_CONCURRENCY, discard: true },
+      );
+
+      while (worklist.length > 0) {
+        const file = worklist.shift()!;
+        if (visited.has(file.absolutePath)) continue;
+        visited.add(file.absolutePath);
+
+        const deps = yield* this.collectDependencies(file);
+        if (deps.length === 0) continue;
+
+        yield* this.forEachFile(
+          deps,
+          (absolutePath) => absolutePath,
+          'Unable to mirror LaTeX dependency',
+          (absolutePath) =>
+            Effect.gen(function* () {
+              const depLocation = pathToLocation(absolutePath);
+              const isTex = hasExtension(absolutePath, '.tex');
+              yield* fsCall(() =>
+                fileService.mirrorWorkspaceFile(depLocation, {
+                  snapshot: isTex,
+                }),
+              );
+              if (isTex) {
+                worklist.push(depLocation);
+              }
+            }),
+        );
+        this.logger.debug('Mirrored LaTeX dependencies', {
+          data: { count: deps.length, from: file.absolutePath },
+        });
+      }
+    });
   }
 
   /**
@@ -320,45 +348,66 @@ export class LatexMediaManager {
    * \usepackage{name} whose `name.sty` sits beside the current file or its
    * project root.
    */
-  private async collectDependencies(
+  private collectDependencies(
     latexFile: FileLocation,
-  ): Promise<string[]> {
-    const found = new Set<string>();
+  ): Effect.Effect<string[]> {
+    return Effect.gen({ self: this }, function* () {
+      const found = new Set<string>();
 
-    try {
-      const direct = await extractLatexFileDependencies(latexFile);
+      const direct = yield* extractLatexFileDependencies(latexFile).pipe(
+        Effect.catch((error) =>
+          Effect.sync((): readonly string[] => {
+            this.logger.debug('Unable to extract LaTeX dependencies', {
+              data: { path: latexFile.absolutePath, error },
+            });
+            return [];
+          }),
+        ),
+      );
       for (const abs of direct) {
         found.add(abs);
       }
-    } catch (error) {
-      this.logger.debug('Unable to extract LaTeX dependencies', {
-        data: { path: latexFile.absolutePath, error },
-      });
-    }
 
-    try {
-      const realPath = await platform().fs.realPath(latexFile.absolutePath);
-      const content = await AbsoluteFS.read(latexFile.absolutePath);
-      const uncommented = stripLatexComments(content);
-      const baseDir = path.dirname(realPath);
+      const local = yield* Effect.gen({ self: this }, function* () {
+        // `resolveLatexDir` follows the symlink and falls back to the literal
+        // dirname, so a file whose real path can't be resolved still gets its
+        // sibling `.sty` files probed instead of skipping the probe entirely.
+        const baseDir = yield* resolveLatexDir(latexFile.absolutePath);
+        const content = yield* fsCall(() =>
+          AbsoluteFS.read(latexFile.absolutePath),
+        );
+        const uncommented = stripLatexComments(content);
 
-      const packageNames = collectCommaSeparatedMatches(
-        uncommented,
-        USEPACKAGE_PATTERN,
+        const candidates = collectCommaSeparatedMatches(
+          uncommented,
+          USEPACKAGE_PATTERN,
+        ).map((name) => path.join(baseDir, `${name}.sty`));
+
+        const probed = yield* Effect.forEach(
+          candidates,
+          (candidate) =>
+            fsCall(() => AbsoluteFS.exists(candidate)).pipe(
+              Effect.map((exists) => (exists ? candidate : undefined)),
+            ),
+          { concurrency: LATEX_CONCURRENCY },
+        );
+        return probed.filter(filterNotNullish);
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync((): readonly string[] => {
+            this.logger.debug('Unable to probe \\usepackage targets', {
+              data: { path: latexFile.absolutePath, error },
+            });
+            return [];
+          }),
+        ),
       );
-      for (const name of packageNames) {
-        const candidate = path.join(baseDir, `${name}.sty`);
-        if (await AbsoluteFS.exists(candidate)) {
-          found.add(candidate);
-        }
+      for (const abs of local) {
+        found.add(abs);
       }
-    } catch (error) {
-      this.logger.debug('Unable to probe \\usepackage targets', {
-        data: { path: latexFile.absolutePath, error },
-      });
-    }
 
-    return [...found];
+      return [...found];
+    });
   }
 
   /**
@@ -366,43 +415,51 @@ export class LatexMediaManager {
    * (*.cls, *.sty, *.bst, latexmkrc, .latexindentrc) and mirror them into
    * run storage so the compiled document can find its project-local style.
    */
-  private async mirrorProjectSiblings(projectDir: string): Promise<void> {
-    const fileService = this.fileService;
-    if (!fileService) return;
+  private mirrorProjectSiblings(projectDir: string): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const fileService = this.fileService;
+      if (!fileService) return;
 
-    let entries: string[];
-    try {
-      entries = (await AbsoluteFS.readDir(projectDir)).map(([name]) => name);
-    } catch (error) {
-      this.logger.debug('Unable to scan project siblings', {
-        data: { path: projectDir, error },
-      });
-      return;
-    }
+      const entries = yield* fsCall(() => AbsoluteFS.readDir(projectDir)).pipe(
+        Effect.map((read) => read.map(([name]) => name)),
+        Effect.catch((error) =>
+          Effect.sync((): string[] | undefined => {
+            this.logger.debug('Unable to scan project siblings', {
+              data: { path: projectDir, error },
+            });
+            return undefined;
+          }),
+        ),
+      );
+      if (!entries) return;
 
-    const candidates: string[] = [];
-    for (const name of entries) {
-      const ext = getExtensionLowercase(name);
-      if (
-        PROJECT_SIBLING_EXTENSIONS.has(ext) ||
-        PROJECT_SIBLING_NAMES.has(name)
-      ) {
-        candidates.push(path.join(projectDir, name));
+      const candidates: string[] = [];
+      for (const name of entries) {
+        const ext = getExtensionLowercase(name);
+        if (
+          PROJECT_SIBLING_EXTENSIONS.has(ext) ||
+          PROJECT_SIBLING_NAMES.has(name)
+        ) {
+          candidates.push(path.join(projectDir, name));
+        }
       }
-    }
 
-    if (candidates.length === 0) return;
+      if (candidates.length === 0) return;
 
-    await this.forEachFile(
-      candidates,
-      (absolutePath) => absolutePath,
-      'Unable to mirror project sibling',
-      async (absolutePath) => {
-        const stats = await AbsoluteFS.stat(absolutePath);
-        if (!isFile(stats.type)) return;
-        await fileService.mirrorWorkspaceFile(pathToLocation(absolutePath));
-      },
-    );
+      yield* this.forEachFile(
+        candidates,
+        (absolutePath) => absolutePath,
+        'Unable to mirror project sibling',
+        (absolutePath) =>
+          Effect.gen(function* () {
+            const stats = yield* fsCall(() => AbsoluteFS.stat(absolutePath));
+            if (!isFile(stats.type)) return;
+            yield* fsCall(() =>
+              fileService.mirrorWorkspaceFile(pathToLocation(absolutePath)),
+            );
+          }),
+      );
+    });
   }
 
   /**
@@ -411,126 +468,139 @@ export class LatexMediaManager {
    * (round 1+) so newly-referenced figures are available for PDF compilation
    * but not re-sent to the model on every round.
    */
-  private async mirrorFiguresForFiles(files: FileLocation[]): Promise<void> {
-    if (!this.fileService || files.length === 0) {
-      return;
-    }
-
-    const texFiles = files.filter((file) =>
-      hasExtension(file.absolutePath, '.tex'),
-    );
-    if (texFiles.length === 0) return;
-
-    await this.forEachFile(
-      texFiles,
-      (file) => file.absolutePath,
-      'Unable to mirror figures',
-      async (file) => {
-        const figures = await extractFigurePathsFromLatex(file);
-        if (figures.length === 0) return;
-        await this.mirrorFigureDependencies(file, figures);
-      },
-    );
-  }
-
-  private async extractFiguresFromFiles(
-    files: FileLocation[],
-    workspaceState: MediaWorkspaceState,
-  ): Promise<void> {
-    const figureResults = await pMap(
-      files,
-      async (file): Promise<{ file: FileLocation; figures: string[] }> => {
-        try {
-          const figures = await extractFigurePathsFromLatex(file);
-          return { file, figures };
-        } catch {
-          // Silent skip: malformed or unreadable .tex files should not abort
-          // the surrounding pMap. Existence/format errors here are common
-          // (e.g. file deleted mid-run) and not worth user-visible noise.
-          return { file, figures: [] };
-        }
-      },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
-    );
-
-    const mirrorTasks: Promise<void>[] = [];
-
-    for (const { file, figures } of figureResults) {
-      if (figures.length === 0) {
-        continue;
+  private mirrorFiguresForFiles(
+    files: readonly FileLocation[],
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.fileService || files.length === 0) {
+        return;
       }
 
-      this.logger.debug('Extracted figures', {
-        data: { count: figures.length, from: file.absolutePath },
-      });
+      const texFiles = files.filter((file) =>
+        hasExtension(file.absolutePath, '.tex'),
+      );
+      if (texFiles.length === 0) return;
 
-      // Match the resolution in extractFigurePathsFromLatex so the returned
-      // figure paths (relative to the real latexDir) map back to workspace
-      // files when the .tex is symlinked into run storage.
-      const baseDir = await resolveLatexDir(file.absolutePath);
-      const fileLocations = figures.map((relativePath) =>
-        pathToLocation(path.normalize(path.join(baseDir, relativePath))),
+      yield* this.forEachFile(
+        texFiles,
+        (file) => file.absolutePath,
+        'Unable to mirror figures',
+        (file) =>
+          Effect.gen({ self: this }, function* () {
+            const figures = yield* extractFigurePathsFromLatex(file);
+            if (figures.length === 0) return;
+            yield* this.mirrorFigureDependencies(file, figures);
+          }),
+      );
+    });
+  }
+
+  private extractFiguresFromFiles(
+    files: readonly FileLocation[],
+    workspaceState: MediaWorkspaceState,
+  ): Effect.Effect<void, Error> {
+    return Effect.gen({ self: this }, function* () {
+      const figureResults = yield* Effect.forEach(
+        files,
+        (file) =>
+          extractFigurePathsFromLatex(file).pipe(
+            // Silent skip: malformed or unreadable .tex files should not abort
+            // the surrounding fan-out. Existence/format errors here are common
+            // (e.g. file deleted mid-run) and not worth user-visible noise.
+            Effect.catch(() => Effect.succeed<readonly string[]>([])),
+            Effect.map((figures) => ({ file, figures })),
+          ),
+        { concurrency: LATEX_CONCURRENCY },
       );
 
-      // A figure that no longer exists cannot be compiled into the PDF or
-      // attached to vision context, so it must not enter media. The resolution
-      // above re-derives baseDir (unlike extractFigurePathsFromLatex, whose
-      // paths were checked against the original latexDir), so this filter is a
-      // real gate, not a re-check of already-known data.
-      const existingLocations: FileLocation[] = [];
-      for (const loc of fileLocations) {
-        if (!(await AbsoluteFS.exists(loc.absolutePath))) {
-          this.logger.debug('Extracted figure path does not exist', {
-            data: { figurePath: loc.absolutePath, from: file.absolutePath },
-          });
+      const mirrors: Effect.Effect<void>[] = [];
+
+      for (const { file, figures } of figureResults) {
+        if (figures.length === 0) {
           continue;
         }
-        existingLocations.push(loc);
+
+        this.logger.debug('Extracted figures', {
+          data: { count: figures.length, from: file.absolutePath },
+        });
+
+        // Match the resolution in extractFigurePathsFromLatex so the returned
+        // figure paths (relative to the real latexDir) map back to workspace
+        // files when the .tex is symlinked into run storage.
+        const baseDir = yield* resolveLatexDir(file.absolutePath);
+        const fileLocations = figures.map((relativePath) =>
+          pathToLocation(path.normalize(path.join(baseDir, relativePath))),
+        );
+
+        // A figure that no longer exists cannot be compiled into the PDF or
+        // attached to vision context, so it must not enter media. The
+        // resolution above re-derives baseDir (unlike
+        // extractFigurePathsFromLatex, whose paths were checked against the
+        // original latexDir), so this filter is a real gate, not a re-check of
+        // already-known data.
+        const probed = yield* Effect.forEach(
+          fileLocations,
+          (loc) =>
+            fsCall(() => AbsoluteFS.exists(loc.absolutePath)).pipe(
+              Effect.map((exists) => ({ loc, exists })),
+            ),
+          { concurrency: LATEX_CONCURRENCY },
+        );
+        const existingLocations: FileLocation[] = [];
+        for (const { loc, exists } of probed) {
+          if (!exists) {
+            this.logger.debug('Extracted figure path does not exist', {
+              data: { figurePath: loc.absolutePath, from: file.absolutePath },
+            });
+            continue;
+          }
+          existingLocations.push(loc);
+        }
+
+        workspaceState.media.addMediaFiles(existingLocations);
+        mirrors.push(this.mirrorFigureDependencies(file, figures, baseDir));
       }
 
-      workspaceState.media.addMediaFiles(existingLocations);
-      mirrorTasks.push(this.mirrorFigureDependencies(file, figures, baseDir));
-    }
-
-    if (mirrorTasks.length > 0) {
-      await Promise.all(mirrorTasks);
-    }
+      yield* Effect.all(mirrors, {
+        concurrency: LATEX_CONCURRENCY,
+        discard: true,
+      });
+    });
   }
 
-  private async compileTikzFigures(
-    files: FileLocation[],
+  private compileTikzFigures(
+    files: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     logSummary: boolean,
-  ): Promise<void> {
-    const tikzResults = await pMap(
-      files,
-      async (file): Promise<FileLocation[]> => {
-        try {
-          return await TikzPictureManager.compile(file);
-        } catch {
-          // Silent skip: TikZ compilation failures are reported by the
-          // TikzPictureManager itself; pMap with stopOnError: false must
-          // continue past individual failures.
-          return [];
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const tikzResults = yield* Effect.forEach(
+        files,
+        (file) =>
+          fsCall(() => TikzPictureManager.compile(file)).pipe(
+            // Silent skip: TikZ compilation failures are reported by the
+            // TikzPictureManager itself; the fan-out must continue past
+            // individual failures.
+            Effect.catch(() => Effect.succeed<FileLocation[]>([])),
+          ),
+        { concurrency: LATEX_CONCURRENCY },
+      );
+
+      for (const r of tikzResults) {
+        if (r.length > 0) {
+          workspaceState.media.addMediaFiles(r);
         }
-      },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
-    );
-
-    for (const r of tikzResults) {
-      if (r.length > 0) {
-        workspaceState.media.addMediaFiles(r);
       }
-    }
 
-    if (logSummary) {
-      const totalFigures = tikzResults.reduce((sum, r) => sum + r.length, 0);
-      this.logger.debug(`Extracted ${totalFigures} TikZ figures`);
-    }
+      if (logSummary) {
+        const totalFigures = tikzResults.reduce((sum, r) => sum + r.length, 0);
+        this.logger.debug(`Extracted ${totalFigures} TikZ figures`);
+      }
+    });
   }
 
-  private async processFiles(
-    files: FileLocation[],
+  private processFiles(
+    files: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     {
@@ -548,52 +618,52 @@ export class LatexMediaManager {
       extraMediaFiles?: readonly FileLocation[];
       logTikzSummary?: boolean;
     },
-  ): Promise<void> {
-    if (files.length === 0) {
-      return;
-    }
-
-    const existingFilesInfo = await pMap(
-      files,
-      async (file) => ({
-        file,
-        exists: await AbsoluteFS.exists(file.absolutePath),
-      }),
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
-    );
-    const existingFiles = existingFilesInfo
-      .filter((f) => f.exists)
-      .map((f) => f.file);
-
-    if (existingFiles.length === 0) {
-      return;
-    }
-
-    if (extraMediaFiles.length > 0) {
-      workspaceState.media.addMediaFiles(extraMediaFiles);
-    }
-
-    if (cfg.autoExtractFigure) {
-      if (figureMode === 'extract') {
-        await this.extractFiguresFromFiles(existingFiles, workspaceState);
-      } else {
-        await this.mirrorFiguresForFiles(existingFiles);
+  ): Effect.Effect<void, Error> {
+    return Effect.gen({ self: this }, function* () {
+      if (files.length === 0) {
+        return;
       }
-    }
 
-    await this.mirrorLatexFileDependencies(existingFiles);
-
-    if (cfg.autoExtractTikzFigure) {
-      await this.compileTikzFigures(
-        existingFiles,
-        workspaceState,
-        logTikzSummary,
+      const probed = yield* Effect.forEach(
+        files,
+        (file) =>
+          fsCall(() => AbsoluteFS.exists(file.absolutePath)).pipe(
+            Effect.map((exists) => ({ file, exists })),
+          ),
+        { concurrency: LATEX_CONCURRENCY },
       );
-    }
+      const existingFiles = probed
+        .filter((entry) => entry.exists)
+        .map((entry) => entry.file);
 
-    if (cfg.autoCompileInputPdf) {
-      await this.compilePdfs(existingFiles, workspaceState);
-    }
+      if (existingFiles.length === 0) {
+        return;
+      }
+
+      if (extraMediaFiles.length > 0) {
+        workspaceState.media.addMediaFiles(extraMediaFiles);
+      }
+
+      if (cfg.autoExtractFigure) {
+        yield* figureMode === 'extract'
+          ? this.extractFiguresFromFiles(existingFiles, workspaceState)
+          : this.mirrorFiguresForFiles(existingFiles);
+      }
+
+      yield* this.mirrorLatexFileDependencies(existingFiles);
+
+      if (cfg.autoExtractTikzFigure) {
+        yield* this.compileTikzFigures(
+          existingFiles,
+          workspaceState,
+          logTikzSummary,
+        );
+      }
+
+      if (cfg.autoCompileInputPdf) {
+        yield* this.compilePdfs(existingFiles, workspaceState);
+      }
+    });
   }
 
   /**
@@ -603,13 +673,13 @@ export class LatexMediaManager {
    * @param extraMediaFiles - Additional media files to include, typically the
    *   user-provided `mediaFiles` from the agent config.
    */
-  async processInputFiles(
-    inputFiles: FileLocation[],
+  processInputFiles(
+    inputFiles: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     extraMediaFiles: readonly FileLocation[] = [],
-  ): Promise<void> {
-    await this.processFiles(inputFiles, workspaceState, cfg, {
+  ): Effect.Effect<void, Error> {
+    return this.processFiles(inputFiles, workspaceState, cfg, {
       figureMode: 'extract',
       extraMediaFiles,
       logTikzSummary: true,
@@ -623,12 +693,12 @@ export class LatexMediaManager {
    * so agent-introduced references compile outside the workspace. Figures are
    * mirrored only (not added to vision context) — they were sent on round 0.
    */
-  async processOutputFiles(
-    outputFiles: FileLocation[],
+  processOutputFiles(
+    outputFiles: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
-  ): Promise<void> {
-    await this.processFiles(outputFiles, workspaceState, cfg, {
+  ): Effect.Effect<void, Error> {
+    return this.processFiles(outputFiles, workspaceState, cfg, {
       figureMode: 'mirror',
     });
   }

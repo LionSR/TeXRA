@@ -25,7 +25,6 @@ import type {
 } from '@shared/schemas';
 
 import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
-import { ensureError } from '@utils/errors/errorMessage';
 import {
   runLatexdiffFromMetadata,
   runLatexdiffViaWorkspaceScan,
@@ -125,17 +124,13 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
     if (!outputsByRound && runId) {
       const parsedRunId = ExecutionIdSchema.safeParse(runId);
       if (parsedRunId.success) {
-        const scanned = yield* Effect.tryPromise({
-          try: () =>
-            scanRunDirForOutputs(
-              parsedRunId.data,
-              inputFile,
-              outputFiles,
-              latexdiff.channel,
-              params.filesystem,
-            ),
-          catch: ensureError,
-        });
+        const scanned = yield* scanRunDirForOutputs(
+          parsedRunId.data,
+          inputFile,
+          outputFiles,
+          latexdiff.channel,
+          params.filesystem,
+        );
         if (scanned) {
           outputsByRound = scanned;
           source = 'run-dir-scan';
@@ -175,28 +170,24 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
     }
 
     const rounds = outputsByRound;
-    const outcome = yield* Effect.tryPromise({
-      try: () =>
-        rounds
-          ? runLatexdiffFromMetadata({
-              rounds,
-              mathMarkup,
-              generateBetweenRoundDiffs,
-              latexdiff,
-              progress,
-            })
-          : runLatexdiffViaWorkspaceScan({
-              agent,
-              model,
-              inputFile,
-              outputFiles,
-              mathMarkup,
-              generateBetweenRoundDiffs,
-              latexdiff,
-              progress,
-            }),
-      catch: ensureError,
-    });
+    const outcome = yield* rounds
+      ? runLatexdiffFromMetadata({
+          rounds,
+          mathMarkup,
+          generateBetweenRoundDiffs,
+          latexdiff,
+          progress,
+        })
+      : runLatexdiffViaWorkspaceScan({
+          agent,
+          model,
+          inputFile,
+          outputFiles,
+          mathMarkup,
+          generateBetweenRoundDiffs,
+          latexdiff,
+          progress,
+        });
 
     return { outcome, executionId: discoveredExecutionId, source };
   },

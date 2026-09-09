@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 import {
@@ -12,6 +13,7 @@ import {
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
+import { ensureError } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
@@ -47,34 +49,50 @@ export function emptyExtractionResult(
   return executed(formatToolOutput(label, null), summary);
 }
 
-export async function resolveLatexFileOrThrow(
+/** Attachment builds read files, so bound the fan-out. */
+const ATTACHMENT_CONCURRENCY = 8;
+
+export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
   texPath: string,
-): Promise<LatexFileResolution> {
+): Effect.fn.Return<LatexFileResolution, ToolError | Error> {
   const { path, display } = resolveAndFormat(texPath);
-  if (!(await WorkspaceFS.exists(path.relative))) {
-    throw new ToolError(`LaTeX file not found: ${display}`);
+  const exists = yield* Effect.tryPromise({
+    try: () => WorkspaceFS.exists(path.relative),
+    catch: ensureError,
+  });
+  if (!exists) {
+    return yield* Effect.fail(
+      new ToolError(`LaTeX file not found: ${display}`),
+    );
   }
 
   return { path, display };
-}
+});
 
-export async function buildLimitedAttachments(
-  paths: string[],
+export const buildLimitedAttachments = Effect.fn(
+  'tools.buildLimitedAttachments',
+)(function* (
+  paths: readonly string[],
   { limit, describe, mimeType }: AttachmentLimitOptions,
-): Promise<AttachmentLimitResult> {
+): Effect.fn.Return<AttachmentLimitResult, Error> {
   if (paths.length === 0 || limit <= 0) {
     return { attachments: [], limitedPaths: [], limitReached: false };
   }
 
   const limitedPaths = paths.slice(0, limit);
-  const attachments = await Promise.all(
-    limitedPaths.map((filePath) =>
-      buildFileAttachment({
-        filePath,
-        description: describe(filePath),
-        mimeType,
+  const attachments = yield* Effect.forEach(
+    limitedPaths,
+    (filePath) =>
+      Effect.tryPromise({
+        try: () =>
+          buildFileAttachment({
+            filePath,
+            description: describe(filePath),
+            mimeType,
+          }),
+        catch: ensureError,
       }),
-    ),
+    { concurrency: ATTACHMENT_CONCURRENCY },
   );
 
   return {
@@ -82,4 +100,4 @@ export async function buildLimitedAttachments(
     limitedPaths,
     limitReached: paths.length > limit,
   };
-}
+});

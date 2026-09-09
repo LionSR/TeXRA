@@ -51,6 +51,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { checkToolInstalled } from '@utils/system/toolUtils';
+import type { Effect } from 'effect';
 
 const log = createLog(CHANNEL);
 
@@ -243,13 +244,13 @@ async function prepareLatexdiffResultsAndScheduleViewer(
  */
 async function runDiffAndOpen(
   toolLabel: string,
-  runDiff: (mathMarkup: MathMarkupOption) => Promise<LaTeXdiffResult>,
+  runDiff: (mathMarkup: MathMarkupOption) => Effect.Effect<LaTeXdiffResult>,
 ): Promise<void> {
   const mathMarkup = await promptForLatexdiffMathMarkup();
   if (!mathMarkup) return;
   log.info(`Running ${toolLabel} with math markup mode: ${mathMarkup}`);
 
-  const result = await runDiff(mathMarkup);
+  const result = await effectRuntime().runPromise(runDiff(mathMarkup));
   if (!result.success) {
     throw new Error(result.message);
   }

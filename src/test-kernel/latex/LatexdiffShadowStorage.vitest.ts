@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as logger from '@logger/logUtils';
@@ -71,15 +72,19 @@ describe('LaTeXdiffService shadow output', () => {
     return { sourceDir, shadowDir };
   }
 
+  // This suite drives the real filesystem through Promise fs helpers, so the
+  // diff programs are run here rather than threaded through an Effect test.
   async function runShadowDiff(sourceDir: string, shadowDir: string) {
     const { LaTeXdiffService } = await import('@latex/latexdiff');
     const service = new LaTeXdiffService('test');
-    return service.runDiff(
-      createExternalLocation(path.join(sourceDir, 'base.tex')),
-      createExternalLocation(path.join(sourceDir, 'revised.tex')),
-      '_diff',
-      undefined,
-      { outputDirectory: shadowDir },
+    return Effect.runPromise(
+      service.runDiff(
+        createExternalLocation(path.join(sourceDir, 'base.tex')),
+        createExternalLocation(path.join(sourceDir, 'revised.tex')),
+        '_diff',
+        undefined,
+        { outputDirectory: shadowDir },
+      ),
     );
   }
 
@@ -170,15 +175,20 @@ describe('LaTeXdiffService shadow output', () => {
       await import('@latex/latexdiff/diffOperations');
 
     const { LaTeXdiffService } = await import('@latex/latexdiff');
-    const result = await runLatexdiffFromMetadata({
-      rounds: { 1: [output(1, first)], 2: [output(2, second, './paper.tex')] },
-      generateBetweenRoundDiffs: true,
-      latexdiff: {
-        channel: 'test',
-        service: new LaTeXdiffService('test'),
-      },
-      progress: { report: vi.fn() },
-    });
+    const result = await Effect.runPromise(
+      runLatexdiffFromMetadata({
+        rounds: {
+          1: [output(1, first)],
+          2: [output(2, second, './paper.tex')],
+        },
+        generateBetweenRoundDiffs: true,
+        latexdiff: {
+          channel: 'test',
+          service: new LaTeXdiffService('test'),
+        },
+        progress: { report: vi.fn() },
+      }),
+    );
 
     expect(result.results).toHaveLength(3);
     expect(result.results).toEqual(
@@ -283,8 +293,8 @@ describe('LaTeXdiffService shadow output', () => {
       ].join('\n'),
     );
 
-    await new DiffFileProcessor().processDiffFile(
-      createExternalLocation(diffPath),
+    await Effect.runPromise(
+      new DiffFileProcessor().processDiffFile(createExternalLocation(diffPath)),
     );
 
     const diff = await readFile(diffPath, 'utf8');
@@ -336,9 +346,11 @@ describe('LaTeXdiffService logger channel', () => {
     const { LaTeXdiffService } = await import('@latex/latexdiff');
     const service = new LaTeXdiffService('pinnedLatexdiffChannel');
 
-    const result = await service.runDiff(
-      createExternalLocation('/missing/base.tex'),
-      createExternalLocation('/missing/revised.tex'),
+    const result = await Effect.runPromise(
+      service.runDiff(
+        createExternalLocation('/missing/base.tex'),
+        createExternalLocation('/missing/revised.tex'),
+      ),
     );
 
     expect(result.success).toBe(false);

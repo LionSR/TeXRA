@@ -2,6 +2,7 @@
 import * as assert from 'node:assert';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, it, afterEach, vi } from 'vitest';
 
 // Local imports - tools
@@ -16,19 +17,18 @@ type TexcountCall = {
 };
 
 function stubTexcount(output: string | null, errors: string[] = []): void {
-  vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(async () => ({
-    output,
-    errors,
-  }));
+  vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(() =>
+    Effect.succeed({ output, errors }),
+  );
 }
 
 // Spies getTeXCount and records each call's files/options.
 function captureTexcountCalls(output: string): TexcountCall[] {
   const calls: TexcountCall[] = [];
   vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(
-    async (files, options) => {
+    (files, options) => {
       calls.push({ files: Array.isArray(files) ? files : [files], options });
-      return { output, errors: [] };
+      return Effect.succeed({ output, errors: [] });
     },
   );
   return calls;

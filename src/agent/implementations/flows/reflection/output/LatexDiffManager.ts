@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
+import { effectRuntime } from '@platform/processRuntime';
 import { platform } from '@platform/platform';
 import {
   fileLocationDisplayPath,
@@ -192,13 +193,18 @@ export class LatexDiffManager {
               outputByPath,
               originalLocation: baseLocation,
               baseRound: null,
+              // The one Promise seam left in this manager: the diff service
+              // is Effect below this line and the reflection flow above it is
+              // not. The run goes when the flow becomes an Effect loop (R4).
               runDiff: (base, revised, cwd) =>
-                this.latexdiffService.runDiffForRound(
-                  base,
-                  revised,
-                  currRound,
-                  undefined,
-                  { cwd, outputDirectory: diffDirectory.absolutePath },
+                effectRuntime().runPromise(
+                  this.latexdiffService.runDiffForRound(
+                    base,
+                    revised,
+                    currRound,
+                    undefined,
+                    { cwd, outputDirectory: diffDirectory.absolutePath },
+                  ),
                 ),
               label: 'round-diff',
               pdfStemSuffix: '-diff',
@@ -229,16 +235,18 @@ export class LatexDiffManager {
               originalLocation,
               baseRound: currRound - 1,
               runDiff: (base, revised, cwd) =>
-                this.latexdiffService.runDiffBetweenRounds(
-                  base,
-                  revised,
-                  currRound - 1,
-                  currRound,
-                  undefined,
-                  {
-                    cwd,
-                    outputDirectory: diffDirectory.absolutePath,
-                  },
+                effectRuntime().runPromise(
+                  this.latexdiffService.runDiffBetweenRounds(
+                    base,
+                    revised,
+                    currRound - 1,
+                    currRound,
+                    undefined,
+                    {
+                      cwd,
+                      outputDirectory: diffDirectory.absolutePath,
+                    },
+                  ),
                 ),
               label: 'between-rounds-diff',
               pdfStemSuffix: '-round-diff',

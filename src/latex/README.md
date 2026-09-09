@@ -5,6 +5,30 @@ documents. No file here imports `vscode`; host wiring (commands, UI prompts)
 stays in the extension/desktop/CLI layers and reaches this code through typed
 ports (see `overleafClone.ts`) rather than the other way around.
 
+## The subsystem is Effect-native
+
+The subprocess-and-filesystem lane — `texcount.ts`, `latexdiff.ts` and
+`latexdiff/`, the three extractors, `overleafClone.ts`, `arxivProcessor.ts`
+and `LatexMediaManager.ts` — returns `Effect` programs, not Promises. Two
+consequences worth knowing before you touch a file here:
+
+- **Nothing in this directory runs a fiber.** A caller runs the program at
+  its own boundary: a tool's `execute()`, a VS Code command, a desktop
+  request handler, or a CLI command. The exceptions are named debt, not a
+  pattern to copy — `MediaExtractionNode`, `TeXCountNode`, `LatexDiffManager`
+  and `tools/approval/latexPreview.ts` each keep one `runPromise` against the
+  Promise-shaped reflection flow, and `config/ratchets/effect-migration-baseline.json`
+  names the lane that deletes them.
+- **Cancellation is interruption, not a threaded `AbortSignal`.** `texcount`
+  and the latexdiff executors spawn their subprocess inside
+  `Effect.tryPromise`, whose thunk receives the signal that aborts when the
+  running fiber is interrupted. Do not add a `signal` parameter to a function
+  here so a caller can pass one down.
+
+A new function in this directory converts together with its callers up to one
+of those boundaries, or it waits — a Promise → Effect → Promise sandwich is
+rejected in review (migration PRD, execution rule 1).
+
 The files have distinct roles:
 
 - **Compilation** — `texTools.ts` builds the kpathsea search path and runs

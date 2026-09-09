@@ -1,6 +1,9 @@
+import { Effect } from 'effect';
+
 import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [
@@ -51,28 +54,40 @@ const BIBITEM_START = /(?:^|\n)\s*(?:\\DIF(?:add|del)\{)?\\bibitem\b/;
 
 export class DiffFileProcessor {
   // Intentionally does not swallow failures: a read/transform/write error here
-  // means the diff output is missing or corrupt, so it must propagate to the
-  // caller (LaTeXdiffService.runDiff*/), whose catch turns it into a
-  // `{ success: false }` result. Swallowing it would falsely report success.
-  async processDiffFile(
+  // means the diff output is missing or corrupt, so it must stay in the error
+  // channel for the caller (LaTeXdiffService.runDiff*/) to turn into a
+  // `{ success: false }` result. Recovering here would falsely report success.
+  processDiffFile(
     diffFileLocation: FileLocation,
     editedFileLocation?: FileLocation,
-  ): Promise<void> {
-    const content = await AbsoluteFS.read(diffFileLocation.absolutePath);
-    const editedContent = editedFileLocation
-      ? await AbsoluteFS.read(editedFileLocation.absolutePath)
-      : undefined;
-    let processedContent = this.restoreFlattenedBibliography(
-      content,
-      editedContent,
-    );
-    processedContent = this.processStarEnvironments(processedContent);
-    processedContent = this.processLineByLine(processedContent);
-    processedContent = replacementEngine.applyAll(processedContent);
-    for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
-      processedContent = processedContent.replace(pattern, replacement);
-    }
-    await AbsoluteFS.write(diffFileLocation.absolutePath, processedContent);
+  ): Effect.Effect<void, Error> {
+    return Effect.gen({ self: this }, function* () {
+      const content = yield* Effect.tryPromise({
+        try: () => AbsoluteFS.read(diffFileLocation.absolutePath),
+        catch: ensureError,
+      });
+      const editedContent = editedFileLocation
+        ? yield* Effect.tryPromise({
+            try: () => AbsoluteFS.read(editedFileLocation.absolutePath),
+            catch: ensureError,
+          })
+        : undefined;
+      let processedContent = this.restoreFlattenedBibliography(
+        content,
+        editedContent,
+      );
+      processedContent = this.processStarEnvironments(processedContent);
+      processedContent = this.processLineByLine(processedContent);
+      processedContent = replacementEngine.applyAll(processedContent);
+      for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
+        processedContent = processedContent.replace(pattern, replacement);
+      }
+      yield* Effect.tryPromise({
+        try: () =>
+          AbsoluteFS.write(diffFileLocation.absolutePath, processedContent),
+        catch: ensureError,
+      });
+    });
   }
 
   private restoreFlattenedBibliography(

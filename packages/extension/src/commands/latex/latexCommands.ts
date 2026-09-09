@@ -21,6 +21,7 @@ import { runLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 
 import {
@@ -138,10 +139,12 @@ export async function handleGetTeXCount(): Promise<void> {
         async (progress) => {
           progress.report({ message: 'Running texcount...' });
 
-          const { output, errors } = await getTeXCount(relativePath, {
-            mode: countingMode.value,
-            channel: CHANNEL,
-          });
+          const { output, errors } = await effectRuntime().runPromise(
+            getTeXCount(relativePath, {
+              mode: countingMode.value,
+              channel: CHANNEL,
+            }),
+          );
 
           if (!output) {
             const message =

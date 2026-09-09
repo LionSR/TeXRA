@@ -1,23 +1,27 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
+import { ensureError } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 import {
   emptyExtractionResult,
-  resolveLatexFileOrThrow,
+  resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
 
@@ -42,19 +46,14 @@ function formatPathList(filePaths: string[]): string {
     .join(', ');
 }
 
-export class ExtractBibliographyTool extends defineTool({
-  name: 'extract_bib_entries',
-  description:
-    'Collect BibTeX records for citations referenced in a LaTeX document.',
-  schema: ExtractBibliographyInputSchema,
-}) {
-  protected async execute({
+const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
+  function* ({
     texPath,
     bibPath,
-  }: ExtractBibliographyInput): Promise<ToolResult> {
-    const { path, display } = await resolveLatexFileOrThrow(texPath);
+  }: ExtractBibliographyInput): Effect.fn.Return<ToolResult, Error> {
+    const { path, display } = yield* resolveLatexFile(texPath);
 
-    const context = await extractBibliographyContext(path.relative);
+    const context = yield* extractBibliographyContext(path.relative);
     const bibliographyFiles = [...context.bibliographyFiles];
     const missingBibliographyFiles = [...context.missingBibliographyFiles];
     let citationKeys = [...context.citationKeys];
@@ -65,7 +64,10 @@ export class ExtractBibliographyTool extends defineTool({
 
     if (effectiveBibPath) {
       const { path: resolved } = resolveAndFormat(effectiveBibPath);
-      const exists = await WorkspaceFS.exists(resolved.relative);
+      const exists = yield* Effect.tryPromise({
+        try: () => WorkspaceFS.exists(resolved.relative),
+        catch: ensureError,
+      });
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
       if (!target.includes(resolved.relative)) {
         target.push(resolved.relative);
@@ -98,7 +100,7 @@ export class ExtractBibliographyTool extends defineTool({
       return { ...result, output: `${result.output}${missingNote}` };
     }
 
-    const { entries, missingKeys } = await loadBibliographyEntries(
+    const { entries, missingKeys } = yield* loadBibliographyEntries(
       bibliographyFiles,
       citationKeys,
     );
@@ -137,5 +139,20 @@ export class ExtractBibliographyTool extends defineTool({
       instructions.length > 0 ? `\n\nNote: ${instructions.join(' ')}` : '';
 
     return executed(`${output}${notes}`, summary);
+  },
+);
+
+export class ExtractBibliographyTool extends defineTool({
+  name: 'extract_bib_entries',
+  description:
+    'Collect BibTeX records for citations referenced in a LaTeX document.',
+  schema: ExtractBibliographyInputSchema,
+}) {
+  protected execute(input: ExtractBibliographyInput): Promise<ToolResult> {
+    // The owning run's cancellation enters the bibliography reads as
+    // interruption rather than waiting them out.
+    return effectRuntime().runPromise(extractBibliography(input), {
+      signal: getCurrentToolCallContext()?.signal,
+    });
   }
 }

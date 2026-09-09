@@ -1,7 +1,11 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Internal imports
 import { createLog } from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
@@ -56,11 +60,11 @@ export class DiffCommandExecutor {
 
   constructor(private readonly channel: string) {}
 
-  async executeDiff(
+  executeDiff(
     inputFile: string,
     editedFile: string,
     options?: DiffExecutionOptions,
-  ): Promise<ExecResult> {
+  ): Effect.Effect<ExecResult, Error> {
     return this.executeWithFallback(
       (useFlatten) =>
         this.buildLatexdiffCommand(inputFile, editedFile, useFlatten, options),
@@ -69,11 +73,11 @@ export class DiffCommandExecutor {
     );
   }
 
-  async executeDiffVc(
+  executeDiffVc(
     inputFile: string,
     commitHash: string,
     options?: DiffExecutionOptions,
-  ): Promise<ExecResult> {
+  ): Effect.Effect<ExecResult, Error> {
     return this.executeWithFallback(
       (useFlatten) =>
         this.buildLatexdiffVcCommand(
@@ -143,77 +147,112 @@ export class DiffCommandExecutor {
     ];
   }
 
-  private async executeWithFallback(
+  /**
+   * Run `commandBuilder(true)`, and on a bibliography failure retry it without
+   * `--flatten`. The subprocess is torn down by the fiber's own interruption:
+   * `Effect.tryPromise` hands the thunk the `AbortSignal` that `executeCommand`
+   * uses to kill the process group.
+   */
+  private executeWithFallback(
     commandBuilder: (useFlatten: boolean) => string[],
     commandType: string,
     cwd?: string,
-  ): Promise<ExecResult> {
-    // Snapshot the timeout once per invocation so the value stays consistent
-    // across the --flatten attempt and any retry, while still picking up any
-    // updates the user has made between successive diff runs. Reading per diff
-    // also matters because `LaTeXdiffService` is constructed at module scope
-    // (before `initPlatform()` runs); a value captured at construction would
-    // permanently freeze at whatever the default was at activation-zero.
-    const timeoutMs = readPlatformSetting<number>(
-      WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-    );
-    const execOptions: CommandExecOptions = {
-      channel: this.channel,
-      timeout: timeoutMs,
-      cwd,
-    };
-
-    this.log.debug(`Attempting ${commandType} with --flatten flag`);
-    const result = await executeCommand(commandBuilder(true), execOptions);
-
-    if (result.success) {
-      this.log.debug(`${commandType} completed successfully (with --flatten)`);
-      return result;
-    }
-
-    if (result.timedOut) {
-      throw new Error(
-        `${commandType} operation timed out after ${timeoutMs}ms`,
+  ): Effect.Effect<ExecResult, Error> {
+    return Effect.gen({ self: this }, function* () {
+      // Snapshot the timeout once per invocation so the value stays consistent
+      // across the --flatten attempt and any retry, while still picking up any
+      // updates the user has made between successive diff runs. Reading per
+      // diff also matters because `LaTeXdiffService` is constructed at module
+      // scope (before `initPlatform()` runs); a value captured at construction
+      // would permanently freeze at whatever the default was at activation-zero.
+      const timeoutMs = readPlatformSetting<number>(
+        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
       );
-    }
+      const execOptions: CommandExecOptions = {
+        channel: this.channel,
+        timeout: timeoutMs,
+        cwd,
+      };
 
-    if (!this.isBibliographyError(result.stderr)) {
-      throw new Error(
-        result.stderr
-          ? `Failed to run ${commandType}: ${result.stderr}`
-          : `Failed to run ${commandType}`,
+      this.log.debug(`Attempting ${commandType} with --flatten flag`);
+      const result = yield* this.exec(commandBuilder(true), execOptions);
+
+      if (result.success) {
+        this.log.debug(
+          `${commandType} completed successfully (with --flatten)`,
+        );
+        return result;
+      }
+
+      if (result.timedOut) {
+        return yield* Effect.fail(
+          new Error(`${commandType} operation timed out after ${timeoutMs}ms`),
+        );
+      }
+
+      if (!this.isBibliographyError(result.stderr)) {
+        return yield* Effect.fail(
+          new Error(
+            result.stderr
+              ? `Failed to run ${commandType}: ${result.stderr}`
+              : `Failed to run ${commandType}`,
+          ),
+        );
+      }
+
+      return yield* this.retryWithoutFlatten(
+        commandBuilder,
+        commandType,
+        execOptions,
       );
-    }
-
-    return this.retryWithoutFlatten(commandBuilder, commandType, execOptions);
+    });
   }
 
-  private async retryWithoutFlatten(
+  /** One `executeCommand` invocation, cancelled by the running fiber. */
+  private exec(
+    command: string[],
+    execOptions: CommandExecOptions,
+  ): Effect.Effect<ExecResult, Error> {
+    return Effect.tryPromise({
+      try: (signal) => executeCommand(command, { ...execOptions, signal }),
+      catch: ensureError,
+    });
+  }
+
+  private retryWithoutFlatten(
     commandBuilder: (useFlatten: boolean) => string[],
     commandType: string,
     execOptions: CommandExecOptions,
-  ): Promise<ExecResult> {
-    this.log.warn(
-      'Bibliography compilation failed with --flatten, retrying without --flatten',
-    );
-    this.log.debug(`Retrying ${commandType} without --flatten flag`);
-
-    const result = await executeCommand(commandBuilder(false), execOptions);
-
-    if (result.timedOut) {
-      throw new Error(
-        `${commandType} operation timed out after ${execOptions.timeout}ms (retry)`,
+  ): Effect.Effect<ExecResult, Error> {
+    return Effect.gen({ self: this }, function* () {
+      this.log.warn(
+        'Bibliography compilation failed with --flatten, retrying without --flatten',
       );
-    }
+      this.log.debug(`Retrying ${commandType} without --flatten flag`);
 
-    if (!result.success) {
-      throw new Error(
-        `Failed to run ${commandType} (both with and without --flatten)`,
+      const result = yield* this.exec(commandBuilder(false), execOptions);
+
+      if (result.timedOut) {
+        return yield* Effect.fail(
+          new Error(
+            `${commandType} operation timed out after ${execOptions.timeout}ms (retry)`,
+          ),
+        );
+      }
+
+      if (!result.success) {
+        return yield* Effect.fail(
+          new Error(
+            `Failed to run ${commandType} (both with and without --flatten)`,
+          ),
+        );
+      }
+
+      this.log.debug(
+        `${commandType} completed successfully (without --flatten)`,
       );
-    }
-
-    this.log.debug(`${commandType} completed successfully (without --flatten)`);
-    return result;
+      return result;
+    });
   }
 
   private isBibliographyError(errorOutput: string): boolean {

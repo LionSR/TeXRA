@@ -12,6 +12,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { debug, warn } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   type FileLocation,
@@ -265,15 +266,19 @@ export async function runLatexdiff(
       '_proposed',
     );
 
-    const result = await latexdiffService.runDiff(
-      tempPathToLocation(originalPath),
-      tempPathToLocation(proposedPath),
-      '_diff',
-      'coarse',
-      {
-        cwd: WorkspaceFS.getPath() ?? path.dirname(originalPath),
-        subtype: options.subtype,
-      },
+    // The one Promise seam left here: the diff service is Effect below this
+    // line and the approval preview's callback plumbing above it is not.
+    const result = await effectRuntime().runPromise(
+      latexdiffService.runDiff(
+        tempPathToLocation(originalPath),
+        tempPathToLocation(proposedPath),
+        '_diff',
+        'coarse',
+        {
+          cwd: WorkspaceFS.getPath() ?? path.dirname(originalPath),
+          subtype: options.subtype,
+        },
+      ),
     );
 
     if (!result.success || !result.diffPath) {

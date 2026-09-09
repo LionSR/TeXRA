@@ -1,17 +1,21 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
+import { effectRuntime } from '@platform/processRuntime';
 import { type ToolFileAttachment, type ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
+import { ensureError } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
   emptyExtractionResult,
-  resolveLatexFileOrThrow,
+  resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
 
@@ -27,20 +31,18 @@ type ExtractTikzInput = z.infer<typeof ExtractTikzInputSchema>;
 
 const DEFAULT_TIKZ_MAX_FILES = 12;
 
-export class ExtractTikzFiguresTool extends defineTool({
-  name: 'extract_tikz_figures',
-  description:
-    'Discover TikZ figures inside a LaTeX document and optionally compile them into standalone PDFs.',
-  schema: ExtractTikzInputSchema,
-}) {
-  protected async execute({
+const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
+  function* ({
     texPath,
     compile = true,
-  }: ExtractTikzInput): Promise<ToolResult> {
-    const { path, display } = await resolveLatexFileOrThrow(texPath);
+  }: ExtractTikzInput): Effect.fn.Return<ToolResult, Error> {
+    const { path, display } = yield* resolveLatexFile(texPath);
     const location = pathToLocation(path.absolute);
 
-    const tikzFigures = await TikzPictureManager.extract(location);
+    const tikzFigures = yield* Effect.tryPromise({
+      try: () => TikzPictureManager.extract(location),
+      catch: ensureError,
+    });
     if (tikzFigures.length === 0) {
       return emptyExtractionResult(
         'TikZ figures',
@@ -62,14 +64,17 @@ export class ExtractTikzFiguresTool extends defineTool({
 
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
-      const compiledPaths = await TikzPictureManager.compile(location);
+      const compiledPaths = yield* Effect.tryPromise({
+        try: () => TikzPictureManager.compile(location),
+        catch: ensureError,
+      });
       if (compiledPaths.length > 0) {
         // Convert FileLocation[] to string[] for legacy attachment API
         const compiledPathStrings = compiledPaths.map(
           (loc) => loc.absolutePath,
         );
         const { attachments: compiledAttachments, limitReached } =
-          await buildLimitedAttachments(compiledPathStrings, {
+          yield* buildLimitedAttachments(compiledPathStrings, {
             limit: DEFAULT_TIKZ_MAX_FILES,
             describe: () => `Standalone TikZ figure derived from ${display}`,
             mimeType: 'application/pdf',
@@ -100,5 +105,20 @@ export class ExtractTikzFiguresTool extends defineTool({
       output: outputs.join('\n'),
       files: attachments,
     };
+  },
+);
+
+export class ExtractTikzFiguresTool extends defineTool({
+  name: 'extract_tikz_figures',
+  description:
+    'Discover TikZ figures inside a LaTeX document and optionally compile them into standalone PDFs.',
+  schema: ExtractTikzInputSchema,
+}) {
+  protected execute(input: ExtractTikzInput): Promise<ToolResult> {
+    // Compiling every picture is slow, so the run's cancellation has to reach
+    // it as interruption rather than waiting the compiles out.
+    return effectRuntime().runPromise(extractTikzFigures(input), {
+      signal: getCurrentToolCallContext()?.signal,
+    });
   }
 }

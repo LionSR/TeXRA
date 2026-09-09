@@ -178,12 +178,14 @@ describe('outputDiscovery logger seam', () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
 
-    const result = await scanRunDirForOutputs(
-      'abc123',
-      'paper.tex',
-      undefined,
-      'test',
-      platform().fs,
+    const result = await Effect.runPromise(
+      scanRunDirForOutputs(
+        'abc123',
+        'paper.tex',
+        undefined,
+        'test',
+        platform().fs,
+      ),
     );
 
     expect(result).toBeNull();
@@ -244,12 +246,14 @@ describe('outputDiscovery logger seam', () => {
     mocks.findRunDir.mockResolvedValue(runDir);
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
-    const result = await scanRunDirForOutputs(
-      'abc123',
-      'paper.tex',
-      undefined,
-      'test',
-      platform().fs,
+    const result = await Effect.runPromise(
+      scanRunDirForOutputs(
+        'abc123',
+        'paper.tex',
+        undefined,
+        'test',
+        platform().fs,
+      ),
     );
 
     expect(Object.keys(result ?? {}).map(Number)).toEqual([1]);

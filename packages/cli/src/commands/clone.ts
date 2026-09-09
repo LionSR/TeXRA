@@ -2,6 +2,7 @@
 import { mkdir, readdir, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 // Third-party imports
+import { Effect } from 'effect';
 import { execa } from 'execa';
 
 // Internal imports
@@ -16,12 +17,14 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
+import { effectRuntime } from '@platform/processRuntime';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
+
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { getCliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -43,93 +46,108 @@ function buildOverleafClonePorts(
   const secrets = getCliSecrets();
   let canonicalWorkspacePath = workspacePath;
   return {
-    getStoredToken: (key) => secrets.get(key),
-    deleteStoredToken: (key) => secrets.delete(key),
-    storeToken: (key, token) => secrets.set(key, token),
-    promptToken: async (spec) => {
-      const tokenGuidance = remote.isOverleaf
-        ? `${spec.tokenHint ?? ''} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`.trim()
-        : spec.tokenHint;
-      if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
-        throw new CliUsageError(
-          `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
+    getStoredToken: (key) => Effect.promise(() => secrets.get(key)),
+    deleteStoredToken: (key) => Effect.promise(() => secrets.delete(key)),
+    storeToken: (key, token) => Effect.promise(() => secrets.set(key, token)),
+    promptToken: (spec) =>
+      Effect.gen(function* () {
+        const tokenGuidance = remote.isOverleaf
+          ? `${spec.tokenHint ?? ''} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`.trim()
+          : spec.tokenHint;
+        if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
+          return yield* Effect.fail(
+            new CliUsageError(
+              `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
+            ),
+          );
+        }
+        if (tokenGuidance) writeTextStderr(tokenGuidance);
+        const token = yield* Effect.promise(() =>
+          askCliQuestion(`${spec.tokenTitle}: `, { hidden: true }),
         );
-      }
-      if (tokenGuidance) writeTextStderr(tokenGuidance);
-      const token = (
-        await askCliQuestion(`${spec.tokenTitle}: `, { hidden: true })
-      ).trim();
-      return token || null;
-    },
-    showInvalidToken: async (_spec, message) => {
-      writeTextStderr(message);
-      writeTextStderr(`Token instructions: ${OVERLEAF_TOKEN_DOCS_URL}`);
-    },
+        return token.trim() || null;
+      }),
+    showInvalidToken: (_spec, message) =>
+      Effect.sync(() => {
+        writeTextStderr(message);
+        writeTextStderr(`Token instructions: ${OVERLEAF_TOKEN_DOCS_URL}`);
+      }),
 
     isGitAvailable: () =>
-      executeCommandSync(['git', '--version'], { quiet: true }).success,
-    showGitMissing: async () => {
-      writeTextStderr(
-        `Git is not installed or is not on PATH. Install it from ${GIT_DOWNLOAD_URL}.`,
-      );
-    },
-    listWorkspaceEntries: async (dir) => {
-      try {
-        return await readdir(dir);
-      } catch (error) {
-        if (isFileNotFoundError(error)) return [];
-        throw error;
-      }
-    },
-    showWorkspaceUnreadable: (error) => {
-      writeTextStderr(
-        `Cannot read destination directory: ${toErrorMessage(error)}`,
-      );
-    },
-    showWorkspaceNotEmpty: () => {
-      writeTextStderr(
-        `The destination directory ${workspacePath} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./paper`,
-      );
-    },
+      Effect.sync(
+        () => executeCommandSync(['git', '--version'], { quiet: true }).success,
+      ),
+    showGitMissing: () =>
+      Effect.sync(() => {
+        writeTextStderr(
+          `Git is not installed or is not on PATH. Install it from ${GIT_DOWNLOAD_URL}.`,
+        );
+      }),
+    listWorkspaceEntries: (dir) =>
+      Effect.tryPromise({ try: () => readdir(dir), catch: ensureError }).pipe(
+        // A destination that does not exist yet is an empty destination, not
+        // an unreadable one: `runClone` creates it.
+        Effect.catchIf(isFileNotFoundError, () => Effect.succeed<string[]>([])),
+      ),
+    showWorkspaceUnreadable: (error) =>
+      Effect.sync(() => {
+        writeTextStderr(
+          `Cannot read destination directory: ${toErrorMessage(error)}`,
+        );
+      }),
+    showWorkspaceNotEmpty: () =>
+      Effect.sync(() => {
+        writeTextStderr(
+          `The destination directory ${workspacePath} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./paper`,
+        );
+      }),
 
-    runClone: async (remoteUrl, workspacePath) => {
-      await mkdir(workspacePath, { recursive: true });
-      canonicalWorkspacePath = await realpath(workspacePath);
-      await execa('git', ['clone', remoteUrl, '.'], {
-        cwd: canonicalWorkspacePath,
-        // extendEnv: false is required — makeMachineGitEnv omits the
-        // helper-invoking keys, and execa's default merge re-adds them.
-        env: makeMachineGitEnv(),
-        extendEnv: false,
-      });
-    },
-    showCloneSucceeded: (label) => {
-      const result = {
-        cloned: true,
-        provider: remote.isOverleaf ? 'overleaf' : 'sharelatex',
-        host: remote.host,
-        destination: canonicalWorkspacePath,
-      };
-      emitCliResult(context, {
-        json: result,
-        ndjson: { kind: 'result', result: { command: 'clone', ...result } },
-        text: `${label} project cloned into ${canonicalWorkspacePath}.`,
-      });
-    },
-    showAuthFailure: async (failedRemote) => {
-      const detail = failedRemote.isOverleaf
-        ? `Generate a new token at ${OVERLEAF_GIT_TOKEN_URL}, then rerun the command.`
-        : 'Check the ShareLaTeX credentials for this host, then rerun the command.';
-      writeTextStderr(`Clone failed: authentication error. ${detail}`);
-    },
-    showCloneFailed: (message) => {
-      writeTextStderr(message);
-    },
-    logCloneError: (message) => {
-      if (!context.quietLogs) {
-        writeTextStderr(`Git clone error: ${message}`);
-      }
-    },
+    runClone: (remoteUrl, cloneInto) =>
+      Effect.tryPromise({
+        try: async () => {
+          await mkdir(cloneInto, { recursive: true });
+          canonicalWorkspacePath = await realpath(cloneInto);
+          await execa('git', ['clone', remoteUrl, '.'], {
+            cwd: canonicalWorkspacePath,
+            // extendEnv: false is required — makeMachineGitEnv omits the
+            // helper-invoking keys, and execa's default merge re-adds them.
+            env: makeMachineGitEnv(),
+            extendEnv: false,
+          });
+        },
+        catch: ensureError,
+      }),
+    showCloneSucceeded: (label) =>
+      Effect.sync(() => {
+        const result = {
+          cloned: true,
+          provider: remote.isOverleaf ? 'overleaf' : 'sharelatex',
+          host: remote.host,
+          destination: canonicalWorkspacePath,
+        };
+        emitCliResult(context, {
+          json: result,
+          ndjson: { kind: 'result', result: { command: 'clone', ...result } },
+          text: `${label} project cloned into ${canonicalWorkspacePath}.`,
+        });
+      }),
+    showAuthFailure: (failedRemote) =>
+      Effect.sync(() => {
+        const detail = failedRemote.isOverleaf
+          ? `Generate a new token at ${OVERLEAF_GIT_TOKEN_URL}, then rerun the command.`
+          : 'Check the ShareLaTeX credentials for this host, then rerun the command.';
+        writeTextStderr(`Clone failed: authentication error. ${detail}`);
+      }),
+    showCloneFailed: (message) =>
+      Effect.sync(() => {
+        writeTextStderr(message);
+      }),
+    logCloneError: (message) =>
+      Effect.sync(() => {
+        if (!context.quietLogs) {
+          writeTextStderr(`Git clone error: ${message}`);
+        }
+      }),
   };
 }
 
@@ -181,10 +199,12 @@ export const cloneCommand = withUsageSections(
       // way the update check does for the entry that precedes any platform.
       await installCliProcessRuntime(context.storageRoot);
 
-      const outcome = await cloneOverleafProject(
-        remote,
-        workspacePath,
-        buildOverleafClonePorts(context, remote, workspacePath),
+      const outcome = await effectRuntime().runPromise(
+        cloneOverleafProject(
+          remote,
+          workspacePath,
+          buildOverleafClonePorts(context, remote, workspacePath),
+        ),
       );
       switch (outcome.status) {
         case 'success':

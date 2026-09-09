@@ -1,6 +1,7 @@
 import { lstat, mkdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -139,10 +140,12 @@ describe('LatexMediaManager PDF compilation', () => {
 
     const workspaceState = AgentWorkspaceState.create();
     const manager = new LatexMediaManager(logger);
-    await manager.processInputFiles(
-      inputPaths.map(createExternalLocation),
-      workspaceState,
-      compilePdfConfig,
+    await Effect.runPromise(
+      manager.processInputFiles(
+        inputPaths.map(createExternalLocation),
+        workspaceState,
+        compilePdfConfig,
+      ),
     );
 
     expect(mocks.compileLatex2Pdf).toHaveBeenCalledTimes(2);
@@ -156,8 +159,8 @@ type LatexMediaManagerFigureInternals = {
   extractFiguresFromFiles(
     files: FileLocation[],
     workspaceState: MediaWorkspaceState,
-  ): Promise<void>;
-  mirrorFiguresForFiles(files: FileLocation[]): Promise<void>;
+  ): Effect.Effect<void, Error>;
+  mirrorFiguresForFiles(files: FileLocation[]): Effect.Effect<void>;
 };
 
 describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
@@ -217,9 +220,11 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
       logger,
       new TaskRunFileService(executionId),
     ) as unknown as LatexMediaManagerFigureInternals;
-    await manager.extractFiguresFromFiles(
-      [createWorkspaceLocation(texPath, 'main.tex')],
-      workspaceState,
+    await Effect.runPromise(
+      manager.extractFiguresFromFiles(
+        [createWorkspaceLocation(texPath, 'main.tex')],
+        workspaceState,
+      ),
     );
 
     // Before the fix this was 3: once inside extractFigurePathsFromLatex,
@@ -242,9 +247,11 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
       logger,
       new TaskRunFileService(executionId),
     ) as unknown as LatexMediaManagerFigureInternals;
-    await manager.mirrorFiguresForFiles([
-      createWorkspaceLocation(texPath, 'main.tex'),
-    ]);
+    await Effect.runPromise(
+      manager.mirrorFiguresForFiles([
+        createWorkspaceLocation(texPath, 'main.tex'),
+      ]),
+    );
 
     // Unchanged by the fix: mirrorFiguresForFiles has no precomputed baseDir,
     // so mirrorFigureDependencies still resolves it itself (once inside
