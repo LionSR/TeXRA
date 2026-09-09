@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.123.0",
+    "@anthropic-ai/sdk": "0.124.0",
     "@google/genai": "2.21.0",
     "openai": "7.10.0",
     "ws": "8.21.3"
