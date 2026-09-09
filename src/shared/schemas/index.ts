@@ -86,3 +86,5 @@ export * from './streamState';
 export * from './streamSnapshot';
 export * from './sessionEvent';
 export * from './traceEvent';
+
+export * from './updateCheck';

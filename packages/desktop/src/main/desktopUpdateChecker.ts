@@ -1,5 +1,6 @@
-import type { StateStore } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { Effect } from 'effect';
+
+import { ensureError } from '@utils/errors/errorMessage';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import {
@@ -37,10 +38,8 @@ interface DesktopLatestRelease {
 }
 
 /** Fetch the latest release's version, or undefined on any failure. */
-async function fetchLatestDesktopRelease(): Promise<
-  DesktopLatestRelease | undefined
-> {
-  const tag = await fetchJsonStringField({
+const fetchLatestDesktopRelease = () =>
+  fetchJsonStringField({
     url: RELEASES_API_URL,
     field: 'tag_name',
     timeoutMs: FETCH_TIMEOUT_MS,
@@ -48,77 +47,67 @@ async function fetchLatestDesktopRelease(): Promise<
       accept: 'application/vnd.github+json',
       'user-agent': GITHUB_USER_AGENT,
     },
-  });
-  return tag ? { version: tag.replace(/^v/, '') } : undefined;
-}
+  }).pipe(
+    Effect.map((tag) => (tag ? { version: tag.replace(/^v/, '') } : undefined)),
+  );
 
 interface CheckForDesktopUpdateOptions {
   currentVersion: string;
-  globalState: StateStore;
   /** Skip entirely for unpackaged/dev runs, whose version is not meaningful. */
   isPackaged: boolean;
   notify: (release: DesktopLatestRelease) => Promise<void> | void;
-  now?: () => number;
-  fetchRelease?: typeof fetchLatestDesktopRelease;
+  fetchRelease?: Effect.Effect<DesktopLatestRelease | undefined, Error>;
   env?: NodeJS.ProcessEnv;
 }
 
-let desktopUpdateCheckInFlight: Promise<void> | undefined;
 let desktopUpdateCheckNotify:
   CheckForDesktopUpdateOptions['notify'] | undefined;
 
-/**
- * At most once per day (persisted in global state), check for a newer
- * desktop release and notify at most once per release version. The daily
- * throttle stamp is only persisted after a successful fetch and any required
- * notification, so a failed check retries on the next launch instead of being
- * suppressed for a full day. Concurrent callers share one process-level check.
- */
-export function checkForDesktopUpdate(
-  options: CheckForDesktopUpdateOptions,
-): Promise<void> {
-  // Window recreation may call again while the fetch is pending. Keep the
-  // newest callback so any eventual dialog is parented to the live window.
-  desktopUpdateCheckNotify = options.notify;
-  if (desktopUpdateCheckInFlight) return desktopUpdateCheckInFlight;
-
-  const check = runDesktopUpdateCheck({
-    ...options,
-    notify: (release) => desktopUpdateCheckNotify?.(release),
-  });
-  const tracked = check.finally(() => {
-    if (desktopUpdateCheckInFlight === tracked) {
-      desktopUpdateCheckInFlight = undefined;
-      desktopUpdateCheckNotify = undefined;
+/** One check owns the work; later windows supply the current dialog parent. */
+export const checkForDesktopUpdate = (options: CheckForDesktopUpdateOptions) =>
+  Effect.suspend(() => {
+    if (desktopUpdateCheckNotify !== undefined) {
+      desktopUpdateCheckNotify = options.notify;
+      return Effect.void;
     }
+    desktopUpdateCheckNotify = options.notify;
+    return runDesktopUpdateCheck({
+      ...options,
+      notify: (release) => desktopUpdateCheckNotify?.(release),
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          desktopUpdateCheckNotify = undefined;
+        }),
+      ),
+    );
   });
-  desktopUpdateCheckInFlight = tracked;
-  return tracked;
-}
 
-async function runDesktopUpdateCheck({
+const runDesktopUpdateCheck = ({
   currentVersion,
-  globalState,
   isPackaged,
   notify,
-  now = Date.now,
-  fetchRelease = fetchLatestDesktopRelease,
+  fetchRelease = fetchLatestDesktopRelease(),
   env = process.env,
-}: CheckForDesktopUpdateOptions): Promise<void> {
-  if (!isPackaged) return;
-  if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV, env)) return;
-
-  await runDailyUpdateCheck({
-    currentVersion,
-    state: globalState,
-    lastCheckedAtKey: GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-    lastNotifiedVersionKey:
-      GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
-    fetchLatest: async () => {
-      const release = await fetchRelease();
-      return { version: release?.version, refreshed: release !== undefined };
-    },
-    notify: (version) => notify({ version }),
-    now,
+}: CheckForDesktopUpdateOptions) =>
+  Effect.gen(function* () {
+    if (!isPackaged || isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV, env)) return;
+    yield* runDailyUpdateCheck({
+      currentVersion,
+      host: 'desktop',
+      notifyOnce: true,
+      fetchLatest: fetchRelease.pipe(
+        Effect.map((release) => ({
+          version: release?.version,
+          refreshed: release !== undefined,
+        })),
+      ),
+      notify: (version) =>
+        Effect.tryPromise({
+          try: async () => {
+            await notify({ version });
+          },
+          catch: ensureError,
+        }).pipe(Effect.uninterruptible),
+    });
   });
-}

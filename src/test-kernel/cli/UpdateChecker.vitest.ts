@@ -1,3 +1,5 @@
+import { it as effectIt } from '@effect/vitest';
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -122,7 +124,7 @@ describe('buildUpdateCommand', () => {
 });
 
 describe('fetchLatestCliVersion', () => {
-  it.each([
+  effectIt.effect.each([
     {
       name: 'returns the version field from the latest dist-tag',
       fetchImpl: async () => jsonResponse({ version: '9.9.9' }),
@@ -145,11 +147,13 @@ describe('fetchLatestCliVersion', () => {
       fetchImpl: async () => jsonResponse({}),
       expected: undefined,
     },
-  ])('$name', async ({ fetchImpl, expected }) => {
-    await expect(
-      fetchLatestCliVersion({ fetchImpl: fetchImpl as typeof fetch }),
-    ).resolves.toBe(expected);
-  });
+  ])('$name', ({ fetchImpl, expected }) =>
+    Effect.gen(function* () {
+      expect(
+        yield* fetchLatestCliVersion({ fetchImpl: fetchImpl as typeof fetch }),
+      ).toBe(expected);
+    }),
+  );
 });
 
 describe('fetchLatestHomebrewFormulaVersion', () => {
@@ -256,18 +260,22 @@ describe('notifyCliUpdate', () => {
     });
   });
 
-  it('runs the check at most once per process', async () => {
-    await notifyCliUpdate(context);
-    await notifyCliUpdate(context);
+  effectIt.live('runs the check at most once per process', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => notifyCliUpdate(context));
+      yield* Effect.promise(() => notifyCliUpdate(context));
 
-    expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(1);
-  });
+      expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(1);
+    }),
+  );
 
-  it('starts a fresh check once the latch is cleared', async () => {
-    await notifyCliUpdate(context);
-    resetCliUpdateNotifyLatchForTests();
-    await notifyCliUpdate(context);
+  effectIt.live('starts a fresh check once the latch is cleared', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => notifyCliUpdate(context));
+      resetCliUpdateNotifyLatchForTests();
+      yield* Effect.promise(() => notifyCliUpdate(context));
 
-    expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(2);
-  });
+      expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(2);
+    }),
+  );
 });

@@ -78,6 +78,7 @@ import { Database } from '@shared/session/database';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
+import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
@@ -765,6 +766,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
 export function installProcessRuntime(
   processStart: string | undefined | Promise<string | undefined>,
   globalStorage: () => string,
+  updateCheckStorage: () => string,
 ): void {
   const identity =
     processStart instanceof Promise
@@ -779,9 +781,10 @@ export function installProcessRuntime(
           ),
         )
       : ProcessIdentity.layer(processOwnerId(processStart));
-  const services = inquiryRecordsLayer(globalStorage).pipe(
-    Layer.provideMerge(identity),
-  );
+  const services = Layer.merge(
+    inquiryRecordsLayer(globalStorage),
+    updateCheckRecordsLayer(updateCheckStorage),
+  ).pipe(Layer.provideMerge(identity));
   const release = (key: SessionKey): void => {
     runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
   };

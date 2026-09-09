@@ -135,8 +135,10 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // pending read: the owner's map builds synchronously over it, so an
     // open registers its root before the opener's first await and only the
     // entry's build waits.
-    installProcessRuntime(platform.processes.selfIdentity(), () =>
-      platform.storage.getGlobalStoragePath(),
+    installProcessRuntime(
+      platform.processes.selfIdentity(),
+      () => platform.storage.getGlobalStoragePath(),
+      () => platform.storage.getGlobalStoragePath(),
     );
     if (!active) {
       initNodeAgentRuntime(platform.lifecycle, platform.globalState);

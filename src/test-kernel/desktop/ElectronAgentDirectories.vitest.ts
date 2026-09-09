@@ -25,6 +25,7 @@ import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -106,8 +107,9 @@ describe('desktop agent directory bootstrap', () => {
       } catch {
         initProcessRuntime(
           ManagedRuntime.make(
-            Layer.merge(
+            Layer.mergeAll(
               testHttpClientLayer,
+              Layer.mock(UpdateCheckRecords, {}),
               inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
                 Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
               ),

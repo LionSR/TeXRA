@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
+import { UpdateCheckRecordSchema } from './updateCheck';
 import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { GoalStateSchema } from './goal';
@@ -104,6 +105,7 @@ const AggregateKeySchema = z.tuple([
     'session',
     'desktop-projects',
     'global-inquiry',
+    'update-check',
   ]),
   z.string().min(1),
 ]);
@@ -381,11 +383,17 @@ const GlobalInquiryDraftSchema = durable(
   { record: InquiryThreadRecordSchema },
   'global-inquiry',
 );
+const UpdateCheckDraftSchema = durable(
+  'update.check.recorded',
+  { record: UpdateCheckRecordSchema },
+  'update-check',
+);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...ExecutionEventDraftSchema.options,
   DesktopProjectsDraftSchema,
   GlobalInquiryDraftSchema,
+  UpdateCheckDraftSchema,
 ]);
 const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope).refine(
@@ -419,6 +427,7 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   ...ExecutionEventDraftSchema.options.map((schema) => schema.extend(envelope)),
   DesktopProjectsDraftSchema.extend(envelope),
   GlobalInquiryDraftSchema.extend(envelope),
+  UpdateCheckDraftSchema.extend(envelope),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 

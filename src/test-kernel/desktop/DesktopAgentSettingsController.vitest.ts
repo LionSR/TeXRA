@@ -6,6 +6,7 @@ import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgen
 import { initProcessRuntime } from '@platform/processRuntime';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
@@ -46,8 +47,9 @@ beforeEach(() => {
   const storage = createFakePlatform().storage;
   initProcessRuntime(
     ManagedRuntime.make(
-      Layer.merge(
+      Layer.mergeAll(
         testHttpClientLayer,
+        Layer.mock(UpdateCheckRecords, {}),
         inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),

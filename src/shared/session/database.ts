@@ -17,6 +17,9 @@ import type {
   SessionEventDraft,
   InquiryThreadRecord,
   InquiryThreadId,
+  UpdateCheckHost,
+  UpdateCheckRecord,
+  UpdateCheckChange,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -112,6 +115,13 @@ export class Database extends Context.Service<
     readonly readDesktopProjects: (
       id: AggregateId,
     ) => Effect.Effect<SessionEvent | undefined, DatabaseReadFailed>;
+    readonly readUpdateCheck: (
+      host: UpdateCheckHost,
+    ) => Effect.Effect<UpdateCheckRecord | null, DatabaseReadFailed>;
+    readonly recordUpdateCheck: (
+      host: UpdateCheckHost,
+      change: UpdateCheckChange,
+    ) => Effect.Effect<void, DatabaseWriteFailed>;
     /** Canonical global inquiry content, never a project display projection. */
     readonly readInquiryRecord: (
       id: InquiryThreadId,

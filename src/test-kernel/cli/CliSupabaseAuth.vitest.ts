@@ -2,6 +2,7 @@
 import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber } from 'effect';
 import { beforeEach, describe, expect, type Mock, vi } from 'vitest';
+import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 
 // Local imports
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -92,8 +93,9 @@ async function loadSupabaseAuth() {
   const storage = createFakePlatform().storage;
   initProcessRuntime(
     ManagedRuntime.make(
-      Layer.merge(
+      Layer.mergeAll(
         testHttpClientLayer,
+        Layer.mock(UpdateCheckRecords, {}),
         inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),

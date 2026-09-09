@@ -6,8 +6,6 @@ import { z } from 'zod';
 import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { effectRuntime } from '@platform/processRuntime';
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
@@ -25,7 +23,6 @@ import {
   type CliContext,
 } from './cliContext';
 import { installCliProcessRuntime } from './cliProcessRuntime';
-import { openCliGlobalStateStore } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle } from './style';
@@ -124,7 +121,7 @@ export function fetchLatestCliVersion(options?: {
   registry?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
-}): Promise<string | undefined> {
+}): Effect.Effect<string | undefined> {
   const registry = options?.registry ?? DEFAULT_REGISTRY;
   return fetchJsonStringField({
     url: `${registry}/${CLI_PACKAGE_NAME}/latest`,
@@ -282,13 +279,8 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   const { command, args } = buildUpdateCommand(method);
   const updateCmd = [command, ...args].join(' ');
   const style = createCliStyle(context.stderrColorEnabled);
-  // Runs before `initInteractiveCliPlatform`, so `platform()` isn't up yet —
-  // open the same global `state.json` that `createCliStateStores` opens later
-  // via `openCliGlobalStateStore` (see `cliStateStores.ts`), on the process
-  // runtime this entry installs when it gets there first. Failures here
-  // (e.g. an unreadable or unwritable global-storage directory, or stdin
-  // closing mid-prompt) must stay as silent as a network failure: this whole
-  // check is best-effort and must never block `chat` / `orchestrate` startup.
+  // The process runtime captures the configured global storage root before
+  // the platform is installed. Check failures remain best-effort at this host.
   let latest: string | undefined;
   let confirmed = false;
   // `installCliProcessRuntime` is the pre-runtime edge: until it resolves
@@ -301,23 +293,25 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // below, which covers the part that actually runs on the runtime.
   await installCliProcessRuntime(context.storageRoot);
   const check = Effect.gen(function* () {
-    const globalState = yield* openCliGlobalStateStore(
-      createNodeStorageProvider(),
-    );
-    latest = yield* Effect.tryPromise({
-      try: () =>
-        runDailyUpdateCheck({
-          currentVersion: context.version,
-          state: globalState,
-          lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-          fetchLatest: async () => {
-            if (method === 'brew') {
-              return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
-            }
-            const version = await fetchLatestCliVersion();
-            return { version, refreshed: version !== undefined };
-          },
-          notify: async (latestVersion) => {
+    latest = yield* runDailyUpdateCheck({
+      currentVersion: context.version,
+      host: 'cli',
+      fetchLatest:
+        method === 'brew'
+          ? Effect.tryPromise({
+              try: () =>
+                fetchLatestHomebrewFormulaVersion({ cwd: context.cwd }),
+              catch: ensureError,
+            })
+          : fetchLatestCliVersion().pipe(
+              Effect.map((version) => ({
+                version,
+                refreshed: version !== undefined,
+              })),
+            ),
+      notify: (latestVersion) =>
+        Effect.tryPromise({
+          try: async () => {
             writeTextStderr(
               `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
             );
@@ -328,12 +322,9 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
             confirmed =
               normalized === '' || normalized === 'y' || normalized === 'yes';
           },
-          // A readable-but-unwritable global state file must not cancel an
-          // update the user already accepted; the next launch merely checks
-          // again early.
-          stampFailure: 'ignore',
+          catch: ensureError,
         }),
-      catch: (cause) => ensureError(cause),
+      stampFailure: 'ignore',
     });
   });
   // Best-effort by policy: any failure — typed, defect, or interruption —

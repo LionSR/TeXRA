@@ -157,8 +157,10 @@ async function initVscodePlatform(
   // `platform().processes`, read before installing: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous layer build.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
-  installProcessRuntime(await nodeProcesses.selfIdentity(), () =>
-    storage.getGlobalStoragePath(),
+  installProcessRuntime(
+    await nodeProcesses.selfIdentity(),
+    () => storage.getGlobalStoragePath(),
+    () => storage.getGlobalStoragePath(),
   );
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
