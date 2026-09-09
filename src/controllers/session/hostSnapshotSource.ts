@@ -22,12 +22,15 @@ import type { StateStore } from '@platform/interfaces';
 import type { FileOptions, SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FILE_SELECT_CONFIGS } from '@shared/launcher/fileSelectConfigs';
-import type { HostSnapshot, PaperDisplay } from '@shared/session/hostSnapshot';
+import type {
+  HostSnapshot,
+  ProjectDisplay,
+} from '@shared/session/hostSnapshot';
 
 type Banners = HostSnapshot['banners'];
 
 export interface HostSnapshotSourceOptions {
-  paper: PaperDisplay;
+  project: ProjectDisplay;
   globalState: StateStore;
   /** The launcher's single-slot catalogs: base and edited candidates. */
   fileOptions(): Promise<FileOptions>;
@@ -52,7 +55,7 @@ export interface HostSnapshotSource {
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<void>;
-  /** The paper's files changed on disk, or the surface asked for a relist. */
+  /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void>;
   readonly refreshCommits: Effect.Effect<void>;
   /** The sign-in state changed. */
@@ -71,7 +74,7 @@ export interface HostSnapshotSource {
   setOnboarding(state: HostSnapshot['onboarding']): void;
 }
 
-/** The paper's display record and the catalogs, assembled per session. */
+/** The project's display record and the catalogs, assembled per session. */
 export function createHostSnapshotSource(
   options: HostSnapshotSourceOptions,
 ): HostSnapshotSource {
@@ -105,7 +108,7 @@ export function createHostSnapshotSource(
 
   function publish(): void {
     options.publish({
-      paper: options.paper,
+      project: options.project,
       ...catalogs,
       workspaceRoots: options.workspaceRoots?.() ?? [],
       fileConfigs: [...FILE_SELECT_CONFIGS],

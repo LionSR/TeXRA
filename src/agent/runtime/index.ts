@@ -32,7 +32,6 @@ export {
 export {
   closeSession,
   listSessions,
-  openSession,
   openSessionEffect,
   sessionOwnerInstalled,
 } from './sessionGraph';

@@ -11,7 +11,7 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
-import type { PaperDisplay } from '@shared/session/hostSnapshot';
+import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { resolveSelected, type Surface } from '@shared/session/surface';
@@ -25,10 +25,10 @@ import {
   type WorkbenchTab,
 } from '../shared/desktopTaskShell.js';
 
-/** One open paper as the rail lists it: how its host names it, its session,
+/** One open project as the rail lists it: how its host names it, its session,
  *  its surface. */
-export interface RailPaper {
-  readonly display: PaperDisplay;
+export interface RailProject {
+  readonly display: ProjectDisplay;
   readonly view: SessionView;
   readonly surface: Surface;
 }
@@ -36,12 +36,12 @@ export interface RailPaper {
 interface TaskSidebarModel {
   readonly files: Node;
   readonly filesExpanded: boolean;
-  /** Every open paper, in `shell.open` order. */
-  readonly papers: readonly RailPaper[];
+  /** Every open project, in `shell.open` order. */
+  readonly projects: readonly RailProject[];
   readonly shell: Shell;
-  /** The shown workbench (the active paper's) has its Subagents tab open:
-   *  that paper's tree lives there and its section lists top-level streams
-   *  only. Other papers' workbenches are not shown, so their sections keep
+  /** The shown workbench (the active project's) has its Subagents tab open:
+   *  that project's tree lives there and its section lists top-level streams
+   *  only. Other projects' workbenches are not shown, so their sections keep
    *  their trees. */
   readonly subagentsOpen: boolean;
   /** Canonical name of the command palette action, from the command catalog. */
@@ -53,14 +53,14 @@ interface TaskSidebarCallbacks {
   onSearch(): void;
   onToggleFiles(): void;
   onOpenFolder(): void;
-  onSelectPaper(key: string): void;
-  onClosePaper(key: string): void;
-  onTogglePaperCollapsed(key: string): void;
+  onSelectProject(key: string): void;
+  onCloseProject(key: string): void;
+  onToggleProjectCollapsed(key: string): void;
   onOpenTerminal(): void;
   onOpenBrowser(): void;
   onOpenSettings(): void;
   onOpenLogs(): void;
-  /** Opens the Subagents tab on the active paper's selected family. */
+  /** Opens the Subagents tab on the active project's selected family. */
   onOpenSubagents(): void;
 }
 
@@ -89,23 +89,23 @@ function sidebarAction(options: {
 }
 
 /**
- * A collapsed paper's badge: the one count that needs the user first
+ * A collapsed project's badge: the one count that needs the user first
  * (waiting, then interrupted, then running), read from the view's rollup.
  */
-function paperBadge(view: SessionView): TemplateResult | typeof nothing {
+function projectBadge(view: SessionView): TemplateResult | typeof nothing {
   const { waiting, interrupted, running } = view.rollup;
   if (waiting > 0) {
-    return html`<wa-badge class="task-paper-badge" variant="warning" pill
+    return html`<wa-badge class="task-project-badge" variant="warning" pill
       >${waiting}</wa-badge
     >`;
   }
   if (interrupted > 0) {
-    return html`<wa-badge class="task-paper-badge" variant="danger" pill
+    return html`<wa-badge class="task-project-badge" variant="danger" pill
       >${interrupted}</wa-badge
     >`;
   }
   if (running > 0) {
-    return html`<wa-badge class="task-paper-badge" variant="success" pill
+    return html`<wa-badge class="task-project-badge" variant="success" pill
       >${running}</wa-badge
     >`;
   }
@@ -113,13 +113,13 @@ function paperBadge(view: SessionView): TemplateResult | typeof nothing {
 }
 
 function streamTabsTemplate(
-  paper: RailPaper,
+  project: RailProject,
   options: { topLevelOnly: boolean },
 ): TemplateResult {
-  return html`<div data-session=${paper.display.key}>
+  return html`<div data-session=${project.display.key}>
     <stream-tabs
-      .view=${paper.view}
-      .surface=${paper.surface}
+      .view=${project.view}
+      .surface=${project.surface}
       .topLevelOnly=${options.topLevelOnly}
     ></stream-tabs>
   </div>`;
@@ -128,17 +128,17 @@ function streamTabsTemplate(
 /**
  * Where the selected stream's children are. The whole tree is the Subagents
  * tab's, and this control is what opens that tab; it belongs to the shown
- * paper alone, since the workbench beside the rail is that paper's. While the
+ * project alone, since the workbench beside the rail is that project's. While the
  * tab holds the tree the section is flat, and under a workflow run the note
  * then says where its calls went (W2). Nothing when the selection has no
  * children, since there would be no tree to reach.
  */
 function childStreamsAccess(
-  paper: RailPaper,
+  project: RailProject,
   options: { active: boolean; flattened: boolean },
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult | typeof nothing {
-  const { view, surface } = paper;
+  const { view, surface } = project;
   const selected = resolveSelected(view, surface);
   const stream = selected === null ? undefined : view.streams.get(selected);
   const rootId = stream?.ancestors[0]?.id ?? stream?.id;
@@ -175,24 +175,24 @@ function childStreamsAccess(
 }
 
 /**
- * One section per open paper: the row, then that paper's own stream tree
+ * One section per open project: the row, then that project's own stream tree
  * beneath it unless the user folded the section shut (`Shell.collapsed`).
- * The row chooses the paper; the chevron folds the section; the close
- * control beside them is the one place a paper is closed from. The file
- * tree is the shown paper's workbench tree, so only its section carries the
+ * The row chooses the project; the chevron folds the section; the close
+ * control beside them is the one place a project is closed from. The file
+ * tree is the shown project's workbench tree, so only its section carries the
  * Files disclosure.
  */
-function paperSection(
-  paper: RailPaper,
+function projectSection(
+  project: RailProject,
   model: TaskSidebarModel,
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult {
-  const { key, name, initials, subtitle } = paper.display;
+  const { key, name, initials, subtitle } = project.display;
   const active = key === model.shell.active;
   const collapsed = model.shell.collapsed.includes(key);
   const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
   // The tree has one home at a time: the Subagents tab holds the shown
-  // paper's, and this section then lists its top-level streams only.
+  // project's, and this section then lists its top-level streams only.
   const flattened = active && model.subagentsOpen;
   return html`
     <div class="task-project-item">
@@ -203,7 +203,7 @@ function paperSection(
         size="s"
         title=${key}
         aria-current=${active ? 'true' : nothing}
-        @click=${() => callbacks.onSelectPaper(key)}
+        @click=${() => callbacks.onSelectProject(key)}
       >
         <span class="task-project-mark icon-surface is-size-m"
           >${initials}</span
@@ -213,7 +213,7 @@ function paperSection(
           <small>${subtitle}</small>
         </span>
       </wa-button>
-      ${collapsed ? paperBadge(paper.view) : nothing}
+      ${collapsed ? projectBadge(project.view) : nothing}
       <wa-button
         type="button"
         class="task-project-fold icon-button is-size-s"
@@ -222,7 +222,7 @@ function paperSection(
         title=${foldLabel}
         aria-label=${foldLabel}
         aria-expanded=${collapsed ? 'false' : 'true'}
-        @click=${() => callbacks.onTogglePaperCollapsed(key)}
+        @click=${() => callbacks.onToggleProjectCollapsed(key)}
       >
         ${waIcon(collapsed ? 'chevron-right' : 'chevron-down')}
       </wa-button>
@@ -233,7 +233,7 @@ function paperSection(
         size="s"
         title="Close ${name}"
         aria-label="Close ${name}"
-        @click=${() => callbacks.onClosePaper(key)}
+        @click=${() => callbacks.onCloseProject(key)}
       >
         ${waIcon('xmark')}
       </wa-button>
@@ -242,9 +242,9 @@ function paperSection(
       collapsed
         ? nothing
         : html`
-            <div class="task-sidebar-sessions task-paper-streams">
-              ${streamTabsTemplate(paper, { topLevelOnly: flattened })}
-              ${childStreamsAccess(paper, { active, flattened }, callbacks)}
+            <div class="task-sidebar-sessions task-project-streams">
+              ${streamTabsTemplate(project, { topLevelOnly: flattened })}
+              ${childStreamsAccess(project, { active, flattened }, callbacks)}
             </div>
           `
     }
@@ -273,7 +273,7 @@ function paperSection(
   `;
 }
 
-function papersSectionsTemplate(
+function projectsSectionsTemplate(
   model: TaskSidebarModel,
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult {
@@ -281,17 +281,17 @@ function papersSectionsTemplate(
     <section class="task-sidebar-section task-project-section">
       <div class="task-sidebar-section-heading">
         <span class="task-sidebar-section-label">
-          ${model.papers.length > 1 ? 'Papers' : 'Paper'}
+          ${model.projects.length > 1 ? 'Projects' : 'Project'}
         </span>
         <wa-badge
           class="task-sidebar-section-count"
           variant="neutral"
           appearance="outlined"
           pill
-          >${model.papers.length}</wa-badge
+          >${model.projects.length}</wa-badge
         >
       </div>
-      ${model.papers.map((paper) => paperSection(paper, model, callbacks))}
+      ${model.projects.map((project) => projectSection(project, model, callbacks))}
       <wa-button
         type="button"
         class="task-project-add"
@@ -300,7 +300,7 @@ function papersSectionsTemplate(
         @click=${callbacks.onOpenFolder}
       >
         ${waIcon('folder-open', { slot: 'start' })}
-        <span>Add paper</span>
+        <span>Add project</span>
       </wa-button>
     </section>
   `;
@@ -310,9 +310,9 @@ export function taskSidebarTemplate(
   model: TaskSidebarModel,
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult {
-  let papersBody: TemplateResult;
-  if (model.papers.length === 0) {
-    papersBody = html`
+  let projectsBody: TemplateResult;
+  if (model.projects.length === 0) {
+    projectsBody = html`
       <section class="task-sidebar-section task-project-section">
         <wa-button
           type="button"
@@ -324,7 +324,7 @@ export function taskSidebarTemplate(
         >
           <span class="task-project-mark icon-surface is-size-m">TX</span>
           <span class="task-project-copy">
-            <strong>No paper open</strong>
+            <strong>No project open</strong>
             <small>Get started</small>
           </span>
           ${waIcon('arrow-up-right-from-square', {
@@ -335,10 +335,10 @@ export function taskSidebarTemplate(
       </section>
     `;
   } else {
-    papersBody = papersSectionsTemplate(model, callbacks);
+    projectsBody = projectsSectionsTemplate(model, callbacks);
   }
   return html`
-    <aside class="task-sidebar" aria-label="Papers and tasks">
+    <aside class="task-sidebar" aria-label="Projects and tasks">
       <header class="task-sidebar-brand">
         <div class="task-sidebar-logo" aria-hidden="true">T</div>
         <span class="task-sidebar-product">TeXRA</span>
@@ -369,7 +369,7 @@ export function taskSidebarTemplate(
         })}
       </nav>
 
-      <div class="task-sidebar-scroll">${papersBody}</div>
+      <div class="task-sidebar-scroll">${projectsBody}</div>
 
       <footer class="task-sidebar-footer">
         ${sidebarAction({
@@ -398,23 +398,23 @@ export function taskSidebarTemplate(
 }
 
 /**
- * The paper chip at the head of the conversation pane: names the paper the
- * conversation belongs to and switches paper from its menu, the same choice
+ * The project chip at the head of the conversation pane: names the project the
+ * conversation belongs to and switches project from its menu, the same choice
  * a rail row makes.
  */
-export function paperChipTemplate(
-  papers: readonly RailPaper[],
-  active: RailPaper | undefined,
-  onSelectPaper: (key: string) => void,
+export function projectChipTemplate(
+  projects: readonly RailProject[],
+  active: RailProject | undefined,
+  onSelectProject: (key: string) => void,
 ): TemplateResult {
   return html`
     <wa-dropdown
-      class="task-paper-chip"
+      class="task-project-chip"
       placement="bottom-start"
       @wa-select=${(
         event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
       ) => {
-        if (event.detail.item.value) onSelectPaper(event.detail.item.value);
+        if (event.detail.item.value) onSelectProject(event.detail.item.value);
       }}
     >
       <wa-button
@@ -423,20 +423,20 @@ export function paperChipTemplate(
         appearance="outlined"
         size="s"
         with-caret
-        title=${active?.display.key ?? 'No paper open'}
+        title=${active?.display.key ?? 'No project open'}
       >
         <span class="task-project-mark icon-surface is-size-s" slot="start"
           >${active?.display.initials ?? 'TX'}</span
         >
-        ${active?.display.name ?? 'No paper open'}
+        ${active?.display.name ?? 'No project open'}
       </wa-button>
-      ${papers.map(
-        (paper) => html`
+      ${projects.map(
+        (project) => html`
           <wa-dropdown-item
-            value=${paper.display.key}
+            value=${project.display.key}
             type="checkbox"
-            ?checked=${paper === active}
-            >${paper.display.name}</wa-dropdown-item
+            ?checked=${project === active}
+            >${project.display.name}</wa-dropdown-item
           >
         `,
       )}
@@ -445,14 +445,18 @@ export function paperChipTemplate(
 }
 
 /**
- * The dock under the composer: the paper-level shortcut a running
+ * The dock under the composer: the project-level shortcut a running
  * conversation reaches for, dispatched as the surface arm it is. The
  * latexdiff chip opens the Tools sheet on the launcher's base file and
  * commit; the desktop host performs its commit verbs (desktopHostRequests).
  */
 export function conversationDockTemplate(): TemplateResult {
   return html`
-    <div class="task-conversation-dock" role="group" aria-label="Paper actions">
+    <div
+      class="task-conversation-dock"
+      role="group"
+      aria-label="Project actions"
+    >
       <wa-button
         type="button"
         appearance="outlined"

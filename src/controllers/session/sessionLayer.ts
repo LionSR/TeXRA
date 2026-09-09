@@ -42,11 +42,7 @@ import { FetchHttpClient } from 'effect/unstable/http';
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import {
-  processOwnerId,
-  sessionEventsLayer,
-  tailFrom,
-} from '@agent/runtime/SessionEvents';
+import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   initSessionOwner,
@@ -60,6 +56,7 @@ import {
   initProcessRuntime,
   tryProcessRuntime,
 } from '@platform/processRuntime';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   aggregateId as qualifyAggregateId,

@@ -1,14 +1,10 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+import { Effect } from 'effect';
 import { _electron as electron } from 'playwright';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Page } from 'playwright';
@@ -20,9 +16,9 @@ const MAIN_ENTRY = join(PACKAGE_ROOT, 'dist', 'main', 'index.js');
 export interface LaunchOptions {
   /**
    * Workspace folder the app opens at launch, seeded into the profile's
-   * remembered papers (there is no launch flag; the app reopens what it
+   * remembered projects (there is no launch flag; the app reopens what it
    * remembers). If omitted, a fresh temp directory is created so the app
-   * shows a paper rather than the empty state at startup.
+   * shows a project rather than the empty state at startup.
    */
   workspacePath?: string;
   /**
@@ -52,30 +48,95 @@ export interface LaunchedApp {
   ownsUserData: boolean;
 }
 
-/**
- * Seed `workspacePath` as the paper the app shows at launch. Source of truth:
- * `readRememberedDesktopPapers` in packages/desktop/src/main/desktopPapers.ts
- * reads the `texra.desktop.openPapers` list from the profile's global state
- * (a JSON object at `state/global.json`, opened by
- * packages/desktop/src/main/platform/index.ts) and shows the last entry.
- * Merges into an existing profile so a relaunch keeps its other state.
- */
-function rememberOpenPaper(userDataPath: string, workspacePath: string): void {
-  const statePath = join(userDataPath, 'state', 'global.json');
-  let state: Record<string, unknown> = {};
-  if (existsSync(statePath)) {
-    state = JSON.parse(readFileSync(statePath, 'utf8')) as Record<
-      string,
-      unknown
-    >;
-  }
-  const remembered = state['texra.desktop.openPapers'];
-  const others = (Array.isArray(remembered) ? remembered : []).filter(
-    (entry) => typeof entry === 'string' && entry !== workspacePath,
+export type DatabaseFixture = Pick<
+  typeof import('@controllers/session/Database'),
+  'databaseLayer'
+> &
+  Pick<typeof import('@controllers/session/WorkspaceRoots'), 'WorkspaceRoots'> &
+  Pick<typeof import('@shared/session/database'), 'Database'> &
+  Pick<typeof import('@shared/session/sessionEvents'), 'ProcessIdentity'> &
+  Pick<typeof import('@shared/schemas'), 'aggregateId'> &
+  Pick<
+    typeof import('@platform/defaults/workspaceStorage'),
+    'resolveWorkspaceStoragePath'
+  > &
+  Pick<
+    typeof import('@desktop/main/desktopProjectRecords'),
+    'openDesktopProjectRecords'
+  > &
+  Pick<
+    typeof import('@platform/defaults/nodeProcesses'),
+    'nodeProcesses' | 'processOwnerId'
+  >;
+
+/** Playwright's ESM loader cannot directly import the root's CommonJS-shaped TS modules. */
+export async function loadDatabaseFixture(
+  userDataPath: string,
+): Promise<DatabaseFixture> {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+  const bundle = join(userDataPath, 'session-database-fixture.mjs');
+  await build({
+    stdin: {
+      contents: `
+        export { databaseLayer } from '@controllers/session/Database';
+        export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+        export { Database } from '@shared/session/database';
+        export { ProcessIdentity } from '@shared/session/sessionEvents';
+        export { aggregateId } from '@shared/schemas';
+        export { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
+        export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
+        export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
+      `,
+      loader: 'ts',
+      resolveDir: root,
+    },
+    outfile: bundle,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    loader: { '.node': 'file' },
+    assetNames: '[name]',
+    target: 'node22.16',
+    tsconfig: join(root, 'tsconfig.json'),
+    banner: {
+      js: "import { createRequire as __texraCreateRequire } from 'node:module'; const require = __texraCreateRequire(import.meta.url);",
+    },
+  });
+  return import(pathToFileURL(bundle).href) as Promise<DatabaseFixture>;
+}
+
+/** Resolve project storage through the production path function in the fixture bundle. */
+export async function findWorkspaceStoragePath(input: {
+  userDataPath: string;
+  workspacePath: string;
+}): Promise<string> {
+  const fixture = await loadDatabaseFixture(input.userDataPath);
+  return fixture.resolveWorkspaceStoragePath(
+    input.userDataPath,
+    realpathSync(input.workspacePath),
   );
-  state['texra.desktop.openPapers'] = [...others, workspacePath];
-  mkdirSync(dirname(statePath), { recursive: true });
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+}
+
+/** Seed the profile through the same scoped project-record owner as the application. */
+async function rememberOpenProject(
+  userDataPath: string,
+  workspacePath: string,
+): Promise<void> {
+  const fixture = await loadDatabaseFixture(userDataPath);
+  const owner = fixture.processOwnerId(
+    await fixture.nodeProcesses.selfIdentity(),
+  );
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const records = yield* fixture.openDesktopProjectRecords(
+          userDataPath,
+          owner,
+        );
+        yield* records.activate(workspacePath);
+      }),
+    ),
+  );
 }
 
 /**
@@ -107,7 +168,7 @@ export async function launchTexraApp(
   const userDataPath =
     options.userDataPath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
 
-  rememberOpenPaper(userDataPath, workspacePath);
+  await rememberOpenProject(userDataPath, workspacePath);
   const app = await electron.launch({
     args: [MAIN_ENTRY],
     cwd: PACKAGE_ROOT,

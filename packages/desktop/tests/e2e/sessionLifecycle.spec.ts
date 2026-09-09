@@ -1,68 +1,26 @@
 import { hostname } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { join } from 'node:path';
 import { Effect, Layer } from 'effect';
 
 import { expect, test } from '@playwright/test';
 
 import {
   closeTexraApp,
+  findWorkspaceStoragePath,
+  loadDatabaseFixture,
+  type DatabaseFixture,
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
 import {
   cleanupDirectory,
   createIsolatedProfile,
-  findWorkspaceStoragePath,
 } from './workspaceStorageFixture.js';
 
 const WAITING_STREAM = 'e2e-waiting#a11ce1';
 const WAITING_EXECUTION = 'a11ce1';
 const ORPHAN_STREAM = 'e2e-orphan#baddad';
 const ORPHAN_EXECUTION = 'baddad';
-
-type DatabaseFixture = Pick<
-  typeof import('@controllers/session/Database'),
-  'databaseLayer'
-> &
-  Pick<typeof import('@controllers/session/WorkspaceRoots'), 'WorkspaceRoots'> &
-  Pick<typeof import('@shared/session/database'), 'Database'> &
-  Pick<typeof import('@shared/session/sessionEvents'), 'ProcessIdentity'> &
-  Pick<typeof import('@shared/schemas'), 'aggregateId'>;
-
-/** Playwright's ESM loader cannot directly import the root's CommonJS-shaped TS modules. */
-async function loadDatabaseFixture(
-  userDataPath: string,
-): Promise<DatabaseFixture> {
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-  const bundle = join(userDataPath, 'session-database-fixture.mjs');
-  await build({
-    stdin: {
-      contents: `
-        export { databaseLayer } from '@controllers/session/Database';
-        export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-        export { Database } from '@shared/session/database';
-        export { ProcessIdentity } from '@shared/session/sessionEvents';
-        export { aggregateId } from '@shared/schemas';
-      `,
-      loader: 'ts',
-      resolveDir: root,
-    },
-    outfile: bundle,
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    loader: { '.node': 'file' },
-    assetNames: '[name]',
-    target: 'node22.16',
-    tsconfig: join(root, 'tsconfig.json'),
-    banner: {
-      js: "import { createRequire as __texraCreateRequire } from 'node:module'; const require = __texraCreateRequire(import.meta.url);",
-    },
-  });
-  return import(pathToFileURL(bundle).href) as Promise<DatabaseFixture>;
-}
 
 /** Open the same C1 database implementation used by the application. */
 function inEventDatabase<A, E>(
@@ -196,7 +154,7 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
     await closeTexraApp(currentLaunch);
     currentLaunch = undefined;
 
-    const storagePath = findWorkspaceStoragePath({
+    const storagePath = await findWorkspaceStoragePath({
       userDataPath,
       workspacePath,
     });

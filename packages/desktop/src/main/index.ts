@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname, join, resolve as resolvePath } from 'node:path';
+import { Scope } from 'effect';
 import {
   app,
   BrowserWindow,
@@ -56,7 +57,7 @@ import {
   type InstructionAction,
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { paperDisplayOf } from '@shared/session/hostSnapshot';
+import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import {
@@ -74,6 +75,7 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
+import { openDesktopProjectRecords } from './desktopProjectRecords.js';
 import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
@@ -86,11 +88,11 @@ import {
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 import {
-  openDesktopPaperRegistry,
-  readRememberedDesktopPapers,
-  type DesktopPaper,
-  type DesktopPaperRegistry,
-} from './desktopPapers.js';
+  openDesktopProjectRegistry,
+  readRememberedDesktopProjects,
+  type DesktopProject,
+  type DesktopProjectRegistry,
+} from './desktopProjects.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
@@ -105,10 +107,10 @@ import {
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
 } from '../shared/desktopWorkspaceMessages.js';
 import {
-  DESKTOP_PAPER_COMMANDS,
-  DesktopClosePaperMessageSchema,
-  DesktopSelectPaperMessageSchema,
-} from '../shared/desktopPaperMessages.js';
+  DESKTOP_PROJECT_COMMANDS,
+  DesktopCloseProjectMessageSchema,
+  DesktopSelectProjectMessageSchema,
+} from '../shared/desktopProjectMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -266,14 +268,14 @@ function installContentSecurityPolicy(): void {
   });
 }
 
-/** The one field every session message carries: which paper it names. */
+/** The one field every session message carries: which project it names. */
 const SessionMessageEnvelopeSchema = z.object({ session: z.string() });
 
-// Recording has one process owner, shared by every paper and window.
+// Recording has one process owner, shared by every project and window.
 const hostDraftRequests = new HostDraftRequests();
 
 function createWindow(options: {
-  papers: DesktopPaperRegistry;
+  projects: DesktopProjectRegistry;
   authCoordinator: DesktopAuthCoordinator;
   authCallbackState: DesktopAuthCallbackState;
   /**
@@ -288,11 +290,11 @@ function createWindow(options: {
   /** See ElectronPlatformInitResult.resourcesPath. */
   resourcesPath: string;
 }): void {
-  const activePaper = () => options.papers.active();
-  const initialPaper = activePaper();
+  const activeProject = () => options.projects.active();
+  const initialProject = activeProject();
   const initialWindowTitle = getDesktopWindowTitle(
-    initialPaper.session,
-    initialPaper.root,
+    initialProject.session,
+    initialProject.root,
   );
   const window = new BrowserWindow({
     // The task canvas remains useful with a project sidebar and an optional
@@ -337,16 +339,17 @@ function createWindow(options: {
   // creation, and the `closed` handler disposes the store (LIFO) instead of
   // running a hand-ordered teardown ledger.
   const windowResources = new DisposableStore();
-  // Paper root: every resource bound to the paper the window shows (its
+  // Project root: every resource bound to the project the window shows (its
   // title, its settings surface, its progress bridge) registers here and is
-  // replaced when the window switches papers.
-  let paperResources = new DisposableStore();
-  let attachedPaper: DesktopPaper | undefined;
+  // replaced when the window switches projects.
+  let projectResources = new DisposableStore();
+  let attachedProject: DesktopProject | undefined;
   windowResources.add(() => {
-    const paper = attachedPaper;
-    attachedPaper = undefined;
-    if (paper) void runInSession(paper.session, () => paperResources.dispose());
-    else paperResources.dispose();
+    const project = attachedProject;
+    attachedProject = undefined;
+    if (project)
+      void runInSession(project.session, () => projectResources.dispose());
+    else projectResources.dispose();
   });
   const ipcRef: {
     current?: { postToRenderer(message: unknown): void };
@@ -560,7 +563,7 @@ function createWindow(options: {
   let teamSignInPending = false;
   const refreshDesktopAuthSurfaces = async () => {
     await Promise.all(
-      [...paperBindings.values()].map((binding) =>
+      [...projectBindings.values()].map((binding) =>
         effectRuntime().runPromise(binding.snapshot.refreshAuth),
       ),
     );
@@ -617,10 +620,10 @@ function createWindow(options: {
   initializeDesktopSetupAuth();
   windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
   const folderPickerDefaultPath = () =>
-    activePaper().root ?? app.getPath('home');
+    activeProject().root ?? app.getPath('home');
 
-  const paperByKey = (key: string) =>
-    options.papers.list().find((paper) => paper.key === key);
+  const projectByKey = (key: string) =>
+    options.projects.list().find((project) => project.key === key);
   const showDiscardDialog = () =>
     dialog.showMessageBoxSync(window, {
       type: 'warning',
@@ -632,24 +635,33 @@ function createWindow(options: {
       detail: 'Discard the changes and continue?',
     });
 
-  /** Selection changes visibility; each paper retains its tabs and processes. */
-  const selectPaper = (key: string) => {
-    const paper = paperByKey(key);
-    if (!paper || paper.root === undefined || paper === activePaper()) return;
-    options.papers.activate(paper.root);
+  /** Selection changes visibility; each project retains its tabs and processes. */
+  const selectProject = (key: string) => {
+    const project = projectByKey(key);
+    if (!project || project.root === undefined || project === activeProject())
+      return;
+    effectRuntime().runFork(
+      options.projects
+        .activate(project.root)
+        .pipe(
+          Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+        ),
+    );
   };
 
-  /** The renderer reports dirtiness for the addressed paper, including a
+  /** The renderer reports dirtiness for the addressed project, including a
    *  hidden one. Only explicit closure releases its resources. */
-  const closePaper = (key: string, hasUnsavedChanges: boolean) => {
-    const paper = paperByKey(key);
-    if (!paper || paper.root === undefined) return;
+  const closeProject = (key: string, hasUnsavedChanges: boolean) => {
+    const project = projectByKey(key);
+    if (!project || project.root === undefined) return;
     if (hasUnsavedChanges && showDiscardDialog() !== 1) return;
-    const root = paper.root;
+    const root = project.root;
     effectRuntime().runFork(
-      hostPort(() => options.papers.close(root)).pipe(
-        Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
-      ),
+      options.projects
+        .close(root)
+        .pipe(
+          Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+        ),
     );
   };
 
@@ -661,8 +673,10 @@ function createWindow(options: {
     });
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
     if (!selectedPath) return;
-    const paper = await options.papers.open(selectedPath);
-    if (paper.root !== undefined) selectPaper(paper.key);
+    const project = await effectRuntime().runPromise(
+      options.projects.open(selectedPath),
+    );
+    if (project.root !== undefined) selectProject(project.key);
   };
   attachRendererConsoleLog(window.webContents);
   const desktopDiffHost = createDesktopDiffHost({
@@ -765,15 +779,15 @@ function createWindow(options: {
     });
   };
   /**
-   * One binding per open paper for this window (PRD 8.1, 12.2): the
-   * session bridge the renderer subscribes to, the paper's `host` snapshot,
-   * and its presentation and launch path. Every open paper is bound, not
+   * One binding per open project for this window (PRD 8.1, 12.2): the
+   * session bridge the renderer subscribes to, the project's `host` snapshot,
+   * and its presentation and launch path. Every open project is bound, not
    * only the shown one: the rail lists them all from their own views.
    */
-  interface PaperBinding {
-    readonly paper: DesktopPaper;
+  interface ProjectBinding {
+    readonly project: DesktopProject;
     readonly bridge: SessionBridge;
-    /** This window's port on the paper's bridge. */
+    /** This window's port on the project's bridge. */
     readonly port: AttachedPort;
     readonly snapshot: ReturnType<typeof createHostSnapshotSource>;
     readonly execution: ReturnType<typeof createDesktopAgentExecution>;
@@ -781,25 +795,25 @@ function createWindow(options: {
     readonly browserViews: ReturnType<typeof createDesktopBrowserViews>;
     dispose(): void;
   }
-  const paperBindings = new Map<string, PaperBinding>();
-  const bindPaper = (paper: DesktopPaper): PaperBinding => {
-    const { workspace, browserViews } = createPaperWorkspace(paper);
+  const projectBindings = new Map<string, ProjectBinding>();
+  const bindProject = (project: DesktopProject): ProjectBinding => {
+    const { workspace, browserViews } = createProjectWorkspace(project);
     const files = createDesktopFileSelection({
-      workspacePath: paper.root,
+      workspacePath: project.root,
       showOpenFileDialog: openFileDialog,
     });
     // Install the recipient before host requests publish the recorder's state.
     const bridge = new SessionBridge({
-      session: paper.session,
+      session: project.session,
       handleHostRequest: (request, portId) =>
         hostRequests.handle(request, portId),
       onPortClosed: (portId) => hostRequests.closePort(portId),
     });
     const snapshot = createHostSnapshotSource({
-      paper: paperDisplayOf(paper.key, paper.root),
+      project: projectDisplayOf(project.key, project.root),
       globalState: options.globalState,
       fileOptions: () => files.fileOptions(),
-      readRecentCommits: () => recentCommitsOf(paper.root),
+      readRecentCommits: () => recentCommitsOf(project.root),
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
       onError: reportBackgroundError,
       publish: (next) => bridge.setHost(next),
@@ -813,14 +827,14 @@ function createWindow(options: {
         openBuildDisplay: requestPreviewHost.openBuildDisplay,
         openDiff: requestDiffHost.openDiff,
       },
-      session: paper.session,
+      session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
       onLaunched: (streamId) =>
         bridge.surfaceAction({ kind: 'select', streamId }),
     });
     const hostRequests = createDesktopHostRequests({
-      session: paper.session,
+      session: project.session,
       draftRequests: hostDraftRequests,
       host: {
         ...agentExecutionHost,
@@ -831,7 +845,7 @@ function createWindow(options: {
       execution,
       files,
       snapshot,
-      workspacePath: paper.root,
+      workspacePath: project.root,
       resourcesPath: options.resourcesPath,
       postToRenderer: postToRendererIfAlive,
       postSurfaceAction: (action) => bridge.surfaceAction(action),
@@ -853,7 +867,7 @@ function createWindow(options: {
     });
     void effectRuntime().runPromise(snapshot.refresh);
     return {
-      paper,
+      project,
       bridge,
       port,
       snapshot,
@@ -869,45 +883,47 @@ function createWindow(options: {
       },
     };
   };
-  const syncPaperBindings = () => {
+  const syncProjectBindings = () => {
     const open = new Map(
-      [options.papers.fallback(), ...options.papers.list()].map(
-        (paper) => [paper.key, paper] as const,
+      [options.projects.fallback(), ...options.projects.list()].map(
+        (project) => [project.key, project] as const,
       ),
     );
-    for (const [key, binding] of paperBindings) {
+    for (const [key, binding] of projectBindings) {
       if (open.has(key)) continue;
-      paperBindings.delete(key);
-      void runInSession(binding.paper.session, () => binding.dispose());
+      projectBindings.delete(key);
+      void runInSession(binding.project.session, () => binding.dispose());
     }
-    for (const [key, paper] of open) {
-      if (paperBindings.has(key)) continue;
-      paperBindings.set(
+    for (const [key, project] of open) {
+      if (projectBindings.has(key)) continue;
+      projectBindings.set(
         key,
-        runInSession(paper.session, () => bindPaper(paper)) as PaperBinding,
+        runInSession(project.session, () =>
+          bindProject(project),
+        ) as ProjectBinding,
       );
     }
   };
   windowResources.add(() => {
-    for (const binding of paperBindings.values()) {
-      void runInSession(binding.paper.session, () => binding.dispose());
+    for (const binding of projectBindings.values()) {
+      void runInSession(binding.project.session, () => binding.dispose());
     }
-    paperBindings.clear();
+    projectBindings.clear();
   });
-  const activeBinding = () => paperBindings.get(activePaper().key);
+  const activeBinding = () => projectBindings.get(activeProject().key);
   const requireOnboardingIpc = (): DesktopOnboardingIpc => {
     const onboarding = onboardingIpcRef.current;
     if (!onboarding) throw new Error('Desktop onboarding IPC is not attached.');
     return onboarding;
   };
   // Catalog refresh leaves each Surface's selections intact. Applying an
-  // agent mode separately sends the chosen root to that paper's launcher.
-  // Each paper's catalogs are read inside its own session: the presets
-  // come from that paper's workspace state, not the caller's.
+  // agent mode separately sends the chosen root to that project's launcher.
+  // Each project's catalogs are read inside its own session: the presets
+  // come from that project's workspace state, not the caller's.
   const refreshCatalogs = async () => {
     await Promise.all(
-      [...paperBindings.values()].map((binding) =>
-        runInSession(binding.paper.session, () =>
+      [...projectBindings.values()].map((binding) =>
+        runInSession(binding.project.session, () =>
           effectRuntime().runPromise(binding.snapshot.refreshCatalogs),
         ),
       ),
@@ -920,19 +936,19 @@ function createWindow(options: {
     confirmAction: (message, confirmLabel) =>
       confirmDialog({ message, confirmLabel }),
     openPath: previewHost.openPath,
-    // Selection is the surface's: a settings jump asks the shown paper's
+    // Selection is the surface's: a settings jump asks the shown project's
     // surface to select the stream, and reports a stream the view no longer
     // holds as missing.
     revealStream: async (streamId) => {
       const binding = activeBinding();
       if (!binding) return 'unavailable';
-      const view = SubscriptionRef.getUnsafe(binding.paper.session.view);
+      const view = SubscriptionRef.getUnsafe(binding.project.session.view);
       if (!view.streams.has(streamId)) return 'missing';
       binding.bridge.surfaceAction({ kind: 'select', streamId });
       return 'revealed';
     },
     getStreamLabel: (streamId) =>
-      SubscriptionRef.getUnsafe(activePaper().session.view).streams.get(
+      SubscriptionRef.getUnsafe(activeProject().session.view).streams.get(
         streamId,
       )?.label,
     promptForSecret: (input) =>
@@ -949,40 +965,40 @@ function createWindow(options: {
     if (!settingsIpc) throw new Error('Desktop settings IPC is not attached.');
     return settingsIpc;
   };
-  const postPapers = () => {
+  const postProjects = () => {
     postToRendererIfAlive({
-      command: DESKTOP_PAPER_COMMANDS.PAPERS,
-      ...options.papers.summary(),
+      command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
+      ...options.projects.summary(),
     });
   };
   /**
-   * Bind the window to the paper it shows. The settings controllers read the
-   * paper's workspace state and config, the settings surface subscribes to
-   * the paper's session (goal facts, approval policy), the title follows its
+   * Bind the window to the project it shows. The settings controllers read the
+   * project's workspace state and config, the settings surface subscribes to
+   * the project's session (goal facts, approval policy), the title follows its
    * activity. These active settings bindings are replaced on selection;
-   * the session bridge and workbench remain with their paper.
+   * the session bridge and workbench remain with their project.
    */
-  const attachActivePaper = (documentChanged = false) => {
-    const paper = activePaper();
-    if (paper === attachedPaper && !documentChanged) return;
-    const documentBinding = paperBindings.get(paper.key);
-    const previous = attachedPaper;
-    const previousResources = paperResources;
-    attachedPaper = paper;
-    paperResources = new DisposableStore();
-    const owner = paperResources;
-    const postForActivePaper = (message: unknown) => {
-      if (paperResources !== owner) return false;
+  const attachActiveProject = (documentChanged = false) => {
+    const project = activeProject();
+    if (project === attachedProject && !documentChanged) return;
+    const documentBinding = projectBindings.get(project.key);
+    const previous = attachedProject;
+    const previousResources = projectResources;
+    attachedProject = project;
+    projectResources = new DisposableStore();
+    const owner = projectResources;
+    const postForActiveProject = (message: unknown) => {
+      if (projectResources !== owner) return false;
       return postToRendererIfAlive(message);
     };
     if (previous) {
       void runInSession(previous.session, () => previousResources.dispose());
     }
-    paperResources.add(
-      installDesktopWindowTitle(window, paper.session, paper.root),
+    projectResources.add(
+      installDesktopWindowTitle(window, project.session, project.root),
     );
     const agentSettingsController = new DefaultDesktopAgentSettingsController({
-      workspaceState: paper.roots.workspaceState,
+      workspaceState: project.roots.workspaceState,
       globalState: options.globalState,
       registry: {
         loadAgents,
@@ -1020,7 +1036,7 @@ function createWindow(options: {
         revealPath: async (filePath) => shell.showItemInFolder(filePath),
       },
       renderer: {
-        postToRenderer: postForActivePaper,
+        postToRenderer: postForActiveProject,
       },
       prompts: {
         promptText: (input) => promptController.request(input),
@@ -1037,7 +1053,7 @@ function createWindow(options: {
       onCatalogChanged: async (selectedToolUseAgent) => {
         await refreshCatalogs();
         if (!selectedToolUseAgent) return;
-        const binding = paperBindings.get(paper.key);
+        const binding = projectBindings.get(project.key);
         if (!binding || binding !== documentBinding) return;
         binding.bridge.surfaceAction({
           kind: 'launch',
@@ -1047,12 +1063,12 @@ function createWindow(options: {
     });
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({
-        workspaceState: paper.roots.workspaceState,
+        workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
-        config: paper.roots.config,
+        config: project.roots.config,
         secrets: options.secrets,
         renderer: {
-          postToRenderer: postForActivePaper,
+          postToRenderer: postForActiveProject,
         },
         prompt: {
           input: (input) =>
@@ -1134,11 +1150,11 @@ function createWindow(options: {
     const toolingSettingsController =
       new DefaultDesktopToolingSettingsController({
         onError: reportAsyncError,
-        workspaceState: paper.roots.workspaceState,
+        workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
-        config: paper.roots.config,
+        config: project.roots.config,
         renderer: {
-          postToRenderer: postForActivePaper,
+          postToRenderer: postForActiveProject,
         },
         dashboard: {
           buildItems: async (cachedResults) => {
@@ -1157,10 +1173,10 @@ function createWindow(options: {
         navigation: { openExternal: previewHost.openExternal },
         commands: {
           run: async (command: string) => {
-            if (paperBindings.get(paper.key) !== documentBinding) return;
+            if (projectBindings.get(project.key) !== documentBinding) return;
             postToRendererIfAlive({
               command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
-              session: paper.key,
+              session: project.key,
               initialCommand: command,
             });
           },
@@ -1179,21 +1195,21 @@ function createWindow(options: {
           onDetectionError: reportBackgroundError,
         }),
       });
-    paperResources.add(() => toolingSettingsController.dispose());
+    projectResources.add(() => toolingSettingsController.dispose());
     const settingsIpc = createDesktopSettingsIpc({
-      postToRenderer: postForActivePaper,
+      postToRenderer: postForActiveProject,
       agentSettingsController,
       credentialSettingsController,
       toolingSettingsController,
       globalState: options.globalState,
       secrets: options.secrets,
       ui: settingsUi,
-      session: paper.session,
+      session: project.session,
     });
     settingsIpcRef.current = settingsIpc;
-    // Holds paper-scoped subscriptions (goal state and app signals) that
+    // Holds project-scoped subscriptions (goal state and app signals) that
     // would otherwise accumulate one listener per switch or dock reactivation.
-    paperResources.add(() => {
+    projectResources.add(() => {
       if (settingsIpcRef.current === settingsIpc) {
         settingsIpcRef.current = undefined;
       }
@@ -1201,14 +1217,14 @@ function createWindow(options: {
     });
   };
   windowResources.add(
-    options.papers.onChange(() => {
-      syncPaperBindings();
-      if (activePaper() !== attachedPaper) {
-        for (const binding of paperBindings.values())
+    options.projects.onChange(() => {
+      syncProjectBindings();
+      if (activeProject() !== attachedProject) {
+        for (const binding of projectBindings.values())
           binding.browserViews.hideAll();
       }
-      attachActivePaper();
-      postPapers();
+      attachActiveProject();
+      postProjects();
     }),
   );
   const onboardingIpc = createDesktopOnboardingIpc(
@@ -1233,13 +1249,13 @@ function createWindow(options: {
       // one-shot; on a resolution failure it throws so that guard resets and a
       // later "Run Setup" click can retry.
       kickoffSetup: async () => {
-        const setupSession = activePaper().session;
+        const setupSession = activeProject().session;
         await effectRuntime().runPromise(
           Effect.tryPromise({
             try: async () => {
-              // The paper the user started setup in, taken before the first await:
+              // The project the user started setup in, taken before the first await:
               // the run and its presentation belong to it even when the window
-              // moves to another paper while the model resolves and agents load.
+              // moves to another project while the model resolves and agents load.
               const binding = activeBinding();
               if (!binding) {
                 throw new Error('Open a folder before running setup.');
@@ -1256,7 +1272,7 @@ function createWindow(options: {
               // racing the startup `loadAgents()` cannot hit "Could not find agent:
               // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
               await effectRuntime().runPromise(loadAgents());
-              await runInSession(binding.paper.session, async () =>
+              await runInSession(binding.project.session, async () =>
                 binding.execution.runValidated(
                   await effectRuntime().runPromise(
                     prepareMainViewExecutionLaunch(message, agentExecutionHost),
@@ -1321,10 +1337,10 @@ function createWindow(options: {
     },
   );
   onboardingIpcRef.current = onboardingIpc;
-  // The funnel is host state every open paper's snapshot carries (8.1).
+  // The funnel is host state every open project's snapshot carries (8.1).
   windowResources.add(
     onboardingIpc.onFunnelChange((state) => {
-      for (const binding of paperBindings.values()) {
+      for (const binding of projectBindings.values()) {
         binding.snapshot.setOnboarding(state);
       }
     }),
@@ -1347,18 +1363,19 @@ function createWindow(options: {
       onAsyncError: reportAsyncError,
     },
   );
-  /** Each document/paper owns one auxiliary transport and its resources.
-   *  Callbacks capture the paper before any asynchronous file or PTY work. */
-  function createPaperWorkspace(paper: DesktopPaper) {
+  /** Each document/project owns one auxiliary transport and its resources.
+   *  Callbacks capture the project before any asynchronous file or PTY work. */
+  function createProjectWorkspace(project: DesktopProject) {
     const post = (message: unknown) => {
-      if (paperBindings.get(paper.key)?.workspace !== workspace) return false;
+      if (projectBindings.get(project.key)?.workspace !== workspace)
+        return false;
       return postToRendererIfAlive({
         ...(message as Record<string, unknown>),
-        session: paper.key,
+        session: project.key,
       });
     };
     const ptyHost = createDesktopPtyHost({
-      cwd: () => paper.root,
+      cwd: () => project.root,
       onData: (sessionId, data) =>
         post({
           command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,
@@ -1398,10 +1415,10 @@ function createWindow(options: {
             height: Math.round(bounds.height * zoom),
           };
         },
-        getWorkspacePath: () => paper.root,
+        getWorkspacePath: () => project.root,
         getEnvironmentSummary: async () =>
-          paper.root
-            ? ((await readGitEnvironmentSummary(paper.root, {
+          project.root
+            ? ((await readGitEnvironmentSummary(project.root, {
                 onError: reportBackgroundError,
               })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY)
             : EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
@@ -1416,21 +1433,21 @@ function createWindow(options: {
     ) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
       if (!parsed.success) return false;
-      const binding = paperBindings.get(parsed.data.session);
+      const binding = projectBindings.get(parsed.data.session);
       if (!binding) {
         console.warn(
-          `Dropped a workspace request for closed paper ${parsed.data.session}`,
+          `Dropped a workspace request for closed project ${parsed.data.session}`,
         );
         return true;
       }
-      // Hidden papers retain their resources, but cannot cover the visible paper
+      // Hidden projects retain their resources, but cannot cover the visible project
       // with a late browser-bounds notification.
       if (
         parsed.data.command === DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS &&
-        binding.paper !== activePaper()
+        binding.project !== activeProject()
       )
         return true;
-      runInSession(binding.paper.session, () =>
+      runInSession(binding.project.session, () =>
         binding.workspace.handleMessage(message),
       );
       return true;
@@ -1438,12 +1455,12 @@ function createWindow(options: {
     disposeRendererResources() {
       // Navigation destroys the document, including its request correlations
       // and recording ownership. Replace its ports while retaining sessions.
-      for (const binding of paperBindings.values()) {
-        runInSession(binding.paper.session, () => binding.dispose());
+      for (const binding of projectBindings.values()) {
+        runInSession(binding.project.session, () => binding.dispose());
       }
-      paperBindings.clear();
-      syncPaperBindings();
-      attachActivePaper(true);
+      projectBindings.clear();
+      syncProjectBindings();
+      attachActiveProject(true);
     },
   };
   // The renderer owns editor dirtiness. This event is the main process's only
@@ -1463,7 +1480,7 @@ function createWindow(options: {
     { postToRenderer: postToRendererIfAlive },
     {
       readLog: () =>
-        readDesktopLogSnapshot({ workspacePath: activePaper().root }),
+        readDesktopLogSnapshot({ workspacePath: activeProject().root }),
       copyLog: async (text) => clipboard.writeText(text),
       exportLog: async (text) => {
         const result = await dialog.showSaveDialog(window, {
@@ -1478,27 +1495,27 @@ function createWindow(options: {
     },
   );
   // The desktop-only handlers, in match order. A message every one of them
-  // declines is a session message: the paper it names answers it inside
-  // that paper's session scope.
-  // Renderer traffic about papers: the list it asks for once it boots, and
+  // declines is a session message: the project it names answers it inside
+  // that project's session scope.
+  // Renderer traffic about projects: the list it asks for once it boots, and
   // the select and close requests. safeParse, not parse: dispatch runs under
   // `runInSession` with no catch, so a malformed message is dropped, not an
   // unhandled rejection.
-  const papersIpc: DesktopMessageHandler = {
+  const projectsIpc: DesktopMessageHandler = {
     handleMessage(message) {
       switch (message.command) {
-        case DESKTOP_PAPER_COMMANDS.REQUEST_PAPERS:
-          postPapers();
+        case DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS:
+          postProjects();
           return true;
-        case DESKTOP_PAPER_COMMANDS.SELECT_PAPER: {
-          const parsed = DesktopSelectPaperMessageSchema.safeParse(message);
-          if (parsed.success) selectPaper(parsed.data.key);
+        case DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT: {
+          const parsed = DesktopSelectProjectMessageSchema.safeParse(message);
+          if (parsed.success) selectProject(parsed.data.key);
           return true;
         }
-        case DESKTOP_PAPER_COMMANDS.CLOSE_PAPER: {
-          const parsed = DesktopClosePaperMessageSchema.safeParse(message);
+        case DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT: {
+          const parsed = DesktopCloseProjectMessageSchema.safeParse(message);
           if (parsed.success)
-            closePaper(parsed.data.key, parsed.data.hasUnsavedChanges);
+            closeProject(parsed.data.key, parsed.data.hasUnsavedChanges);
           return true;
         }
         default:
@@ -1513,7 +1530,7 @@ function createWindow(options: {
         settingsIpcRef.current?.handleMessage(message) ?? false,
     },
     onboardingIpc,
-    papersIpc,
+    projectsIpc,
     workspaceIpc,
     logsIpc,
     createDesktopShellIpc(shellActions),
@@ -1521,25 +1538,27 @@ function createWindow(options: {
   const hostBridge = installDesktopHostBridge(window, {
     onRendererMessage: (message) => {
       if (isDesktopCommandMessage(message)) {
-        void runInSession(activePaper().session, () => {
+        void runInSession(activeProject().session, () => {
           for (const handler of desktopHandlers) {
             if (handler.handleMessage(message)) return;
           }
         });
         return;
       }
-      // A session message names its paper: that paper's port answers it
-      // inside the paper's session scope.
+      // A session message names its project: that project's port answers it
+      // inside the project's session scope.
       const addressed = SessionMessageEnvelopeSchema.safeParse(message);
       if (!addressed.success) return;
-      const binding = paperBindings.get(addressed.data.session);
+      const binding = projectBindings.get(addressed.data.session);
       if (!binding) {
         console.warn(
           `Dropped a renderer message for session ${addressed.data.session}: not open`,
         );
         return;
       }
-      runInSession(binding.paper.session, () => binding.port.receive(message));
+      runInSession(binding.project.session, () =>
+        binding.port.receive(message),
+      );
     },
   });
   windowResources.add(() => {
@@ -1548,8 +1567,8 @@ function createWindow(options: {
   });
   const mainViewIpc = { postToRenderer: hostBridge.postToRenderer };
   ipcRef.current = mainViewIpc;
-  syncPaperBindings();
-  attachActivePaper();
+  syncProjectBindings();
+  attachActiveProject();
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(buildDesktopMenuTemplate(shellActions)),
   );
@@ -1604,10 +1623,10 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
     .then(async () => {
       // Every resume call is run-time or user-triggered, so the registry is
       // open by the time the owner reads it.
-      let papers!: DesktopPaperRegistry;
+      let projects!: DesktopProjectRegistry;
       const processResumeOwner = new DesktopProcessResumeOwner({
         sessions: () =>
-          [papers.fallback(), ...papers.list()].map((p) => p.session),
+          [projects.fallback(), ...projects.list()].map((p) => p.session),
       });
       const platformInit = await initializeElectronPlatform(
         desktopMainDir,
@@ -1615,7 +1634,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       );
       const { lifecycle } = platformInit;
       // Process root: session-lifetime resources register at creation and are
-      // disposed LIFO in the ON phase (every paper's process stores → result
+      // disposed LIFO in the ON phase (every project's process stores → result
       // toast → session, most recently opened first).
       const processResources = new DisposableStore();
       registerRuntimeShutdownHandlers(lifecycle, {
@@ -1625,14 +1644,14 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         // Agent shutdown runs first so its final events enter the
         // process-owned stores. Flush in BEFORE so persistence cannot be
         // delayed by a later ON-phase language-service disposal.
-        flushArtifacts: () => papers.flushArtifacts(),
+        flushArtifacts: () => projects.flushArtifacts(),
         // Each window's closed handler starts diff temp-dir removal before the
         // quit lifecycle drains; awaiting idle keeps the process alive until
         // the directories are actually gone.
         afterFlushArtifacts: [() => diffHostDisposeQueue.onIdle()],
         afterExecutionSettlement: [
           () => processResources.dispose(),
-          // Last: every paper's session has released its graph above.
+          // Last: every project's session has released its graph above.
           () => disposeProcessRuntime(),
         ],
       });
@@ -1647,36 +1666,48 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         hostPort(async () => {
           const warn = (message: string) =>
             console.warn(`[desktop] ${message}`);
-          papers = await openDesktopPaperRegistry({
-            dataRoot: platformInit.dataRoot,
-            processRoots: platformInit.processRoots,
-            globalConfigStore: platformInit.globalConfigStore,
-            globalState: platformInit.globalState,
-            warn,
-          });
-          processResources.add(() => papers.dispose());
+          const projectRecords = await effectRuntime().runPromise(
+            Scope.provide(
+              openDesktopProjectRecords(
+                app.getPath('userData'),
+                platformInit.ownerId,
+              ),
+              effectRuntime().scope,
+            ),
+          );
+          projects = await effectRuntime().runPromise(
+            openDesktopProjectRegistry({
+              dataRoot: platformInit.dataRoot,
+              processRoots: platformInit.processRoots,
+              globalConfigStore: platformInit.globalConfigStore,
+              records: projectRecords,
+              warn,
+            }),
+          );
+          processResources.add(() => projects.dispose());
           // Reopen every folder left open last time and show the one shown
           // last. A folder that is gone or no longer opens is reported once the
           // window exists; the others open regardless.
-          const remembered = await readRememberedDesktopPapers(
-            platformInit.globalState,
-            warn,
+          const remembered = await effectRuntime().runPromise(
+            readRememberedDesktopProjects(projectRecords, warn),
           );
-          const unopenedPapers = remembered.missing.map(
+          const unopenedProjects = remembered.missing.map(
             (root) => `${root} (no such folder; forgotten)`,
           );
           for (const root of remembered.roots) {
             await effectRuntime().runPromise(
-              hostPort(() => papers.open(root)).pipe(
+              projects.open(root).pipe(
                 Effect.catch((error) =>
                   Effect.sync(() => {
-                    unopenedPapers.push(`${root}: ${toErrorMessage(error)}`);
+                    unopenedProjects.push(`${root}: ${toErrorMessage(error)}`);
                   }),
                 ),
               ),
             );
           }
-          papers.activate(papers.list().at(-1)?.root);
+          await effectRuntime().runPromise(
+            projects.activate(projects.list().at(-1)?.root),
+          );
           // Ask the renderer to close before draining process services. A dirty
           // editor can veto that close and remain fully operational. Once the
           // window really closes, its handler calls app.quit() again and this
@@ -1692,7 +1723,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
 
           void initializeDesktopCrashReporting({
             sensitivePaths: () => [
-              ...papers.list().map((paper) => paper.root),
+              ...projects.list().map((project) => project.root),
               app.getPath('userData'),
               platformInit.dataRoot,
             ],
@@ -1709,7 +1740,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           installContentSecurityPolicy();
           reopenMainWindow = () =>
             createWindow({
-              papers,
+              projects,
               authCoordinator,
               authCallbackState,
               globalState: platformInit.globalState,
@@ -1718,11 +1749,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               resourcesPath: platformInit.resourcesPath,
             });
           reopenMainWindow();
-          if (unopenedPapers.length > 0) {
+          if (unopenedProjects.length > 0) {
             effectRuntime().runFork(
               hostPort(() =>
                 showDesktopWarningDialog(
-                  `Some papers could not be reopened:\n${unopenedPapers.join('\n')}`,
+                  `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
                 ),
               ).pipe(
                 Effect.catch((error) =>

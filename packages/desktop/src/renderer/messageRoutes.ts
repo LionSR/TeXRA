@@ -18,9 +18,9 @@ import {
 } from '../shared/desktopShellMessages';
 import { DesktopOnboardingSetStateMessageSchema } from '../shared/desktopOnboardingMessages';
 import {
-  DesktopPapersMessageSchema,
-  type DesktopPapersMessage,
-} from '../shared/desktopPaperMessages';
+  DesktopProjectsMessageSchema,
+  type DesktopProjectsMessage,
+} from '../shared/desktopProjectMessages';
 import {
   DesktopCloseDiffMessageSchema,
   DesktopShowDiffMessageSchema,
@@ -85,8 +85,8 @@ interface DesktopMessageRouteHandlers {
   renameBrowserTab(session: string, tabId: string, title: string): void;
   /** Adopts a freshly reported environment summary and repaints the shell. */
   environment(session: string, summary: DesktopEnvironmentSummary): void;
-  /** Adopts the open papers and which one this window shows. */
-  papers(message: DesktopPapersMessage): void;
+  /** Adopts the open projects and which one this window shows. */
+  projects(message: DesktopProjectsMessage): void;
 }
 
 function messageRoute<T>(
@@ -215,8 +215,8 @@ export function createMessageRoutes(
     messageRoute(DesktopEnvironmentStateMessageSchema, (message) =>
       handlers.environment(message.session, message.environment),
     ),
-    messageRoute(DesktopPapersMessageSchema, (message) =>
-      handlers.papers(message),
+    messageRoute(DesktopProjectsMessageSchema, (message) =>
+      handlers.projects(message),
     ),
   ];
 }

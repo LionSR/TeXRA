@@ -415,8 +415,8 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   font-size: var(--font-size-xs);
 }
 
-/* The paper this window shows reads as a section heading: its streams sit
-   beneath it and the header's paper chip names it, so the row itself stays
+/* The project this window shows reads as a section heading: its streams sit
+   beneath it and the header's project chip names it, so the row itself stays
    plain and only its name firms up. */
 .task-project-row.is-active .task-project-copy strong {
   font-weight: var(--font-weight-semibold);
@@ -1050,7 +1050,7 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 }
 
 /* ---------------------------------------------------------------------------
- * Papers as rail sections
+ * Projects as rail sections
  * ------------------------------------------------------------------------- */
 
 .task-sidebar-scroll {
@@ -1062,21 +1062,21 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 
 /* A sibling of the row button, not its child: WebAwesome pins a badge
    slotted into a button to the button's corner. */
-.task-paper-badge {
+.task-project-badge {
   flex: 0 0 auto;
   margin: 0 2px;
   font-size: 10px;
   line-height: 1;
 }
 
-.task-paper-badge::part(base) {
+.task-project-badge::part(base) {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
   line-height: 16px;
 }
 
-.task-paper-streams {
+.task-project-streams {
   margin: 2px 0 4px 10px;
 }
 
@@ -1121,12 +1121,12 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   color: var(--wa-color-text-quiet);
 }
 
-/* The conversation pane's paper chip and dock. */
-.task-paper-chip {
+/* The conversation pane's project chip and dock. */
+.task-project-chip {
   flex: 0 0 auto;
 }
 
-.task-paper-chip wa-button::part(base) {
+.task-project-chip wa-button::part(base) {
   gap: 6px;
 }
 
@@ -1175,14 +1175,14 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   font-size: var(--font-size-sm);
 }
 
-/* Paper and tab contents retain their DOM nodes while another owner is visible. */
-.task-paper-workbench,
+/* Project and tab contents retain their DOM nodes while another owner is visible. */
+.task-project-workbench,
 .task-workbench-retained-surface {
   height: 100%;
   min-height: 0;
 }
 
-.task-paper-workbench[hidden],
+.task-project-workbench[hidden],
 .task-workbench-retained-surface[hidden] {
   display: none;
 }

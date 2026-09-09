@@ -1,8 +1,16 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import { Effect, FileSystem } from 'effect';
+import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
+import { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords.js';
+import {
+  nodeProcesses,
+  processOwnerId,
+} from '@platform/defaults/nodeProcesses';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -66,22 +74,57 @@ describe('desktop composition root and launch environment', () => {
     ]);
   }
 
-  it('owns one session per paper and flushes them before shutdown disposal', async () => {
-    const [source, papersSource] = await Promise.all([
+  effectIt.live(
+    'reopens the ordered project record without reading or changing earlier profile state',
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const profile = yield* fs.makeTempDirectoryScoped({
+            prefix: 'texra-project-records-',
+          });
+          const oldState = join(profile, 'state', 'global.json');
+          const previous = '{"texra.desktop.openPapers":["earlier-project"]}';
+          yield* fs.makeDirectory(join(profile, 'state'));
+          yield* fs.writeFileString(oldState, previous);
+          const owner = processOwnerId(
+            yield* Effect.promise(() => nodeProcesses.selfIdentity()),
+          );
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const records = yield* openDesktopProjectRecords(profile, owner);
+              expect(yield* records.read).toEqual([]);
+              yield* Effect.all(
+                [records.remember('/first'), records.remember('/second')],
+                { concurrency: 'unbounded' },
+              );
+              yield* records.activate('/first');
+              yield* records.forget('/second');
+            }),
+          );
+          const reopened = yield* openDesktopProjectRecords(profile, owner);
+          expect(yield* reopened.read).toEqual(['/first']);
+          expect(yield* fs.readFileString(oldState)).toBe(previous);
+        }),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
+
+  it('owns one session per project and flushes them before shutdown disposal', async () => {
+    const [source, projectsSource] = await Promise.all([
       readDesktopMainIndex(),
-      readFile(desktopSourcePath('main', 'desktopPapers.ts'), 'utf8'),
+      readFile(desktopSourcePath('main', 'desktopProjects.ts'), 'utf8'),
     ]);
 
-    // Sessions are opened in the paper registry only, one per root, through
+    // Sessions are opened in the project registry only, one per root, through
     // the process's session owner.
     expect(source).not.toMatch(/openSession\(/u);
-    expect(papersSource.match(/openSession\(/gu)).toHaveLength(1);
-    expect(source).toMatch(/createWindow\(\{[\s\S]*?\bpapers,[\s\S]*?\}\)/u);
-    // Every open paper is bound to the window: one backend with this
+    expect(projectsSource.match(/openSessionEffect\(/gu)).toHaveLength(1);
+    expect(source).toMatch(/createWindow\(\{[\s\S]*?\bprojects,[\s\S]*?\}\)/u);
+    // Every open project is bound to the window: one backend with this
     // window's port (the framer's), one host snapshot, one presentation each.
     expect(source).toContain('new SessionBridge({');
     expect(source).toContain('createHostSnapshotSource({');
-    expect(source).toContain('for (const [key, paper] of open)');
+    expect(source).toContain('for (const [key, project] of open)');
 
     expectOrderedAfter(source, 'installDesktopWindowTitle(', [
       'window.loadURL(',
@@ -101,7 +144,7 @@ describe('desktop composition root and launch environment', () => {
       'afterAgentShutdown:',
       'killActiveRecording()',
       'flushArtifacts:',
-      'papers.flushArtifacts()',
+      'projects.flushArtifacts()',
       'afterFlushArtifacts:',
       'diffHostDisposeQueue.onIdle()',
       'afterExecutionSettlement:',

@@ -5,6 +5,7 @@ import { test, expect } from '@playwright/test';
 
 import {
   closeTexraApp,
+  findWorkspaceStoragePath,
   dismissOnboarding,
   launchTexraApp,
   setSettingsTab,
@@ -13,7 +14,6 @@ import {
 import {
   cleanupDirectory,
   createIsolatedProfile,
-  findWorkspaceStoragePath,
 } from './workspaceStorageFixture.js';
 
 const MEMORY_FILE_NAME = 'playwright-relaunch-memory.md';
@@ -25,11 +25,11 @@ const MEMORY_FILE_CONTENT = `${MEMORY_PREVIEW_TEXT}
 It verifies that the same workspace storage is read after relaunch.
 `;
 
-function writeMemoryEntry(input: {
+async function writeMemoryEntry(input: {
   userDataPath: string;
   workspacePath: string;
-}): void {
-  const memoryDir = join(findWorkspaceStoragePath(input), 'memories');
+}): Promise<void> {
+  const memoryDir = join(await findWorkspaceStoragePath(input), 'memories');
   mkdirSync(memoryDir, { recursive: true });
   writeFileSync(join(memoryDir, MEMORY_FILE_NAME), MEMORY_FILE_CONTENT, 'utf8');
 }
@@ -125,7 +125,7 @@ test('settings memory entries survive relaunch with shared user data', async () 
     currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
     await dismissOnboarding(currentLaunch.page);
 
-    writeMemoryEntry({ userDataPath, workspacePath });
+    await writeMemoryEntry({ userDataPath, workspacePath });
     await verifyMemoryEntryIsListed(currentLaunch);
 
     await closeTexraApp(currentLaunch);

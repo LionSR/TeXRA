@@ -149,7 +149,7 @@ describe('desktop preview host', () => {
         >[0]['execution'],
         files,
         snapshot: createHostSnapshotSource({
-          paper: {
+          project: {
             key: 'paper',
             name: 'Paper',
             initials: 'P',

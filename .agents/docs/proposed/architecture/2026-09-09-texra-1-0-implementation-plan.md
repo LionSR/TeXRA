@@ -185,12 +185,18 @@ they still serve the product.
 This can proceed independently once project identity is settled. Rename the
 desktop registry, messages, state keys, shared display record, renderer
 workbench, and interface text together. The main locations are
-`desktopPapers.ts`, `desktopPaperMessages.ts`, `hostSnapshot.ts`,
-`hostSnapshotSource.ts`, `paperWorkbench.ts`, and `taskShell.ts`.
+`desktopProjects.ts`, `desktopProjectMessages.ts`, `hostSnapshot.ts`,
+`hostSnapshotSource.ts`, `projectWorkbench.ts`, and `taskShell.ts`.
 
 Adopt the new internal names directly, without aliases or a desktop-state
 migration. Retain **paper** for scholarly documents and literature operations.
 Preserve the existing per-folder session and resource ownership behavior.
+
+The remembered-project list is a private ordered snapshot in the desktop
+profile's versioned SQLite database. Registry operations use native Effects
+and the existing desktop process scope owns the connection. Acceptance covers
+reopening the committed order, concurrent selection updates, unchanged earlier
+profile bytes, and consistent project names from host messages to the renderer.
 
 ## 5. Work to stop scheduling
 

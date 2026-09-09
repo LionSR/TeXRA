@@ -25,7 +25,10 @@ import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
-import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import {
+  nodeProcesses,
+  processOwnerId,
+} from '@platform/defaults/nodeProcesses';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
@@ -37,6 +40,7 @@ import {
   openTexraConfigStores,
 } from '@platform/defaults/nodeStores';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import type { OwnerId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
@@ -51,13 +55,13 @@ import { showDesktopWarningDialog } from './warningDialog.js';
 export interface ElectronPlatformInitResult {
   /**
    * The no-workspace roots: what the window shows before a folder is open,
-   * and what every paper's roots are built beside.
+   * and what every project's roots are built beside.
    */
   processRoots: WorkspaceRoots;
   /**
-   * The store over the global config file. Every paper's config provider
+   * The store over the global config file. Every project's config provider
    * layers its own workspace store over this one instance, so a global
-   * setting changed from one paper is what the others read.
+   * setting changed from one project is what the others read.
    */
   globalConfigStore: ConfigStore;
   lifecycle: LifecycleHost;
@@ -68,6 +72,7 @@ export interface ElectronPlatformInitResult {
    * `platform()` singleton: one owner, one place to substitute in a test.
    */
   globalState: StateStore;
+  ownerId: OwnerId;
   secrets: PlatformSecrets;
   agentDirectories: AgentDirectoriesPort;
   /**
@@ -98,19 +103,20 @@ export async function initializeElectronPlatform(
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.
   const dataRoot = resolveDesktopDataRoot(userDataPath);
-  // The process roots are the no-workspace roots. Each open paper gets its
+  // The process roots are the no-workspace roots. Each open project gets its
   // own roots (desktopPapers.ts); this pair only backs the window before a
   // folder is open.
   const storage = new WorkspaceStorageProvider(dataRoot, undefined);
   // The one Effect runtime of this process (PRD 7.7) is installed first: the
-  // stores below open as Effect programs, and every paper's session graph and
+  // stores below open as Effect programs, and every project's session graph and
   // Promise-facing fiber runs on it. The entry disposes it last
-  // (`disposeProcessRuntime`), after execution settlement and the papers'
+  // (`disposeProcessRuntime`), after execution settlement and the projects'
   // release of their graphs. Its identity is the Node default
   // `createNodePlatform` wires as `platform().processes`, read before
   // installing: an opener that uses the synchronous `open` would otherwise
   // face an asynchronous layer build.
-  installProcessRuntime(await nodeProcesses.selfIdentity());
+  const processStart = await nodeProcesses.selfIdentity();
+  installProcessRuntime(processStart);
   const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
     await effectRuntime().runPromise(
       Effect.gen(function* () {
@@ -224,7 +230,7 @@ export async function initializeElectronPlatform(
   // the extension; one call registers every row of the prompt table, so
   // desktop cannot wire one prompt and forget another the way it once did.
   initializeBundledPrompts(resourcesPath);
-  // Project skills follow each paper's session; only the bundle is fixed.
+  // Project skills follow each project's session; only the bundle is fixed.
   initializeNodeRuntimeSkills({ resourcesPath });
 
   await effectRuntime().runPromise(
@@ -241,6 +247,7 @@ export async function initializeElectronPlatform(
     globalConfigStore: configStores.global,
     lifecycle,
     globalState: globalStateStore,
+    ownerId: processOwnerId(processStart),
     secrets,
     agentDirectories,
     dataRoot,

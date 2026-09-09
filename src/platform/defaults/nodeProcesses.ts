@@ -6,13 +6,25 @@
  * process; none of them is converted to a clock value, so a wall-clock step
  * cannot make a live owner look dead.
  */
+import { hostname } from 'node:os';
+
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { createLog } from '@logger/logUtils';
+import type { OwnerId } from '@shared/schemas';
 
 import type { ProcessesPort } from '../interfaces';
+
+/** This process's complete owner identity (contract C5). */
+export function processOwnerId(processStart: string | undefined): OwnerId {
+  return JSON.stringify([
+    hostname().toLowerCase(),
+    process.pid,
+    processStart ?? null,
+  ]);
+}
 
 const log = createLog('NodeProcesses');
 const execFileAsync = promisify(execFile);

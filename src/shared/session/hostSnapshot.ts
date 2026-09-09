@@ -25,14 +25,14 @@ import { getBasename } from '@utils/core';
 
 const visible = { visible: z.boolean() };
 
-/** How a paper is named in a rail row, a chip, and the hero subtitle. */
-const PaperDisplaySchema = z.object({
+/** How a project is named in a rail row, a chip, and the hero subtitle. */
+const ProjectDisplaySchema = z.object({
   key: z.string().min(1),
   name: z.string(),
   initials: z.string(),
   subtitle: z.string(),
 });
-export type PaperDisplay = z.infer<typeof PaperDisplaySchema>;
+export type ProjectDisplay = z.infer<typeof ProjectDisplaySchema>;
 
 /** The initials a rail row and the hero badge show for a folder. */
 function workspaceInitials(workspacePath: string | undefined): string {
@@ -50,14 +50,14 @@ function workspaceInitials(workspacePath: string | undefined): string {
 /** The display record of one open folder, produced by the host once so no
  *  renderer derives a name or initials from a path; the no-folder session
  *  reads as the prompt to open one. */
-export function paperDisplayOf(
+export function projectDisplayOf(
   key: string,
   root: string | undefined,
-): PaperDisplay {
+): ProjectDisplay {
   if (root === undefined) {
     return {
       key,
-      name: 'No paper open',
+      name: 'No project open',
       initials: 'TX',
       subtitle: 'Open a folder to start',
     };
@@ -67,7 +67,7 @@ export function paperDisplayOf(
 }
 
 export const HostSnapshotSchema = z.object({
-  paper: PaperDisplaySchema,
+  project: ProjectDisplaySchema,
   agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
@@ -91,9 +91,9 @@ export const HostSnapshotSchema = z.object({
 });
 export type HostSnapshot = z.infer<typeof HostSnapshotSchema>;
 
-export function emptyHostSnapshot(paper: PaperDisplay): HostSnapshot {
+export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {
-    paper,
+    project,
     agentOptions: { toolUse: [], workflow: [] },
     modelOptions: [],
     teamOptions: [],

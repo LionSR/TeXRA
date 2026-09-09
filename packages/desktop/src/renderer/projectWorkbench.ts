@@ -1,5 +1,5 @@
-// The document resources of one paper. Selection changes which owner is visible;
-// only tab closure, paper closure, or document disposal releases its resources.
+// The document resources of one project. Selection changes which owner is visible;
+// only tab closure, project closure, or document disposal releases its resources.
 
 import { nothing, type TemplateResult } from 'lit';
 
@@ -27,7 +27,7 @@ import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
 import { createWorkbenchController } from './workbenchController';
 
-export function createPaperWorkbench(options: {
+export function createProjectWorkbench(options: {
   session: string;
   root: string | undefined;
   surfaces: SessionSurfaces;
@@ -43,7 +43,7 @@ export function createPaperWorkbench(options: {
 }) {
   const { session, surfaces } = options;
   const surface = surfaces.get(session);
-  if (!surface) throw new Error(`No surface for paper ${session}.`);
+  if (!surface) throw new Error(`No surface for project ${session}.`);
   const restored = surface.surface$.get().workbench;
   const layout =
     restored === null
@@ -98,7 +98,7 @@ export function createPaperWorkbench(options: {
         setWorkbenchTabDirty(getState(), `workbench:editor:${path}`, dirty),
       ),
     onError: (error) => {
-      // Closing a paper rejects its pending I/O as part of disposal.
+      // Closing a project rejects its pending I/O as part of disposal.
       if (!disposed) console.error('TeXRA editor pane', error);
     },
   });

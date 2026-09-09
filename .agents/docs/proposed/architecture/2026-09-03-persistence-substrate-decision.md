@@ -327,13 +327,21 @@ every row; neither is derived from the other.
 latest-of-type lookup never has to disambiguate targets and no key column
 exists. A database `AggregateId` is the canonical encoding
 `aggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`, with kind
-`stream`, `execution`, `workflow-checkpoint`, `inquiry`, `session`, or the
-temporary `migration`.
+`stream`, `execution`, `workflow-checkpoint`, `inquiry`, `session`, or
+`desktop-projects`.
 This encoding is injective even when logical ids coincide or contain
 punctuation. Raw logical ids never serve as database keys. The constructor
 accepts a kind and an unencoded logical id; encoded keys are a distinct type
 and are never encoded twice. External `streamId`, `executionId`, thread ids,
 and their payload fields remain unchanged.
+
+The desktop profile owns `aggregateId('desktop-projects', 'remembered')`.
+Its private `desktop.projects.changed` event contains the ordered project
+paths, with the active project last. The latest committed event is the
+complete reopening list. The desktop process owns the connection at
+`<Electron userData>/v1/global-storage/texra.db`; project sessions do not own
+this record, and it is excluded from session display transport. Each write
+borrows its aggregate claim for that transaction only.
 
 Every `aggregate_id`, `parent_id`, read or claim argument, per-aggregate fold
 map, and transport subscription key uses this qualified `AggregateId`.

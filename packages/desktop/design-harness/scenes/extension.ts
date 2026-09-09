@@ -29,9 +29,9 @@ import {
   withWaitingGrandchild,
 } from '@test/shared/session/fanOutScenario';
 
-// ── the host snapshot: one paper, the catalogs the composer and sheet read ──
+// ── the host snapshot: one project, the catalogs the composer and sheet read ──
 
-const PAPER = {
+const PROJECT = {
   key: '/paper',
   name: 'LDT-Lean-Paper',
   initials: 'LP',
@@ -40,7 +40,7 @@ const PAPER = {
 
 function host(): HostSnapshot {
   return {
-    ...emptyHostSnapshot(PAPER),
+    ...emptyHostSnapshot(PROJECT),
     agentOptions: {
       toolUse: [
         { value: 'orchestrator', label: 'orchestrator', isOrchestrator: true },

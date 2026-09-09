@@ -518,6 +518,14 @@ export const databaseLayer = (
       ) =>
         Effect.forEach(prepared, ({ draft, payload }) =>
           Effect.gen(function* () {
+            if (draft.type === 'desktop.projects.changed') {
+              // Profile-state writes own their aggregate only during this transaction.
+              yield* sql.unsafe<Record<string, unknown>>(claim, [
+                identity.ownerId,
+                draft.aggregateId,
+                null,
+              ]);
+            }
             if (draft.type === 'inquiryThreadUpdated') {
               // Inquiry writes borrow their claim for this transaction only.
               yield* sql.unsafe<Record<string, unknown>>(claim, [
@@ -691,6 +699,12 @@ export const databaseLayer = (
                 `No commit assigned for aggregate ${draft.aggregateId}`,
               );
             }
+            if (draft.type === 'desktop.projects.changed') {
+              yield* sql.unsafe<Record<string, unknown>>(release, [
+                JSON.stringify([draft.aggregateId]),
+                identity.ownerId,
+              ]);
+            }
             if (draft.type === 'inquiryThreadUpdated') {
               yield* sql.unsafe<Record<string, unknown>>(reparentInquiry, [
                 draft.parentStreamId === null
@@ -770,6 +784,16 @@ export const databaseLayer = (
                 executionChildren,
                 [id],
               )).map(decodeEvent);
+            }),
+          ),
+        readDesktopProjects: (id) =>
+          query(
+            Effect.gen(function* () {
+              const row = (yield* sql.unsafe<Record<string, unknown>>(
+                `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
+                [id],
+              ))[0];
+              return row === undefined ? undefined : decodeEvent(row);
             }),
           ),
         readAggregate: (id, fromSeq) =>

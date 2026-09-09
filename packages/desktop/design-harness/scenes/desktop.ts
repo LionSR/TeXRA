@@ -1,5 +1,5 @@
 // Desktop scenes: the real rail, workbench, and pane templates over folded
-// SessionViews (one per paper), never hand-built stream fixtures. Screenshots
+// SessionViews (one per project), never hand-built stream fixtures. Screenshots
 // of these are the verification for the desktop boards.
 import { html, nothing, type TemplateResult } from 'lit';
 
@@ -7,10 +7,10 @@ import { createPdfPane } from '@desktop/renderer/pdfPane.js';
 import { subagentsPaneTemplate } from '@desktop/renderer/subagentsPane.js';
 import {
   conversationDockTemplate,
-  paperChipTemplate,
+  projectChipTemplate,
   taskSidebarTemplate,
   workbenchTabsTemplate,
-  type RailPaper,
+  type RailProject,
 } from '@desktop/renderer/taskShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopTaskShell.js';
 import {
@@ -18,7 +18,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type StreamTabId,
 } from '@shared/schemas';
-import type { PaperDisplay } from '@shared/session/hostSnapshot';
+import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import {
   emptySessionView,
   type SessionView,
@@ -40,7 +40,7 @@ import {
   withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
 
-// ── fixtures: three papers, three folded views ────────────────────────────
+// ── fixtures: three projects, three folded views ────────────────────────────
 
 /** The fan-out with nothing waiting: the same replay minus the approval. */
 function runningOnlyView(): SessionView {
@@ -115,18 +115,18 @@ const display = (
   key: string,
   name: string,
   subtitle: string,
-): PaperDisplay => ({
+): ProjectDisplay => ({
   key,
   name,
   initials: key,
   subtitle,
 });
 
-function paper(
-  displayRecord: PaperDisplay,
+function project(
+  displayRecord: ProjectDisplay,
   view: SessionView,
   selected: StreamTabId | null = null,
-): RailPaper {
+): RailProject {
   const surface: Surface = { ...emptySurface(displayRecord.key), selected };
   return { display: displayRecord, view, surface };
 }
@@ -148,9 +148,9 @@ const sidebarCallbacks = {
   onSearch: noop,
   onToggleFiles: noop,
   onOpenFolder: noop,
-  onSelectPaper: noop,
-  onClosePaper: noop,
-  onTogglePaperCollapsed: noop,
+  onSelectProject: noop,
+  onCloseProject: noop,
+  onToggleProjectCollapsed: noop,
   onOpenTerminal: noop,
   onOpenBrowser: noop,
   onOpenSettings: noop,
@@ -168,7 +168,7 @@ const filesPlaceholder = document.createElement('div');
 // ── real chrome over the fixtures ─────────────────────────────────────────
 
 const rail = (
-  papers: readonly RailPaper[],
+  projects: readonly RailProject[],
   shell: Shell,
   options: { subagentsOpen?: boolean } = {},
 ) =>
@@ -176,7 +176,7 @@ const rail = (
     {
       files: filesPlaceholder,
       filesExpanded: false,
-      papers,
+      projects,
       shell,
       subagentsOpen: options.subagentsOpen ?? false,
       commandsLabel: 'Commands',
@@ -197,8 +197,8 @@ const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
 /** The conversation pane as `main.ts` composes it: the desktop header row,
  *  then the one conversation shell's pieces for the selected stream. */
 const conversationPane = (
-  papers: readonly RailPaper[],
-  active: RailPaper,
+  projects: readonly RailProject[],
+  active: RailProject,
   stream: StreamView | undefined,
   body: TemplateResult | typeof nothing,
   options: { chip?: boolean; dock?: boolean } = {},
@@ -211,7 +211,7 @@ const conversationPane = (
       ${
         options.chip === false
           ? nothing
-          : paperChipTemplate(papers, active, noop)
+          : projectChipTemplate(projects, active, noop)
       }
       <span class="task-header-spacer"></span>
       ${iconBtn('circle-stop', 'Stop')}${iconBtn('window-maximize', 'Layout')}${iconBtn('ellipsis', 'More')}
@@ -237,9 +237,9 @@ const conversationPane = (
 
 /** What `progress-app` puts in the column for a selected stream: its header
  *  (label, ancestors path, status) over its transcript. */
-const transcriptBody = (paper: RailPaper, stream: StreamView) =>
-  html`<stream-header .stream=${stream} .view=${paper.view}></stream-header>
-    <log-list .stream=${stream} .surface=${paper.surface}></log-list>`;
+const transcriptBody = (project: RailProject, stream: StreamView) =>
+  html`<stream-header .stream=${stream} .view=${project.view}></stream-header>
+    <log-list .stream=${stream} .surface=${project.surface}></log-list>`;
 
 const pdfPane = createPdfPane();
 const tab = (
@@ -276,11 +276,15 @@ const desktopFrame = (cols: string, ...panes: TemplateResult[]) =>
 
 // ── scenes ────────────────────────────────────────────────────────────────
 
-/** Plan 3: papers as sections; the selected conversation (the fixture's
+/** Plan 3: projects as sections; the selected conversation (the fixture's
  *  chat transcript is the child's); the PDF in the workbench. */
-function sceneDesktopPapers(): TemplateResult {
-  const lp = paper(LP, withConversation(), CHILD);
-  const papers = [lp, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
+function sceneDesktopProjects(): TemplateResult {
+  const lp = project(LP, withConversation(), CHILD);
+  const projects = [
+    lp,
+    project(CT, runningOnlyView()),
+    project(TN, fanOutView()),
+  ];
   const stream = lp.view.streams.get(CHILD);
   const tabs = [
     tab('pdf', 'main.pdf', '/paper/main.pdf'),
@@ -289,9 +293,9 @@ function sceneDesktopPapers(): TemplateResult {
   ];
   return desktopFrame(
     '288px minmax(0,1fr) 440px',
-    rail(papers, shellOf('LP', ['LP', 'CT', 'TN'])),
+    rail(projects, shellOf('LP', ['LP', 'CT', 'TN'])),
     conversationPane(
-      papers,
+      projects,
       lp,
       stream,
       stream ? transcriptBody(lp, stream) : nothing,
@@ -300,17 +304,17 @@ function sceneDesktopPapers(): TemplateResult {
   );
 }
 
-/** The rail with one paper open: the sections layout already reads as the
- *  Plan 2 switcher card (mark, name, folder, badge, Add paper). */
-function sceneDesktopOnePaper(): TemplateResult {
-  const lp = paper(LP, withConversation(), CHILD);
-  const papers = [lp];
+/** The rail with one project open: the sections layout already reads as the
+ *  Plan 2 switcher card (mark, name, folder, badge, Add project). */
+function sceneDesktopOneProject(): TemplateResult {
+  const lp = project(LP, withConversation(), CHILD);
+  const projects = [lp];
   const stream = lp.view.streams.get(CHILD);
   return desktopFrame(
     '288px minmax(0,1fr)',
-    rail(papers, shellOf('LP', ['LP'])),
+    rail(projects, shellOf('LP', ['LP'])),
     conversationPane(
-      papers,
+      projects,
       lp,
       stream,
       stream ? transcriptBody(lp, stream) : nothing,
@@ -318,18 +322,22 @@ function sceneDesktopOnePaper(): TemplateResult {
   );
 }
 
-/** A paper with no streams is a distinct Surface with its own composer
+/** A project with no streams is a distinct Surface with its own composer
  *  (PRD 9): its section is empty, the conversation is the launch state, and
- *  the other papers keep their badges. The running paper's row is folded so
- *  its badge shows beside the waiting paper's amber one. */
-function sceneDesktopEmptyPaper(): TemplateResult {
-  const co = paper(CO, emptySessionView(CO.key));
-  const papers = [co, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
+ *  the other projects keep their badges. The running project's row is folded so
+ *  its badge shows beside the waiting project's amber one. */
+function sceneDesktopEmptyProject(): TemplateResult {
+  const co = project(CO, emptySessionView(CO.key));
+  const projects = [
+    co,
+    project(CT, runningOnlyView()),
+    project(TN, fanOutView()),
+  ];
   return desktopFrame(
     '288px minmax(0,1fr)',
-    rail(papers, shellOf('CO', ['CO', 'CT', 'TN'])),
+    rail(projects, shellOf('CO', ['CO', 'CT', 'TN'])),
     conversationPane(
-      papers,
+      projects,
       co,
       undefined,
       html`<div class="h-hero">
@@ -343,17 +351,21 @@ function sceneDesktopEmptyPaper(): TemplateResult {
 /** The window at 900 px: the rail keeps its 288 px and the conversation
  *  column takes what is left; the workbench is closed. */
 function sceneDesktopNarrow(): TemplateResult {
-  const lp = paper(LP, withConversation(), CHILD);
-  const papers = [lp, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
+  const lp = project(LP, withConversation(), CHILD);
+  const projects = [
+    lp,
+    project(CT, runningOnlyView()),
+    project(TN, fanOutView()),
+  ];
   const stream = lp.view.streams.get(CHILD);
   return html`<div
     class="h-desktop"
     id="frame"
     style="grid-template-columns:288px minmax(0,1fr);width:900px"
   >
-    ${rail(papers, shellOf('LP', ['LP', 'CT', 'TN']))}
+    ${rail(projects, shellOf('LP', ['LP', 'CT', 'TN']))}
     ${conversationPane(
-      papers,
+      projects,
       lp,
       stream,
       stream ? transcriptBody(lp, stream) : nothing,
@@ -364,8 +376,12 @@ function sceneDesktopNarrow(): TemplateResult {
 /** Desktop 5: the rail lists top-level streams only while the Subagents
  *  workbench tab owns the tree; a child is selected. */
 function sceneDesktopSubagents(): TemplateResult {
-  const lp = paper(LP, withConversation(), CHILD);
-  const papers = [lp, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
+  const lp = project(LP, withConversation(), CHILD);
+  const projects = [
+    lp,
+    project(CT, runningOnlyView()),
+    project(TN, fanOutView()),
+  ];
   const stream = lp.view.streams.get(CHILD);
   const root = lp.view.streams.get(ROOT);
   const tabs = [
@@ -374,9 +390,9 @@ function sceneDesktopSubagents(): TemplateResult {
   ];
   return desktopFrame(
     '288px minmax(0,1fr) 400px',
-    rail(papers, shellOf('LP', ['LP', 'CT', 'TN']), { subagentsOpen: true }),
+    rail(projects, shellOf('LP', ['LP', 'CT', 'TN']), { subagentsOpen: true }),
     conversationPane(
-      papers,
+      projects,
       lp,
       stream,
       stream ? transcriptBody(lp, stream) : nothing,
@@ -401,14 +417,14 @@ function sceneDesktopRun(): TemplateResult {
   const rootId = view.order.find(
     (id) => view.streams.get(id)?.category === 'workflow',
   );
-  const co = paper(CO, view, rootId ?? null);
-  const papers = [co, paper(LP, fanOutView())];
+  const co = project(CO, view, rootId ?? null);
+  const projects = [co, project(LP, fanOutView())];
   const stream = rootId ? view.streams.get(rootId) : undefined;
   return desktopFrame(
     '288px minmax(0,1fr)',
-    rail(papers, shellOf('CO', ['CO', 'LP'])),
+    rail(projects, shellOf('CO', ['CO', 'LP'])),
     conversationPane(
-      papers,
+      projects,
       co,
       stream,
       stream?.category === 'workflow'
@@ -426,9 +442,9 @@ function sceneDesktopRun(): TemplateResult {
 }
 
 export const desktopScenes: Record<string, () => TemplateResult> = {
-  'desktop-papers': sceneDesktopPapers,
-  'desktop-one-paper': sceneDesktopOnePaper,
-  'desktop-empty-paper': sceneDesktopEmptyPaper,
+  'desktop-projects': sceneDesktopProjects,
+  'desktop-one-project': sceneDesktopOneProject,
+  'desktop-empty-project': sceneDesktopEmptyProject,
   'desktop-narrow': sceneDesktopNarrow,
   'desktop-subagents': sceneDesktopSubagents,
   'desktop-run': sceneDesktopRun,

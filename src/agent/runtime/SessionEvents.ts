@@ -5,9 +5,6 @@
  * prefix. Wake counters and commit ordinals are separate coordinates, so a
  * claim change can wake a reader without inventing an event.
  */
-// Node imports
-import { hostname } from 'node:os';
-
 // Third-party imports
 import { Effect, Layer, Ref, Stream, SubscriptionRef } from 'effect';
 
@@ -16,7 +13,6 @@ import {
   aggregateId as qualifyAggregateId,
   isDisplaySessionEvent,
   type CommitOrdinal,
-  type OwnerId,
   type SessionEvent,
   type DisplaySessionEvent,
   type SessionEventDraft,
@@ -27,15 +23,6 @@ import {
   SessionEvents,
   type SessionCursor,
 } from '@shared/session/sessionEvents';
-
-/** This process's complete owner identity (contract C5). */
-export function processOwnerId(processStart: string | undefined): OwnerId {
-  return JSON.stringify([
-    hostname().toLowerCase(),
-    process.pid,
-    processStart ?? null,
-  ]);
-}
 
 /** The tail drain (C7): read forward from the caller's position on each
  * wake, never past the committed upper bound captured for that read. A level says "there is more", not "there is one more", so a
