@@ -10,9 +10,6 @@ import type {
   LanguageModelReference,
 } from '@platform/languageModel';
 
-const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
-const MODEL_ACCESS_DISCOVERY_ATTEMPTS = 2;
-
 /**
  * The Copilot access route for one canonical base model: the exact editor
  * model reference requests must use, plus the access state the editor last
@@ -22,6 +19,8 @@ const MODEL_ACCESS_DISCOVERY_ATTEMPTS = 2;
 export interface CopilotModelRoute {
   readonly access: LanguageModelAccessState;
   readonly reference: LanguageModelReference;
+  /** Exact editor version observed during this catalogue discovery. */
+  readonly version: string;
   /** Base config with the editor's context ceiling and subscription pricing. */
   readonly effectiveConfig: ModelConfig;
 }
@@ -109,6 +108,7 @@ async function discoverCopilotRoutes(): Promise<
         vendor: info.vendor,
         id: info.id,
       },
+      version: info.version,
       effectiveConfig: {
         ...MODEL_CONFIGS[baseModel],
         ...zeroCostAccessOverrides(info.maxInputTokens),
@@ -256,54 +256,4 @@ export function getRuntimeModelDirectFallback(
         chatGptSubscriptionEligible: Boolean(config.codexSubscription),
       }
     : undefined;
-}
-
-type RuntimeModelAccessRequestResult =
-  'already-allowed' | 'requested' | 'unavailable';
-
-/**
- * Ask the editor for access to one discovered model. Call only from a direct
- * user action: VS Code permits the first consent-producing request only there.
- */
-export async function requestRuntimeModelAccess(
-  model: string,
-): Promise<RuntimeModelAccessRequestResult> {
-  let refreshResult: RefreshRuntimeModelRegistryResult = 'superseded';
-  for (
-    let attempt = 0;
-    attempt < MODEL_ACCESS_DISCOVERY_ATTEMPTS && refreshResult === 'superseded';
-    attempt += 1
-  ) {
-    refreshResult = await refreshRuntimeModelRegistry({ forceDiscovery: true });
-  }
-  // Repeated native invalidations must fail closed rather than authorize from
-  // the retained last-known catalogue.
-  if (refreshResult === 'superseded') return 'unavailable';
-
-  const route = catalogue.entries.get(model);
-  if (!route) return 'unavailable';
-  if (route.access === 'allowed') return 'already-allowed';
-  if (route.access === 'unavailable') return 'unavailable';
-
-  const signal = AbortSignal.timeout(MODEL_ACCESS_REQUEST_TIMEOUT_MS);
-  for await (const _part of platform().languageModel.sendRequest(
-    route.reference,
-    [
-      {
-        role: 'user',
-        content: [
-          {
-            kind: 'text',
-            text: 'Reply with OK to confirm language-model access for TeXRA.',
-          },
-        ],
-      },
-    ],
-    { justification: 'Use Copilot models in TeXRA.' },
-    signal,
-  )) {
-    // The response is intentionally discarded; this request exists to let the
-    // editor present its native consent prompt after the user clicks Grant.
-  }
-  return 'requested';
 }

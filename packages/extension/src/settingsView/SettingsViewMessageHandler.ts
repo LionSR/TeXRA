@@ -9,6 +9,8 @@
  * subscription provider).
  */
 import * as vscode from 'vscode';
+import { Cause, Effect, Exit } from 'effect';
+import { ModelError } from '@texra-ai/llm/turn';
 
 // Shared schemas and dispatchers
 import { defaultSession } from '@agent/runtime';
@@ -34,6 +36,7 @@ import {
 } from '@frontend/latex/inlineCriticism';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -45,14 +48,12 @@ import {
 } from '@model/apiProviders';
 import {
   invalidateRuntimeModelRegistry,
-  requestRuntimeModelAccess,
+  copilotRouteForModel,
+  refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
-import {
-  LANGUAGE_MODEL_PORT_ERROR_CODE,
-  LanguageModelPortError,
-} from '@platform/languageModel';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -191,7 +192,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       ctx,
       () => this.refreshAfterSubscriptionAuthChange(),
     );
-    this.handlerRegistry = this.createHandlerRegistry();
+    this.handlerRegistry = this.createHandlerRegistry(context);
 
     context.subscriptions.push(
       {
@@ -244,7 +245,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     return handlers[providerId].handleSignIn();
   }
 
-  private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
+  private createHandlerRegistry(
+    context: vscode.ExtensionContext,
+  ): SettingsViewInboundHandlerRegistry {
     return {
       webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
       getMemoryData: () =>
@@ -281,7 +284,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           },
         ),
       requestModelAccess: (message) =>
-        this.handleRequestModelAccess(message.modelName),
+        this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>
         this.handleClearCopilotRoute(message.modelName),
       setAgentEnabled: (message) =>
@@ -370,16 +373,32 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
-    try {
-      const delivered = await webview.postMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-        items: GoalStore.list(),
-      });
-      if (!delivered) {
-        throw new Error('settings webview is no longer available');
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(this.channel, 'Failed to load goals', error);
+    const result = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: () =>
+          webview.postMessage({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+            items: GoalStore.list(),
+          }),
+        catch: (error) => error,
+      }).pipe(
+        Effect.flatMap((delivered) =>
+          delivered
+            ? Effect.void
+            : Effect.fail(new Error('settings webview is no longer available')),
+        ),
+      ),
+    );
+    if (Exit.isFailure(result)) {
+      const reason =
+        result.cause.reasons.length === 1 ? result.cause.reasons[0] : undefined;
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to load goals',
+        reason && Cause.isFailReason(reason)
+          ? reason.error
+          : new Error(Cause.pretty(result.cause), { cause: result.cause }),
+      );
     }
   }
 
@@ -654,35 +673,114 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async handleRequestModelAccess(modelName: string): Promise<void> {
+  private async handleRequestModelAccess(
+    modelName: string,
+    context: vscode.ExtensionContext,
+  ): Promise<void> {
     try {
-      const result = await requestRuntimeModelAccess(modelName);
-      if (result === 'unavailable') {
-        await showLoggedInfoMessage(
-          this.channel,
-          'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
+      const discovery = await effectRuntime().runPromiseExit(
+        Effect.gen(function* () {
+          // Retry one superseded discovery, then fail closed rather than
+          // authorize from the retained presentation catalogue.
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            const result = yield* Effect.tryPromise({
+              try: () => refreshRuntimeModelRegistry({ forceDiscovery: true }),
+              catch: (error) => error,
+            });
+            if (result === 'current') return copilotRouteForModel(modelName);
+          }
+          return undefined;
+        }),
+      );
+      const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
+      let result: Exit.Exit<unknown, unknown> = discovery;
+      if (route?.access === 'consent-required') {
+        result = await effectRuntime().runPromiseExit(
+          Effect.gen(function* () {
+            const model = yield* acquireVscodeLanguageModel(
+              context,
+              {
+                protocol: 'vscode-lm',
+                requestedModel: route.reference.id,
+                deployment: {
+                  vendor: route.reference.vendor,
+                  version: route.version,
+                },
+                supportsImageInput: false,
+                supportsToolCalling: false,
+                defaults: { justification: 'Use Copilot models in TeXRA.' },
+              },
+              'request-on-send',
+            );
+            const turn = yield* model.prepareTurn({
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      kind: 'text',
+                      text: 'Reply with OK to confirm language-model access for TeXRA.',
+                    },
+                  ],
+                },
+              ],
+            });
+            if (turn.mode !== 'foreground') {
+              return yield* new ModelError({
+                kind: 'unsupported',
+                message: 'Editor access requires a foreground request.',
+              });
+            }
+            // Consume completion; partial output does not establish access.
+            yield* model.generateTurn(turn);
+          }).pipe(Effect.scoped),
+          // Preserve the post-discovery deadline at the host boundary. Direct
+          // interruption joins cleanup and retains any distinct release failure.
+          { signal: AbortSignal.timeout(120_000) },
         );
-      } else {
-        // Granting access is the user's explicit choice of the Copilot route
-        // for this model; persist it so the canonical model row routes
-        // through Copilot from here on (#9635).
-        await setCopilotRoutePreference(modelName, true);
       }
-    } catch (error) {
-      if (
-        error instanceof LanguageModelPortError &&
-        error.code === LANGUAGE_MODEL_PORT_ERROR_CODE.NO_PERMISSIONS
-      ) {
-        await showLoggedInfoMessage(
-          this.channel,
-          'Copilot access was not granted. TeXRA will leave these models disabled.',
+      if (Exit.isSuccess(result)) {
+        result = await effectRuntime().runPromiseExit(
+          Effect.tryPromise({
+            try: (): Promise<unknown> =>
+              !route || route.access === 'unavailable'
+                ? showLoggedInfoMessage(
+                    this.channel,
+                    'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
+                  )
+                : setCopilotRoutePreference(modelName, true),
+            catch: (error) => error,
+          }),
         );
-      } else {
-        await showLoggedErrorMessage(
-          this.channel,
-          'Could not request Copilot model access',
-          error,
-        );
+      }
+      if (Exit.isFailure(result)) {
+        const reason =
+          result.cause.reasons.length === 1
+            ? result.cause.reasons[0]
+            : undefined;
+        const error =
+          reason && Cause.isFailReason(reason) ? reason.error : undefined;
+        if (
+          error instanceof ModelError &&
+          error.providerEvidence?.kind === 'vscode-lm' &&
+          error.providerEvidence.code === 'NoPermissions'
+        ) {
+          await showLoggedInfoMessage(
+            this.channel,
+            'Copilot access was not granted. TeXRA will leave these models disabled.',
+          );
+        } else {
+          await showLoggedErrorMessage(
+            this.channel,
+            'Could not request Copilot model access',
+            new Error(
+              Cause.hasInterruptsOnly(result.cause)
+                ? 'The Copilot access request was cancelled.'
+                : Cause.pretty(result.cause),
+              { cause: result.cause },
+            ),
+          );
+        }
       }
     } finally {
       invalidateRuntimeModelRegistry();

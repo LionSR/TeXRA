@@ -58,6 +58,7 @@ function sonnet46CopilotRoutes(
       {
         access,
         reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+        version: '2026-07',
         effectiveConfig: {
           ...MODEL_CONFIGS.sonnet46,
           ...(capabilities === undefined ? {} : { capabilities }),

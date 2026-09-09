@@ -114,7 +114,7 @@ export async function generateSessionDescription(
     const instruction = getDisplayedInstruction(config);
     if (!instruction) return;
 
-    const helperResult = await createHelperModelKit(session);
+    const helperResult = await createHelperModelKit();
     signal?.throwIfAborted();
     if (!helperResult.kit) {
       warnWithoutRejecting(helperResult.reason);
