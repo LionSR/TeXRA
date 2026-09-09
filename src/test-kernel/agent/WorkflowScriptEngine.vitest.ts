@@ -1,3 +1,5 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,7 +13,6 @@ import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
 import { deriveWorkflowCounts, type ExecutionId } from '@shared/schemas';
-import { delay } from '@utils/core';
 
 const META = `export const meta = {
   name: 'test-flow',

@@ -74,9 +74,7 @@ export class HostDraftRequests {
   ): Effect.fn.Return<HostOutcome, unknown> {
     switch (request.kind) {
       case 'polish': {
-        const result = yield* hostPort(() =>
-          polishTextWithAI(request.text, undefined, session),
-        );
+        const result = yield* hostPort(() => polishTextWithAI(request.text));
         if (!result.success) {
           return yield* new Rejected({
             reason: result.error ?? 'Polishing failed.',

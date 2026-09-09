@@ -46,19 +46,18 @@ interface ResolvedApiKey {
   origin: ApiKeyOrigin;
 }
 
-// Short-lived cache to dedupe concurrent secret scans across paths
-// (e.g. computeModelOptions + settings-view profile refresh after a key
-// change). Invalidate explicitly when a key is set or removed.
+// Short-lived per-store caches deduplicate concurrent secret scans without
+// sharing credentials between independently supplied stores. Invalidation drops
+// every store's cache; already-running reads retain only the retired cache.
 const LOOKUP_CACHE_TTL_MS = 5_000;
-const lookupCache = new LRUCache<ApiProvider, ResolvedApiKey>({
-  max: API_PROVIDERS.length,
-  ttl: LOOKUP_CACHE_TTL_MS,
-});
-const lookupPending = new Map<ApiProvider, Promise<ResolvedApiKey>>();
+interface ApiKeyLookupCache {
+  readonly resolved: LRUCache<ApiProvider, ResolvedApiKey>;
+  readonly pending: Map<ApiProvider, Promise<ResolvedApiKey>>;
+}
+let lookupCaches = new WeakMap<PlatformSecrets, ApiKeyLookupCache>();
 
 export function invalidateApiKeyCache(): void {
-  lookupCache.clear();
-  lookupPending.clear();
+  lookupCaches = new WeakMap();
 }
 
 /** Read the key straight from secret storage then the environment, no caching. */
@@ -78,17 +77,28 @@ async function resolveApiKeyUncached(
 }
 
 /**
- * Cached secret → env lookup. Invalidation clears the in-flight map too, so a
- * read that was already awaiting refuses to cache its now-stale result rather
- * than re-poisoning the cache after the user deleted the key.
+ * Cached secret → env lookup, scoped to the supplied credential store.
+ * Invalidation replaces the store map, so a pending read can only populate
+ * its retired cache and cannot restore a deleted key in subsequent lookups.
  */
 function resolveApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Promise<ResolvedApiKey> {
+  let cache = lookupCaches.get(secrets);
+  if (!cache) {
+    cache = {
+      resolved: new LRUCache({
+        max: API_PROVIDERS.length,
+        ttl: LOOKUP_CACHE_TTL_MS,
+      }),
+      pending: new Map(),
+    };
+    lookupCaches.set(secrets, cache);
+  }
   return coalesceAsync<ApiProvider, ResolvedApiKey>(
-    lookupCache,
-    lookupPending,
+    cache.resolved,
+    cache.pending,
     provider,
     () => resolveApiKeyUncached(secrets, provider),
   );

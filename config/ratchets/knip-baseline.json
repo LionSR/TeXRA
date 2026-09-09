@@ -1352,12 +1352,6 @@
       "name": "CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT"
     },
     {
-      "file": "src/model/runtimeModelRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "refreshRuntimeModelRegistry"
-    },
-    {
       "file": "src/platform/defaults/workspaceStorage.ts",
       "category": "production-dead",
       "kind": "exports",

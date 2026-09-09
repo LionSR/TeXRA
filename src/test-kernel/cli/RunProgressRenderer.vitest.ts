@@ -473,15 +473,15 @@ describe('CLI run progress renderer', () => {
     expect(output.text.endsWith('\r\x1b[2K')).toBe(true);
   });
 
-  it('keeps long elapsed times in minute-second form', async () => {
+  it('formats long elapsed times with compact duration units', async () => {
     let now = 0;
     const output = outputBuffer();
     const renderer = ansiRenderer(output, { nowMs: () => now });
 
-    now = 3_600_000;
+    now = 3_723_000;
     await handleRunConfig(renderer);
 
-    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 60m 00s');
+    expect(output.text).toContain('\r\x1b[2Kpolish paper.tex · 1h 2m');
   });
 
   it('ticks the ANSI status line while a root workflow is quiet', async () => {

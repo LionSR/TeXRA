@@ -1,8 +1,11 @@
+// Node imports
+import { setTimeout as sleep } from 'node:timers/promises';
+
 // Local imports - utils
 import type { AgentTrace } from '@agent/trace';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { delay, onAbort as registerAbortHandler } from '@utils/core';
+import { onAbort as registerAbortHandler } from '@utils/core';
 
 export interface BackgroundPollStats {
   readonly responseId: string;
@@ -54,7 +57,7 @@ interface BackgroundPollOptions<TResponse> {
   readonly extractId: (response: TResponse) => string | undefined;
   /** Extract a human-readable status string for log messages. */
   readonly extractStatus: (response: TResponse) => string;
-  /** Optional abort signal propagated to `delay` and `retrieve`. */
+  /** Optional abort signal propagated to the poll sleep and `retrieve`. */
   readonly signal?: AbortSignal;
   /**
    * Absolute wall-clock deadline for the polling lifetime, which may have
@@ -230,7 +233,7 @@ export class BackgroundPoller<TResponse> {
     );
 
     // Register a one-shot abort listener to fire the onAbort callback, then
-    // let the signal propagate naturally through delay() and retrieve().
+    // let the signal propagate naturally through the sleep and retrieve().
     const abortHandler = () => {
       if (onAbort) {
         try {
@@ -253,9 +256,13 @@ export class BackgroundPoller<TResponse> {
         );
 
         try {
-          await delay(pollIntervalMs, { signal });
+          await sleep(pollIntervalMs, undefined, { signal });
         } catch (err) {
-          if (isUserAbort(err)) {
+          // `node:timers/promises` rejects with a fresh AbortError; surface the
+          // caller's own abort reason instead, exactly as the
+          // `signal.throwIfAborted()` below would.
+          const reason = signal?.aborted ? (signal.reason as unknown) : err;
+          if (isUserAbort(reason)) {
             logger().debug(
               `${providerLabel} background polling aborted for ${resourceLabel} ${responseId} while waiting (poll ${pollCount}).`,
               {
@@ -267,7 +274,7 @@ export class BackgroundPoller<TResponse> {
               },
             );
           }
-          throw err;
+          throw reason;
         }
 
         signal?.throwIfAborted();

@@ -1,11 +1,15 @@
-import { chmod, mkdir, readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+// Node imports
+import { Buffer } from 'node:buffer';
 
-import { Effect } from 'effect';
+// Third-party imports
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
+import { Effect, FileSystem, Layer, Path, type PlatformError } from 'effect';
 import writeFileAtomic from 'write-file-atomic';
 
+// Local imports
 import { isFileNotFoundError } from '@common/errors';
 import { effectRuntime } from '@platform/processRuntime';
+import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { StateStore } from '../interfaces';
@@ -33,6 +37,13 @@ const fileLocks = Effect.promise(() => import('./fileLocks.js'));
 
 type JsonRecord = Record<string, unknown>;
 
+const nodeStorageLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+
+/** Preserve the Node error identity exposed by this store's existing callers. */
+function storageError(error: PlatformError.PlatformError): Error {
+  return ensureError(error.reason.cause ?? error);
+}
+
 export interface JsonStoreOptions {
   /**
    * POSIX mode for the store file (e.g. `0o600` to restrict a secrets file
@@ -56,18 +67,21 @@ function dirModeFor(fileMode: number): number {
 /**
  * Read the store file as a JSON object. A missing file reads as a copy of
  * `missingFallback`; unreadable or non-object content fails with the
- * original error (`SyntaxError`, `TypeError`, or the fs error). The mappers
- * only name those types — the foreign-boundary adapter case of PRD R7, kept
- * untagged because `JsonStore.open` rethrows the same instances.
+ * original error (`SyntaxError`, `TypeError`, or the Node filesystem error).
+ * The standard filesystem service's error is unwrapped at this store boundary
+ * because its existing callers match the underlying Node errors.
  */
 const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   filePath: string,
   missingFallback: JsonRecord = {},
 ) {
-  const content = yield* Effect.tryPromise({
-    try: () => readFile(filePath, 'utf8'),
-    catch: (cause) => cause as NodeJS.ErrnoException,
-  }).pipe(Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)));
+  const fs = yield* FileSystem.FileSystem;
+  const content = yield* fs.readFile(filePath).pipe(
+    // Preserve the existing UTF-8 decoding, including a leading BOM.
+    Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
+    Effect.mapError(storageError),
+    Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
+  );
   if (content === undefined) return { ...missingFallback };
   const parsed = yield* Effect.try({
     try: () => JSON.parse(content) as unknown,
@@ -92,15 +106,12 @@ const ensureDir = Effect.fn('JsonStore.ensureDir')(function* (
   fileMode: number | undefined,
 ) {
   const dirMode = fileMode === undefined ? undefined : dirModeFor(fileMode);
-  yield* Effect.tryPromise({
-    try: () => mkdir(dir, { recursive: true, mode: dirMode }),
-    catch: (cause) => cause as NodeJS.ErrnoException,
-  });
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs
+    .makeDirectory(dir, { recursive: true, mode: dirMode })
+    .pipe(Effect.mapError(storageError));
   if (dirMode !== undefined) {
-    yield* Effect.tryPromise({
-      try: () => chmod(dir, dirMode),
-      catch: (cause) => cause as NodeJS.ErrnoException,
-    });
+    yield* fs.chmod(dir, dirMode).pipe(Effect.mapError(storageError));
   }
 });
 
@@ -124,7 +135,8 @@ const flush = Effect.fn('JsonStore.flush')(function* (
   value: unknown,
   missingFallback: JsonRecord,
 ) {
-  yield* ensureDir(dirname(filePath), mode);
+  const path = yield* Path.Path;
+  yield* ensureDir(path.dirname(filePath), mode);
   const { withFileLock } = yield* fileLocks;
   yield* withFileLock(
     filePath,
@@ -192,9 +204,10 @@ export class JsonStore implements StateStore {
     filePath: string,
     options: JsonStoreOptions = {},
   ) {
-    const storePath = resolve(filePath);
+    const path = yield* Path.Path;
+    const storePath = path.resolve(filePath);
     return new JsonStore(storePath, yield* readJsonRecord(storePath), options);
-  });
+  }, Effect.provide(nodeStorageLayer));
 
   get<T>(key: string, defaultValue?: T): T {
     const value = this.data[key];
@@ -222,7 +235,15 @@ export class JsonStore implements StateStore {
       return withPerKeyLane(
         writeLanes,
         this.filePath,
-      )(flush(this.filePath, this.options.mode, key, value, this.snapshot()));
+      )(
+        flush(
+          this.filePath,
+          this.options.mode,
+          key,
+          value,
+          this.snapshot(),
+        ).pipe(Effect.provide(nodeStorageLayer)),
+      );
     });
   }
 

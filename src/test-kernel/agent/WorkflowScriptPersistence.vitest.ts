@@ -1,3 +1,5 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,7 +33,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { delay } from '@utils/core';
 
 const executionId = 'aaaaaa111111' as ExecutionId;
 const EMPTY_FILES = { inputFiles: [], contextFiles: [], mediaFiles: [] };

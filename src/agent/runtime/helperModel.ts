@@ -9,10 +9,6 @@
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { auxiliaryRetry } from '@agent/modelHandlers/support/auxiliaryRetry';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
-import {
-  currentSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
@@ -30,9 +26,7 @@ type HelperModelResult =
   { kit: HelperModelKit } | { kit: undefined; reason: string };
 
 /** Resolve the configured helper model, create a non-streaming handler, and obtain a client. */
-export async function createHelperModelKit(
-  session: SessionHandle = currentSession(),
-): Promise<HelperModelResult> {
+export async function createHelperModelKit(): Promise<HelperModelResult> {
   const modelName = getHelperModelName();
 
   const reason = await getModelUnavailableReason(modelName);
@@ -48,10 +42,8 @@ export async function createHelperModelKit(
     };
   }
 
-  const handler = await createModelHandler(
-    modelConfig,
-    session.responseTextProcessing,
-  );
+  // Helper output is interpreted by its caller, not rewritten as document text.
+  const handler = await createModelHandler(modelConfig);
   handler.setOutputStreaming(false);
   handler.setProgressViewEnabled(false);
 
