@@ -287,12 +287,14 @@ describe('runChat signal ownership wiring', () => {
     });
     mocks.chatToolUseAgentUsageError.mockReturnValue(undefined);
     mocks.selectCliRunnableModel.mockResolvedValue({ model: 'gpt-test' });
-    mocks.loadInputHistory.mockResolvedValue({
-      at: vi.fn(),
-      length: vi.fn(() => 0),
-      push: vi.fn(async () => undefined),
-      reverseFind: vi.fn(),
-    });
+    mocks.loadInputHistory.mockReturnValue(
+      Effect.succeed({
+        at: vi.fn(),
+        length: vi.fn(() => 0),
+        push: vi.fn(() => Effect.void),
+        reverseFind: vi.fn(),
+      }),
+    );
     mocks.discoverTerminalCapabilities.mockResolvedValue({
       kittyKeyboard: false,
       oscColorReports: false,

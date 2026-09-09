@@ -2,6 +2,8 @@ import '@test/support/defaultSessionTestSetup';
 
 import { setTimeout as sleep } from 'node:timers/promises';
 
+import { Effect } from 'effect';
+
 import stripAnsi from 'strip-ansi';
 import {
   afterEach,
@@ -327,7 +329,7 @@ function currentFrame(stdout: InkRenderHandles['stdout']): string {
 
 function fakeHistory(entries: readonly string[]): InputHistory {
   return {
-    push: async () => undefined,
+    push: () => Effect.void,
     reverseFind: () => undefined,
     at: (index) => entries[index],
     length: () => entries.length,

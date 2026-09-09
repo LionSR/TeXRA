@@ -252,8 +252,18 @@ This section is the only shared contract between the substrate program and
 `.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md`. The PRD references
 it; it does not restate it. Changes land here first.
 
-**C1. Persisted schema.** Two tables, nothing else app-owned on disk except the
-two permanent settings files (`state.json`, `config.json`).
+**Implementation amendment, 2026-09-09.** Under the accepted SQLite-authority
+direction, C1's event-only restriction is qualified for bounded mutable
+records. The previous CLI history implementation discards entries beyond
+1,000 and rewrites its file. The current `input_history` table preserves
+that behavior: insertion, adjacent-duplicate suppression, and removal of
+excess rows are atomic. Immutable events would instead retain discarded
+input. This is an implementation choice, not a new retention ruling.
+
+**C1. Persisted schema.** The event substrate uses the two tables below.
+The separate `input_history` current-state table stores bounded CLI history;
+it does not participate in event sequence or commit ordinals. The existing
+settings files (`state.json`, `config.json`) remain separately owned.
 
 ```
 event

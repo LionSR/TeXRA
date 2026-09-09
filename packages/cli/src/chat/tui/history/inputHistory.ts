@@ -1,122 +1,103 @@
-// Per-user input history persisted as JSONL under the global storage path.
-//
-// File format: one `{"t": <ms>, "v": "<line>"}` record per line. We avoid a
-// single-JSON-blob format so partial writes never corrupt the history; the
-// session reader skips malformed lines silently.
+/** Global, bounded CLI input history. Older entries are replaced, not archived. */
+import { Clock, Effect, Layer, Result, Semaphore } from 'effect';
 
-import { z } from 'zod';
-
-import { Effect, Result } from 'effect';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
-import { effectRuntime } from '@platform/processRuntime';
+import { databaseLayer } from '@controllers/session/Database';
+import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import {
+  nodeProcesses,
+  processOwnerId,
+} from '@platform/defaults/nodeProcesses';
+import {
+  Database,
+  INPUT_HISTORY_LIMIT,
+  INPUT_HISTORY_LINE_LIMIT,
+  type InputHistoryRecord,
+} from '@shared/session/database';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { ensureError } from '@utils/errors/errorMessage';
-import { GlobalStorageFS } from '@utils/files/storageFS';
-
-const HISTORY_DIR = 'tui';
-const HISTORY_PATH = `${HISTORY_DIR}/input-history.jsonl`;
-const MAX_LINES = 1000;
-const MAX_LINE_CHARS = 4000;
-
-// No `.catch` on `t`: a record with a missing or corrupt timestamp fails
-// validation and is skipped by the reader below, per the malformed-line
-// policy — never rewritten into the file with a fabricated epoch-0 time.
-const HistoryRecordSchema = z.object({ t: z.number(), v: z.string() });
-type HistoryRecord = z.infer<typeof HistoryRecordSchema>;
 
 export interface InputHistory {
-  /** Append a new entry. Duplicates of the most-recent entry are skipped. */
-  push(line: string): Promise<void>;
-  /** Reverse-incremental search: returns the most recent entry containing
-   *  `needle`, or undefined. */
+  /** Persist a nonempty entry, suppressing an adjacent duplicate. */
+  push(line: string): Effect.Effect<void, Error>;
   reverseFind(
     needle: string,
     from?: number,
   ): { value: string; index: number } | undefined;
-  /** Entry at `index` (0 = oldest), for ↑/↓ history browsing. */
   at(index: number): string | undefined;
-  /** Number of stored entries. */
   length(): number;
 }
 
-/** Serialise the in-memory ring back to JSONL. Records keep their original
- *  timestamp so a compaction doesn't collapse the entire history to "now"
- *  in case anything ever reads the file externally. */
-function serializeRecords(records: readonly HistoryRecord[]): string {
-  return records.map((r) => JSON.stringify(r)).join('\n') + '\n';
-}
+/** Each I/O operation owns its database scope; browsing remains synchronous. */
+export const loadInputHistory = (
+  globalStorage: () => string,
+): Effect.Effect<InputHistory, Error> =>
+  Effect.gen(function* () {
+    const access = <A, E>(operation: Effect.Effect<A, E, Database>) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const ownerId = processOwnerId(
+            yield* Effect.tryPromise({
+              try: () => nodeProcesses.selfIdentity(),
+              catch: ensureError,
+            }),
+          );
 
-/** Read and parse the JSONL log, skipping malformed lines per the file-format
- *  policy in the header. */
-function readHistoryRecords(): Effect.Effect<HistoryRecord[], Error> {
-  return Effect.tryPromise({
-    try: () => GlobalStorageFS.read(HISTORY_PATH),
-    catch: (cause) => ensureError(cause),
-  }).pipe(
-    Effect.map((raw) => {
-      const records: HistoryRecord[] = [];
-      for (const line of raw.split('\n')) {
-        const rec = Result.getOrUndefined(
-          parseJsonWith(line, HistoryRecordSchema),
-        );
-        if (rec && rec.v.length > 0) records.push(rec);
-      }
-      return records;
-    }),
-  );
-}
-
-export async function loadInputHistory(): Promise<InputHistory> {
-  let records: HistoryRecord[] = [];
-  if (await GlobalStorageFS.exists(HISTORY_PATH)) {
-    // A read failure (EIO, permission, race-after-exists) must not block the
-    // TUI from mounting — the user can still type, just without history this
-    // session.
-    records = await effectRuntime().runPromise(
-      readHistoryRecords().pipe(Effect.catch(() => Effect.succeed([]))),
-    );
-  }
-  // Cap on load; older entries fall off when the ring is full.
-  if (records.length > MAX_LINES) records = records.slice(-MAX_LINES);
-
-  return {
-    async push(line: string) {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      const stored = trimmed.slice(0, MAX_LINE_CHARS);
-      if (records.at(-1)?.v === stored) return;
-      const record: HistoryRecord = { t: Date.now(), v: stored };
-      records.push(record);
-      await GlobalStorageFS.ensureDir(HISTORY_DIR);
-      if (records.length > MAX_LINES) {
-        const drop = records.length - MAX_LINES;
-        records.splice(0, drop);
-        await GlobalStorageFS.writeAtomic(
-          HISTORY_PATH,
-          serializeRecords(records),
-        );
-        return;
-      }
-      await GlobalStorageFS.appendFile(
-        HISTORY_PATH,
-        `${JSON.stringify(record)}\n`,
+          const storage = yield* Effect.try({
+            try: globalStorage,
+            catch: ensureError,
+          });
+          return yield* operation.pipe(
+            Effect.provide(
+              databaseLayer('persistent').pipe(
+                Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+                Layer.provide(ProcessIdentity.layer(ownerId)),
+              ),
+            ),
+          );
+        }),
       );
-    },
-    reverseFind(needle, from) {
-      if (!needle) return undefined;
-      const start = from === undefined ? records.length - 1 : from - 1;
-      for (let i = start; i >= 0; i--) {
-        const record = records[i];
-        if (record?.v.includes(needle)) {
-          return { value: record.v, index: i };
+    const read = Effect.flatMap(Database, (database) =>
+      database.readInputHistory(),
+    );
+    // History failure must not prevent typing. A subsequent push may retry storage.
+    let records: readonly InputHistoryRecord[] = Result.getOrElse(
+      yield* Effect.result(access(read)),
+      () => [],
+    );
+    const pushes = Semaphore.makeUnsafe(1);
+    return {
+      push: (line) =>
+        pushes.withPermit(
+          Effect.gen(function* () {
+            const value = line.trim().slice(0, INPUT_HISTORY_LINE_LIMIT);
+            if (value.length === 0 || records.at(-1)?.value === value) return;
+            const record = { at: yield* Clock.currentTimeMillis, value };
+            // Keep submitted text browsable even when storage fails.
+            records = [...records, record].slice(-INPUT_HISTORY_LIMIT);
+            yield* access(
+              Effect.gen(function* () {
+                const database = yield* Database;
+                yield* database.appendInputHistory(record);
+              }),
+            );
+          }),
+        ),
+      reverseFind(needle, from) {
+        if (!needle) return undefined;
+        const start = from === undefined ? records.length - 1 : from - 1;
+        for (let i = start; i >= 0; i--) {
+          const record = records[i];
+          if (record?.value.includes(needle)) {
+            return { value: record.value, index: i };
+          }
         }
-      }
-      return undefined;
-    },
-    at(index) {
-      return records[index]?.v;
-    },
-    length() {
-      return records.length;
-    },
-  };
-}
+        return undefined;
+      },
+      at(index) {
+        return records[index]?.value;
+      },
+      length() {
+        return records.length;
+      },
+    };
+  });

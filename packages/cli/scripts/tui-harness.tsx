@@ -16,7 +16,7 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import { SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -368,8 +368,10 @@ const HARNESS_INPUT_HISTORY: InputHistory | undefined =
   HARNESS_INPUT_HISTORY_ENTRIES.length === 0
     ? undefined
     : {
-        async push(line) {
-          HARNESS_INPUT_HISTORY_ENTRIES.push(line);
+        push(line) {
+          return Effect.sync(() => {
+            HARNESS_INPUT_HISTORY_ENTRIES.push(line);
+          });
         },
         reverseFind: () => undefined,
         at: (index) => HARNESS_INPUT_HISTORY_ENTRIES[index],

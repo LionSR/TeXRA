@@ -125,6 +125,14 @@ The current event store is a foundation; its two-table layout is not a reason
 to encode every setting or mutable record as an event. Add ordinary tables
 where they make the final model simpler while keeping related writes atomic.
 
+**Implementation amendment, 2026-09-09.** CLI input history uses bounded current rows: insertion, adjacent-duplicate
+suppression, and removal beyond 1,000 entries occur in one transaction.
+This preserves its existing replacement behavior without archiving discarded
+input. This implements the accepted SQLite-authority direction while
+preserving existing behavior; it is not a new retention ruling or acceptance
+of every recommendation in this plan. The substrate's C1 restriction is
+qualified accordingly for these current rows.
+
 Connect the provider package to scoped Effect tool-use and reflection loops.
 Commit a completed response before dispatching its tools, and commit the
 observed tool outcomes before continuing. Specify what happens if a process

@@ -13,6 +13,7 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
+import { effectRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { textInputCappedRowCount } from '../input/textInputDisplay';
@@ -294,7 +295,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       // shared log sink so it isn't completely silent.
       const historyPersist =
         historyText.length > 0 && !shouldRedactSlashInput(historyText)
-          ? historyRef.current?.push(historyText)
+          ? historyRef.current &&
+            effectRuntime().runPromise(historyRef.current.push(historyText))
           : null;
       historyPersist?.catch((err: unknown) => {
         writeTextStderr(
