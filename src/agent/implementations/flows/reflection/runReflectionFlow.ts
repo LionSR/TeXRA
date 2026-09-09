@@ -17,7 +17,6 @@ import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass
 import {
   PersistedFlowStateError,
   readPersistedFlowRecord,
-  stampCompatibilityKey,
 } from '@agent/node/persistedFlow';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
@@ -240,9 +239,6 @@ export async function runReflectionFlow(
     ) {
       shared.unresolvedCompileRejection = true;
     }
-    // A keyless legacy record gets the active handler's key stamped here;
-    // model-based inference for such records lives at SessionResumeRetrieval.
-    shared = stampCompatibilityKey(shared, compatibilityKey);
     // Response-cycle cancellation persists a WAITING cursor together with
     // this latch. It records why the previous invocation stopped, not a
     // durable instruction that all later invocations must also stop.

@@ -26,7 +26,6 @@ import {
 import { createLog } from '@logger/logUtils';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import { inferPersistedModelHandlerCompatibilityKey } from './modelHandlerCompatibilityInference';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const logger = createLog('SessionResumeRetrieval');
@@ -205,8 +204,7 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
           model: parsedShared.data.modelId ?? agentConfig.model,
         };
         const modelHandlerCompatibilityKey =
-          parsedShared.data.modelHandlerCompatibilityKey ??
-          inferPersistedModelHandlerCompatibilityKey(currentConfig.model);
+          parsedShared.data.modelHandlerCompatibilityKey;
 
         const shared: PreparedShared = {
           ...parsedShared.data,
@@ -276,8 +274,7 @@ const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
           },
         });
         const modelHandlerCompatibilityKey =
-          parseResult.data.modelHandlerCompatibilityKey ??
-          inferPersistedModelHandlerCompatibilityKey(agentConfig.model);
+          parseResult.data.modelHandlerCompatibilityKey;
         return {
           type: 'workflow',
           agentConfig,

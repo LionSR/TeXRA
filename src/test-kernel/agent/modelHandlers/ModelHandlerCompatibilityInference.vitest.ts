@@ -1,27 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
+import { persistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 
-const GOOGLE_KEYLESS_ERROR =
-  'Persisted Google sessions without a model-handler identity cannot be resumed.';
-
-describe('model handler compatibility inference', () => {
-  it('rejects keyless Google transcripts without inspecting their format', () => {
-    expect(() =>
-      inferPersistedFlowModelHandlerCompatibilityKey('gemini35f', {
-        messages: [
-          {
-            type: 'user_input',
-            content: [{ type: 'text', text: 'continue' }],
-          },
-        ],
-      }),
-    ).toThrow(GOOGLE_KEYLESS_ERROR);
-  });
-
-  it('honors an explicitly persisted flow compatibility key', () => {
+describe('persisted flow compatibility key', () => {
+  it('reads an explicitly persisted flow compatibility key', () => {
     expect(
-      inferPersistedFlowModelHandlerCompatibilityKey('gemini35f', {
+      persistedFlowModelHandlerCompatibilityKey({
         modelHandlerCompatibilityKey: 'ModelHandlerOpenRouterNative',
         messages: [
           {
@@ -31,5 +15,20 @@ describe('model handler compatibility inference', () => {
         ],
       }),
     ).toBe('ModelHandlerOpenRouterNative');
+  });
+
+  it('reports no key for a record that carries none', () => {
+    // Records are stamped at write time, so a keyless record is malformed
+    // rather than old: nothing is inferred back from the model id.
+    expect(
+      persistedFlowModelHandlerCompatibilityKey({
+        messages: [
+          {
+            type: 'user_input',
+            content: [{ type: 'text', text: 'continue' }],
+          },
+        ],
+      }),
+    ).toBeUndefined();
   });
 });

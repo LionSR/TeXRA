@@ -149,19 +149,7 @@ const WorkflowExecutionSkippedCallSchema = issuedCallVariant({
   settledBySweep: z.literal(true).optional(),
   timestamps: WorkflowExecutionTerminalTimestampsSchema,
 }).superRefine((call, context) => {
-  const hasLegacyIssuedFacts =
-    call.kind !== undefined ||
-    call.agent !== undefined ||
-    call.model !== undefined ||
-    call.childExecutionId !== undefined ||
-    call.childStreamId !== undefined ||
-    call.attempts.length > 0 ||
-    call.timestamps.startedAt !== undefined;
-  if (
-    call.issued === undefined &&
-    !hasLegacyIssuedFacts &&
-    call.settledBySweep !== true
-  ) {
+  if (call.issued === undefined && call.settledBySweep !== true) {
     context.addIssue({
       code: 'custom',
       path: ['settledBySweep'],

@@ -49,9 +49,9 @@ export const ToolUseRunSharedSchema = z.object({
    * resume SSOT for model identity.
    */
   modelId: z.string().optional(),
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable()
-    .transform((key) => key ?? undefined)
-    .optional(),
+  /** Provider-message format of the persisted messages. Absent for an
+   *  untagged handler (see `modelHandlersShareConversationFormat`). */
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
   shouldSkipCycle: z.boolean(),
   stateSlices: StateSlicesSchema.nullable(),
   /** Per-call system text for providers that do not embed it in messages. */

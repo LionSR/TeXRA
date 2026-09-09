@@ -675,36 +675,6 @@ describe('retrieveSessionResumeData', () => {
     expect(resume.parentStreamId).toBe(parentStreamId);
   });
 
-  it('rejects a Google record without persisted handler identity', async () => {
-    const executionId = 'abc124' as ExecutionId;
-    const streamId = 'chat@gemini35f#abc124' as StreamTabId;
-    const shared = {
-      messages: [
-        {
-          type: 'user_input',
-          content: [{ type: 'text', text: 'Continue.' }],
-        },
-      ],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices('gemini35f'),
-    };
-    await writeFlowRecord(executionId, shared);
-
-    await expect(
-      Effect.runPromise(
-        retrieveSessionResumeData(
-          streamId,
-          executionId,
-          GOOGLE_CONFIG,
-          retrievalSession,
-        ),
-      ),
-    ).rejects.toThrow(
-      `Failed to retrieve tool-use resume data for stream: ${streamId}`,
-    );
-    expect((await readFlowRecord(executionId))?.shared).toEqual(shared);
-  });
-
   it('throws when resumable tool-use storage cannot be read', async () => {
     const executionId = 'abc129' as ExecutionId;
     const streamId = 'chat@gpt54#abc129' as StreamTabId;
