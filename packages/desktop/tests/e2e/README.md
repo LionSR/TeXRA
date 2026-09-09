@@ -32,18 +32,18 @@ refresh after a deliberate UI change:
 
 ## Workspace folder
 
-Each launch seeds a temp folder into the profile's remembered papers
-(`texra.desktop.openPapers` in `state/global.json`) so the app shows a paper
-instead of the empty state. Pass `workspacePath` to `launchTexraApp()` if a
+Each launch records a temporary project through the production SQLite owner
+in the isolated profile, so the app opens that project. Pass `workspacePath` to `launchTexraApp()` if a
 specific layout is required.
 
 ## Cross-package imports
 
 Playwright's ESM loader cannot resolve a relative `.js` import of a TS file
 from `src/shared/...` (it sees the `.js` suffix and treats the resolved
-module as CommonJS, then fails on named exports). To stay safe, prefer
-inlining constants the suite needs from the shared schemas with a comment
-pointing back at the source of truth.
+module as CommonJS, then fails on named exports). The shared fixture loader in
+`scripts/desktop-package-smoke-environment.mjs` bundles the production database
+and project-record operations with esbuild. Both E2E launches and the packaged
+application smoke use that loader, without duplicating SQL or persisted schemas.
 
 ## macOS keychain caveat
 

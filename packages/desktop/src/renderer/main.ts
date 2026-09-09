@@ -60,9 +60,9 @@ import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import './taskShell.css';
 import {
   conversationDockTemplate,
-  paperChipTemplate,
+  projectChipTemplate,
   taskSidebarTemplate,
-  type RailPaper,
+  type RailProject,
 } from './taskShell';
 import { subagentsPaneTemplate } from './subagentsPane';
 import {
@@ -81,14 +81,14 @@ import {
   type WorkbenchTab,
   type WorkbenchPlacement,
 } from '../shared/desktopTaskShell';
-import { DESKTOP_PAPER_COMMANDS } from '../shared/desktopPaperMessages';
+import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
 import { createEnvironmentPopover } from './environmentPopover';
 import { disposePendingFileRequests } from './fileRequests';
-import { createPaperWorkbench } from './paperWorkbench';
+import { createProjectWorkbench } from './projectWorkbench';
 import { createMessageRoutes } from './messageRoutes';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;
@@ -111,7 +111,7 @@ function currentTheme() {
 function applyTheme(): void {
   const theme = currentTheme();
   applyHostBodyTheme(theme);
-  for (const paper of paperWorkbenches.values()) paper.setTheme(theme);
+  for (const project of projectWorkbenches.values()) project.setTheme(theme);
 }
 darkScheme.addEventListener('change', applyTheme);
 forcedColors.addEventListener('change', applyTheme);
@@ -161,10 +161,10 @@ const rendererState: StateStore = {
     return Promise.resolve();
   },
 };
-// The one Shell of this window (PRD 9): which papers are open and which one
+// The one Shell of this window (PRD 9): which projects are open and which one
 // the window shows come from the main process; the collapsed set is the
-// rail's own and persists. Until the first papers report the launcher is
-// assumed usable so the empty state does not flash before the papers arrive.
+// rail's own and persists. Until the first projects report the launcher is
+// assumed usable so the empty state does not flash before the projects arrive.
 const persistedShell = new PersistedState(
   rendererState,
   'shell',
@@ -175,32 +175,32 @@ let shell: Shell = {
   open: [],
   collapsed: persistedShell.getState().collapsed,
 };
-let papersKnown = false;
-let applyingPaperList = false;
-// The folder of every open paper, by session key; the no-workspace session
-// is never among them. How a paper is named is its host snapshot's.
-let paperRoots: ReadonlyMap<string, string> = new Map();
-const activePaperRoot = () => paperRoots.get(shell.active);
-const hasWorkspace = () => !papersKnown || activePaperRoot() !== undefined;
+let projectsKnown = false;
+let applyingProjectList = false;
+// The folder of every open project, by session key; the no-workspace session
+// is never among them. How a project is named is its host snapshot's.
+let projectRoots: ReadonlyMap<string, string> = new Map();
+const activeProjectRoot = () => projectRoots.get(shell.active);
+const hasWorkspace = () => !projectsKnown || activeProjectRoot() !== undefined;
 function setShell(next: Shell): void {
   shell = next;
   persistedShell.setState({ collapsed: [...next.collapsed] });
   rerenderShell();
 }
-// One fold, one surface, and one host snapshot per open paper, on the one
+// One fold, one surface, and one host snapshot per open project, on the one
 // webview runtime; the rail, the conversation shell, the palette, and the
 // chrome read those three records and nothing else.
-const paperSessions = createSessionSurfaces({
+const projectSessions = createSessionSurfaces({
   storage: rendererState,
   hostRequestFailureOwner: 'host',
 });
-paperSessions.onChange(rerenderShell);
-// A paper whose session has not framed its host snapshot yet is not listed:
+projectSessions.onChange(rerenderShell);
+// A project whose session has not framed its host snapshot yet is not listed:
 // the rail shows what is known.
-const railPapers = (): RailPaper[] =>
+const railProjects = (): RailProject[] =>
   shell.open.flatMap((key) => {
-    const session = paperSessions.get(key);
-    const display = session?.host$.get()?.paper;
+    const session = projectSessions.get(key);
+    const display = session?.host$.get()?.project;
     if (!session || !display) return [];
     return [
       {
@@ -210,11 +210,11 @@ const railPapers = (): RailPaper[] =>
       },
     ];
   });
-const activeRailPaper = (papers: readonly RailPaper[]) =>
-  papers.find((paper) => paper.display.key === shell.active);
-/** The active paper's streams in rail order, for the palette. */
+const activeRailProject = (projects: readonly RailProject[]) =>
+  projects.find((project) => project.display.key === shell.active);
+/** The active project's streams in rail order, for the palette. */
 const activeStreams = () => {
-  const active = activeRailPaper(railPapers());
+  const active = activeRailProject(railProjects());
   if (!active) return [];
   return active.view.order.flatMap((id) => {
     const stream = active.view.streams.get(id);
@@ -264,20 +264,20 @@ function commandTitle(
 // The task canvas is permanent. Workbench tabs can live in independently
 // resizable Right and Bottom panes without replacing the conversation.
 
-const paperWorkbenches = new Map<
+const projectWorkbenches = new Map<
   string,
-  ReturnType<typeof createPaperWorkbench>
+  ReturnType<typeof createProjectWorkbench>
 >();
 
 function currentWorkbench() {
-  const paper = paperWorkbenches.get(shell.active);
-  if (!paper) throw new Error(`No workbench for paper ${shell.active}.`);
-  return paper;
+  const project = projectWorkbenches.get(shell.active);
+  if (!project) throw new Error(`No workbench for project ${shell.active}.`);
+  return project;
 }
 
 function shellState(): DesktopTaskShellState {
   return (
-    paperWorkbenches.get(shell.active)?.getState() ??
+    projectWorkbenches.get(shell.active)?.getState() ??
     initialDesktopTaskShellState()
   );
 }
@@ -291,7 +291,7 @@ function layoutChanged(
   previous: DesktopTaskShellState,
   next: DesktopTaskShellState,
 ): void {
-  if (session !== shell.active || applyingPaperList) return;
+  if (session !== shell.active || applyingProjectList) return;
   rerenderShell();
   currentWorkbench().workbench.syncBrowserViewBounds();
   const activeTabChanged =
@@ -365,7 +365,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 
 // The one conversation shell both hosts render: its empty state is the
 // launcher, its conversation branch the selected stream. `rerenderShell`
-// hands it the active paper's session.
+// hands it the active project's session.
 const conversationView = document.createElement('progress-app') as ProgressApp;
 conversationView.placement = 'desktop';
 conversationView.setAttribute('data-desktop-view', 'progress');
@@ -392,14 +392,14 @@ const environmentPopover = createEnvironmentPopover({
 
 function taskConversationTemplate(): TemplateResult {
   const startupPanelVisible = startupTeamPanel.isVisible();
-  const papers = railPapers();
-  const activePaper = activeRailPaper(papers);
+  const projects = railProjects();
+  const activeProject = activeRailProject(projects);
   // The sidebar is the only home for the rail's per-stream pending-approval
   // badge (StreamTabs.ts). Collapsing it removes that cue entirely, so a
   // call held at the approval gate — often on a workflow's child stream, not
   // the one on screen — can stall with zero visible affordance (#11511).
   // Surface the same signal on the toggle that reopens the rail.
-  const hasPendingApproval = (activePaper?.view.rollup.waiting ?? 0) > 0;
+  const hasPendingApproval = (activeProject?.view.rollup.waiting ?? 0) > 0;
   const sidebarCollapsedWithPendingApproval =
     shellState().sidebarCollapsed && hasPendingApproval;
   let sidebarToggleLabel = shellState().sidebarCollapsed
@@ -408,7 +408,7 @@ function taskConversationTemplate(): TemplateResult {
   if (sidebarCollapsedWithPendingApproval) {
     sidebarToggleLabel = 'Show sidebar - approval pending';
   }
-  const workspacePath = activePaperRoot();
+  const workspacePath = activeProjectRoot();
   // Names the button even when the ≤560px container query collapses it to the
   // icon: the shadow button then has no visible text, so only `title` reaches
   // its accessible name.
@@ -440,8 +440,8 @@ function taskConversationTemplate(): TemplateResult {
           }
         </span>
         ${
-          papers.length > 0
-            ? paperChipTemplate(papers, activePaper, selectPaper)
+          projects.length > 0
+            ? projectChipTemplate(projects, activeProject, selectProject)
             : nothing
         }
         <span class="task-header-spacer"></span>
@@ -524,7 +524,7 @@ function taskConversationTemplate(): TemplateResult {
               ? html`
                   <section
                     class="task-launcher-surface"
-                    data-session=${activePaper ? activePaper.display.key : nothing}
+                    data-session=${activeProject ? activeProject.display.key : nothing}
                     ?hidden=${startupPanelVisible}
                   >
                     ${conversationView} ${conversationDockTemplate()}
@@ -545,11 +545,11 @@ interface SplitPanelElement extends HTMLElement {
 }
 
 /**
- * Store the split handle's measured size on this paper's surface.
+ * Store the split handle's measured size on this project's surface.
  */
 function recordLayoutMeasurement(next: DesktopTaskShellState): void {
-  if (applyingPaperList) return;
-  paperWorkbenches.get(shell.active)?.updateState(next);
+  if (applyingProjectList) return;
+  projectWorkbenches.get(shell.active)?.updateState(next);
 }
 
 function rememberSidebarWidth(event: Event): void {
@@ -570,19 +570,19 @@ function rememberWorkbenchWidth(event: Event): void {
   recordLayoutMeasurement(setWorkbenchWidth(shellState(), width));
 }
 
-function paperWorkbenchesTemplate(
+function projectWorkbenchesTemplate(
   placement: WorkbenchPlacement,
 ): TemplateResult {
   return html`${repeat(
-    paperWorkbenches.values(),
-    (paper) => paper.session,
-    (paper) =>
+    projectWorkbenches.values(),
+    (project) => project.session,
+    (project) =>
       html` <div
-        class="task-paper-workbench"
-        data-session=${paper.session}
-        ?hidden=${paper.session !== shell.active || !activeWorkbenchTab(paper.getState(), placement)}
+        class="task-project-workbench"
+        data-session=${project.session}
+        ?hidden=${project.session !== shell.active || !activeWorkbenchTab(project.getState(), placement)}
       >
-        ${paper.workbench.template(placement)}
+        ${project.workbench.template(placement)}
       </div>`,
   )} `;
 }
@@ -607,7 +607,7 @@ function taskRightLayoutTemplate(
         ${taskConversationTemplate()}
       </div>
       <div slot="end" class="task-workbench-panel">
-        ${paperWorkbenchesTemplate('right')}
+        ${projectWorkbenchesTemplate('right')}
       </div>
     </wa-split-panel>
   `;
@@ -633,14 +633,14 @@ function taskMainTemplate(
       </span>
       <div slot="start" class="task-main-panel">${rightLayout}</div>
       <div slot="end" class="task-bottom-workbench-panel">
-        ${paperWorkbenchesTemplate('bottom')}
+        ${projectWorkbenchesTemplate('bottom')}
       </div>
     </wa-split-panel>
   `;
 }
 
-function selectPaper(key: string): void {
-  postMessage(DESKTOP_PAPER_COMMANDS.SELECT_PAPER, { key });
+function selectProject(key: string): void {
+  postMessage(DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT, { key });
 }
 
 function shellTemplate(): TemplateResult {
@@ -674,7 +674,7 @@ function shellTemplate(): TemplateResult {
           {
             files: currentWorkbench().editorPane.treeElement,
             filesExpanded: shellState().filesExpanded,
-            papers: railPapers(),
+            projects: railProjects(),
             shell,
             subagentsOpen: shellState().workbenchTabs.some(
               (tab) => tab.kind === 'subagents',
@@ -692,15 +692,15 @@ function shellTemplate(): TemplateResult {
             },
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-            onSelectPaper: selectPaper,
-            onClosePaper: (key) =>
-              postMessage(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER, {
+            onSelectProject: selectProject,
+            onCloseProject: (key) =>
+              postMessage(DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT, {
                 key,
                 hasUnsavedChanges:
-                  paperWorkbenches.get(key)?.editorPane.hasUnsavedChanges() ??
+                  projectWorkbenches.get(key)?.editorPane.hasUnsavedChanges() ??
                   false,
               }),
-            onTogglePaperCollapsed: (key) =>
+            onToggleProjectCollapsed: (key) =>
               setShell(
                 applyShellAction(shell, {
                   kind: 'collapse',
@@ -729,11 +729,11 @@ let surfaceResizeObserver: ResizeObserver | undefined;
 
 function observeSurfaceResizes(): void {
   surfaceResizeObserver ??= new ResizeObserver(() => {
-    const paper = paperWorkbenches.get(shell.active);
-    if (!paper || applyingPaperList) return;
-    paper.editorPane.layout();
-    paper.terminalPane.layout();
-    paper.workbench.syncBrowserViewBounds();
+    const project = projectWorkbenches.get(shell.active);
+    if (!project || applyingProjectList) return;
+    project.editorPane.layout();
+    project.terminalPane.layout();
+    project.workbench.syncBrowserViewBounds();
   });
   surfaceResizeObserver.disconnect();
   for (const element of document.querySelectorAll(
@@ -758,10 +758,10 @@ let sidebarRevealedForApprovalIds = new Set<string>();
  * request card lives on the pending stream's own view (one home for the
  * decision), so a collapsed, non-viewed rail leaves nothing to click
  * (#11511 — per-call workflow review cards land on a child stream, not the
- * one the user is watching). The preference belongs to the paper's surface.
+ * one the user is watching). The preference belongs to the project's surface.
  */
 function revealSidebarForOffScreenApproval(): void {
-  const active = activeRailPaper(railPapers());
+  const active = activeRailProject(railProjects());
   const offScreen = (active?.view.approvals ?? [])
     .filter((approval) => approval.streamId !== active?.surface.selected)
     .map((approval) => approval.requestId);
@@ -774,7 +774,7 @@ function revealSidebarForOffScreenApproval(): void {
   );
   sidebarRevealedForApprovalIds = new Set(offScreen);
   if (isNewApproval && shellState().sidebarCollapsed) {
-    paperSessions.act(shell.active, {
+    projectSessions.act(shell.active, {
       kind: 'workbench',
       layout: toggleSidebar(shellState()),
     });
@@ -782,16 +782,16 @@ function revealSidebarForOffScreenApproval(): void {
 }
 
 function rerenderShell(): void {
-  if (bootstrapFailed || applyingPaperList) return;
+  if (bootstrapFailed || applyingProjectList) return;
   revealSidebarForOffScreenApproval();
-  const active = activeRailPaper(railPapers());
-  const session = active ? paperSessions.get(active.display.key) : undefined;
+  const active = activeRailProject(railProjects());
+  const session = active ? projectSessions.get(active.display.key) : undefined;
   conversationView.view = active?.view ?? null;
   conversationView.surface = active?.surface ?? null;
   conversationView.host = session?.host$.get() ?? null;
   conversationView.nowMs = Date.now();
   render(
-    paperWorkbenches.has(shell.active)
+    projectWorkbenches.has(shell.active)
       ? shellTemplate()
       : noWorkspacePlaceholder,
     appRoot,
@@ -800,7 +800,7 @@ function rerenderShell(): void {
     activeWorkbenchTab(shellState(), 'right')?.kind === 'logs' ||
       activeWorkbenchTab(shellState(), 'bottom')?.kind === 'logs',
   );
-  if (paperWorkbenches.has(shell.active)) observeSurfaceResizes();
+  if (projectWorkbenches.has(shell.active)) observeSurfaceResizes();
 }
 
 function renderBootstrapFallback(error: unknown): void {
@@ -965,7 +965,7 @@ function openCommandPalette(): void {
 
 // Clear the active stream so the conversation shell shows its empty state.
 function returnToLauncher(): void {
-  paperSessions.act(shell.active, { kind: 'selectNew' });
+  projectSessions.act(shell.active, { kind: 'selectNew' });
 }
 
 const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
@@ -976,21 +976,21 @@ const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
 
 const MESSAGE_ROUTES = createMessageRoutes({
   saveAllFiles: () => {
-    void paperWorkbenches.get(shell.active)?.editorPane.save();
+    void projectWorkbenches.get(shell.active)?.editorPane.save();
   },
   // `refresh()` re-lists from the root and drops the expansion state, which is
   // the same reset the Files rail already performs each time it is opened —
   // so this stays consistent with how the pane behaves everywhere else rather
   // than introducing a second, subtler kind of refresh.
   reloadWorkspaceFiles: (session) => {
-    void paperWorkbenches.get(session)?.editorPane.refresh();
+    void projectWorkbenches.get(session)?.editorPane.refresh();
   },
   isBootstrapFailed: () => bootstrapFailed,
   returnToLauncher,
   openKind: (kind) =>
-    paperWorkbenches.get(shell.active)?.workbench.openKind(kind),
+    projectWorkbenches.get(shell.active)?.workbench.openKind(kind),
   toggleLayoutPanel: (panel) => {
-    if (paperWorkbenches.has(shell.active)) LAYOUT_PANEL_TOGGLES[panel]();
+    if (projectWorkbenches.has(shell.active)) LAYOUT_PANEL_TOGGLES[panel]();
   },
   onboarding: {
     show: () => startupTeamPanel.show(),
@@ -999,14 +999,14 @@ const MESSAGE_ROUTES = createMessageRoutes({
   logs: { applySnapshot: (message) => logsController.applySnapshot(message) },
   review: {
     open: (message) => {
-      const paper = paperWorkbenches.get(message.session);
-      paper?.reviewPane.open(message);
-      paper?.workbench.openKind('review');
+      const project = projectWorkbenches.get(message.session);
+      project?.reviewPane.open(message);
+      project?.workbench.openKind('review');
     },
-    clear: (session) => paperWorkbenches.get(session)?.reviewPane.clear(),
+    clear: (session) => projectWorkbenches.get(session)?.reviewPane.clear(),
   },
   disposeReviewTab: (session) =>
-    paperWorkbenches
+    projectWorkbenches
       .get(session)
       ?.workbench.disposeWorkbenchTab('workbench:review'),
   pdf: {
@@ -1018,10 +1018,10 @@ const MESSAGE_ROUTES = createMessageRoutes({
         console.error('[desktop] rejected unsafe PDF path', message.pdfPath);
         return;
       }
-      const paper = paperWorkbenches.get(message.session);
-      if (!paper) return;
-      paper.updateState(
-        openWorkbenchTab(paper.getState(), {
+      const project = projectWorkbenches.get(message.session);
+      if (!project) return;
+      project.updateState(
+        openWorkbenchTab(project.getState(), {
           kind: 'pdf',
           target: message.pdfPath,
           title: message.title,
@@ -1032,52 +1032,52 @@ const MESSAGE_ROUTES = createMessageRoutes({
   prompt: { open: (message) => promptOverlay.open(message) },
   terminal: {
     write: (session, sessionId, data) =>
-      paperWorkbenches.get(session)?.terminalPane.write(sessionId, data),
+      projectWorkbenches.get(session)?.terminalPane.write(sessionId, data),
     reportExit: (session, sessionId, exitCode) =>
-      paperWorkbenches
+      projectWorkbenches
         .get(session)
         ?.terminalPane.reportExit(sessionId, exitCode),
     reportError: (session, sessionId, message) =>
-      paperWorkbenches
+      projectWorkbenches
         .get(session)
         ?.terminalPane.reportError(sessionId, message),
   },
   openTerminalCommand: (session, command) =>
-    paperWorkbenches.get(session)?.workbench.openTerminalCommand(command),
+    projectWorkbenches.get(session)?.workbench.openTerminalCommand(command),
   renameBrowserTab: (session, tabId, title) => {
-    const paper = paperWorkbenches.get(session);
-    if (paper)
-      paper.updateState(renameWorkbenchTab(paper.getState(), tabId, title));
+    const project = projectWorkbenches.get(session);
+    if (project)
+      project.updateState(renameWorkbenchTab(project.getState(), tabId, title));
   },
-  papers: (message) => {
+  projects: (message) => {
     const previousKey = shell.active;
     // The list changes resource ownership and selection together. Keep signal
     // notifications from painting an intermediate owner during this adoption.
-    applyingPaperList = true;
+    applyingProjectList = true;
     try {
-      paperRoots = new Map(
-        message.papers.map((paper) => [paper.key, paper.root] as const),
+      projectRoots = new Map(
+        message.projects.map((project) => [project.key, project.root] as const),
       );
-      papersKnown = true;
-      const open = message.papers.map((paper) => paper.key);
+      projectsKnown = true;
+      const open = message.projects.map((project) => project.key);
       const sessions = [...new Set([...open, message.activeKey])];
-      for (const [key, paper] of paperWorkbenches) {
+      for (const [key, project] of projectWorkbenches) {
         if (sessions.includes(key)) continue;
-        paper.dispose();
-        paperWorkbenches.delete(key);
+        project.dispose();
+        projectWorkbenches.delete(key);
       }
-      paperSessions.sync(sessions);
+      projectSessions.sync(sessions);
       for (const key of sessions) {
-        if (paperWorkbenches.has(key)) continue;
-        const paper = createPaperWorkbench({
+        if (projectWorkbenches.has(key)) continue;
+        const project = createProjectWorkbench({
           session: key,
-          root: paperRoots.get(key),
-          surfaces: paperSessions,
+          root: projectRoots.get(key),
+          surfaces: projectSessions,
           settingsView,
           logsPane,
           isActive: () => shell.active === key,
           subagentsTemplate: () => {
-            const session = paperSessions.get(key);
+            const session = projectSessions.get(key);
             return session
               ? subagentsPaneTemplate({
                   view: session.view$.get(),
@@ -1088,9 +1088,9 @@ const MESSAGE_ROUTES = createMessageRoutes({
           },
           onLayoutChanged: layoutChanged,
         });
-        paperWorkbenches.set(key, paper);
-        paper.setTheme(currentTheme());
-        if (paperRoots.has(key)) void paper.editorPane.refresh();
+        projectWorkbenches.set(key, project);
+        project.setTheme(currentTheme());
+        if (projectRoots.has(key)) void project.editorPane.refresh();
       }
       setShell({
         ...shell,
@@ -1099,7 +1099,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
         collapsed: shell.collapsed.filter((key) => open.includes(key)),
       });
     } finally {
-      applyingPaperList = false;
+      applyingProjectList = false;
     }
     rerenderShell();
     if (previousKey !== message.activeKey) {
@@ -1117,10 +1117,10 @@ const MESSAGE_ROUTES = createMessageRoutes({
 
 // The shell's one message listener: the desktop routes first, then the
 // session transport, which takes the frames, responses, and surface
-// actions of every open paper's session. The settings view's pushes reach
+// actions of every open project's session. The settings view's pushes reach
 // `<settings-app>` through its own listener and match no route here.
 window.addEventListener('message', (event) => {
-  for (const route of [...MESSAGE_ROUTES, paperSessions.receive]) {
+  for (const route of [...MESSAGE_ROUTES, projectSessions.receive]) {
     if (route(event.data)) return;
   }
 });
@@ -1128,11 +1128,11 @@ window.addEventListener('message', (event) => {
 // Keep the embedded browser aligned when the window resizes: its view is
 // positioned in absolute window coordinates, not renderer layout.
 window.addEventListener('resize', () => {
-  const paper = paperWorkbenches.get(shell.active);
-  if (!paper || applyingPaperList) return;
-  paper.workbench.syncBrowserViewBounds();
-  paper.editorPane.layout();
-  paper.terminalPane.layout();
+  const project = projectWorkbenches.get(shell.active);
+  if (!project || applyingProjectList) return;
+  project.workbench.syncBrowserViewBounds();
+  project.editorPane.layout();
+  project.terminalPane.layout();
 });
 
 // =============================================================================
@@ -1140,9 +1140,9 @@ window.addEventListener('resize', () => {
 // =============================================================================
 //
 // Every component dispatches the arm it wants as a bubbling, composed event
-// (`uiEvents.ts`); the root forwards it to the paper it came from. The paper
+// (`uiEvents.ts`); the root forwards it to the project it came from. The project
 // is the nearest `data-session` on the event's path: the conversation column
-// (the shell and its dock) carries the shown paper's key, and each paper's
+// (the shell and its dock) carries the shown project's key, and each project's
 // workbench and rail tree its own.
 
 // The guard below protects the wiring against double-registration: a
@@ -1166,25 +1166,25 @@ function wireShellEvents(): void {
   shellEventsWired = true;
   appRoot.addEventListener('runtime-request', (event) => {
     const key = sessionOf(event);
-    if (key) paperSessions.runtimeRequest(key, event.detail);
+    if (key) projectSessions.runtimeRequest(key, event.detail);
   });
   appRoot.addEventListener('host-request', (event) => {
     const key = sessionOf(event);
-    if (key) paperSessions.hostRequest(key, event.detail);
+    if (key) projectSessions.hostRequest(key, event.detail);
   });
   appRoot.addEventListener('surface-action', (event) => {
     const key = sessionOf(event);
     if (!key) return;
-    paperSessions.act(key, event.detail);
+    projectSessions.act(key, event.detail);
     // The rail is bound to one active stream across every section: picking
-    // a stream in another paper's tree picks that paper too (PRD 12.2).
+    // a stream in another project's tree picks that project too (PRD 12.2).
     if (event.detail.kind === 'select' && key !== shell.active) {
-      selectPaper(key);
+      selectProject(key);
     }
   });
   appRoot.addEventListener('composer-submit', (event) => {
     const key = sessionOf(event);
-    if (key) paperSessions.submit(key);
+    if (key) projectSessions.submit(key);
   });
 }
 
@@ -1200,10 +1200,10 @@ function completeBootstrap(): void {
   // bootstrap failure re-installs shortcuts too; every step is idempotent.
   shortcutBootstrap.ensure();
   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
-  // The papers list arrives in reply; each paper's session subscribes as it
-  // opens, and the file tree refreshes when the list names the paper this
+  // The projects list arrives in reply; each project's session subscribes as it
+  // opens, and the file tree refreshes when the list names the project this
   // window shows.
-  postMessage(DESKTOP_PAPER_COMMANDS.REQUEST_PAPERS);
+  postMessage(DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS);
   document.body.dataset.desktopReady = 'true';
   bootstrapComplete = true;
 }
@@ -1216,8 +1216,8 @@ if (!bootstrapFailed) {
 // keeps no copy and learns of it only when this veto raises will-prevent-unload.
 installDesktopUnsavedCloseWiring(window, {
   hasUnsavedChanges: () =>
-    [...paperWorkbenches.values()].some((paper) =>
-      paper.editorPane.hasUnsavedChanges(),
+    [...projectWorkbenches.values()].some((project) =>
+      project.editorPane.hasUnsavedChanges(),
     ),
 });
 
@@ -1227,9 +1227,9 @@ window.addEventListener(
     surfaceResizeObserver?.disconnect();
     shortcutBootstrap.dispose();
     disposePendingFileRequests();
-    for (const paper of paperWorkbenches.values()) paper.dispose();
-    paperWorkbenches.clear();
-    paperSessions.dispose();
+    for (const project of projectWorkbenches.values()) project.dispose();
+    projectWorkbenches.clear();
+    projectSessions.dispose();
   },
   { once: true },
 );

@@ -1,6 +1,6 @@
 /**
  * The Sessions drawer (PRD 12.1): a slide-over with a scrim, headed by the
- * paper name with search and close, the real `<stream-tabs>` in group
+ * project name with search and close, the real `<stream-tabs>` in group
  * sections as its body, and "Open sessions in editor" as its footer. New
  * task has one home, the shell header; the drawer carries no second one.
  *
@@ -144,7 +144,7 @@ export class SessionDrawer extends LitElement {
       <div class="scrim" @click=${this.close}></div>
       <div class="panel" role="dialog" aria-label="Sessions">
         <div class="drawer-header">
-          <span class="drawer-title">${this.host?.paper.name ?? ''}</span>
+          <span class="drawer-title">${this.host?.project.name ?? ''}</span>
           ${renderIconActionButton({
             id: 'drawer-close',
             icon: 'xmark',

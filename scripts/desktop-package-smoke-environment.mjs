@@ -1,5 +1,8 @@
 // Node imports
 import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+import { Effect } from 'effect';
 
 const PASSTHROUGH_ENV_NAMES = new Set([
   'COLORTERM',
@@ -70,4 +73,57 @@ export function buildDesktopSmokeEnvironment(sourceEnvironment, paths) {
     XDG_CACHE_HOME: join(paths.profile, '.cache'),
     XDG_CONFIG_HOME: join(paths.profile, '.config'),
   };
+}
+
+/** Playwright's ESM loader cannot directly import the root's CommonJS-shaped TS modules. */
+export async function loadDatabaseFixture(userDataPath) {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const bundle = join(userDataPath, 'session-database-fixture.mjs');
+  await build({
+    stdin: {
+      contents: `
+        export { databaseLayer } from '@controllers/session/Database';
+        export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+        export { Database } from '@shared/session/database';
+        export { ProcessIdentity } from '@shared/session/sessionEvents';
+        export { aggregateId } from '@shared/schemas';
+        export { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
+        export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
+        export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
+      `,
+      loader: 'ts',
+      resolveDir: root,
+    },
+    outfile: bundle,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    loader: { '.node': 'file' },
+    assetNames: '[name]',
+    target: 'node22.16',
+    tsconfig: join(root, 'tsconfig.json'),
+    banner: {
+      js: "import { createRequire as __texraCreateRequire } from 'node:module'; const require = __texraCreateRequire(import.meta.url);",
+    },
+  });
+  return import(pathToFileURL(bundle).href);
+}
+
+/** Seed the profile through the same scoped project-record owner as the application. */
+export async function rememberOpenProject(userDataPath, workspacePath) {
+  const fixture = await loadDatabaseFixture(userDataPath);
+  const owner = fixture.processOwnerId(
+    await fixture.nodeProcesses.selfIdentity(),
+  );
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const records = yield* fixture.openDesktopProjectRecords(
+          userDataPath,
+          owner,
+        );
+        yield* records.activate(workspacePath);
+      }),
+    ),
+  );
 }

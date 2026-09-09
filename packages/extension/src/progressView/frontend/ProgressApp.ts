@@ -270,13 +270,13 @@ export class ProgressApp extends LitElement {
       !stream.readOnly &&
       (stream.group === 'running' || stream.group === 'waiting');
     // One 38px row. Docked wide (the editor tab past 720px), the row is a
-    // 300px + 1fr grid: the dock cell carries the paper name and New task,
+    // 300px + 1fr grid: the dock cell carries the project name and New task,
     // the reading cell the stream's actions; the sidebar and the narrow tab
     // show the sessions button and the title in one cell.
     return html`
       <header class="shell-header">
         <div class="header-dock">
-          <span class="shell-title">${host.paper.name}</span>
+          <span class="shell-title">${host.project.name}</span>
           <span class="spacer"></span>
           ${renderIconActionButton({
             id: 'dock-new-task',
@@ -297,7 +297,7 @@ export class ProgressApp extends LitElement {
             onClick: this.toggleDrawer,
           })}
           <span class="shell-title header-main-title"
-            >${stream ? host.paper.name : 'New task'}</span
+            >${stream ? host.project.name : 'New task'}</span
           >
           <span class="spacer"></span>
           ${
@@ -455,8 +455,8 @@ export class ProgressApp extends LitElement {
       </div>
       <h1 id="shell-hero-title">What are you working on?</h1>
       <p>
-        ${host.paper.name}. Describe the outcome you want: a polish, a review, a
-        literature pass, a proof check.
+        ${host.project.name}. Describe the outcome you want: a polish, a review,
+        a literature pass, a proof check.
       </p>
     </section>`;
   }

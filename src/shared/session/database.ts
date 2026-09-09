@@ -100,6 +100,10 @@ export class Database extends Context.Service<
     readonly readExecutionChildren: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** Latest desktop profile record, selected directly by its aggregate index. */
+    readonly readDesktopProjects: (
+      id: AggregateId,
+    ) => Effect.Effect<SessionEvent | undefined, DatabaseReadFailed>;
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,

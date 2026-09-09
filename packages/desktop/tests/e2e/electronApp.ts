@@ -1,15 +1,13 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright';
+import {
+  loadDatabaseFixture,
+  rememberOpenProject,
+} from '../../../../scripts/desktop-package-smoke-environment.mjs';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Page } from 'playwright';
 
@@ -20,9 +18,9 @@ const MAIN_ENTRY = join(PACKAGE_ROOT, 'dist', 'main', 'index.js');
 export interface LaunchOptions {
   /**
    * Workspace folder the app opens at launch, seeded into the profile's
-   * remembered papers (there is no launch flag; the app reopens what it
+   * remembered projects (there is no launch flag; the app reopens what it
    * remembers). If omitted, a fresh temp directory is created so the app
-   * shows a paper rather than the empty state at startup.
+   * shows a project rather than the empty state at startup.
    */
   workspacePath?: string;
   /**
@@ -52,30 +50,16 @@ export interface LaunchedApp {
   ownsUserData: boolean;
 }
 
-/**
- * Seed `workspacePath` as the paper the app shows at launch. Source of truth:
- * `readRememberedDesktopPapers` in packages/desktop/src/main/desktopPapers.ts
- * reads the `texra.desktop.openPapers` list from the profile's global state
- * (a JSON object at `state/global.json`, opened by
- * packages/desktop/src/main/platform/index.ts) and shows the last entry.
- * Merges into an existing profile so a relaunch keeps its other state.
- */
-function rememberOpenPaper(userDataPath: string, workspacePath: string): void {
-  const statePath = join(userDataPath, 'state', 'global.json');
-  let state: Record<string, unknown> = {};
-  if (existsSync(statePath)) {
-    state = JSON.parse(readFileSync(statePath, 'utf8')) as Record<
-      string,
-      unknown
-    >;
-  }
-  const remembered = state['texra.desktop.openPapers'];
-  const others = (Array.isArray(remembered) ? remembered : []).filter(
-    (entry) => typeof entry === 'string' && entry !== workspacePath,
+/** Resolve project storage through the production path function in the fixture bundle. */
+export async function findWorkspaceStoragePath(input: {
+  userDataPath: string;
+  workspacePath: string;
+}): Promise<string> {
+  const fixture = await loadDatabaseFixture(input.userDataPath);
+  return fixture.resolveWorkspaceStoragePath(
+    input.userDataPath,
+    realpathSync(input.workspacePath),
   );
-  state['texra.desktop.openPapers'] = [...others, workspacePath];
-  mkdirSync(dirname(statePath), { recursive: true });
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
 }
 
 /**
@@ -107,7 +91,7 @@ export async function launchTexraApp(
   const userDataPath =
     options.userDataPath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
 
-  rememberOpenPaper(userDataPath, workspacePath);
+  await rememberOpenProject(userDataPath, workspacePath);
   const app = await electron.launch({
     args: [MAIN_ENTRY],
     cwd: PACKAGE_ROOT,

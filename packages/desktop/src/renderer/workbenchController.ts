@@ -36,12 +36,12 @@ interface WorkbenchControllerDeps {
   terminalPane: ReturnType<typeof createTerminalPane>;
   reviewPane: ReturnType<typeof createReviewPane>;
   pdfPane: ReturnType<typeof createPdfPane>;
-  /** The Subagents tab's content, read from the active paper's view. */
+  /** The Subagents tab's content, read from the active project's view. */
   subagentsTemplate(): TemplateResult | typeof nothing;
   settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopTaskShellState;
-  /** Root of the paper this window shows; new terminals start there. */
+  /** Root of the project this window shows; new terminals start there. */
   getWorkspacePath(): string | undefined;
   updateShell(next: DesktopTaskShellState): void;
   postMessage(command: string, payload?: Record<string, unknown>): void;
@@ -198,7 +198,7 @@ export function createWorkbenchController({
     if (terminal?.kind !== 'terminal') return;
     pendingTerminalCommands.set(terminal.id, initialCommand);
     updateShell(next);
-    // An explicit command belongs to its paper even when another paper is shown.
+    // An explicit command belongs to its project even when another project is shown.
     if (!isActive()) terminalPane.activate(terminal.id, { focus: false });
   }
 

@@ -70,7 +70,7 @@ import {
   type SessionType,
   type StreamTabId,
 } from '@shared/schemas';
-import { paperDisplayOf } from '@shared/session/hostSnapshot';
+import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import type {
   DownMessage,
   SurfaceActionMessage,
@@ -151,7 +151,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
     const roots = workspaceRoots();
     this.snapshot = createHostSnapshotSource({
-      paper: paperDisplayOf(session.roots.storage, roots.workspace),
+      project: projectDisplayOf(session.roots.storage, roots.workspace),
       globalState: platform().globalState,
       fileOptions: () => workspaceFileOptions(roots.workspace),
       readRecentCommits: async () => {

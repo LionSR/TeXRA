@@ -93,7 +93,14 @@ export function ownerPid(ownerId: OwnerId): number {
 
 /** C2 separates independent lifecycles even when their logical ids coincide. */
 const AggregateKeySchema = z.tuple([
-  z.enum(['stream', 'execution', 'workflow-checkpoint', 'inquiry', 'session']),
+  z.enum([
+    'stream',
+    'execution',
+    'workflow-checkpoint',
+    'inquiry',
+    'session',
+    'desktop-projects',
+  ]),
   z.string().min(1),
 ]);
 
@@ -360,9 +367,15 @@ const ExecutionEventDraftSchema = z.discriminatedUnion('type', [
     'execution',
   ),
 ]);
+const DesktopProjectsDraftSchema = durable(
+  'desktop.projects.changed',
+  { roots: z.array(z.string().min(1)) },
+  'desktop-projects',
+);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...ExecutionEventDraftSchema.options,
+  DesktopProjectsDraftSchema,
 ]);
 const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope).refine(
@@ -394,6 +407,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...ExecutionEventDraftSchema.options.map((schema) => schema.extend(envelope)),
+  DesktopProjectsDraftSchema.extend(envelope),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 

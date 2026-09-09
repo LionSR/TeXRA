@@ -142,7 +142,7 @@ test('loads the project tree before an editor panel is opened', async () => {
   ).toHaveCount(0);
 });
 
-test('resizes the window canvas and paper sidebar', async () => {
+test('resizes the window canvas and project sidebar', async () => {
   const { page } = launched;
 
   const contentBounds = await setContentSize(1500, 900);
@@ -732,17 +732,17 @@ test('closes a bottom tab and falls back within the same pane', async () => {
   await expect(page.locator('.task-conversation')).toBeVisible();
 });
 
-test('keeps paper workbenches alive across selection and releases them on closure', async () => {
+test('keeps project workbenches alive across selection and releases them on closure', async () => {
   const { app, page } = launched;
-  const otherWorkspace = mkdtempSync(join(tmpdir(), 'texra-other-paper-'));
+  const otherWorkspace = mkdtempSync(join(tmpdir(), 'texra-other-project-'));
   writeFileSync(join(otherWorkspace, 'sample.tex'), 'A different paper.\n');
-  const pidPath = join(workspacePath, 'paper-process.pid');
-  const hiddenPidPath = join(workspacePath, 'hidden-paper-process.pid');
+  const pidPath = join(workspacePath, 'project-process.pid');
+  const hiddenPidPath = join(workspacePath, 'hidden-project-process.pid');
   try {
-    const paperA = await page
+    const projectA = await page
       .locator('.task-project-row.is-active')
       .getAttribute('title');
-    expect(paperA).toBeTruthy();
+    expect(projectA).toBeTruthy();
     await page
       .locator('.desktop-editor-tree-row[data-path="paper-retention.tex"]')
       .click();
@@ -758,7 +758,7 @@ test('keeps paper workbenches alive across selection and releases them on closur
     );
     await openSidebarWorkbench('Terminal');
     const terminal = page.locator(
-      '.task-paper-workbench:not([hidden]) .desktop-terminal-surface:not([hidden])',
+      '.task-project-workbench:not([hidden]) .desktop-terminal-surface:not([hidden])',
     );
     await terminal.locator('.xterm').click();
     await page.keyboard.type(`printf '%s' "$$" > ${JSON.stringify(pidPath)}`);
@@ -786,17 +786,17 @@ test('keeps paper workbenches alive across selection and releases them on closur
     const platform = await app.evaluate(() => process.platform);
     await page.keyboard.press(platform === 'darwin' ? 'Meta+o' : 'Control+o');
     await expect(page.locator('.task-project-row')).toHaveCount(2);
-    const paperB = await page
+    const projectB = await page
       .locator('.task-project-row.is-active')
       .getAttribute('title');
-    expect(paperB).not.toBe(paperA);
+    expect(projectB).not.toBe(projectA);
     expect(process.kill(pid, 0)).toBe(true);
     expect(await originalTerminal?.evaluate((node) => node.isConnected)).toBe(
       true,
     );
     await expect(
       page.locator(
-        '.task-paper-workbench:not([hidden]) .task-workbench-tab[data-kind="terminal"]',
+        '.task-project-workbench:not([hidden]) .task-workbench-tab[data-kind="terminal"]',
       ),
     ).toHaveCount(0);
     await page
@@ -813,7 +813,7 @@ test('keeps paper workbenches alive across selection and releases them on closur
         );
       },
       {
-        session: paperA,
+        session: projectA,
         initialCommand: `printf '%s' "$$" > ${JSON.stringify(hiddenPidPath)}`,
       },
     );
@@ -827,10 +827,10 @@ test('keeps paper workbenches alive across selection and releases them on closur
     const hiddenPid = Number.parseInt(readFileSync(hiddenPidPath, 'utf8'), 10);
     await expect(page.locator('.task-project-row.is-active')).toHaveAttribute(
       'title',
-      paperB!,
+      projectB!,
     );
 
-    await page.locator(`.task-project-row[title="${paperA}"]`).click();
+    await page.locator(`.task-project-row[title="${projectA}"]`).click();
     await expect(
       page.locator('.desktop-editor-surface .view-lines:visible'),
     ).toContainText('paper-a-unsaved');
@@ -843,7 +843,7 @@ test('keeps paper workbenches alive across selection and releases them on closur
 
     await page
       .locator(
-        '.task-paper-workbench:not([hidden]) .task-workbench-tab[data-kind="terminal"][data-active="true"] .task-workbench-tab-close',
+        '.task-project-workbench:not([hidden]) .task-workbench-tab[data-kind="terminal"][data-active="true"] .task-workbench-tab-close',
       )
       .click();
     await expect
@@ -856,17 +856,17 @@ test('keeps paper workbenches alive across selection and releases them on closur
       })
       .toBe(false);
     expect(process.kill(pid, 0)).toBe(true);
-    await page.locator(`.task-project-row[title="${paperB}"]`).click();
+    await page.locator(`.task-project-row[title="${projectB}"]`).click();
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBoxSync = () => 1;
     });
     await page
       .locator(
-        `.task-project-item:has(.task-project-row[title="${paperA}"]) .task-project-close`,
+        `.task-project-item:has(.task-project-row[title="${projectA}"]) .task-project-close`,
       )
       .click();
     await expect(
-      page.locator(`.task-project-row[title="${paperA}"]`),
+      page.locator(`.task-project-row[title="${projectA}"]`),
     ).toHaveCount(0);
     expect(await originalEditor?.evaluate((node) => node.isConnected)).toBe(
       false,

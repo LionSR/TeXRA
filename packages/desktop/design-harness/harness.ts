@@ -492,7 +492,7 @@ const style = html`<style>
   .h-nested {
     padding: 0 0 6px 10px;
   }
-  .h-add-paper {
+  .h-add-project {
     margin-top: 8px;
     width: 100%;
   }
@@ -533,7 +533,7 @@ const style = html`<style>
   .h-dock follow-up-input {
     padding: 0;
   }
-  .h-paper-chip::part(base) {
+  .h-project-chip::part(base) {
     gap: 6px;
   }
   .h-context-col {
