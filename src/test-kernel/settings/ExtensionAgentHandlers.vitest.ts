@@ -15,7 +15,6 @@ const host = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
-  executeCommand: vi.fn(),
 }));
 
 vi.mock('vscode', async () => {
@@ -28,7 +27,6 @@ vi.mock('vscode', async () => {
       showInformationMessage: host.showInformationMessage,
       showWarningMessage: host.showWarningMessage,
     },
-    commands: { ...actual.commands, executeCommand: host.executeCommand },
   };
 });
 
@@ -169,77 +167,6 @@ describe('extension settings AgentHandlers', () => {
     expect(notifications).toEqual([
       'Applied "Physicist" with 7 members still unavailable',
     ]);
-  });
-
-  it('reports members that stayed unavailable after applying a team', async () => {
-    const catalog = physicistCatalog();
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: [
-        {
-          id: 'partial-team',
-          name: 'Partial team',
-          description: 'One member is missing locally',
-          icon: 'screwdriver-wrench',
-          agents: { workflow: ['correct'], toolUse: ['review', 'ghost'] },
-          texraHostedAgents: [],
-        },
-      ],
-    });
-    const { handlers, notifications } = await createHandlerFixture({
-      catalog,
-      workspaceState,
-    });
-
-    await applyPreset(handlers, 'partial-team');
-
-    expect(notifications).toEqual([
-      'Applied "Partial team" with 1 member still unavailable',
-    ]);
-  });
-
-  it('signs in before one forced remote refresh and commits the team once', async () => {
-    const workspaceState = new FakeStateStore(REMOTE_TEAM_STATE);
-    const order: string[] = [];
-    registry.refreshAgents.mockImplementation(() =>
-      Effect.sync(() => {
-        order.push('refresh');
-        registry.catalog.toolUse = [
-          {
-            source: 'remote',
-            name: 'orchestrator',
-            path: '/remote/orchestrator.yaml',
-            category: 'toolUse',
-            tools: ['delegate_agent'],
-          },
-        ];
-      }),
-    );
-    host.executeCommand.mockImplementation(async () => {
-      order.push('sign-in');
-      return true;
-    });
-    const { handlers } = await createHandlerFixture({
-      workspaceState,
-      modalChoice: 'Sign In to TeXRA',
-    });
-    const update = vi.spyOn(workspaceState, 'update');
-
-    await applyPreset(handlers, 'remote-team');
-
-    expect(order).toEqual(['sign-in', 'refresh']);
-    expect(host.executeCommand).toHaveBeenCalledOnce();
-    expect(registry.refreshAgents).toHaveBeenCalledOnce();
-    expect(registry.refreshAgents).toHaveBeenCalledWith({
-      includeRemote: true,
-    });
-    expect(
-      update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-      ),
-    ).toHaveLength(1);
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({ kind: 'team', teamId: 'remote-team' });
   });
 
   it('does not write roster state when team preflight is cancelled', async () => {

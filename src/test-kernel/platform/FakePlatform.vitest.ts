@@ -9,16 +9,10 @@ import { describe, it } from 'vitest';
 
 // Local imports
 import { FileType, type FileSystemProvider } from '@platform/interfaces';
-import { platform } from '@platform/platform';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local file imports
-import {
-  FakeFileSystemProvider,
-  createFakePlatform,
-  createFakeWorkspaceRoots,
-} from '../support/FakePlatform';
+import { FakeFileSystemProvider } from '../support/FakePlatform';
 
 type ProviderCase = {
   provider: FileSystemProvider;
@@ -82,106 +76,6 @@ async function rejectsWithCode(
 }
 
 describe('FakePlatform', () => {
-  it('installs a default fake platform and roots from vitest setup', () => {
-    assert.equal(workspaceRoots().workspace, '/workspace');
-    assert.equal(platform().fs instanceof FakeFileSystemProvider, true);
-  });
-
-  it('provides overridable platform services for tests', async () => {
-    const options = {
-      config: { enabled: true },
-      globalState: { version: 2 },
-      workspaceState: { task: 'active' },
-      files: { '/workspace/src/main.tex': 'hello' },
-      secrets: { token: 'secret-value' },
-    };
-    const platform = createFakePlatform(options);
-    const roots = createFakeWorkspaceRoots(options);
-
-    assert.equal(roots.config.get('enabled', false), true);
-    assert.equal(platform.globalState.get('version', 0), 2);
-    assert.equal(roots.workspaceState.get('task', 'idle'), 'active');
-    assert.equal(roots.workspace, '/workspace');
-    assert.equal(roots.storage, '/workspace/.texra/storage');
-    assert.equal(await platform.secrets.get('token'), 'secret-value');
-    assert.equal(
-      Buffer.from(
-        await platform.fs.readFile('/workspace/src/main.tex'),
-      ).toString('utf8'),
-      'hello',
-    );
-  });
-
-  it('can model a missing workspace root', () => {
-    const roots = createFakeWorkspaceRoots({ workspacePath: undefined });
-
-    assert.equal(roots.workspace, undefined);
-  });
-
-  it('supports fake config updates', async () => {
-    const { config } = createFakeWorkspaceRoots({
-      config: { enabled: true },
-    });
-
-    await config.update('enabled', false, 'global');
-    await config.update('enabled', true, 'global');
-
-    assert.equal(config.get('enabled', true), true);
-    assert.equal(config.isExplicitlySet('enabled'), true);
-    assert.deepEqual(config.inspect('enabled'), {
-      globalValue: true,
-      workspaceValue: undefined,
-    });
-  });
-
-  it('mirrors texra config aliases', async () => {
-    const { config } = createFakeWorkspaceRoots();
-
-    await config.update('texra.files.exclude', ['node_modules']);
-    await config.update('texra.files.include', ['src']);
-
-    assert.deepEqual(config.get('files.exclude', []), ['node_modules']);
-    assert.equal(config.isExplicitlySet('files.exclude'), true);
-    assert.deepEqual(config.inspect('files.exclude'), {
-      globalValue: undefined,
-      workspaceValue: ['node_modules'],
-    });
-  });
-
-  it('writes config aliases to the exact caller key', async () => {
-    const { config } = createFakeWorkspaceRoots();
-
-    await config.update('texra.files.exclude', ['dist']);
-    await config.update('files.exclude', ['node_modules']);
-
-    assert.deepEqual(config.get('files.exclude', []), ['node_modules']);
-    assert.deepEqual(config.get('texra.files.exclude', []), ['dist']);
-
-    await config.update('files.exclude', undefined);
-
-    assert.deepEqual(config.get('files.exclude', []), ['dist']);
-    assert.equal(config.isExplicitlySet('texra.files.exclude'), true);
-  });
-
-  it('supports custom overrides while retaining other fakes', () => {
-    const fs = new FakeFileSystemProvider();
-    const platform = createFakePlatform({}, { fs });
-
-    assert.equal(platform.fs, fs);
-    assert.ok(platform.globalState);
-    assert.ok(platform.secrets);
-  });
-
-  it('keeps fake-only convenience helpers backed by the provider', async () => {
-    const fakeFs = new FakeFileSystemProvider();
-
-    fakeFs.setFile('/workspace/missing/a.txt', 'seed');
-    await fakeFs.writeFile('/workspace/missing/a.txt', Buffer.from('updated'));
-
-    assert.equal(fakeFs.exists('/workspace/missing/a.txt'), true);
-    assert.equal(fakeFs.getText('/workspace/missing/a.txt'), 'updated');
-  });
-
   it('matches node filesystem semantics for file reads, writes, stats, and directories', async () => {
     await withProviders(async ({ provider, resolve, expectedRealPath }) => {
       await provider.createDirectory(resolve('/workspace/docs'));

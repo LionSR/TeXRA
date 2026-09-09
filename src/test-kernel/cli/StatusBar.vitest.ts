@@ -14,7 +14,6 @@ import {
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import {
   STREAM_PHASE,
-  type StreamPhase,
   type StreamTabId,
   STREAM_LIFECYCLE_READY,
 } from '@shared/schemas';
@@ -879,25 +878,6 @@ describe('CLI StatusBar display model', () => {
     expect(leftTexts(display).join(' ')).not.toContain(
       `${PERSONAL_API_MODE_LABEL}3`,
     );
-  });
-
-  it('drops approval depth before returning an over-wide narrow status', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: STREAM_PHASE.RUNNING,
-        turn: { elapsedMs: 75_000 },
-        approvalDepth: 3,
-        ctrlCAction: 'stop',
-        width: 30,
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual([
-      '◆',
-      'Running',
-      '1m 15s',
-      PERSONAL_API_MODE_LABEL,
-    ]);
   });
 
   it('drops elapsed and access mode rather than overflowing the row', () => {

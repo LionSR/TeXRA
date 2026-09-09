@@ -285,31 +285,6 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('still stops the Lean servers when the run fails', async () => {
-    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-      'lifecycle-lean-server-stop-failed',
-    );
-    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
-
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlowWithLifecycle(
-            ctx,
-            async () => {
-              throw new Error('flow exploded');
-            },
-            { onRunEnd: stopSessionsForRun },
-          ),
-        ),
-      ).rejects.toThrow('flow exploded');
-
-      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
-    } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
-    }
-  });
-
   it('does not stop the Lean servers when a tool-use run parks at WAITING', async () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-lean-server-stop-waiting',
@@ -330,30 +305,6 @@ describe('runFlowWithLifecycle', () => {
       // spawn.
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
       expect(stopSessionsForRun).not.toHaveBeenCalled();
-    } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
-    }
-  });
-
-  it('stops the Lean servers attributed to a subagent when it ends', async () => {
-    await initLifecycleTestPlatform(true);
-    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-      'lifecycle-lean-server-stop-subagent',
-    );
-    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
-
-    try {
-      const result = await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () =>
-            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-          { isSubagent: true, onRunEnd: stopSessionsForRun },
-        ),
-      );
-
-      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }

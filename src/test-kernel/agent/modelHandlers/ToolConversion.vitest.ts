@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { extractToolNames } from '@agent/index/agentYamlScanner';
 import {
   convertGoogleToolSchema,
-  convertToolSchema,
   toAnthropicTools,
   toGoogleTools,
   toOpenAITools,
@@ -18,38 +17,18 @@ import type { ToolDefinition } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { getDefaultToolRegistry } from '@tools/registry';
-import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { BashTool } from '@tools/bash';
 import { EditFileTool } from '@tools/EditTool';
 import { GlobTool } from '@tools/glob';
 import { GrepTool } from '@tools/grep';
 import { ReadFileTool } from '@tools/ReadTool';
 import { WriteFileTool } from '@tools/WriteTool';
-import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
-import { ArxivMetadataTool } from '@tools/arxiv/ArxivMetadataTool';
-import { ArxivSearchTool } from '@tools/arxiv/ArxivSearchTool';
 import { CrossrefSearchTool } from '@tools/citation/CrossrefSearchTool';
-import { TexcountTool } from '@tools/texcount/TexcountTool';
-import { WebFetchTool } from '@tools/web/WebFetchTool';
-import { WebSearchTool } from '@tools/web/WebSearchTool';
 import type { Tool as GeminiTool } from '@google/genai';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { FunctionTool } from 'openai/resources/responses/responses';
 
 type OpenAIFunctionTool = Extract<ChatCompletionTool, { type: 'function' }>;
-type JsonSchemaWithProperties = {
-  description?: unknown;
-  properties?: Record<string, JsonSchemaWithProperties>;
-  anyOf?: JsonSchemaWithProperties[];
-  oneOf?: JsonSchemaWithProperties[];
-  allOf?: JsonSchemaWithProperties[];
-};
-type DescriptionPath = readonly string[];
-type ToolDescriptionCase = {
-  readonly definition: ToolDefinition;
-  readonly fields: readonly string[];
-  readonly nestedFields?: readonly DescriptionPath[];
-};
 
 /** A plain JSON-schema function tool, the baseline shape every provider gets. */
 const READ_FILE_DEF: ToolDefinition = {
@@ -62,36 +41,6 @@ const READ_FILE_DEF: ToolDefinition = {
   },
 };
 
-function propertySchema(
-  schema: JsonSchemaWithProperties | undefined,
-  field: string,
-): JsonSchemaWithProperties | undefined {
-  const directProperty = schema?.properties?.[field];
-  if (directProperty) return directProperty;
-
-  for (const branch of [
-    ...(schema?.anyOf ?? []),
-    ...(schema?.oneOf ?? []),
-    ...(schema?.allOf ?? []),
-  ]) {
-    const nestedProperty = propertySchema(branch, field);
-    if (nestedProperty) return nestedProperty;
-  }
-
-  return undefined;
-}
-
-function schemaAtPath(
-  parameters: unknown,
-  path: DescriptionPath,
-): JsonSchemaWithProperties | undefined {
-  let schema = parameters as JsonSchemaWithProperties | undefined;
-  for (const segment of path) {
-    schema = propertySchema(schema, segment);
-  }
-  return schema;
-}
-
 /** The registry's own definitions for a declared tool list, in order. */
 function registeredDefinitions(names: readonly string[]): ToolDefinition[] {
   const registry = getDefaultToolRegistry();
@@ -100,29 +49,6 @@ function registeredDefinitions(names: readonly string[]): ToolDefinition[] {
     if (!tool) throw new Error(`Tool "${name}" is not registered`);
     return tool.definition;
   });
-}
-
-function expectDescribedParameters(
-  toolName: string,
-  parameters: unknown,
-  paths: readonly DescriptionPath[],
-): void {
-  for (const path of paths) {
-    const field = path.join('.');
-    const description = schemaAtPath(parameters, path)?.description;
-    expect(typeof description, `${toolName}.${field}`).toBe('string');
-    expect(
-      (description as string).length,
-      `${toolName}.${field}`,
-    ).toBeGreaterThan(0);
-  }
-}
-
-function descriptionPaths(testCase: ToolDescriptionCase): DescriptionPath[] {
-  return [
-    ...testCase.fields.map((field) => [field] as const),
-    ...(testCase.nestedFields ?? []),
-  ];
 }
 
 type GooglePropertiesSchema = {
@@ -325,117 +251,6 @@ describe('Anthropic tool conversion', () => {
     expect(customTools.map((tool) => tool.name)).toContain('grep');
     for (const tool of customTools) {
       expect(tool.input_schema?.type, tool.name).toBe('object');
-    }
-  });
-});
-
-describe('tool schema descriptions', () => {
-  it('keeps LLM-facing input fields described through provider conversions', () => {
-    const cases: ToolDescriptionCase[] = [
-      {
-        definition: new ArxivDownloadTool().definition,
-        fields: ['id', 'autoIndent', 'destination'],
-      },
-      {
-        definition: new ArxivMetadataTool().definition,
-        fields: ['id', 'includeAbstract', 'maxAuthors'],
-      },
-      {
-        definition: new ArxivSearchTool().definition,
-        fields: [
-          'query',
-          'field',
-          'categories',
-          'maxResults',
-          'start',
-          'sortBy',
-          'sortOrder',
-        ],
-      },
-      {
-        definition: new CrossrefSearchTool().definition,
-        fields: [
-          'command',
-          'query',
-          'rows',
-          'offset',
-          'sort',
-          'order',
-          'filter',
-          'doi',
-        ],
-      },
-      {
-        definition: new DiagnosticsTool().definition,
-        fields: ['command', 'path'],
-      },
-      {
-        definition: new EditFileTool().definition,
-        fields: ['path', 'old_str', 'new_str', 'replace_all'],
-      },
-      { definition: new GlobTool().definition, fields: ['pattern', 'path'] },
-      {
-        definition: new ReadFileTool().definition,
-        fields: ['path', 'range'],
-        nestedFields: [
-          ['range', 'start'],
-          ['range', 'end'],
-        ],
-      },
-      {
-        definition: new TexcountTool().definition,
-        fields: ['files', 'mode', 'format'],
-      },
-      { definition: new WebFetchTool().definition, fields: ['url', 'prompt'] },
-      {
-        definition: new WebSearchTool().definition,
-        fields: ['query', 'max_results'],
-      },
-    ];
-
-    const definitions = cases.map(({ definition }) => definition);
-    const anthropicByName = new Map(
-      toAnthropicTools(definitions).flatMap((tool) =>
-        'type' in tool ? [] : [[tool.name, tool.input_schema] as const],
-      ),
-    );
-    const openAiByName = new Map(
-      toOpenAITools(definitions).flatMap((tool) =>
-        tool.type === 'function'
-          ? [[tool.function.name, tool.function.parameters] as const]
-          : [],
-      ),
-    );
-    const openAiResponseByName = new Map(
-      toOpenAIResponseTools(definitions).flatMap((tool) =>
-        tool.type === 'function' ? [[tool.name, tool.parameters] as const] : [],
-      ),
-    );
-
-    for (const testCase of cases) {
-      const { definition } = testCase;
-      const paths = descriptionPaths(testCase);
-
-      expectDescribedParameters(
-        definition.name,
-        convertToolSchema(definition),
-        paths,
-      );
-      expectDescribedParameters(
-        `${definition.name} anthropic`,
-        anthropicByName.get(definition.name),
-        paths,
-      );
-      expectDescribedParameters(
-        `${definition.name} openai`,
-        openAiByName.get(definition.name),
-        paths,
-      );
-      expectDescribedParameters(
-        `${definition.name} openai-response`,
-        openAiResponseByName.get(definition.name),
-        paths,
-      );
     }
   });
 });

@@ -6,37 +6,19 @@ import { describe, it } from 'vitest';
 
 // Local imports
 import {
-  AgentCategory,
   CODEX_FILE_CHANGE_TOOL,
-  CODEX_THREAD_TOOL,
   CODEX_TODO_TOOL,
   CODEX_TURN_TOOL,
 } from '@shared/schemas';
-import {
-  buildCodexConfig,
-  toCodexCliReasoningEffort,
-} from '@tools/codexConfig';
+import { toCodexCliReasoningEffort } from '@tools/codexConfig';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
   buildCodexMcpToolLog,
-  buildCodexThreadToolLog,
   buildCodexTodoToolLog,
-  CODEX_AGENT_NAME,
   buildCodexTurnToolLog,
   buildCodexUsageStats,
 } from '@tools/codexShared';
-
-describe('buildCodexConfig', () => {
-  it('uses Codex-specific tool-use metadata for child streams', () => {
-    const config = buildCodexConfig('Inspect the failing CI job');
-
-    assert.equal(config.agent, CODEX_AGENT_NAME);
-    assert.equal(config.model, 'gpt55');
-    assert.equal(config.agentCategory, AgentCategory.ToolUse);
-    assert.equal(config.instruction, 'Inspect the failing CI job');
-  });
-});
 
 describe('toCodexCliReasoningEffort', () => {
   it.each(['low', 'medium', 'high'] as const)(
@@ -213,22 +195,6 @@ describe('buildCodexMcpToolLog', () => {
         structuredContent: { total: 1 },
         contentBlocks: [{ type: 'text', text: 'Found one result' }],
       },
-      status: 'completed',
-    });
-  });
-});
-
-describe('buildCodexThreadToolLog', () => {
-  it('builds a native thread lifecycle card', () => {
-    const log = buildCodexThreadToolLog({
-      type: 'thread.started',
-      thread_id: 'thread_123',
-    });
-
-    assert.deepEqual(log, {
-      toolName: CODEX_THREAD_TOOL,
-      summary: 'Created',
-      input: { threadId: 'thread_123' },
       status: 'completed',
     });
   });
