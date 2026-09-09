@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { flowKey } from '@agent/node/persistedFlow';
@@ -110,7 +111,7 @@ describe('ExecutionsTool', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.listExecutions.mockResolvedValue([]);
+    mocks.listExecutions.mockReturnValue(Effect.succeed([]));
     mocks.readMeta.mockResolvedValue(null);
     mocks.readChildren.mockResolvedValue([]);
     mocks.readReport.mockResolvedValue(null);

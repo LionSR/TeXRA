@@ -223,7 +223,7 @@ async function runHistoryDelete(
     // stored execution, including `isUserVisibleExecution`-hidden
     // process-bookkeeping entries and agent-spawned child runs — don't add the
     // visibility filter here.
-    const count = (await listExecutions()).length;
+    const count = (await effectRuntime().runPromise(listExecutions())).length;
     writeTextStderr(
       `Refusing to delete ${formatResultCount(count, 'stored execution')}. Re-run with --yes to confirm.`,
     );

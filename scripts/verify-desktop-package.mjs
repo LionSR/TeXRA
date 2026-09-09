@@ -5,6 +5,8 @@ import { basename, dirname, join, posix, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { nativeCleanupTargets } from './native-cleanup/targets.mjs';
+
 import {
   reportCheckFailures,
   requiredMonacoWorkers,
@@ -618,6 +620,24 @@ if (!app) {
     );
   }
 
+  const cleanupFiles = (await app.listDir('dist/main'))
+    .filter((file) => file.endsWith('.node'))
+    .map((file) => `dist/main/${file}`);
+  // Signing changes Mach-O bytes. The afterPack hook verifies byte identity
+  // before signing; the final package must retain every target and unpack it.
+  for (const target of nativeCleanupTargets) {
+    const matches = cleanupFiles.filter(
+      (file) => basename(file) === `${target}.node`,
+    );
+    if (matches.length !== 1)
+      failures.push(
+        `Expected one packaged cleanup binary for ${target}, found ${matches.length}`,
+      );
+  }
+  for (const file of cleanupFiles) {
+    if (app.isAsar && !(await app.isUnpacked(file)))
+      failures.push(`Native cleanup asset must be unpacked: ${file}`);
+  }
   await checkRuntimeDependencies(app, appPackageJson, failures);
   await checkExists(app, 'dist/main/index.js', 'main bundle', failures);
   await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);

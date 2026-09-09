@@ -22,6 +22,7 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
+import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -71,7 +72,6 @@ import {
   listLeanServers,
   unregisterLeanServer,
 } from '@tools/lean/leanServerRegistry';
-import { delay } from '@utils/core';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
 const FAKE_LAKE = `#!/usr/bin/env node

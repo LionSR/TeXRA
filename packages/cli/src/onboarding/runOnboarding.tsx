@@ -154,13 +154,15 @@ export async function maybeRunCliOnboarding(
       GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
     ) === undefined;
   const hasRunHistory = needsFirstRunBackfill
-    ? await listExecutions().then(
-        (entries) => entries.length > 0,
-        (error: unknown) => {
-          warnOnboardingFailure('Run-history check', error);
-          return false;
-        },
-      )
+    ? await effectRuntime()
+        .runPromise(listExecutions())
+        .then(
+          (entries) => entries.length > 0,
+          (error: unknown) => {
+            warnOnboardingFailure('Run-history check', error);
+            return false;
+          },
+        )
     : false;
   // LAST_KNOWN_VERSION is stamped by desktop/extension startup and is the
   // reliable prior-install signal shared across hosts.

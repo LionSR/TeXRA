@@ -62,8 +62,10 @@ await build({
       },
     },
   ],
+  assetNames: '[name]',
   loader: {
     '.wasm': 'binary',
+    '.node': 'file',
   },
   sourcemap: false,
   splitting: true,

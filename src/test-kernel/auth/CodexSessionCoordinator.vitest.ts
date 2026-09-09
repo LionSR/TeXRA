@@ -1,3 +1,6 @@
+// Node imports
+import { setTimeout as delay } from 'node:timers/promises';
+
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit } from 'effect';
@@ -17,7 +20,6 @@ import type {
 } from '@auth/codex/codexSessionTypes';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { effectRuntime } from '@platform/processRuntime';
-import { delay } from '@utils/core';
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;

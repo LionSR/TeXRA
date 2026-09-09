@@ -16,11 +16,15 @@ import '@test/support/sessionGraphTestSetup';
 // Node imports
 import * as childProcess from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -33,9 +37,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { it } from '@effect/vitest';
 import { Clock, Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
 import { TestClock } from 'effect/testing';
-import { afterAll, describe, expect, vi } from 'vitest';
+
+import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
+import { removeExecutionDirectories } from '@agent/storage/nativeGeneratedCleanup.mjs';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
   forEachLiveSession,
@@ -188,6 +194,20 @@ function drawnSequence(states: Iterable<ReturnType<typeof drawn>>) {
   }
   return seen;
 }
+
+// The native CI coordinator may use a different CPU architecture from its worker.
+beforeAll(() => {
+  if (process.env.NATIVE_TARGET) {
+    expect(`${process.platform}-${process.arch}`).toBe(
+      process.env.NATIVE_TARGET.split('-').slice(0, 2).join('-'),
+    );
+  }
+  if (process.env.TEXRA_TEST_NODE) {
+    expect(realpathSync(process.execPath)).toBe(
+      realpathSync(process.env.TEXRA_TEST_NODE),
+    );
+  }
+});
 
 describe('session events and view', () => {
   it.effect(
@@ -1591,6 +1611,197 @@ describe('the C1 event table and the C6 publisher', () => {
           [],
         );
       }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps replaced storage and queued cleanup confined to the owned directory',
+    async () => {
+      const directory = workspace();
+      const admitted = join(directory, 'admitted');
+      const moved = join(directory, 'moved');
+      const outside = join(directory, 'outside');
+      const generated = join(
+        admitted,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      const replacement = join(
+        outside,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      mkdirSync(generated, { recursive: true });
+      mkdirSync(replacement, { recursive: true });
+      writeFileSync(join(generated, 'output.tex'), 'generated');
+      writeFileSync(join(replacement, 'keep.tex'), 'outside contents');
+      symlinkSync(outside, join(generated, 'reference'));
+      // Admission is synchronous even though deletion is performed by a worker.
+      const pending = removeExecutionDirectories(
+        realpathSync.native(admitted),
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      renameSync(admitted, moved);
+      symlinkSync(outside, admitted);
+      await pending;
+      // A crash after physical removal must permit the same tombstone to retry.
+      await removeExecutionDirectories(
+        realpathSync.native(moved),
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      expect(
+        existsSync(join(moved, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION)),
+      ).toBe(false);
+      expect(readFileSync(join(replacement, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
+    },
+  );
+
+  it.skipIf(
+    process.platform !== 'win32' || !process.env.TEXRA_NATIVE_CLEANUP_UNC_ROOT,
+  )(
+    'confines ephemeral generated cleanup beneath an admitted UNC share',
+    async () => {
+      const directory = mkdtempSync(
+        join(
+          String(process.env.TEXRA_NATIVE_CLEANUP_UNC_ROOT),
+          'texra-cleanup-',
+        ),
+      );
+      roots.push(directory);
+      const generated = join(
+        directory,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      mkdirSync(generated, { recursive: true });
+      writeFileSync(join(generated, 'output.tex'), 'generated');
+      writeFileSync(join(directory, 'keep.tex'), 'retained sibling');
+      await removeExecutionDirectories(
+        directory,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      expect(existsSync(generated)).toBe(false);
+      expect(readFileSync(join(directory, 'keep.tex'), 'utf8')).toBe(
+        'retained sibling',
+      );
+    },
+  );
+
+  it.skipIf(process.platform !== 'win32')(
+    'removes read-only generated Windows files without changing a retained sibling',
+    async () => {
+      const directory = workspace();
+      const generated = join(
+        directory,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      const nested = join(generated, 'nested');
+      const output = join(nested, 'output.tex');
+      const retained = join(directory, 'accepted.tex');
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(output, 'generated');
+      writeFileSync(retained, 'accepted workspace output');
+      chmodSync(output, 0o444);
+      chmodSync(retained, 0o444);
+      expect(statSync(output).mode & 0o200).toBe(0);
+      await removeExecutionDirectories(
+        directory,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      expect(existsSync(generated)).toBe(false);
+      expect(readFileSync(retained, 'utf8')).toBe('accepted workspace output');
+      expect(statSync(retained).mode & 0o200).toBe(0);
+    },
+  );
+
+  it.skipIf(process.platform !== 'win32')(
+    'keeps Windows junction deletion and renamed storage confined to held handles',
+    async () => {
+      const directory = workspace();
+      const admitted = join(directory, 'admitted');
+      const moved = join(directory, 'moved');
+      const outside = join(directory, 'outside');
+      const runs = join(admitted, WORKSPACE_STORAGE_LAYOUT.runs);
+      mkdirSync(runs, { recursive: true });
+      mkdirSync(outside);
+      writeFileSync(join(outside, 'keep.tex'), 'outside contents');
+      // A generated leaf junction is removed through its own handle.
+      symlinkSync(outside, join(runs, EXECUTION), 'junction');
+      await removeExecutionDirectories(
+        admitted,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      expect(existsSync(join(runs, EXECUTION))).toBe(false);
+      expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
+
+      // Replacing the generated root with a junction never grants access to
+      // its target. The storage directory itself is still admissible.
+      rmSync(runs, { recursive: true });
+      symlinkSync(outside, runs, 'junction');
+      await expect(
+        removeExecutionDirectories(admitted, WORKSPACE_STORAGE_LAYOUT.runs, [
+          EXECUTION,
+        ]),
+      ).rejects.toMatchObject({ code: 'ELOOP' });
+      expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
+      rmSync(runs, { recursive: true });
+
+      mkdirSync(join(runs, EXECUTION, 'nested'), { recursive: true });
+      writeFileSync(
+        join(runs, EXECUTION, 'nested', 'generated.tex'),
+        'original',
+      );
+      const pending = removeExecutionDirectories(
+        admitted,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        [EXECUTION],
+      );
+      // Windows may refuse an ancestor rename while the worker holds a child
+      // without delete sharing. Both outcomes must preserve confinement.
+      const destination = (() => {
+        try {
+          renameSync(admitted, moved);
+          return moved;
+        } catch (error) {
+          expect(error).toMatchObject({
+            code: expect.stringMatching(/^(EACCES|EPERM|EBUSY)$/),
+          });
+          return admitted;
+        }
+      })();
+      const replacement = join(
+        admitted,
+        WORKSPACE_STORAGE_LAYOUT.runs,
+        EXECUTION,
+      );
+      if (destination === moved) {
+        mkdirSync(replacement, { recursive: true });
+        writeFileSync(join(replacement, 'keep.tex'), 'replacement contents');
+      }
+      await pending;
+      expect(
+        existsSync(join(destination, WORKSPACE_STORAGE_LAYOUT.runs, EXECUTION)),
+      ).toBe(false);
+      expect(readFileSync(join(outside, 'keep.tex'), 'utf8')).toBe(
+        'outside contents',
+      );
+      if (destination === moved) {
+        expect(readFileSync(join(replacement, 'keep.tex'), 'utf8')).toBe(
+          'replacement contents',
+        );
+      }
     },
   );
 

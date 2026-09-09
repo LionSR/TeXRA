@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import console from 'node:console';
+import process from 'node:process';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+
+import { verifyNativeCleanupAssets } from '../../../scripts/native-cleanup/verify-assets.mjs';
 
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const packageName = '@texra-ai/cli';
@@ -148,6 +152,16 @@ try {
     'texra.js',
   );
   assertBundleHardened(installedBin);
+  const nativeDirectory = path.join(
+    path.dirname(path.dirname(installedBin)),
+    'native-cleanup',
+  );
+  const nativeFailures = await verifyNativeCleanupAssets(
+    readdirSync(nativeDirectory).map((file) =>
+      path.join(nativeDirectory, file),
+    ),
+  );
+  assert(nativeFailures.length === 0, nativeFailures.join('\n'));
 
   const help = run(process.execPath, [installedBin, '--help']);
   assert(help.includes('TeXRA CLI'), 'installed CLI help should name TeXRA.');

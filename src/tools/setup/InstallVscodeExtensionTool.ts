@@ -1,3 +1,6 @@
+// Node imports
+import { setTimeout as delay } from 'node:timers/promises';
+
 // Third-party imports
 import { z } from 'zod';
 
@@ -6,7 +9,6 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
 import { executed } from '@tools/core/result';
-import { delay } from '@utils/core';
 
 // Local file imports
 import { defineTool } from '../core/define';

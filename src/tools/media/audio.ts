@@ -1,12 +1,11 @@
 import * as path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import { delay } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
@@ -180,6 +179,8 @@ export async function stopRecordingAndTranscribe(): Promise<{
       return { success: false, text: '', error: 'Recording file is empty' };
     }
 
+    const { ModelHandlerOpenAI } =
+      await import('@agent/modelHandlers/openai/modelHandlerOpenAI');
     const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt4o']);
     const client = await handler.getClient();
     const result = await client.audio.transcriptions.create({

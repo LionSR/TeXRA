@@ -1,15 +1,21 @@
 import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isGoalEnabled } from '@tools/goal';
 
-// Must be called after initPlatform(): predicates read host services
-// (workspaceRoots().config, platform().globalState).
-export function registerAgentFeatures(): void {
+/**
+ * Register the conditional tool injections (memory, plan/goal).
+ *
+ * `memory` reads the global state store the caller passes in — every host
+ * composition root already holds it. `plan` still reads host config
+ * (`workspaceRoots().config`) when its predicate runs at injection time, so
+ * process workspace roots must be initialized before a run injects tools.
+ */
+export function registerAgentFeatures(globalState: StateStore): void {
   SharedToolInjectionRegistry.register({
     toolName: 'memory',
     shouldInject: () =>
-      platform().globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true),
+      globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true),
   });
 
   // The unified `plan` tool owns both planning and goal lifecycle commands

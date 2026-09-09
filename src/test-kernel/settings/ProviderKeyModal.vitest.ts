@@ -1,6 +1,7 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
 import { describe, expect, it, vi } from 'vitest';
 
-import { delay } from '@utils/core';
 import {
   mountComponent,
   useLitComponentTestDom,

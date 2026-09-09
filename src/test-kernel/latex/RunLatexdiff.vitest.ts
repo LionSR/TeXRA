@@ -43,8 +43,8 @@ function roundMap(): RoundIndexed<OutputFileInfo> {
 }
 
 const executionDiscovery: LatexExecutionDiscoveryPort = {
-  listAgentRuns: async () => [],
-  readStreamId: async () => undefined,
+  listAgentRuns: () => Effect.succeed([]),
+  readStreamId: () => Effect.succeed(undefined),
 };
 
 const snapshots = { read: vi.fn() };

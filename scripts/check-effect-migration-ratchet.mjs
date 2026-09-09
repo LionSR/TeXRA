@@ -66,7 +66,6 @@ const SUPERSEDED_PACKAGES = [
   'p-timeout',
   'p-defer',
   'async-mutex',
-  'delay',
 ];
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
@@ -135,7 +134,37 @@ const ROW_SET_SERVICES = 'setServices()';
 const ROW_ABORT_CONTROLLER = 'new AbortController()';
 const ROW_RUN_BOUNDARY = 'Effect.run*';
 const ROW_CATCH = 'catch:effect-importer';
+const ROW_NODE_ENGINE = 'dep:@agent/node';
+const ROW_MODEL_HANDLERS = 'dep:@agent/modelHandlers';
 const importRow = (pkg) => `import:${pkg}`;
+
+/**
+ * Directory rows: a subsystem the migration replaces wholesale, measured by
+ * the files that import INTO it. Counting consumers rather than class
+ * declarations is what makes such a row track the work the migration actually
+ * has to do. A heritage row over `src/agent/node/` (classes extending the
+ * engine's bases) finds 17 files, two of which are the engine's own
+ * `index.ts` and `persistedFlow.ts` — the files the elimination ledger
+ * deletes outright, so they measure the thing being removed rather than
+ * anything that has to be rewired — and none of which are the
+ * flow-checkpoint callers the ledger rewires or deletes one by one:
+ * `runReflectionFlow`, `ToolUseRoundFlow`, `AgentLaunchContext`,
+ * `SessionResumeRetrieval`, `persistedCompileRejection`, `resumeRun`,
+ * `executionLifecycle`, `resumability`, `executionKvFiles` and
+ * `executionLiveness`. Over `src/agent/modelHandlers/` the difference is
+ * total: every class extending the handler superclass lives inside the
+ * directory, so a heritage row would report zero consumers of a
+ * 21,000-line subsystem while `ModelFactory.ts` alone reaches into it 18
+ * times.
+ */
+const DIRECTORY_ROWS = [
+  { id: ROW_NODE_ENGINE, alias: '@agent/node', root: 'src/agent/node' },
+  {
+    id: ROW_MODEL_HANDLERS,
+    alias: '@agent/modelHandlers',
+    root: 'src/agent/modelHandlers',
+  },
+];
 
 /**
  * Baseline rows in output order. Every row is a per-file allowlist of
@@ -168,16 +197,26 @@ const ROWS = [
     id: ROW_CATCH,
     rule: `${PRD} R7 and execution rule 2 (one pass per file): a file that imports 'effect' converts its catch sites in the same pass — typed recovery, scope finalizers, or Exit folds; a raw catch remains only inside a named foreign-runtime adapter`,
   },
+  {
+    id: ROW_NODE_ENGINE,
+    rule: `${PRD} R4 (amended 2026-09-06): there is no PocketFlow, no node, no graph, no action string and no flow record — each flow family becomes one plain Effect loop over the run ledger, so every file still importing src/agent/node/ is a consumer of an engine that is being deleted, not extended (elimination ledger: .agents/docs/proposed/architecture/2026-09-04-agent-runtime-on-effect.md §4)`,
+  },
+  {
+    id: ROW_MODEL_HANDLERS,
+    rule: `${PRD} R2 and .agents/docs/proposed/architecture/2026-09-04-agent-runtime-on-effect.md §2 (Ownership): provider protocol behaviour moves to packages/llm behind the ModelInvoker service, with "no forwarding facade over IModelHandler or the old superclass" — so every file still importing src/agent/modelHandlers/ is a call site that has to move to the service`,
+  },
 ];
 
 const SEMANTICS =
   'Per-file counts of the mechanisms the Effect 4 migration retires (.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. ' +
-  'Scope: *.ts and *.tsx under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
+  'Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
-  "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to — `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
+  "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
   "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. Every file here belongs to the lane named for it in the closed 'debtLanes' register: --update refuses a below-boundary file the register does not already name, never adds a file to a row, and writes the lower of the committed count and the tree's); " +
-  "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator. " +
+  "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
+  "'dep:@agent/node' counts, in each file OUTSIDE src/agent/node/, the module specifiers that reach into that directory — the @agent/node alias itself or any deeper path under it, plus relative specifiers that resolve inside it (type-only included, as for the package rows) — so the row measures the PocketFlow engine's consumers, not its class hierarchy, and a file inside the directory importing its own sibling is not a consumer and does not count; " +
+  "'dep:@agent/modelHandlers' counts the same reaches into src/agent/modelHandlers/, the model handler hierarchy the ModelInvoker service replaces. " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   "'debtLanes' maps each below-boundary 'Effect.run*' file to the lane that removes it; an entry whose file leaves the row is stale and --update drops it. " +
   'The PR that zeroes a row deletes the row. The same script fails on the presence of any `@adapter-until` marker in scope (owner ruling 2026-09-06: no temporary adapters), a hard check with no baseline.';
@@ -266,7 +305,8 @@ function productionFiles() {
   const files = [];
   for (const root of roots) {
     for (const entry of walkFiles(join(rootDir, root), {
-      include: (file) => /\.tsx?$/.test(file) && !/\.vitest\.ts$/.test(file),
+      include: (file) =>
+        /\.(?:tsx?|mts)$/.test(file) && !/\.vitest\.ts$/.test(file),
       prune: (dir) => {
         const name = dir.slice(dir.lastIndexOf('/') + 1);
         return (
@@ -384,6 +424,28 @@ function isPlatformModule(specifier, fileName) {
 }
 
 /**
+ * Whether a specifier reaches into `root` from a file outside it: the path
+ * alias (`@agent/node`, or any deeper path under it) or a relative specifier
+ * that resolves inside the directory, resolved the same way
+ * {@link isPlatformModule} resolves one.
+ *
+ * The `fileName` guard is the row's definition, not a nicety: these rows
+ * count CONSUMERS of a subsystem, and a file inside the subsystem importing
+ * its own sibling is not one. Counting those would put the directory's own
+ * files in the row, where they could only leave by being deleted — which
+ * makes the row unshrinkable by the rewiring work it is supposed to measure.
+ */
+function reachesDirectory(specifier, fileName, alias, root) {
+  if (fileName === root || fileName.startsWith(`${root}/`)) return false;
+  if (specifier === alias || specifier.startsWith(`${alias}/`)) return true;
+  if (!specifier.startsWith('.')) return false;
+  const resolved = posix
+    .normalize(posix.join(posix.dirname(fileName), specifier))
+    .replace(/\.(tsx?|js)$/, '');
+  return resolved === root || resolved.startsWith(`${root}/`);
+}
+
+/**
  * Local names a file binds the platform locator to: `locals` are bindings of
  * the `platform` export itself (aliased or not); `namespaces` are namespace
  * imports whose `.platform` member is the locator. Import declarations are
@@ -498,6 +560,11 @@ function surveySource(text, fileName) {
     const specifier = moduleSpecifier(node);
     if (specifier != null) {
       if (SUPERSEDED_PACKAGES.includes(specifier)) bump(importRow(specifier));
+      for (const row of DIRECTORY_ROWS) {
+        if (reachesDirectory(specifier, fileName, row.alias, row.root)) {
+          bump(row.id);
+        }
+      }
       if (importsEffect(specifier) && !isTypeOnly(node)) effectImporter = true;
     }
     if (ts.isCallExpression(node)) {
@@ -676,10 +743,10 @@ function selfTestSurvey() {
       // ImportKeyword branch of moduleSpecifier, so it must always name a
       // live row: without it, a dynamic `import('p-queue')` would dodge its
       // row undetected, in a ratchet whose whole subject is import rows.
-      text: "import PQueue from 'p-queue';\nimport type { Options } from 'delay';\nimport pd from 'p-delay';\nimport local from './delay';\nconst map = require('p-map');\nexport { retry } from 'p-retry';\nawait import('async-mutex');\n",
+      text: "import PQueue from 'p-queue';\nimport type { Options } from 'p-timeout';\nimport pd from 'p-timeout-plus';\nimport local from './p-timeout';\nconst map = require('p-map');\nexport { retry } from 'p-retry';\nawait import('async-mutex');\n",
       expected: {
         [importRow('p-queue')]: 1,
-        [importRow('delay')]: 1,
+        [importRow('p-timeout')]: 1,
         [importRow('p-map')]: 1,
         [importRow('p-retry')]: 1,
         [importRow('async-mutex')]: 1,
@@ -716,6 +783,31 @@ function selfTestSurvey() {
     {
       text: 'const c = new AbortController();\nflow.setServices(services);\nsetServices(services);\n',
       expected: { [ROW_ABORT_CONTROLLER]: 1, [ROW_SET_SERVICES]: 2 },
+    },
+    {
+      // A consumer of both directories: the alias, a deeper path under it,
+      // the equivalent relative import, and an `export ... from`. The three
+      // near-misses pin the edges a later edit could silently widen: a
+      // similarly-named sibling directory under the same alias prefix
+      // (@agent/nodeUtils, @agent/modelHandlersRegistry) and a relative
+      // import that merely starts with the directory's name.
+      text: "import { BaseNode } from '@agent/node';\nimport { PersistedFlow } from '@agent/node/persistedFlow';\nimport type { Action } from '../node';\nimport { pick } from '@agent/nodeUtils';\nimport { helper } from './nodeHelpers';\nimport { registry } from '@agent/modelHandlersRegistry';\nexport { build } from '@agent/modelHandlers/registry';\n",
+      fileName: 'src/agent/runtime/probe.ts',
+      expected: { [ROW_NODE_ENGINE]: 3, [ROW_MODEL_HANDLERS]: 1 },
+    },
+    {
+      // Inside the directory: neither the sibling relative import nor the
+      // alias counts, because the row measures consumers. Without this the
+      // engine's own files would sit in their own row and could leave it
+      // only by deletion.
+      text: "import { BaseNode } from './index';\nimport { Flow } from '@agent/node';\n",
+      fileName: 'src/agent/node/persistedFlow.ts',
+      expected: {},
+    },
+    {
+      text: "import { attach } from '../utils/toolAttachmentUtils';\nimport { base } from '@agent/modelHandlers/ModelHandler';\n",
+      fileName: 'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts',
+      expected: {},
     },
   ];
   for (const { text, fileName = 'case.ts', expected } of cases) {
@@ -983,6 +1075,24 @@ function selfTestBoundaryAndMarkers() {
     console.error('staleDebtLanes self-test failed:', JSON.stringify(stale));
     process.exit(1);
   }
+
+  // A row the committed baseline does not carry has no ceiling yet, so
+  // `--update`'s pre-write diff must not report its entries as growth: they
+  // are about to be seeded, and saying "the check stays red" about them is
+  // false. Row-agnostic on purpose, so retiring a row does not touch it.
+  const emptyShape = Object.fromEntries(ROWS.map((row) => [row.id, {}]));
+  const oneEntry = {
+    ...emptyShape,
+    [ROWS[0].id]: { 'src/agent/runtime/probe.ts': 3 },
+  };
+  if (
+    diffRows(oneEntry, emptyShape, new Set([ROWS[0].id])).failures.length !==
+      0 ||
+    diffRows(oneEntry, emptyShape).failures.length !== 1
+  ) {
+    console.error('diffRows unseeded-row self-test failed');
+    process.exit(1);
+  }
 }
 
 const BASELINE_MISSING = `Baseline missing: ${baselinePath}. Restore it from git; it cannot be regenerated from scratch, because the lane names in its debtLanes map are written by hand and --update cannot recover them.`;
@@ -1100,11 +1210,22 @@ function writeBaseline(rows, debtLanes) {
   );
 }
 
-/** Compare a survey against the baseline: { failures, stale }. */
-function diffRows(current, baseline) {
+/**
+ * Compare a survey against the baseline: { failures, stale }.
+ *
+ * `unseeded` names rows the comparison has no committed opinion about, which
+ * only `--update` has: a row the script has just gained reads as `{}` there,
+ * so every real entry in it would be reported as a count that "grew" and as a
+ * check that "stays red", moments before `--update` seeds the row from the
+ * tree and the check goes green. Skipping those rows keeps the pre-write
+ * report about actual growth. The post-write comparison passes nothing,
+ * because `readBaseline` guarantees a row for every entry in ROWS.
+ */
+function diffRows(current, baseline, unseeded = new Set()) {
   const failures = [];
   const stale = [];
   for (const row of ROWS) {
+    if (unseeded.has(row.id)) continue;
     const now = current[row.id];
     const was = baseline[row.id];
     for (const [file, count] of Object.entries(now)) {
@@ -1162,7 +1283,11 @@ function main() {
     // blocks the write -- refusing outright meant a tree with one new site
     // could not record any of its genuine shrinkage, which is how a
     // legitimate reduction ended up needing a hand edit.
-    const { failures: grew } = diffRows(rows, committed.rows);
+    const { failures: grew } = diffRows(
+      rows,
+      committed.rows,
+      committed.unseeded,
+    );
     if (grew.length > 0) {
       console.error(
         `\n${grew.length} count(s) grew; the baseline keeps the committed ceiling for each and the check stays red until they are gone.`,
