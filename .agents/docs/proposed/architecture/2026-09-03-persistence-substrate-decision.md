@@ -2,6 +2,16 @@
 
 Status: proposed
 
+**Amendment (2026-09-09):** The accepted [TeXRA 1.0 direction](../../../../AGENTS.md#texra-10-direction)
+supersedes this proposal's legacy-state import and migration requirements.
+The new release starts with fresh SQLite application state; no legacy JSON
+store migration is required or planned. Existing user data must remain
+untouched. This amendment does not waive the storage correctness requirements.
+The same direction requires retiring the custom native cleanup addon and its
+build machinery. Reconsider generated-file ownership and deletion as part of
+the final 1.0 design; do not extend that addon merely to retain this proposal's
+earlier filesystem arrangement.
+
 > **Status:** survey + decision proposal, revised the same day after reading
 > OpenCode's V2 session core. Grounded on `main` at `1fbcaa0108`. Companion to
 > `.agents/docs/archived/architecture/2026-09-03-startup-repair-is-the-wrong-shape.md`, which owns the lifecycle

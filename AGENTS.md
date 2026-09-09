@@ -2,6 +2,84 @@
 
 This document sets the common conventions for contributions. Follow these norms when working anywhere in this repository.
 
+## TeXRA 1.0 direction
+
+Accepted 2026-09-09. TeXRA 1.0 is the next release generation, developed on
+`main` in this repository. It introduces breaking changes to the application
+and its stored state. This is a development target, not a claim that 1.0 has
+shipped or that the transition is complete.
+
+The [implementation and retirement plan](.agents/docs/proposed/architecture/2026-09-09-texra-1-0-implementation-plan.md)
+records the audited removal targets and proposed order. `release/0.40` starts
+at `v0.40.10` and carries focused fixes for existing users under the released
+storage and execution contracts; the 1.0 breaking changes apply to `main`.
+
+- **Project terminology.** Use **project** for the user's working unit in
+  product text, documentation, and new or revised application interfaces. A
+  project may contain papers, code, data, and other research materials. Use
+  **paper** when referring to an actual scholarly document, not as a synonym
+  for a project. Existing application identifiers using `paper` should be
+  renamed coherently when their surrounding interfaces are revised.
+- **Breaking storage format.** SQLite is the authoritative store for
+  persistent application state. TeXRA 1.0 does not import or migrate the
+  legacy JSON store, histories, or execution checkpoints. Do not develop
+  JSON-to-SQLite migration, legacy readers, dual writes, or compatibility
+  adapters for this transition. Remove obsolete compatibility code and its
+  dedicated tests when replacing the corresponding storage path. This
+  decision supersedes earlier proposals requiring preservation or import of
+  legacy application state, and the general three-month compatibility window
+  below does not apply to this transition. It does not authorize deleting
+  existing user data: initialize new state separately and leave old state
+  untouched. Research files remain ordinary files; JSON may still be used
+  for deliberate configuration, interchange, and export formats.
+- **Effect-native implementation.** Express asynchronous application logic
+  directly through Effect services, layers, scoped resources, typed errors,
+  and structured concurrency. Keep execution of Effect programs at the
+  established host, tool, and SDK boundaries. Use the supported idioms of the
+  pinned Effect version; do not preserve Promise-based orchestration or add
+  pass-through adapters merely to retain an old internal interface. Pure
+  computation should remain simple TypeScript where Effect adds no value.
+- **Effect-native tests.** Test Effect programs with `@effect/vitest`,
+  `it.effect`, and scoped test layers. Use the Effect test clock for retries,
+  delays, and deadlines, and test interruption and resource release through
+  Effect's own lifecycle. Use `it.live` when the test intentionally exercises
+  real external I/O or real time. Do not rebuild a Promise-based test harness
+  around the retired implementation or mock every internal service call.
+  Pure functions and schemas may use ordinary Vitest. Retire obsolete tests
+  with their implementation and keep behavioral coverage at the final
+  application's durable boundaries.
+- **Modern, direct design.** Prefer the current supported APIs and one
+  coherent implementation. Historical internal formats and interfaces are
+  not constraints on the 1.0 design. This does not remove requirements for
+  correctness, interruption handling, transactional storage, or the external
+  protocols that TeXRA continues to support.
+- **Use the supported stack before writing infrastructure.** Prefer the
+  maintained facilities provided by Effect, SQLite, Node, and the host APIs
+  for concurrency, resource lifetime, retries, streams, database access, and
+  filesystem operations. Check their actual supported APIs before adding a
+  custom implementation. Custom infrastructure requires a concrete product
+  requirement that those facilities cannot meet; preserving an old internal
+  interface is not such a requirement. Remove redundant implementations and
+  pass-through layers when adopting the supported facility. Do not preserve
+  technical debt merely because removing it breaks an internal API, schema,
+  or test tied to the old design.
+- **Build the intended 1.0 design directly.** Do not spend implementation
+  effort on temporary migration tools, transitional adapters, compatibility
+  mirrors, or cleanup systems whose purpose disappears with the old design.
+  Divide work into complete changes that remain useful in 1.0, rather than
+  intermediate systems scheduled for replacement. Revise an obsolete
+  requirement before building machinery to satisfy it.
+- **Retire the custom native cleanup addon.** The 1.0 storage work must
+  eliminate `scripts/native-cleanup` and its native loader, binary artifacts,
+  CI jobs, packaging requirements, and addon-specific tests together with
+  the application dependency on it. Do not expand this machinery as an
+  intermediate step. First settle how the final design owns and deletes
+  generated files; preserve research files and prevent deletion outside
+  application-owned storage. The addon currently serves SQLite-backed
+  session deletion, so dropping legacy JSON migration alone does not remove
+  that dependency. Effect-native means using Effect's execution model, not
+  adding custom compiled extensions.
+
 ## Changelog Guidelines
 
 When updating CHANGELOG.md:
@@ -692,7 +770,7 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle, not a bare module-level variable. The only test flake hit during the 2026-07 campaign was a module-level session singleton colliding across suites.
 
-- **Serialize async work with `p-queue`, not hand-rolled promise chains.** When operations must run one at a time (per-file write ordering, approval prompts, follow-up dispatch), use the root-dependency `p-queue`: `new PQueue({ concurrency: 1 })`, or a `Map` of queues for per-key ordering, as `src/agent/runtime/executionLanes.ts` and the CLI's `chatSessionController.followUpQueue` already do. Inside an Effect program use `withPerKeyLane` (`src/utils/core/perKeyQueue.ts`) instead: it is the same FIFO per-key lane, released on success, failure, and interruption alike. Don't hand-roll the `chain = chain.then(...)` idiom — every copy re-solves error isolation (a swallowed rejection poisons or silently skips later work) and map-entry cleanup by hand, and the 2026-07-18 coupling audit found each existing copy did so differently (the 2026-07-25 sweep migrated all of them, including `writeChains` in `src/platform/defaults/jsonStore.ts` — since moved onto `withPerKeyLane` — and `todoPersistChain` in `ToolUseCycleNode.ts`, onto this pattern).
+- **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or the existing Effect-based per-key ordering helper when operations must run one at a time. Resource ownership must be released on success, failure, and interruption. Do not introduce `p-queue` orchestration or hand-written Promise chains; follow the TeXRA 1.0 direction above.
 
 ### Test fixtures and fakes
 
