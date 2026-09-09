@@ -196,7 +196,6 @@ describe('response cycle continuation phases', () => {
     expect(harness.shouldContinue).toHaveBeenCalledWith(
       'length',
       'partial response',
-      harness.services.setting,
     );
     expect(harness.shouldContinue).toHaveReturnedWith(false);
     expect(harness.round.continuationCount).toBe(1);

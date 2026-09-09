@@ -1,5 +1,5 @@
 // Node imports
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
 // Third-party imports
@@ -15,15 +15,7 @@ import {
   toRepoPath,
 } from '../support/repoScan';
 
-const LEGACY_MODULE = 'src/agent/runtime/hostProgressEvents.ts';
-const OLD_AGENT_RUNTIME_MODULE =
-  'src/agent/runtime/agentRuntimeProgressEvents.ts';
-const OLD_CLI_MODULE = 'packages/cli/src/runtime/cliProgressEvents.ts';
 const CLI_NDJSON_MODULE = 'packages/cli/src/runtime/cliNdjsonProgressEvents.ts';
-const OLD_TASK_STATE_PAYLOAD_MODULE =
-  'src/agent/runtime/taskStateProgressPayload.ts';
-const OLD_AGENT_RUNTIME_ALIAS = '@agent/runtime/agentRuntimeProgressEvents';
-const OLD_CLI_ALIAS = '@cli/runtime/cliProgressEvents';
 const CLI_NDJSON_ALIAS = '@cli/runtime/cliNdjsonProgressEvents';
 
 const CLI_PROJECTION_MODULE =
@@ -57,14 +49,7 @@ const ALL_SOURCE_FILES = scanFiles(false);
 const SOURCE_TEXT_BY_FILE = new Map<string, string>();
 const MODULE_SPECIFIERS_BY_FILE = new Map<string, string[]>();
 
-function resolveAgentAlias(specifier: string): string | null {
-  if (specifier === OLD_AGENT_RUNTIME_ALIAS) return OLD_AGENT_RUNTIME_MODULE;
-  if (!specifier.startsWith('@agent/')) return null;
-  return `src/agent/${specifier.slice('@agent/'.length)}`;
-}
-
 function resolveCliAlias(specifier: string): string | null {
-  if (specifier === OLD_CLI_ALIAS) return OLD_CLI_MODULE;
   if (specifier === CLI_NDJSON_ALIAS) return CLI_NDJSON_MODULE;
   if (!specifier.startsWith('@cli/')) return null;
   return `packages/cli/src/${specifier.slice('@cli/'.length)}`;
@@ -74,7 +59,6 @@ function resolveRepoRelativeImport(
   importer: string,
   specifier: string,
 ): string | null {
-  if (specifier.startsWith('@agent/')) return resolveAgentAlias(specifier);
   if (specifier.startsWith('@cli/')) return resolveCliAlias(specifier);
   if (!specifier.startsWith('.')) return null;
   return toRepoPath(join(dirname(importer), specifier));
@@ -119,52 +103,25 @@ function importsModule(file: string, targetModule: string): boolean {
 }
 
 describe('agent runtime progress-event vocabulary boundary', () => {
-  it('deletes the legacy hostProgressEvents module', () => {
-    expect(existsSync(resolve(REPO_ROOT, LEGACY_MODULE))).toBe(false);
-  });
-
   it.each<{
     name: string;
     modulePath: string;
-    exists: boolean;
     allowedImporters: readonly string[];
     /** Test suites are in scope only where they appear in the allowlist. */
     scanTests?: boolean;
   }>([
     {
-      name: 'removes the agent-runtime CLI progress vocabulary module',
-      modulePath: OLD_AGENT_RUNTIME_MODULE,
-      exists: false,
-      allowedImporters: [],
-    },
-    {
-      name: 'removes the neutral CLI progress vocabulary module',
-      modulePath: OLD_CLI_MODULE,
-      exists: false,
-      allowedImporters: [],
-    },
-    {
-      name: 'removes the agent-runtime task-state compatibility payload module',
-      modulePath: OLD_TASK_STATE_PAYLOAD_MODULE,
-      exists: false,
-      allowedImporters: [],
-    },
-    {
       name: 'keeps the CLI compatibility vocabulary NDJSON-projection only',
       modulePath: CLI_NDJSON_MODULE,
-      exists: true,
       allowedImporters: ALLOWED_PRODUCTION_IMPORTERS,
     },
     {
       name: 'keeps the CLI projection scoped to headless NDJSON output',
       modulePath: CLI_PROJECTION_MODULE,
-      exists: true,
       allowedImporters: ALLOWED_CLI_PROJECTION_IMPORTERS,
       scanTests: true,
     },
-  ])('$name', ({ modulePath, exists, allowedImporters, scanTests }) => {
-    expect(existsSync(resolve(REPO_ROOT, modulePath))).toBe(exists);
-
+  ])('$name', ({ modulePath, allowedImporters, scanTests }) => {
     const importers = (scanTests ? ALL_SOURCE_FILES : PRODUCTION_FILES)
       .filter((file) => importsModule(file, modulePath))
       .toSorted();

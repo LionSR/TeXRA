@@ -55,8 +55,9 @@ const ActiveChildInfoSchema = z.object({
    * roster row (which knows tokens/elapsed) and the run's task cards (which
    * know `phase`) — `WorkflowCallIdentity` carries no execution or stream id.
    * Immutable per attempt: it is stamped on the handle before the first
-   * `child.activity` emission, so retained (finished) rows keep it. Optional
-   * because only a workflow-script run's children have an owning phase.
+   * `ExecutionRegistry.onChildActivity` notification, so retained (finished)
+   * rows keep it. Optional because only a workflow-script run's children have
+   * an owning phase.
    */
   workflowPhase: z.string().optional(),
 });

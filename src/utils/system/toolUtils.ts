@@ -153,30 +153,6 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
   }),
 };
 
-/**
- * Run a probe command, returning its result or null when the spawn itself
- * throws (missing binary, permission error). `reject: false` means non-zero
- * exit codes still resolve, so only a real spawn failure lands here. `label`
- * distinguishes the primary probe from a fallback one in the log line. The
- * inline `reject: false` literal keeps execa's overload resolving `stdout`/
- * `stderr` to strings.
- */
-async function tryExeca(
-  cmd: string,
-  args: string[],
-  label: string,
-  env: NodeJS.ProcessEnv,
-) {
-  try {
-    return await execa(cmd, args, { env, reject: false, timeout: 5000 });
-  } catch (execErr) {
-    log.info(
-      `Exception executing ${label}'${cmd}': ${toErrorMessage(execErr)}`,
-    );
-    return null;
-  }
-}
-
 /** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */
 function hasVersionOutput(result: { stdout: string; stderr: string }): boolean {
   return /\d+\.\d+/.test(result.stdout) || /\d+\.\d+/.test(result.stderr);
@@ -203,8 +179,11 @@ async function executeWithFallback(
 ): Promise<boolean> {
   log.debug(`Checking tool '${cmd}' with args [${args.join(', ')}]`);
 
-  let result = await tryExeca(cmd, args, '', execEnv);
-  if (!result) return false;
+  let result = await execa(cmd, args, {
+    env: execEnv,
+    reject: false,
+    timeout: 5000,
+  });
   log.debug(
     `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
       `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
@@ -227,13 +206,11 @@ async function executeWithFallback(
     log.debug(
       `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
     );
-    result = await tryExeca(
-      fallback.command,
-      fallback.args,
-      'fallback ',
-      execEnv,
-    );
-    if (!result) return false;
+    result = await execa(fallback.command, fallback.args, {
+      env: execEnv,
+      reject: false,
+      timeout: 5000,
+    });
     log.debug(
       `Fallback result: exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +

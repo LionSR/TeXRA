@@ -12,7 +12,6 @@ import type { Database } from '@shared/session/database';
 import { StreamLog, type StreamLogDelta } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { createListenerSet } from '@utils/core/listenerSet';
-import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 
 type TranscriptDatabase = Pick<
   Context.Service.Shape<typeof Database>,
@@ -64,10 +63,7 @@ function foldEntries(events: readonly SessionEvent[]): StreamState | undefined {
 }
 
 export class StreamLogStore {
-  private readonly streams = new ResidentStreamRegistry<
-    StreamTabId,
-    StreamState
-  >(() => ({}));
+  private readonly streams = new Map<StreamTabId, StreamState>();
   private readonly known = new Set<StreamTabId>();
   private readonly releaseRequests = new Set<StreamTabId>();
   private readonly listeners = createListenerSet<StreamLogListener>();
@@ -319,16 +315,23 @@ export class StreamLogStore {
   }
 
   private ensureStreamState(streamId: StreamTabId): StreamState {
-    return this.streams.getOrCreate(streamId);
+    let state = this.streams.get(streamId);
+    if (!state) {
+      state = {};
+      this.streams.set(streamId, state);
+    }
+    return state;
   }
   private pruneStreamState(streamId: StreamTabId): void {
-    this.streams.pruneIfEmpty(
-      streamId,
-      (state) =>
-        state.log === undefined &&
-        (state.pins?.size ?? 0) === 0 &&
-        state.runOwner === undefined,
-    );
+    const state = this.streams.get(streamId);
+    if (
+      state &&
+      state.log === undefined &&
+      (state.pins?.size ?? 0) === 0 &&
+      state.runOwner === undefined
+    ) {
+      this.streams.delete(streamId);
+    }
   }
   private acquireLease(
     streamId: StreamTabId,

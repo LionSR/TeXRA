@@ -7,10 +7,6 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
-import {
-  AgentSettingSchema,
-  type AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
@@ -19,7 +15,6 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHan
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerVscodeLm } from '@agent/modelHandlers/vscodelm/modelHandlerVscodeLm';
 import type { LanguageModelMessage } from '@platform/languageModel';
-import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Provider SDK message types
@@ -38,11 +33,7 @@ type ContinuationCase = {
 interface ContinuationHandler<M> {
   setLogger(logger: AgentTrace): void;
   createAssistantMessage(text: string): M;
-  addContinueMessage(
-    messages: M[],
-    workspaceState: AgentWorkspaceState,
-    agentSetting: AgentSetting,
-  ): void;
+  addContinueMessage(messages: M[], workspaceState: AgentWorkspaceState): void;
   updateMessageContent(
     messages: M[],
     bestConnector: string,
@@ -56,10 +47,6 @@ const CONTINUATION_CAPABILITIES = Object.freeze({
   supportsIntermDevMsgs: false,
   supportsReasoning: false,
   supportsVision: false,
-});
-
-const agentSetting = AgentSettingSchema.parse({
-  agentCategory: AgentCategory.Workflow,
 });
 
 function createWorkspaceState(): AgentWorkspaceState {
@@ -132,7 +119,7 @@ function exerciseContinuation<M>(options: {
   const messages: M[] = [handler.createAssistantMessage('partial')];
   const workspaceState = createWorkspaceState();
 
-  handler.addContinueMessage(messages, workspaceState, agentSetting);
+  handler.addContinueMessage(messages, workspaceState);
   afterAddContinue?.(messages);
   handler.updateMessageContent(messages, '', ' resumed', workspaceState);
 
@@ -268,7 +255,7 @@ describe('model handler continuation contract', () => {
       const messages: M[] = [handler.createAssistantMessage('partial')];
       const workspaceState = createWorkspaceState();
 
-      handler.addContinueMessage(messages, workspaceState, agentSetting);
+      handler.addContinueMessage(messages, workspaceState);
 
       const continuation = messages.at(-1)!;
       assert.equal(messages.length, 2);
@@ -352,7 +339,7 @@ describe('model handler continuation contract', () => {
     ];
     const workspaceState = createWorkspaceState();
 
-    handler.addContinueMessage(messages, workspaceState, agentSetting);
+    handler.addContinueMessage(messages, workspaceState);
 
     assert.equal(messages.length, 3);
     assert.equal(textFromResponseContent(messages[1]!), 'follow-up');
@@ -382,7 +369,7 @@ describe('model handler continuation contract', () => {
     ];
     const workspaceState = createWorkspaceState();
 
-    handler.addContinueMessage(messages, workspaceState, agentSetting);
+    handler.addContinueMessage(messages, workspaceState);
 
     assert.equal(messages.length, 3);
     assert.equal(textFromInteractionStep(messages[1]!), 'follow-up');

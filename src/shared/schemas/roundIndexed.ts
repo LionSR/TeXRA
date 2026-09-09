@@ -3,9 +3,8 @@
  *
  * One shape for every round-scoped collection (output files, missing-output
  * paths, compile failures) across the live stream state, progress events,
- * webview messages, snapshots, and the persisted `streamData/{id}/*.json`
- * sidecars — the record is the JSON wire/disk format itself, so no encode
- * step exists anywhere.
+ * webview messages, and snapshots — the record is the JSON wire/disk format
+ * itself, so no encode step exists anywhere.
  *
  * Deliberately NOT unified into this shape (different requirements, not
  * history): `RoundOutput[]` (a per-round aggregate carrying `rawOutput`,
@@ -143,8 +142,8 @@ export function cloneRoundIndexed<T>(
 // ============================================================================
 
 /**
- * Parse a persisted round-indexed sidecar file (`outputFiles.json`,
- * `missingOutputs.json`, `compileFailures.json`) into the canonical record.
+ * Parse an untrusted round-indexed value (a persisted record, or a VS Code
+ * command payload of any shape) into the canonical record.
  *
  * Salvage semantics: round keys are coerced integers (anything else is
  * skipped), malformed items are dropped LOUDLY (warned, never silently

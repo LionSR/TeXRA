@@ -323,30 +323,25 @@ function findToolInCommonPathsUncached(tool: string): string | null {
   // kpsewhich resolves files through the TeX database rather than PATH, so it
   // stays a subprocess. npm `which` only searches PATH.
   for (const name of candidates) {
-    try {
-      const result = execaSync('kpsewhich', [name], {
-        env: { ...process.env, PATH: pathEnv },
-        reject: false,
-      });
-      const found = result.stdout.trim();
-      if (result.exitCode === 0 && found) {
-        return found;
-      }
-    } catch (_err) {
-      // ignore command errors
+    const result = execaSync('kpsewhich', [name], {
+      env: { ...process.env, PATH: pathEnv },
+      reject: false,
+    });
+    if (result.exitCode !== 0) {
+      continue;
+    }
+    const found = result.stdout.trim();
+    if (found) {
+      return found;
     }
   }
 
   // PATH lookup via npm `which` (in-process; honors PATHEXT on Windows, so no
   // `where`/`which` subprocess is needed). `nothrow` returns null on a miss.
   for (const name of candidates) {
-    try {
-      const found = which.sync(name, { nothrow: true, path: pathEnv });
-      if (found) {
-        return found;
-      }
-    } catch (_err) {
-      // ignore resolution errors
+    const found = which.sync(name, { nothrow: true, path: pathEnv });
+    if (found) {
+      return found;
     }
   }
 

@@ -8,7 +8,6 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
-import { WORKSPACE_SIDECAR_FILE } from '@common/storage/storageLayout';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
@@ -24,16 +23,6 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-
-async function readWorkspaceMarker(
-  storagePath: string,
-): Promise<{ path: string }> {
-  const marker = await readFile(
-    join(storagePath, WORKSPACE_SIDECAR_FILE),
-    'utf8',
-  );
-  return JSON.parse(marker) as { path: string };
-}
 
 describe('workspace storage defaults', () => {
   const tempDirs = useTempDirs();
@@ -129,13 +118,8 @@ describe('workspace storage defaults', () => {
           ),
         );
         expect(globalPath).toBe(join(root, 'v1', 'global-storage'));
-        expect(yield* Effect.promise(() => readdir(storagePath))).toEqual([
-          WORKSPACE_SIDECAR_FILE,
-        ]);
+        expect(yield* Effect.promise(() => readdir(storagePath))).toEqual([]);
         expect(yield* Effect.promise(() => readdir(globalPath))).toEqual([]);
-        expect(
-          yield* Effect.promise(() => readWorkspaceMarker(storagePath)),
-        ).toMatchObject({ path: workspacePath });
         yield* Effect.promise(() =>
           writeFile(join(storagePath, 'state.json'), 'new project state'),
         );

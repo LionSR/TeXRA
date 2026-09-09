@@ -76,8 +76,6 @@ export class ResponseCycleNode extends BaseNode<
   override async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
     const [outputAlreadyComplete, initializedMessages] =
       await this.services.modelCell.handler.initializeOutputAndPrefill(
-        this.services.config,
-        this.services.setting,
         prepRes.context,
         prepRes.workspace,
         prepRes.outputLocation,

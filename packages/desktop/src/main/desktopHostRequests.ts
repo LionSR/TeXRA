@@ -169,9 +169,6 @@ export function createDesktopHostRequests(
     },
     showInfo: (message) => host.showInfoMessage(message),
     showWarning: (message) => host.showWarningMessage(message),
-    showError: rejectRequest,
-    logError: (message, error) =>
-      logger.error(message, { data: toLogData(error) }),
   });
   const { getRunMetadata } = runActions.snapshotPort;
 

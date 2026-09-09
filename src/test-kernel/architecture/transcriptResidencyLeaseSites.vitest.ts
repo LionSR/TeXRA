@@ -15,7 +15,6 @@ import {
 /** Runtime sites allowed to perform ordinary transcript hydration. */
 const HYDRATION_SITE_ALLOWLIST = new Set([
   'packages/cli/src/chat/chatSessionController.ts',
-  'packages/cli/src/chat/tui/state/subscribeStreamLog.ts',
   'src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts',
   'src/agent/runtime/executeAgent.ts',
   'src/transcript/StreamLogStore.ts',
@@ -23,7 +22,6 @@ const HYDRATION_SITE_ALLOWLIST = new Set([
 
 /** Runtime sites allowed to retain transcripts for a visible reader. */
 const PRESENTATION_LEASE_SITE_ALLOWLIST = new Set([
-  'packages/cli/src/chat/tui/state/subscribeStreamLog.ts',
   'src/transcript/StreamLogStore.ts',
 ]);
 
