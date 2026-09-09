@@ -229,6 +229,39 @@ function retain<V>(
 }
 
 /**
+ * The `Surface` fields that are stream-keyed maps — the only fields
+ * `pruneSurface` may retain over. Restricting the list below to these keys
+ * means a non-map field (`search`, `drawerOpen`) is refused at the list
+ * itself, not several lines later at the read.
+ */
+type StreamKeyedMapField = {
+  [K in keyof Surface]: Surface[K] extends ReadonlyMap<StreamTabId, unknown>
+    ? K
+    : never;
+}[keyof Surface];
+
+/**
+ * The single list `pruneSurface` reads: the per-stream maps it retains over.
+ * `StreamKeyedMapField` refuses any entry that is not a stream-keyed map, so a
+ * typo or a non-map field fails here at the list. It does not enforce the
+ * reverse — the type system cannot, since `StreamTabId` is `string` and so a
+ * stream-keyed map is indistinguishable from any other string-keyed one — so a
+ * new per-stream field added to `Surface` but left off this list still keeps a
+ * deleted stream's entry forever, and adding such a field means adding it here.
+ * `inquiryDrafts` is that indistinguishable case made deliberate: it is a
+ * string-keyed map too, but keyed by `${InquiryThreadId}#${turn}`, not by
+ * stream, so no stream leaving the view can retire one and it stays off.
+ */
+const PER_STREAM_MAPS = [
+  'drafts',
+  'expanded',
+  'groups',
+  'phase',
+  'scroll',
+  'rejected',
+] as const satisfies readonly StreamKeyedMapField[];
+
+/**
  * Every per-stream map drops its entry when that stream leaves the view
  * (PRD 9): an id is never reused, so the entry can never become valid
  * again, and without the prune the maps and the persisted form grow without
@@ -236,23 +269,19 @@ function retain<V>(
  * when nothing left.
  */
 export function pruneSurface(surface: Surface, view: SessionView): Surface {
-  const drafts = retain(surface.drafts, view);
-  const expanded = retain(surface.expanded, view);
-  const groups = retain(surface.groups, view);
-  const phase = retain(surface.phase, view);
-  const scroll = retain(surface.scroll, view);
-  const rejected = retain(surface.rejected, view);
-  if (
-    drafts === surface.drafts &&
-    expanded === surface.expanded &&
-    groups === surface.groups &&
-    phase === surface.phase &&
-    scroll === surface.scroll &&
-    rejected === surface.rejected
-  ) {
-    return surface;
+  // `retain` only ever drops entries, never changes a value, so each pruned
+  // map keeps its field's element type; the maps are read through the common
+  // read-only supertype and the once-narrowed patch is cast back at the end.
+  const patch: Partial<
+    Record<(typeof PER_STREAM_MAPS)[number], ReadonlyMap<StreamTabId, unknown>>
+  > = {};
+  for (const key of PER_STREAM_MAPS) {
+    const current: ReadonlyMap<StreamTabId, unknown> = surface[key];
+    const next = retain(current, view);
+    if (next !== current) patch[key] = next;
   }
-  return { ...surface, drafts, expanded, groups, phase, scroll, rejected };
+  if (Object.keys(patch).length === 0) return surface;
+  return { ...surface, ...patch } as Surface;
 }
 
 /**
