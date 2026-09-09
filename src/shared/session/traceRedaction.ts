@@ -26,23 +26,6 @@ export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
       };
     case 'stage.start':
       return { ...event, label: redactSecrets(event.label) };
-    case 'tool.start':
-      return {
-        ...event,
-        input: redactToolInputForLog(event.toolName, event.input),
-      };
-    case 'tool.end': {
-      const result = event.result;
-      if (!isObject(result) || typeof result.toolName !== 'string')
-        return event;
-      return {
-        ...event,
-        result: {
-          ...result,
-          input: redactToolInputForLog(result.toolName, result.input),
-        },
-      };
-    }
     case 'workflow.plan':
       return {
         ...event,
@@ -86,29 +69,6 @@ export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
     default:
       return event;
   }
-}
-
-/**
- * Redact secrets from a tool's recorded input before it is persisted.
- * Older sessions may replay `set_api_key` events whose tool.start/tool.end
- * payload carries the raw input. The tool is no longer registered, but this
- * redaction remains so imported or resumed history cannot write a legacy key
- * into the current transcript. New secret-bearing tool inputs must extend this
- * guard.
- */
-export function redactToolInputForLog(
-  toolName: string,
-  input: unknown,
-): unknown {
-  if (
-    toolName !== 'set_api_key' ||
-    input === null ||
-    typeof input !== 'object' ||
-    !('key' in input)
-  ) {
-    return input;
-  }
-  return { ...input, key: '[redacted]' };
 }
 
 /**

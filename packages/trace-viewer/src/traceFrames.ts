@@ -232,8 +232,9 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
 /**
  * The events of one trace: listing rows, then the transcript rows, one
  * aggregate (the stream), seq in publish order, commit equal to seq. The
- * legacy import stamps `ownerId: null` (contract C3), which folds every
- * unfinished run as interrupted and every finished one as durably final.
+ * viewer stamps `ownerId: null` (contract C3) because an archived export has
+ * no owning process, which folds every unfinished run as interrupted and every
+ * finished one as durably final.
  */
 function traceEvents(trace: TraceDocument): {
   readonly listing: DisplaySessionEvent[];

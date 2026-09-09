@@ -176,7 +176,8 @@ export type ApprovalPolicySnapshot = z.infer<
 const envelope = {
   seq: SeqSchema,
   commit: CommitOrdinalSchema,
-  /** Owner of the process that appended the event; null on legacy imports. */
+  /** Owner of the process that appended the event; null for the trace
+   *  viewer's reconstruction, which has no owning process. */
   ownerId: OwnerIdSchema.nullable(),
   /** The publish clock in whole milliseconds: C1 stores it in an `INTEGER`
    *  column of a `STRICT` table, so the vocabulary states that rule here and

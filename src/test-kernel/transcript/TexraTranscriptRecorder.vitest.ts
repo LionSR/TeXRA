@@ -60,7 +60,7 @@ describe('attachTestTranscriptFold StreamPhase-native group rows (issue #7993)',
     expect(dataOf(startEntry).status).toBe(STREAM_PHASE.RUNNING);
   });
 
-  it('defaults GROUP_END to the literal RunOutcome.COMPLETED, not a folded EndGroupStatus', () => {
+  it('defaults GROUP_END to the literal RunOutcome.COMPLETED', () => {
     const { trace, row } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
