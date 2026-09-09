@@ -66,7 +66,7 @@ describe('persistence write boundary', () => {
   it('scans the shared, host, and SDK production roots', () => {
     expectRealCoverage(PRODUCTION_ROOTS);
     expect(PRODUCTION_ROOTS.flatMap(productionFilesUnder)).toContain(
-      'src/agent/storage/nativeGeneratedCleanup.mts',
+      'src/controllers/session/deletionCleanup.ts',
     );
   });
 

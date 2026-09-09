@@ -9,7 +9,6 @@ import {
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
 import { walkFiles } from './walkFiles.mjs';
-import { verifyNativeCleanupAssets } from './native-cleanup/verify-assets.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -38,9 +37,7 @@ const requiredFiles = [
   path.join(desktopDir, 'dist', 'preload', 'index.cjs'),
   path.join(desktopDir, 'dist', 'renderer', 'index.html'),
 ];
-const failures = await verifyNativeCleanupAssets(
-  collectFiles(path.join(desktopDir, 'dist', 'main')),
-);
+const failures = [];
 
 for (const filePath of requiredFiles) {
   if (!fileExists(filePath)) {

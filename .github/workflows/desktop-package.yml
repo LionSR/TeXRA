@@ -29,11 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  native-cleanup:
-    uses: ./.github/workflows/native-cleanup.yml
-
   desktop-macos-installer:
-    needs: native-cleanup
     name: desktop installer (macOS)
     if: inputs.run_desktop_installers
     runs-on: macos-latest
@@ -52,13 +48,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Download native prebuilds
-        uses: actions/download-artifact@v8
-        with:
-          pattern: native-cleanup-*
-          path: scripts/native-cleanup/prebuilds
-          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -137,7 +126,6 @@ jobs:
           retention-days: 14
 
   desktop-linux-installer:
-    needs: native-cleanup
     name: desktop installer (Linux)
     if: inputs.run_desktop_installers
     runs-on: ubuntu-latest
@@ -146,13 +134,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Download native prebuilds
-        uses: actions/download-artifact@v8
-        with:
-          pattern: native-cleanup-*
-          path: scripts/native-cleanup/prebuilds
-          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -202,7 +183,6 @@ jobs:
           retention-days: 14
 
   desktop-windows-artifact:
-    needs: native-cleanup
     name: desktop artifact (Windows)
     if: inputs.run_windows_desktop
     runs-on: windows-latest
@@ -219,13 +199,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Download native prebuilds
-        uses: actions/download-artifact@v8
-        with:
-          pattern: native-cleanup-*
-          path: scripts/native-cleanup/prebuilds
-          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6

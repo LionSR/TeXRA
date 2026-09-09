@@ -23,22 +23,6 @@ const extensionPackageUtilsUrl = pathToFileURL(
   repoPath('scripts/extension-package-utils.mjs'),
 ).href;
 
-const nativeCleanupTargetsUrl = pathToFileURL(
-  repoPath('scripts/native-cleanup/targets.mjs'),
-).href;
-const { nativeCleanupTargets } = (await import(nativeCleanupTargetsUrl)) as {
-  nativeCleanupTargets: string[];
-};
-
-const nativeAssetVerifierUrl = pathToFileURL(
-  repoPath('scripts/native-cleanup/verify-assets.mjs'),
-).href;
-const { verifyNativeCleanupAssets } = (await import(
-  nativeAssetVerifierUrl
-)) as {
-  verifyNativeCleanupAssets(files: string[]): Promise<string[]>;
-};
-
 const { requiredMonacoWorkers } = (await import(extensionPackageUtilsUrl)) as {
   requiredMonacoWorkers: string[];
 };
@@ -96,39 +80,6 @@ describe('desktop package native CLI payload', () => {
       '- no bundled Codex or Claude Code CLI payload',
     );
   });
-
-  it.skipIf(process.platform !== 'darwin')(
-    'checks prebuild bytes before signing and accepts the signed package',
-    async () => {
-      const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-      const files = nativeCleanupTargets.map((target) =>
-        join(resourcesDir, 'dist/main', `${target}.node`),
-      );
-      expect(await verifyNativeCleanupAssets(files)).toEqual([]);
-      const binary = join(resourcesDir, 'dist/main/darwin-arm64.node');
-      const original = readFileSync(binary);
-      const signed = spawnSync(
-        'codesign',
-        [
-          '--force',
-          '--sign',
-          '-',
-          '--timestamp=none',
-          '--identifier',
-          'ai.texra.native-storage-regression',
-          binary,
-        ],
-        { encoding: 'utf8' },
-      );
-      expect(signed.status, signed.stderr).toBe(0);
-      expect(readFileSync(binary).equals(original)).toBe(false);
-      expect(await verifyNativeCleanupAssets(files)).toContain(
-        'Packaged cleanup binary differs from prebuild: darwin-arm64',
-      );
-      const result = runVerifier(packageRoot);
-      expect(result.status, result.stderr).toBe(0);
-    },
-  );
 
   it.each([
     { cli: 'codex' as const, label: 'OpenAI Codex CLI' },
@@ -246,12 +197,6 @@ function createFakeDesktopPackage(
   });
   writeText(join(appRoot, 'dist/main/index.js'), "import './bootstrap.js';\n");
   writeText(join(appRoot, 'dist/main/bootstrap.js'), 'export {};\n');
-  for (const target of nativeCleanupTargets) {
-    copyFileSync(
-      repoPath('scripts/native-cleanup/prebuilds', `${target}.node`),
-      join(appRoot, 'dist/main', `${target}.node`),
-    );
-  }
   writeJson(join(appRoot, 'dist/main/metafile.json'), {
     outputs: {
       'dist/main/index.js': {
