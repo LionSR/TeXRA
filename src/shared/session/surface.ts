@@ -229,6 +229,18 @@ function retain<V>(
 }
 
 /**
+ * The `Surface` fields that are stream-keyed maps — the only fields
+ * `pruneSurface` may retain over. Restricting the list below to these keys
+ * means a non-map field (`search`, `drawerOpen`) is refused at the list
+ * itself, not several lines later at the read.
+ */
+type StreamKeyedMapField = {
+  [K in keyof Surface]: Surface[K] extends ReadonlyMap<StreamTabId, unknown>
+    ? K
+    : never;
+}[keyof Surface];
+
+/**
  * The surface fields keyed by `StreamTabId`, in one place so `pruneSurface`
  * can never fall out of sync with the record: a field added here is pruned,
  * a field left off keeps a deleted stream's entry forever. `inquiryDrafts`
@@ -242,7 +254,7 @@ const PER_STREAM_MAPS = [
   'phase',
   'scroll',
   'rejected',
-] as const satisfies readonly (keyof Surface)[];
+] as const satisfies readonly StreamKeyedMapField[];
 
 /**
  * Every per-stream map drops its entry when that stream leaves the view
