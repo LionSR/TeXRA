@@ -26,7 +26,7 @@ function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
     entries: [],
     snapshot: StreamSnapshotSchema.parse({
       streamId: STREAM_ID,
-      status: 'ready',
+      status: 'running',
     }),
     ...overrides,
   };

@@ -7,7 +7,7 @@ import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
 import {
-  STREAM_STATUS,
+  STREAM_LIFECYCLE_READY,
   StreamLifecycleStatusSchema,
   StreamPhaseSchema,
   StreamSubstateSchema,
@@ -117,7 +117,7 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
-const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
+const DEFAULT_STREAM_METADATA_STATUS = STREAM_LIFECYCLE_READY;
 
 // Stream metadata: the backend-owned fields of a stream's state.
 

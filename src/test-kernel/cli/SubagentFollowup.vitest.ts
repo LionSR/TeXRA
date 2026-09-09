@@ -48,8 +48,8 @@ describe('deliveryTagOf', () => {
       deliveryTagOf('<subagent-result agent="a">x</subagent-result>'),
     ).toBe('subagent-result');
     expect(
-      deliveryTagOf('  \n<execution-activity>x</execution-activity>'),
-    ).toBe('execution-activity');
+      deliveryTagOf('  \n<github-webhook-activity>x</github-webhook-activity>'),
+    ).toBe('github-webhook-activity');
     expect(deliveryTagOf('<claude-agent-error />')).toBe('claude-agent-error');
     expect(deliveryTagOf('<codex-result/>')).toBe('codex-result');
   });
@@ -453,14 +453,6 @@ describe('summarizeSubagentFollowup', () => {
     const xml =
       '<github-webhook-activity>\nPR #42 opened by octocat\n</github-webhook-activity>';
     expect(summarizeSubagentFollowup(xml)).toBe('PR #42 opened by octocat');
-  });
-
-  it('summarizes an execution-activity block as its first body line', () => {
-    const xml =
-      '<execution-activity>\nexec-1 (research, toolUse) running → completed\n</execution-activity>';
-    expect(summarizeSubagentFollowup(xml)).toBe(
-      'exec-1 (research, toolUse) running → completed',
-    );
   });
 
   it('does not prefix-match invalid tag-name continuations', () => {

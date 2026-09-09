@@ -65,7 +65,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  STREAM_STATUS,
+  STREAM_LIFECYCLE_READY,
   STREAMING_TEXT_MESSAGE_TYPES,
   isPlainAgentIdentity,
   listingTypeOf,
@@ -459,7 +459,7 @@ const NO_ROUNDS = Object.freeze({});
 /** A stream in its initial shape, minted by its `run.start` alone. */
 function createStream(view: SessionView, event: RunStartEvent): StreamView {
   const id = aggregateTarget(event.aggregateId).id;
-  const status = STREAM_STATUS.READY;
+  const status = STREAM_LIFECYCLE_READY;
   const identity = event.identity ?? null;
   const common = {
     id,

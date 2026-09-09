@@ -3,41 +3,7 @@ import { z } from 'zod';
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { RunIdentitySchema } from './runIdentity';
-import { PersistedWorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
-
-/**
- * The retired 7-value live-status vocabulary. **Read-only residue** — no
- * production code decides anything from it any more (#7993 steps 2-3 moved
- * every live producer and host reader to `StreamPhase` + `StreamSubstate`).
- * It survives for one reason: externally-authored `trace.json` exports
- * (§8.3's permanent boundary — a static exported file stays legacy-shaped
- * forever) still carry these values, and `LegacyStreamStatusAsPhaseSchema`
- * (`@shared/schemas/streamSnapshot`) normalizes them into `StreamPhase` at
- * that one parse entry point, inside `StreamSnapshotSchema.status`. The live
- * wire union {@link StreamLifecycleStatusSchema} below does NOT accept them:
- * its one field (`BackendOwnedFieldsSchema.status`) is written only by
- * same-bundle producers already typed `StreamPhase | 'ready' | 'unavailable'`.
- *
- * The trait table that used to hang off this enum is gone: membership
- * questions are answered by the `StreamPhase` predicates in
- * `@shared/streams/streamStatus` (`isActivePhase`, `isInFlightPhase`,
- * `isTerminalOutcomePhase`). Do not add a new reader here — add a
- * `StreamPhase` one.
- */
-export const STREAM_STATUS = {
-  RUNNING: 'running',
-  ERROR: 'error',
-  STOPPED: 'stopped',
-  READY: 'ready',
-  WAITING: 'waiting',
-  RESUMING: 'resuming',
-  INITIALIZING: 'initializing',
-} as const;
-
-export const StreamStatusSchema = z.enum(STREAM_STATUS);
-/** Local to this module: the only consumer is `streamStatusToLifecycleStatus`
- *  below. `StreamStatusSchema` stays exported for the snapshot parse boundary. */
-type StreamStatus = z.infer<typeof StreamStatusSchema>;
+import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
 
 export const EXECUTION_STATUS = {
   COMPLETED: 'completed',
@@ -53,8 +19,6 @@ export type ExecutionStatus =
  * run end", decided exactly once at the run-lifecycle boundary. Current
  * production writers use these values for terminal run, group-end, and stream
  * state. `ExecutionStatus` remains an injective persisted-metadata projection.
- * Retired `EndGroupStatus` and `StreamStatus` values are accepted only by
- * parse-side compatibility readers and normalized to current values.
  *
  * `cancelled` is a sibling of `failed`, never folded into it — a user stop is
  * not an error. This is the triad `ResultEvent.outcome` carries.
@@ -109,14 +73,19 @@ const ExecutionMetaCoreSchema = z.object({
 /** Execution metadata stored alongside config at launch time. */
 export const ExecutionMetaSchema = ExecutionMetaCoreSchema.extend({
   /** Canonical execution state for a detached workflow run. */
-  workflow: PersistedWorkflowExecutionSnapshotSchema.optional(),
+  workflow: WorkflowExecutionSnapshotSchema.optional(),
 });
 
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
+/**
+ * The live phase vocabulary. Membership questions are answered by the
+ * predicates in `@shared/streams/streamStatus` (`isActivePhase`,
+ * `isInFlightPhase`, `isTerminalOutcomePhase`).
+ */
 export const STREAM_PHASE = {
-  RUNNING: STREAM_STATUS.RUNNING,
-  WAITING: STREAM_STATUS.WAITING,
+  RUNNING: 'running',
+  WAITING: 'waiting',
   COMPLETED: RUN_OUTCOME.COMPLETED,
   CANCELLED: RUN_OUTCOME.CANCELLED,
   FAILED: RUN_OUTCOME.FAILED,
@@ -157,35 +126,23 @@ export type StreamSubstate = z.infer<typeof StreamSubstateSchema>;
  * runs live here. `StreamMetadata.statusDetail` carries the reason; renderers
  * show it read-only and Delete is the only run control that applies.
  */
-export const STREAM_LIFECYCLE_UNAVAILABLE = 'unavailable';
+export const STREAM_LIFECYCLE_UNAVAILABLE = 'unavailable' as const;
+
+/**
+ * Wire-level lifecycle status of a stream with no run recorded yet. `as const`
+ * is load-bearing: a bare `const` gives a *widening* literal type, which
+ * widens back to `string` inside an object literal.
+ */
+export const STREAM_LIFECYCLE_READY = 'ready' as const;
 
 export type StreamLifecycleStatus =
   | StreamPhase
-  | typeof STREAM_STATUS.READY
+  | typeof STREAM_LIFECYCLE_READY
   | typeof STREAM_LIFECYCLE_UNAVAILABLE;
-
-export function streamStatusToLifecycleStatus(
-  status: StreamStatus,
-): StreamLifecycleStatus {
-  switch (status) {
-    case STREAM_STATUS.RUNNING:
-    case STREAM_STATUS.RESUMING:
-    case STREAM_STATUS.INITIALIZING:
-      return STREAM_PHASE.RUNNING;
-    case STREAM_STATUS.WAITING:
-      return STREAM_PHASE.WAITING;
-    case STREAM_STATUS.ERROR:
-      return STREAM_PHASE.FAILED;
-    case STREAM_STATUS.STOPPED:
-      return STREAM_PHASE.COMPLETED;
-    case STREAM_STATUS.READY:
-      return STREAM_STATUS.READY;
-  }
-}
 
 export const StreamLifecycleStatusSchema = z.union([
   StreamPhaseSchema,
-  z.literal(STREAM_STATUS.READY),
+  z.literal(STREAM_LIFECYCLE_READY),
   z.literal(STREAM_LIFECYCLE_UNAVAILABLE),
 ]);
 

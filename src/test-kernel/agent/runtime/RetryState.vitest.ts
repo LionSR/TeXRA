@@ -43,7 +43,6 @@ import {
   AgentCategory,
   MESSAGE_TYPES,
   STREAM_PHASE,
-  STREAM_STATUS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -1126,7 +1125,7 @@ describe('ModelInvocationNode retry', () => {
         node.promptFor(new Error('temporary provider failure')),
       );
 
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
       expect(requestRetry).toHaveBeenCalledWith(
         expect.objectContaining({
           streamId,
@@ -1232,7 +1231,7 @@ describe('ModelInvocationNode retry', () => {
         shouldRetry: true,
         userCancelled: false,
       });
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
     } finally {
       session.dispose();
       clearStreamStatusForTest(streamStatus, streamId);
@@ -1285,7 +1284,7 @@ describe('ModelInvocationNode retry', () => {
       // stream resumes to RUNNING to let the failure terminalize (a WAITING
       // stream can't be written to a terminal outcome directly).
       expect(shouldRetry).toBe(false);
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
 
       // The fallback classifies this as `failed` (→ RUN_OUTCOME.FAILED),
       // surfacing the underlying error — rather than `cancelled`, which would

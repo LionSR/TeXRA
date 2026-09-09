@@ -8,12 +8,7 @@
 import { z } from 'zod';
 
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import {
-  STREAM_STATUS,
-  StreamPhaseSchema,
-  StreamStatusSchema,
-  streamStatusToLifecycleStatus,
-} from './stream';
+import { StreamPhaseSchema } from './stream';
 import {
   BackendOwnedFieldsSchema,
   RoundKeyedOutputSidecarValueSchemas,
@@ -37,24 +32,6 @@ const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 // ============================================================================
 // StreamSnapshot — the assembled logical view (durable + log-derived + liveness)
 // ============================================================================
-
-/**
- * Legacy-inbound member for `status`: archived `trace.json` exports (the §8.3
- * permanently-fenced boundary — a static exported file stays legacy-shaped
- * forever) still carry the retired 7-value `StreamStatus` vocabulary.
- * Normalized once here, at the parse entry point, into the canonical
- * `StreamPhase` via the same collapse `streamStatusToLifecycleStatus` performs
- * everywhere else; `ready` has no phase equivalent ("no run recorded") and
- * normalizes to `undefined` — the parsed snapshot keeps an own `status` key
- * with that value (absent only when the input omits `status`). Downstream
- * code never sees a legacy value.
- */
-const LegacyStreamStatusAsPhaseSchema = StreamStatusSchema.transform(
-  (status) => {
-    const lifecycle = streamStatusToLifecycleStatus(status);
-    return lifecycle === STREAM_STATUS.READY ? undefined : lifecycle;
-  },
-);
 
 export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   /**
@@ -88,9 +65,7 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   parentStreamId: StreamTabIdSchema.optional(),
 
   // -- Log-derived (recomputed from the StreamLog on load) ------------------
-  status: z
-    .union([StreamPhaseSchema, LegacyStreamStatusAsPhaseSchema])
-    .optional(),
+  status: StreamPhaseSchema.optional(),
   // conversationProgress comes from SharedBackendOwnedFieldsSchema above.
 
   // -- Liveness (NEVER restored as live — clamp on hydrate) -----------------

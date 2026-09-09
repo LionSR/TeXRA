@@ -18,12 +18,7 @@ import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolU
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import {
-  MESSAGE_TYPES,
-  STREAM_PHASE,
-  STREAM_STATUS,
-  type StreamTabId,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   clearStreamStatusForTest,
@@ -520,7 +515,7 @@ describe('ToolUseWaitNode', () => {
           ),
         },
       ]);
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
     } finally {
       await GoalStore.forget(streamId);
     }
@@ -687,12 +682,12 @@ describe('ToolUseWaitNode', () => {
       const exec = await withTestRunContext(services.runScope, () =>
         node.exec(prep),
       );
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.WAITING);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
 
       await withTestRunContext(services.runScope, () =>
         node.post(shared, prep, exec),
       );
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
       expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
@@ -755,7 +750,7 @@ describe('ToolUseWaitNode', () => {
     });
     const createUserFollowUpMessages = appendUserFollowUpMessages();
     const info = vi.fn(() => {
-      expect(ownerSession.status.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(ownerSession.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
     });
     const streamId = 'test-stream' as StreamTabId;
     const logger = Object.assign(new TraceEmitter(), {
@@ -806,7 +801,7 @@ describe('ToolUseWaitNode', () => {
       );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
-      expect(ownerSession.status.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(ownerSession.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
       expect(info).toHaveBeenCalled();
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);

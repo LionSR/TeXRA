@@ -1,7 +1,7 @@
 import {
   STREAM_LIFECYCLE_UNAVAILABLE,
   STREAM_PHASE,
-  STREAM_STATUS,
+  STREAM_LIFECYCLE_READY,
   STREAM_SUBSTATE,
   type PhaseStage,
   type RoundStage,
@@ -12,7 +12,7 @@ import {
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 
 export type StreamStatusDisplayKey =
-  | Exclude<StreamLifecycleStatus, typeof STREAM_STATUS.READY>
+  | Exclude<StreamLifecycleStatus, typeof STREAM_LIFECYCLE_READY>
   | StreamSubstate
   | 'ready';
 
@@ -46,7 +46,7 @@ function streamStatusDisplayKey(
   substate?: StreamSubstate,
 ): StreamStatusDisplayKey | undefined {
   if (status === undefined) return undefined;
-  if (status === STREAM_STATUS.READY) return 'ready';
+  if (status === STREAM_LIFECYCLE_READY) return 'ready';
   return substate ?? status;
 }
 

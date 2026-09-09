@@ -16,7 +16,7 @@ import {
   STREAM_PHASE,
   type StreamPhase,
   type StreamTabId,
-  STREAM_STATUS,
+  STREAM_LIFECYCLE_READY,
 } from '@shared/schemas';
 import { streamStatusCopy } from '@shared/streams/streamStatusDisplay';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
@@ -1052,7 +1052,7 @@ describe('CLI StatusBar display model', () => {
       rootView(STREAM_PHASE.CANCELLED),
       childView(STREAM_PHASE.CANCELLED),
     );
-    const pendingRoot = treeOf(rootView(STREAM_STATUS.READY));
+    const pendingRoot = treeOf(rootView(STREAM_LIFECYCLE_READY));
     const waitingRoot = treeOf(rootView(STREAM_PHASE.WAITING));
     const empty = treeOf();
 

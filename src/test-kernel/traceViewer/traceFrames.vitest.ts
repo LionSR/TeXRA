@@ -12,7 +12,6 @@ import {
   AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
   StreamSnapshotSchema,
   StreamLogEntrySchema,
@@ -96,7 +95,7 @@ function stageEntry(
 }
 
 function legacyTrace(
-  snapshotStatus: 'error' | 'stopped' | undefined,
+  snapshotStatus: string | undefined,
   category: AgentCategory = AgentCategory.Workflow,
 ): TraceDocument {
   const streamId = 'stream:legacy-trace' as StreamTabId;
@@ -334,13 +333,13 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
 
-  // STOPPED folds into the canonical COMPLETED phase (the same collapse
-  // `streamStatusToLifecycleStatus` performs everywhere else in the app) — the
-  // point of these regressions is that a terminal snapshot status must not
-  // silently become READY, not that the literal legacy string survives.
+  // The point of these regressions is that a terminal snapshot status must
+  // not silently become READY. The retired 7-value vocabulary ('error',
+  // 'stopped', …) is no longer normalized at the parse boundary, so only the
+  // canonical phases are exercised here.
   it.each([
-    { snapshotStatus: 'error', expected: 'failed' },
-    { snapshotStatus: 'stopped', expected: 'completed' },
+    { snapshotStatus: 'failed', expected: 'failed' },
+    { snapshotStatus: 'completed', expected: 'completed' },
   ] as const)(
     'derives "$expected" from snapshot.status "$snapshotStatus" instead of defaulting to ready',
     ({ snapshotStatus, expected }) => {
@@ -351,6 +350,10 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       expect(replayed?.durableOutcome).toBe(expected);
     },
   );
+
+  it('rejects a retired snapshot status instead of normalizing it', () => {
+    expect(() => legacyTrace('stopped')).toThrow();
+  });
 
   it('reports no durable outcome when neither meta.outcome nor snapshot.status is set', () => {
     const trace = legacyTrace(undefined);

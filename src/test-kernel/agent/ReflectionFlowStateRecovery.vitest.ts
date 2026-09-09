@@ -268,7 +268,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
             userRetryable: true,
             isCredentialExhausted: true,
             isUpstreamCreditDepleted: true,
-          },
+          } as never,
         }),
       ),
     ).toThrow();

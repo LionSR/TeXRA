@@ -4,7 +4,6 @@ import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumul
 import {
   ContextManagementDataSchema,
   STREAM_PHASE,
-  STREAM_STATUS,
   StreamSnapshotSchema,
 } from '@shared/schemas';
 
@@ -80,23 +79,28 @@ describe('ContextManagementDataSchema', () => {
   });
 });
 
-describe('StreamSnapshotSchema.status — legacy-inbound normalization', () => {
-  // Archived trace.json exports (the permanently-fenced §8.3 boundary) still
-  // carry the retired 7-value StreamStatus. The parse entry point normalizes
-  // them into StreamPhase once; downstream never sees a legacy value.
-  it.each([
-    { legacy: STREAM_STATUS.INITIALIZING, expected: STREAM_PHASE.RUNNING },
-    { legacy: STREAM_STATUS.RESUMING, expected: STREAM_PHASE.RUNNING },
-    { legacy: STREAM_STATUS.ERROR, expected: STREAM_PHASE.FAILED },
-    { legacy: STREAM_STATUS.STOPPED, expected: STREAM_PHASE.COMPLETED },
-    // `ready` has no phase equivalent ("no run recorded") → `undefined`.
-    { legacy: STREAM_STATUS.READY, expected: undefined },
-  ])('normalizes legacy "$legacy" to "$expected"', ({ legacy, expected }) => {
+describe('StreamSnapshotSchema.status — canonical phases only', () => {
+  // The retired 7-value StreamStatus vocabulary is no longer normalized at the
+  // parse boundary: an archived trace.json export still carrying it fails
+  // loudly rather than being collapsed into a StreamPhase.
+  it.each(['initializing', 'resuming', 'error', 'stopped', 'ready'])(
+    'rejects the retired status "%s"',
+    (retired) => {
+      expect(() =>
+        StreamSnapshotSchema.parse({
+          streamId: 'stream:retired',
+          status: retired,
+        }),
+      ).toThrow();
+    },
+  );
+
+  it('passes a canonical phase through unchanged', () => {
     const result = StreamSnapshotSchema.parse({
-      streamId: 'stream:legacy',
-      status: legacy,
+      streamId: 'stream:canonical',
+      status: STREAM_PHASE.RUNNING,
     });
 
-    expect(result.status).toBe(expected);
+    expect(result.status).toBe(STREAM_PHASE.RUNNING);
   });
 });

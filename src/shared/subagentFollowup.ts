@@ -344,7 +344,7 @@ export function summarizeSubagentFollowup(text: unknown): string {
     return message ? `${head}\n${decodeXmlEntities(message)}` : head;
   }
 
-  // Activity envelopes (github-webhook-activity, execution-activity) wrap a
+  // Activity envelopes (github-webhook-activity) wrap a
   // plain sanitized text body — no attribute schema, so surface its first
   // line instead of the raw wrapper tags.
   const body = elementBody(trimmed, tag);

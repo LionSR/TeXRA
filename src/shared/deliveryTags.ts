@@ -1,5 +1,5 @@
 // Single source of truth for the child-run delivery-envelope XML root tags
-// (`<subagent-result>`, `<codex-error>`, `<execution-activity>`, …) that
+// (`<subagent-result>`, `<codex-error>`, `<github-webhook-activity>`, …) that
 // producers (src/tools/*) mint and render surfaces (progressView
 // UserMessage, the CLI transcript) must recognize. Previously each render
 // surface hand-listed the tag vocabulary separately from the producers, so
@@ -24,7 +24,6 @@ export const DELIVERY_TAG = {
   workflowScriptResult: 'workflow-script-result',
   workflowScriptError: 'workflow-script-error',
   githubWebhookActivity: 'github-webhook-activity',
-  executionActivity: 'execution-activity',
 } as const;
 
 /** Every canonical tag name — the union `DELIVERY_TAGS` entries must draw from. */
@@ -37,10 +36,9 @@ export interface DeliveryTagEntry {
    * the producer) and needs `decodeXmlEntities()` before display.
    * `subagent-progress` is included because its "todos" variant runs todo
    * text through `escapeText()`, producing `&amp;`/`&lt;` entities in the
-   * body. `github-webhook-activity` / `execution-activity` neutralize
-   * embedded tag names instead (see `wrapWebhookEvent()` in
-   * `src/tools/github/formatUtils.ts`) rather than XML-entity-escaping, so
-   * they are not in the escaped subset.
+   * body. `github-webhook-activity` neutralizes embedded tag names instead
+   * (see `wrapWebhookEvent()` in `src/tools/github/formatUtils.ts`) rather
+   * than XML-entity-escaping, so it is not in the escaped subset.
    */
   readonly escaped: boolean;
 }
@@ -48,13 +46,6 @@ export interface DeliveryTagEntry {
 /** The tags whose bodies are neutralized rather than XML-entity-escaped. */
 const UNESCAPED_DELIVERY_TAGS = new Set<DeliveryTagName>([
   DELIVERY_TAG.githubWebhookActivity,
-  // `execution-activity` has no live producer since the model-facing
-  // `executions subscribe` action was removed, but transcripts recorded
-  // before then still carry the envelope and must keep rendering as a block
-  // instead of raw XML. Persisted-data read shim: retire after 2026-11-24
-  // (#6981 ledger, row on #9627), deleting this entry and its
-  // `DELIVERY_TAG.executionActivity` member together.
-  DELIVERY_TAG.executionActivity,
 ]);
 
 /** Every recognized child-run delivery-envelope tag, in no particular order. */

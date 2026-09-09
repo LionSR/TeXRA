@@ -18,10 +18,7 @@ import {
 } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import {
-  JsonValueSchema,
-  RetryErrorInfoSchema,
-} from '@shared/schemas';
+import { JsonValueSchema, RetryErrorInfoSchema } from '@shared/schemas';
 
 const StateSlicesSchema = z.object({
   runStateSnapshot: AgentRunStateSnapshotSchema,
