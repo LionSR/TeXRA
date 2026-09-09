@@ -487,7 +487,7 @@ describe('ModelInvocationNode retry', () => {
 
       await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
 
-      const rows = transcript.getRange(0) ?? [];
+      const rows = transcript.getRange(0);
       const diagnostics = rows
         .map((row) => row.data)
         .filter(
