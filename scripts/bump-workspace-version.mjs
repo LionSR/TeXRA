@@ -11,6 +11,7 @@ const MANIFEST_PATHS = [
   'packages/cli/package.json',
   'packages/desktop/package.json',
   'packages/extension/package.json',
+  'packages/llm/package.json',
 ];
 
 // Accept the canonical extension tag (`v0.38.9`), the CLI tag (`cli-v0.38.9`),
