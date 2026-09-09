@@ -28,7 +28,7 @@ try {
     external: ['fsevents', 'clipboardy'],
     jsx: 'automatic',
     // Keep the harness build graph faithful to the production CLI bundle.
-    loader: { '.tsx': 'tsx', '.ts': 'ts', '.wasm': 'binary', '.node': 'file' },
+    loader: { '.tsx': 'tsx', '.ts': 'ts', '.wasm': 'binary' },
     alias: { 'react-devtools-core': reactDevtoolsStub },
     outfile,
     banner: {
