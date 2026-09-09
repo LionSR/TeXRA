@@ -104,7 +104,6 @@ vi.mock('@logger/logSink', () => ({
 }));
 
 vi.mock('@logger/logUtils', () => ({
-  createChannelWriter: vi.fn(() => vi.fn()),
   createLog: vi.fn(() => ({
     debug: vi.fn(),
     info: vi.fn(),

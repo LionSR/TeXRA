@@ -16,11 +16,9 @@
  */
 // Third-party imports
 import { Logger } from 'effect';
-import safeStringify from 'safe-stable-stringify';
 
 // Local imports
 import { redactDisplayValue, redactSecrets } from '@logger/redaction';
-import { serializeError } from '@utils/core';
 
 /**
  * One diagnostic record, shaped by Effect's own structured formatter rather
@@ -61,26 +59,6 @@ export function entryMessage(entry: LogEntry): string {
   return parts
     .map((part) => (typeof part === 'string' ? part : JSON.stringify(part)))
     .join(' ');
-}
-
-/**
- * Render a debug payload for display. Errors don't survive `JSON.stringify`,
- * so they're flattened here; `safe-stable-stringify` already renders circular
- * references as `"[Circular]"`. Producers pre-render their payload through
- * this so error flattening and cycle handling live in one place rather than in
- * every host — severity, timestamp, and identity stay structured fields, which
- * is what a host needs to render an entry; the payload has no reader but a
- * human.
- */
-export function formatLogData(data: unknown): string {
-  if (typeof data !== 'object' || data === null) return String(data);
-  return (
-    safeStringify(
-      data,
-      (_key, value) => (value instanceof Error ? serializeError(value) : value),
-      2,
-    ) ?? String(data)
-  );
 }
 
 function redactEntry(entry: LogEntry): LogEntry {

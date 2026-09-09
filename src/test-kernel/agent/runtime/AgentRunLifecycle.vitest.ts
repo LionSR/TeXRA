@@ -457,10 +457,7 @@ describe('runFlowWithLifecycle', () => {
     );
     publishTestRunStart(ctx.runScope.session, streamId, executionId);
     const trace = new TraceEmitter();
-    const detachTrace = ctx.runScope.session.attachRunTrace(
-      { trace },
-      streamId,
-    );
+    const detachTrace = ctx.runScope.session.attachRunTrace(trace, streamId);
     // One plane in commit order: run.config and the status fact both land
     // on it, so the ordering assertion reads one log.
     const recorded = recordSessionEvents(ctx.runScope.session);

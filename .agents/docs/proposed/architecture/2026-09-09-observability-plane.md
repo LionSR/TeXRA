@@ -234,6 +234,15 @@ is a standalone logger migration, and no step introduces a bridge between old an
    with one caller and no lifecycle, for a trace with no session behind it: a model handler's
    default emitter before a run swaps in the real trace. Net −184 lines.
 
+   A follow-on pass collapsed what the removal exposed. `createChannelWriter` and its
+   `ChannelWriter` type had no consumer outside `channelTrace.ts`, and duplicated in a
+   level-first shape what `createLog` already provides — both adapters now bind one `Log` and
+   share a single `forward` that drops internal-only facts, instead of building that filter
+   twice. `formatLogData` sat on the host port with one caller and no host using it, so it
+   moved into the module that renders the payload. And `SessionHandle.attachRunTrace` took
+   `Pick<RunTrace, 'trace'>` — a container passed to read one field, which two test call sites
+   were building `{ trace }` wrappers to satisfy; it takes the `AgentTrace` now.
+
 4. **Trace hub, after model-handler retirement.** That retirement deletes
    `ModelHandler.ts:279`, leaving one construction site and two consumers that both already want
    a queue. `createListenerSet`, `publicationGate`, the promise `Set`, and the SDK's buffer cap

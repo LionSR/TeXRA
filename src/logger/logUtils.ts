@@ -3,28 +3,24 @@
  * or Promise-based and so cannot reach `Effect.log*`.
  *
  * Functional callers use `debug/info/warn/error(channel, message, options)`.
- * Channel-trace infrastructure in `src/agent/trace/channelTrace.ts` uses
- * `createChannelWriter(channel)` to reach the same sink without making this
- * module depend on its event types.
  *
  * Both this module and the Effect logger layer write the same structured entry
  * to the one host sink in `@logger/logSink`; hosts install that sink and own
  * all rendering. This module carries no destination state of its own and is
  * deleted with the last caller that cannot yield an Effect.
  */
+// Third-party imports
+import safeStringify from 'safe-stable-stringify';
+
 // Local imports
 import * as loggerSelf from '@logger/logUtils';
-import {
-  LOG_CHANNEL,
-  formatLogData,
-  writeLogEntry,
-  type LogEntry,
-} from '@logger/logSink';
+import { LOG_CHANNEL, writeLogEntry, type LogEntry } from '@logger/logSink';
 // Deliberate deep import: the '@shared/schemas' barrel transitively imports
 // this module (stateSettings → '@shared/approvalPolicy' → here), so importing
 // the barrel would create an import cycle. Recorded in the shared-schemas
 // deep-import baseline as its documented cycle floor.
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas/log';
+import { serializeError } from '@utils/core';
 import { getConfigBeforePlatformInit } from '@utils/config/configUtils';
 
 export interface LogUtilsOptions {
@@ -49,6 +45,22 @@ export function isDebugModeEnabled(): boolean {
   // Documented pre-init exception: fatal/startup reporting can log structured
   // errors before a host has installed the platform composition root.
   return getConfigBeforePlatformInit('texra.logger.debugMode', false);
+}
+
+/**
+ * Render a debug payload for display. Errors don't survive `JSON.stringify`,
+ * so they're flattened here; `safe-stable-stringify` already renders circular
+ * references as `"[Circular]"`.
+ */
+function formatLogData(data: unknown): string {
+  if (typeof data !== 'object' || data === null) return String(data);
+  return (
+    safeStringify(
+      data,
+      (_key, value) => (value instanceof Error ? serializeError(value) : value),
+      2,
+    ) ?? String(data)
+  );
 }
 
 /**
@@ -77,17 +89,6 @@ function writeLine(
     spans: {},
   };
   writeLogEntry(entry);
-}
-
-export type ChannelWriter = (
-  level: LogLevel,
-  message: string,
-  data?: unknown,
-) => void;
-
-/** Create a level-tagged writer bound to one channel. */
-export function createChannelWriter(channel: string): ChannelWriter {
-  return (level, message, data) => writeLine(level, channel, message, data);
 }
 
 type LogFn = (

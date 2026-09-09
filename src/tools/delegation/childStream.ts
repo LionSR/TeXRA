@@ -121,7 +121,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
   const setup = yield* Effect.exit(
     Effect.gen(function* () {
       // Attach the run's canonical event publication before activation.
-      detachSessionTrace = session.attachRunTrace(runTrace, childStreamId);
+      detachSessionTrace = session.attachRunTrace(runTrace.trace, childStreamId);
       const disposeTrace = () => {
         detachSessionTrace?.();
         runTrace.dispose();

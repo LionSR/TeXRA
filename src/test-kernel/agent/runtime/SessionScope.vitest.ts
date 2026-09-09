@@ -34,7 +34,7 @@ describe('session-owned transcripts and follow-up queues', () => {
         launching.transcripts.acquireRunResidency(streamId, streamId),
       );
       const handle = createRunTrace(lease);
-      const detach = launching.attachRunTrace(handle, streamId);
+      const detach = launching.attachRunTrace(handle.trace, streamId);
       try {
         const output = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
         output.append('owned by launching session');
@@ -68,7 +68,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       session.transcripts.acquireRunResidency(streamId, streamId),
     );
     const handle = createRunTrace(lease);
-    const detach = session.attachRunTrace(handle, streamId);
+    const detach = session.attachRunTrace(handle.trace, streamId);
     try {
       const output = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('partial text');

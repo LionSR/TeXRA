@@ -89,7 +89,6 @@ import {
   nonterminalWorkflowCall,
 } from '@shared/session/traceEntries';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-import type { RunTrace } from '@transcript/runTrace';
 import type {
   StreamLogStore,
   StreamLogStoreMode,
@@ -534,13 +533,8 @@ export class SessionHandle {
    * transcript order. Returns a detach disposer the run bundles into its
    * trace teardown.
    */
-  attachRunTrace(
-    run: Pick<RunTrace, 'trace'>,
-    streamId: StreamTabId,
-  ): () => void {
-    return run.trace.subscribe((event) =>
-      this.publishRunEvent(streamId, event),
-    );
+  attachRunTrace(trace: AgentTrace, streamId: StreamTabId): () => void {
+    return trace.subscribe((event) => this.publishRunEvent(streamId, event));
   }
 
   /**

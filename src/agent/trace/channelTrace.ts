@@ -3,8 +3,8 @@
  */
 
 // Local imports
-import { createChannelWriter, type ChannelWriter } from '@logger/logUtils';
-import { MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
+import { createLog, type Log } from '@logger/logUtils';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local file imports
 import { noopTrace } from './noopTrace';
@@ -15,15 +15,18 @@ import type {
 } from './AgentTrace';
 import type { AgentEvent } from './events';
 
-/** Bind a functional logger call to one channel. */
-function toChannelLog(
-  writer: ChannelWriter,
-  level: LogLevel,
-): (message: string, options?: LogOptions) => void {
-  return (message: string, options: LogOptions = {}): void => {
-    if (options.messageType === MESSAGE_TYPES.INTERNAL) return;
-    writer(level, message, options.data);
-  };
+/** One log fact, in the shape both the sugar methods and the events carry. */
+interface LogFact {
+  readonly level: 'debug' | 'info' | 'warn' | 'error';
+  readonly message: string;
+  readonly data?: unknown;
+  readonly messageType?: string;
+}
+
+/** Write one fact to the channel, dropping the internal-only ones. */
+function forward(log: Log, fact: LogFact): void {
+  if (fact.messageType === MESSAGE_TYPES.INTERNAL) return;
+  log[fact.level](fact.message, { data: fact.data });
 }
 
 /**
@@ -31,14 +34,18 @@ function toChannelLog(
  * Structured events, stages, and streams remain inert through `noopTrace`.
  */
 export function createChannelTrace(name: string): AgentTrace {
-  const writer = createChannelWriter(name);
+  const log = createLog(name);
+  const bind =
+    (level: LogFact['level']) =>
+    (message: string, options: LogOptions = {}): void =>
+      forward(log, { ...options, level, message });
 
   return {
     ...noopTrace,
-    debug: toChannelLog(writer, 'debug'),
-    info: toChannelLog(writer, 'info'),
-    warn: toChannelLog(writer, 'warn'),
-    error: toChannelLog(writer, 'error'),
+    debug: bind('debug'),
+    info: bind('info'),
+    warn: bind('warn'),
+    error: bind('error'),
   };
 }
 
@@ -55,14 +62,10 @@ export function attachChannelSubscriber(
   trace: AgentTrace,
   channel: string,
 ): () => void {
-  const writer = createChannelWriter(channel);
-
+  const log = createLog(channel);
   const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
     if (event.type !== 'log') return;
-    if (event.messageType === MESSAGE_TYPES.INTERNAL) return;
-
-    writer(event.level, event.message, event.data);
+    forward(log, event);
   };
-
   return trace.subscribe(subscriber);
 }

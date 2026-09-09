@@ -470,7 +470,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       try: () => input.signal?.throwIfAborted(),
       catch: ensureError,
     });
-    attachment.detach = session.attachRunTrace(rawRunTrace, streamId);
+    attachment.detach = session.attachRunTrace(rawRunTrace.trace, streamId);
 
     const agentLogger = runTrace.trace;
     modelHandler.setAgentCategory(setting.agentCategory);
