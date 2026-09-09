@@ -170,7 +170,8 @@ export const registerExecution = Effect.fn('registerExecution')(function* (
             options.identity.kind === 'agent' &&
             isRemoteAgent(options.identity.agent),
           worktree: launchWorktreeInfo(pinned.workingDirectory),
-          parentStreamId: options.parentStreamId ?? parent?.streamId,
+          parentStreamId:
+            parent === null ? options.parentStreamId : parent.streamId,
           background,
           approvalPolicy: session.approvalPolicySnapshotFor(options.streamId),
           checkpointId: options.checkpointId,
