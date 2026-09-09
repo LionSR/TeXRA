@@ -256,11 +256,6 @@ describe('formatResumeHint', () => {
     expected: string;
   }>([
     {
-      usageRoute: 'relay',
-      cost: 0.012,
-      expected: '$0.012 via included access',
-    },
-    {
       usageRoute: 'chatgpt-subscription',
       cost: 0,
       expected: 'Free via ChatGPT',

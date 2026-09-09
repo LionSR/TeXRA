@@ -1,5 +1,3 @@
-import { workspaceRoots } from '@platform/workspaceRoots';
-import { warnAbandonedSlotValue } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
@@ -34,10 +32,5 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
  * The platform must be initialized before a run can be stopped or killed.
  */
 export function detachSubagentsOnStop(): boolean {
-  warnAbandonedSlotValue(
-    GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-    'workspaceState',
-    workspaceRoots().workspaceState,
-  );
   return readPlatformSetting<boolean>(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP);
 }

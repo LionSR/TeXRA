@@ -12,8 +12,8 @@ import {
   AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   StreamSnapshotSchema,
   StreamLogEntrySchema,
   type ExecutionId,
@@ -96,7 +96,7 @@ function stageEntry(
 }
 
 function legacyTrace(
-  snapshotStatus: 'error' | 'stopped' | undefined,
+  snapshotStatus: string | undefined,
   category: AgentCategory = AgentCategory.Workflow,
 ): TraceDocument {
   const streamId = 'stream:legacy-trace' as StreamTabId;
@@ -104,9 +104,12 @@ function legacyTrace(
     executionId: 'abc123' as ExecutionId,
     streamId,
     config: parseConfig(category),
-    // Legacy meta: no description, nothing replayTrace needs beyond the
-    // optional `description` read.
-    meta: null,
+    meta: {
+      schemaVersion: 1,
+      timestamp: '2026-01-01T00:00:00.000Z',
+      identity: { kind: 'agent', agent: 'assistant' },
+      streamId: streamId,
+    },
     entries: [],
     snapshot: StreamSnapshotSchema.parse({
       streamId,
@@ -235,7 +238,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           timestamp: 120,
           groupId: 'root-run',
           text: 'Round',
-          data: { status: 'stopped', endTime: 120 },
+          data: { status: STREAM_PHASE.COMPLETED, endTime: 120 },
         }),
       ],
     };
@@ -273,7 +276,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           // No groupId — the bug: rounds have no ambient parent, so this is
           // indistinguishable from a root stage by groupId alone.
           text: 'r0',
-          data: { status: 'stopped', endTime: 120, kind: 'round' },
+          data: { status: STREAM_PHASE.COMPLETED, endTime: 120, kind: 'round' },
         }),
       ],
     };
@@ -324,7 +327,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           // across the stage.end merge, so this row has only its entry
           // position (second top-level stage entry, opened after root) to
           // distinguish it from root.
-          data: { status: 'stopped', endTime: 120 },
+          data: { status: STREAM_PHASE.COMPLETED, endTime: 120 },
         }),
       ],
     };
@@ -334,13 +337,13 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
 
-  // STOPPED folds into the canonical COMPLETED phase (the same collapse
-  // `streamStatusToLifecycleStatus` performs everywhere else in the app) — the
-  // point of these regressions is that a terminal snapshot status must not
-  // silently become READY, not that the literal legacy string survives.
+  // The point of these regressions is that a terminal snapshot status must
+  // not silently become READY. The retired 7-value vocabulary ('error',
+  // 'stopped', …) is no longer normalized at the parse boundary, so only the
+  // canonical phases are exercised here.
   it.each([
-    { snapshotStatus: 'error', expected: 'failed' },
-    { snapshotStatus: 'stopped', expected: 'completed' },
+    { snapshotStatus: 'failed', expected: 'failed' },
+    { snapshotStatus: 'completed', expected: 'completed' },
   ] as const)(
     'derives "$expected" from snapshot.status "$snapshotStatus" instead of defaulting to ready',
     ({ snapshotStatus, expected }) => {
@@ -351,6 +354,10 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       expect(replayed?.durableOutcome).toBe(expected);
     },
   );
+
+  it('rejects a retired snapshot status instead of normalizing it', () => {
+    expect(() => legacyTrace('stopped')).toThrow();
+  });
 
   it('reports no durable outcome when neither meta.outcome nor snapshot.status is set', () => {
     const trace = legacyTrace(undefined);
@@ -366,7 +373,12 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       executionId: 'abc125' as ExecutionId,
       streamId,
       config: { name: 'bash', instruction: 'ls -la' },
-      meta: null,
+      meta: {
+        schemaVersion: 1,
+        timestamp: '2026-01-01T00:00:00.000Z',
+        identity: { kind: 'process', tool: 'bash' },
+        streamId,
+      },
       entries: [],
       snapshot: StreamSnapshotSchema.parse({ streamId }),
     };

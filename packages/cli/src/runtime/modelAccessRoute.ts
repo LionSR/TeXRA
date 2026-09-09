@@ -24,7 +24,6 @@ export type CliModelAccessRoute =
   | 'glm-code'
   // LEGACY: renders historical usage recorded on the retired relay route
   // (removed 2026-08; see .agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md).
-  | 'included'
   | 'personal';
 
 type CliSubscriptionPreferenceState = 'off' | 'on';
@@ -145,8 +144,6 @@ export function resolveCliModelAccessRoute({
       return 'kimi-code';
     case 'glm-coding-plan-subscription':
       return 'glm-code';
-    case 'relay':
-      return 'included';
     case 'api-key':
       return 'personal';
     default:
@@ -165,8 +162,6 @@ export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
       // The bar names how the call is paid for, not which provider; the /api
       // form and /status name the subscription itself.
       return 'subscription';
-    case 'included':
-      return 'Included';
     case 'personal':
       return OWN_API_KEYS.compactLabel;
     default:
@@ -184,8 +179,6 @@ export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
       return 'Kimi Code subscription';
     case 'glm-code':
       return 'GLM Coding Plan';
-    case 'included':
-      return 'Included access';
     case 'personal':
       return OWN_API_KEYS.label;
     default:

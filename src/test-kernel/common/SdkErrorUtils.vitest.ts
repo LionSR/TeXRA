@@ -44,8 +44,6 @@ import {
 } from '@common/errors/sdkError/providerErrorFormat';
 import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 import {
-  ErrorLogDataSchema,
-  PersistedRetryErrorInfoSchema,
   ProviderErrorPartialSchema,
   RetryErrorInfoSchema,
   toRetryErrorInfo,
@@ -915,89 +913,30 @@ describe('provider error schemas', () => {
     ).toBe(false);
   });
 
-  it('normalizes every legacy classification into one canonical discriminant', () => {
-    const cases = [
-      [{ exhaustionReason: 'upstream-credit' }, 'upstream-credit'],
-      [{ missingApiKey: true }, 'missing-api-key'],
-      [{ contextWindow: true }, 'context-window'],
-      [
-        {
-          isCredentialExhausted: true,
-          isChatGptSubscriptionLimited: true,
-        },
-        'chatgpt-subscription',
-      ],
-    ] as const;
-
-    for (const [legacy, kind] of cases) {
-      const parsed = PersistedRetryErrorInfoSchema.parse({
-        message: 'legacy persisted error',
-        retryable: true,
-        ...legacy,
-      });
-      expect(parsed.classification).toStrictEqual({ kind });
-      expect(parsed.userRetryable).toBe(true);
-      expect('retryable' in parsed).toBe(false);
-      expect('exhaustionReason' in parsed).toBe(false);
-      expect('missingApiKey' in parsed).toBe(false);
-      expect('contextWindow' in parsed).toBe(false);
-      expect(RetryErrorInfoSchema.safeParse(parsed).success).toBe(true);
+  it('rejects the retired independent classification markers outright', () => {
+    for (const legacy of [
+      { exhaustionReason: 'upstream-credit' },
+      { missingApiKey: true },
+      { contextWindow: true },
+      { isCredentialExhausted: true, isChatGptSubscriptionLimited: true },
+      { isRelayError: true },
+    ]) {
+      expect(
+        RetryErrorInfoSchema.safeParse({
+          message: 'retired persisted error',
+          userRetryable: true,
+          ...legacy,
+        }).success,
+      ).toBe(false);
     }
   });
 
-  it('normalizes a persisted relay retry error without relaxing the current schema', () => {
-    const legacyRelayError = {
-      message: 'legacy relay error',
-      userRetryable: true,
-      isCredentialExhausted: true,
-      isUpstreamCreditDepleted: true,
-      isRelayError: true,
-    };
-
-    expect(PersistedRetryErrorInfoSchema.parse(legacyRelayError)).toStrictEqual(
-      {
-        message: 'legacy relay error',
-        userRetryable: true,
-        classification: { kind: 'upstream-credit' },
-      },
-    );
-    expect(RetryErrorInfoSchema.safeParse(legacyRelayError).success).toBe(
-      false,
-    );
-  });
-
-  it('preserves legacy marker precedence while rejecting malformed classifications', () => {
-    const contradictoryLegacy = PersistedRetryErrorInfoSchema.parse({
-      message: 'old record with overlapping markers',
-      userRetryable: true,
-      exhaustionReason: 'upstream-credit',
-      missingApiKey: true,
-      contextWindow: true,
-    });
-    expect(contradictoryLegacy.classification).toStrictEqual({
-      kind: 'missing-api-key',
-    });
-
-    expect(() =>
-      PersistedRetryErrorInfoSchema.parse({
-        message: 'malformed legacy marker',
-        userRetryable: false,
-        missingApiKey: false,
-      }),
-    ).toThrow();
+  it('rejects a malformed canonical classification', () => {
     expect(() =>
       RetryErrorInfoSchema.parse({
         message: 'malformed canonical classification',
         userRetryable: false,
         classification: { kind: 'not-a-provider-kind' },
-      }),
-    ).toThrow();
-    expect(() =>
-      PersistedRetryErrorInfoSchema.parse({
-        message: 'mixed canonical and legacy classifications',
-        userRetryable: false,
-        classification: { kind: 'context-window' },
-        missingApiKey: true,
       }),
     ).toThrow();
   });
@@ -1010,7 +949,7 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
     statusCode: 429,
     statusText: 'Too Many Requests',
     provider: 'anthropic',
-    classification: { kind: 'relay-limit' },
+    classification: { kind: 'upstream-credit' },
     requestId: 'req_abc123',
     streamDiagnostics: {
       thinkingChars: 100,
@@ -1035,7 +974,9 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
 
     expect(reconstructed.statusCode).toBe(429);
     expect(reconstructed.provider).toBe('anthropic');
-    expect(reconstructed.classification).toStrictEqual({ kind: 'relay-limit' });
+    expect(reconstructed.classification).toStrictEqual({
+      kind: 'upstream-credit',
+    });
     expect(reconstructed.requestId).toBe('req_abc123');
     expect(reconstructed.userRetryable).toBe(true);
   });

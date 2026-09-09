@@ -34,25 +34,25 @@ describe('usage wire vocabulary and aggregation', () => {
       name: 'kept when every active entry shares the route',
       entries: [
         emptyUsageStats(),
-        { inputTokens: 10, outputTokens: 2, cost: 0, usageRoute: 'relay' },
-        {
-          inputTokens: 1,
-          outputTokens: 1,
-          cost: 0.001,
-          usageRoute: 'relay',
-        },
-      ],
-      expectedRoute: 'relay',
-    },
-    {
-      name: 'dropped when accumulated entries mix routes',
-      entries: [
-        { inputTokens: 10, outputTokens: 2, cost: 0, usageRoute: 'relay' },
+        { inputTokens: 10, outputTokens: 2, cost: 0, usageRoute: 'api-key' },
         {
           inputTokens: 1,
           outputTokens: 1,
           cost: 0.001,
           usageRoute: 'api-key',
+        },
+      ],
+      expectedRoute: 'api-key',
+    },
+    {
+      name: 'dropped when accumulated entries mix routes',
+      entries: [
+        { inputTokens: 10, outputTokens: 2, cost: 0, usageRoute: 'api-key' },
+        {
+          inputTokens: 1,
+          outputTokens: 1,
+          cost: 0.001,
+          usageRoute: 'chatgpt-subscription',
         },
       ],
       expectedRoute: undefined,

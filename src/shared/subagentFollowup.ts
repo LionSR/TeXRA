@@ -48,7 +48,8 @@ const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
 // the vocabulary is a shared, growing const). Every producer
 // (deliveryEnvelope.ts / subagentResults.ts / github/formatUtils.ts) only ever
 // follows a tag name with whitespace (attributes), `>` (bare open, e.g.
-// `<execution-activity>`), or the exact `/>` self-closing delimiter, so anchor
+// `<execution-activity>`), or the exact `/>` self-closing delimiter (bare open, e.g.
+// `<subagent-result>`), so anchor
 // on those delimiters instead of accepting any slash continuation.
 const TAG_NAME_END = '(?=[\\s>]|/>)';
 const DELIVERY_TAG_RE = new RegExp(
@@ -344,7 +345,7 @@ export function summarizeSubagentFollowup(text: unknown): string {
     return message ? `${head}\n${decodeXmlEntities(message)}` : head;
   }
 
-  // Activity envelopes (github-webhook-activity, execution-activity) wrap a
+  // Activity envelopes (github-webhook-activity) wrap a
   // plain sanitized text body — no attribute schema, so surface its first
   // line instead of the raw wrapper tags.
   const body = elementBody(trimmed, tag);

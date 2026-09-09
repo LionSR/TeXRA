@@ -86,7 +86,7 @@ export class LogList extends LitElement {
       ([id]) => id,
       ([id, data]) => {
         const stream = data.stream;
-        const terminal = stream.identity?.kind === 'process';
+        const terminal = stream.identity.kind === 'process';
         return html`
           <task-group-list
             ${ref(data.ref)}

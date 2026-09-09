@@ -2,10 +2,10 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  STREAM_LIFECYCLE_READY,
   type ActiveChildInfo,
   AgentCategory,
   STREAM_PHASE,
-  STREAM_STATUS,
   STREAM_SUBSTATE,
   type StreamLifecycleStatus,
 } from '@shared/schemas';
@@ -66,7 +66,7 @@ describe('stream status display labels', () => {
     [STREAM_PHASE.WAITING, 'Idle'],
     [STREAM_PHASE.COMPLETED, 'Completed'],
     [STREAM_PHASE.CANCELLED, 'Stopped'],
-    [STREAM_STATUS.READY, 'Ready'],
+    [STREAM_LIFECYCLE_READY, 'Ready'],
   ];
 
   it.each(wordingCases)('preserves wording: %s -> "%s"', (status, label) => {
@@ -103,7 +103,7 @@ describe('stream status display labels', () => {
     [STREAM_PHASE.CANCELLED, STREAM_PHASE.CANCELLED],
     [STREAM_PHASE.FAILED, STREAM_PHASE.FAILED],
     [STREAM_PHASE.WAITING, STREAM_PHASE.WAITING],
-    [STREAM_STATUS.READY, 'ready'],
+    [STREAM_LIFECYCLE_READY, 'ready'],
   ] as const)('maps lifecycle status %s to display key %s', (status, key) => {
     expect(progressHeaderStatus(status).displayKey).toBe(key);
   });

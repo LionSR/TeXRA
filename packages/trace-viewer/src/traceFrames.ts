@@ -10,7 +10,6 @@ import {
   referencedAggregates,
   AgentCategory,
   AgentConfigFieldsSchema,
-  END_GROUP_STATUS,
   runIdentityDisplayName,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
@@ -62,14 +61,13 @@ function findRootStageId(
 /**
  * The terminal phase the trace records, or null for a trace that never
  * reached one. `meta.outcome` is the one terminal fact the document
- * carries; for traces that predate outcome tracking, the persisted
- * transcript's last terminal root group row decides, then the older
- * snapshot-status escape hatch (already normalized to `StreamPhase` at
- * trace parse). A trace with no terminal fact folds as interrupted: an
+ * carries; failing that, the persisted transcript's last terminal root group
+ * row decides, then the snapshot status. Every one of those is a canonical
+ * `StreamPhase`. A trace with no terminal fact folds as interrupted: an
  * exported file has no producer that could still be running it.
  */
 function traceOutcome(trace: TraceDocument): StreamPhase | null {
-  if (trace.meta?.outcome) return trace.meta.outcome;
+  if (trace.meta.outcome) return trace.meta.outcome;
   const rootStageId = findRootStageId(trace.entries);
   for (const entry of trace.entries.toReversed()) {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;
@@ -78,59 +76,22 @@ function traceOutcome(trace: TraceDocument): StreamPhase | null {
     if (kind !== undefined) {
       if (NESTED_STAGE_KINDS.has(kind)) continue;
     } else if (entry.id !== rootStageId) {
-      // No `data.kind` to check: this entry predates kind-tagging. Only the
-      // entry at the root stage's fixed position can be the run's own
-      // GROUP_END; anything else sharing the "no parent" shape is a nested
-      // round, phase, or session.
+      // Untagged: only the entry at the root stage's fixed position can be the
+      // run's own GROUP_END; anything else sharing the "no parent" shape is a
+      // nested round, phase, or session.
       continue;
     }
     const { status } = entry.data;
-    if (status === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
-    if (status === END_GROUP_STATUS.STOPPED) return STREAM_PHASE.COMPLETED;
     if (status !== undefined) return status;
   }
   const status = trace.snapshot.status;
   return status !== undefined && isTerminalOutcomePhase(status) ? status : null;
 }
 
-/** The raw configured name across both arms of the config union. Not a
- *  display name: it still carries any source prefix. */
-function recordName(config: TraceDocument['config']): string {
-  return 'agentCategory' in config ? config.agent : config.name;
-}
-
-function legacyTraceIdentity(trace: TraceDocument): RunIdentity {
-  const { streamId } = trace;
-  const name = recordName(trace.config);
-  if (streamId.startsWith('workflow-script#')) {
-    return { kind: 'multiAgentWorkflow', workflowName: name };
-  }
-  if (streamId.startsWith('codex@')) {
-    return { kind: 'agent', agent: name, tool: 'codex' };
-  }
-  if (streamId.startsWith('claude@')) {
-    return { kind: 'agent', agent: name, tool: 'claude_code' };
-  }
-  if (streamId.startsWith('bash@')) return { kind: 'process', tool: 'bash' };
-  return { kind: 'agent', agent: name };
-}
-
-/**
- * The run's identity. The embedded ExecutionMeta carries it; pre-migration
- * exports have none and are not all agent runs (bash process and
- * workflow-script traces exist), so those classify from the trace's
- * stream-id prefix. An exported trace file is immutable, so this fallback
- * is permanent: it is the only place a stream-id prefix may be read as
- * evidence.
- */
-function traceIdentity(trace: TraceDocument): RunIdentity {
-  return trace.meta?.identity ?? legacyTraceIdentity(trace);
-}
-
 /** The run's display name: the same identity rule every host's stream tab
  *  labels with, so the page title and the tab cannot disagree. */
 export function traceDisplayName(trace: TraceDocument): string {
-  return runIdentityDisplayName(traceIdentity(trace));
+  return runIdentityDisplayName(trace.meta.identity);
 }
 
 /** The listing facts of the run, in publish order, without envelopes. */
@@ -138,7 +99,7 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
   const { snapshot, executionId } = trace;
   const agentConfig =
     'agentCategory' in trace.config ? trace.config : undefined;
-  const identity = traceIdentity(trace);
+  const identity = trace.meta.identity;
   // Workflow-shaped for workflow agents and multi-agent-workflow containers
   // (both have round outputs); everything else renders the tool-use shape.
   const category =
@@ -188,7 +149,7 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       }),
     });
   }
-  if (trace.meta?.description) {
+  if (trace.meta.description) {
     bodies.push({
       type: 'updateStreamDescription',
       aggregateId: qualifyAggregateId('stream', trace.streamId),

@@ -170,7 +170,7 @@ function seedStreamMeta(
   },
 ): void {
   seedStream(streamId, {
-    identity: meta.identity ?? null,
+    identity: meta.identity,
     followUpSupport:
       meta.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     ...(meta.agentCategory !== undefined

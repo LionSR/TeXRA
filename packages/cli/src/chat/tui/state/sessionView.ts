@@ -15,7 +15,8 @@ import {
   AgentCategory,
   isEmptyUsage,
   isPlainAgentIdentity,
-  STREAM_STATUS,
+  STREAM_LIFECYCLE_READY,
+  STREAM_PHASE,
   sumUsageStats,
   USER_FOLLOW_UP_SUPPORT,
   type StreamPhase,
@@ -107,7 +108,7 @@ export function streamLabelOf(stream: StreamView): string {
 export function streamPhaseOf(
   stream: StreamView | undefined,
 ): StreamPhase | undefined {
-  return stream === undefined || stream.status === STREAM_STATUS.READY
+  return stream === undefined || stream.status === STREAM_LIFECYCLE_READY
     ? undefined
     : stream.status;
 }
@@ -142,7 +143,7 @@ export function runningChildCount(
   stream: StreamView | undefined,
 ): number {
   return (stream?.childIds ?? []).filter(
-    (id) => view.streams.get(id)?.status === STREAM_STATUS.RUNNING,
+    (id) => view.streams.get(id)?.status === STREAM_PHASE.RUNNING,
   ).length;
 }
 
@@ -152,7 +153,7 @@ export function anyStreamRunning(
   rootStreamId: StreamTabId | undefined,
 ): boolean {
   return descendantStreamIds(view, rootStreamId).some(
-    (id) => view.streams.get(id)?.status === STREAM_STATUS.RUNNING,
+    (id) => view.streams.get(id)?.status === STREAM_PHASE.RUNNING,
   );
 }
 

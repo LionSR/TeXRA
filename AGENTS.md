@@ -178,7 +178,7 @@ subset of the same files under the same options.
 - **Const object naming**:
   - Use **PascalCase** for service singletons that encapsulate state and behavior (e.g., `StreamStatusService`, `ModelRegistry`)
   - Use **camelCase** for simple command/function namespaces (e.g., `agentCommands`, `latexCommands`)
-- **Constants**: Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_ERROR_LENGTH`, `STREAM_STATUS`)
+- **Constants**: Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_ERROR_LENGTH`, `STREAM_PHASE`)
 
 ### Directory organization
 

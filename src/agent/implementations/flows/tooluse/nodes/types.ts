@@ -18,10 +18,7 @@ import {
 } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import {
-  JsonValueSchema,
-  PersistedRetryErrorInfoSchema,
-} from '@shared/schemas';
+import { JsonValueSchema, RetryErrorInfoSchema } from '@shared/schemas';
 
 const StateSlicesSchema = z.object({
   runStateSnapshot: AgentRunStateSnapshotSchema,
@@ -52,16 +49,16 @@ export const ToolUseRunSharedSchema = z.object({
    * resume SSOT for model identity.
    */
   modelId: z.string().optional(),
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable()
-    .transform((key) => key ?? undefined)
-    .optional(),
+  /** Provider-message format of the persisted messages. Absent for an
+   *  untagged handler (see `modelHandlersShareConversationFormat`). */
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
   shouldSkipCycle: z.boolean(),
   stateSlices: StateSlicesSchema.nullable(),
   /** Per-call system text for providers that do not embed it in messages. */
   systemPrompt: z.string().optional(),
   userCancelledRetry: z.boolean().optional(),
   /** Distinguishes failure from cancellation during resume. */
-  lastError: PersistedRetryErrorInfoSchema.optional(),
+  lastError: RetryErrorInfoSchema.optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });

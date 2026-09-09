@@ -24,7 +24,6 @@ export const UsageRouteSchema = z.enum([
   'xai-subscription',
   'kimi-code-subscription',
   'glm-coding-plan-subscription',
-  'relay',
   'api-key',
 ]);
 

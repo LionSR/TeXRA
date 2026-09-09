@@ -108,7 +108,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
   const prior = shouldRegister
     ? null
     : yield* getExecutionRecords(runSession, executionId).readMeta();
-  if (!shouldRegister && !prior?.streamId)
+  if (!shouldRegister && !prior)
     return yield* Effect.fail(
       new Error(`Execution metadata not found for ${executionId}`),
     );

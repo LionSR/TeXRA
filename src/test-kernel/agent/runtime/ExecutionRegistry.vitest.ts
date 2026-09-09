@@ -26,7 +26,6 @@ import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   STREAM_PHASE,
-  STREAM_STATUS,
   STREAM_SUBSTATE,
   type ExecutionId,
   type StreamTabId,
@@ -831,7 +830,7 @@ describe('executionRegistry', () => {
       expect(killRegistry(registry, executionId)).toBe(false);
 
       expect(registry.getHandle(executionId)).toBe(handle);
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
     } finally {
       registry.dispose();
     }
@@ -1311,7 +1310,7 @@ describe('executionRegistry', () => {
       expect(registry.getActiveChildren(parentStreamId)).toEqual([
         expect.objectContaining({
           executionId,
-          status: STREAM_STATUS.WAITING,
+          status: STREAM_PHASE.WAITING,
         }),
       ]);
     } finally {
@@ -1365,14 +1364,14 @@ describe('executionRegistry', () => {
     try {
       registry.trackAgentExecution(
         createHandle(executionId, parentStreamId, childStreamId),
-        { status: STREAM_STATUS.RUNNING },
+        { status: STREAM_PHASE.RUNNING },
       );
 
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.RUNNING);
       expect(registry.getActiveChildren(parentStreamId)).toEqual([
         expect.objectContaining({
           executionId,
-          status: STREAM_STATUS.RUNNING,
+          status: STREAM_PHASE.RUNNING,
         }),
       ]);
     } finally {
@@ -1388,12 +1387,12 @@ describe('executionRegistry', () => {
     const handle = createHandle(executionId, parentStreamId, childStreamId);
 
     try {
-      registry.trackAgentExecution(handle, { status: STREAM_STATUS.RUNNING });
+      registry.trackAgentExecution(handle, { status: STREAM_PHASE.RUNNING });
 
       expect(
-        registry.updateAgentExecutionStatus(handle, STREAM_STATUS.WAITING),
+        registry.updateAgentExecutionStatus(handle, STREAM_PHASE.WAITING),
       ).toBe(true);
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
 
       seedStreamStatusForTest(streamStatus, childStreamId, {
         phase: STREAM_PHASE.CANCELLED,
@@ -1405,7 +1404,7 @@ describe('executionRegistry', () => {
         }),
       ]);
       expect(
-        registry.updateAgentExecutionStatus(handle, STREAM_STATUS.RUNNING),
+        registry.updateAgentExecutionStatus(handle, STREAM_PHASE.RUNNING),
       ).toBe(false);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
 
@@ -1414,9 +1413,9 @@ describe('executionRegistry', () => {
         phase: STREAM_PHASE.WAITING,
       });
       expect(
-        registry.updateAgentExecutionStatus(handle, STREAM_STATUS.RUNNING),
+        registry.updateAgentExecutionStatus(handle, STREAM_PHASE.RUNNING),
       ).toBe(false);
-      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
     } finally {
       registry.dispose();
     }

@@ -57,7 +57,7 @@ export class StreamConversation extends LitElement {
     const { stream, view, surface } = this;
     if (!stream || !view || !surface) return nothing;
 
-    if (stream.identity?.kind === 'process') {
+    if (stream.identity.kind === 'process') {
       return html`<process-stream-content
         .stream=${stream}
         .view=${view}

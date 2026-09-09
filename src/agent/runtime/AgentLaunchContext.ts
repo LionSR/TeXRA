@@ -29,7 +29,7 @@ import {
 import { ModelCell } from '@agent/runtime/ModelCell';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
-import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
+import { persistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
@@ -245,10 +245,7 @@ const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
       ),
     catch: ensureError,
   });
-  return inferPersistedFlowModelHandlerCompatibilityKey(
-    model,
-    flowRecord?.shared,
-  );
+  return persistedFlowModelHandlerCompatibilityKey(flowRecord?.shared);
 });
 
 /**

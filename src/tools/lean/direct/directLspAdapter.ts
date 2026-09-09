@@ -50,12 +50,6 @@ export interface DirectLspLeanAdapterOptions {
   lakeCommand?: string;
   /** Stop a server after this much idle time. `0` disables idle eviction. */
   idleTimeoutMs?: number;
-  /**
-   * @deprecated Superseded by the runtime `Clock`: idle eviction runs on the
-   * pool's clock and tests drive a `TestClock`. Kept for signature parity;
-   * never read.
-   */
-  now?: () => number;
 }
 
 /**

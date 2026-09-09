@@ -8,40 +8,16 @@ import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import {
   AgentFileLocationSchema,
-  PersistedRetryErrorInfoSchema,
+  RetryErrorInfoSchema,
   RoundOutputSchema,
 } from '@shared/schemas';
-
-/**
- * The round conversation, normalized at this parse boundary.
- *
- * Records written before the round-metrics snapshot was moved out of the
- * persisted context wrapped the messages in `{ messages, stateRoundSnapshot }`.
- * That snapshot is a per-attempt metrics accumulator, so persisting it meant a
- * round resumed after a cancel re-recorded the cancelled attempt's response
- * time and usage. The snapshot is now minted fresh per attempt in
- * `ResponseCycleNode`, and the legacy wrapper unwraps to its messages here so
- * nothing downstream branches on the format.
- *
- * Legacy arm introduced 2026-08-29 with the retirement (#11568); remove it
- * after 2026-11-29 once persisted wrapped-context rounds have aged out.
- */
-const RoundConversationSchema = z.union([
-  ProviderMessageArraySchema,
-  z
-    .object({
-      messages: ProviderMessageArraySchema,
-      stateRoundSnapshot: z.unknown(),
-    })
-    .transform((legacy) => legacy.messages),
-]);
 
 export const ReflectionFlowStateSchema = z.object({
   currentRound: z.int().nonnegative(),
   totalRounds: z.int().nonnegative(),
 
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-  context: RoundConversationSchema.nullable(),
+  context: ProviderMessageArraySchema.nullable(),
   outputLocation: AgentFileLocationSchema.nullable(),
 
   runStateSnapshot: AgentRunStateSnapshotSchema,
@@ -52,10 +28,11 @@ export const ReflectionFlowStateSchema = z.object({
   endTurn: z.boolean(),
 
   /** Distinguishes failure from cancellation during resume. */
-  lastError: PersistedRetryErrorInfoSchema.optional(),
+  lastError: RetryErrorInfoSchema.optional(),
 
-  /** Provider-message format used by the persisted `context` messages. */
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
+  /** Provider-message format used by the persisted `context` messages.
+   *  Absent for an untagged handler. */
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
 
   /** One-shot compile-failure feedback injected into the next round prompt. */
   compileFailureContext: z.string().optional(),

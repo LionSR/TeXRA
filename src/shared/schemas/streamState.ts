@@ -7,7 +7,7 @@ import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
 import {
-  STREAM_STATUS,
+  STREAM_LIFECYCLE_READY,
   StreamLifecycleStatusSchema,
   StreamPhaseSchema,
   StreamSubstateSchema,
@@ -33,8 +33,7 @@ const ActiveChildInfoSchema = z.object({
   agentName: z.string(),
   /**
    * Current execution phase. Takes `StreamPhase` only: no artifact carries a
-   * roster (see the note above), so no input can hold the retired 7-value
-   * `StreamStatus` vocabulary and there is nothing to normalize here.
+   * roster (see the note above), so there is nothing to normalize here.
    */
   status: StreamPhaseSchema.optional(),
   /**
@@ -117,7 +116,7 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
-const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
+const DEFAULT_STREAM_METADATA_STATUS = STREAM_LIFECYCLE_READY;
 
 // Stream metadata: the backend-owned fields of a stream's state.
 

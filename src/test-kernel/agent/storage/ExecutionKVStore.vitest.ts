@@ -148,6 +148,7 @@ describe('canonical execution records', () => {
           type: 'run.start',
           aggregateId: aggregateId('stream', 'stream:child'),
           executionId: childId,
+          identity: { kind: 'agent', agent: 'assistant' },
           category: 'toolUse',
           background: true,
           userFollowUpSupport: 'unsupported',

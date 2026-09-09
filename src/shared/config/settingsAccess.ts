@@ -55,37 +55,6 @@ export function settingDefault(entry: StateSettingEntry): unknown {
   return entry.schema.parse(undefined);
 }
 
-/** Keys already reported, so a per-call reader warns once per process. */
-const abandonedSlotWarned = new Set<string>();
-
-/**
- * Report, once per key per process, that a value survives in a slot the row has
- * migrated away from.
- *
- * Intermediate-era persisted data is disposable here, so a slot migration
- * abandons whatever the old slot held rather than shipping a compat reader that
- * outlives its purpose. Abandoning it *silently* is the defect: to the user the
- * toggle simply reverts, with nothing anywhere saying why. Called from the
- * runtime reader — the moment the old value would have changed the outcome.
- *
- * Temporary: introduced 2026-08-19 with the `globalState` slot move for
- * `DETACH_SUBAGENTS_ON_STOP` / `ALLOW_ORCHESTRATOR_KILL`. Remove after
- * 2026-11-19 (three months on, per AGENTS.md), deleting this function,
- * `abandonedSlotWarned` and both call sites together.
- */
-export function warnAbandonedSlotValue(
-  key: string,
-  abandonedSlot: SettingStore,
-  abandonedStore: StateStore,
-): void {
-  if (abandonedSlotWarned.has(key)) return;
-  abandonedSlotWarned.add(key);
-  if (abandonedStore.get(key) === undefined) return;
-  log.warn(
-    `Setting "${key}" changed storage slot; the value still held in ${abandonedSlot} is abandoned and will not be migrated. Set it again if you had changed it.`,
-  );
-}
-
 /**
  * Read a state-backed setting, falling back to (and validating against) the
  * entry's schema. A stored value that no longer validates resolves to the

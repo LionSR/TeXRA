@@ -30,7 +30,7 @@ import {
   RunIdentitySchema,
   RunOutcomeSchema,
   RunUsageMapSchema,
-  STREAM_STATUS,
+  STREAM_LIFECYCLE_READY,
   StreamPhaseSchema,
   StreamStageSchema,
   StreamSubstateSchema,
@@ -86,8 +86,8 @@ const StreamViewCommonSchema = z.object({
   id: StreamTabIdSchema,
   /** From `run.start`; 1:1 with `id`, never changes. */
   executionId: ExecutionIdSchema,
-  /** Null only for legacy imports. */
-  identity: RunIdentitySchema.nullable(),
+  /** From `run.start`; every stream has one. */
+  identity: RunIdentitySchema,
   // Launch facts from the `run.start` payload, never derived (5.2).
   isRemote: z.boolean(),
   /** Current sequence-row owner; null when unclaimed. */
@@ -106,7 +106,7 @@ const StreamViewCommonSchema = z.object({
   /** The durable phase, or `ready` before the first `status` folds. An
    *  interrupted stream keeps it and reads as interrupted through the copy;
    *  unavailability is `readOnly`, never a status (5.2). */
-  status: z.union([StreamPhaseSchema, z.literal(STREAM_STATUS.READY)]),
+  status: z.union([StreamPhaseSchema, z.literal(STREAM_LIFECYCLE_READY)]),
   substate: StreamSubstateSchema.nullable(),
   /**
    * The terminal status once nothing can move it: for a run this process

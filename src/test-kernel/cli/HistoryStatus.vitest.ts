@@ -136,6 +136,8 @@ describe('CLI history status formatting', () => {
       meta: {
         schemaVersion: EXECUTION_META_SCHEMA_VERSION,
         timestamp: '2026-06-03T05:03:06.717Z',
+        identity: { kind: 'agent', agent: 'assistant' },
+        streamId: 'stream-test',
       },
       config: null,
       result: null,

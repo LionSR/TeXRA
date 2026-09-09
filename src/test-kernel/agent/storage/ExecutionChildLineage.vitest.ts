@@ -35,6 +35,7 @@ describe('hasPersistedParent', () => {
           aggregateId: aggregateId('stream', 'child'),
           executionId: 'aaa010',
           parentStreamId: 'parent',
+          identity: { kind: 'agent', agent: 'assistant' },
           category: 'toolUse',
           isRemote: false,
           userFollowUpSupport: 'unsupported',

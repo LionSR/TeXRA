@@ -15,7 +15,7 @@ export const TraceDocumentSchema = z.object({
   streamId: StreamTabIdSchema,
   /** The run's honest record: AgentConfig for agent runs, minimal otherwise. */
   config: RunRecordSchema,
-  meta: ExecutionMetaSchema.nullable(),
+  meta: ExecutionMetaSchema,
   /**
    * Transcript entries. Workflow-call entries have their `data.model` already
    * projected to the runtime display label (via `projectWorkflowCallEntry`) at

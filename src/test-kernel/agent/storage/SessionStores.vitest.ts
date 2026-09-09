@@ -161,7 +161,8 @@ describe('indexed background-shell cleanup', () => {
         Effect.gen(function* () {
           const shell = 'leftover-shell' as StreamTabId;
           const active = 'active-shell' as StreamTabId;
-          const unknown = 'bash@unknown' as StreamTabId;
+          // Not a background shell: the sweep only removes `process` runs.
+          const notAShell = 'agent@not-a-shell' as StreamTabId;
           const agent = 'saved-agent' as StreamTabId;
           session.executions.track(
             testExecutionHandle({
@@ -191,8 +192,9 @@ describe('indexed background-shell cleanup', () => {
             },
             {
               type: 'run.start',
-              aggregateId: aggregateId('stream', unknown),
+              aggregateId: aggregateId('stream', notAShell),
               executionId: 'cc3344',
+              identity: { kind: 'agent', agent: 'assistant' },
               category: 'toolUse',
               isRemote: false,
               userFollowUpSupport: 'unsupported',
@@ -201,7 +203,7 @@ describe('indexed background-shell cleanup', () => {
           publishTestRunStart(session, agent);
           yield* Effect.promise(() => session.settlePublications());
           const rows = yield* Effect.all(
-            [shell, active, unknown, agent].map((id) =>
+            [shell, active, notAShell, agent].map((id) =>
               Stream.runCollect(
                 session.events.aggregate(aggregateId('stream', id), 0),
               ),
@@ -214,7 +216,7 @@ describe('indexed background-shell cleanup', () => {
             ),
           );
           expect(session.hasStream(active)).toBe(true);
-          expect(session.hasStream(unknown)).toBe(true);
+          expect(session.hasStream(notAShell)).toBe(true);
           expect(session.hasStream(agent)).toBe(true);
         }),
       ),

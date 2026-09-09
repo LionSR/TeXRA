@@ -11,7 +11,6 @@ import type {
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
-  AgentDelegationScopeLegacySchema,
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
@@ -86,16 +85,13 @@ function allPresets(
 }
 
 /**
- * Read the canonical workspace selection. A value that does not parse is
- * tried against the legacy pair-shaped format (`{workflowAgentKeys,
- * toolUseAgentKeys}`, with or without a stray `kind` field) via the existing
- * AgentDelegationScopeLegacySchema. The reader is deliberately pure. It used to
- * repair the stored value in place, but the read-modify-write mutations
- * (`setEnabledAgentKeys`, `setAgentEnabled`, `removeTeamPreset`) read the
- * selection while already holding the write mutex, so a repair issued from
- * here either races that mutation or, if serialized behind it, overwrites the
- * selection the mutation just committed. The mutations own every durable
- * write; a legacy value normalizes the next time one of them runs.
+ * Read the canonical workspace selection. The reader is deliberately pure. It
+ * used to repair the stored value in place, but the read-modify-write
+ * mutations (`setEnabledAgentKeys`, `setAgentEnabled`, `removeTeamPreset`)
+ * read the selection while already holding the write mutex, so a repair
+ * issued from here either races that mutation or, if serialized behind it,
+ * overwrites the selection the mutation just committed. The mutations own
+ * every durable write.
  */
 function readAgentRosterSelection(
   workspaceState: StateStore,
@@ -106,33 +102,11 @@ function readAgentRosterSelection(
   if (raw === undefined) return INHERITED_AGENT_ROSTER;
   const parsed = AgentRosterSelectionSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
-  const legacy = parseLegacySelection(raw);
-  if (legacy) return legacy;
   log.warn(
     `Ignoring malformed roster selection; falling back to ` +
       `the inherited roster: ${parsed.error.message}`,
   );
   return INHERITED_AGENT_ROSTER;
-}
-
-function parseLegacySelection(raw: unknown): AgentRosterSelection | undefined {
-  // The legacy pair-shaped value may carry a stray `kind` field: an
-  // intermediate version wrote `{kind: 'custom', workflowAgentKeys,
-  // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION, which neither the
-  // canonical schema (missing `agentKeys`) nor the strict legacy schema
-  // (rejects `kind`) accepts. Drop the discriminant before parsing so both
-  // the pure and hybrid legacy shapes normalize to the same canonical value.
-  let candidate: unknown = raw;
-  if (raw !== null && typeof raw === 'object' && 'kind' in raw) {
-    const { kind: _ignored, ...rest } = raw as Record<string, unknown>;
-    candidate = rest;
-  }
-  const legacy = AgentDelegationScopeLegacySchema.safeParse(candidate);
-  if (!legacy.success) return undefined;
-  return {
-    kind: 'custom',
-    agentKeys: legacy.data,
-  };
 }
 
 function selectedIdentifiers(

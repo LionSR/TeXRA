@@ -1147,7 +1147,7 @@ describe('handleTuiSlashCommand', () => {
           inputTokens: 1_000,
           outputTokens: 100,
           cost: 0,
-          usageRoute: 'relay',
+          usageRoute: 'api-key',
         },
       },
     });
@@ -1155,7 +1155,7 @@ describe('handleTuiSlashCommand', () => {
     await handleTuiSlashCommand('/status', createContext(session));
 
     const statusText = lastEntryText(streamId);
-    expect(statusText).toContain('model access: Included access');
+    expect(statusText).toContain('model access: Your own API keys');
     expect(statusText).not.toContain('model access: ChatGPT subscription');
     expect(overview).not.toHaveBeenCalled();
   });

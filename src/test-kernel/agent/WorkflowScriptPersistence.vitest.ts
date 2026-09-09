@@ -21,7 +21,6 @@ import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import {
   aggregateId,
   WorkflowExecutionSnapshotSchema,
-  PersistedWorkflowExecutionSnapshotSchema,
   deriveWorkflowCounts,
   type ExecutionId,
   type StreamTabId,
@@ -245,11 +244,9 @@ return await agent('resume cancelled call', { id: 'cancelled-call' })`;
     priorSnapshot.lifecycle = 'cancelled';
     priorSnapshot.error = 'Workflow cancelled.';
     priorSnapshot.calls[0]!.status = 'cancelled';
-    priorSnapshot.calls[0]!.error =
-      'Workflow cancelled before this call completed.';
     await writeWorkflowExecutionSnapshot(
       executionId,
-      PersistedWorkflowExecutionSnapshotSchema.parse(
+      WorkflowExecutionSnapshotSchema.parse(
         {
           timestamp: '2026-08-30T00:00:00.000Z',
           workflow: priorSnapshot,

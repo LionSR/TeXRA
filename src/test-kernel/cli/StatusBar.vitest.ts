@@ -16,14 +16,13 @@ import {
   STREAM_PHASE,
   type StreamPhase,
   type StreamTabId,
-  STREAM_STATUS,
+  STREAM_LIFECYCLE_READY,
 } from '@shared/schemas';
 import { streamStatusCopy } from '@shared/streams/streamStatusDisplay';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
 
 // The bar renders the short access-route label.
-const INCLUDED_ACCESS_LABEL = shortCliModelAccessRoute('included');
 const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('personal');
 
 type StatusBarDisplay = ReturnType<typeof buildStatusBarDisplay>;
@@ -154,8 +153,7 @@ describe('CLI StatusBar display model', () => {
 
   it('uses clear compact labels for API access mode', () => {
     // The session header and the status bar share one mapper, so neither can
-    // print the raw enum value ('included' / 'personal') the way they once did.
-    expect(shortCliModelAccessRoute('included')).toBe('Included');
+    // print the raw enum value ('personal') the way they once did.
     expect(shortCliModelAccessRoute('personal')).toBe('API keys');
   });
 
@@ -558,7 +556,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         turn: { elapsedMs: 12_000 },
-        modelAccess: 'included',
+        modelAccess: 'personal',
         ctrlCAction: 'stop',
         shortcuts: { modifierLabel: 'Option' },
       }),
@@ -596,7 +594,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         turn: { elapsedMs: 12_000 },
         subagents: 1,
-        modelAccess: 'included',
+        modelAccess: 'personal',
         ctrlCAction: 'stop',
         shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
       }),
@@ -617,7 +615,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         subagents: 1,
-        modelAccess: 'included',
+        modelAccess: 'personal',
         ctrlCAction: 'stop root',
         width: 100,
         shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
@@ -656,7 +654,7 @@ describe('CLI StatusBar display model', () => {
         stage: { kind: 'round', index: 1 },
         subagents: 2,
         approvalDepth: 3,
-        modelAccess: 'included',
+        modelAccess: 'personal',
         ctrlCAction: 'stop',
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
@@ -665,7 +663,7 @@ describe('CLI StatusBar display model', () => {
     expect(leftTexts(display)).toEqual([
       '◆',
       'Running',
-      INCLUDED_ACCESS_LABEL,
+      PERSONAL_API_MODE_LABEL,
       'r2',
       '80k/1.0M (8%)',
       'queued 2',
@@ -767,7 +765,6 @@ describe('CLI StatusBar display model', () => {
         | 'chatgpt-subscription'
         | 'kimi-code-subscription'
         | 'glm-coding-plan-subscription'
-        | 'relay'
         | 'api-key',
     ): string[] =>
       leftTexts(
@@ -792,8 +789,6 @@ describe('CLI StatusBar display model', () => {
     expect(accessLabel('glm-coding-plan-subscription')).toContain(
       'subscription',
     );
-    expect(accessLabel('relay')).toContain(INCLUDED_ACCESS_LABEL);
-    expect(accessLabel('relay')).not.toContain('subscription');
     expect(accessLabel('api-key')).toContain(PERSONAL_API_MODE_LABEL);
     expect(accessLabel('api-key')).not.toContain('subscription');
   });
@@ -1052,7 +1047,7 @@ describe('CLI StatusBar display model', () => {
       rootView(STREAM_PHASE.CANCELLED),
       childView(STREAM_PHASE.CANCELLED),
     );
-    const pendingRoot = treeOf(rootView(STREAM_STATUS.READY));
+    const pendingRoot = treeOf(rootView(STREAM_LIFECYCLE_READY));
     const waitingRoot = treeOf(rootView(STREAM_PHASE.WAITING));
     const empty = treeOf();
 

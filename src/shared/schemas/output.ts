@@ -131,18 +131,10 @@ const OutputFileSchema = z.strictObject({
   location: FileLocationSchema,
 });
 
-// Strict, with the retired write-only `diffFile` member validated and then
-// stripped: persisted round data predating its removal still carries the
-// key, while any other unexpected member stays a loud parse failure.
-// Legacy member introduced 2026-08-29 with the removal (#11568); drop it
-// (and the transform) after 2026-11-29 once such rows have aged out.
-const FileLineageSchema = z
-  .strictObject({
-    original: FileLocationSchema.nullable(),
-    diffBase: FileLocationSchema.nullable(),
-    diffFile: FileLocationSchema.nullable().optional(),
-  })
-  .transform(({ diffFile: _diffFile, ...lineage }) => lineage);
+const FileLineageSchema = z.strictObject({
+  original: FileLocationSchema.nullable(),
+  diffBase: FileLocationSchema.nullable(),
+});
 type FileLineage = z.infer<typeof FileLineageSchema>;
 
 /**
