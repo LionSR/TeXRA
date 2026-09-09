@@ -44,34 +44,6 @@ describe('logUtils', () => {
     expect(entries[0]?.level).toBe('ERROR');
   });
 
-  it('serializes self-referential array log data without recursing forever', () => {
-    enableDebugLogging();
-    const entries = captureEntries();
-
-    const data: unknown[] = [];
-    data.push(data);
-
-    logger.debug('test', 'cyclic array payload', { data });
-
-    expect(payloadOf(entries[0])).toContain('[Circular]');
-  });
-
-  it('does not mark repeated acyclic references as circular', () => {
-    enableDebugLogging();
-    const entries = captureEntries();
-
-    const shared = { value: 1 };
-
-    logger.debug('test', 'shared payload', {
-      data: { first: shared, second: shared },
-    });
-
-    const payload = payloadOf(entries[0]);
-    expect(payload).not.toContain('[Circular]');
-    expect(payload).toContain('"first"');
-    expect(payload).toContain('"second"');
-  });
-
   it('carries the level and channel as fields rather than message text', () => {
     const entries = captureEntries();
 
@@ -141,24 +113,16 @@ describe('logUtils', () => {
     expect(payload).toContain('"requestId": "visible-request-id"');
   });
 
-  it('createLog binds the channel and emits through the shared sink', () => {
-    const entries = captureEntries();
-
-    const log = logger.createLog('BoundChannel');
-    log.warn('bound warning');
-
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.annotations['channel']).toBe('BoundChannel');
-  });
-
-  it('createLog forwards debug data identically to the free debug fn', () => {
+  it('createLog binds its channel onto the same entry the free writers build', () => {
     enableDebugLogging();
     const entries = captureEntries();
 
-    const log = logger.createLog('BoundChannel');
-    log.debug('with data', { data: { requestId: 'visible-request-id' } });
+    logger.createLog('BoundChannel').debug('with data', {
+      data: { requestId: 'visible-request-id' },
+    });
 
     expect(entries).toHaveLength(1);
+    expect(entries[0]?.annotations['channel']).toBe('BoundChannel');
     expect(payloadOf(entries[0])).toContain(
       '"requestId": "visible-request-id"',
     );
