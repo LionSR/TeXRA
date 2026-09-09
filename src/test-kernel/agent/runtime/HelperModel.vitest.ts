@@ -1,14 +1,21 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import {
+  createHelperModelKit,
   runHelperModelCompletion,
   type HelperModelKit,
 } from '@agent/runtime/helperModel';
+
+import * as helperModelName from '@agent/runtime/helperModelName';
+import * as validationOverride from '@agent/runtime/internalValidationOverride';
+import { ModelHandlerValidation } from '@agent/modelHandlers/modelHandlerValidation';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import * as modelAvailability from '@model/computeModelOptions';
+import * as modelRegistry from '@model/runtimeModelRegistry';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 function createKit(createResponse: ReturnType<typeof vi.fn>): HelperModelKit {
   return {
@@ -23,9 +30,56 @@ function createKit(createResponse: ReturnType<typeof vi.fn>): HelperModelKit {
   };
 }
 
-describe('helper model completion retries', () => {
+describe('helper model completion', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('preserves helper output inside a session with document replacement rules', async () => {
+    const raw = '<yaml>\nname: correct\ninstruction: $\\mathrm{Tr}$\n</yaml>';
+    const postProcessResponse = vi.fn(() => 'document replacement');
+    const session = createTestSession({
+      responseTextProcessing: {
+        normalizeResponseText: (text) => text.trim(),
+        postProcessResponse,
+        connectResponseText: async () => ' ',
+      },
+    });
+    vi.spyOn(helperModelName, 'getHelperModelName').mockReturnValue('gpt54');
+    vi.spyOn(modelAvailability, 'getModelUnavailableReason').mockResolvedValue(
+      null,
+    );
+    vi.spyOn(modelRegistry, 'resolveRuntimeModelConfig').mockResolvedValue(
+      MODEL_CONFIGS.gpt54,
+    );
+    vi.spyOn(
+      validationOverride,
+      'shouldUseInternalValidationModelHandler',
+    ).mockReturnValue(true);
+    vi.spyOn(
+      ModelHandlerValidation.prototype,
+      'createResponse',
+    ).mockResolvedValue({
+      response: {
+        text: raw,
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        stopReason: 'STOP',
+      },
+    });
+
+    try {
+      await withRunContext(createRunContext({ session }), async () => {
+        const result = await createHelperModelKit();
+        if (!result.kit) throw new Error(result.reason);
+        await expect(
+          runHelperModelCompletion(result.kit, { userPrompt: 'Generate YAML' }),
+        ).resolves.toBe(raw);
+      });
+      expect(postProcessResponse).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
   });
 
   it('retries transient failures twice outside the generation node', async () => {

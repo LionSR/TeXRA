@@ -237,8 +237,7 @@ export class DesktopProgressBridge {
   ) {
     this.logger = options.logger ?? createChannelTrace('DesktopProgressBridge');
     this.followUpPolishController = new ProgressFollowUpPolishController({
-      polishText: (text, fileContext) =>
-        polishTextWithAI(text, fileContext, options.session),
+      polishText: (text, fileContext) => polishTextWithAI(text, fileContext),
     });
     this.presentationEventHandlers = {
       // The desktop task shell keeps the conversation canvas permanently on
