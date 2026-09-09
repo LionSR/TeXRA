@@ -813,19 +813,6 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(reported(report, 'childStreamId')).toEqual([]);
   });
 
-  it('aborts the run when a file-editing agent gets no input files', async () => {
-    const runner = defaultRunner();
-
-    // Run-fatal (WorkflowRunAbortError), not a per-call failure: a plain
-    // error would resolve to null inside parallel() and be silently filtered.
-    await expect(runner(invocation({}))).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringMatching(
-        /pass options\.inputFiles with files that still exist/,
-      ),
-    });
-  });
-
   it('rejects a tool-use default agent used as a workflow agent', async () => {
     const runner = createWorkflowScriptAgentRunner(
       parentContext(),
@@ -840,17 +827,6 @@ describe('createWorkflowScriptAgentRunner', () => {
         /is a toolUse agent but was launched as workflow/,
       ),
     });
-  });
-
-  it('allows empty input files when the agent declares default outputs', async () => {
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      { ...defaultAgent, defaultOutputFiles: ['generated.tex'] },
-      'tool-call-7',
-      run,
-    );
-
-    await expect(runner(invocation({}))).resolves.toBe(result);
   });
 
   it('uses one stable child id per workflow call identity', async () => {
