@@ -78,29 +78,3 @@ describe('ContextManagementDataSchema', () => {
     ).toThrow();
   });
 });
-
-describe('StreamSnapshotSchema.status — canonical phases only', () => {
-  // The retired 7-value StreamStatus vocabulary is no longer normalized at the
-  // parse boundary: an archived trace.json export still carrying it fails
-  // loudly rather than being collapsed into a StreamPhase.
-  it.each(['initializing', 'resuming', 'error', 'stopped', 'ready'])(
-    'rejects the retired status "%s"',
-    (retired) => {
-      expect(() =>
-        StreamSnapshotSchema.parse({
-          streamId: 'stream:retired',
-          status: retired,
-        }),
-      ).toThrow();
-    },
-  );
-
-  it('passes a canonical phase through unchanged', () => {
-    const result = StreamSnapshotSchema.parse({
-      streamId: 'stream:canonical',
-      status: STREAM_PHASE.RUNNING,
-    });
-
-    expect(result.status).toBe(STREAM_PHASE.RUNNING);
-  });
-});

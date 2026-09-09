@@ -228,7 +228,6 @@ describe('trace-viewer TraceDataSchema', () => {
         },
       }),
     );
-    expect(parsed.snapshot.subagents).toEqual([]);
     expect(parsed.snapshot).not.toHaveProperty('processes');
     expect(parsed.snapshot).not.toHaveProperty('finishedSubagentCount');
     expect(parsed.snapshot).not.toHaveProperty('activeSubagents');

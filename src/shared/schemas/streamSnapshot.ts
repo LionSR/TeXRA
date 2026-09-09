@@ -8,23 +8,9 @@
 import { z } from 'zod';
 
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import { StreamPhaseSchema } from './stream';
-import {
-  BackendOwnedFieldsSchema,
-  RoundKeyedOutputSidecarValueSchemas,
-} from './streamState';
+import { RoundKeyedOutputSidecarValueSchemas } from './streamState';
 import { RunUsageMapSchema } from './usage';
 import { WorkPlanSnapshotShape } from './workPlan';
-
-/**
- * The liveness/log-derived fields this snapshot shares with the backend-owned
- * stream-state metadata (`@shared/schemas/streamState`), picked from that one
- * definition so the two can't drift apart field-by-field.
- */
-const SharedBackendOwnedFieldsSchema = BackendOwnedFieldsSchema.pick({
-  conversationProgress: true,
-  subagents: true,
-});
 
 /** Version of the exported logical snapshot shape. */
 const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
@@ -33,12 +19,16 @@ const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 // StreamSnapshot — the assembled logical view (durable + log-derived + liveness)
 // ============================================================================
 
-export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
-  /**
-   * Missing on legacy assemblies/exports → current version; a PRESENT wrong
-   * version fails the parse loudly (`.prefault`, not `.catch` — a swallowed
-   * future version would consume unknown-shaped fields as v1).
-   */
+/**
+ * Only the fields `StreamSnapshotStore.apply()` actually folds. Status,
+ * conversation progress and the child roster are deliberately absent: the
+ * store never wrote them, so carrying them meant every consumer read a
+ * permanently empty value as if it were a fact.
+ */
+export const StreamSnapshotSchema = z.object({
+  /** A present wrong version fails the parse loudly (`.prefault`, not
+   *  `.catch` — a swallowed future version would consume unknown-shaped
+   *  fields as v1). */
   schemaVersion: z
     .literal(STREAM_SNAPSHOT_SCHEMA_VERSION)
     .prefault(STREAM_SNAPSHOT_SCHEMA_VERSION),
@@ -64,12 +54,6 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
 
-  // -- Log-derived (recomputed from the StreamLog on load) ------------------
-  status: StreamPhaseSchema.optional(),
-  // conversationProgress comes from SharedBackendOwnedFieldsSchema above.
-
-  // -- Liveness (NEVER restored as live — clamp on hydrate) -----------------
-  // subagents comes from SharedBackendOwnedFieldsSchema.
 });
 
 export type StreamSnapshot = z.infer<typeof StreamSnapshotSchema>;

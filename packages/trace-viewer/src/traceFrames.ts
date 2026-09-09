@@ -84,8 +84,7 @@ function traceOutcome(trace: TraceDocument): StreamPhase | null {
     const { status } = entry.data;
     if (status !== undefined) return status;
   }
-  const status = trace.snapshot.status;
-  return status !== undefined && isTerminalOutcomePhase(status) ? status : null;
+  return null;
 }
 
 /** The run's display name: the same identity rule every host's stream tab
@@ -154,13 +153,6 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       type: 'updateStreamDescription',
       aggregateId: qualifyAggregateId('stream', trace.streamId),
       description: trace.meta.description,
-    });
-  }
-  if (snapshot.conversationProgress) {
-    bodies.push({
-      type: 'conversation.progress',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
-      progress: snapshot.conversationProgress,
     });
   }
   for (const [storageKey, usage] of Object.entries(snapshot.runUsage)) {

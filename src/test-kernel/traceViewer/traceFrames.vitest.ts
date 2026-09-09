@@ -205,7 +205,6 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
     expect(result.trace.meta?.outcome).toBeUndefined();
-    expect(result.trace.snapshot.status).toBeUndefined();
 
     expect(foldTrace(result.trace)?.status).toBe('failed');
   });
