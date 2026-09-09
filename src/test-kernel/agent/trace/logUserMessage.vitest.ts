@@ -25,8 +25,7 @@ describe('logUserMessage', () => {
   });
 
   function capturedEntries(): StreamLogEntry[] {
-    const log = store;
-    return log?.getRange(0, log.head) ?? [];
+    return store.getRange(0, store.head);
   }
 
   it('logs a plain userMessage row with no data when there are no attachments', () => {
