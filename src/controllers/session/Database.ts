@@ -520,7 +520,8 @@ export const databaseLayer = (
           Effect.gen(function* () {
             if (
               draft.type === 'desktop.projects.changed' ||
-              draft.type === 'inquiry.recorded'
+              draft.type === 'inquiry.recorded' ||
+              draft.type === 'update.check.recorded'
             ) {
               // Profile-state writes own their aggregate only during this transaction.
               yield* sql.unsafe<Record<string, unknown>>(claim, [
@@ -704,7 +705,8 @@ export const databaseLayer = (
             }
             if (
               draft.type === 'desktop.projects.changed' ||
-              draft.type === 'inquiry.recorded'
+              draft.type === 'inquiry.recorded' ||
+              draft.type === 'update.check.recorded'
             ) {
               yield* sql.unsafe<Record<string, unknown>>(release, [
                 JSON.stringify([draft.aggregateId]),
@@ -759,12 +761,29 @@ export const databaseLayer = (
           throw new Error('Invalid global inquiry record');
         return event.record;
       };
+      const latestEventRow = (id: AggregateId) =>
+        sql
+          .unsafe<Record<string, unknown>>(
+            `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
+            [id],
+          )
+          .pipe(Effect.map((rows) => rows[0]));
+      const readUpdateCheck = (host: string) =>
+        Effect.gen(function* () {
+          const row = yield* latestEventRow(
+            qualifyAggregateId('update-check', host),
+          );
+          if (row === undefined) return null;
+          const event = decodeEvent(row);
+          if (event.type !== 'update.check.recorded')
+            throw new Error('Invalid update check record');
+          return event.record;
+        });
       const readInquiryRecord = (id: string) =>
         Effect.gen(function* () {
-          const row = (yield* sql.unsafe<Record<string, unknown>>(
-            `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
-            [qualifyAggregateId('global-inquiry', id)],
-          ))[0];
+          const row = yield* latestEventRow(
+            qualifyAggregateId('global-inquiry', id),
+          );
           return row === undefined ? null : inquiryRecordFromRow(row);
         });
       return {
@@ -806,6 +825,34 @@ export const databaseLayer = (
               )).map(decodeEvent);
             }),
           ),
+        readUpdateCheck: (host) => query(readUpdateCheck(host)),
+        recordUpdateCheck: (host, change) =>
+          transact(
+            Effect.gen(function* () {
+              const current = yield* readUpdateCheck(host);
+              const record = {
+                lastCheckedAt:
+                  change.type === 'checked'
+                    ? change.at
+                    : (current?.lastCheckedAt ?? null),
+                lastNotifiedVersion:
+                  change.type === 'notified'
+                    ? change.version
+                    : (current?.lastNotifiedVersion ?? null),
+              };
+              const at = yield* Clock.currentTimeMillis;
+              yield* appendPrepared(
+                [
+                  prepareEventDraft({
+                    type: 'update.check.recorded',
+                    aggregateId: qualifyAggregateId('update-check', host),
+                    record,
+                  }),
+                ],
+                at,
+              );
+            }),
+          ),
         readInquiryRecord: (id) => query(readInquiryRecord(id)),
         listInquiryRecords: () =>
           query(
@@ -845,10 +892,7 @@ export const databaseLayer = (
         readDesktopProjects: (id) =>
           query(
             Effect.gen(function* () {
-              const row = (yield* sql.unsafe<Record<string, unknown>>(
-                `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
-                [id],
-              ))[0];
+              const row = yield* latestEventRow(id);
               return row === undefined ? undefined : decodeEvent(row);
             }),
           ),

@@ -15,6 +15,7 @@ import { afterEach, beforeEach } from 'vitest';
 
 import type { Platform } from '@platform/platform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   createFakePlatform,
@@ -82,8 +83,9 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   } catch {
     initProcessRuntime(
       ManagedRuntime.make(
-        Layer.merge(
+        Layer.mergeAll(
           testHttpClientLayer,
+          Layer.mock(UpdateCheckRecords, {}),
           // Suites using inquiries install the real service with their session
           // graph. Any inquiry call on this bare fake host is a test error.
           Layer.mock(InquiryRecords, {}),

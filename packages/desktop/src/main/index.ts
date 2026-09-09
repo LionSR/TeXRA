@@ -462,28 +462,25 @@ function createWindow(options: {
   // no extra single-instance gate is needed here; `checkForDesktopUpdate`
   // itself dedupes concurrent calls and window reopens.
   effectRuntime().runFork(
-    hostPort(() =>
-      checkForDesktopUpdate({
-        currentVersion: app.getVersion(),
-        globalState: options.globalState,
-        isPackaged: app.isPackaged,
-        notify: async (release) => {
-          const { response } = await dialog.showMessageBox(window, {
-            type: 'info',
-            message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
-            buttons: ['Download', 'Later'],
-            defaultId: 0,
-            cancelId: 1,
-          });
-          if (response === 0) {
-            // Open the known-constant releases page rather than any
-            // network-provided URL, so an unauthenticated API response can
-            // never influence what shell.openExternal opens.
-            await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
-          }
-        },
-      }),
-    ).pipe(
+    checkForDesktopUpdate({
+      currentVersion: app.getVersion(),
+      isPackaged: app.isPackaged,
+      notify: async (release) => {
+        const { response } = await dialog.showMessageBox(window, {
+          type: 'info',
+          message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+          buttons: ['Download', 'Later'],
+          defaultId: 0,
+          cancelId: 1,
+        });
+        if (response === 0) {
+          // Open the known-constant releases page rather than any
+          // network-provided URL, so an unauthenticated API response can
+          // never influence what shell.openExternal opens.
+          await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
+        }
+      },
+    }).pipe(
       Effect.catch((error) => Effect.sync(() => reportBackgroundError(error))),
     ),
   );

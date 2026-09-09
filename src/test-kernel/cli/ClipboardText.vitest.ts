@@ -27,6 +27,7 @@ import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { initProcessRuntime } from '@platform/processRuntime';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
@@ -97,8 +98,9 @@ describe('CLI clipboard text writer', () => {
       const storage = createFakePlatform().storage;
       initProcessRuntime(
         ManagedRuntime.make(
-          Layer.merge(
+          Layer.mergeAll(
             testHttpClientLayer,
+            Layer.mock(UpdateCheckRecords, {}),
             inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
               Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
             ),

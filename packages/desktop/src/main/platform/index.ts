@@ -39,7 +39,10 @@ import {
   openNodeWorkspaceStateStore,
   openTexraConfigStores,
 } from '@platform/defaults/nodeStores';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  WorkspaceStorageProvider,
+  resolveGlobalStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import type { OwnerId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -116,7 +119,11 @@ export async function initializeElectronPlatform(
   // installing: an opener that uses the synchronous `open` would otherwise
   // face an asynchronous layer build.
   const processStart = await nodeProcesses.selfIdentity();
-  installProcessRuntime(processStart, () => storage.getGlobalStoragePath());
+  installProcessRuntime(
+    processStart,
+    () => storage.getGlobalStoragePath(),
+    () => resolveGlobalStoragePath(userDataPath),
+  );
   const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
     await effectRuntime().runPromise(
       Effect.gen(function* () {

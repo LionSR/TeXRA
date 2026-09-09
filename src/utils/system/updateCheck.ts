@@ -1,4 +1,7 @@
-import type { StateStore } from '@platform/interfaces';
+import { Clock, Effect } from 'effect';
+
+import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   DAILY_UPDATE_CHECK_INTERVAL_MS,
@@ -15,73 +18,60 @@ export interface UpdateCheckFetchResult {
 
 interface DailyUpdateCheckOptions {
   currentVersion: string;
-  state: StateStore;
-  lastCheckedAtKey: string;
-  /** Persisted version used by hosts that notify only once per release. */
-  lastNotifiedVersionKey?: string;
-  fetchLatest: () => Promise<UpdateCheckFetchResult>;
-  notify: (latest: string) => PromiseLike<void> | void;
-  now?: () => number;
+  host: 'cli' | 'desktop';
+  /** Desktop announces each release only once. */
+  notifyOnce?: boolean;
+  fetchLatest: Effect.Effect<UpdateCheckFetchResult, Error>;
+  notify: (latest: string) => Effect.Effect<void, Error>;
   /** Whether failure to persist the throttle stamp rejects the check. */
   stampFailure?: 'throw' | 'ignore';
 }
 
-/**
- * Run one daily-throttled update check.
- *
- * The throttle stamp is written only after a live source consultation and any
- * required notification. Thus network failures, stale local metadata, and
- * failed notifications all retry on the next launch. Hosts may additionally
- * persist the last notified version when a release should be announced only
- * once, independently of the daily fetch cadence.
- */
-export async function runDailyUpdateCheck({
+/** Consult the source, notify, then persist the successful check in that order. */
+export const runDailyUpdateCheck = ({
   currentVersion,
-  state,
-  lastCheckedAtKey,
-  lastNotifiedVersionKey,
+  host,
+  notifyOnce = false,
   fetchLatest,
   notify,
-  now = Date.now,
   stampFailure = 'throw',
-}: DailyUpdateCheckOptions): Promise<string | undefined> {
-  const lastCheckedAt = state.get<number>(lastCheckedAtKey, 0);
-  const nowMs = now();
-  if (nowMs - lastCheckedAt < DAILY_UPDATE_CHECK_INTERVAL_MS) return undefined;
+}: DailyUpdateCheckOptions) =>
+  Effect.gen(function* () {
+    const records = yield* UpdateCheckRecords;
+    const previous = yield* records.read(host);
+    const nowMs = yield* Clock.currentTimeMillis;
+    if (
+      previous?.lastCheckedAt != null &&
+      nowMs - previous.lastCheckedAt < DAILY_UPDATE_CHECK_INTERVAL_MS
+    )
+      return undefined;
 
-  const { version, refreshed } = await fetchLatest();
-  if (version === undefined) return undefined;
-
-  const latest = isNewerSemverVersion(version, currentVersion)
-    ? version
-    : undefined;
-  const alreadyNotified =
-    latest !== undefined &&
-    lastNotifiedVersionKey !== undefined &&
-    state.get<string>(lastNotifiedVersionKey) === latest;
-
-  if (latest !== undefined && !alreadyNotified) {
-    await notify(latest);
-    if (lastNotifiedVersionKey !== undefined) {
-      await state.update(lastNotifiedVersionKey, latest);
-    }
-  }
-
-  if (refreshed) {
-    if (stampFailure === 'ignore') {
-      try {
-        await state.update(lastCheckedAtKey, nowMs);
-      } catch {
-        // CLI throttle persistence is best-effort; a read-only state store
-        // must not invalidate an update result that was already accepted.
+    const { version, refreshed } = yield* fetchLatest;
+    if (version === undefined) return undefined;
+    const latest = isNewerSemverVersion(version, currentVersion)
+      ? version
+      : undefined;
+    if (
+      latest !== undefined &&
+      (!notifyOnce || previous?.lastNotifiedVersion !== latest)
+    ) {
+      if (notifyOnce) {
+        yield* Effect.uninterruptible(
+          Effect.gen(function* () {
+            yield* notify(latest);
+            yield* records.recordNotified(host, latest);
+          }),
+        );
+      } else {
+        yield* notify(latest);
       }
-    } else {
-      await state.update(lastCheckedAtKey, nowMs);
     }
-  }
-
-  return latest;
-}
+    if (refreshed) {
+      const stamp = records.recordChecked(host, nowMs);
+      yield* stampFailure === 'ignore' ? Effect.ignore(stamp) : stamp;
+    }
+    return latest;
+  });
 
 interface FetchJsonStringFieldOptions {
   url: string;
@@ -96,27 +86,24 @@ interface FetchJsonStringFieldOptions {
  * non-success responses, malformed payloads, timeouts, and network failures
  * all yield `undefined`.
  */
-export async function fetchJsonStringField({
+export const fetchJsonStringField = ({
   url,
   field,
   timeoutMs,
   headers,
   fetchImpl = fetch,
-}: FetchJsonStringFieldOptions): Promise<string | undefined> {
-  try {
-    const response = await fetchImpl(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-      headers,
-    });
-    if (!response.ok) return undefined;
-
-    const body: unknown = await response.json();
-    if (typeof body !== 'object' || body === null) return undefined;
-    const value = (body as Record<string, unknown>)[field];
-    return typeof value === 'string' && value !== '' ? value : undefined;
-  } catch {
-    // AbortError (timeout), TypeError (network), and SyntaxError (invalid JSON)
-    // all make this best-effort update source unavailable for the current run.
-    return undefined;
-  }
-}
+}: FetchJsonStringFieldOptions) =>
+  Effect.tryPromise({
+    try: async (signal) => {
+      const response = await fetchImpl(url, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
+        headers,
+      });
+      if (!response.ok) return undefined;
+      const body: unknown = await response.json();
+      if (typeof body !== 'object' || body === null) return undefined;
+      const value = (body as Record<string, unknown>)[field];
+      return typeof value === 'string' && value !== '' ? value : undefined;
+    },
+    catch: ensureError,
+  }).pipe(Effect.catch(() => Effect.succeed(undefined)));

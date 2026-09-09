@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { FakeStateStore } from '@test/support/FakePlatform';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import { it as effectIt } from '@effect/vitest';
+import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
+import { TestClock } from 'effect/testing';
+import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { isNewerSemverVersion } from '@utils/system/semverUpdateCheck';
 import {
   fetchJsonStringField,
@@ -32,177 +39,242 @@ describe('isNewerSemverVersion', () => {
 
 describe('runDailyUpdateCheck', () => {
   const nowMs = Date.UTC(2026, 0, 1);
-  const lastCheckedAtKey = 'update.lastCheckedAt';
-  const lastNotifiedVersionKey = 'update.lastNotifiedVersion';
-
   type CheckOptions = Parameters<typeof runDailyUpdateCheck>[0];
-
-  function checkOptions(
-    state: FakeStateStore,
+  const checkOptions = (
     overrides: Partial<CheckOptions> = {},
-  ): CheckOptions {
-    return {
-      currentVersion: '1.0.0',
-      state,
-      lastCheckedAtKey,
-      fetchLatest: async () => ({ version: '1.0.0', refreshed: true }),
-      notify: () => {},
-      now: () => nowMs,
-      ...overrides,
-    };
-  }
-
-  it('notifies before stamping a successful live check', async () => {
-    const state = new FakeStateStore();
-    let stampDuringNotify: number | undefined;
-
-    const latest = await runDailyUpdateCheck(
-      checkOptions(state, {
-        fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
-        notify: () => {
-          stampDuringNotify = state.get(lastCheckedAtKey);
-        },
+  ): CheckOptions => ({
+    currentVersion: '1.0.0',
+    host: 'desktop',
+    fetchLatest: Effect.succeed({ version: '1.0.0', refreshed: true }),
+    notify: () => Effect.void,
+    ...overrides,
+  });
+  const withRecords = <A, E>(
+    program: Effect.Effect<A, E, UpdateCheckRecords | TestClock.TestClock>,
+  ) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const storage = yield* fs.makeTempDirectoryScoped({
+          prefix: 'texra-update-check-',
+        });
+        yield* TestClock.setTime(nowMs);
+        return yield* program.pipe(
+          Effect.provide(
+            updateCheckRecordsLayer(() => storage).pipe(
+              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            ),
+          ),
+        );
       }),
+    ).pipe(
+      Effect.provide(NodeFileSystem.layer),
+      Effect.provide(TestClock.layer()),
     );
 
-    expect(latest).toBe('1.1.0');
-    expect(stampDuringNotify).toBeUndefined();
-    expect(state.get(lastCheckedAtKey)).toBe(nowMs);
-  });
-
-  it('does not repeat a release notification but still stamps a live refresh', async () => {
-    const state = new FakeStateStore({
-      [lastNotifiedVersionKey]: '1.1.0',
-    });
-    const notify = vi.fn();
-
-    await runDailyUpdateCheck(
-      checkOptions(state, {
-        lastNotifiedVersionKey,
-        fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
-        notify,
+  effectIt.live('notifies before stamping a successful live check', () =>
+    withRecords(
+      Effect.gen(function* () {
+        const records = yield* UpdateCheckRecords;
+        let stampDuringNotify: number | null | undefined;
+        const latest = yield* runDailyUpdateCheck(
+          checkOptions({
+            fetchLatest: Effect.succeed({ version: '1.1.0', refreshed: true }),
+            notify: () =>
+              Effect.gen(function* () {
+                stampDuringNotify = (yield* records.read('desktop'))
+                  ?.lastCheckedAt;
+              }),
+          }),
+        );
+        expect(latest).toBe('1.1.0');
+        expect(stampDuringNotify).toBeUndefined();
+        expect((yield* records.read('desktop'))?.lastCheckedAt).toBe(nowMs);
       }),
-    );
+    ),
+  );
 
-    expect(notify).not.toHaveBeenCalled();
-    expect(state.get(lastCheckedAtKey)).toBe(nowMs);
-  });
+  effectIt.live(
+    'does not repeat a release notification but still stamps a live refresh',
+    () =>
+      withRecords(
+        Effect.gen(function* () {
+          const records = yield* UpdateCheckRecords;
+          yield* records.recordNotified('desktop', '1.1.0');
+          const notify = vi.fn(() => Effect.void);
+          yield* runDailyUpdateCheck(
+            checkOptions({
+              notifyOnce: true,
+              fetchLatest: Effect.succeed({
+                version: '1.1.0',
+                refreshed: true,
+              }),
+              notify,
+            }),
+          );
+          expect(notify).not.toHaveBeenCalled();
+          expect((yield* records.read('desktop'))?.lastCheckedAt).toBe(nowMs);
+        }),
+      ),
+  );
 
-  it('throttles a repeat check within the same day', async () => {
-    const state = new FakeStateStore();
-    const fetchLatest = vi.fn(async () => ({
-      version: '1.0.0',
-      refreshed: true,
-    }));
-    let clockMs = nowMs;
-    const options = checkOptions(state, { fetchLatest, now: () => clockMs });
-
-    await runDailyUpdateCheck(options);
-    expect(fetchLatest).toHaveBeenCalledTimes(1);
-
-    // Ten minutes later: still inside the daily window, no fetch.
-    clockMs += 10 * 60 * 1000;
-    await runDailyUpdateCheck(options);
-    expect(fetchLatest).toHaveBeenCalledTimes(1);
-
-    // A full day later: the throttle window has elapsed.
-    clockMs += 24 * 60 * 60 * 1000;
-    await runDailyUpdateCheck(options);
-    expect(fetchLatest).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not notify when the latest version is not newer', async () => {
-    const state = new FakeStateStore();
-    const notify = vi.fn();
-
-    await expect(
-      runDailyUpdateCheck(checkOptions(state, { notify })),
-    ).resolves.toBeUndefined();
-
-    expect(notify).not.toHaveBeenCalled();
-    // A live refresh still stamps the throttle even without a notification.
-    expect(state.get(lastCheckedAtKey)).toBe(nowMs);
-  });
-
-  it('retries a failed release notification before recording it as notified', async () => {
-    // A thrown notify must reject the check and leave no stamp or release key,
-    // so the next launch retries instead of silently skipping the announcement.
-    const state = new FakeStateStore();
-    const notify = vi.fn().mockImplementationOnce(() => {
-      throw new Error('dialog failed');
-    });
-    const options = checkOptions(state, {
-      lastNotifiedVersionKey,
-      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
-      notify,
-    });
-
-    await expect(runDailyUpdateCheck(options)).rejects.toThrow('dialog failed');
-    expect(state.get(lastCheckedAtKey)).toBeUndefined();
-    expect(state.get(lastNotifiedVersionKey)).toBeUndefined();
-
-    await expect(runDailyUpdateCheck(options)).resolves.toBe('1.1.0');
-    expect(notify).toHaveBeenCalledTimes(2);
-    expect(state.get(lastNotifiedVersionKey)).toBe('1.1.0');
-  });
-
-  it('can offer stale source metadata without stamping the check', async () => {
-    const state = new FakeStateStore();
-    const notify = vi.fn();
-
-    await runDailyUpdateCheck(
-      checkOptions(state, {
-        fetchLatest: async () => ({ version: '1.1.0', refreshed: false }),
-        notify,
+  effectIt.live('throttles a repeat check within the same day', () =>
+    withRecords(
+      Effect.gen(function* () {
+        const fetchLatest = vi.fn(() => ({
+          version: '1.0.0',
+          refreshed: true,
+        }));
+        const options = checkOptions({ fetchLatest: Effect.sync(fetchLatest) });
+        yield* runDailyUpdateCheck(options);
+        expect(fetchLatest).toHaveBeenCalledTimes(1);
+        yield* TestClock.adjust('10 minutes');
+        yield* runDailyUpdateCheck(options);
+        expect(fetchLatest).toHaveBeenCalledTimes(1);
+        yield* TestClock.adjust('24 hours');
+        yield* runDailyUpdateCheck(options);
+        expect(fetchLatest).toHaveBeenCalledTimes(2);
       }),
-    );
+    ),
+  );
 
-    expect(notify).toHaveBeenCalledWith('1.1.0');
-    expect(state.get(lastCheckedAtKey)).toBeUndefined();
-  });
+  effectIt.live('does not notify when the latest version is not newer', () =>
+    withRecords(
+      Effect.gen(function* () {
+        const records = yield* UpdateCheckRecords;
+        const notify = vi.fn(() => Effect.void);
+        expect(
+          yield* runDailyUpdateCheck(checkOptions({ notify })),
+        ).toBeUndefined();
+        expect(notify).not.toHaveBeenCalled();
+        expect((yield* records.read('desktop'))?.lastCheckedAt).toBe(nowMs);
+      }),
+    ),
+  );
 
-  it('applies the host policy when the throttle stamp cannot be persisted', async () => {
-    const state = new FakeStateStore();
-    vi.spyOn(state, 'update').mockRejectedValue(new Error('read-only state'));
-    // With `ignore`, a failed stamp write must still hand back the newer
-    // version, so an update the user already accepted is not cancelled.
-    const options = checkOptions(state, {
-      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
-    });
+  effectIt.live(
+    'retries a failed release notification before recording it as notified',
+    () =>
+      withRecords(
+        Effect.gen(function* () {
+          const records = yield* UpdateCheckRecords;
+          const failure = new Error('dialog failed');
+          const notify = vi
+            .fn<CheckOptions['notify']>(() => Effect.void)
+            .mockReturnValueOnce(Effect.fail(failure));
+          const options = checkOptions({
+            notifyOnce: true,
+            fetchLatest: Effect.succeed({ version: '1.1.0', refreshed: true }),
+            notify,
+          });
+          expect(yield* Effect.flip(runDailyUpdateCheck(options))).toBe(
+            failure,
+          );
+          expect(yield* records.read('desktop')).toBeNull();
+          expect(yield* runDailyUpdateCheck(options)).toBe('1.1.0');
+          expect(notify).toHaveBeenCalledTimes(2);
+          expect((yield* records.read('desktop'))?.lastNotifiedVersion).toBe(
+            '1.1.0',
+          );
+        }),
+      ),
+  );
 
-    await expect(
-      runDailyUpdateCheck({ ...options, stampFailure: 'ignore' }),
-    ).resolves.toBe('1.1.0');
-    await expect(runDailyUpdateCheck(options)).rejects.toThrow(
-      'read-only state',
-    );
-  });
+  effectIt.live(
+    'records an announced release before honoring interruption',
+    () =>
+      withRecords(
+        Effect.gen(function* () {
+          const records = yield* UpdateCheckRecords;
+          const checking = yield* Effect.forkChild(
+            Effect.withFiber((fiber) =>
+              runDailyUpdateCheck(
+                checkOptions({
+                  notifyOnce: true,
+                  fetchLatest: Effect.succeed({
+                    version: '1.1.0',
+                    refreshed: true,
+                  }),
+                  notify: () => Effect.sync(() => fiber.interruptUnsafe()),
+                }),
+              ),
+            ),
+          );
+          expect(Exit.isFailure(yield* Fiber.await(checking))).toBe(true);
+          expect(yield* records.read('desktop')).toEqual({
+            lastNotifiedVersion: '1.1.0',
+            lastCheckedAt: null,
+          });
+        }),
+      ),
+  );
 
-  it('ignores a synchronous throttle stamp failure when requested', async () => {
-    const state = new FakeStateStore();
-    vi.spyOn(state, 'update').mockImplementation(() => {
-      throw new Error('read-only state');
-    });
+  effectIt.live(
+    'can offer stale source metadata without stamping the check',
+    () =>
+      withRecords(
+        Effect.gen(function* () {
+          const records = yield* UpdateCheckRecords;
+          const notify = vi.fn(() => Effect.void);
+          yield* runDailyUpdateCheck(
+            checkOptions({
+              fetchLatest: Effect.succeed({
+                version: '1.1.0',
+                refreshed: false,
+              }),
+              notify,
+            }),
+          );
+          expect(notify).toHaveBeenCalledWith('1.1.0');
+          expect(yield* records.read('desktop')).toBeNull();
+        }),
+      ),
+  );
 
-    await expect(
-      runDailyUpdateCheck(checkOptions(state, { stampFailure: 'ignore' })),
-    ).resolves.toBeUndefined();
-  });
+  effectIt.live(
+    'applies the host policy when the throttle stamp cannot be persisted',
+    () =>
+      withRecords(
+        Effect.gen(function* () {
+          const records = yield* UpdateCheckRecords;
+          const failure = new Error('read-only state');
+          const layer = Layer.succeed(UpdateCheckRecords)({
+            ...records,
+            recordChecked: () => Effect.fail(failure),
+          });
+          const options = checkOptions({
+            fetchLatest: Effect.succeed({ version: '1.1.0', refreshed: true }),
+          });
+          expect(
+            yield* runDailyUpdateCheck({
+              ...options,
+              stampFailure: 'ignore',
+            }).pipe(Effect.provide(layer)),
+          ).toBe('1.1.0');
+          expect(
+            yield* Effect.flip(
+              runDailyUpdateCheck(options).pipe(Effect.provide(layer)),
+            ),
+          ).toBe(failure);
+        }),
+      ),
+  );
 });
 
 describe('fetchJsonStringField', () => {
-  it('rejects an empty string field', async () => {
-    const fetchImpl = vi.fn(async () =>
-      Response.json({ version: '' }),
-    ) as unknown as typeof fetch;
-
-    await expect(
-      fetchJsonStringField({
-        url: 'https://example.test/latest',
-        field: 'version',
-        timeoutMs: 1000,
-        fetchImpl,
-      }),
-    ).resolves.toBeUndefined();
-  });
+  effectIt.effect('rejects an empty string field', () =>
+    Effect.gen(function* () {
+      const fetchImpl = vi.fn(async () =>
+        Response.json({ version: '' }),
+      ) as unknown as typeof fetch;
+      expect(
+        yield* fetchJsonStringField({
+          url: 'https://example.test/latest',
+          field: 'version',
+          timeoutMs: 1000,
+          fetchImpl,
+        }),
+      ).toBeUndefined();
+    }),
+  );
 });

@@ -37,8 +37,10 @@ export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
   if (pending) return pending;
   const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
-    installProcessRuntime(await nodeProcesses.selfIdentity(), () =>
-      storage.getGlobalStoragePath(),
+    installProcessRuntime(
+      await nodeProcesses.selfIdentity(),
+      () => storage.getGlobalStoragePath(),
+      () => storage.getGlobalStoragePath(),
     );
   })().finally(() => {
     pending = null;

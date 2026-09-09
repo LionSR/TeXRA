@@ -328,7 +328,7 @@ latest-of-type lookup never has to disambiguate targets and no key column
 exists. A database `AggregateId` is the canonical encoding
 `aggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`, with kind
 `stream`, `execution`, `workflow-checkpoint`, `inquiry`, `session`,
-`desktop-projects`, or `global-inquiry`.
+`desktop-projects`, `global-inquiry`, or `update-check`.
 This encoding is injective even when logical ids coincide or contain
 punctuation. Raw logical ids never serve as database keys. The constructor
 accepts a kind and an unencoded logical id; encoded keys are a distinct type
@@ -342,6 +342,18 @@ complete reopening list. The desktop process owns the connection at
 `<Electron userData>/v1/global-storage/texra.db`; project sessions do not own
 this record, and it is excluded from session display transport. Each write
 borrows its aggregate claim for that transaction only.
+
+Update checks own private `aggregateId('update-check', host)` records, where
+`host` is `cli` or `desktop`. The latest `update.check.recorded` event stores
+the last successful check time and last notified version. CLI records use its
+configured global storage; desktop records use the Electron user-data profile
+database, independently of the shared desktop inquiry storage. Each read or
+write acquires its connection only for that operation, and each write borrows
+its aggregate claim within the transaction. No connection is held during a
+network request or notification. Notification and throttle updates remain
+separate commits, preserving the existing retry behavior. These records are
+excluded from session display transport; old JSON keys are neither read nor
+migrated.
 
 Every `aggregate_id`, `parent_id`, read or claim argument, per-aggregate fold
 map, and transport subscription key uses this qualified `AggregateId`.

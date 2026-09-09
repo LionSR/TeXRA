@@ -23,8 +23,10 @@ let installed = false;
 export function installTestSessionGraphs(): void {
   if (installed) return;
   installed = true;
-  installProcessRuntime('vitest', () =>
-    createFakePlatform().storage.getGlobalStoragePath(),
+  installProcessRuntime(
+    'vitest',
+    () => createFakePlatform().storage.getGlobalStoragePath(),
+    () => createFakePlatform().storage.getGlobalStoragePath(),
   );
 }
 
