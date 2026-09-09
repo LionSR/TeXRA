@@ -236,35 +236,31 @@ export class ExternalInquiryTool extends defineTool({
   schema: InquiryInputSchema,
 }) {
   protected execute(input: InquiryInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(
-      Effect.gen({ self: this }, function* () {
-        const context = tryUseRunContext();
-        const streamId = getRunContextStreamId(context);
-        const executionId = getRunContextExecutionId(context);
+    // Capture the run owner before the shared Effect scheduler can yield.
+    const context = tryUseRunContext();
+    const streamId = getRunContextStreamId(context);
+    const executionId = getRunContextExecutionId(context);
+    const signal = getCurrentToolCallContext()?.signal;
+    let operation: Effect.Effect<ToolResult, Error, InquiryRecords>;
 
-        // Only `ask` emits events. `read` and `list` are pure storage reads
-        // and stay usable in contexts without a wired runtime host.
-        switch (input.command) {
-          case 'ask': {
-            // Guard only: interactions exist iff the run context carries a
-            // session, so `executeAsk` reaches them through that one session
-            // rather than carrying a second handle to the same object.
-            requireInteractions('inquiry', context);
-            return yield* this.executeAsk({
-              input,
-              streamId,
-              executionId,
-              session: currentSession(),
-            });
-          }
-          case 'read':
-            return yield* this.executeRead(input);
-          case 'list':
-            return yield* this.executeList({ input, streamId });
-        }
-      }),
-      { signal: getCurrentToolCallContext()?.signal },
-    );
+    switch (input.command) {
+      case 'ask':
+        requireInteractions('inquiry', context);
+        operation = this.executeAsk({
+          input,
+          streamId,
+          executionId,
+          session: currentSession(),
+        });
+        break;
+      case 'read':
+        operation = this.executeRead(input);
+        break;
+      case 'list':
+        operation = this.executeList({ input, streamId });
+        break;
+    }
+    return effectRuntime().runPromise(operation, { signal });
   }
 
   private executeAsk(args: {

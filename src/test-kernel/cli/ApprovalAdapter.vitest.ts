@@ -366,7 +366,6 @@ describe('approval prompt hooks', () => {
           allowBypass: false,
           streamId: 'root@deepseekT#abc',
           sessionLinks: null,
-          draft: null,
           transcript: null,
         }),
       );

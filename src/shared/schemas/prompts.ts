@@ -4,7 +4,6 @@ import { AgentCategory } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
 import { StreamSelectionSchema, StreamTabIdSchema } from './identifiers';
 import {
-  InquiryDraftSchema,
   InquiryTranscriptTurnSchema,
   InquirySessionLinksSchema,
   InquiryThreadIdSchema,
@@ -118,7 +117,6 @@ const CommonExternalInquiryFieldsSchema = z.object({
 
 const ExternalInquiryHydrationFieldsSchema = z.object({
   sessionLinks: InquirySessionLinksSchema.nullish(),
-  draft: InquiryDraftSchema.nullish(),
   transcript: z.array(InquiryTranscriptTurnSchema).nullish(),
 });
 

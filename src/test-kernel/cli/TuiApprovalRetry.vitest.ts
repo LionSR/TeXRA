@@ -487,7 +487,6 @@ describe('TUI retry approvals', () => {
       question: 'Which external fact should be checked?',
       threadId: 'ei_aabbccddeeff',
       sessionLinks: null,
-      draft: null,
       transcript: null,
     });
     await waitForApproval('externalInquiry', {
@@ -518,7 +517,6 @@ describe('TUI retry approvals', () => {
       question: 'Which external fact should be checked?',
       threadId: 'ei_112233445566',
       sessionLinks: null,
-      draft: null,
       transcript: null,
     });
     await waitForApproval('externalInquiry', {
