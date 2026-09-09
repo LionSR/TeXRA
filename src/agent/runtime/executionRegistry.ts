@@ -26,7 +26,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/streams/streamStatus';
-import { formatDuration, onAbort } from '@utils/core';
+import { formatDuration } from '@utils/core';
 import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import {
   type AgentExecutionHandle,
@@ -580,20 +580,20 @@ export class ExecutionRegistry {
 
   /**
    * Wait for any of the given executions to change — see {@link addListener}
-   * for the full wake set. Pass an AbortSignal for timeout cleanup.
-   * Resolves with the execution id that changed first (or '' on abort).
+   * for the full wake set — and succeed with the execution id that changed
+   * first.
+   *
+   * A caller that wants a bounded wait races or times out this effect instead
+   * of passing a deadline in: interrupting the waiting fiber is what detaches
+   * the listeners, so an abandoned wait leaves nothing registered and no
+   * caller has to read a sentinel to learn that its deadline, rather than an
+   * execution, ended the wait.
    */
-  waitForAnyChange(
-    executionIds: string[],
-    signal?: AbortSignal,
-  ): Promise<string> {
-    return new Promise<string>((resolve) => {
+  waitForAnyChange(executionIds: readonly string[]): Effect.Effect<string> {
+    return Effect.callback<string>((resume) => {
       let resolved = false;
-      let detachAbort: () => void = () => {};
       const detachListeners: Array<() => void> = [];
-
       const cleanup = (): void => {
-        detachAbort();
         for (const detach of detachListeners) detach();
       };
 
@@ -603,17 +603,12 @@ export class ExecutionRegistry {
             if (resolved) return;
             resolved = true;
             cleanup();
-            resolve(id);
+            resume(Effect.succeed(id));
           }),
         );
       }
 
-      detachAbort = onAbort(signal, () => {
-        if (resolved) return;
-        resolved = true;
-        cleanup();
-        resolve('');
-      });
+      return Effect.sync(cleanup);
     });
   }
 

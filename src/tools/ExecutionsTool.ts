@@ -152,7 +152,7 @@ const executionsRead = <A>(
  * pre-check and registration. The race settles on the first completion,
  * success or defect, so a throw inside the registry wait surfaces at once
  * instead of stalling until the deadline. Interrupting the winner-less
- * racers aborts the registry wait's signal and disposes the follow-up
+ * racers detaches the registry wait's listeners and disposes the follow-up
  * listener.
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
@@ -173,11 +173,8 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       ),
       (stop) => Effect.sync(stop),
     );
-    // Non-rejecting: `waitForAnyChange`'s executor resolves on a registry
-    // listener or on the abort and never rejects.
-    const statusChange = Effect.promise((signal) =>
-      context.session.executions.waitForAnyChange(executionIds, signal),
-    );
+    const statusChange =
+      context.session.executions.waitForAnyChange(executionIds);
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
     );

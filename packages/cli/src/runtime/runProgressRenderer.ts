@@ -496,9 +496,11 @@ export function attachWorkflowPlainOutput(
     const key = workflows.map((stream) => stream.id).join('\0');
     if (key !== subscribed) {
       subscribed = key;
-      session.setTranscriptSubscriptions(
-        'workflow-plain-output',
-        workflows.map((stream) => ({ id: stream.id, fromSeq: 0 })),
+      effectRuntime().runFork(
+        session.setTranscriptSubscriptions(
+          'workflow-plain-output',
+          workflows.map((stream) => ({ id: stream.id, fromSeq: 0 })),
+        ),
       );
     }
     for (const stream of workflows) printStream(stream);
@@ -506,6 +508,8 @@ export function attachWorkflowPlainOutput(
   return () => {
     detach();
     previous.clear();
-    session.setTranscriptSubscriptions('workflow-plain-output', []);
+    effectRuntime().runFork(
+      session.setTranscriptSubscriptions('workflow-plain-output', []),
+    );
   };
 }

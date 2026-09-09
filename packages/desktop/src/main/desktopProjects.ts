@@ -173,7 +173,7 @@ async function stopProjectExecutions(session: SessionHandle): Promise<void> {
     for (;;) {
       const active = executions.getActiveIds();
       if (active.length === 0) return;
-      await executions.waitForAnyChange(active);
+      await effectRuntime().runPromise(executions.waitForAnyChange(active));
     }
   });
 }

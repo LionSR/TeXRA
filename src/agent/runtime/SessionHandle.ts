@@ -192,8 +192,8 @@ export class SessionHandle {
    * transcript tier the view folds for that port, the view's set being the
    * union over every port. An Effect-native reader (the SDK's run drain,
    * the session bridge's ports) sets its own port here;
-   * {@link setTranscriptSubscriptions} is the same write for the callers
-   * that still speak Promises.
+   * {@link setTranscriptSubscriptions} is the same write with this session's
+   * qualification and disposal guard applied.
    */
   readonly subscriptions: SessionGraph['subscriptions'];
   /** Session-scoped status plane. */
@@ -759,20 +759,25 @@ export class SessionHandle {
    * logical stream ids whose transcript tier the view folds for that port.
    * Qualify them once when entering the event graph. An empty
    * set removes the port; the view's set is the union over every port.
+   *
+   * The write is returned, not run: the session owns no fiber for a set a
+   * surface asks for, so the host entry that asks runs it on its own runtime
+   * and a session disposed before it starts writes nothing.
    */
   setTranscriptSubscriptions(
     port: string,
     set: readonly (Omit<TranscriptSubscription, 'id'> & { id: StreamTabId })[],
-  ): void {
-    if (this.disposed) return;
-    effectRuntime().runFork(
-      this.subscriptions.set(
-        port,
-        set.map(({ id, fromSeq }) => ({
-          id: qualifyAggregateId('stream', id),
-          fromSeq,
-        })),
-      ),
+  ): Effect.Effect<void> {
+    return Effect.suspend(() =>
+      this.disposed
+        ? Effect.void
+        : this.subscriptions.set(
+            port,
+            set.map(({ id, fromSeq }) => ({
+              id: qualifyAggregateId('stream', id),
+              fromSeq,
+            })),
+          ),
     );
   }
 
