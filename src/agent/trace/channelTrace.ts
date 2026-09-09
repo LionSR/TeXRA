@@ -3,7 +3,6 @@
  */
 
 // Local imports
-import { disposeRunChannel } from '@logger/logSink';
 import { createChannelWriter, type ChannelWriter } from '@logger/logUtils';
 import { MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 
@@ -32,7 +31,7 @@ function toChannelLog(
  * Structured events, stages, and streams remain inert through `noopTrace`.
  */
 export function createChannelTrace(name: string): AgentTrace {
-  const writer = createChannelWriter(name, false);
+  const writer = createChannelWriter(name);
 
   return {
     ...noopTrace,
@@ -43,19 +42,20 @@ export function createChannelTrace(name: string): AgentTrace {
   };
 }
 
-interface ChannelSubscriberOptions {
-  /** Channel name used for the per-channel output sink. */
-  readonly channel: string;
-  /** Whether to route writes to the agent-specific output channel. */
-  readonly isAgent: boolean;
-}
-
-/** Route a trace's public log events to a channel sink. */
+/**
+ * Route a trace's public log events to one diagnostic channel.
+ *
+ * A run's trace does not use this: its log events already reach the durable
+ * transcript through `runEventDraft`, which every host renders, so a second
+ * per-run output channel would be the same facts in a worse place. This
+ * remains for a trace with no session behind it — a model handler's default
+ * emitter before a run swaps in the real trace.
+ */
 export function attachChannelSubscriber(
   trace: AgentTrace,
-  options: ChannelSubscriberOptions,
+  channel: string,
 ): () => void {
-  const writer = createChannelWriter(options.channel, options.isAgent);
+  const writer = createChannelWriter(channel);
 
   const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
     if (event.type !== 'log') return;
@@ -64,16 +64,5 @@ export function attachChannelSubscriber(
     writer(event.level, event.message, event.data);
   };
 
-  const unsubscribe = trace.subscribe(subscriber);
-  // Run-once: a second invocation after a same-name re-attach (resumed runs
-  // reuse their stream ID) must not dispose the new owner's channel.
-  let released = false;
-  return () => {
-    unsubscribe();
-    if (released) return;
-    released = true;
-    // A per-run agent channel dies with its run; without this every run leaks
-    // a live host output channel. Shared channels outlive the subscriber.
-    if (options.isAgent) disposeRunChannel(options.channel);
-  };
+  return trace.subscribe(subscriber);
 }

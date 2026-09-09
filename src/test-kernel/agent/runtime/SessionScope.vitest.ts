@@ -33,7 +33,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       const lease = await Effect.runPromise(
         launching.transcripts.acquireRunResidency(streamId, streamId),
       );
-      const handle = createRunTrace(streamId, lease);
+      const handle = createRunTrace(lease);
       const detach = launching.attachRunTrace(handle, streamId);
       try {
         const output = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -67,7 +67,7 @@ describe('session-owned transcripts and follow-up queues', () => {
     const lease = await Effect.runPromise(
       session.transcripts.acquireRunResidency(streamId, streamId),
     );
-    const handle = createRunTrace(streamId, lease);
+    const handle = createRunTrace(lease);
     const detach = session.attachRunTrace(handle, streamId);
     try {
       const output = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);

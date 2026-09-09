@@ -1,59 +1,30 @@
-/** Per-run channel output. Transcript history is folded from committed session events. */
-import {
-  attachChannelSubscriber,
-  TraceEmitter,
-  type AgentTrace,
-} from '@agent/trace';
-import type { StreamTabId } from '@shared/schemas';
-import { aggregateError } from '@utils/core';
+/** Per-run trace. Transcript history is folded from committed session events. */
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 
 export interface RunTrace {
   readonly trace: AgentTrace;
   readonly dispose: () => void;
 }
 
-/** Run every resource release and preserve all failures. */
-function releaseAll(actions: readonly (() => void)[]): void {
-  const failures: unknown[] = [];
-  for (const action of actions) {
-    try {
-      action();
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (failures.length > 0)
-    throw aggregateError(failures, 'Run trace cleanup failed');
-}
-
-/** Attach channel output and own the caller's transcript residency lease. */
-export function createRunTrace(
-  streamId: StreamTabId,
-  residency?: { readonly close: () => void },
-): RunTrace {
-  const trace = new TraceEmitter();
-  let unsubscribeChannel: () => void;
-  try {
-    unsubscribeChannel = attachChannelSubscriber(trace, {
-      channel: streamId,
-      isAgent: true,
-    });
-  } catch (error) {
-    const failures: unknown[] = [error];
-    try {
-      residency?.close();
-    } catch (cleanup) {
-      failures.push(cleanup);
-    }
-    throw aggregateError(failures, 'Run trace setup and cleanup failed');
-  }
+/**
+ * Open a run's trace and own the caller's transcript residency lease.
+ *
+ * The trace gets no diagnostic-channel subscriber, so the run needs no stream
+ * id here: its log events reach the durable transcript through
+ * `SessionHandle.attachRunTrace`, which every host renders. A per-run output
+ * channel would duplicate them into a surface keyed by an opaque stream id,
+ * created and disposed once per execution.
+ */
+export function createRunTrace(residency?: {
+  readonly close: () => void;
+}): RunTrace {
   let disposed = false;
   return {
-    trace,
+    trace: new TraceEmitter(),
     dispose: () => {
       if (disposed) return;
       disposed = true;
-      releaseAll([unsubscribeChannel, () => residency?.close()]);
+      residency?.close();
     },
   };
 }

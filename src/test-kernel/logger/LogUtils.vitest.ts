@@ -81,18 +81,7 @@ describe('logUtils', () => {
     expect(entries[0]).toMatchObject({
       level: 'WARN',
       message: 'bound warning',
-      annotations: { channel: 'BoundChannel', scope: 'shared' },
-    });
-  });
-
-  it('marks a run-scoped writer so a host can give it its own surface', () => {
-    const entries = captureEntries();
-
-    logger.createChannelWriter('stream-7', true)('info', 'run started');
-
-    expect(entries[0]?.annotations).toMatchObject({
-      channel: 'stream-7',
-      scope: 'run',
+      annotations: { channel: 'BoundChannel' },
     });
   });
 

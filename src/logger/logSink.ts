@@ -33,22 +33,8 @@ export type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
 /** Annotation naming the logical channel an entry belongs to. */
 export const LOG_CHANNEL = 'channel';
 
-/**
- * Annotation choosing the destination shape: `run` entries belong to one
- * execution and earn a dedicated host surface that dies with the run; `shared`
- * entries land on the host's single application surface.
- */
-export const LOG_SCOPE = 'scope';
-
-export type LogScope = 'run' | 'shared';
-
 export interface LogSink {
   write(entry: LogEntry): void;
-  /**
-   * Release the surface opened for one run-scoped channel. A run's surface
-   * dies with the run; without this every execution leaks a live one.
-   */
-  disposeRun?(channel: string): void;
   dispose?(): void;
 }
 
@@ -63,11 +49,6 @@ export interface LogSink {
 export function entryChannel(entry: LogEntry): string | undefined {
   const channel = entry.annotations[LOG_CHANNEL];
   return typeof channel === 'string' ? channel : undefined;
-}
-
-/** Whether an entry belongs to one run rather than the shared application. */
-export function isRunScoped(entry: LogEntry): boolean {
-  return entry.annotations[LOG_SCOPE] === 'run';
 }
 
 /**
@@ -158,9 +139,4 @@ export function setLogSink(
 /** Write one entry to the installed sink. */
 export function writeLogEntry(entry: LogEntry): void {
   sink.write(sinkTrusted ? entry : redactEntry(entry));
-}
-
-/** Release the host surface a finished run held. */
-export function disposeRunChannel(channel: string): void {
-  sink.disposeRun?.(channel);
 }

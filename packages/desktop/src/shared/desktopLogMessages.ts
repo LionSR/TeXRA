@@ -46,12 +46,12 @@ export function desktopLogLineText(line: DesktopLogLine): string {
   const message = parts
     .map((part) => (typeof part === 'string' ? part : JSON.stringify(part)))
     .join(' ');
-  // `channel` and `scope` are the annotation keys `@logger/logSink` writes.
-  // The renderer cannot import core, so they are named here, where the writer
-  // and the viewer already share this line's schema.
+  // `channel` is the annotation key `@logger/logSink` writes. The renderer
+  // cannot import core, so it is named here, where the writer and the viewer
+  // already share this line's schema.
   const channel = line.annotations['channel'];
   const detail = Object.entries(line.annotations).filter(
-    ([key]) => key !== 'channel' && key !== 'scope',
+    ([key]) => key !== 'channel',
   );
   return [
     `${typeof channel === 'string' ? `[${channel}] ` : ''}${message}`,

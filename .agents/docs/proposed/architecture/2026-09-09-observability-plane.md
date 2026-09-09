@@ -219,8 +219,21 @@ is a standalone logger migration, and no step introduces a bridge between old an
    `packages/llm`, whose `ModelConfigurationSchema` types `apiKey` as a Zod `string`: sealing
    the provider leg is a schema change belonging to the provider work, not to this step.
 
-3. **Delete `channelTrace.ts`.** The host loggers absorb it. This removes one of three trace
-   subscribers and detaches both of its callers (`runTrace.ts:37`, `ModelHandler.ts:280`).
+3. **Drop the per-run diagnostic channel.** This step's description above was wrong and is
+   corrected here: `channelTrace.ts` does not delete, because `createChannelTrace` has seven
+   production callers — it is how module-level code outside a run logs through an `AgentTrace`
+   shape. What deletes is the _run_ half.
+
+   A run's log events already reach the durable transcript: `runEventDraft`'s default arm
+   publishes them as session facts, which all three hosts render. The second copy went to a VS
+   Code output channel named by an opaque stream id, created and disposed once per execution.
+   Removing it takes the whole run-scoped lifecycle with it — the `scope` annotation,
+   `isRunScoped`, `disposeRunChannel`, the sink's `disposeRun`, the VS Code sink's channel map
+   (now one channel), the stale-detach guard, and `createRunTrace`'s setup/teardown error
+   aggregation, which existed only to unwind that attachment. `attachChannelSubscriber` survives
+   with one caller and no lifecycle, for a trace with no session behind it: a model handler's
+   default emitter before a run swaps in the real trace. Net −184 lines.
+
 4. **Trace hub, after model-handler retirement.** That retirement deletes
    `ModelHandler.ts:279`, leaving one construction site and two consumers that both already want
    a queue. `createListenerSet`, `publicationGate`, the promise `Set`, and the SDK's buffer cap

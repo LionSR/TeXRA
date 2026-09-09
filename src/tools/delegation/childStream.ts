@@ -105,7 +105,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
     childStreamId,
     executionId,
   );
-  const runTrace = createRunTrace(childStreamId, residency);
+  const runTrace = createRunTrace(residency);
   const handle = new AgentExecutionHandle(
     {
       streamId: childStreamId,

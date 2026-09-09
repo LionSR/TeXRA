@@ -3,9 +3,9 @@
  * or Promise-based and so cannot reach `Effect.log*`.
  *
  * Functional callers use `debug/info/warn/error(channel, message, options)`.
- * Channel-trace infrastructure and callers in `src/agent/trace/channelTrace.ts`
- * use `createChannelWriter(channel, isAgent)` to reach the same sink without
- * making this module depend on their event types.
+ * Channel-trace infrastructure in `src/agent/trace/channelTrace.ts` uses
+ * `createChannelWriter(channel)` to reach the same sink without making this
+ * module depend on its event types.
  *
  * Both this module and the Effect logger layer write the same structured entry
  * to the one host sink in `@logger/logSink`; hosts install that sink and own
@@ -16,11 +16,9 @@
 import * as loggerSelf from '@logger/logUtils';
 import {
   LOG_CHANNEL,
-  LOG_SCOPE,
   formatLogData,
   writeLogEntry,
   type LogEntry,
-  type LogScope,
 } from '@logger/logSink';
 // Deliberate deep import: the '@shared/schemas' barrel transitively imports
 // this module (stateSettings → '@shared/approvalPolicy' → here), so importing
@@ -62,15 +60,10 @@ export function isDebugModeEnabled(): boolean {
 function writeLine(
   level: LogLevel,
   channel: string,
-  isAgent: boolean,
   message: string,
   data: unknown,
 ): void {
-  const scope: LogScope = isAgent ? 'run' : 'shared';
-  const annotations: Record<string, unknown> = {
-    [LOG_CHANNEL]: channel,
-    [LOG_SCOPE]: scope,
-  };
+  const annotations: Record<string, unknown> = { [LOG_CHANNEL]: channel };
   if (data != null && isDebugModeEnabled()) {
     annotations['data'] = formatLogData(data);
   }
@@ -92,13 +85,9 @@ export type ChannelWriter = (
   data?: unknown,
 ) => void;
 
-/** Create a level-tagged writer bound to one shared or run-scoped channel. */
-export function createChannelWriter(
-  channel: string,
-  isAgent: boolean,
-): ChannelWriter {
-  return (level, message, data) =>
-    writeLine(level, channel, isAgent, message, data);
+/** Create a level-tagged writer bound to one channel. */
+export function createChannelWriter(channel: string): ChannelWriter {
+  return (level, message, data) => writeLine(level, channel, message, data);
 }
 
 type LogFn = (
@@ -110,7 +99,7 @@ type LogFn = (
 /** Build a level-bound writer onto the shared application channel. */
 function makeLogFn(level: LogLevel): LogFn {
   return (channel, message, options = {}) =>
-    writeLine(level, channel, /* isAgent */ false, message, options.data);
+    writeLine(level, channel, message, options.data);
 }
 
 export const debug = makeLogFn(LOG_LEVELS.DEBUG);

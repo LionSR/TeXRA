@@ -277,7 +277,7 @@ export abstract class ModelHandler<
     // before `setLogger` swaps in the real per-run trace in some paths, so it
     // needs the full `TraceEmitter`, not a log-only closure.
     this.logger = new TraceEmitter();
-    attachChannelSubscriber(this.logger, { channel: 'Agent', isAgent: false });
+    attachChannelSubscriber(this.logger, 'Agent');
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
       getCapabilities: () => this.capabilities,
       isOpenAIProvider: () => this.config.provider === ModelProvider.OPENAI,

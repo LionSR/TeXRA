@@ -13,22 +13,18 @@ describe('channel trace adapters', () => {
     setLogSink(null);
   });
 
-  /** Capture the entries the adapters emit, and the run releases they make. */
-  function captureSink(): {
-    entries: LogEntry[];
-    disposeRun: ReturnType<typeof vi.fn>;
-  } {
+  /** Capture the entries the adapters emit. */
+  function captureEntries(): LogEntry[] {
     const entries: LogEntry[] = [];
-    const disposeRun = vi.fn();
-    setLogSink({ write: (entry) => entries.push(entry), disposeRun });
-    return { entries, disposeRun };
+    setLogSink({ write: (entry) => entries.push(entry) });
+    return entries;
   }
 
   const messages = (entries: readonly LogEntry[]): string =>
     entries.map((entry) => String(entry.message)).join('\n');
 
   it('routes debug/info/warn/error through the functional per-channel sink', () => {
-    const { entries } = captureSink();
+    const entries = captureEntries();
     const trace = createChannelTrace('TestChannel');
 
     trace.debug('a debug line');
@@ -48,7 +44,7 @@ describe('channel trace adapters', () => {
   });
 
   it('suppresses INTERNAL-tagged lines', () => {
-    const { entries } = captureSink();
+    const entries = captureEntries();
     const trace = createChannelTrace('TestChannel');
 
     trace.info('internal-only line', { messageType: MESSAGE_TYPES.INTERNAL });
@@ -81,12 +77,9 @@ describe('channel trace adapters', () => {
   });
 
   it('routes public emitter logs until the subscriber is detached', () => {
-    const { entries } = captureSink();
+    const entries = captureEntries();
     const trace = new TraceEmitter();
-    const detach = attachChannelSubscriber(trace, {
-      channel: 'AgentChannel',
-      isAgent: true,
-    });
+    const detach = attachChannelSubscriber(trace, 'AgentChannel');
 
     trace.info('visible emitter line');
     trace.info('internal emitter line', {
@@ -99,52 +92,6 @@ describe('channel trace adapters', () => {
     expect(output).toContain('visible emitter line');
     expect(output).not.toContain('internal emitter line');
     expect(output).not.toContain('detached emitter line');
-    expect(entries[0]?.annotations).toMatchObject({
-      channel: 'AgentChannel',
-      scope: 'run',
-    });
-  });
-
-  it('releases a run-scoped host surface once per attachment', () => {
-    const { disposeRun } = captureSink();
-    const trace = new TraceEmitter();
-    const detach = attachChannelSubscriber(trace, {
-      channel: 'run-stream',
-      isAgent: true,
-    });
-
-    detach();
-    detach();
-
-    expect(disposeRun).toHaveBeenCalledExactlyOnceWith('run-stream');
-  });
-
-  it('stale detach after a same-name re-attach leaves the new surface alive', () => {
-    const { disposeRun } = captureSink();
-    const trace = new TraceEmitter();
-    const detachFirst = attachChannelSubscriber(trace, {
-      channel: 'run-stream',
-      isAgent: true,
-    });
-    detachFirst();
-    expect(disposeRun).toHaveBeenCalledOnce();
-
-    // A resumed run reuses the stream ID; the stale first detach must not
-    // tear down the surface the second attachment now owns.
-    attachChannelSubscriber(trace, { channel: 'run-stream', isAgent: true });
-    detachFirst();
-    expect(disposeRun).toHaveBeenCalledOnce();
-  });
-
-  it('keeps the shared surface alive when a shared subscriber detaches', () => {
-    const { disposeRun } = captureSink();
-    const trace = new TraceEmitter();
-    const detach = attachChannelSubscriber(trace, {
-      channel: 'Agent',
-      isAgent: false,
-    });
-
-    detach();
-    expect(disposeRun).not.toHaveBeenCalled();
+    expect(entries[0]?.annotations['channel']).toBe('AgentChannel');
   });
 });

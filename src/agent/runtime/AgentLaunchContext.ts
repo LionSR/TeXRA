@@ -451,7 +451,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       streamId,
       executionId,
     );
-    const rawRunTrace = createRunTrace(streamId, residency);
+    const rawRunTrace = createRunTrace(residency);
     // The composed trace enters the store BEFORE session attachment, so a
     // failed attachment still disposes the raw trace through the store.
     const attachment: { detach?: () => void } = {};
