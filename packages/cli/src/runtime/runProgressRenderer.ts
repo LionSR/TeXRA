@@ -25,7 +25,7 @@ import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
-import { pluralize } from '@utils/text/stringUtils';
+import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {
   safeTerminalText,
@@ -302,7 +302,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       parts.push(`${plannedRounds} rounds`);
     }
     const runStartedAt = root.runStartedAt ?? this.attachedAt;
-    const elapsed = formatElapsed(now - runStartedAt);
+    const elapsed = formatCompactDuration(now - runStartedAt);
     const children = this.liveChildren();
     const nameOnlySubagents = formatActiveChildren(children, 0);
     if (nameOnlySubagents) {
@@ -396,14 +396,6 @@ function normalizeTerminalColumns(
 
 function isMultiRound(rounds: number | undefined): rounds is number {
   return rounds != null && rounds > 1;
-}
-
-function formatElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (minutes === 0) return `${remainingSeconds}s`;
-  return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
 }
 
 // ---------------------------------------------------------------------------
