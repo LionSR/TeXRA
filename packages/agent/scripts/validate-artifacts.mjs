@@ -2,8 +2,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { verifyNativeCleanupAssets } from '../../../scripts/native-cleanup/verify-assets.mjs';
-
 import { isFile, walkFiles } from './fsWalk.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -17,8 +15,6 @@ const rootTsconfig = JSON.parse(
 );
 
 const allFiles = await walkFiles(distRoot);
-const nativeFailures = await verifyNativeCleanupAssets(allFiles);
-if (nativeFailures.length) throw new Error(nativeFailures.join('\n'));
 const declarationFiles = allFiles.filter((file) => /\.d\.m?ts$/u.test(file));
 const declarationText = (
   await Promise.all(declarationFiles.map((file) => readFile(file, 'utf8')))

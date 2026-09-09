@@ -12,8 +12,6 @@ protocols:
     schemes:
       - texra
 asar: true
-# Verify copied native bytes before platform signing rewrites Mach-O files.
-afterPack: ../../scripts/native-cleanup/verify-assets.mjs
 asarUnpack:
   # node-pty loads a native .node binary at runtime, which cannot be read from
   # inside an asar archive.

@@ -19,11 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  native-cleanup:
-    uses: ./.github/workflows/native-cleanup.yml
-
   publish-extension:
-    needs: native-cleanup
     name: Publish VS Code extension (Marketplace + Open VSX)
     if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
     runs-on: ubuntu-latest
@@ -31,13 +27,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Download native prebuilds
-        uses: actions/download-artifact@v8
-        with:
-          pattern: native-cleanup-*
-          path: scripts/native-cleanup/prebuilds
-          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -120,7 +109,6 @@ jobs:
           skipDuplicate: true
 
   publish-cli:
-    needs: native-cleanup
     name: Publish CLI to npm (Trusted Publishing)
     if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'cli-v') }}
     runs-on: ubuntu-latest
@@ -131,13 +119,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Download native prebuilds
-        uses: actions/download-artifact@v8
-        with:
-          pattern: native-cleanup-*
-          path: scripts/native-cleanup/prebuilds
-          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -178,7 +159,6 @@ jobs:
         run: npm publish
 
   publish-agent:
-    needs: native-cleanup
     name: Publish agent package to npm (Trusted Publishing)
     # NOT PUBLISHED YET: @texra-ai/agent has no npm package or trusted
     # publisher configured, so this job 404s on every cli-v* release. To
@@ -192,13 +172,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Download native prebuilds
-        uses: actions/download-artifact@v8
-        with:
-          pattern: native-cleanup-*
-          path: scripts/native-cleanup/prebuilds
-          merge-multiple: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6

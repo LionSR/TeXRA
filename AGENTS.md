@@ -69,16 +69,17 @@ storage and execution contracts; the 1.0 breaking changes apply to `main`.
   Divide work into complete changes that remain useful in 1.0, rather than
   intermediate systems scheduled for replacement. Revise an obsolete
   requirement before building machinery to satisfy it.
-- **Retire the custom native cleanup addon.** The 1.0 storage work must
-  eliminate `scripts/native-cleanup` and its native loader, binary artifacts,
-  CI jobs, packaging requirements, and addon-specific tests together with
-  the application dependency on it. Do not expand this machinery as an
-  intermediate step. First settle how the final design owns and deletes
-  generated files; preserve research files and prevent deletion outside
-  application-owned storage. The addon currently serves SQLite-backed
-  session deletion, so dropping legacy JSON migration alone does not remove
-  that dependency. Effect-native means using Effect's execution model, not
-  adding custom compiled extensions.
+- **The native cleanup addon is retired.** `scripts/native-cleanup`, its
+  loader, prebuilt binaries, CI matrix, packaging assertions, and
+  addon-specific tests are gone. Generated-file deletion now resolves and
+  checks in `src/controllers/session/deletionCleanup.ts`: the storage root and
+  its runs directory are resolved with `realpath`, a runs directory that does
+  not resolve to itself is refused rather than followed, and every target must
+  fall inside it. That is weaker than the addon's handle-confined deletion,
+  which also survived a root replaced *during* the removal; #12139 owns the
+  final file ownership and deletion contract. Do not reintroduce a compiled extension for
+  this. Effect-native means using Effect's execution model, not adding custom
+  compiled extensions.
 
 ## Changelog Guidelines
 
