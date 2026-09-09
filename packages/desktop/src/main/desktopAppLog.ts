@@ -19,7 +19,7 @@ import {
 
 import { parseLevelTag } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
-import { LOG_LEVELS } from '@shared/schemas/log';
+import { LOG_LEVELS } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 
 import { pathSeparatorVariants } from './desktopPathVariants.js';
