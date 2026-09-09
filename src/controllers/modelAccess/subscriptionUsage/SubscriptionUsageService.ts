@@ -1,7 +1,7 @@
 import { LRUCache } from 'lru-cache';
 
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
-import { lookupApiKey } from '@model/apiProviders';
+import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import type {
@@ -89,8 +89,9 @@ const DEFAULT_CREDENTIALS: SubscriptionUsageCredentials = Object.freeze({
       ...(session.accountId ? { accountId: session.accountId } : {}),
     };
   },
-  loadApiKey(provider: 'kimiCode' | 'glm'): Promise<string | undefined> {
-    return lookupApiKey(platform().secrets, provider);
+  async loadApiKey(provider: 'kimiCode' | 'glm'): Promise<string | undefined> {
+    const key = await lookupApiKey(platform().secrets, provider);
+    return key === undefined ? undefined : exposeApiKey(key);
   },
   useGlmChina: () => useChinaRegion('glm'),
 });

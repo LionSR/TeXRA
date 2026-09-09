@@ -4,6 +4,7 @@
  * Shared between SecretManager (VS Code), ModelHandler (agent core),
  * and computeModelOptions (model). Platform-agnostic.
  */
+import { Redacted } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { PlatformSecrets } from '@platform/secrets';
@@ -42,7 +43,13 @@ export type ApiKeyOrigin = 'secret' | 'env' | 'none';
 export type ApiKeyStatus = 'set' | 'env' | 'not-set';
 
 interface ResolvedApiKey {
-  value: string | undefined;
+  /**
+   * Held as `Redacted` from the store outward, so the short-lived cache below
+   * and every caller carry a value that renders as `<redacted:provider>` if it
+   * ever reaches a log, a trace, or `JSON.stringify`. Only the call that hands
+   * the credential to a provider client unwraps it.
+   */
+  value: Redacted.Redacted<string> | undefined;
   origin: ApiKeyOrigin;
 }
 
@@ -60,6 +67,26 @@ export function invalidateApiKeyCache(): void {
   lookupCaches = new WeakMap();
 }
 
+/**
+ * Unwrap a sealed key at the one point it is handed to a foreign runtime: a
+ * provider SDK, a subprocess environment, a usage client. Every other caller
+ * keeps the `Redacted` value, which renders as `<redacted:provider>` in a log,
+ * a trace, or `JSON.stringify`. Named rather than inlined so the places that
+ * expose a credential are greppable, and so a caller need not import `effect`
+ * to hand a key onward.
+ */
+export function exposeApiKey(key: Redacted.Redacted<string>): string {
+  return Redacted.value(key);
+}
+
+/** Trim a raw key and seal it under a label naming only its provider. */
+function redactedKey(
+  raw: string,
+  provider: ApiProvider,
+): Redacted.Redacted<string> {
+  return Redacted.make(raw.trim(), { label: provider });
+}
+
 /** Read the key straight from secret storage then the environment, no caching. */
 async function resolveApiKeyUncached(
   secrets: PlatformSecrets,
@@ -67,11 +94,11 @@ async function resolveApiKeyUncached(
 ): Promise<ResolvedApiKey> {
   const stored = await secrets.get(apiKeySecretName(provider));
   if (isNonEmptyString(stored)) {
-    return { value: stored.trim(), origin: 'secret' };
+    return { value: redactedKey(stored, provider), origin: 'secret' };
   }
   const envValue = secrets.getEnv(apiKeyEnvName(provider));
   if (isNonEmptyString(envValue)) {
-    return { value: envValue.trim(), origin: 'env' };
+    return { value: redactedKey(envValue, provider), origin: 'env' };
   }
   return { value: undefined, origin: 'none' };
 }
@@ -118,7 +145,7 @@ function resolveApiKey(
 export async function lookupApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Promise<string | undefined> {
+): Promise<Redacted.Redacted<string> | undefined> {
   return (await resolveApiKey(secrets, provider)).value;
 }
 
@@ -169,7 +196,7 @@ export async function configuredApiKeyProviders(
 export async function getApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Promise<string> {
+): Promise<Redacted.Redacted<string>> {
   const key = await lookupApiKey(secrets, provider);
   if (!key) {
     throw new Error(
@@ -190,7 +217,19 @@ export async function hasUsableApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Promise<boolean> {
-  return isNonEmptyString(await lookupApiKey(secrets, provider));
+  return (await lookupApiKey(secrets, provider)) !== undefined;
+}
+
+/**
+ * Read the key without the process-wide cache. Change detection needs this:
+ * the cached lookup's TTL would hand back the previous key for seconds after
+ * the user set a new one.
+ */
+export async function lookupApiKeyUncached(
+  secrets: PlatformSecrets,
+  provider: ApiProvider,
+): Promise<Redacted.Redacted<string> | undefined> {
+  return (await resolveApiKeyUncached(secrets, provider)).value;
 }
 
 /** Check if an API key exists without using the process-wide provider cache. */
@@ -198,7 +237,5 @@ export async function apiKeyExistsUncached(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Promise<boolean> {
-  return isNonEmptyString(
-    (await resolveApiKeyUncached(secrets, provider)).value,
-  );
+  return (await resolveApiKeyUncached(secrets, provider)).value !== undefined;
 }

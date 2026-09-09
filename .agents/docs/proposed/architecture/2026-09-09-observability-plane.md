@@ -203,6 +203,22 @@ is a standalone logger migration, and no step introduces a bridge between old an
 2. **`Redacted` at the secret boundary.** Independent of the logger; the only step here that
    removes a compensating subsystem outright instead of relocating one. Makes every later plane
    safe by construction.
+
+   As landed: `resolveApiKey` seals each key with `Redacted.make(raw, { label: provider })`, so
+   the TTL cache and every caller hold a value that renders `<redacted:openai>` in a log, a
+   trace, or `JSON.stringify`. Three callers wanted only existence and now ask
+   `hasUsableApiKey`; the retry controller compares sealed values with `Equal` instead of
+   holding raw keys in a map across awaits. Exactly three sites unwrap, each handing the
+   credential to a foreign runtime — a provider SDK, a subprocess environment, a usage client —
+   through one named `exposeApiKey`, which keeps them greppable.
+
+   Two constraints worth recording for later steps. First, `exposeApiKey` is named rather than
+   inlined because importing `effect` into a file obliges it to convert its raw catches in the
+   same pass (`catch:effect-importer`); a helper exported from the sealing module lets a caller
+   pass a credential onward without taking on that obligation. Second, this stops at
+   `packages/llm`, whose `ModelConfigurationSchema` types `apiKey` as a Zod `string`: sealing
+   the provider leg is a schema change belonging to the provider work, not to this step.
+
 3. **Delete `channelTrace.ts`.** The host loggers absorb it. This removes one of three trace
    subscribers and detaches both of its callers (`runTrace.ts:37`, `ModelHandler.ts:280`).
 4. **Trace hub, after model-handler retirement.** That retirement deletes

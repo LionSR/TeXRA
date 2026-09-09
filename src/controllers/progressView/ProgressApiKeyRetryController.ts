@@ -1,4 +1,4 @@
-import { Effect, Exit, Semaphore } from 'effect';
+import { Effect, Equal, Exit, Redacted, Semaphore } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
@@ -42,7 +42,9 @@ interface ProgressApiRoutingSnapshot {
 
 export interface ProgressApiKeyRetryControllerDeps {
   providers: readonly ApiProvider[];
-  readKey(provider: ApiProvider): Promise<string | undefined>;
+  readKey(
+    provider: ApiProvider,
+  ): Promise<Redacted.Redacted<string> | undefined>;
   hasUsableKey(provider: ApiProvider): Promise<boolean>;
   promptForApiKey(provider?: ApiProvider): Promise<void>;
   /** Quota-fallback routes (ChatGPT, Grok, GLM, Kimi). Defaults to the
@@ -337,19 +339,26 @@ export class ProgressApiKeyRetryController {
 
   private hasChangedUsableKey(
     providers: readonly ApiProvider[],
-    keysBefore: ReadonlyMap<ApiProvider, string | undefined>,
+    keysBefore: ReadonlyMap<ApiProvider, Redacted.Redacted<string> | undefined>,
   ): Effect.Effect<boolean, unknown> {
     return Effect.map(this.readKeys(providers), (keysAfter) =>
       providers.some((provider) => {
         const next = keysAfter.get(provider);
-        return isNonEmptyString(next) && next !== keysBefore.get(provider);
+        // Sealed values are compared by `Equal`, never unwrapped: this only
+        // needs to know whether the credential changed, not what it is.
+        return (
+          next !== undefined && !Equal.equals(next, keysBefore.get(provider))
+        );
       }),
     );
   }
 
   private readKeys(
     providers: readonly ApiProvider[],
-  ): Effect.Effect<Map<ApiProvider, string | undefined>, unknown> {
+  ): Effect.Effect<
+    Map<ApiProvider, Redacted.Redacted<string> | undefined>,
+    unknown
+  > {
     return Effect.map(
       Effect.forEach(
         providers,

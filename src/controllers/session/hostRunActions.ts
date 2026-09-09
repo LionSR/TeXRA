@@ -21,7 +21,7 @@ import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
   API_PROVIDERS,
-  apiKeySecretName,
+  lookupApiKeyUncached,
   hasUsableApiKey,
   isApiProvider,
 } from '@model/apiProviders';
@@ -199,7 +199,7 @@ export function createHostRunActions(
 
   const apiKeyRetry = new ProgressApiKeyRetryController({
     providers: API_PROVIDERS,
-    readKey: (provider) => platform().secrets.get(apiKeySecretName(provider)),
+    readKey: (provider) => lookupApiKeyUncached(platform().secrets, provider),
     hasUsableKey: (provider) => hasUsableApiKey(platform().secrets, provider),
     promptForApiKey: (provider) => ports.promptForApiKey(provider),
     isRetryPending,

@@ -1,4 +1,4 @@
-import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
+import { API_PROVIDERS, hasUsableApiKey } from '@model/apiProviders';
 import {
   isCodexSubscriptionActive,
   isXaiSubscriptionActive,
@@ -20,7 +20,7 @@ async function hasAnyUsableProviderApiKey(
     // Keep the scan sequential so the first usable key ends the lookup.
     const hasApiKey = await probeSetupCredential(
       `${provider} API key`,
-      async () => isNonEmptyString(await lookupApiKey(secrets, provider)),
+      () => hasUsableApiKey(secrets, provider),
       onProbeFailure,
     );
     if (hasApiKey) return true;

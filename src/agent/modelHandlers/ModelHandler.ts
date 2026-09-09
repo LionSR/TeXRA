@@ -56,7 +56,7 @@ import {
   resolveModelSource,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
-import { getApiKey, type ApiProvider } from '@model/apiProviders';
+import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type {
@@ -468,7 +468,7 @@ export abstract class ModelHandler<
     errorMessage: string,
   ): Promise<string> {
     try {
-      return await getApiKey(platform().secrets, provider);
+      return exposeApiKey(await getApiKey(platform().secrets, provider));
     } catch (cause) {
       const error = new Error(errorMessage, { cause });
       attachMissingApiKeyError(error);

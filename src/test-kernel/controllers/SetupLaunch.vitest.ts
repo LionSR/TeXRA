@@ -17,10 +17,8 @@ import {
 const mocks = vi.hoisted(() => ({
   isCodexSubscriptionActive: vi.fn<() => Promise<boolean>>(),
   isXaiSubscriptionActive: vi.fn<() => Promise<boolean>>(),
-  lookupApiKey:
-    vi.fn<
-      (secrets: unknown, provider: string) => Promise<string | undefined>
-    >(),
+  hasUsableApiKey:
+    vi.fn<(secrets: unknown, provider: string) => Promise<boolean>>(),
   getUseOpenRouter: vi.fn<() => boolean>(),
   getProviderEndpoint: vi.fn<() => string>(),
   useChinaRegion: vi.fn<() => boolean>(),
@@ -39,7 +37,7 @@ vi.mock('@model/providerCapabilities', async (importOriginal) => {
 
 vi.mock('@model/apiProviders', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@model/apiProviders')>();
-  return { ...actual, lookupApiKey: mocks.lookupApiKey };
+  return { ...actual, hasUsableApiKey: mocks.hasUsableApiKey };
 });
 
 vi.mock('@platform/platform', () => ({
@@ -62,7 +60,7 @@ const {
 beforeEach(() => {
   mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
   mocks.isXaiSubscriptionActive.mockReset().mockResolvedValue(false);
-  mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
+  mocks.hasUsableApiKey.mockReset().mockResolvedValue(false);
   mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
   mocks.getProviderEndpoint.mockReset().mockReturnValue('');
   mocks.useChinaRegion.mockReset().mockReturnValue(true);
@@ -78,44 +76,44 @@ function selectCredentialModel(
   );
 }
 
-function mockDirectApiKey(provider: string, key: string): void {
-  mocks.lookupApiKey.mockImplementation(async (_secrets, p) =>
-    p === provider ? key : undefined,
+function mockDirectApiKey(provider: string): void {
+  mocks.hasUsableApiKey.mockImplementation(
+    async (_secrets, p) => p === provider,
   );
 }
 
 describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   it('prefers an active ChatGPT subscription over every other credential', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
-    mocks.lookupApiKey.mockResolvedValue('sk-test');
+    mocks.hasUsableApiKey.mockResolvedValue(true);
 
     await expect(selectCredentialModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
   it('uses an active Grok subscription before provider keys', async () => {
     mocks.isXaiSubscriptionActive.mockResolvedValue(true);
-    mocks.lookupApiKey.mockResolvedValue('sk-test');
+    mocks.hasUsableApiKey.mockResolvedValue(true);
 
     await expect(selectCredentialModel()).resolves.toBe(XAI_SETUP_MODEL);
-    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
+    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
   });
 
   it('falls back to a direct provider API key, skipping openRouter', async () => {
-    mockDirectApiKey('anthropic', 'sk-ant-test');
+    mockDirectApiKey('anthropic');
 
     await expect(selectCredentialModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.anthropic,
     );
-    expect(mocks.lookupApiKey).not.toHaveBeenCalledWith(
+    expect(mocks.hasUsableApiKey).not.toHaveBeenCalledWith(
       expect.anything(),
       'openRouter',
     );
   });
 
   it('continues to a later provider when an earlier API key read fails', async () => {
-    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) => {
+    mocks.hasUsableApiKey.mockImplementation(async (_secrets, provider) => {
       if (provider === 'openai') throw new Error('openai key read failed');
-      return provider === 'anthropic' ? 'sk-ant-test' : undefined;
+      return provider === 'anthropic';
     });
 
     await expect(selectCredentialModel()).resolves.toBe(
@@ -142,7 +140,7 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
     'falls back to a provider key when the $subscription probe fails',
     async ({ fail }) => {
       fail();
-      mockDirectApiKey('anthropic', 'sk-ant-test');
+      mockDirectApiKey('anthropic');
 
       await expect(selectCredentialModel()).resolves.toBe(
         SETUP_MODEL_BY_PROVIDER.anthropic,
@@ -151,7 +149,7 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   );
 
   it('keeps managed direct credentials available when OpenRouter is enabled', async () => {
-    mockDirectApiKey('kimiCode', 'kimi-code-test');
+    mockDirectApiKey('kimiCode');
 
     await expect(selectCredentialModel(true)).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.kimiCode,
@@ -168,7 +166,7 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
 describe('selectDesktopSetupModel', () => {
   it('routes through OpenRouter only when the flag is on and a key exists', async () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
-    mockDirectApiKey('openRouter', 'or-test');
+    mockDirectApiKey('openRouter');
 
     await expect(selectDesktopSetupModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.openRouter,
@@ -186,7 +184,7 @@ describe('selectDesktopSetupModel', () => {
 
   it('uses a managed direct key when the OpenRouter flag is on without a key', async () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
-    mockDirectApiKey('kimiCode', 'kimi-code-test');
+    mockDirectApiKey('kimiCode');
 
     await expect(selectDesktopSetupModel()).resolves.toBe(
       SETUP_MODEL_BY_PROVIDER.kimiCode,
@@ -229,7 +227,7 @@ describe('resolveSetupLaunchModel', () => {
   ])(
     'continues to an active $subscription subscription when the OpenRouter key read fails',
     async ({ model, activate }) => {
-      mocks.lookupApiKey.mockRejectedValueOnce(new Error('keychain locked'));
+      mocks.hasUsableApiKey.mockRejectedValueOnce(new Error('keychain locked'));
       activate();
 
       await expect(
@@ -239,7 +237,7 @@ describe('resolveSetupLaunchModel', () => {
   );
 
   it('falls back to the OpenRouter access-list model when no credential is available and the caller opts in', async () => {
-    mockDirectApiKey('openRouter', 'or-test');
+    mockDirectApiKey('openRouter');
 
     await expect(resolveSetupLaunchModel({} as never, true)).resolves.toEqual({
       model: SETUP_MODEL_BY_PROVIDER.openRouter,
@@ -248,7 +246,7 @@ describe('resolveSetupLaunchModel', () => {
   });
 
   it('returns null instead of the access-list fallback when the caller opts out', async () => {
-    mockDirectApiKey('openRouter', 'or-test');
+    mockDirectApiKey('openRouter');
 
     await expect(resolveSetupLaunchModel({} as never, false)).resolves.toBe(
       null,
