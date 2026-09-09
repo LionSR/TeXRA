@@ -50,6 +50,15 @@ describe('CLI TUI input history', () => {
         reloaded.at(0),
         reloaded.at(1),
       ]);
+      // Another CLI writes between two submissions identical in this cache.
+      yield* reloaded.push('gamma');
+      yield* history.push('beta');
+      const combined = yield* loadInputHistory(() => storage);
+      expect(
+        Array.from({ length: combined.length() }, (_, index) =>
+          combined.at(index),
+        ),
+      ).toEqual(['alpha', 'beta', 'gamma', 'beta']);
     }),
   );
 

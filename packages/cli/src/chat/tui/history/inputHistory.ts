@@ -70,10 +70,12 @@ export const loadInputHistory = (
         pushes.withPermit(
           Effect.gen(function* () {
             const value = line.trim().slice(0, INPUT_HISTORY_LINE_LIMIT);
-            if (value.length === 0 || records.at(-1)?.value === value) return;
+            if (value.length === 0) return;
             const record = { at: yield* Clock.currentTimeMillis, value };
             // Keep submitted text browsable even when storage fails.
-            records = [...records, record].slice(-INPUT_HISTORY_LIMIT);
+            if (records.at(-1)?.value !== value)
+              records = [...records, record].slice(-INPUT_HISTORY_LIMIT);
+            // Global adjacency belongs to SQLite, not this CLI's cached view.
             yield* access(
               Effect.gen(function* () {
                 const database = yield* Database;
