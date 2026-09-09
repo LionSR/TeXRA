@@ -42,6 +42,7 @@ const VSCODE_FREE_ZONES = [
   'src/utils',
   'src/logger',
   'packages/agent/src',
+  'packages/llm/src',
   'packages/desktop/src',
   'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',

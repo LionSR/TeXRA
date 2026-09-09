@@ -50,7 +50,7 @@ vi.mock('@agent/storage', async () => {
       readResultMeta: () => Effect.tryPromise(() => mocks.readResultMeta()),
       readReport: () => Effect.tryPromise(() => mocks.readReport()),
     })),
-    listExecutions: () => Effect.tryPromise(() => mocks.listExecutions()),
+    listExecutions: mocks.listExecutions,
   };
 });
 
@@ -253,7 +253,7 @@ describe('CLI history runtime', () => {
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
-    mocks.listExecutions.mockResolvedValue([runListEntry('a1')]);
+    mocks.listExecutions.mockReturnValue(Effect.succeed([runListEntry('a1')]));
 
     const entries = await listCliHistoryEntries();
 
@@ -278,22 +278,24 @@ describe('CLI history runtime', () => {
     // Byte parity for the public stream (proposal gate G): terminal outcomes
     // emit as ExecutionStatus ('interrupted'/'error'/'completed');
     // 'resumable'/'unknown' pass through. Internal entries keep RunOutcome.
-    mocks.listExecutions.mockResolvedValue(
-      (
-        [
-          ['b1', 'cancelled'],
-          ['b2', 'failed'],
-          ['b3', 'completed'],
-          ['b4', undefined],
-        ] as const
-      ).map(([id, outcome]) => ({
-        kind: 'run',
-        identity: { kind: 'agent', agent: 'correct' },
-        id: id as ExecutionId,
-        timestamp: '2026-05-18T08:00:00.000Z',
-        record: config,
-        ...(outcome ? { outcome } : {}),
-      })),
+    mocks.listExecutions.mockReturnValue(
+      Effect.succeed(
+        (
+          [
+            ['b1', 'cancelled'],
+            ['b2', 'failed'],
+            ['b3', 'completed'],
+            ['b4', undefined],
+          ] as const
+        ).map(([id, outcome]) => ({
+          kind: 'run',
+          identity: { kind: 'agent', agent: 'correct' },
+          id: id as ExecutionId,
+          timestamp: '2026-05-18T08:00:00.000Z',
+          record: config,
+          ...(outcome ? { outcome } : {}),
+        })),
+      ),
     );
 
     const entries = await listCliHistoryEntries();
@@ -327,23 +329,25 @@ describe('CLI history runtime', () => {
 
   it('hides internal process-bookkeeping and configless entries from the history list', async () => {
     const processConfig = toolUseAgentConfig({ agent: 'bash' });
-    mocks.listExecutions.mockResolvedValue([
-      runListEntry('visible'),
-      {
-        kind: 'run',
-        identity: { kind: 'process', tool: 'bash' },
-        id: 'bash-process' as ExecutionId,
-        timestamp: '2026-05-18T08:01:00.000Z',
-        record: processConfig,
-        outcome: 'completed',
-      },
-      {
-        kind: 'incomplete',
-        id: 'configless' as ExecutionId,
-        timestamp: '2026-05-18T08:02:00.000Z',
-        outcome: 'completed',
-      },
-    ]);
+    mocks.listExecutions.mockReturnValue(
+      Effect.succeed([
+        runListEntry('visible'),
+        {
+          kind: 'run',
+          identity: { kind: 'process', tool: 'bash' },
+          id: 'bash-process' as ExecutionId,
+          timestamp: '2026-05-18T08:01:00.000Z',
+          record: processConfig,
+          outcome: 'completed',
+        },
+        {
+          kind: 'incomplete',
+          id: 'configless' as ExecutionId,
+          timestamp: '2026-05-18T08:02:00.000Z',
+          outcome: 'completed',
+        },
+      ]),
+    );
 
     const entries = await listCliHistoryEntries();
 
@@ -351,13 +355,15 @@ describe('CLI history runtime', () => {
   });
 
   it('hides agent-spawned child runs from the history list', async () => {
-    mocks.listExecutions.mockResolvedValue([
-      runListEntry('root'),
-      runListEntry('delegated-child', {
-        timestamp: '2026-05-18T08:01:00.000Z',
-        parentExecutionId: 'root' as ExecutionId,
-      }),
-    ]);
+    mocks.listExecutions.mockReturnValue(
+      Effect.succeed([
+        runListEntry('root'),
+        runListEntry('delegated-child', {
+          timestamp: '2026-05-18T08:01:00.000Z',
+          parentExecutionId: 'root' as ExecutionId,
+        }),
+      ]),
+    );
 
     const entries = await listCliHistoryEntries();
 
@@ -369,15 +375,17 @@ describe('CLI history runtime', () => {
       agent: 'engineer',
       cli: { multiAgentPresetId: ' software-engineer ' },
     });
-    mocks.listExecutions.mockResolvedValue([
-      runListEntry('team1', {
-        identity: { kind: 'agent', agent: 'engineer' },
-        timestamp: '2026-05-18T10:00:00.000Z',
-        record: teamConfig,
-        outcome: 'cancelled',
-        ...RESUMABLE_ROW_FACTS,
-      }),
-    ]);
+    mocks.listExecutions.mockReturnValue(
+      Effect.succeed([
+        runListEntry('team1', {
+          identity: { kind: 'agent', agent: 'engineer' },
+          timestamp: '2026-05-18T10:00:00.000Z',
+          record: teamConfig,
+          outcome: 'cancelled',
+          ...RESUMABLE_ROW_FACTS,
+        }),
+      ]),
+    );
 
     const entries = await listCliHistoryEntries();
 
@@ -390,16 +398,18 @@ describe('CLI history runtime', () => {
 
   it('uses the history description for no-input chat rows', async () => {
     const chatConfig = toolUseAgentConfig({ agent: 'assistant' });
-    mocks.listExecutions.mockResolvedValue([
-      runListEntry('chat1', {
-        identity: { kind: 'agent', agent: 'assistant' },
-        timestamp: '2026-05-18T11:00:00.000Z',
-        record: chatConfig,
-        outcome: 'cancelled',
-        description: 'Sketch a proof outline',
-        ...RESUMABLE_ROW_FACTS,
-      }),
-    ]);
+    mocks.listExecutions.mockReturnValue(
+      Effect.succeed([
+        runListEntry('chat1', {
+          identity: { kind: 'agent', agent: 'assistant' },
+          timestamp: '2026-05-18T11:00:00.000Z',
+          record: chatConfig,
+          outcome: 'cancelled',
+          description: 'Sketch a proof outline',
+          ...RESUMABLE_ROW_FACTS,
+        }),
+      ]),
+    );
 
     const entries = await listCliHistoryEntries();
 

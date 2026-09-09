@@ -1,5 +1,6 @@
 // Node imports
 import { strict as assert } from 'node:assert';
+import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
 import { describe, it } from 'vitest';
@@ -15,7 +16,6 @@ import {
   type SupabaseSessionStorage,
 } from '@auth/SupabaseSession';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { delay } from '@utils/core';
 import type {
   Session as SupabaseNativeSession,
   SupabaseClient as Client,

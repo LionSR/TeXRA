@@ -14,7 +14,6 @@ import {
   getRuntimeModelDirectFallback,
   invalidateRuntimeModelRegistry,
   refreshRuntimeModelRegistry,
-  requestRuntimeModelAccess,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import type {
@@ -107,6 +106,7 @@ describe('runtime model registry', () => {
       expect.objectContaining({
         access: 'allowed',
         reference: { vendor: 'copilot', id: GEMINI_PRO.id },
+        version: GEMINI_PRO.version,
         effectiveConfig: expect.objectContaining({
           name: 'gemini31p',
           contextWindow: GEMINI_PRO.maxInputTokens,
@@ -147,199 +147,6 @@ describe('runtime model registry', () => {
 
     expect(copilotRouteForModel('future-model')).toBeUndefined();
     expect([...(await discoveredCopilotRoutes()).keys()]).toEqual([]);
-  });
-
-  it('keeps the exact editor reference for the access-request consent prompt', async () => {
-    const port = await installModels({
-      ...GEMINI_PRO,
-      access: 'consent-required',
-    });
-
-    await expect(requestRuntimeModelAccess('gemini31p')).resolves.toBe(
-      'requested',
-    );
-    expect(port.sendRequest).toHaveBeenCalledWith(
-      { vendor: 'copilot', id: GEMINI_PRO.id },
-      [
-        {
-          role: 'user',
-          content: [
-            {
-              kind: 'text',
-              text: 'Reply with OK to confirm language-model access for TeXRA.',
-            },
-          ],
-        },
-      ],
-      { justification: 'Use Copilot models in TeXRA.' },
-      expect.any(AbortSignal),
-    );
-
-    invalidateRuntimeModelRegistry();
-    const unavailablePort = await installModels({
-      ...GEMINI_PRO,
-      access: 'unavailable',
-    });
-    await expect(requestRuntimeModelAccess('gemini31p')).resolves.toBe(
-      'unavailable',
-    );
-    expect(unavailablePort.sendRequest).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    {
-      scenario: 'entering the native consent flow',
-      rediscoveredAccess: 'consent-required' as const,
-      outcome: 'requested',
-      sendsProbe: true,
-    },
-    {
-      scenario: 'reporting unavailable',
-      rediscoveredAccess: 'unavailable' as const,
-      outcome: 'unavailable',
-      sendsProbe: false,
-    },
-  ])(
-    're-discovers stale allowed access before $scenario',
-    async ({ rediscoveredAccess, outcome, sendsProbe }) => {
-      let models: readonly LanguageModelInfo[] = [GEMINI_PRO];
-      const port = {
-        ...languageModelPort([]),
-        selectModels: vi.fn(async () => models),
-      };
-      await installPlatform({}, { languageModel: port });
-      await refreshRuntimeModelRegistry();
-      expect(copilotRouteForModel('gemini31p')?.access).toBe('allowed');
-
-      models = [{ ...GEMINI_PRO, access: rediscoveredAccess }];
-
-      await expect(requestRuntimeModelAccess('gemini31p')).resolves.toBe(
-        outcome,
-      );
-      expect(port.selectModels).toHaveBeenCalledTimes(2);
-      if (sendsProbe) {
-        expect(port.sendRequest).toHaveBeenCalledOnce();
-      } else {
-        expect(port.sendRequest).not.toHaveBeenCalled();
-      }
-    },
-  );
-
-  it('retries when access invalidation supersedes a forced allowed probe', async () => {
-    const port = await installModels(GEMINI_PRO);
-    await refreshRuntimeModelRegistry();
-
-    const forced = createDeferred<readonly LanguageModelInfo[]>();
-    vi.mocked(port.selectModels)
-      .mockReturnValueOnce(forced.promise)
-      .mockResolvedValueOnce([{ ...GEMINI_PRO, access: 'unavailable' }]);
-
-    const request = requestRuntimeModelAccess('gemini31p');
-    invalidateRuntimeModelRegistry();
-    forced.resolve([GEMINI_PRO]);
-
-    await expect(request).resolves.toBe('unavailable');
-    expect(port.selectModels).toHaveBeenCalledTimes(3);
-    expect(port.sendRequest).not.toHaveBeenCalled();
-    expect(copilotRouteForModel('gemini31p')?.access).toBe('unavailable');
-  });
-
-  it('fails closed when repeated invalidation supersedes the bounded retry', async () => {
-    const port = await installModels(GEMINI_PRO);
-    await refreshRuntimeModelRegistry();
-
-    const forced = createDeferred<readonly LanguageModelInfo[]>();
-    const retry = createDeferred<readonly LanguageModelInfo[]>();
-    const retryStarted = createDeferred<void>();
-    vi.mocked(port.selectModels)
-      .mockReturnValueOnce(forced.promise)
-      .mockImplementationOnce(() => {
-        retryStarted.resolve();
-        return retry.promise;
-      });
-
-    const request = requestRuntimeModelAccess('gemini31p');
-    invalidateRuntimeModelRegistry();
-    forced.resolve([GEMINI_PRO]);
-    await retryStarted.promise;
-    invalidateRuntimeModelRegistry();
-    retry.resolve([GEMINI_PRO]);
-
-    await expect(request).resolves.toBe('unavailable');
-    expect(port.selectModels).toHaveBeenCalledTimes(3);
-    expect(port.sendRequest).not.toHaveBeenCalled();
-    expect(copilotRouteForModel('gemini31p')?.access).toBe('allowed');
-  });
-
-  it('does not let a superseded ordinary discovery overwrite forced access state', async () => {
-    const ordinary = createDeferred<readonly LanguageModelInfo[]>();
-    const forced = createDeferred<readonly LanguageModelInfo[]>();
-    const port = {
-      ...languageModelPort([]),
-      selectModels: vi
-        .fn<() => Promise<readonly LanguageModelInfo[]>>()
-        .mockReturnValueOnce(ordinary.promise)
-        .mockReturnValueOnce(forced.promise),
-    };
-    await installPlatform({}, { languageModel: port });
-
-    const staleOrdinaryRefresh = refreshRuntimeModelRegistry();
-    const forcedRequest = requestRuntimeModelAccess('gemini31p');
-    forced.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
-    await expect(forcedRequest).resolves.toBe('unavailable');
-
-    // Resolve stale allowed data last: the superseded generation must not
-    // overwrite the forced result that authorized the opt-in outcome.
-    ordinary.resolve([GEMINI_PRO]);
-    await staleOrdinaryRefresh;
-
-    expect((await discoveredCopilotRoutes()).get('gemini31p')?.access).toBe(
-      'unavailable',
-    );
-    expect(port.sendRequest).not.toHaveBeenCalled();
-    expect(port.selectModels).toHaveBeenCalledTimes(2);
-  });
-
-  it('coalesces overlapping user-initiated fresh discoveries', async () => {
-    const port = await installModels(GEMINI_PRO);
-    await refreshRuntimeModelRegistry();
-
-    const discovery = createDeferred<readonly LanguageModelInfo[]>();
-    vi.mocked(port.selectModels).mockReturnValueOnce(discovery.promise);
-
-    const first = requestRuntimeModelAccess('gemini31p');
-    const second = requestRuntimeModelAccess('gemini31p');
-    discovery.resolve([{ ...GEMINI_PRO, access: 'unavailable' }]);
-
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      'unavailable',
-      'unavailable',
-    ]);
-    expect(port.selectModels).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps a visible non-preferred route after failed opt-in revalidation', async () => {
-    const error = new Error('fresh discovery failed');
-    let discoveryFails = false;
-    const port = {
-      ...languageModelPort([]),
-      selectModels: vi.fn(async () => {
-        if (discoveryFails) throw error;
-        return [GEMINI_PRO];
-      }),
-    };
-    await installPlatform({}, { languageModel: port });
-    await refreshRuntimeModelRegistry();
-    discoveryFails = true;
-
-    await expect(requestRuntimeModelAccess('gemini31p')).rejects.toBe(error);
-
-    // Settings reads through the public asynchronous boundary. Its retry also
-    // fails, but the previously visible route remains available for display.
-    const visibleRoutes = await discoveredCopilotRoutes();
-    expect(visibleRoutes.get('gemini31p')?.access).toBe('allowed');
-    expect(preferredCopilotRouteModels()).toEqual([]);
-    expect(port.selectModels).toHaveBeenCalledTimes(3);
   });
 
   it('reports the direct fallback for a base model and a legacy copilot id', async () => {

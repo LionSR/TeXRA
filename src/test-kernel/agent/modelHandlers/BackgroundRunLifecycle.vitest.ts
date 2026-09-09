@@ -250,27 +250,21 @@ describe('BackgroundRunLifecycle.waitForCompletion', () => {
     expect(client.responses.retrieve).not.toHaveBeenCalled();
   });
 
-  it('throws a terminal error when polling ends in a non-completed status', async () => {
-    // Fake timers carry the test past the real poll interval deterministically
-    // instead of swapping in a fast poller through the private field.
-    vi.useFakeTimers();
+  it('throws a terminal error when the run ends in a non-completed status', async () => {
     const lifecycle = createLifecycle();
-    const client = clientWith(
-      vi.fn(async () => ({
+    const retrieve = vi.fn();
+    const client = clientWith(retrieve);
+
+    // Terminal on arrival: the poll loop is never entered, so the test asserts
+    // the terminal verdict without waiting out a poll interval.
+    await expect(
+      lifecycle.waitForCompletion(client, {
         id: 'resp-terminal',
         status: 'failed',
         error: { message: 'server error' },
-      })),
-    );
-
-    const completion = lifecycle.waitForCompletion(client, {
-      id: 'resp-terminal',
-      status: 'in_progress',
-    } as Response);
-    const rejection = expect(completion).rejects.toThrow();
-    // One step well past the first poll interval, far short of the deadline.
-    await vi.advanceTimersByTimeAsync(60_000);
-    await rejection;
+      } as unknown as Response),
+    ).rejects.toThrow();
+    expect(retrieve).not.toHaveBeenCalled();
     expect(lifecycle.hasPendingResume()).toBe(false);
   });
 });

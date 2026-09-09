@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Bug Fixes
+
+- Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
+
 ### CLI and Agent SDK
 
 #### Breaking Changes
