@@ -8,6 +8,9 @@ import { join } from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports
+import * as logger from '@logger/logUtils';
+
 // Local imports - test support
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
@@ -38,6 +41,7 @@ describe('desktop app log', () => {
   afterEach(async () => {
     resetElectronTestStub();
     vi.restoreAllMocks();
+    logger.setOutputChannelFactory(null);
   });
 
   /** Writes a fresh desktop log and points the Electron stub at its dir. */
@@ -145,5 +149,30 @@ describe('desktop app log', () => {
     const lastLine = snapshot.text.trim().split('\n').at(-1);
 
     expect(lastLine).toBe('ERROR [2026-09-09 00:00:00.000] [channel] boom');
+  });
+
+  it('routes logUtils.createLog(...).error(...) through the wired sink at ERROR severity, not console.info', async () => {
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
+    configureElectronTestStub({ userDataPath: join(root, 'userData') });
+    const { installDesktopAppLog, appendLogUtilsLine, readDesktopLogSnapshot } =
+      await loadDesktopAppLogModule();
+    const consoleInfoSpy = vi.spyOn(console, 'info');
+
+    installDesktopAppLog();
+    // Same factory shape platform/index.ts wires in initializeElectronPlatform.
+    logger.setOutputChannelFactory((name) => ({
+      appendLine: (message) => appendLogUtilsLine(`[${name}] ${message}`),
+    }));
+    logger.createLog('channel').error('boom');
+
+    const snapshot = readDesktopLogSnapshot({});
+    const lastLine = snapshot.text.trim().split('\n').at(-1);
+
+    expect(lastLine).toMatch(
+      /^\[TeXRA\] ERROR \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] \[channel\] boom$/,
+    );
+    // The un-wired fallback sink writes through console.info; confirms this
+    // path bypasses it (and therefore the level-blind console mirror).
+    expect(consoleInfoSpy).not.toHaveBeenCalled();
   });
 });
