@@ -583,7 +583,7 @@ interface AgentOptionsDataPayload {
   toolUse: AgentOptionData[];
 }
 
-export function entriesToOptionData(
+function entriesToOptionData(
   entries: readonly AgentEntry[],
 ): AgentOptionData[] {
   return entries.map((entry) => ({
