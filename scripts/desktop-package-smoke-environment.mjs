@@ -98,8 +98,6 @@ export async function loadDatabaseFixture(userDataPath) {
     bundle: true,
     platform: 'node',
     format: 'esm',
-    loader: { '.node': 'file' },
-    assetNames: '[name]',
     target: 'node22.16',
     tsconfig: join(root, 'tsconfig.json'),
     banner: {

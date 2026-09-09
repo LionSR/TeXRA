@@ -29,8 +29,7 @@ export const mainBuildOptions = {
   // a bundle chunk. Keep it external so the require resolves to the real
   // installed package (electron-builder ships it via node_modules).
   external: ['electron', 'fsevents', 'node-pty'],
-  assetNames: '[name]',
-  loader: { '.wasm': 'binary', '.node': 'file' },
+  loader: { '.wasm': 'binary' },
   tsconfig: 'tsconfig.main.json',
   target: 'node22',
   banner: { js: esmCjsGlobalsBanner },
