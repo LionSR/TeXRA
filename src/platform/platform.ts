@@ -33,10 +33,9 @@ import type { PlatformSecrets } from './secrets';
  * (`@platform/workspaceRoots`), carried by each `SessionHandle`, so one
  * process can hold sessions rooted in several folders.
  *
- * Note on logging: channel-output logging is its own subsystem
- * (`@logger/logUtils`). Hosts wire the per-channel sink factory via
- * `logUtils.setOutputChannelFactory` directly; the platform abstraction
- * doesn't carry a log backend.
+ * Note on logging: diagnostics are their own subsystem. Hosts install their
+ * log sink via `logSink.setLogSink` directly; the platform abstraction doesn't
+ * carry a log backend.
  */
 export interface Platform {
   readonly globalState: StateStore;

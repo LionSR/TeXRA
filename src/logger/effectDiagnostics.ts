@@ -1,41 +1,25 @@
-/** Effect diagnostics use the host's existing, secret-redacting output sink. */
+/** Effect diagnostics use the host's existing, secret-redacting log sink. */
 // Third-party imports
 import { Exit, Layer, Logger, Option, References, Tracer } from 'effect';
-import safeStringify from 'safe-stable-stringify';
 
 // Local imports
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
+import { writeLogEntry } from '@logger/logSink';
 
 const log = createLog('Effect');
 const MAX_SPAN_ATTRIBUTES = 32;
 const MAX_ATTRIBUTE_LENGTH = 512;
 
-/** Route native log levels and annotations through the shared host logger. */
+/**
+ * Route native log levels through the shared host sink. `formatStructured`
+ * already carries level, timestamp, fiber, cause, annotations, and spans, so
+ * the entry needs no adaptation and nothing is flattened into a message.
+ */
 const diagnosticLogger = Logger.make<unknown, void>((options) => {
   if (options.logLevel === 'None') return;
   const verbose = options.logLevel === 'Debug' || options.logLevel === 'Trace';
   if (verbose && !isDebugModeEnabled()) return;
-  const entry = Logger.formatStructured.log(options);
-  const message =
-    typeof entry.message === 'string'
-      ? entry.message
-      : (safeStringify(entry.message) ?? String(entry.message));
-  const data = { ...entry, message: undefined };
-  switch (options.logLevel) {
-    case 'Fatal':
-    case 'Error':
-      log.error(entry.cause ? `${message}\n${entry.cause}` : message, { data });
-      break;
-    case 'Warn':
-      log.warn(message, { data });
-      break;
-    case 'Debug':
-    case 'Trace':
-      log.debug(message, { data });
-      break;
-    default:
-      log.info(message, { data });
-  }
+  writeLogEntry(Logger.formatStructured.log(options));
 });
 
 /**

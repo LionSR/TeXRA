@@ -17,6 +17,7 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
+import { setLogSink, type LogEntry } from '@logger/logSink';
 import { redactSecrets } from '@logger/redaction';
 import { normalizeFilePath } from '@utils/core';
 
@@ -39,6 +40,11 @@ export function installDesktopAppLog(): string | undefined {
   if (logFilePath == null) return undefined;
 
   rotateDesktopLogFile(logFilePath);
+  // Core diagnostics reach the file as the structured entries they were
+  // written as. Before this the desktop installed no sink at all, so every
+  // core entry fell to the console fallback and reached the file stamped
+  // `info` with its real level buried in the message text (#12134).
+  setLogSink({ write: appendDesktopLogEntry });
   appendDesktopLogLine('info', '--- TeXRA desktop session started ---');
   installConsoleMirror();
   return logFilePath;
@@ -122,13 +128,39 @@ function installConsoleMirror(): void {
   }
 }
 
+/** Console levels as the names Effect's structured entry uses. */
+const ENTRY_LEVEL: Record<ConsoleLevel, string> = {
+  debug: 'DEBUG',
+  error: 'ERROR',
+  info: 'INFO',
+  log: 'INFO',
+  warn: 'WARN',
+};
+
+/**
+ * Record output that arrives as console arguments rather than as an entry:
+ * Electron's own logging, the renderer's console, and the process-level
+ * signals below. These have no fiber and no channel of their own.
+ */
 function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
+  appendDesktopLogEntry({
+    level: ENTRY_LEVEL[level],
+    fiberId: '',
+    timestamp: new Date().toISOString(),
+    message: format(...args),
+    cause: undefined,
+    annotations: {},
+    spans: {},
+  });
+}
+
+/** One entry, one JSON line. */
+function appendDesktopLogEntry(entry: LogEntry): void {
   const path = resolveActiveLogFilePath();
   if (path == null) return;
 
-  const message = format(...args);
   try {
-    appendFileSync(path, `${new Date().toISOString()} [${level}] ${message}\n`);
+    appendFileSync(path, `${JSON.stringify(entry)}\n`);
   } catch {
     // Logging must never become a startup dependency.
   }

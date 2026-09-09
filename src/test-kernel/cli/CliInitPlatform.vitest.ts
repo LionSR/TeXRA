@@ -10,7 +10,7 @@ import {
   initCliPlatform,
   setCliAgentResumeHandler,
 } from '@cli/runtime/initPlatform';
-import { setOutputChannelFactory } from '@logger/logUtils';
+import { setLogSink } from '@logger/logSink';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -62,6 +62,7 @@ function spyOnSignalRegistration(): {
 }
 
 const mocks = vi.hoisted(() => ({
+  consoleLogSink: { write: vi.fn() },
   signInCliSupabase: vi.fn(),
   bootstrapNodeAgentDirectories: vi.fn(),
   createPlatformAgentDirectories: vi.fn(() => ({
@@ -97,6 +98,11 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
   signInCliSupabase: mocks.signInCliSupabase,
 }));
 
+vi.mock('@logger/logSink', () => ({
+  consoleLogSink: mocks.consoleLogSink,
+  setLogSink: vi.fn(),
+}));
+
 vi.mock('@logger/logUtils', () => ({
   createChannelWriter: vi.fn(() => vi.fn()),
   createLog: vi.fn(() => ({
@@ -109,7 +115,6 @@ vi.mock('@logger/logUtils', () => ({
   error: vi.fn(),
   info: vi.fn(),
   isDebugModeEnabled: vi.fn(() => false),
-  setOutputChannelFactory: vi.fn(),
   warn: vi.fn(),
 }));
 
@@ -428,7 +433,7 @@ describe('CLI platform init', () => {
   it('marks the operator-terminal console sink as trusted', async () => {
     await initCliPlatform(cliContext({ quietLogs: false }));
 
-    expect(vi.mocked(setOutputChannelFactory)).toHaveBeenCalledWith(null, {
+    expect(vi.mocked(setLogSink)).toHaveBeenCalledWith(mocks.consoleLogSink, {
       trusted: true,
     });
   });

@@ -1,31 +1,31 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import * as logUtils from '@logger/logUtils';
+import { setLogSink } from '@logger/logSink';
 import { createRunTrace } from '@transcript';
 
 describe('createRunTrace dispose', () => {
-  afterEach(() => logUtils.setOutputChannelFactory(null));
+  afterEach(() => setLogSink(null));
 
-  it('disposes the per-run output channel and residency lease once', () => {
-    const dispose = vi.fn();
+  it('releases the per-run host surface and residency lease once', () => {
+    const disposeRun = vi.fn();
     const close = vi.fn();
-    logUtils.setOutputChannelFactory(() => ({ appendLine: vi.fn(), dispose }));
+    setLogSink({ write: vi.fn(), disposeRun });
     const handle = createRunTrace('channel-stream', { close });
     handle.dispose();
     handle.dispose();
-    expect(dispose).toHaveBeenCalledOnce();
+    expect(disposeRun).toHaveBeenCalledExactlyOnceWith('channel-stream');
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it('releases residency even when the output channel cannot close', () => {
+  it('releases residency even when the host surface cannot close', () => {
     const failure = new Error('channel disposal failed');
     const close = vi.fn();
-    logUtils.setOutputChannelFactory(() => ({
-      appendLine: vi.fn(),
-      dispose: () => {
+    setLogSink({
+      write: vi.fn(),
+      disposeRun: () => {
         throw failure;
       },
-    }));
+    });
     const handle = createRunTrace('failed-stream', { close });
     expect(() => handle.dispose()).toThrow(failure);
     expect(close).toHaveBeenCalledOnce();

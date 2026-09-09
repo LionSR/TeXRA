@@ -13,7 +13,7 @@ import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
-import { setOutputChannelFactory } from '@logger/logUtils';
+import { consoleLogSink, setLogSink } from '@logger/logSink';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
@@ -263,10 +263,11 @@ export async function initCliPlatform(
   context: CliPlatformInitOptions & Pick<CliContext, 'quietLogs'>,
 ): Promise<CliPlatformServices> {
   quietPlatformLogs = context.quietLogs;
-  setOutputChannelFactory(
-    quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
-    { trusted: true },
-  );
+  // The terminal is the operator's own, so entries reach it unredacted — the
+  // contract `logSinks.ts` documents for CLI output.
+  setLogSink(quietPlatformLogs ? { write: () => undefined } : consoleLogSink, {
+    trusted: true,
+  });
 
   // Double init is the normal path (every command calls one of these), so the
   // already-installed platform is the value returned on the second and later

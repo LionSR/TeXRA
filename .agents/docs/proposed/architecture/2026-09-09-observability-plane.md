@@ -70,9 +70,13 @@ Effect's log record already carries the identity every mechanism is threading by
 ```
 
 So there is **no TeXRA log record type to define** — defining one duplicates `Logger.Options`.
-Identity is supplied by `Effect.annotateLogs` (`executionId`, `streamId`) and by the span stack,
-which this code already opens for tracing (`Effect.fn('model.request')`,
-`Effect.withSpan('session.run')`).
+Identity is supplied by `Effect.annotateLogs` (`executionId`, `streamId`).
+
+One correction to an earlier draft of this note, established by running it: the entry's `spans`
+field reads `CurrentLogSpans`, which only `Effect.withLogSpan` writes. A **tracer** span opened by
+`Effect.withSpan` or `Effect.fn` does _not_ attribute a log entry, so the tracing spans this code
+already opens cannot serve as the channel. Annotations are the carrier; `withLogSpan` is available
+where a labelled, timed region is wanted, and is used nowhere today.
 
 This retires three separate identity mechanisms:
 
@@ -190,10 +194,12 @@ metrics plane without a named consumer would be speculative generality.
 Each step is deleted by a subsystem conversion that already exists in the 1.0 plan. Nothing here
 is a standalone logger migration, and no step introduces a bridge between old and new.
 
-1. **Host loggers.** Add the three `Logger`s, delete `effectDiagnostics`' logger half (the
-   `DiagnosticSpan` tracer stays), delete `setOutputChannelFactory` and its two call sites.
-   **Zero call-site churn** — `Effect.log*` already routes through this layer — and it fixes
-   #12134 at the cause rather than by parsing text.
+1. **Host loggers.** Add the three `Logger`s and reshape the host port: `setOutputChannelFactory`
+   (an `appendLine(string)` factory) becomes `setLogSink` (a structured entry sink), and
+   `effectDiagnostics`' logger half maps `Logger.formatStructured` straight onto it (the
+   `DiagnosticSpan` tracer stays). The port is **reshaped, not deleted** — 501 imperative call
+   sites still need a destination until step 5 — and that reshape is exactly what fixes #12134:
+   severity stops being flattened into message text. **Zero call-site churn.**
 2. **`Redacted` at the secret boundary.** Independent of the logger; the only step here that
    removes a compensating subsystem outright instead of relocating one. Makes every later plane
    safe by construction.

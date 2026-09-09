@@ -39,19 +39,40 @@ async function loadLogsPane(): Promise<LogsPaneModule> {
   return import('@desktop/renderer/logsPane') as unknown as Promise<LogsPaneModule>;
 }
 
+/** One line of the log file: the structured entry the main process writes. */
+function logLine(
+  level: string,
+  timestamp: string,
+  message: string,
+  cause?: string,
+): string {
+  return JSON.stringify({
+    level,
+    fiberId: '#1',
+    timestamp,
+    message,
+    ...(cause === undefined ? {} : { cause }),
+    annotations: {},
+    spans: {},
+  });
+}
+
 const MULTILINE_LOG = [
-  '2026-07-26T02:10:00.123Z [info] Renderer ready',
-  '2026-07-26T02:10:01.456Z [error] Could not open file',
-  'Error: permission denied',
-  '    at openFile (desktop.js:10:4)',
-  '2026-07-26T02:10:02.789Z [warn] Retrying',
+  logLine('INFO', '2026-07-26T02:10:00.123Z', 'Renderer ready'),
+  logLine(
+    'ERROR',
+    '2026-07-26T02:10:01.456Z',
+    'Could not open file',
+    'Error: permission denied\n    at openFile (desktop.js:10:4)',
+  ),
+  logLine('WARN', '2026-07-26T02:10:02.789Z', 'Retrying'),
   '',
 ].join('\n');
 
 describe('desktop logs pane', () => {
   useLitComponentTestDom(loadLogsPane);
 
-  it('parses timestamped entries and keeps continuation lines together', async () => {
+  it('reads severity and time as fields and keeps a failure whole', async () => {
     const { parseDesktopLogEntries } = await loadLogsPane();
 
     const entries = parseDesktopLogEntries(MULTILINE_LOG);
@@ -63,21 +84,20 @@ describe('desktop logs pane', () => {
       timestamp: '2026-07-26T02:10:00.123Z',
       timestampLabel: '2026-07-26 02:10:00',
     });
+    // The stack rides the entry's own cause, so a multi-line failure is one
+    // row without the viewer stitching continuation lines back together.
     expect(entries[1]).toMatchObject({
       level: 'error',
       message:
         'Could not open file\nError: permission denied\n    at openFile (desktop.js:10:4)',
     });
-    expect(entries[1]?.raw).toContain(
-      '2026-07-26T02:10:01.456Z [error] Could not open file',
-    );
   });
 
   it('assigns deterministic IDs that survive later snapshot refreshes', async () => {
     const { parseDesktopLogEntries } = await loadLogsPane();
     const before = parseDesktopLogEntries(MULTILINE_LOG);
     const after = parseDesktopLogEntries(
-      `${MULTILINE_LOG}2026-07-26T02:10:03.000Z [debug] Refreshed\n`,
+      `${MULTILINE_LOG}${logLine('DEBUG', '2026-07-26T02:10:03.000Z', 'Refreshed')}\n`,
     );
 
     expect(after.slice(0, before.length).map((entry) => entry.id)).toEqual(

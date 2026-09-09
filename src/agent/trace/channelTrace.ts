@@ -3,11 +3,8 @@
  */
 
 // Local imports
-import {
-  createChannelWriter,
-  disposeAgentChannel,
-  type ChannelWriter,
-} from '@logger/logUtils';
+import { disposeRunChannel } from '@logger/logSink';
+import { createChannelWriter, type ChannelWriter } from '@logger/logUtils';
 import { MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 
 // Local file imports
@@ -77,6 +74,6 @@ export function attachChannelSubscriber(
     released = true;
     // A per-run agent channel dies with its run; without this every run leaks
     // a live host output channel. Shared channels outlive the subscriber.
-    if (options.isAgent) disposeAgentChannel(options.channel);
+    if (options.isAgent) disposeRunChannel(options.channel);
   };
 }
