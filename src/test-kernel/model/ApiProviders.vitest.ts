@@ -180,6 +180,32 @@ describe('API provider key caches', () => {
     await expect(getApiKey(secrets, 'openai')).rejects.toBe(readError);
   });
 
+  it('keeps concurrent and cached API keys bound to their credential stores', async () => {
+    const firstRead = createDeferred<string | undefined>();
+    const { secrets: backing } = createSecrets();
+    const first: PlatformSecrets = {
+      ...backing,
+      get: vi.fn(() => firstRead.promise),
+    };
+    const { secrets: second } = createSecrets({
+      [apiKeySecretName('openai')]: 'second-store-key',
+    });
+    const secondRead = vi.spyOn(second, 'get');
+
+    const firstKey = getApiKey(first, 'openai');
+    const secondKey = getApiKey(second, 'openai');
+    firstRead.resolve('first-store-key');
+
+    await expect(Promise.all([firstKey, secondKey])).resolves.toEqual([
+      'first-store-key',
+      'second-store-key',
+    ]);
+    await expect(getApiKey(first, 'openai')).resolves.toBe('first-store-key');
+    await expect(getApiKey(second, 'openai')).resolves.toBe('second-store-key');
+    expect(first.get).toHaveBeenCalledTimes(1);
+    expect(secondRead).toHaveBeenCalledTimes(1);
+  });
+
   it('does not let in-flight stale lookups repopulate the cache after invalidation', async () => {
     const firstLookup = createDeferred<string | undefined>();
     const { secrets: backing, store } = createSecrets();

@@ -347,14 +347,16 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
           },
         ],
         toolMode: 'auto',
+        maxTokens: 4096,
       },
       expect.any(AbortSignal),
     );
   });
 
-  it('does not advertise tools when function calling is unsupported', async () => {
+  it('does not advertise or count tools when function calling is unsupported', async () => {
     const port = fakePort([{ kind: 'text', text: 'answer' }]);
     const handler = new ModelHandlerVscodeLm(modelConfig(false));
+    port.countTokens.mockResolvedValue(128_000);
 
     const { response } = await handler.createResponse({
       client: port,
@@ -364,8 +366,10 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
     });
 
     expect(response.stopReason).toBe(OPENAI_CHAT_FINISH.STOP);
+    expect(port.countTokens).not.toHaveBeenCalled();
     expect(port.sendRequest.mock.calls[0]?.[2]).toEqual({
       justification: 'Run the selected TeXRA agent.',
+      maxTokens: 4096,
     });
   });
 
@@ -499,6 +503,34 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
     ).resolves.toBe(8);
     expect(port.countTokens).toHaveBeenCalledTimes(2);
     expect(handler.normalizeUsage(undefined, 100)).toBeUndefined();
+  });
+
+  it('reduces request maxTokens when the counted prompt leaves no output room', async () => {
+    const port = fakePort([{ kind: 'text', text: 'ok' }]);
+    port.countTokens.mockResolvedValue(90);
+    const handler = new ModelHandlerVscodeLm({
+      ...modelConfig(false),
+      maxOutputTokens: 50,
+      contextWindow: 100,
+    });
+
+    await handler.createResponse({
+      client: port,
+      messages: [
+        { role: 'user', content: [{ kind: 'text', text: 'question' }] },
+      ],
+      temperature: 0,
+    });
+
+    expect(port.sendRequest).toHaveBeenCalledWith(
+      { vendor: ModelProvider.COPILOT, id: 'copilot-model-id' },
+      expect.any(Array),
+      {
+        justification: 'Run the selected TeXRA agent.',
+        maxTokens: 10,
+      },
+      expect.any(AbortSignal),
+    );
   });
 });
 

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Bug Fixes
+
+- Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
+- VS Code language-model requests reduce their output allowance when necessary to fit the model context window.
+- API key lookups keep credentials isolated between independently configured stores.
+
 ## [0.40.10] - 2026-09-06
 
 ### Shared (all surfaces)
