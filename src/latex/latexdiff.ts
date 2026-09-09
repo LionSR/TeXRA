@@ -174,8 +174,16 @@ export class LaTeXdiffService {
         cwd,
       });
 
-      // latexdiff-vc writes output alongside the input, relative to cwd
-      const diffFilePath = filePath.replace('.tex', `-diff${commitHash}.tex`);
+      // latexdiff-vc writes output alongside the input, relative to cwd,
+      // inserting `-diff<hash>` before the extension. Anchor the insertion to
+      // the parsed extension: a plain `.tex` string replacement would land on
+      // the first literal `.tex` anywhere in the path, so a directory such as
+      // `my.texnotes/` would send us looking for a file that was never written.
+      const parsedFilePath = path.parse(filePath);
+      const diffFilePath = path.join(
+        parsedFilePath.dir,
+        `${parsedFilePath.name}-diff${commitHash}${parsedFilePath.ext}`,
+      );
       const outputPath = path.join(cwd, diffFilePath);
       await this.fileProcessor.processDiffFile(
         pathToLocation(outputPath),

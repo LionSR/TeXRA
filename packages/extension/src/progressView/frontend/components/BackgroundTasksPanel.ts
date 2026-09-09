@@ -41,6 +41,7 @@ import {
   formatResultCount,
 } from '@utils/text/stringUtils';
 import { getTimeFormatter } from '../formatters/timestampUtils';
+import { dispatchGroupToggle } from '../utils';
 
 /** The card's key in `Surface.groups` for its stream. */
 const DISPATCH_GROUP_KEY = 'dispatch';
@@ -348,14 +349,11 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private handleToggle(event: Event): void {
-    if (event.target !== event.currentTarget || !this.stream) return;
-    this.dispatchEvent(
-      SessionUiEvents.surface({
-        kind: 'group',
-        streamId: this.stream.id,
-        key: DISPATCH_GROUP_KEY,
-        expanded: event.type === 'wa-show',
-      }),
+    dispatchGroupToggle(
+      this,
+      event,
+      this.stream?.id ?? null,
+      DISPATCH_GROUP_KEY,
     );
   }
 
