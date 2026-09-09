@@ -35,6 +35,19 @@ async function loadDesktopAppLogModule(): Promise<DesktopAppLogModule> {
   ) as Promise<DesktopAppLogModule>;
 }
 
+// A successful installDesktopAppLog() replaces these five console methods
+// with wrappers (installConsoleMirror), directly on the process-global
+// `console` — not via vi.spyOn, so vi.restoreAllMocks() below doesn't undo
+// it. Left alone, a wrapper would outlive its test and stack another layer
+// on the next test that installs the mirror.
+const ORIGINAL_CONSOLE_METHODS = {
+  debug: console.debug,
+  error: console.error,
+  info: console.info,
+  log: console.log,
+  warn: console.warn,
+};
+
 describe('desktop app log', () => {
   const tempDirs = useTempDirs();
 
@@ -42,6 +55,7 @@ describe('desktop app log', () => {
     resetElectronTestStub();
     vi.restoreAllMocks();
     logger.setOutputChannelFactory(null);
+    Object.assign(console, ORIGINAL_CONSOLE_METHODS);
   });
 
   /** Writes a fresh desktop log and points the Electron stub at its dir. */

@@ -87,17 +87,36 @@ function createOutputChannel(channel: string, isAgent: boolean): OutputSink {
 }
 
 /**
+ * Matches a full `writeLine` header (`${LEVEL_TAG} [${timestamp}] ...`), not
+ * just the leading level word: a bare word prefix would also match a debug
+ * payload line (`writeLine`'s second `sink.appendLine` call for `data`, gated
+ * on `texra.logger.debugMode`) whenever the stringified value itself happens
+ * to start with one of these words — e.g. data `'ERROR from latexdiff'` is a
+ * plain scalar payload, not a new log header.
+ */
+const LEVEL_TAG_HEADER_PATTERN: Record<LogLevel, RegExp> = Object.fromEntries(
+  (Object.keys(LEVEL_TAG) as LogLevel[]).map((level) => [
+    level,
+    new RegExp(
+      `^${LEVEL_TAG[level]} \\[\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\]`,
+    ),
+  ]),
+) as Record<LogLevel, RegExp>;
+
+/**
  * Recovers the level {@link writeLine} tagged as plain text at the front of a
  * sink's message — the only place a level survives once emitted, since
  * {@link OutputSink.appendLine}'s `message: string` carries no level of its
  * own (a real VS Code `OutputChannel.appendLine` can't accept one either). A
  * host whose sink needs real severity for something other than display text
  * (e.g. desktop's file-format-aware log viewer) parses it back with this
- * rather than re-deriving {@link LEVEL_TAG} itself.
+ * rather than re-deriving {@link LEVEL_TAG} itself. Returns `undefined` for
+ * anything that isn't a real header line, including a debug-data payload
+ * line — a caller should treat that as a continuation, not its own entry.
  */
 export function parseLevelTag(message: string): LogLevel | undefined {
-  return (Object.keys(LEVEL_TAG) as LogLevel[]).find((level) =>
-    message.startsWith(LEVEL_TAG[level]),
+  return (Object.keys(LEVEL_TAG_HEADER_PATTERN) as LogLevel[]).find((level) =>
+    LEVEL_TAG_HEADER_PATTERN[level].test(message),
   );
 }
 
