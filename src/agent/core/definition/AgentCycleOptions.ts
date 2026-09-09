@@ -190,8 +190,11 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  */
 export const UserVariableChannelsSchema = UserVariableChannelRecordSchema.check(
   (ctx) => {
-    const { input, transient } = ctx.value;
-    if (isPlainRecord(input) && isPlainRecord(transient)) {
+    // Either key alone is enough to reject: the retired envelope always
+    // carried both, and a malformed one (a non-record in either channel) must
+    // fail just as loudly as a well-formed one rather than parsing into two
+    // junk variables.
+    if ('input' in ctx.value || 'transient' in ctx.value) {
       ctx.issues.push({
         code: 'custom',
         input: ctx.value,

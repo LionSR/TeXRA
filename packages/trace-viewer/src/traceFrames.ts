@@ -61,10 +61,9 @@ function findRootStageId(
 /**
  * The terminal phase the trace records, or null for a trace that never
  * reached one. `meta.outcome` is the one terminal fact the document
- * carries; for traces that predate outcome tracking, the persisted
- * transcript's last terminal root group row decides, then the older
- * snapshot-status escape hatch (already normalized to `StreamPhase` at
- * trace parse). A trace with no terminal fact folds as interrupted: an
+ * carries; failing that, the persisted transcript's last terminal root group
+ * row decides, then the snapshot status. Every one of those is a canonical
+ * `StreamPhase`. A trace with no terminal fact folds as interrupted: an
  * exported file has no producer that could still be running it.
  */
 function traceOutcome(trace: TraceDocument): StreamPhase | null {

@@ -1,4 +1,3 @@
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 

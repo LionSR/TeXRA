@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AgentCategory, AgentCategorySchema } from './agent';
+import { AgentCategorySchema } from './agent';
 
 const AgentKeyListSchema = z.array(z.string().trim().min(1));
 const AgentRosterCategorySelectionSchema = z.union([

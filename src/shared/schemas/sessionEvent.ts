@@ -210,7 +210,7 @@ function durable<T extends string, S extends z.ZodRawShape>(
  */
 const RunStartEventSchema = durable('run.start', {
   executionId: ExecutionIdSchema,
-  identity: RunIdentitySchema.nullish(),
+  identity: RunIdentitySchema,
   userFollowUpSupport: UserFollowUpSupportSchema,
   /** The `StreamView` discriminant: `toolUse` for an agent in tool-use mode
    *  and for a process stream, `workflow` for a workflow agent or script. */
@@ -335,9 +335,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('transcript.entry', { entry: StreamLogEntrySchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
     schema.extend({
-      /** Captured at publication. Pre-2026-09-07 source facts used false on
-       * replay; retain that absent-input rule until 2026-12-07. Imported
-       * transcript.entry rows already contain their recorded presentation. */
+      /** Stamped at publication (`SessionHandle.publish`), so a draft does
+       * not carry it. Imported transcript.entry rows already contain their
+       * recorded presentation. */
       transcriptDebug: z.boolean().optional(),
       aggregateId: AggregateIdSchema.refine(
         (key) => aggregateTarget(key).kind === 'stream',

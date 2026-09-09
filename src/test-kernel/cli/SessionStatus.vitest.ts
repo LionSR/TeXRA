@@ -170,7 +170,7 @@ describe('CLI session status formatter', () => {
 
   it('surfaces an active goal in status details', () => {
     const status = sessionStatus({
-      modelAccess: 'included',
+      modelAccess: 'personal',
       statusLabel: 'Stopped',
       goal: {
         status: 'active',
@@ -202,13 +202,13 @@ describe('CLI session status formatter', () => {
     );
   });
 
-  it('reports included TeXRA model access without a subscription line', () => {
+  it('reports personal-API-key model access without a subscription line', () => {
     const status = sessionStatus({
       model: 'gpt55',
-      modelAccess: 'included',
+      modelAccess: 'personal',
     });
 
-    expect(status).toContain('model access: Included access');
+    expect(status).toContain('model access: Your own API keys');
     expect(status).not.toContain('subscription:');
   });
 
@@ -226,7 +226,7 @@ describe('CLI session status formatter', () => {
       sessionStatus({
         agent: 'research',
         model: 'deepseekT',
-        modelAccess: 'included',
+        modelAccess: 'personal',
         statusLabel: 'Idle',
       }),
     ).toContain('status: Idle');

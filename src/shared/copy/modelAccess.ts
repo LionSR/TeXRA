@@ -59,15 +59,6 @@ export function usageRouteBadge(
       return { label: 'ChatGPT', compactLabel: 'ChatGPT', subscription: true };
     case 'xai-subscription':
       return { label: 'Grok', compactLabel: 'Grok', subscription: true };
-    // LEGACY: usage recorded on the retired relay route (producers removed
-    // 2026-08, .agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md);
-    // kept so historical transcripts render honestly. Delete after 2026-11.
-    case 'relay':
-      return {
-        label: 'included access',
-        compactLabel: 'Included',
-        subscription: false,
-      };
     case 'api-key':
       return {
         label: OWN_API_KEYS.inline,

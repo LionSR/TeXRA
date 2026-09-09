@@ -15,10 +15,6 @@ const UsageRouteSchema = z.enum([
   'glm-coding-plan-subscription',
   'kimi-code-subscription',
   'xai-subscription',
-  // 'relay' and `usedRelay` below are legacy wire tolerance: relay producers
-  // were removed 2026-08 (.agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md)
-  // but released clients still report them. Delete after 2026-11.
-  'relay',
   'api-key',
 ]);
 
@@ -34,7 +30,6 @@ const UsageLogEntryInputSchema = z.object({
   responseTimeMs: optionalNonnegativeInt,
   cachedInputTokens: optionalNonnegativeInt,
   reasoningTokens: optionalNonnegativeInt,
-  usedRelay: optionalBoolean,
   usageRoute: optional(UsageRouteSchema),
   viaChatGptSubscription: z
     .boolean()

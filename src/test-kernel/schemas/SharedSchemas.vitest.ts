@@ -40,8 +40,8 @@ describe('parseClaudeAgentModel', () => {
     expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-5');
   });
 
-  it('maps a persisted claude-fable-5 selection forward to its 5.1 successor', () => {
-    expect(parseClaudeAgentModel('claude-fable-5')).toBe('claude-fable-5-1');
+  it('defaults a retired persisted id to Sonnet rather than mapping it', () => {
+    expect(parseClaudeAgentModel('claude-fable-5')).toBe('claude-sonnet-5');
   });
 });
 

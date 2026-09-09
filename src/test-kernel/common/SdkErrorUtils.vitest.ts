@@ -44,7 +44,6 @@ import {
 } from '@common/errors/sdkError/providerErrorFormat';
 import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 import {
-  ErrorLogDataSchema,
   ProviderErrorPartialSchema,
   RetryErrorInfoSchema,
   toRetryErrorInfo,

@@ -199,10 +199,10 @@ describe('CLI model access routes', () => {
   it('uses observed access before the prospective route', () => {
     expect(
       resolveCliModelAccessRoute({
-        usageRoute: 'relay',
+        usageRoute: 'api-key',
         prospectiveRoute: 'chatgpt-subscription',
       }),
-    ).toBe('included');
+    ).toBe('personal');
     // A completed request's route cannot change — ordinary `api-key` usage
     // stays personal even while the Kimi Code route is currently active.
     expect(
@@ -218,7 +218,6 @@ describe('CLI model access routes', () => {
     ['xai-subscription', 'grok'],
     ['kimi-code-subscription', 'kimi-code'],
     ['glm-coding-plan-subscription', 'glm-code'],
-    ['relay', 'included'],
     ['api-key', 'personal'],
     [undefined, 'personal'],
   ])('labels %s the same observed or prospective', (route, expected) => {
@@ -232,13 +231,11 @@ describe('CLI model access routes', () => {
     const detailed: Array<[AccessRoute, string]> = [
       ['chatgpt', 'ChatGPT subscription'],
       ['kimi-code', 'Kimi Code subscription'],
-      ['included', 'Included access'],
       ['personal', 'Your own API keys'],
     ];
     const inline: Array<[AccessRoute, string]> = [
       ['chatgpt', 'ChatGPT subscription'],
       ['kimi-code', 'Kimi Code subscription'],
-      ['included', 'included access'],
       ['personal', 'your own API keys'],
     ];
     // Every arm is display text; the enum value never reaches the status bar.
@@ -246,7 +243,6 @@ describe('CLI model access routes', () => {
       ['chatgpt', 'subscription'],
       ['grok', 'subscription'],
       ['kimi-code', 'subscription'],
-      ['included', 'Included'],
       ['personal', 'API keys'],
     ];
 

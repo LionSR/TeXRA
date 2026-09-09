@@ -64,11 +64,6 @@ describe('usage-panel route badges', () => {
 
   it.each([
     {
-      route: 'relay' as UsageRoute,
-      visibleLabel: 'Included',
-      detailedLabel: 'included access',
-    },
-    {
       route: 'api-key' as UsageRoute,
       visibleLabel: 'API keys',
       detailedLabel: 'your own API keys',

@@ -33,8 +33,7 @@ const ActiveChildInfoSchema = z.object({
   agentName: z.string(),
   /**
    * Current execution phase. Takes `StreamPhase` only: no artifact carries a
-   * roster (see the note above), so no input can hold the retired 7-value
-   * `StreamStatus` vocabulary and there is nothing to normalize here.
+   * roster (see the note above), so there is nothing to normalize here.
    */
   status: StreamPhaseSchema.optional(),
   /**

@@ -110,14 +110,19 @@ const ErrorContextSchema = z.object({
 });
 export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 
-/** Complete error log data. */
+/**
+ * Complete error log data. Strict, like every sibling provider-error schema:
+ * a stream log still carrying the retired independent classification markers
+ * must fail loudly rather than have them stripped into a classification-less
+ * row that reads as an ordinary provider failure.
+ */
 export const ErrorLogDataSchema = ProviderErrorObjectSchema.extend({
   // Compose the shared operation/model context pair from ErrorContextSchema
   // so adding a field there propagates to the flattened log-row shape instead
   // of silently diverging (mirrors the omit-based RetryErrorInfoSchema).
   ...ErrorContextSchema.shape,
   rawMessage: z.string().optional(),
-});
+}).strict();
 export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
 
 /** Canonical provider error with all fields optional for event transport. */
