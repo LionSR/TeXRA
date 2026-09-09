@@ -16,7 +16,7 @@ The files have distinct roles:
   backends log under. `latexdiff.ts`'s `LaTeXdiffService` instead takes a
   caller-supplied channel (agent runs use their stream id; desktop and the
   tool-approval preview use their own) — only the extension's own latexdiff
-  command group, via `latexdiff/service.ts`, reuses this shared channel.
+  command group reuses this shared channel.
 - **Content extraction** — `extractFigure.ts` pulls figure paths out of LaTeX
   source; `extractBibliography.ts` extracts bibliography-file references and
   citation keys from the source (`extractBibliographyContext`) and separately
@@ -78,9 +78,7 @@ The files have distinct roles:
   `mathMarkup.ts`). `diffFileProcessor.ts` is the post-processor
   `LaTeXdiffService` itself calls after generating a direct or VC diff, to
   restore flattened bibliography directives and sanitize latexdiff's
-  `\DIFadd`/`\DIFdel` markup. `service.ts` holds the shared
-  `latexdiffService` singleton (used only by the extension's own command
-  group — see the Compilation bullet above), `types.ts` the types those
+  `\DIFadd`/`\DIFdel` markup. `types.ts` holds the types those
   pieces share, and
   `latexdiffCopy.ts` the user-facing outcome strings both host commands print
   so they can't disagree on wording.

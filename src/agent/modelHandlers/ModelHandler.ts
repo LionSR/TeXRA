@@ -15,8 +15,6 @@ import {
   startCompactionActivity,
   TraceEmitter,
 } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
@@ -1196,11 +1194,7 @@ export abstract class ModelHandler<
    * with-prefill branch in subclasses only if custom behavior is needed (e.g.
    * providers without native assistant-prefill continuation).
    */
-  addContinueMessage(
-    messages: M[],
-    workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
-  ): void {
+  addContinueMessage(messages: M[], workspaceState: AgentWorkspaceState): void {
     if (this.capabilities.supportsAssistantPrefill) {
       this.logger.debug(
         'Skipping continuation - assistant prefill is supported',
@@ -1445,8 +1439,6 @@ export abstract class ModelHandler<
    * @returns Promise resolving to [isComplete: generation complete, messages: updated message array]
    */
   async initializeOutputAndPrefill(
-    _agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
     messages: M[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
@@ -1481,7 +1473,7 @@ export abstract class ModelHandler<
       'Output file exists but no end tag found - continuing from file',
     );
 
-    this.addContinueMessage(messages, workspaceState, agentSetting);
+    this.addContinueMessage(messages, workspaceState);
 
     return [false, messages];
   }
@@ -1539,11 +1531,7 @@ export abstract class ModelHandler<
    * Determines if model should continue generating based on response state.
    * @returns Boolean indicating if generation should continue
    */
-  shouldContinue(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    _agentSetting: AgentSetting,
-  ): boolean {
+  shouldContinue(stopReason: ProviderStopReason, newResponse: string): boolean {
     const hasResponseEndTag = newResponse.includes(OUTPUT_END_TAG);
     const shouldContinue =
       isTokenLimitStopReason(stopReason) && !hasResponseEndTag;

@@ -80,9 +80,8 @@ vi.mock('@latex/latexdiff/runLatexdiff', () => ({
   runLatexdiffForExecution: mocks.runLatexdiffForExecution,
 }));
 
-vi.mock('@latex/latexdiff/service', () => ({
-  CHANNEL: 'LaTeXCommands',
-  latexdiffService: {},
+vi.mock('@latex/latexdiff', () => ({
+  LaTeXdiffService: class {},
 }));
 
 vi.mock('@latex/latexdiff/mathMarkup', () => ({

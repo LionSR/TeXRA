@@ -55,7 +55,7 @@ export function createWebviewStorage(hostBridge: {
  * // Backend (user preferences - persist across sessions)
  * const prefs = new PersistedState(
  *   workspaceRoots().workspaceState,
- *   WorkspaceStateKey.VIEW_PREFS,
+ *   WorkspaceStateKey.AGENT_ROSTER_SELECTION,
  *   z.object({ filter: z.string().prefault('all') }),
  * );
  *

@@ -10,7 +10,6 @@
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
-  ActiveChildInfo,
   ResultEvent,
   RawAcceptedSkill,
   AddOutputFilesPayload,
@@ -167,13 +166,6 @@ export type StatusEvent = Omit<
   'aggregateId'
 > & { readonly streamId: StreamTabId };
 
-/** Session-owned subagent activity for a parent run stream. */
-interface ChildActivityEvent extends StageStamp {
-  readonly type: 'child.activity';
-  readonly parentStreamId: StreamTabId;
-  readonly items: readonly ActiveChildInfo[];
-}
-
 /** UI progress counters for a run, projected by hosts but not transcript logs. */
 interface ConversationProgressEvent extends StageStamp {
   readonly type: 'conversation.progress';
@@ -292,7 +284,6 @@ export type AgentEvent =
   | WorkflowCallEvent
   | ActiveSkillsEvent
   | UsageEvent
-  | ChildActivityEvent
   | ConversationProgressEvent
   | RunFactEvent
   | ContextStateEvent

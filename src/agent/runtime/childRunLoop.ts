@@ -59,7 +59,7 @@ import {
 } from '@shared/schemas';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
-import { aggregateError, formatDuration } from '@utils/core';
+import { aggregateError, formatDuration, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Minimal token usage shape consumed by the loop's turn summary. */
@@ -991,22 +991,16 @@ export function startChildRunLoop<TTurn>(
             Effect.raceFirst(
               budget.withPermit(Effect.uninterruptible(base(signal))),
               Effect.callback<never, Error>((resume) => {
-                const onAbort = () =>
+                const detach = onAbort(signal, () =>
                   resume(
                     Effect.fail(
                       new Error(
                         'Child run turn cancelled while awaiting a concurrency slot.',
                       ),
                     ),
-                  );
-                if (signal.aborted) {
-                  onAbort();
-                  return;
-                }
-                signal.addEventListener('abort', onAbort, { once: true });
-                return Effect.sync(() =>
-                  signal.removeEventListener('abort', onAbort),
+                  ),
                 );
+                return Effect.sync(detach);
               }),
             ).pipe(Effect.interruptible);
 

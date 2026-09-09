@@ -209,7 +209,6 @@ return await agent('Inspect', { id: 'inspect' })`,
         total: 2,
       }),
     );
-    expect(events.some((event) => event.type === 'child.activity')).toBe(false);
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'log',

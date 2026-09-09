@@ -20,11 +20,6 @@ import {
 
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  type AgentSetting,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
@@ -174,7 +169,6 @@ describe('ModelHandlerAnthropic.shouldContinue', () => {
       handler.shouldContinue(
         ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
         'partial response',
-        {} as AgentSetting,
       ),
       false,
     );
@@ -1397,10 +1391,6 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       },
     } as any;
     const workspace = AgentWorkspaceState.create();
-    const setting = AgentSettingSchema.parse({
-      agentCategory: AgentCategory.Workflow,
-    });
-
     const first = await handler.createResponse({
       client,
       messages,
@@ -1417,7 +1407,7 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       first.response,
     );
     handler.requestCompaction();
-    handler.addContinueMessage(messages, workspace, setting);
+    handler.addContinueMessage(messages, workspace);
 
     const second = await handler.createResponse({
       client,
@@ -1434,7 +1424,7 @@ describe('ModelHandlerAnthropic forced compaction', () => {
       workspace,
       second.response,
     );
-    handler.addContinueMessage(messages, workspace, setting);
+    handler.addContinueMessage(messages, workspace);
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -2547,13 +2537,6 @@ async function withTempOutputPath(
   }
 }
 
-/** Build the workflow AgentSetting shared by the output initialization tests. */
-function createOutputInitAgentSetting(): AgentSetting {
-  return AgentSettingSchema.parse({
-    agentCategory: AgentCategory.Workflow,
-  });
-}
-
 describe('ModelHandlerAnthropic output initialization', () => {
   it('leaves messages untouched when no output file exists', async () => {
     await withTempOutputPath('anthropic-output-init-', async (outputPath) => {
@@ -2562,7 +2545,6 @@ describe('ModelHandlerAnthropic output initialization', () => {
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = createOutputInitAgentSetting();
       const userMessage: MessageParam = {
         role: 'user',
         content: [{ type: 'text', text: 'revise the document' }],
@@ -2572,8 +2554,6 @@ describe('ModelHandlerAnthropic output initialization', () => {
 
       const [isComplete, updatedMessages] =
         await handler.initializeOutputAndPrefill(
-          {} as AgentConfig,
-          agentSetting,
           messages,
           workspaceState,
           pathToLocation(outputPath),

@@ -440,7 +440,7 @@ class ResponseContinuationNode extends BaseNode<
   override async exec(
     prepRes: ContinuationPrepResult,
   ): Promise<ContinuationNodeResult> {
-    const { round, run, setting, logger } = this.services;
+    const { round, run, logger } = this.services;
     const modelHandler = this.services.modelCell.handler;
 
     if (prepRes.kind === 'skipped') {
@@ -504,7 +504,6 @@ class ResponseContinuationNode extends BaseNode<
     const shouldContinue = modelHandler.shouldContinue(
       stopReason,
       processedResponse,
-      setting,
     );
     const reachedTokenLimit = isTokenLimitStopReason(stopReason);
     const contextWindowExceeded = isContextWindowExceededStopReason(stopReason);
@@ -526,7 +525,7 @@ class ResponseContinuationNode extends BaseNode<
     _prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
-    const { round, workspace, logger, setting, config } = this.services;
+    const { round, workspace, logger } = this.services;
     const modelHandler = this.services.modelCell.handler;
 
     if (execRes.kind === 'skipped') {
@@ -586,7 +585,7 @@ class ResponseContinuationNode extends BaseNode<
       });
     }
 
-    modelHandler.addContinueMessage(shared.messages, workspace, setting);
+    modelHandler.addContinueMessage(shared.messages, workspace);
 
     return FlowTransition.CONTINUE;
   }

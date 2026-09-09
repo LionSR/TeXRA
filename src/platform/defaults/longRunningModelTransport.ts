@@ -8,6 +8,9 @@ import {
   type RequestInit as UndiciRequestInit,
 } from 'undici';
 
+// Internal imports
+import { onAbort } from '@utils/core';
+
 const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
 type UploadCompatibleFetch = typeof fetch & { Response: typeof Response };
@@ -37,7 +40,7 @@ export async function longRunningGoogleInteractionsFetch(
     if (disposed) return;
     disposed = true;
     clearTimer();
-    input.signal.removeEventListener('abort', onCallerAbort);
+    detachCallerAbort();
   };
   const armTimer = (timeoutMs: number, message: string) => {
     clearTimer();
@@ -50,8 +53,7 @@ export async function longRunningGoogleInteractionsFetch(
   };
   const onCallerAbort = () => controller.abort(input.signal.reason);
 
-  if (input.signal.aborted) onCallerAbort();
-  else input.signal.addEventListener('abort', onCallerAbort, { once: true });
+  const detachCallerAbort = onAbort(input.signal, onCallerAbort);
   armTimer(
     MODEL_RESPONSE_HEADERS_TIMEOUT_MS,
     'Model response headers were not received within 10 minutes',

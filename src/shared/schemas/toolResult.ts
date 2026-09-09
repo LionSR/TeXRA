@@ -80,7 +80,7 @@ export type ValidationErrorDiagnostics = z.infer<
  * Render Zod issues as a single `; `-joined, human-readable string
  * (`path.to.field: message; <root>: message`). Shared by the salvage parsers
  * that must loudly surface malformed persisted entries (roundIndexed,
- * streamData, StreamSnapshotStore) without coupling them to the structured
+ * StreamSnapshotStore) without coupling them to the structured
  * {@link formatZodIssuesForDiagnostics} output. Keeps the `<root>` fallback
  * and `; ` separator defined once.
  */

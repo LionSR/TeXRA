@@ -130,7 +130,6 @@ export function runEventDraft(
   const aggregateId = qualifyAggregateId('stream', streamId);
   switch (event.type) {
     case 'stream.chunk':
-    case 'child.activity':
       return null;
     case 'usage':
       return {

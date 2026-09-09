@@ -20,7 +20,7 @@ import {
   runPackLatexdiffvc,
   type LatexdiffPackResult,
 } from '@housekeeping/packLatexdiffvc';
-import type { LaTeXdiffResult } from '@latex/latexdiff';
+import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type {
   DiffRunResult,
@@ -34,7 +34,6 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { latexdiffService } from '@latex/latexdiff/service';
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
@@ -54,6 +53,11 @@ import { pathToLocation } from '@utils/files/fileLocation';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 const log = createLog(CHANNEL);
+
+// A single module-scope instance is intentional: it constructs before
+// `initPlatform()` runs, and reads the timeout per-diff via a thunk, so the
+// value is never frozen at construction time.
+const latexdiffService = new LaTeXdiffService(CHANNEL);
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 

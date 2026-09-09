@@ -42,7 +42,6 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { submitProgressFollowUp } from '../progressView/progressFollowUpSubmit';
-import { applyFollowUpPlan } from '../progressView/followUpApply';
 import { ProgressApiKeyRetryController } from '../progressView/ProgressApiKeyRetryController';
 import {
   ProgressFollowUpController,
@@ -68,8 +67,6 @@ export interface HostRunActionPorts {
   promptForApiKey(provider?: ApiProvider): Promise<void>;
   showInfo(message: string): Promise<void> | void;
   showWarning(message: string): Promise<void> | void;
-  showError(message: string): Promise<void> | void;
-  logError(message: string, error: Error | undefined): void;
 }
 
 export interface HostRunActions {
@@ -406,18 +403,25 @@ export function createHostRunActions(
         try: () => followUp.planCompileFixerForStream(streamId, config),
         catch: ensureError,
       });
-      yield* Effect.tryPromise({
-        try: () =>
-          applyFollowUpPlan(plan, {
-            showInfo: ports.showInfo,
-            showWarning: ports.showWarning,
-            showError: ports.showError,
-            logError: ports.logError,
-            runCompileFixer: (request) =>
-              ports.runExecutionRequest(request, { preferHelperModel: true }),
-          }),
-        catch: ensureError,
-      });
+      if (plan.kind === 'warning') {
+        yield* Effect.tryPromise({
+          try: async () => await ports.showWarning(plan.message),
+          catch: ensureError,
+        });
+      } else if (plan.kind === 'info') {
+        yield* Effect.tryPromise({
+          try: async () => await ports.showInfo(plan.message),
+          catch: ensureError,
+        });
+      } else {
+        yield* Effect.tryPromise({
+          try: () =>
+            ports.runExecutionRequest(plan.request, {
+              preferHelperModel: true,
+            }),
+          catch: ensureError,
+        });
+      }
     }),
     useOwnApiKey(request) {
       if (request.exhaustionReason === 'copilot-subscription') {
