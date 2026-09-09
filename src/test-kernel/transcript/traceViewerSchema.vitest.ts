@@ -53,7 +53,12 @@ function trace(
     executionId: 'abcdef',
     streamId: 'stream-1',
     config: config(),
-    meta: null,
+    meta: {
+      schemaVersion: 1,
+      timestamp: '2026-01-01T00:00:00.000Z',
+      identity: { kind: 'agent', agent: 'assistant' },
+      streamId: 'stream-1',
+    },
     entries: [],
     snapshot: { streamId: 'stream-1' },
     ...overrides,
@@ -137,6 +142,7 @@ describe('trace-viewer TraceDataSchema', () => {
         meta: {
           timestamp: '2026-07-05T00:00:00.000Z',
           identity: { kind: 'agent', agent: 'assistant' },
+          streamId: 'stream-1',
           terminalStatus: EXECUTION_STATUS.ERROR,
           delegationDepth: 2,
         },

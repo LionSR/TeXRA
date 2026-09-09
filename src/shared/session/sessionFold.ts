@@ -447,12 +447,6 @@ function emptyTranscript(): TranscriptView {
 // Stream construction
 // ---------------------------------------------------------------------------
 
-/** The label an identity-less stream shows: its id's name prefix. */
-function streamIdDisplayName(streamId: StreamTabId): string {
-  const separator = streamId.indexOf('#');
-  return separator <= 0 ? streamId : streamId.slice(0, separator);
-}
-
 /** A stream with no rounds recorded yet. */
 const NO_ROUNDS = Object.freeze({});
 
@@ -460,16 +454,14 @@ const NO_ROUNDS = Object.freeze({});
 function createStream(view: SessionView, event: RunStartEvent): StreamView {
   const id = aggregateTarget(event.aggregateId).id;
   const status = STREAM_LIFECYCLE_READY;
-  const identity = event.identity ?? null;
+  const identity = event.identity;
   const common = {
     id,
     executionId: event.executionId,
     identity,
     isRemote: event.isRemote,
     ownerId: view.claims.get(event.aggregateId) ?? null,
-    label: identity
-      ? runIdentityDisplayName(identity)
-      : streamIdDisplayName(id),
+    label: runIdentityDisplayName(identity),
     description: null,
     model: null,
     modelLabel: null,
@@ -779,7 +771,7 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
 // ---------------------------------------------------------------------------
 
 function isWorkflowScriptRun(stream: StreamView): boolean {
-  return stream.identity?.kind === 'multiAgentWorkflow';
+  return stream.identity.kind === 'multiAgentWorkflow';
 }
 
 function childProgressOf(child: StreamView): ChildRunProgress {
@@ -997,7 +989,6 @@ function isStreamingTextRow(row: TranscriptRow): row is StreamingTextRow {
 function lifecycleToTaskGroups(stream: StreamView): boolean {
   return (
     stream.category === AgentCategory.Workflow ||
-    stream.identity === null ||
     isPlainAgentIdentity(stream.identity)
   );
 }
@@ -1367,13 +1358,13 @@ function applyOwnArm(
       return stream;
     case 'run.config': {
       const model =
-        stream.identity?.kind === 'agent' ? event.config.model : null;
+        stream.identity.kind === 'agent' ? event.config.model : null;
       return {
         ...stream,
         model,
         modelLabel: model === null ? null : getModelLabel(model),
         command:
-          stream.identity?.kind === 'process' ? event.config.instruction : null,
+          stream.identity.kind === 'process' ? event.config.instruction : null,
         inputFiles: event.config.inputFiles,
       };
     }

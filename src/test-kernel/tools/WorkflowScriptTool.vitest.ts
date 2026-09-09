@@ -958,6 +958,7 @@ return null`;
           schemaVersion: 1,
           timestamp: '2026-08-01T00:00:00.000Z',
           identity: { kind: 'agent', agent: 'assistant' },
+          streamId: 'stream-test',
           workflow: priorWorkflow,
         };
       }),

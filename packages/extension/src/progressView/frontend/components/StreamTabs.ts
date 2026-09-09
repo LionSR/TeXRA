@@ -60,7 +60,7 @@ const GROUP_ORDER = Object.keys(GROUP_LABELS) as StreamView['group'][];
 
 function buildTooltip(stream: StreamView): string {
   const modelDisplay =
-    stream.identity?.kind === 'agent' && stream.model
+    stream.identity.kind === 'agent' && stream.model
       ? (stream.modelLabel ?? stream.model)
       : undefined;
   const worktree = stream.worktree;
@@ -89,7 +89,7 @@ function buildTooltip(stream: StreamView): string {
 }
 
 function streamDecorator(stream: StreamView) {
-  const kind = stream.identity?.kind;
+  const kind = stream.identity.kind;
   return kind === 'multiAgentWorkflow' || kind === 'process'
     ? AGENT_DECORATORS.streamKinds[kind]
     : getAgentCategoryDecorator(stream.category);
@@ -139,7 +139,7 @@ class StreamTab extends LitElement {
       ? BACKGROUND_TASK.collapseAction
       : childCountLabel;
     const metaAgentName =
-      stream.identity?.kind === 'agent' && stream.description
+      stream.identity.kind === 'agent' && stream.description
         ? stream.label
         : undefined;
     // The rollup is the row's own fact: the rail carries it with no
@@ -242,7 +242,7 @@ class StreamTab extends LitElement {
               }
               <span class="model"
                 >${
-                  stream.identity?.kind === 'agent'
+                  stream.identity.kind === 'agent'
                     ? (stream.modelLabel ?? stream.model ?? '')
                     : ''
                 }</span
@@ -267,7 +267,7 @@ class StreamTab extends LitElement {
         </div>
         <wa-tooltip for="stream-tab-kind"
           >${
-            stream.identity === null || stream.identity.kind === 'agent'
+            stream.identity.kind === 'agent'
               ? `Category: ${this.decorator.label}`
               : this.decorator.label
           }</wa-tooltip

@@ -104,9 +104,12 @@ function legacyTrace(
     executionId: 'abc123' as ExecutionId,
     streamId,
     config: parseConfig(category),
-    // Legacy meta: no description, nothing replayTrace needs beyond the
-    // optional `description` read.
-    meta: null,
+    meta: {
+      schemaVersion: 1,
+      timestamp: '2026-01-01T00:00:00.000Z',
+      identity: { kind: 'agent', agent: 'assistant' },
+      streamId: streamId,
+    },
     entries: [],
     snapshot: StreamSnapshotSchema.parse({
       streamId,
@@ -370,7 +373,12 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       executionId: 'abc125' as ExecutionId,
       streamId,
       config: { name: 'bash', instruction: 'ls -la' },
-      meta: null,
+      meta: {
+        schemaVersion: 1,
+        timestamp: '2026-01-01T00:00:00.000Z',
+        identity: { kind: 'process', tool: 'bash' },
+        streamId,
+      },
       entries: [],
       snapshot: StreamSnapshotSchema.parse({ streamId }),
     };

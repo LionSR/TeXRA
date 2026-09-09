@@ -393,7 +393,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const status = yield* Effect.exit(
     session.updateRecordFacts(executionId, (rows) => {
       const meta = executionMetaFromEvents(rows, executionId);
-      if (!meta?.streamId)
+      if (!meta)
         throw new Error(`Execution metadata not found for ${executionId}`);
       const persisted =
         keepExistingOutcome === true && meta.outcome !== undefined
@@ -469,7 +469,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
 export const resolveStreamForExecution = Effect.fn('resolveStreamForExecution')(
   function* (executionId: ExecutionId, session: SessionHandle) {
     const meta = yield* getExecutionRecords(session, executionId).readMeta();
-    return meta?.streamId ? { streamId: meta.streamId, meta } : null;
+    return meta ? { streamId: meta.streamId, meta } : null;
   },
 );
 

@@ -62,7 +62,7 @@ const ExecutionMetaCoreSchema = z.object({
    * execution→stream mapping, written at registration. A row without one has
    * no persisted stream; nothing re-derives it from names or scans.
    */
-  streamId: StreamTabIdSchema.optional(),
+  streamId: StreamTabIdSchema,
 });
 
 /** Execution metadata stored alongside config at launch time. */

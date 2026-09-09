@@ -67,7 +67,7 @@ function findRootStageId(
  * exported file has no producer that could still be running it.
  */
 function traceOutcome(trace: TraceDocument): StreamPhase | null {
-  if (trace.meta?.outcome) return trace.meta.outcome;
+  if (trace.meta.outcome) return trace.meta.outcome;
   const rootStageId = findRootStageId(trace.entries);
   for (const entry of trace.entries.toReversed()) {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;
@@ -88,29 +88,10 @@ function traceOutcome(trace: TraceDocument): StreamPhase | null {
   return status !== undefined && isTerminalOutcomePhase(status) ? status : null;
 }
 
-/** The raw configured name across both arms of the config union. Not a
- *  display name: it still carries any source prefix. */
-function recordName(config: TraceDocument['config']): string {
-  return 'agentCategory' in config ? config.agent : config.name;
-}
-
-/**
- * The run's identity, from the embedded ExecutionMeta. A trace assembled for
- * a run with no metadata at all carries none, so it classifies from the run
- * record — the only other first-hand evidence in the document.
- */
-function traceIdentity(trace: TraceDocument): RunIdentity {
-  if (trace.meta) return trace.meta.identity;
-  const config = trace.config;
-  return 'agentCategory' in config
-    ? { kind: 'agent', agent: config.agent }
-    : { kind: 'process', tool: recordName(config) };
-}
-
 /** The run's display name: the same identity rule every host's stream tab
  *  labels with, so the page title and the tab cannot disagree. */
 export function traceDisplayName(trace: TraceDocument): string {
-  return runIdentityDisplayName(traceIdentity(trace));
+  return runIdentityDisplayName(trace.meta.identity);
 }
 
 /** The listing facts of the run, in publish order, without envelopes. */
@@ -118,7 +99,7 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
   const { snapshot, executionId } = trace;
   const agentConfig =
     'agentCategory' in trace.config ? trace.config : undefined;
-  const identity = traceIdentity(trace);
+  const identity = trace.meta.identity;
   // Workflow-shaped for workflow agents and multi-agent-workflow containers
   // (both have round outputs); everything else renders the tool-use shape.
   const category =
@@ -168,7 +149,7 @@ function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
       }),
     });
   }
-  if (trace.meta?.description) {
+  if (trace.meta.description) {
     bodies.push({
       type: 'updateStreamDescription',
       aggregateId: qualifyAggregateId('stream', trace.streamId),

@@ -42,7 +42,9 @@ function config(
 let session: SessionHandle;
 async function writeMetadata(
   id: ExecutionId,
-  meta: Omit<ExecutionMeta, 'schemaVersion'>,
+  meta: Omit<ExecutionMeta, 'schemaVersion' | 'streamId'> & {
+    streamId?: StreamTabId;
+  },
 ): Promise<void> {
   const existing = await Effect.runPromise(
     getExecutionRecords(session, id).readMeta(),

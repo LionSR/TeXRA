@@ -22,7 +22,12 @@ function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
       agentCategory: AgentCategory.ToolUse,
       workingDirectory: '/workspace',
     }),
-    meta: null,
+    meta: {
+      schemaVersion: 1,
+      timestamp: '2026-01-01T00:00:00.000Z',
+      identity: { kind: 'agent', agent: 'assistant' },
+      streamId: STREAM_ID,
+    },
     entries: [],
     snapshot: StreamSnapshotSchema.parse({
       streamId: STREAM_ID,
@@ -65,6 +70,7 @@ describe('injectStandaloneTrace', () => {
         schemaVersion: 1,
         timestamp: '2026-01-01T00:00:00.000Z',
         identity: { kind: 'agent', agent: 'assistant' },
+        streamId: 'stream-test',
         description: '</script><img src=x onerror=alert(1)>',
       },
     });
