@@ -113,14 +113,13 @@ describe('AgentRosterController', () => {
     });
   });
 
-  it('normalizes the hybrid pair-shaped roster on read without writing', async () => {
+  it('falls back to the inherited roster for a retired pair-shaped value', async () => {
     // An intermediate version wrote `{kind: 'custom', workflowAgentKeys,
-    // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION. Neither the canonical
-    // schema (missing `agentKeys`) nor the strict legacy schema (rejects
-    // `kind`) accepts it, so it must be normalized to the canonical custom
-    // selection without warning. The read must not persist that
-    // normalization: the mutations read the selection while holding the write
-    // mutex, so a write from here would overwrite what they just committed.
+    // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION. That reader is gone, so
+    // the value no longer parses and the read warns and inherits. The read
+    // must still not persist anything: the mutations read the selection while
+    // holding the write mutex, so a write from here would overwrite what they
+    // just committed.
     const warn = stubWarn();
     const hybrid = {
       kind: 'custom',
@@ -132,14 +131,8 @@ describe('AgentRosterController', () => {
     });
     const roster = controller(workspaceState);
 
-    expect(roster.snapshot().selection).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: ['builtInWorkflow:write'],
-        toolUse: ['builtInToolUse:lead'],
-      },
-    });
-    expect(warn).not.toHaveBeenCalled();
+    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
+    expect(warn).toHaveBeenCalled();
     expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toBe(
       hybrid,
     );

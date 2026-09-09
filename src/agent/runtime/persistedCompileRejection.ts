@@ -3,9 +3,6 @@ import { readPersistedFlowRecord } from '@agent/node/persistedFlow';
 import type { ExecutionId } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
-const LEGACY_FINAL_COMPILE_REJECTION_MESSAGE =
-  'Automatic LaTeX compilation failed after the final workflow round.';
-
 /** Whether persisted state records an unresolved compile rejection. */
 export function hasPersistedCompileRejection(shared: unknown): boolean {
   if (!isObject(shared)) return false;
@@ -33,14 +30,4 @@ export async function hasTerminalPersistedCompileRejection(
 ): Promise<boolean> {
   const flowRecord = await readPersistedFlowRecord(getExecutionStore(id), id);
   return isTerminalPersistedCompileRejection(flowRecord?.shared);
-}
-
-/** Identify the exact provider-like error synthesized by legacy workflow code. */
-export function isLegacySyntheticFinalCompileError(error: unknown): boolean {
-  if (!isObject(error)) return false;
-  return (
-    Object.keys(error).length === 2 &&
-    error.message === LEGACY_FINAL_COMPILE_REJECTION_MESSAGE &&
-    error.userRetryable === false
-  );
 }

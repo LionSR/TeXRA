@@ -27,18 +27,18 @@ describe('UserVariableChannelsSchema', () => {
     assert.strictEqual(parsed.CUSTOM_FILE, 'notes.md');
   });
 
-  // Supported-window coverage for the legacy reader in
-  // UserVariableChannelsSchema; delete this case together with that reader
-  // after 2026-11-29.
-  it('merges a legacy two-channel record, newer transient values winning', () => {
-    const parsed = UserVariableChannelsSchema.parse({
-      input: { MODEL: 'gpt54', IS_OPENAI_MODEL: true },
-      transient: { MODEL: 'gpt55', CUSTOM_FILE: 'notes.md' },
-    });
-
-    assert.strictEqual(parsed.MODEL, 'gpt55');
-    assert.strictEqual(parsed.IS_OPENAI_MODEL, true);
-    assert.strictEqual(parsed.CUSTOM_FILE, 'notes.md');
+  // The pre-collapse two-channel envelope is no longer merged: `input` and
+  // `transient` parse as two ordinary custom variables whose record values
+  // fail the fixed-key schema.
+  it('rejects a retired two-channel record instead of merging it', () => {
+    assert.throws(
+      () =>
+        UserVariableChannelsSchema.parse({
+          input: { MODEL: 'gpt54', IS_OPENAI_MODEL: true },
+          transient: { MODEL: 'gpt55', CUSTOM_FILE: 'notes.md' },
+        }),
+      z.ZodError,
+    );
   });
 
   it('rejects a malformed value for a known fixed key', () => {

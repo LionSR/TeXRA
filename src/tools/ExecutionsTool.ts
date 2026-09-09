@@ -46,7 +46,6 @@ import {
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { warnAbandonedSlotValue } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -692,11 +691,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
       // Only block kills when the toggle is disabled (the guard above has
       // already narrowed `target` to an owned AgentExecutionHandle).
-      warnAbandonedSlotValue(
-        GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-        'workspaceState',
-        context.session.roots.workspaceState,
-      );
       if (
         !context.inRunScope(() =>
           readPlatformSetting<boolean>(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL),

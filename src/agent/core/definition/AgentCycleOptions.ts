@@ -182,49 +182,25 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  * not already carry. The pair only cost every tool-use checkpoint a second
  * full copy of the record, `ALL_INPUTS`/`INPUT_CONTENT` file bodies included.
  *
- * Checkpoints written before the collapse are normalized here, at the one
- * parse boundary, by merging the legacy pair the way the reflection flow
- * already merged it at read time. Shape-detected rather than tried as a union
- * member: the canonical record is loose, so a legacy record with one malformed
- * variable would otherwise fall through and parse as a flat record carrying
- * two junk keys instead of failing. The legacy shape always carried both
- * keys, so only a record with both is treated as an envelope (a lone
- * `input`/`transient` key stays an ordinary custom variable), and each
- * channel is validated on its own before merging so a malformed value one
- * channel would override still fails as the old two-channel schema did.
- *
- * Legacy reader introduced 2026-08-29 with the collapse (#11568); remove
- * after 2026-11-29 once pre-collapse checkpoints have aged out.
+ * Checkpoints written before the collapse carried the pair and are no longer
+ * merged. The retired envelope is rejected explicitly rather than left to the
+ * record schema: that schema is loose by design (older checkpoints may carry
+ * renamed or dropped custom variables), so an unrejected envelope would parse
+ * as two junk `input`/`transient` variables instead of failing.
  */
-export const UserVariableChannelsSchema = z.preprocess((value, ctx) => {
-  if (!isPlainRecord(value)) return value;
-  if (!('input' in value) || !('transient' in value)) return value;
-  const { input, transient } = value;
-  if (!isPlainRecord(input) || !isPlainRecord(transient)) {
-    ctx.addIssue({
-      code: 'custom',
-      message:
-        'Malformed legacy user-variable envelope: `input`/`transient` present but not both records',
-    });
-    return z.NEVER;
-  }
-  for (const [channel, record] of [
-    ['input', input],
-    ['transient', transient],
-  ] as const) {
-    const parsed = UserVariableChannelRecordSchema.safeParse(record);
-    if (!parsed.success) {
-      ctx.addIssue({
+export const UserVariableChannelsSchema = UserVariableChannelRecordSchema.check(
+  (ctx) => {
+    const { input, transient } = ctx.value;
+    if (isPlainRecord(input) && isPlainRecord(transient)) {
+      ctx.issues.push({
         code: 'custom',
-        message: `Malformed legacy user-variable \`${channel}\` channel: ${
-          parsed.error.issues[0]?.message ?? 'invalid record'
-        }`,
+        input: ctx.value,
+        message:
+          'Retired two-channel user-variable envelope: `input`/`transient` are no longer merged',
       });
-      return z.NEVER;
     }
-  }
-  return { ...input, ...transient };
-}, UserVariableChannelRecordSchema);
+  },
+);
 
 /** Derived from UserVariableChannelsSchema - single source of truth. */
 export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;

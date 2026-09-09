@@ -6,10 +6,7 @@ import type {
   ToolPolicy,
 } from '@agent/core/flows/BaseFlowServices';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
-import {
-  hasPersistedCompileRejection,
-  isLegacySyntheticFinalCompileError,
-} from '@agent/runtime/persistedCompileRejection';
+import { hasPersistedCompileRejection } from '@agent/runtime/persistedCompileRejection';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -242,15 +239,6 @@ export async function runReflectionFlow(
       shared.unresolvedCompileRejection === undefined
     ) {
       shared.unresolvedCompileRejection = true;
-    }
-    // PR #11624 represented a final compile verdict as a provider-like error.
-    // Remove only that exact synthetic shape when compile-rejection evidence is
-    // present. Genuine provider and runtime errors remain durable.
-    if (
-      hasCompileRejection &&
-      isLegacySyntheticFinalCompileError(shared.lastError)
-    ) {
-      delete shared.lastError;
     }
     // A keyless legacy record gets the active handler's key stamped here;
     // model-based inference for such records lives at SessionResumeRetrieval.

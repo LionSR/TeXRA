@@ -44,33 +44,8 @@ const AgentDelegationScopeCanonicalSchema = z.record(
   AgentKeyListSchema,
 );
 
-/**
- * Legacy persisted shape: team-run `config.json` rows written before the
- * category-keyed record (#8403 era) carried the scope as a
- * `workflowAgentKeys`/`toolUseAgentKeys` field pair. Normalized once, here at
- * the parse boundary — dropping this member would fail AgentConfigSchema on
- * those rows and list finished team runs as incomplete.
- *
- * Introduced 2026-08-04 (#9705). Permanent parse-side reader, not a dated
- * migration: the pair lives in immutable per-run history rows that are never
- * rewritten, so there is no rewrite event to retire on. Retires only with a
- * policy decision to stop reading pre-record run history.
- */
-export const AgentDelegationScopeLegacySchema = z
-  .strictObject({
-    workflowAgentKeys: AgentKeyListSchema,
-    toolUseAgentKeys: AgentKeyListSchema,
-  })
-  .transform(({ workflowAgentKeys, toolUseAgentKeys }) => ({
-    [AgentCategory.Workflow]: workflowAgentKeys,
-    [AgentCategory.ToolUse]: toolUseAgentKeys,
-  }));
-
 /** Exact delegation catalog attached to a run, independent of durable UI state. */
-export const AgentDelegationScopeSchema = z.union([
-  AgentDelegationScopeCanonicalSchema,
-  AgentDelegationScopeLegacySchema,
-]);
+export const AgentDelegationScopeSchema = AgentDelegationScopeCanonicalSchema;
 
 export type AgentDelegationScope = z.infer<
   typeof AgentDelegationScopeCanonicalSchema
