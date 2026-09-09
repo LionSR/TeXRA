@@ -317,35 +317,6 @@ export const acquireResumedExecutionOwnership = Effect.fn(
 });
 
 /**
- * Drop the previous run's terminal facts as a persisted execution is admitted
- * for resumption. `meta.outcome` owns "how did this run end" and every reader
- * projects it onto the turn-owned result envelope (`readResultMeta`), so
- * an execution that resumes while still carrying its interrupted predecessor's
- * outcome relabels every turn the resumed run writes until its next terminal
- * finalize.
- *
- * Metadata that is absent or unreadable is left alone: `readResultMeta` reads
- * the same metadata, so there is no outcome to project either way, and the
- * store already warns about metadata it could not parse.
- */
-export const clearTerminalExecutionState = Effect.fn(
-  'clearTerminalExecutionState',
-)(function* (executionId: ExecutionId, session: SessionHandle) {
-  const meta = yield* getExecutionRecords(session, executionId).readMeta();
-  if (meta?.streamId)
-    yield* session.commit([
-      {
-        type: 'status',
-        aggregateId: aggregateId('stream', meta.streamId),
-        phase: STREAM_PHASE.RUNNING,
-        substate: STREAM_SUBSTATE.RESUMING,
-        cause: 'resume',
-      },
-    ]);
-  return { previousOutcome: meta?.outcome, streamId: meta?.streamId };
-});
-
-/**
  * The one rule for whether a run's resume checkpoint (`flow_<id>.json`)
  * survives finalization: **delete only on a genuinely COMPLETED run; keep it
  * otherwise.** A cancelled or failed run is the case a user resumes, so

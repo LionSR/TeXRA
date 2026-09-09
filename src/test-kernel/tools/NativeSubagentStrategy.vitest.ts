@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
 import {
@@ -149,12 +150,13 @@ function baseParams(
 ) {
   if (parentSession !== defaultSession()) ownedSessions.add(parentSession);
   return {
-    config: AgentConfigSchema.parse({
-      agent: 'review',
-      model: 'gpt5',
-      agentCategory,
-    }),
-    agentCategoryExplicit: true,
+    definition: {
+      config: AgentConfigSchema.parse({
+        agent: 'review',
+        model: 'gpt5',
+        agentCategory,
+      }),
+    } as PreparedAgentDefinition,
     executionId: 'exec-1' as ExecutionId,
     agentName: 'review',
     parentStreamId: 'orchestrator-stream' as StreamTabId,
@@ -241,9 +243,9 @@ describe('NativeSubagentStrategy', () => {
       strategy.launch(fakePorts(), new AbortController().signal),
     );
     expect(mocks.executeAgent).toHaveBeenLastCalledWith(
-      params.config,
+      params.definition,
       params.executionId,
-      expect.objectContaining({ enforceCategory: true }),
+      expect.objectContaining({ isSubagent: true }),
     );
     expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
 
@@ -289,11 +291,10 @@ describe('NativeSubagentStrategy', () => {
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
-      params.config,
+      params.definition,
       params.executionId,
       expect.objectContaining({
         isSubagent: true,
-        enforceCategory: true,
         parentStreamId: params.parentStreamId,
         stopAfterCycle: true,
         workflowPhase: 'review',

@@ -282,7 +282,7 @@ export async function initCliPlatform(
     // undisposed.
     await installCliProcessRuntime();
     // The project `.texra/config.json` backs the workspace target and
-    // user-level config (`~/.texra/global-storage/config.json`, the same file
+    // user-level config (`~/.texra/v1/global-storage/config.json`, the same file
     // chatDefaults reads) backs the global target — the same pair of stores
     // the extension and desktop hosts open, including the fallback to the
     // internal workspace store when the project file cannot be read or its

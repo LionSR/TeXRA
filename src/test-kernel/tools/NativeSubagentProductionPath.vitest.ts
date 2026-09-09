@@ -30,6 +30,7 @@ import {
   getExecutionRecords,
   registerExecution,
 } from '@agent/storage';
+import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
   assertOwnedExecutionLease,
@@ -321,11 +322,15 @@ async function launchWaitingChild(options: {
   );
   await expect(
     Effect.runPromise(
-      executeAgent(parentConfig, PARENT_EXECUTION_ID, {
-        session,
-        isSubagent: true,
-        parentStreamId: OUTER_STREAM_ID,
-      }),
+      prepareAgentDefinition({ config: parentConfig, session }).pipe(
+        Effect.flatMap((definition) =>
+          executeAgent(definition, PARENT_EXECUTION_ID, {
+            session,
+            isSubagent: true,
+            parentStreamId: OUTER_STREAM_ID,
+          }),
+        ),
+      ),
     ),
   ).resolves.toMatchObject({
     outcome: STREAM_PHASE.WAITING,

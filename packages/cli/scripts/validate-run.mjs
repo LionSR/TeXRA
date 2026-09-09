@@ -924,7 +924,7 @@ function validateWorkflowScriptAgentRunCommand() {
   );
   try {
     const home = path.join(cwd, 'home');
-    const globalStorage = path.join(home, '.texra', 'global-storage');
+    const globalStorage = path.join(home, '.texra', 'v1', 'global-storage');
     const customAgents = path.join(globalStorage, 'custom_agents');
     const validationFlagPath = path.join(
       cwd,

@@ -93,14 +93,7 @@ export function ownerPid(ownerId: OwnerId): number {
 
 /** C2 separates independent lifecycles even when their logical ids coincide. */
 const AggregateKeySchema = z.tuple([
-  z.enum([
-    'stream',
-    'execution',
-    'workflow-checkpoint',
-    'inquiry',
-    'session',
-    'migration',
-  ]),
+  z.enum(['stream', 'execution', 'workflow-checkpoint', 'inquiry', 'session']),
   z.string().min(1),
 ]);
 

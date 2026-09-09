@@ -246,7 +246,12 @@ The platform is **process-wide**. Create one and reuse it for every run; passing
 a second, different platform in the same process throws.
 
 Implement the `Platform` ports and the `roots` yourself when embedding in a
-host that already owns those services.
+host that already owns those services. For TeXRA 1.0, supply a fresh,
+application-owned storage directory in custom `WorkspaceRoots`; the SDK uses
+that exact directory. Do not reuse an earlier TeXRA storage directory.
+`nodePlatform()` selects the separate `v1` storage layout automatically,
+including when `storageDir` is supplied. Earlier histories and checkpoints
+are not imported or removed.
 
 ## Custom tools
 

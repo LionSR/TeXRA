@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
-  clearTerminalExecutionState: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
   hasPersistedParent: vi.fn(),
   invokeModelOrTool: vi.fn(),
@@ -32,6 +31,8 @@ vi.mock('@agent/storage/executionLease', () => ({
 vi.mock('@agent/runtime/AgentLaunchContext', async () => {
   const { Effect } = await import('effect');
   return {
+    prepareAgentDefinition: ({ config }: { config: unknown }) =>
+      Effect.succeed({ config }),
     buildAgentLaunchContext: (...args: unknown[]) =>
       Effect.tryPromise({
         try: () => mocks.buildAgentLaunchContext(...args),
@@ -55,11 +56,6 @@ vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
 
 vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
-  clearTerminalExecutionState: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.clearTerminalExecutionState(...args),
-      catch: ensureError,
-    }),
   getPersistedUserFollowUpSupport: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.getPersistedUserFollowUpSupport(...args),
@@ -189,7 +185,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       async (streamId, executionId, agentConfig) =>
         createToolUseResumeData({ executionId, streamId, agentConfig }),
     );
-    mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
     mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
       USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     );
@@ -204,45 +199,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         run: (liveHandle: unknown) => Promise<unknown>,
       ) => run(noopFlowHandle()),
     );
-  });
-
-  // The predecessor run's terminal outcome is projected onto every result
-  // envelope read back (`readResultMeta`), so it has to be gone before
-  // the resumed run can write a turn of its own.
-  it('clears the previous run terminal facts before the resumed run starts', async () => {
-    const executionId = 'e9503-boundary' as ExecutionId;
-    const streamId = 'stream-9503-boundary' as StreamTabId;
-    const order: string[] = [];
-    mocks.acquireResumedExecutionLease.mockImplementationOnce(async () => {
-      order.push('lease');
-      return 'existing';
-    });
-    mocks.retrieveSessionResumeData.mockImplementationOnce(async () => {
-      order.push('retrieve');
-      return createToolUseResumeData({ executionId, streamId });
-    });
-    mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
-      order.push('clear');
-    });
-    mocks.buildAgentLaunchContext.mockImplementationOnce(async () => {
-      order.push('launch');
-      return buildResumeContext(executionId, streamId);
-    });
-    mocks.hasPersistedParent.mockResolvedValueOnce(true);
-    mocks.runToolUseFlow.mockImplementationOnce(async () => {
-      order.push('flow');
-      return { outcome: RUN_OUTCOME.COMPLETED };
-    });
-
-    await resumeToolUseFromResumeData(
-      createToolUseResumeData({ executionId, streamId }),
-    );
-
-    expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(
-      executionId,
-      LANE_SESSION,
-    );
-    expect(order).toEqual(['lease', 'retrieve', 'clear', 'launch', 'flow']);
   });
 
   it('preserves persisted native follow-up support across resumed waiting turns', async () => {
@@ -275,29 +231,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     ]);
-  });
-
-  it('releases the resumed lease when the terminal-fact clear fails', async () => {
-    const storageError = new Error('meta write failed');
-    const snapshot = createToolUseResumeData({
-      executionId: 'e9503-boundary-failure' as ExecutionId,
-      streamId: 'stream-9503-boundary-failure' as StreamTabId,
-    });
-    mocks.clearTerminalExecutionState.mockRejectedValueOnce(storageError);
-
-    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBe(
-      storageError,
-    );
-
-    expect(mocks.hasPersistedParent).not.toHaveBeenCalled();
-    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
-      snapshot.executionId,
-    );
-    expect(mocks.releaseExecutionClaims).toHaveBeenCalledWith(
-      snapshot.executionId,
-    );
-    expect(mocks.releaseExecutionClaims).toHaveBeenCalledTimes(1);
   });
 
   it('resolves execution lineage before activating the resume stream', async () => {

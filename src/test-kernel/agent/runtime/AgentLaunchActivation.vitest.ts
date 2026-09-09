@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   buildVars: vi.fn(),
-  clearTerminalExecutionState: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
@@ -34,7 +33,6 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@agent/storage/executionLifecycle')
   >()),
-  clearTerminalExecutionState: mocks.clearTerminalExecutionState,
   getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
   hasPersistedParent: mocks.hasPersistedParent,
 }));
@@ -48,6 +46,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 import { TraceEmitter } from '@agent/trace';
+import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -218,7 +217,6 @@ describe('native agent launch activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
-    mocks.clearTerminalExecutionState.mockReturnValue(Effect.succeed({}));
     mocks.getPersistedUserFollowUpSupport.mockReturnValue(
       Effect.succeed(USER_FOLLOW_UP_SUPPORT.UNSUPPORTED),
     );
@@ -234,16 +232,20 @@ describe('native agent launch activation', () => {
       // has to be visible at the call site rather than widened by `it.each`.
       const launch = await captureStartedLaunch(
         (session) =>
-          isSubagent
-            ? executeAgent(config, 'f1e501' as ExecutionId, {
-                session,
-                isSubagent: true,
-                modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
-              })
-            : executeAgent(config, 'f1e501' as ExecutionId, {
-                session,
-                modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
-              }),
+          prepareAgentDefinition({ config, session }).pipe(
+            Effect.flatMap((definition) =>
+              isSubagent
+                ? executeAgent(definition, 'f1e501' as ExecutionId, {
+                    session,
+                    isSubagent: true,
+                    modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+                  })
+                : executeAgent(definition, 'f1e501' as ExecutionId, {
+                    session,
+                    modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+                  }),
+            ),
+          ),
         { isSubagent },
       );
 

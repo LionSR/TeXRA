@@ -55,6 +55,11 @@ const mocks = vi.hoisted(() => ({
   computeModelOptionsData: vi.fn(),
 }));
 
+vi.mock('@agent/runtime/AgentLaunchContext', () => ({
+  prepareAgentDefinition: ({ config }: { config: unknown }) =>
+    Effect.succeed({ config }),
+}));
+
 // Delegation resolves targets through the scope resolver; with no active run
 // scope that is the workspace-visible roster, and identity matching is
 // agentRegistry's own rule — mirrored here rather than re-implemented.
@@ -485,10 +490,12 @@ describe('headless delegation', () => {
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({
-        agent: 'review',
-        agentCategory: AgentCategory.ToolUse,
-        instruction: expect.stringContaining('Check the proof.'),
-        model: 'deepseekT',
+        config: expect.objectContaining({
+          agent: 'review',
+          agentCategory: AgentCategory.ToolUse,
+          instruction: expect.stringContaining('Check the proof.'),
+          model: 'deepseekT',
+        }),
       }),
       expect.any(String),
       expect.objectContaining({
@@ -544,7 +551,9 @@ describe('headless delegation', () => {
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ agent: 'review' }),
+      expect.objectContaining({
+        config: expect.objectContaining({ agent: 'review' }),
+      }),
       result.executionId,
       expect.objectContaining({
         stopAfterCycle: true,
@@ -1256,8 +1265,10 @@ describe('headless delegation', () => {
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({
-        agent: 'review',
-        agentSource: 'builtInToolUse',
+        config: expect.objectContaining({
+          agent: 'review',
+          agentSource: 'builtInToolUse',
+        }),
       }),
       expect.any(String),
       expect.anything(),
@@ -1271,7 +1282,8 @@ describe('headless delegation', () => {
     await withRunContext(parentRunContext(), () => callDelegateReview());
     await waitForChildren(defaultSession());
 
-    const instruction = mocks.executeAgent.mock.calls.at(-1)?.[0].instruction;
+    const instruction =
+      mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
     expect(instruction).toContain('Check the proof.');
     expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
   });
@@ -1290,10 +1302,12 @@ describe('headless delegation', () => {
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({
-        rootUserInstruction: parentInstruction,
-        instruction: expect.stringContaining(
-          `Parent user request (constraint context only):\n${parentInstruction}`,
-        ),
+        config: expect.objectContaining({
+          rootUserInstruction: parentInstruction,
+          instruction: expect.stringContaining(
+            `Parent user request (constraint context only):\n${parentInstruction}`,
+          ),
+        }),
       }),
       expect.any(String),
       expect.anything(),
@@ -1417,7 +1431,9 @@ describe('headless delegation', () => {
       expect(result.status).toBe('executed');
       expect(result.summary).toBe("Launched 'review' (async)");
       expect(mocks.executeAgent).toHaveBeenCalledWith(
-        expect.objectContaining({ agent: 'review' }),
+        expect.objectContaining({
+          config: expect.objectContaining({ agent: 'review' }),
+        }),
         expect.any(String),
         expect.anything(),
       );
@@ -1461,7 +1477,9 @@ describe('headless delegation', () => {
     expect(result.status).toBe('executed');
     expect(result.summary).toBe("Launched 'review' (async)");
     expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gpt5' }),
+      expect.objectContaining({
+        config: expect.objectContaining({ model: 'gpt5' }),
+      }),
       expect.any(String),
       expect.anything(),
     );

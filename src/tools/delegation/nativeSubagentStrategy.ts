@@ -46,7 +46,7 @@ import type {
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -150,8 +150,7 @@ export interface ChildRunLaunchOptions {
 }
 
 interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
-  readonly config: AgentConfig;
-  readonly agentCategoryExplicit: boolean;
+  readonly definition: PreparedAgentDefinition;
   readonly executionId: ExecutionId;
   readonly parentExecutionId?: ExecutionId;
   readonly startedAt: number;
@@ -279,7 +278,7 @@ export function createNativeSubagentStrategy(
     // record. Keep it category-derived so a failed workflow subagent's record
     // never reads "tool-use".
     stageLabel:
-      params.config.agentCategory === AgentCategory.ToolUse
+      params.definition.config.agentCategory === AgentCategory.ToolUse
         ? 'Native tool-use subagent'
         : 'Native workflow subagent',
 
@@ -294,7 +293,6 @@ export function createNativeSubagentStrategy(
         Effect.gen(function* () {
           const executeOptions = {
             session: params.session,
-            enforceCategory: params.agentCategoryExplicit,
             parentStreamId: params.parentStreamId,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
@@ -309,7 +307,7 @@ export function createNativeSubagentStrategy(
             onRun,
           };
           const turn = yield* engine().executeAgent(
-            params.config,
+            params.definition,
             params.executionId,
             {
               ...executeOptions,
@@ -477,7 +475,7 @@ export function createNativeSubagentStrategy(
             Effect.sync(() =>
               buildSubagentFailureResultMeta(
                 params.agentName,
-                params.config.agentCategory,
+                params.definition.config.agentCategory,
                 result,
                 wallTimeMs,
                 failureOptions,
@@ -496,7 +494,7 @@ export function createNativeSubagentStrategy(
           });
           return buildSubagentFailureResultMeta(
             params.agentName,
-            params.config.agentCategory,
+            params.definition.config.agentCategory,
             undefined,
             wallTimeMs,
             failureOptions,

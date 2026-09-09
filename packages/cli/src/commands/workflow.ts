@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 import {
   buildCliWorkflowResultMeta,
@@ -10,7 +10,6 @@ import {
 import {
   isTerminalPersistedCompileRejection,
   type AgentConfigPayload,
-  type SessionHandle,
 } from '@agent/runtime';
 import { effectRuntime } from '@platform/processRuntime';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
@@ -268,38 +267,41 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       expectedCategory: AgentCategory.Workflow,
       categoryMismatchMessage: options.categoryMismatchMessage,
       openWorkflowOutput: (result, tryCommitPublication) =>
-        Effect.tryPromise({
-          try: () =>
-            resolveWorkflowOutput(output, outputDir, result, runContext, {
-              expectedOutputFiles,
-              tryCommitPublication,
+        Effect.gen(function* () {
+          const outputResult = yield* Effect.result(
+            Effect.tryPromise({
+              try: () =>
+                resolveWorkflowOutput(output, outputDir, result, runContext, {
+                  expectedOutputFiles,
+                  tryCommitPublication,
+                }),
+              catch: ensureError,
             }),
-          catch: ensureError,
-        }).pipe(
-          Effect.map((resolved) => {
-            workflowResult = resolved;
-          }),
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              workflowOutputError = error;
-              return result.outcome === RUN_OUTCOME.CANCELLED
-                ? result.outcome
-                : RUN_OUTCOME.FAILED;
+          );
+          let outcome = result.outcome;
+          if (Result.isFailure(outputResult)) {
+            workflowOutputError = outputResult.failure;
+            if (outcome !== RUN_OUTCOME.CANCELLED) outcome = RUN_OUTCOME.FAILED;
+          } else {
+            workflowResult = outputResult.success;
+          }
+          yield* getExecutionRecords(
+            session,
+            result.executionId,
+          ).writeResultMeta(
+            buildCliWorkflowResultMeta(result, {
+              outcome,
+              copiedOutput: workflowResult?.copiedOutput,
+              copiedOutputs: workflowResult?.copiedOutputs,
             }),
-          ),
-        ),
+          );
+          return outcome;
+        }),
     });
     if (!execution.ok) return execution.exitCode;
 
     const { result } = execution;
     if (workflowOutputError !== undefined) {
-      yield* persistWorkflowResultMeta(
-        session,
-        result.executionId,
-        buildCliWorkflowResultMeta(result, {
-          outcome: result.outcome,
-        }),
-      );
       writeErrorStderr(workflowOutputError);
       if (result.outcome === RUN_OUTCOME.CANCELLED) {
         yield* maybeAdvertiseRecovery(result.executionId);
@@ -317,15 +319,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     // envelope from the lifecycle-resolved verdict so a signal that lands during
     // the copy cannot leave a completed presentation beside a cancelled run.
     workflowResult = { ...workflowResult, outcome: result.outcome };
-    yield* persistWorkflowResultMeta(
-      session,
-      result.executionId,
-      buildCliWorkflowResultMeta(result, {
-        outcome: result.outcome,
-        copiedOutput: workflowResult.copiedOutput,
-        copiedOutputs: workflowResult.copiedOutputs,
-      }),
-    );
 
     emitCliResult(runContext, {
       json: workflowResult,
@@ -340,24 +333,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     return runOutcomeExitCode(result.outcome);
   },
 );
-
-function persistWorkflowResultMeta(
-  session: SessionHandle,
-  executionId: string,
-  resultMeta: ReturnType<typeof buildCliWorkflowResultMeta>,
-): Effect.Effect<void> {
-  return getExecutionRecords(session, executionId)
-    .writeResultMeta(resultMeta)
-    .pipe(
-      Effect.catch((err) =>
-        Effect.sync(() =>
-          writeTextStderr(
-            `Warning: could not persist workflow result metadata: ${toErrorMessage(err)}`,
-          ),
-        ),
-      ),
-    );
-}
 
 export const runWorkflowCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a workflow agent' },

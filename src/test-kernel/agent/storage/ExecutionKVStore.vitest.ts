@@ -1,5 +1,6 @@
 import { Effect, Stream, SubscriptionRef } from 'effect';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { beforeEach, describe, expect } from 'vitest';
 import { z } from 'zod';
 
 import {
@@ -7,11 +8,7 @@ import {
   getExecutionStore,
   isReservedKvKeyName,
 } from '@agent/storage';
-import {
-  clearTerminalExecutionState,
-  finalizeRun,
-  readExecutionChildren,
-} from '@agent/storage/executionLifecycle';
+import { readExecutionChildren } from '@agent/storage/executionLifecycle';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId,
@@ -63,6 +60,64 @@ describe('canonical execution records', () => {
     expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(session.now());
   });
 
+  it.effect(
+    'hides all private records at deletion while their rows await collection',
+    () =>
+      Effect.gen(function* () {
+        const records = getExecutionRecords(session, executionId);
+        yield* records.writeRunRecord(
+          AgentConfigFieldsSchema.parse({
+            agent: 'worker',
+            agentCategory: 'toolUse',
+          }),
+        );
+        yield* records.writeReport('retained report bytes');
+        yield* records.writeWorkspaceFiles(['output.tex']);
+        yield* records.writeResultMeta({
+          producer: 'subagent',
+          agentName: 'worker',
+          wallTimeMs: 1,
+          result: {
+            category: 'toolUse',
+            outcome: 'completed',
+            response: 'answer',
+            files: [],
+            cost: 0,
+          },
+        });
+        yield* session.commit([
+          {
+            type: 'status',
+            aggregateId: aggregateId('stream', streamId),
+            phase: 'completed',
+            cause: 'lifecycle',
+          },
+        ]);
+        expect(yield* records.readReport()).toBe('retained report bytes');
+        yield* session.commit([
+          {
+            type: 'stream.removed',
+            aggregateId: aggregateId('stream', streamId),
+          },
+        ]);
+        expect(
+          yield* Effect.all([
+            records.readMeta(),
+            records.readRunRecord(),
+            records.readReport(),
+            records.readWorkspaceFiles(),
+            records.readResultMeta(),
+          ]),
+        ).toEqual([null, null, null, [], null]);
+        const retained = yield* Stream.runCollect(
+          session.events.aggregate(aggregateId('stream', streamId), 1),
+        );
+        expect(retained.some((row) => row.type === 'stream.removed')).toBe(
+          true,
+        );
+      }),
+  );
+
   it('resets a prior report explicitly without replacing another metadata value', async () => {
     const records = getExecutionRecords(session, executionId);
     await run(records.writeReport('old report'));
@@ -70,44 +125,6 @@ describe('canonical execution records', () => {
     await run(records.clearReport());
     expect(await run(records.readReport())).toBeNull();
     expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
-  });
-
-  it('derives terminal outcome from status and clears it at the resume boundary', async () => {
-    const records = getExecutionRecords(session, executionId);
-    await run(
-      records.writeResultMeta({
-        producer: 'subagent',
-        agentName: 'worker',
-        wallTimeMs: 1,
-        result: {
-          category: 'toolUse',
-          outcome: 'completed',
-          response: 'answer',
-          files: [],
-          cost: 0,
-        },
-      }),
-    );
-    expect(
-      await run(
-        finalizeRun(session, {
-          executionId,
-          outcome: 'cancelled',
-          flowRecord: 'preserve',
-        }),
-      ),
-    ).toEqual({ ok: true, outcome: 'cancelled' });
-    expect(await run(records.readResultMeta())).toMatchObject({
-      result: { outcome: 'cancelled' },
-    });
-    await run(clearTerminalExecutionState(executionId, session));
-    expect(await run(records.readMeta())).not.toHaveProperty(
-      'outcome',
-      'cancelled',
-    );
-    expect(await run(records.readResultMeta())).toMatchObject({
-      result: { outcome: 'completed' },
-    });
   });
 
   it('preserves malformed-record failures instead of reading a legacy file or a default', async () => {

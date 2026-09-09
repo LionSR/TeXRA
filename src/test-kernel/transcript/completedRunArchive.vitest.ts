@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const launchMocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   buildVars: vi.fn(),
-  clearTerminalExecutionState: vi.fn(),
   createHandler: vi.fn(),
   hasPersistedParent: vi.fn(),
   loadAgent: vi.fn(),
@@ -33,8 +32,6 @@ vi.mock('@agent/prompt/userVars', async (importActual) => ({
 }));
 vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
-  clearTerminalExecutionState: (...args: unknown[]) =>
-    Effect.promise(() => launchMocks.clearTerminalExecutionState(...args)),
   hasPersistedParent: (...args: unknown[]) =>
     Effect.promise(() => launchMocks.hasPersistedParent(...args)),
 }));
@@ -583,7 +580,6 @@ describe('completedRunArchive facade', () => {
         launchMocks.acquireResumedExecutionLease.mockImplementation(
           leaseModule.acquireResumedExecutionLease,
         );
-        launchMocks.clearTerminalExecutionState.mockResolvedValue(undefined);
         launchMocks.hasPersistedParent.mockResolvedValue(false);
         launchMocks.resolveAgent.mockReturnValue({
           entry: { path: '/agents/orchestrator.yaml' },

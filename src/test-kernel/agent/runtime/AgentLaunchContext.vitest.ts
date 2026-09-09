@@ -37,6 +37,7 @@ import {
   buildAgentLaunchContext as buildAgentLaunchContextEffect,
   withExecutionRunContext,
   type AgentLaunchContext,
+  prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
@@ -55,8 +56,19 @@ import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const buildAgentLaunchContext = (
-  ...args: Parameters<typeof buildAgentLaunchContextEffect>
-) => Effect.runPromise(buildAgentLaunchContextEffect(...args));
+  input: Omit<
+    Parameters<typeof buildAgentLaunchContextEffect>[0],
+    'definition'
+  > &
+    Parameters<typeof prepareAgentDefinition>[0],
+) =>
+  Effect.runPromise(
+    prepareAgentDefinition(input).pipe(
+      Effect.flatMap((definition) =>
+        buildAgentLaunchContextEffect({ ...input, definition }),
+      ),
+    ),
+  );
 
 const EXECUTION_ID = 'a00101' as ExecutionId;
 

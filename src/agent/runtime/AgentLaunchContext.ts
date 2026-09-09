@@ -94,7 +94,7 @@ export interface AgentLaunchContext extends AgentCore {
 }
 
 interface AgentLaunchInput {
-  config: AgentConfig;
+  definition: PreparedAgentDefinition;
   executionId: ExecutionId;
   streamTabIdOverride?: StreamTabId;
   /**
@@ -116,8 +116,6 @@ interface AgentLaunchInput {
   checkpointId?: string;
   /** Runtime behavior declared by the launch source, stamped on `run.start`. */
   userFollowUpSupport?: UserFollowUpSupport;
-  /** When true, reject if an explicit category doesn't match the YAML-defined category. */
-  enforceCategory?: boolean;
   /** Skip the `requestShowError` toast -- for callers that show their own UI. */
   suppressErrorNotification?: boolean;
   /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
@@ -279,13 +277,32 @@ function beginRunStage(
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
-const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
+function notifyLaunchFailure(
+  error: unknown,
+  input: { session: SessionHandle; suppressErrorNotification?: boolean },
+): void {
+  if (
+    !input.suppressErrorNotification &&
+    !(error instanceof ZodError) &&
+    !hasErrorPresentationClaimed(error)
+  ) {
+    input.session.interactions.emit(
+      'requestShowError',
+      { message: toErrorMessage(error) },
+      { replayWhenAttached: true },
+    );
+  }
+}
+
+export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (
-    input: AgentLaunchInput & { session: SessionHandle },
-    executionId: ExecutionId,
-    streamId: StreamTabId,
-    resources: Array<() => void | Promise<void>>,
-  ): Effect.fn.Return<AgentLaunchContext, Error> {
+    input: {
+      config: AgentConfig;
+      enforceCategory?: boolean;
+      signal?: AbortSignal;
+      suppressErrorNotification?: boolean;
+    } & { session: SessionHandle },
+  ) {
     yield* Effect.try({
       try: () => input.signal?.throwIfAborted(),
       catch: ensureError,
@@ -351,6 +368,37 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       );
     }
 
+    const config: AgentConfig = {
+      ...fullConfig,
+      agentCategory: setting.agentCategory,
+    };
+    return { config, setting, prompt, resolution };
+  },
+  (effect, input) =>
+    effect.pipe(
+      Effect.onError((cause) =>
+        Effect.sync(() => notifyLaunchFailure(Cause.squash(cause), input)),
+      ),
+    ),
+);
+export type PreparedAgentDefinition = Effect.Success<
+  ReturnType<typeof prepareAgentDefinition>
+>;
+
+const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
+  function* (
+    input: AgentLaunchInput & { session: SessionHandle },
+    executionId: ExecutionId,
+    streamId: StreamTabId,
+    resources: Array<() => void | Promise<void>>,
+  ): Effect.fn.Return<AgentLaunchContext, Error> {
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    const { config, setting, prompt, resolution } = input.definition;
+    const fullConfig = config;
+    const interactions = input.session.interactions;
     const modelConfig = yield* Effect.tryPromise({
       try: async () =>
         runInSession(input.session, () =>
@@ -362,11 +410,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       try: () => input.signal?.throwIfAborted(),
       catch: ensureError,
     });
-
-    const config: AgentConfig = {
-      ...fullConfig,
-      agentCategory: setting.agentCategory,
-    };
 
     // The session is resolved once at the boundary (buildAgentLaunchContext)
     // and carried in, so a delegated launch inherits the parent run's session
@@ -595,8 +638,8 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       try: () => input.signal?.throwIfAborted(),
       catch: ensureError,
     });
-    const { config, session: launchSession, executionId } = input;
-    const interactions = launchSession.interactions;
+    const { session: launchSession, executionId } = input;
+    const { config } = input.definition;
     const streamStatus = launchSession.status;
     const streamId =
       input.streamTabIdOverride ??
@@ -661,17 +704,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
               },
             );
           }
-          if (
-            !input.suppressErrorNotification &&
-            !(err instanceof ZodError) &&
-            !hasErrorPresentationClaimed(err)
-          ) {
-            interactions.emit(
-              'requestShowError',
-              { message: toErrorMessage(err) },
-              { replayWhenAttached: true },
-            );
-          }
+          notifyLaunchFailure(err, input);
         }),
       ),
     );

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Breaking Changes
+
+- TeXRA 1.0 starts with new session history. Earlier conversations and saved
+  runs remain on disk but are not imported or available to resume. Project
+  documents and research files are unchanged.
+
 ### Bug Fixes
 
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.

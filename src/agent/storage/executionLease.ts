@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -51,96 +50,6 @@ export const ExecutionLeaseSchema = z.strictObject({
 });
 
 type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
-
-/**
- * The single-file records of the two retired protocols, still found at
- * `executionLeases/<executionId>.json`. A presence-socket record (v2,
- * shipped in 0.40.3) can belong to a process that is live during a rolling
- * upgrade, so it is read as an ordinary claim whose owner is proven by pid
- * alone (no start identity was ever recorded). A heartbeat record (v1)
- * predates 0.40.3 and names no process: it is a tombstone, retired on
- * contact, exactly as 0.40.3 treated it.
- *
- * COMPATIBILITY SHIM: introduced with the v3 protocol in 0.40.4, retiring
- * after 2026-11-24 with the v2 writer it mirrors (see `legacyShadowRecord`
- * for the date and its reasoning). This reader half — this schema,
- * `legacyLeasePath`, `StoredClaim.files`, `readLegacyRecord`, the shadow
- * merge in `readClaims` and the legacy unlink in `unlinkOwnClaim` — is
- * deleted in that same pass.
- */
-const LegacyLeaseSchema = z.union([
-  z
-    .looseObject({
-      version: z.literal(2),
-      executionId: LeaseExecutionIdSchema,
-      ownerToken: z.uuid(),
-      acquiredAt: z.int().nonnegative(),
-      owner: z.looseObject({
-        pid: z.int().positive(),
-        hostname: z.string().min(1),
-      }),
-    })
-    .transform((record) =>
-      ExecutionLeaseSchema.parse({
-        version: 3,
-        executionId: record.executionId,
-        ownerToken: record.ownerToken,
-        acquiredAt: record.acquiredAt,
-        owner: {
-          pid: record.owner.pid,
-          processStart: null,
-          hostname: record.owner.hostname,
-        },
-      } satisfies ExecutionLeaseRecord),
-    ),
-  z
-    .looseObject({ version: z.literal(1) })
-    .transform(() => 'tombstone' as const),
-]);
-
-/**
- * COMPATIBILITY SHIM: the v2 record a 0.40.3-or-earlier process reads at the
- * single-file path. 0.40.3 is the last release that writes and reads v2;
- * 0.40.4 already ships the v3 per-token protocol. While this process holds a
- * v3 claim it keeps one of these beside it, naming its own token and pid and
- * a socket path that does not exist. A 0.40.3 reader probes that path, gets
- * ENOENT, sees the pid alive, and treats the owner as active, so it backs
- * off instead of claiming beside a v3 owner it cannot see. 0.40.3 validates
- * the record strictly, so every field it expects is present.
- *
- * Retire after 2026-11-24 (#6981 ledger, row on #9627), deleting this
- * function, its caller, and the reader half together: `LegacyLeaseSchema`,
- * `legacyLeasePath`, `StoredClaim.files`, `readLegacyRecord`, the shadow
- * merge in `readClaims` and the legacy unlink in `unlinkOwnClaim`. The
- * original "delete after v0.41 ships" trigger was derived from the wrong
- * last-v2 release (0.40.4 rather than 0.40.3); this date is three months
- * past 0.40.3's release on 2026-08-20, the upgrade window after which a
- * process still writing v2 against a shared ~/.texra is not worth carrying.
- * It shares a date with the delivery-tag read shim in
- * `src/shared/deliveryTags.ts` so both retire in one pass.
- */
-function legacyShadowRecord(record: ExecutionLeaseRecord): string {
-  const socketPath =
-    process.platform === 'win32'
-      ? `\\\\.\\pipe\\texra-${record.ownerToken}`
-      : path.join(os.tmpdir(), `texra-${record.ownerToken}.sock`);
-  return `${JSON.stringify(
-    {
-      version: 2,
-      executionId: record.executionId,
-      ownerToken: record.ownerToken,
-      acquiredAt: record.acquiredAt,
-      owner: {
-        instanceId: record.ownerToken,
-        socketPath,
-        pid: record.owner.pid,
-        hostname: record.owner.hostname,
-      },
-    },
-    null,
-    2,
-  )}\n`;
-}
 
 /** How long a claimant waits before re-reading a competitor's claim. */
 const CLAIM_RECHECK_MS = 20;
@@ -233,11 +142,6 @@ function leaseDir(root: string): string {
   return path.join(root, WORKSPACE_STORAGE_LAYOUT.executionLeases);
 }
 
-function legacyLeasePath(root: string, executionId: ExecutionId): string {
-  const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
-  return path.join(leaseDir(root), `${safeExecutionId}.json`);
-}
-
 function claimDir(root: string, executionId: ExecutionId): string {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
   return path.join(leaseDir(root), safeExecutionId);
@@ -247,29 +151,24 @@ function claimPath(root: string, executionId: ExecutionId, ownerToken: string) {
   return path.join(claimDir(root, executionId), `${ownerToken}.json`);
 }
 
-/**
- * A claim as found on disk. `files` is everything a reap unlinks for it: the
- * claim file, plus the legacy shadow record when the claim's owner keeps one
- * (see `legacyShadowRecord`).
- */
+/** A current claim and the file that owns its identity. */
 interface StoredClaim {
-  readonly files: readonly string[];
+  readonly file: string;
   readonly record: ExecutionLeaseRecord;
 }
 
-async function readClaimFile<T extends ExecutionLeaseRecord | 'tombstone'>(
+async function readClaimFile(
   file: string,
   executionId: ExecutionId,
-  schema: z.ZodType<T>,
-): Promise<T | undefined> {
-  let stored: T;
+): Promise<ExecutionLeaseRecord | undefined> {
+  let stored: ExecutionLeaseRecord;
   try {
-    stored = await StorageFS.readJson(file, schema);
+    stored = await StorageFS.readJson(file, ExecutionLeaseSchema);
   } catch (error) {
     if (isFileNotFoundError(error)) return undefined;
     throw error;
   }
-  if (stored !== 'tombstone' && stored.executionId !== executionId) {
+  if (stored.executionId !== executionId) {
     throw new Error(
       `Execution lease identity mismatch: expected ${executionId}, found ${stored.executionId}.`,
     );
@@ -278,46 +177,15 @@ async function readClaimFile<T extends ExecutionLeaseRecord | 'tombstone'>(
 }
 
 /**
- * The record at the legacy single-file path, or undefined. A heartbeat
- * tombstone is deleted on contact: no supported version writes one and the
- * protocol it belongs to expired its own records.
- */
-async function readLegacyRecord(
-  executionId: ExecutionId,
-  root: string,
-): Promise<ExecutionLeaseRecord | undefined> {
-  const legacyFile = legacyLeasePath(root, executionId);
-  const legacy = await readClaimFile(
-    legacyFile,
-    executionId,
-    LegacyLeaseSchema,
-  );
-  if (legacy !== 'tombstone') return legacy;
-  log.warn(
-    `Deleted retired heartbeat-era lease record for execution ${executionId}`,
-  );
-  try {
-    await StorageFS.delete(legacyFile);
-  } catch (error) {
-    if (!isFileNotFoundError(error)) throw error;
-  }
-  return undefined;
-}
-
-/**
  * Every claim currently on disk for an execution, in token order. A file
  * that vanishes between the listing and its read belongs to a claimant that
- * backed out or released, and is simply not reported. A legacy record whose
- * token matches a claim file is that claim's shadow, not a second claim: its
- * owner's verdict comes from the claim file, which carries the identity.
+ * backed out or released, and is simply not reported.
  */
 async function readClaims(
   executionId: ExecutionId,
   root: string,
 ): Promise<StoredClaim[]> {
   const claims: StoredClaim[] = [];
-  const legacyFile = legacyLeasePath(root, executionId);
-  const legacy = await readLegacyRecord(executionId, root);
   let entries: [string, number][];
   try {
     entries = await StorageFS.readDir(claimDir(root, executionId));
@@ -325,22 +193,18 @@ async function readClaims(
     if (!isFileNotFoundError(error)) throw error;
     entries = [];
   }
-  let shadowed = false;
   for (const [name] of entries) {
     if (!name.endsWith('.json')) continue;
     const file = path.join(claimDir(root, executionId), name);
-    const record = await readClaimFile(file, executionId, ExecutionLeaseSchema);
+    const record = await readClaimFile(file, executionId);
     if (!record) continue;
     if (name !== `${record.ownerToken}.json`) {
       throw new Error(
         `Execution lease identity mismatch: ${file} names owner ${record.ownerToken}.`,
       );
     }
-    const shadow = legacy?.ownerToken === record.ownerToken;
-    shadowed ||= shadow;
-    claims.push({ files: shadow ? [file, legacyFile] : [file], record });
+    claims.push({ file, record });
   }
-  if (legacy && !shadowed) claims.push({ files: [legacyFile], record: legacy });
   // Plain code-unit order: every process must agree on it, unlike a locale.
   claims.sort((a, b) => (a.record.ownerToken < b.record.ownerToken ? -1 : 1));
   return claims;
@@ -379,9 +243,7 @@ async function judgeClaims(
  * Unlink every claim `reap` allows and return the survivors. Safe without
  * any lock: a claim file is named by a token that is never reused, so the
  * file of a dead owner can never become a live claim again, and unlinking
- * it cannot displace anyone. (The one exception is a legacy single-file
- * record, whose path a 0.40.3 process could in principle rewrite in the same
- * window; that process's own write fence catches the displacement.)
+ * it cannot displace anyone.
  */
 async function reapClaims(
   judged: JudgedClaim[],
@@ -399,18 +261,16 @@ async function reapClaims(
     log.warn(
       `Execution ${claim.record.executionId}: removing the lease of ${claim.liveness} pid ${claim.record.owner.pid} on ${claim.record.owner.hostname}`,
     );
-    await deleteFiles(claim.files);
+    await deleteClaimFile(claim.file);
   }
   return survivors;
 }
 
-async function deleteFiles(files: readonly string[]): Promise<void> {
-  for (const file of files) {
-    try {
-      await StorageFS.delete(file);
-    } catch (error) {
-      if (!isFileNotFoundError(error)) throw error;
-    }
+async function deleteClaimFile(file: string): Promise<void> {
+  try {
+    await StorageFS.delete(file);
+  } catch (error) {
+    if (!isFileNotFoundError(error)) throw error;
   }
 }
 
@@ -447,7 +307,7 @@ async function publishClaim(
 }
 
 /**
- * Unlink this process's own claim file and its legacy shadow, then the
+ * Unlink this process's own claim file, then the
  * directory if it is empty. A file already gone is fine: the user may have
  * deleted the run from under this process, and a release must still settle.
  */
@@ -456,20 +316,7 @@ async function unlinkOwnClaim(
   root: string,
   ownerToken: string,
 ): Promise<void> {
-  // The shadow is only this process's while it names this token; a 0.40.3
-  // process could have rewritten the path in the meantime.
-  const legacy = await readLegacyRecord(executionId, root).catch((error) => {
-    log.warn(`Execution ${executionId}: could not read its legacy record`, {
-      data: error,
-    });
-    return undefined;
-  });
-  await deleteFiles([
-    ...(legacy?.ownerToken === ownerToken
-      ? [legacyLeasePath(root, executionId)]
-      : []),
-    claimPath(root, executionId, ownerToken),
-  ]);
+  await deleteClaimFile(claimPath(root, executionId, ownerToken));
   try {
     await StorageFS.removeEmptyDir(claimDir(root, executionId));
   } catch (error) {
@@ -532,13 +379,6 @@ async function claimLease(
           reap,
         );
         if (others.length === 0) {
-          // COMPATIBILITY SHIM (see `legacyShadowRecord`): keep a v2 record a
-          // 0.40.3-or-earlier process can see for as long as this claim is
-          // held.
-          await StorageFS.writeAtomic(
-            legacyLeasePath(root, executionId),
-            legacyShadowRecord(record),
-          );
           return { status: 'claimed', record };
         }
         if (others[0]!.record.ownerToken < record.ownerToken) {

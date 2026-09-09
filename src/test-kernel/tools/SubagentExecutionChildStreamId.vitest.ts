@@ -21,6 +21,11 @@ const mocks = vi.hoisted(() => ({
   childLoopError: vi.fn(),
 }));
 
+vi.mock('@agent/runtime/AgentLaunchContext', () => ({
+  prepareAgentDefinition: ({ config }: { config: unknown }) =>
+    Effect.succeed({ config }),
+}));
+
 vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
   runWithOwnedExecutionLeaseLaunchGuard: (

@@ -1,5 +1,5 @@
 // Node imports
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -68,8 +68,8 @@ describe('workspace storage defaults', () => {
       resolveRunStoragePath('run-1', 'result.json'),
       resolveRunOriginalSnapshotPath('run-1', 'Draft/Draft.tex'),
     ]).toEqual([
-      join(root, 'global-storage'),
-      join(root, 'workspace-storage', workspaceStorageId(workspacePath)),
+      join(root, 'v1', 'global-storage'),
+      join(root, 'v1', 'workspace-storage', workspaceStorageId(workspacePath)),
       'memories',
       'memories/project.md',
       'executions',
@@ -99,33 +99,59 @@ describe('workspace storage defaults', () => {
     },
   );
 
-  it('migrates legacy hash-only workspace storage when possible', async () => {
-    const root = await makeStorageRoot();
-    const workspacePath = '/workspace/Legacy Project';
-    const legacyStoragePath = join(
-      root,
-      'workspace-storage',
-      'dda160810e1d2a9f',
-    );
-    const legacyMarkerPath = join(legacyStoragePath, 'marker.txt');
-
-    await mkdir(legacyStoragePath, { recursive: true });
-    await writeFile(legacyMarkerPath, 'legacy', 'utf8');
-
-    const provider = new WorkspaceStorageProvider(root, workspacePath);
-    const storagePath = provider.getStoragePath();
-
-    expect(storagePath).toBe(
-      join(root, 'workspace-storage', workspaceStorageId(workspacePath)),
-    );
-    await expect(pathExists(legacyStoragePath)).resolves.toBe(false);
-    await expect(pathExists(join(storagePath, 'marker.txt'))).resolves.toBe(
-      true,
-    );
-    await expect(readWorkspaceMarker(storagePath)).resolves.toMatchObject({
-      path: workspacePath,
-    });
-  });
+  it.live(
+    'opens fresh state without changing old project or global storage',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(makeStorageRoot);
+        const workspacePath = '/workspace/Legacy Project';
+        const oldPaths = [
+          join(root, 'workspace-storage', 'dda160810e1d2a9f'),
+          join(root, 'workspace-storage', workspaceStorageId(workspacePath)),
+          join(root, 'global-storage'),
+        ];
+        const oldBytes = Buffer.from('existing state\n\u0000unchanged');
+        for (const oldPath of oldPaths) {
+          yield* Effect.promise(() => mkdir(oldPath, { recursive: true }));
+          yield* Effect.promise(() =>
+            writeFile(join(oldPath, 'state.json'), oldBytes),
+          );
+        }
+        const provider = new WorkspaceStorageProvider(root, workspacePath);
+        const storagePath = provider.getStoragePath();
+        const globalPath = provider.getGlobalStoragePath();
+        expect(storagePath).toBe(
+          join(
+            root,
+            'v1',
+            'workspace-storage',
+            workspaceStorageId(workspacePath),
+          ),
+        );
+        expect(globalPath).toBe(join(root, 'v1', 'global-storage'));
+        expect(yield* Effect.promise(() => readdir(storagePath))).toEqual([
+          WORKSPACE_SIDECAR_FILE,
+        ]);
+        expect(yield* Effect.promise(() => readdir(globalPath))).toEqual([]);
+        expect(
+          yield* Effect.promise(() => readWorkspaceMarker(storagePath)),
+        ).toMatchObject({ path: workspacePath });
+        yield* Effect.promise(() =>
+          writeFile(join(storagePath, 'state.json'), 'new project state'),
+        );
+        yield* Effect.promise(() =>
+          writeFile(join(globalPath, 'state.json'), 'new global state'),
+        );
+        for (const oldPath of oldPaths) {
+          expect(yield* Effect.promise(() => readdir(oldPath))).toEqual([
+            'state.json',
+          ]);
+          expect(
+            yield* Effect.promise(() => readFile(join(oldPath, 'state.json'))),
+          ).toEqual(oldBytes);
+        }
+      }),
+  );
 
   it('initializes each workspace storage root only once', async () => {
     const root = await makeStorageRoot();
@@ -187,9 +213,11 @@ describe('workspace storage defaults', () => {
       workspacePath,
     });
 
-    expect(provider.getGlobalStoragePath()).toBe(join(root, 'global-storage'));
+    expect(provider.getGlobalStoragePath()).toBe(
+      join(root, 'v1', 'global-storage'),
+    );
     expect(provider.getStoragePath()).toBe(
-      join(root, 'workspace-storage', workspaceStorageId(workspacePath)),
+      join(root, 'v1', 'workspace-storage', workspaceStorageId(workspacePath)),
     );
   });
 });

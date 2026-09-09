@@ -156,7 +156,6 @@ WITH latest AS (
   )
 )
 SELECT * FROM selected
-WHERE json_extract(aggregateId, '$[0]') <> 'migration'
 ORDER BY "commit"
 `;
 const READ_STATE = `
@@ -168,7 +167,6 @@ SELECT s.aggregate_id AS aggregateId, s.owner_id AS ownerId,
     ELSE NULL END AS startCommit
 FROM event_sequence s
 WHERE s.aggregate_id IN (SELECT value FROM json_each(?))
-  AND json_extract(s.aggregate_id, '$[0]') <> 'migration'
 `;
 const PayloadSchema = z.record(z.string(), z.unknown());
 const StoredTypeSchema = z.string().endsWith('.1');
@@ -287,14 +285,19 @@ export const databaseLayer = (
       `;
       const all = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         ORDER BY e."commit"`;
       const executionRecords = `
-        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?),
+        WITH own_stream AS (
+          SELECT stream.aggregate_id AS id FROM event_sequence execution
+          JOIN event_sequence stream ON stream.aggregate_id = execution.parent_id
+          WHERE execution.aggregate_id = ? AND execution.closed = 0 AND stream.closed = 0
+        ),
         latest AS (
           SELECT aggregate_id, type, MAX(seq) AS seq FROM event
-          WHERE aggregate_id = ?
+          WHERE EXISTS (SELECT 1 FROM own_stream) AND (
+            aggregate_id = ?
             OR (aggregate_id = (SELECT id FROM own_stream) AND type IN ('run.start.1', 'status.1', 'stream.removed.1'))
+          )
           GROUP BY aggregate_id, type
         )
         SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq)
@@ -317,12 +320,10 @@ export const databaseLayer = (
       `;
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         ORDER BY e.seq`;
       const after = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
           AND e."commit" > ? AND e."commit" <= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         ORDER BY e."commit"`;
       const inputTypes = JSON.stringify([
         ...LISTING_TYPES,
@@ -333,13 +334,11 @@ export const databaseLayer = (
         SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.type IN (SELECT value FROM json_each(?))
           AND e."commit" > ? AND e."commit" <= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         UNION ALL
         SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
           AND e.type NOT IN (SELECT value FROM json_each(?))
           AND e."commit" > ? AND e."commit" <= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         ORDER BY "commit"
       `;
       const dataVersion = 'PRAGMA data_version';

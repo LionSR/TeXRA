@@ -9,6 +9,7 @@
 
 // Third-party imports
 import { Cause, Effect, Exit } from 'effect';
+import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
 import {
@@ -193,7 +194,13 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
 
   const executionId = generateExecutionId();
   const startedAt = Date.now();
-  const config = AgentConfigSchema.parse(childConfigPayload);
+  const definition = yield* prepareAgentDefinition({
+    config: AgentConfigSchema.parse(childConfigPayload),
+    session: parentSession,
+    enforceCategory: childConfigPayload.agentCategory !== undefined,
+    suppressErrorNotification: true,
+  });
+  const { config } = definition;
   const isToolUse = config.agentCategory === AgentCategory.ToolUse;
   // One decision for the child's follow-up capability: the roster row it
   // registers under and the run it launches must agree.
@@ -211,8 +218,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       });
 
       const strategyParams = {
-        config,
-        agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
+        definition,
         executionId,
         parentExecutionId,
         agentName,

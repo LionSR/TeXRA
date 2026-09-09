@@ -21,6 +21,7 @@ import {
   getExecutionRecords,
   type ResultMeta,
 } from '@agent/storage';
+import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -155,7 +156,14 @@ const executeInBand = Effect.fn('executeInBand')(
   ): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
     options.signal?.throwIfAborted();
 
-    const config = AgentConfigSchema.parse(options.configPayload);
+    const definition = yield* prepareAgentDefinition({
+      config: AgentConfigSchema.parse(options.configPayload),
+      session: options.session,
+      enforceCategory: true,
+      signal: options.signal,
+      suppressErrorNotification: true,
+    });
+    const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
     const store = runInSession(options.session, () =>
@@ -236,8 +244,7 @@ const executeInBand = Effect.fn('executeInBand')(
             return {
               strategy: createNativeSubagentStrategy({
                 ...options,
-                config,
-                agentCategoryExplicit: true,
+                definition,
                 executionId,
                 startedAt,
                 workingDirectory,

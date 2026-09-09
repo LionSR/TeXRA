@@ -36,11 +36,9 @@ import {
   displaceLease,
   executionLeaseDir,
   executionLeasePath,
-  legacyExecutionLeasePath,
   readLeaseRecords,
   startForeignInstance,
   writeForeignLease,
-  writeLegacyPresenceLease,
   writeOrphanedLease,
 } from '@test/support/executionLeaseFixtures';
 import type { FakeProcesses } from '@test/support/FakePlatform';
@@ -123,62 +121,6 @@ describe('cross-process execution leases', () => {
     await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
       status: 'owned',
     });
-  });
-
-  it('rejects a presence-socket (v2) record whose token is not a UUID', async () => {
-    const executionId = 'c86450' as ExecutionId;
-    await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
-    await StorageFS.writeAtomic(
-      legacyExecutionLeasePath(executionId),
-      JSON.stringify({
-        version: 2,
-        executionId,
-        ownerToken: 'not-a-uuid',
-        acquiredAt: 1,
-        owner: {
-          instanceId: 'x',
-          socketPath: '/tmp/x.sock',
-          pid: process.pid,
-          hostname: os.hostname(),
-        },
-      }),
-    );
-
-    await expect(inspectExecutionLease(executionId)).rejects.toThrow(
-      'Failed to parse JSON',
-    );
-  });
-
-  it('keeps a v2 shadow record beside its own claim for 0.40.4 readers', async () => {
-    const executionId = 'c86451' as ExecutionId;
-    await acquire(executionId);
-
-    const [record] = await readLeaseRecords(executionId);
-    await expect(
-      StorageFS.readJson(legacyExecutionLeasePath(executionId)),
-    ).resolves.toMatchObject({
-      version: 2,
-      executionId,
-      ownerToken: record!.ownerToken,
-      owner: {
-        instanceId: record!.ownerToken,
-        pid: process.pid,
-        hostname: os.hostname(),
-      },
-    });
-    // The shadow is the claim's, not a second claim.
-    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
-      status: 'owned',
-    });
-
-    await releaseOwnedExecutionLease(executionId);
-    ownedExecutionIds.delete(executionId);
-    expect(await StorageFS.exists(legacyExecutionLeasePath(executionId))).toBe(
-      false,
-    );
-    expect(
-      await StorageFS.readDir(WORKSPACE_STORAGE_LAYOUT.executionLeases),
-    ).toEqual([]);
   });
 
   it('classifies a live pid whose identity differs from the record as orphaned', async () => {
@@ -272,14 +214,13 @@ describe('cross-process execution leases', () => {
     expect((await StorageFS.readDir('.')).map(([name]) => name)).not.toContain(
       'executionLocks',
     );
-    // One directory per execution, one complete file per claim (plus the
-    // winner's v2 shadow): the loser unlinked its own file and nothing else
-    // was ever renamed or rewritten.
+    // One directory per execution, one complete file per claim: the loser
+    // unlinked its own file and nothing was renamed or rewritten.
     expect(
       (await StorageFS.readDir(WORKSPACE_STORAGE_LAYOUT.executionLeases))
         .map(([name]) => name)
         .sort(),
-    ).toEqual([executionId, `${executionId}.json`]);
+    ).toEqual([executionId]);
     const [record, ...rest] = await readLeaseRecords(executionId);
     expect(rest).toEqual([]);
     expect(

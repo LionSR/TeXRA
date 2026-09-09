@@ -1,21 +1,17 @@
 // Node imports
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join, posix, relative } from 'node:path';
 
 import {
   WORKSPACE_SIDECAR_FILE,
   WORKSPACE_STORAGE_LAYOUT,
 } from '@common/storage/storageLayout';
-import { createLog } from '@logger/logUtils';
 import { truncatedHexId } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 // Local imports - platform
 import type { StorageProvider } from '../interfaces';
-
-const log = createLog('WorkspaceStorage');
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',
@@ -24,11 +20,6 @@ const STORAGE_LAYOUT = {
 
 export const MEMORY_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.memory;
 export const RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.runs;
-
-function legacyWorkspaceStorageId(workspacePath: string | undefined): string {
-  const source = workspacePath?.trim() || 'no-workspace';
-  return truncatedHexId(source, 16);
-}
 
 function sanitizeWorkspaceBasename(workspacePath: string): string {
   return sanitizePathSegment(basename(workspacePath), {
@@ -50,7 +41,7 @@ export function workspaceStorageId(workspacePath: string | undefined): string {
 }
 
 export function resolveGlobalStoragePath(storageRoot: string): string {
-  return join(storageRoot, STORAGE_LAYOUT.global);
+  return join(storageRoot, 'v1', STORAGE_LAYOUT.global);
 }
 
 export function resolveWorkspaceStoragePath(
@@ -59,6 +50,7 @@ export function resolveWorkspaceStoragePath(
 ): string {
   return join(
     storageRoot,
+    'v1',
     STORAGE_LAYOUT.workspace,
     workspaceStorageId(workspacePath),
   );
@@ -102,17 +94,6 @@ export function resolveRunStorageRelativePath(
   );
 }
 
-function resolveLegacyWorkspaceStoragePath(
-  storageRoot: string,
-  workspacePath: string | undefined,
-): string {
-  return join(
-    storageRoot,
-    STORAGE_LAYOUT.workspace,
-    legacyWorkspaceStorageId(workspacePath),
-  );
-}
-
 function writeWorkspaceSidecar(
   storagePath: string,
   workspacePath: string | undefined,
@@ -132,27 +113,6 @@ function writeWorkspaceSidecar(
     )}\n`,
     'utf8',
   );
-}
-
-function migrateLegacyWorkspaceStorage(
-  storageRoot: string,
-  workspacePath: string | undefined,
-): void {
-  const currentPath = resolveWorkspaceStoragePath(storageRoot, workspacePath);
-  const legacyPath = resolveLegacyWorkspaceStoragePath(
-    storageRoot,
-    workspacePath,
-  );
-
-  if (currentPath === legacyPath) return;
-  if (!existsSync(legacyPath) || existsSync(currentPath)) return;
-  try {
-    renameSync(legacyPath, currentPath);
-  } catch (error) {
-    log.warn(
-      `Could not migrate legacy workspace storage; continuing with the current storage directory. Cause: ${toErrorMessage(error)}`,
-    );
-  }
 }
 
 export class WorkspaceStorageProvider implements StorageProvider {
@@ -180,9 +140,6 @@ export class WorkspaceStorageProvider implements StorageProvider {
     );
     if (this.initializedStoragePaths.has(storagePath)) return storagePath;
 
-    // The legacy rename must precede directory creation because it stops once
-    // the current directory exists.
-    migrateLegacyWorkspaceStorage(this.storageRoot, workspacePath);
     mkdirSync(storagePath, { recursive: true });
     writeWorkspaceSidecar(storagePath, workspacePath);
     this.initializedStoragePaths.add(storagePath);

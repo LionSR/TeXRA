@@ -29,11 +29,6 @@ export function executionLeasePath(
   return `${executionLeaseDir(executionId)}/${ownerToken}.json`;
 }
 
-/** Storage-relative path of a pre-0.41 single-file lease record. */
-export function legacyExecutionLeasePath(executionId: string): string {
-  return `${WORKSPACE_STORAGE_LAYOUT.executionLeases}/${executionId}.json`;
-}
-
 /** Every claim record currently published for an execution, in token order. */
 export async function readLeaseRecords(
   executionId: string,
@@ -182,34 +177,8 @@ export async function writeForeignLease(
 }
 
 /**
- * Persist a pre-0.41 presence-socket (v2) record naming `owner`'s pid. Such a
- * record carries no start identity, so its owner is proven by pid alone.
- */
-export async function writeLegacyPresenceLease(
-  executionId: string,
-  owner: LeaseOwnerRecord,
-): Promise<void> {
-  await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
-  await StorageFS.writeAtomic(
-    legacyExecutionLeasePath(executionId),
-    JSON.stringify({
-      version: 2,
-      executionId,
-      ownerToken: FOREIGN_OWNER_TOKEN,
-      acquiredAt: 1,
-      owner: {
-        instanceId: 'x',
-        socketPath: '/tmp/x.sock',
-        pid: owner.pid,
-        hostname: owner.hostname,
-      },
-    }),
-  );
-}
-
-/**
- * Model a reclaim performed elsewhere: every claim file on disk, and the v2
- * shadow a claim keeps beside it, is removed and `owner`'s claim published
+ * Model a reclaim performed elsewhere: every claim file on disk is
+ * removed and `owner`'s claim published
  * in its place. Only this (a user's explicit reclaim) ever removes another
  * process's claim; a claim published beside an existing one never displaces
  * it.
@@ -220,7 +189,6 @@ export async function displaceLease(
   owner?: LeaseOwnerRecord,
 ): Promise<void> {
   await StorageFS.delete(executionLeaseDir(executionId), { recursive: true });
-  await StorageFS.delete(legacyExecutionLeasePath(executionId)).catch(() => {});
   await writeForeignLease(executionId, ownerToken, owner);
 }
 

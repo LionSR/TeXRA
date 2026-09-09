@@ -15,7 +15,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import {
-  clearTerminalExecutionState,
   acquireResumedExecutionOwnership,
   getPersistedUserFollowUpSupport,
   hasPersistedParent,
@@ -45,6 +44,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   buildAgentLaunchContext,
+  prepareAgentDefinition,
+  type PreparedAgentDefinition,
   withExecutionRunContext,
   type AgentLaunchContext,
 } from './AgentLaunchContext';
@@ -355,11 +356,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    */
   isSubagent?: boolean;
   /**
-   * When true, enforce that an explicitly supplied category matches the
-   * agent's YAML-defined category.
-   */
-  enforceCategory?: boolean;
-  /**
    * Fires with the real streamId once its `run.start` is published, before
    * the run begins: the stream exists for every fold, so a host may select
    * it as its own surface state. The run's trace comes with it, before its
@@ -383,12 +379,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 // from persisted lineage, so `resumeToolUseFromResumeData` always admits
 // WAITING and callers narrow with `isWaitingFlowResult`.
 export function executeAgent(
-  config: AgentConfig,
+  definition: PreparedAgentDefinition,
   executionId: ExecutionId,
   options: ExecuteAgentOptions & { isSubagent: true; session: SessionHandle },
 ): Effect.Effect<AgentFlowResult | WaitingToolUseFlowResult, Error>;
 export function executeAgent(
-  config: AgentConfig,
+  definition: PreparedAgentDefinition,
   executionId: ExecutionId,
   options: ExecuteAgentOptions & {
     isSubagent?: false | undefined;
@@ -399,11 +395,11 @@ export function executeAgent(
 /**
  * Low-level execution runner for an already-registered execution. Fresh
  * launches should use `runAgent()` or call `registerExecution()` first so the
- * canonical `executions/{id}/config.json` exists before `run.start` exposes
- * its identity. Resume paths reuse the existing execution record.
+ * canonical configuration is committed with the execution's creation.
+ * Its prepared definition must be the one registration used. Resume paths reuse the existing execution record.
  */
 export function executeAgent(
-  config: AgentConfig,
+  definition: PreparedAgentDefinition,
   executionId: ExecutionId,
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error> {
@@ -416,14 +412,13 @@ export function executeAgent(
       catch: ensureError,
     });
     const ctx = yield* buildAgentLaunchContext({
-      config,
+      definition,
       executionId,
       streamTabIdOverride: options.streamTabIdOverride,
       onStreamResolved: options.onStreamResolved,
       isSubagent: options.isSubagent,
       parentStreamId: options.parentStreamId,
       userFollowUpSupport: options.userFollowUpSupport,
-      enforceCategory: options.enforceCategory,
       suppressErrorNotification:
         options.suppressErrorNotification ?? options.isSubagent,
       session: options.session,
@@ -576,13 +571,18 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const runSession = options.session;
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
-        yield* clearTerminalExecutionState(resume.executionId, runSession);
         const [isSubagent, userFollowUpSupport] = yield* Effect.all([
           hasPersistedParent(resume.executionId, runSession),
           getPersistedUserFollowUpSupport(resume.executionId, runSession),
         ]);
-        const ctx = yield* buildAgentLaunchContext({
+        const definition = yield* prepareAgentDefinition({
           config: resume.agentConfig,
+          enforceCategory: true,
+          session: runSession,
+          suppressErrorNotification: true,
+        });
+        const ctx = yield* buildAgentLaunchContext({
+          definition,
           executionId: resume.executionId,
           streamTabIdOverride: resume.streamId,
           modelHandlerCompatibilityKey:
