@@ -10,8 +10,7 @@ describe('AgentTrace error data', () => {
     const logger = createTestRunTrace('TestErrorLogger', store).trace;
     const err = new Error('test failure');
     logger.error(`Error occurred: ${err.message}`, { data: err });
-    const log = store;
-    const captured = log?.getRange(0, log.head).at(-1) as
+    const captured = store.getRange(0, store.head).at(-1) as
       { data: Error } | undefined;
     assert.ok(captured);
     assert.strictEqual(captured.data.message, 'test failure');

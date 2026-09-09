@@ -162,8 +162,7 @@ describe('logFileCategory', () => {
   });
 
   function capturedMessages(): any[] {
-    const log = store;
-    return log?.getRange(0, log.head) ?? [];
+    return store.getRange(0, store.head);
   }
 
   it('handles empty file array gracefully (no-op)', () => {

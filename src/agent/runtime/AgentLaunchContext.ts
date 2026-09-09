@@ -450,11 +450,11 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     });
     const modelCell = new ModelCell(modelHandler, config.model);
 
-    const transcriptWriter = yield* session.transcripts.acquireRunResidency(
+    const residency = yield* session.transcripts.acquireRunResidency(
       streamId,
       executionId,
     );
-    const rawRunTrace = createRunTrace(streamId, transcriptWriter);
+    const rawRunTrace = createRunTrace(streamId, residency);
     // The composed trace enters the store BEFORE session attachment, so a
     // failed attachment still disposes the raw trace through the store.
     const attachment: { detach?: () => void } = {};
