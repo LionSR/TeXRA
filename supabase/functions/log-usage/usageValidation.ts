@@ -31,6 +31,11 @@ const UsageLogEntryInputSchema = z.object({
   cachedInputTokens: optionalNonnegativeInt,
   reasoningTokens: optionalNonnegativeInt,
   usageRoute: optional(UsageRouteSchema),
+  /** LEGACY: relay wire tolerance. Released clients still post this field and
+   *  `index.ts` still writes the `used_relay` column from it. Retirement is
+   *  owned by #10921: after 2026-11, and only once the ops drain (#10920) has
+   *  completed. */
+  usedRelay: optionalBoolean,
   viaChatGptSubscription: z
     .boolean()
     .nullish()
