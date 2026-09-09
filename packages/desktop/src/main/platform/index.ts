@@ -116,7 +116,7 @@ export async function initializeElectronPlatform(
   // installing: an opener that uses the synchronous `open` would otherwise
   // face an asynchronous layer build.
   const processStart = await nodeProcesses.selfIdentity();
-  installProcessRuntime(processStart);
+  installProcessRuntime(processStart, () => storage.getGlobalStoragePath());
   const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
     await effectRuntime().runPromise(
       Effect.gen(function* () {

@@ -158,7 +158,7 @@ export const agentsRunCommand = defineCliCommand({
       ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
       model: optString(ctx.args.model),
     };
-    await installCliProcessRuntime();
+    await installCliProcessRuntime(context.storageRoot);
     return effectRuntime().runPromise(runToolUseAgent(context, init));
   },
 });

@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type { InquiryThreadRecord } from '@shared/schemas';
 
-import {
-  collectKnownSessionLinks,
-  type ExternalInquiryThreadManifest,
-} from '@tools/inquiry/externalInquiryStorage';
+import { collectKnownSessionLinks } from '@tools/inquiry/inquiryRecordFormatting';
 
 function manifestWithSessionLinks(
   turns: Array<{ turnIndex: number; sessionLinks?: string[] | null }>,
-): ExternalInquiryThreadManifest {
+): InquiryThreadRecord {
   return {
-    schemaVersion: 1,
     threadId: 'thread-1',
     parentStreamId: null,
     parentExecutionId: null,

@@ -393,7 +393,7 @@ export const runWorkflowCommand = defineCliCommand({
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
     };
-    await installCliProcessRuntime();
+    await installCliProcessRuntime(context.storageRoot);
     return effectRuntime().runPromise(runWorkflowAgent(context, init));
   },
 });

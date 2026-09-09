@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { runInSession } from '@agent/runtime/RunContext';
 /**
  * External-inquiry action persistence and continuation dispatch.
  *
@@ -15,15 +14,13 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 
 // Local imports - shared
-import type { InquiryActionMessage } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
+import type {
+  InquiryActionMessage,
+  InquiryThreadRecord,
+} from '@shared/schemas';
 
 // Local imports - inquiry
-import {
-  markDropped,
-  recordAnswerForOpenTurn,
-  type ExternalInquiryThreadManifest,
-} from './externalInquiryStorage';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   injectContinuationForAnsweredThread,
   injectContinuationForDroppedThread,
@@ -61,12 +58,12 @@ type ExternalInquiryTransition =
   | {
       readonly kind: 'answered';
       readonly threadId: InquiryActionMessage['threadId'];
-      readonly manifest: ExternalInquiryThreadManifest;
+      readonly manifest: InquiryThreadRecord;
     }
   | {
       readonly kind: 'dropped';
       readonly threadId: InquiryActionMessage['threadId'];
-      readonly manifest: ExternalInquiryThreadManifest;
+      readonly manifest: InquiryThreadRecord;
     }
   | {
       readonly kind: 'stale';
@@ -74,60 +71,63 @@ type ExternalInquiryTransition =
     };
 
 /** Persist one terminal inquiry action without reaching into host presentation. */
-async function persistExternalInquiryAction(
-  payload: ExternalInquiryAction,
-): Promise<ExternalInquiryTransition> {
-  if (payload.action === 'submit') {
-    const manifest = await recordAnswerForOpenTurn({
+const persistExternalInquiryAction = Effect.fn('persistExternalInquiryAction')(
+  function* (
+    payload: ExternalInquiryAction,
+  ): Effect.fn.Return<ExternalInquiryTransition, Error, InquiryRecords> {
+    const records = yield* InquiryRecords;
+    if (payload.action === 'submit') {
+      const manifest = yield* records.recordAnswerForOpenTurn({
+        threadId: payload.threadId,
+        turnIndex: payload.turnIndex,
+        answer: payload.answer,
+        sessionLinks: payload.sessionLinks ?? undefined,
+      });
+      if (!manifest) {
+        logger.warn(
+          `Inquiry submit ignored: thread ${payload.threadId} has no open turn.`,
+        );
+        return { kind: 'stale', threadId: payload.threadId };
+      }
+      return {
+        kind: 'answered',
+        threadId: payload.threadId,
+        manifest,
+      };
+    }
+
+    // Drop only changes status while the thread is open; see markDropped.
+    if (payload.feedback) {
+      logger.info(`Inquiry ${payload.threadId} dropped with feedback`, {
+        data: payload.feedback,
+      });
+    } else if (payload.reason) {
+      logger.info(`Inquiry ${payload.threadId} denied`, {
+        data: payload.reason,
+      });
+    } else if (payload.cause) {
+      logger.info(`Inquiry ${payload.threadId} dropped with cause`, {
+        data: payload.cause,
+      });
+    }
+    const droppedManifest = yield* records.markDropped({
       threadId: payload.threadId,
       turnIndex: payload.turnIndex,
-      answer: payload.answer,
-      sessionLinks: payload.sessionLinks ?? undefined,
     });
-    if (!manifest) {
-      logger.warn(
-        `Inquiry submit ignored: thread ${payload.threadId} has no open turn.`,
-      );
-      return { kind: 'stale', threadId: payload.threadId };
+    if (droppedManifest) {
+      return {
+        kind: 'dropped',
+        threadId: payload.threadId,
+        manifest: droppedManifest,
+      };
     }
-    return {
-      kind: 'answered',
-      threadId: payload.threadId,
-      manifest,
-    };
-  }
-
-  // drop — only flips status if the thread is still open; see markDropped.
-  if (payload.feedback) {
-    logger.info(`Inquiry ${payload.threadId} dropped with feedback`, {
-      data: payload.feedback,
-    });
-  } else if (payload.reason) {
-    logger.info(`Inquiry ${payload.threadId} denied`, {
-      data: payload.reason,
-    });
-  } else if (payload.cause) {
-    logger.info(`Inquiry ${payload.threadId} dropped with cause`, {
-      data: payload.cause,
-    });
-  }
-  const droppedManifest = await markDropped({
-    threadId: payload.threadId,
-    turnIndex: payload.turnIndex,
-  });
-  if (droppedManifest) {
-    return {
-      kind: 'dropped',
-      threadId: payload.threadId,
-      manifest: droppedManifest,
-    };
-  }
-  logger.warn(
-    `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +
-      `(stale/duplicate drop after submit?). Skipping continuation.`,
-  );
-  return { kind: 'stale', threadId: payload.threadId };
-}
+    logger.warn(
+      `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +
+        `(stale/duplicate drop after submit?). Skipping continuation.`,
+    );
+    return { kind: 'stale', threadId: payload.threadId };
+  },
+);
 
 /** Deliver the continuation represented by a completed durable transition. */
 const continueExternalInquiryAction = Effect.fn(
@@ -135,7 +135,7 @@ const continueExternalInquiryAction = Effect.fn(
 )(function* (
   transition: ExternalInquiryTransition,
   options: { session: SessionHandle },
-): Effect.fn.Return<void, Error> {
+): Effect.fn.Return<void, Error, InquiryRecords> {
   switch (transition.kind) {
     case 'answered':
       // Use the manifest just written so a concurrent follow-up cannot flip
@@ -164,14 +164,8 @@ export const handleExternalInquiryAction = Effect.fn(
 )(function* (
   payload: ExternalInquiryAction,
   options: { session: SessionHandle },
-): Effect.fn.Return<boolean, Error> {
-  const transition = yield* Effect.tryPromise({
-    try: async () =>
-      runInSession(options.session, () =>
-        persistExternalInquiryAction(payload),
-      ),
-    catch: ensureError,
-  });
+): Effect.fn.Return<boolean, Error, InquiryRecords> {
+  const transition = yield* persistExternalInquiryAction(payload);
   yield* continueExternalInquiryAction(transition, options);
   return transition.kind !== 'stale';
 });

@@ -31,7 +31,10 @@ import {
 } from './executionRecords';
 import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import { InquiryThreadUpdatedEventSchema } from './inquiry';
+import {
+  InquiryThreadRecordSchema,
+  InquiryThreadUpdatedEventSchema,
+} from './inquiry';
 import { PlanSchema } from './plan';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RunIdentitySchema } from './runIdentity';
@@ -100,6 +103,7 @@ const AggregateKeySchema = z.tuple([
     'inquiry',
     'session',
     'desktop-projects',
+    'global-inquiry',
   ]),
   z.string().min(1),
 ]);
@@ -372,10 +376,16 @@ const DesktopProjectsDraftSchema = durable(
   { roots: z.array(z.string().min(1)) },
   'desktop-projects',
 );
+const GlobalInquiryDraftSchema = durable(
+  'inquiry.recorded',
+  { record: InquiryThreadRecordSchema },
+  'global-inquiry',
+);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...ExecutionEventDraftSchema.options,
   DesktopProjectsDraftSchema,
+  GlobalInquiryDraftSchema,
 ]);
 const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope).refine(
@@ -408,6 +418,7 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...ExecutionEventDraftSchema.options.map((schema) => schema.extend(envelope)),
   DesktopProjectsDraftSchema.extend(envelope),
+  GlobalInquiryDraftSchema.extend(envelope),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 

@@ -3,17 +3,17 @@ import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
+import { it } from '@effect/vitest';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 
 const storageMocks = vi.hoisted(() => ({
-  getOpenTurnDraft: vi.fn(),
   getThreadSummary: vi.fn(),
   listThreadsByStatus: vi.fn(),
-  manifestToTranscript: vi.fn(),
   markDropped: vi.fn(),
   readExternalInquiryThread: vi.fn(),
   recordAnswerForOpenTurn: vi.fn(),
@@ -43,8 +43,6 @@ vi.mock('@logger/logUtils', async (importOriginal) => {
   };
 });
 
-vi.mock('@tools/inquiry/externalInquiryStorage', () => storageMocks);
-
 vi.mock('@tools/inquiry/inquiryContinuation', () => continuationMocks);
 
 const session = {} as SessionHandle;
@@ -59,12 +57,14 @@ describe('handleExternalInquiryAction', () => {
     );
   });
 
-  it('persists and continues submit actions', async () => {
-    const manifest = { status: 'answered' };
-    storageMocks.recordAnswerForOpenTurn.mockResolvedValue(manifest);
+  it.effect('persists and continues submit actions', () =>
+    Effect.gen(function* () {
+      const manifest = { status: 'answered' };
+      storageMocks.recordAnswerForOpenTurn.mockReturnValue(
+        Effect.succeed(manifest),
+      );
 
-    await Effect.runPromise(
-      handleExternalInquiryAction(
+      yield* handleExternalInquiryAction(
         {
           action: 'submit',
           threadId: 'thread-submit',
@@ -72,50 +72,52 @@ describe('handleExternalInquiryAction', () => {
           answer: 'A proof follows by compactness.',
         },
         { session },
-      ),
-    );
+      ).pipe(Effect.provideService(InquiryRecords, storageMocks));
 
-    expect(storageMocks.recordAnswerForOpenTurn).toHaveBeenCalledWith({
-      threadId: 'thread-submit',
-      turnIndex: 1,
-      answer: 'A proof follows by compactness.',
-      sessionLinks: undefined,
-    });
-    expect(
-      continuationMocks.injectContinuationForAnsweredThread,
-    ).toHaveBeenCalledWith('thread-submit', manifest, session);
-  });
+      expect(storageMocks.recordAnswerForOpenTurn).toHaveBeenCalledWith({
+        threadId: 'thread-submit',
+        turnIndex: 1,
+        answer: 'A proof follows by compactness.',
+        sessionLinks: undefined,
+      });
+      expect(
+        continuationMocks.injectContinuationForAnsweredThread,
+      ).toHaveBeenCalledWith('thread-submit', manifest, session);
+    }),
+  );
 
-  it('persists note-free drops without synthesizing provenance', async () => {
-    const manifest = { status: 'dropped' };
-    storageMocks.markDropped.mockResolvedValue(manifest);
+  it.effect('persists note-free drops without synthesizing provenance', () =>
+    Effect.gen(function* () {
+      const manifest = { status: 'dropped' };
+      storageMocks.markDropped.mockReturnValue(Effect.succeed(manifest));
 
-    await Effect.runPromise(
-      handleExternalInquiryAction(
+      yield* handleExternalInquiryAction(
         {
           action: 'drop',
           threadId: 'thread-drop',
           turnIndex: 1,
         },
         { session },
-      ),
-    );
+      ).pipe(Effect.provideService(InquiryRecords, storageMocks));
 
-    expect(storageMocks.markDropped).toHaveBeenCalledWith({
-      threadId: 'thread-drop',
-      turnIndex: 1,
-    });
-    expect(
-      continuationMocks.injectContinuationForDroppedThread,
-    ).toHaveBeenCalledWith('thread-drop', manifest, session);
-    expect(traceMocks.info).not.toHaveBeenCalled();
-  });
+      expect(storageMocks.markDropped).toHaveBeenCalledWith({
+        threadId: 'thread-drop',
+        turnIndex: 1,
+      });
+      expect(
+        continuationMocks.injectContinuationForDroppedThread,
+      ).toHaveBeenCalledWith('thread-drop', manifest, session);
+      expect(traceMocks.info).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('logs policy reasons without labeling them as feedback', async () => {
-    storageMocks.markDropped.mockResolvedValue({ status: 'dropped' });
+  it.effect('logs policy reasons without labeling them as feedback', () =>
+    Effect.gen(function* () {
+      storageMocks.markDropped.mockReturnValue(
+        Effect.succeed({ status: 'dropped' }),
+      );
 
-    await Effect.runPromise(
-      handleExternalInquiryAction(
+      yield* handleExternalInquiryAction(
         {
           action: 'drop',
           threadId: 'thread-denied',
@@ -123,20 +125,22 @@ describe('handleExternalInquiryAction', () => {
           reason: 'Human input is disabled by policy.',
         },
         { session },
-      ),
-    );
+      ).pipe(Effect.provideService(InquiryRecords, storageMocks));
 
-    expect(traceMocks.info).toHaveBeenCalledWith(
-      'Inquiry thread-denied denied',
-      { data: 'Human input is disabled by policy.' },
-    );
-  });
+      expect(traceMocks.info).toHaveBeenCalledWith(
+        'Inquiry thread-denied denied',
+        { data: 'Human input is disabled by policy.' },
+      );
+    }),
+  );
 
-  it('logs lifecycle causes without labeling them as feedback', async () => {
-    storageMocks.markDropped.mockResolvedValue({ status: 'dropped' });
+  it.effect('logs lifecycle causes without labeling them as feedback', () =>
+    Effect.gen(function* () {
+      storageMocks.markDropped.mockReturnValue(
+        Effect.succeed({ status: 'dropped' }),
+      );
 
-    await Effect.runPromise(
-      handleExternalInquiryAction(
+      yield* handleExternalInquiryAction(
         {
           action: 'drop',
           threadId: 'thread-cancelled',
@@ -144,12 +148,12 @@ describe('handleExternalInquiryAction', () => {
           cause: 'Session interrupted.',
         },
         { session },
-      ),
-    );
+      ).pipe(Effect.provideService(InquiryRecords, storageMocks));
 
-    expect(traceMocks.info).toHaveBeenCalledWith(
-      'Inquiry thread-cancelled dropped with cause',
-      { data: 'Session interrupted.' },
-    );
-  });
+      expect(traceMocks.info).toHaveBeenCalledWith(
+        'Inquiry thread-cancelled dropped with cause',
+        { data: 'Session interrupted.' },
+      );
+    }),
+  );
 });

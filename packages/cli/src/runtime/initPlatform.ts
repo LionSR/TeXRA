@@ -280,7 +280,7 @@ export async function initCliPlatform(
     // the update check, `clone` -- may already have installed it; this then
     // adopts that one rather than building a second and leaving the first
     // undisposed.
-    await installCliProcessRuntime();
+    await installCliProcessRuntime(context.storageRoot);
     // The project `.texra/config.json` backs the workspace target and
     // user-level config (`~/.texra/v1/global-storage/config.json`, the same file
     // chatDefaults reads) backs the global target — the same pair of stores

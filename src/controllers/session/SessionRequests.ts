@@ -35,6 +35,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ExecutionBusy } from '@agent/runtime/executionLanes';
 import { aggregateId as qualifyAggregateId } from '@shared/schemas';
 import type { LocalRuntimeState, StreamTabId } from '@shared/schemas';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
@@ -63,12 +64,15 @@ export function sessionRequests(
   session: SessionHandle,
   log: SessionRequestLog,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
+  inquiryRecords: Context.Service.Shape<typeof InquiryRecords>,
 ): SessionGraph['requests'] {
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
     const admitted = yield* admit(log, local, req);
-    return yield* handle(session, req, log, admitted);
+    return yield* handle(session, req, log, admitted).pipe(
+      Effect.provideService(InquiryRecords, inquiryRecords),
+    );
   });
   const removeStream = Effect.fn('SessionRequests.removeStream')(function* (
     streamId: StreamTabId,
@@ -236,7 +240,7 @@ function handle(
   req: RuntimeRequest,
   log: SessionRequestLog,
   admitted: AggregateState,
-): Effect.Effect<Outcome, RequestError> {
+): Effect.Effect<Outcome, RequestError, InquiryRecords> {
   switch (req.kind) {
     case 'stream.stop':
       return Effect.suspend(() =>

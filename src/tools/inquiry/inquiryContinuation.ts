@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { runInSession } from '@agent/runtime/RunContext';
 /**
  * Inquiry continuation injector.
  *
@@ -21,6 +20,7 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
+  type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
   type InquiryThreadId,
   type InquiryThreadSummary,
@@ -28,19 +28,12 @@ import {
   type InquiryResumeOutcome,
   type StreamTabId,
 } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   formatRelativeTime,
   previewLabel,
   truncateSummary,
 } from '@utils/text/stringUtils';
-
-import {
-  getThreadSummary,
-  listThreadsByStatus,
-  readExternalInquiryThread,
-  type ExternalInquiryThreadManifest,
-} from './externalInquiryStorage';
 
 const logger = createLog('inquiryContinuation');
 
@@ -113,11 +106,9 @@ const emitInquiryThreadUpdate = Effect.fn('emitInquiryThreadUpdate')(function* (
   threadId: InquiryThreadId,
   extra: { resumeOutcome: InquiryResumeOutcome },
   session: SessionHandle,
-): Effect.fn.Return<void, Error> {
-  const summary = yield* Effect.tryPromise({
-    try: async () => runInSession(session, () => getThreadSummary(threadId)),
-    catch: ensureError,
-  });
+): Effect.fn.Return<void, Error, InquiryRecords> {
+  const records = yield* InquiryRecords;
+  const summary = yield* records.getThreadSummary(threadId);
   if (!summary) return;
   const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
   session.publish([
@@ -133,7 +124,7 @@ const emitInquiryThreadUpdate = Effect.fn('emitInquiryThreadUpdate')(function* (
 const archiveAsParentFinished = Effect.fn('archiveAsParentFinished')(function* (
   threadId: InquiryThreadId,
   session: SessionHandle,
-): Effect.fn.Return<InjectionOutcome, Error> {
+): Effect.fn.Return<InjectionOutcome, Error, InquiryRecords> {
   yield* emitInquiryThreadUpdate(
     threadId,
     { resumeOutcome: 'parent_finished' },
@@ -148,7 +139,7 @@ const deliverContinuation = Effect.fn('deliverContinuation')(
     text: string;
     threadId: InquiryThreadId;
     session: SessionHandle;
-  }): Effect.fn.Return<InjectionOutcome, Error> {
+  }): Effect.fn.Return<InjectionOutcome, Error, InquiryRecords> {
     const result = yield* submitFollowUp(params.parentStreamId, params.text, {
       session: params.session,
     });
@@ -181,16 +172,12 @@ const deliverContinuation = Effect.fn('deliverContinuation')(
 const injectContinuation = Effect.fn('injectContinuation')(function* (
   event: 'answered' | 'dropped',
   threadId: InquiryThreadId,
-  manifestHint: ExternalInquiryThreadManifest | undefined,
+  manifestHint: InquiryThreadRecord | undefined,
   session: SessionHandle,
-): Effect.fn.Return<InjectionOutcome, Error> {
+): Effect.fn.Return<InjectionOutcome, Error, InquiryRecords> {
+  const records = yield* InquiryRecords;
   const manifest =
-    manifestHint ??
-    (yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(session, () => readExternalInquiryThread(threadId)),
-      catch: ensureError,
-    }));
+    manifestHint ?? (yield* records.readExternalInquiryThread(threadId));
   if (!manifest) return 'archived';
 
   const lastTurn = manifest.turns.at(-1);
@@ -222,16 +209,10 @@ const injectContinuation = Effect.fn('injectContinuation')(function* (
   }
 
   const parentStreamId = manifest.parentStreamId;
-  const stillOpen = yield* Effect.tryPromise({
-    try: async () =>
-      runInSession(session, () =>
-        listThreadsByStatus({
-          status: 'open',
-          scope: 'stream',
-          streamId: parentStreamId,
-        }),
-      ),
-    catch: ensureError,
+  const stillOpen = yield* records.listThreadsByStatus({
+    status: 'open',
+    scope: 'stream',
+    streamId: parentStreamId,
   });
   const text = buildContinuationText({
     event,
@@ -260,9 +241,9 @@ export function injectContinuationForAnsweredThread(
    * stream could flip `answered → open` between the write and the
    * re-read, which would otherwise drop the continuation as archived.
    */
-  manifestHint: ExternalInquiryThreadManifest | undefined,
+  manifestHint: InquiryThreadRecord | undefined,
   session: SessionHandle,
-): Effect.Effect<InjectionOutcome, Error> {
+): Effect.Effect<InjectionOutcome, Error, InquiryRecords> {
   return injectContinuation('answered', threadId, manifestHint, session);
 }
 
@@ -274,8 +255,8 @@ export function injectContinuationForDroppedThread(
    * thread from another stream could flip status away from `dropped`
    * before a fresh read, which would mislabel the continuation.
    */
-  manifestHint: ExternalInquiryThreadManifest | undefined,
+  manifestHint: InquiryThreadRecord | undefined,
   session: SessionHandle,
-): Effect.Effect<InjectionOutcome, Error> {
+): Effect.Effect<InjectionOutcome, Error, InquiryRecords> {
   return injectContinuation('dropped', threadId, manifestHint, session);
 }

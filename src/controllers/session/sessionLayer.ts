@@ -68,6 +68,7 @@ import {
   type SessionEvent,
   type StreamTabId,
 } from '@shared/schemas';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
@@ -76,6 +77,7 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 import { Database } from '@shared/session/database';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { inquiryRecordsLayer } from './inquiryRecords';
 import { databaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
@@ -218,6 +220,7 @@ const sessionHandleLayer = (
     Effect.gen(function* () {
       const { publish, ...reads } = yield* SessionEvents;
       const eventLog = yield* Database;
+      const inquiryRecords = yield* InquiryRecords;
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
       const inputs = yield* SessionInputs;
@@ -363,7 +366,7 @@ const sessionHandleLayer = (
         inputs: inputs.read,
         subscriptions,
         // The request handler admits on the root graph's log.
-        requests: sessionRequests(session, eventLog, local.ref),
+        requests: sessionRequests(session, eventLog, local.ref, inquiryRecords),
         now: () => SubscriptionRef.getUnsafe(eventLog.observedCommit),
         close: () => release(key),
       });
@@ -512,7 +515,7 @@ const sessionGraphLayer = (key: SessionKey) => {
 const sessionLayer = (
   key: SessionKey,
   release: (key: SessionKey) => void,
-  identity: Layer.Layer<ProcessIdentity>,
+  identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
 ) =>
   Layer.fresh(
     sessionHandleLayer(key, release).pipe(
@@ -538,7 +541,7 @@ class Sessions extends Context.Service<
    *  the runtime that holds the map. */
   static layer(
     release: (key: SessionKey) => void,
-    identity: Layer.Layer<ProcessIdentity>,
+    identity: Layer.Layer<ProcessIdentity | InquiryRecords>,
   ) {
     return Layer.effect(
       Sessions,
@@ -761,6 +764,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  */
 export function installProcessRuntime(
   processStart: string | undefined | Promise<string | undefined>,
+  globalStorage: () => string,
 ): void {
   const identity =
     processStart instanceof Promise
@@ -775,11 +779,15 @@ export function installProcessRuntime(
           ),
         )
       : ProcessIdentity.layer(processOwnerId(processStart));
+  const services = inquiryRecordsLayer(globalStorage).pipe(
+    Layer.provideMerge(identity),
+  );
   const release = (key: SessionKey): void => {
     runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
   };
   const runtime = ManagedRuntime.make(
-    Sessions.layer(release, identity).pipe(
+    Sessions.layer(release, services).pipe(
+      Layer.provideMerge(services),
       Layer.provideMerge(
         Layer.mergeAll(effectDiagnosticsLayer, FetchHttpClient.layer),
       ),

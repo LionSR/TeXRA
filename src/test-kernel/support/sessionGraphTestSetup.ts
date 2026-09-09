@@ -1,3 +1,5 @@
+import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { createFakePlatform } from './FakePlatform';
 /**
  * The test kernel's process runtime and session graph family (PRD
  * one-fold-three-renderers, 7.7): what a composition root installs beside
@@ -8,7 +10,6 @@
  * `vi.mock`, and a graph built there would hold the real modules for the
  * rest of the file.
  */
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
 
 let installed = false;
 
@@ -22,7 +23,9 @@ let installed = false;
 export function installTestSessionGraphs(): void {
   if (installed) return;
   installed = true;
-  installProcessRuntime('vitest');
+  installProcessRuntime('vitest', () =>
+    createFakePlatform().storage.getGlobalStoragePath(),
+  );
 }
 
 installTestSessionGraphs();

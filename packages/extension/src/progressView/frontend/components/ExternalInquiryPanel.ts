@@ -126,13 +126,10 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
       this.draftRestored = false;
     }
     // Restore the draft once on first update (avoids the extra render from
-    // connectedCallback): the surface's entry, else the hydrated one.
+    // connectedCallback): the surface owns the draft.
     if (!this.draftRestored) {
       this.draftRestored = true;
-      const data = this.permission.data;
-      const draft =
-        this.surface?.inquiryDrafts.get(draftKey(this.permission)) ??
-        data.draft;
+      const draft = this.surface?.inquiryDrafts.get(draftKey(this.permission));
       if (draft) {
         this.answerText = draft.answer;
         this.sessionLinksText = draft.sessionLinks;

@@ -5,8 +5,9 @@ import { setImmediate as nextTurn } from 'node:timers/promises';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber, ManagedRuntime } from 'effect';
+import { Cause, Effect, Exit, Fiber, Layer, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
+import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 // Local imports
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
@@ -15,6 +16,7 @@ import type {
   AgentDirectoriesPort,
   StorageProvider,
 } from '@platform/interfaces';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import type { NodeAgentDirectoryBootstrapOptions } from '@platform/defaults/nodeHost';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -23,6 +25,7 @@ import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
@@ -95,14 +98,23 @@ describe('desktop agent directory bootstrap', () => {
           import('@platform/processRuntime'),
         ]),
       );
+      const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
       // The desktop entry installs the process runtime before it opens a store;
       // this harness stands in for that entry, so it installs a bare one.
       try {
         effectRuntime();
       } catch {
-        initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+        initProcessRuntime(
+          ManagedRuntime.make(
+            Layer.merge(
+              testHttpClientLayer,
+              inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+                Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+              ),
+            ),
+          ),
+        );
       }
-      const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
       const [globalStateStore, workspaceStateStore] = yield* Effect.all([
         JsonStore.open(join(userDataPath, 'state', 'global.json')),
         JsonStore.open(join(storage.getStoragePath(), 'state.json')),

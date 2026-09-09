@@ -518,7 +518,10 @@ export const databaseLayer = (
       ) =>
         Effect.forEach(prepared, ({ draft, payload }) =>
           Effect.gen(function* () {
-            if (draft.type === 'desktop.projects.changed') {
+            if (
+              draft.type === 'desktop.projects.changed' ||
+              draft.type === 'inquiry.recorded'
+            ) {
               // Profile-state writes own their aggregate only during this transaction.
               yield* sql.unsafe<Record<string, unknown>>(claim, [
                 identity.ownerId,
@@ -699,7 +702,10 @@ export const databaseLayer = (
                 `No commit assigned for aggregate ${draft.aggregateId}`,
               );
             }
-            if (draft.type === 'desktop.projects.changed') {
+            if (
+              draft.type === 'desktop.projects.changed' ||
+              draft.type === 'inquiry.recorded'
+            ) {
               yield* sql.unsafe<Record<string, unknown>>(release, [
                 JSON.stringify([draft.aggregateId]),
                 identity.ownerId,
@@ -747,6 +753,20 @@ export const databaseLayer = (
             };
           }),
         );
+      const inquiryRecordFromRow = (row: Readonly<Record<string, unknown>>) => {
+        const event = decodeEvent(row);
+        if (event.type !== 'inquiry.recorded')
+          throw new Error('Invalid global inquiry record');
+        return event.record;
+      };
+      const readInquiryRecord = (id: string) =>
+        Effect.gen(function* () {
+          const row = (yield* sql.unsafe<Record<string, unknown>>(
+            `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
+            [qualifyAggregateId('global-inquiry', id)],
+          ))[0];
+          return row === undefined ? null : inquiryRecordFromRow(row);
+        });
       return {
         observedCommit,
         level,
@@ -784,6 +804,42 @@ export const databaseLayer = (
                 executionChildren,
                 [id],
               )).map(decodeEvent);
+            }),
+          ),
+        readInquiryRecord: (id) => query(readInquiryRecord(id)),
+        listInquiryRecords: () =>
+          query(
+            Effect.gen(function* () {
+              const rows = yield* sql.unsafe<Record<string, unknown>>(
+                `SELECT ${EVENT_COLUMNS} FROM event e JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event WHERE type = 'inquiry.recorded.1' GROUP BY aggregate_id) latest USING (aggregate_id, seq) ORDER BY e."commit"`,
+                [],
+              );
+              return rows.map(inquiryRecordFromRow);
+            }),
+          ),
+        updateInquiryRecord: (id, change) =>
+          transact(
+            Effect.gen(function* () {
+              const current = yield* readInquiryRecord(id);
+              const result = change(current);
+              if (Result.isSuccess(result) && result.success !== null) {
+                if (result.success.threadId !== id)
+                  throw new Error(
+                    'An inquiry transition cannot change its thread identity.',
+                  );
+                const at = yield* Clock.currentTimeMillis;
+                yield* appendPrepared(
+                  [
+                    prepareEventDraft({
+                      type: 'inquiry.recorded',
+                      aggregateId: qualifyAggregateId('global-inquiry', id),
+                      record: result.success,
+                    }),
+                  ],
+                  at,
+                );
+              }
+              return result;
             }),
           ),
         readDesktopProjects: (id) =>

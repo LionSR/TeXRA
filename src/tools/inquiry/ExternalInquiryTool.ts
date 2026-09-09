@@ -15,7 +15,9 @@
  *   - `list` → enumerate threads by status / scope
  */
 
+import { Effect } from 'effect';
 import { z } from 'zod';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 import {
   getRunContextExecutionId,
@@ -26,8 +28,11 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import {
+  type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,
@@ -37,22 +42,18 @@ import {
   type StreamTabId,
   type ToolResult,
 } from '@shared/schemas';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
+import { ensureError } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
   collectKnownSessionLinks,
-  getThreadSummary,
-  getOpenTurnDraft,
-  listThreadsByStatus,
-  manifestToTranscript,
-  readExternalInquiryThread,
-  recordOpenQuestion,
-  type ExternalInquiryThreadManifest,
-} from './externalInquiryStorage';
+  inquiryRecordToTranscript,
+} from './inquiryRecordFormatting';
 
 const logger = createLog('InquiryTool');
 
@@ -150,7 +151,7 @@ export type InquiryInput = z.infer<typeof InquiryInputSchema>;
 // Read / list subcommand outputs
 // ============================================================================
 
-function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
+function buildReadOutput(manifest: InquiryThreadRecord): ToolResult {
   const lines = [
     `Thread: ${manifest.threadId}`,
     `Status: ${manifest.status}`,
@@ -234,139 +235,162 @@ export class ExternalInquiryTool extends defineTool({
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,
 }) {
-  protected async execute(input: InquiryInput): Promise<ToolResult> {
-    const context = tryUseRunContext();
-    const streamId = getRunContextStreamId(context);
-    const executionId = getRunContextExecutionId(context);
+  protected execute(input: InquiryInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(
+      Effect.gen({ self: this }, function* () {
+        const context = tryUseRunContext();
+        const streamId = getRunContextStreamId(context);
+        const executionId = getRunContextExecutionId(context);
 
-    // Only `ask` emits events. `read` and `list` are pure storage reads
-    // and stay usable in contexts without a wired runtime host.
-    switch (input.command) {
-      case 'ask': {
-        // Guard only: interactions exist iff the run context carries a
-        // session, so `executeAsk` reaches them through that one session
-        // rather than carrying a second handle to the same object.
-        requireInteractions('inquiry', context);
-        return this.executeAsk({
-          input,
-          streamId,
-          executionId,
-          session: currentSession(),
-        });
-      }
-      case 'read':
-        return this.executeRead(input);
-      case 'list':
-        return this.executeList({ input, streamId });
-    }
+        // Only `ask` emits events. `read` and `list` are pure storage reads
+        // and stay usable in contexts without a wired runtime host.
+        switch (input.command) {
+          case 'ask': {
+            // Guard only: interactions exist iff the run context carries a
+            // session, so `executeAsk` reaches them through that one session
+            // rather than carrying a second handle to the same object.
+            requireInteractions('inquiry', context);
+            return yield* this.executeAsk({
+              input,
+              streamId,
+              executionId,
+              session: currentSession(),
+            });
+          }
+          case 'read':
+            return yield* this.executeRead(input);
+          case 'list':
+            return yield* this.executeList({ input, streamId });
+        }
+      }),
+      { signal: getCurrentToolCallContext()?.signal },
+    );
   }
 
-  private async executeAsk(args: {
+  private executeAsk(args: {
     input: Extract<InquiryInput, { command: 'ask' }>;
     streamId: StreamTabId | undefined;
     executionId?: ExecutionId;
     session: SessionHandle;
-  }): Promise<ToolResult> {
-    const { input, streamId, executionId, session } = args;
-    if (!streamId) {
-      throw new ToolError(
-        'inquiry { command: "ask" } requires an active stream context.',
+  }): Effect.Effect<ToolResult, Error, InquiryRecords> {
+    return Effect.gen(function* () {
+      const records = yield* InquiryRecords;
+      const { input, streamId, executionId, session } = args;
+      if (!streamId) {
+        return yield* Effect.fail(
+          new ToolError(
+            'inquiry { command: "ask" } requires an active stream context.',
+          ),
+        );
+      }
+      const questionContext = input.context ?? undefined;
+      const suggestSearch = input.suggestSearch ?? undefined;
+      const attachFiles = input.attachFiles ?? undefined;
+
+      logger.info(`Inquiry dispatch [${input.thread_id ?? 'new'}]`, {
+        data: input.question.slice(0, 100),
+      });
+
+      const manifest = yield* records.recordOpenQuestion({
+        threadId: input.thread_id ?? undefined,
+        parentStreamId: streamId,
+        parentExecutionId: executionId ?? null,
+        question: input.question,
+        context: questionContext,
+        suggestSearch,
+        attachFiles,
+      });
+      // Use the record committed by recordOpenQuestion.
+      // A re-read would only reintroduce the write/read race the continuation
+      // injectors already avoid via writer snapshots.
+
+      const permission: ExternalInquiryPermission = {
+        requestId: manifest.threadId, // The panel addresses the inquiry by threadId.
+        question: input.question,
+        threadId: manifest.threadId,
+        context: questionContext,
+        suggestSearch,
+        attachFiles,
+        allowBypass: false,
+        streamId,
+        sessionLinks: collectKnownSessionLinks(manifest),
+        transcript: inquiryRecordToTranscript(manifest),
+      };
+      const interaction = session.interactions.openExternalInquiry(permission);
+      if (!interaction) {
+        return yield* Effect.fail(
+          new Error('HostInteractions.openExternalInquiry is required'),
+        );
+      }
+      yield* hostPort(() => interaction).pipe(Effect.mapError(ensureError));
+
+      // Background Tasks panel: announce the open thread.
+      const summary = yield* records.getThreadSummary(manifest.threadId);
+      if (summary) {
+        session.publish([
+          {
+            type: 'inquiryThreadUpdated',
+            aggregateId: qualifyAggregateId('inquiry', summary.threadId),
+            ...summary,
+          },
+        ]);
+      }
+
+      const message =
+        'Question dispatched to the user. The tool returned without waiting. ' +
+        'You will be woken with a continuation message when an answer arrives. ' +
+        `Do NOT re-dispatch on thread_id=${manifest.threadId}. ` +
+        'If your next step depends on this answer, end your turn now; ' +
+        'otherwise proceed with independent work.';
+
+      return executed(
+        `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
+        `Inquiry dispatched (${manifest.threadId})`,
       );
-    }
-    const questionContext = input.context ?? undefined;
-    const suggestSearch = input.suggestSearch ?? undefined;
-    const attachFiles = input.attachFiles ?? undefined;
-
-    logger.info(`Inquiry dispatch [${input.thread_id ?? 'new'}]`, {
-      data: input.question.slice(0, 100),
     });
-
-    const manifest = await recordOpenQuestion({
-      threadId: input.thread_id ?? undefined,
-      parentStreamId: streamId,
-      parentExecutionId: executionId ?? null,
-      question: input.question,
-      context: questionContext,
-      suggestSearch,
-      attachFiles,
-    });
-    // Use the manifest recordOpenQuestion just wrote under the thread lock —
-    // a re-read would only reintroduce the write/read race the continuation
-    // injectors already avoid via writer snapshots.
-
-    const permission: ExternalInquiryPermission = {
-      requestId: manifest.threadId, // legacy field — panel addresses by threadId now
-      question: input.question,
-      threadId: manifest.threadId,
-      context: questionContext,
-      suggestSearch,
-      attachFiles,
-      allowBypass: false,
-      streamId,
-      sessionLinks: collectKnownSessionLinks(manifest),
-      draft: getOpenTurnDraft(manifest),
-      transcript: manifestToTranscript(manifest),
-    };
-    const interaction = session.interactions.openExternalInquiry(permission);
-    if (!interaction) {
-      throw new Error('HostInteractions.openExternalInquiry is required');
-    }
-    await interaction;
-
-    // Background Tasks panel: announce the open thread.
-    const summary = await getThreadSummary(manifest.threadId);
-    if (summary) {
-      session.publish([
-        {
-          type: 'inquiryThreadUpdated',
-          aggregateId: qualifyAggregateId('inquiry', summary.threadId),
-          ...summary,
-        },
-      ]);
-    }
-
-    const message =
-      'Question dispatched to the user. The tool returned without waiting. ' +
-      'You will be woken with a continuation message when an answer arrives. ' +
-      `Do NOT re-dispatch on thread_id=${manifest.threadId}. ` +
-      'If your next step depends on this answer, end your turn now; ' +
-      'otherwise proceed with independent work.';
-
-    return executed(
-      `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
-      `Inquiry dispatched (${manifest.threadId})`,
-    );
   }
 
-  private async executeRead(
+  private executeRead(
     input: Extract<InquiryInput, { command: 'read' }>,
-  ): Promise<ToolResult> {
-    const manifest = await readExternalInquiryThread(input.thread_id);
-    if (!manifest) {
-      throw new ToolError(
-        `External inquiry thread not found: ${input.thread_id}`,
+  ): Effect.Effect<ToolResult, Error, InquiryRecords> {
+    return Effect.gen(function* () {
+      const records = yield* InquiryRecords;
+      const manifest = yield* records.readExternalInquiryThread(
+        input.thread_id,
       );
-    }
-    return buildReadOutput(manifest);
+      if (!manifest) {
+        return yield* Effect.fail(
+          new ToolError(
+            `External inquiry thread not found: ${input.thread_id}`,
+          ),
+        );
+      }
+      return buildReadOutput(manifest);
+    });
   }
 
-  private async executeList(args: {
+  private executeList(args: {
     input: Extract<InquiryInput, { command: 'list' }>;
     streamId: StreamTabId | undefined;
-  }): Promise<ToolResult> {
-    const { input, streamId } = args;
-    if (input.scope === 'stream' && !streamId) {
-      throw new ToolError(
-        'inquiry { command: "list", scope: "stream" } requires an active stream context. ' +
-          'Use scope: "all" to list across streams.',
-      );
-    }
+  }): Effect.Effect<ToolResult, Error, InquiryRecords> {
+    return Effect.gen(function* () {
+      const records = yield* InquiryRecords;
+      const { input, streamId } = args;
+      if (input.scope === 'stream' && !streamId) {
+        return yield* Effect.fail(
+          new ToolError(
+            'inquiry { command: "list", scope: "stream" } requires an active stream context. ' +
+              'Use scope: "all" to list across streams.',
+          ),
+        );
+      }
 
-    const summaries = await listThreadsByStatus({
-      status: input.status,
-      scope: input.scope,
-      streamId,
+      const summaries = yield* records.listThreadsByStatus({
+        status: input.status,
+        scope: input.scope,
+        streamId,
+      });
+      return buildListOutput(summaries, input.status, input.scope);
     });
-    return buildListOutput(summaries, input.status, input.scope);
   }
 }

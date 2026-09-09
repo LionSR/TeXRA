@@ -1,5 +1,11 @@
 /** The root-scoped event store contract. SQLite and its resource lifetime belong to the controller layer. */
-import { Context, Data, type Effect, type SubscriptionRef } from 'effect';
+import {
+  Context,
+  Data,
+  type Effect,
+  type SubscriptionRef,
+  type Result,
+} from 'effect';
 import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
@@ -9,6 +15,8 @@ import type {
   OwnerId,
   SessionEvent,
   SessionEventDraft,
+  InquiryThreadRecord,
+  InquiryThreadId,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -104,6 +112,19 @@ export class Database extends Context.Service<
     readonly readDesktopProjects: (
       id: AggregateId,
     ) => Effect.Effect<SessionEvent | undefined, DatabaseReadFailed>;
+    /** Canonical global inquiry content, never a project display projection. */
+    readonly readInquiryRecord: (
+      id: InquiryThreadId,
+    ) => Effect.Effect<InquiryThreadRecord | null, DatabaseReadFailed>;
+    readonly listInquiryRecords: () => Effect.Effect<
+      readonly InquiryThreadRecord[],
+      DatabaseReadFailed
+    >;
+    /** Validate and change a global thread while its SQL write transaction is held. */
+    readonly updateInquiryRecord: <A extends InquiryThreadRecord | null>(
+      id: InquiryThreadId,
+      change: (current: InquiryThreadRecord | null) => Result.Result<A, Error>,
+    ) => Effect.Effect<Result.Result<A, Error>, DatabaseWriteFailed>;
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
