@@ -79,8 +79,7 @@ function threadOf(events: ThreadEvent[]): Thread {
 }
 
 function toolLogs(store: StreamLog): Record<string, unknown>[] {
-  const log = store;
-  const entries = log?.getRange(0, log.head) ?? [];
+  const entries = store.getRange(0, store.head);
   return entries
     .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
     .map((entry) => entry.data as Record<string, unknown>);

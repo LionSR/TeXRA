@@ -238,7 +238,7 @@ describe('runtime skills', () => {
     ).not.toThrow();
     expect(
       store
-        ?.getRange(0)
+        .getRange(0)
         .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)
         ?.data,
     ).toStrictEqual({ skills: result.skills });
