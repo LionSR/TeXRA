@@ -22,7 +22,6 @@
       "src/agent/implementations/flows/reflection/output/compiledPdfArtifacts.ts": 2,
       "src/agent/index/agentRegistry.ts": 2,
       "src/agent/index/platformAgentDirectories.ts": 3,
-      "src/agent/index/remoteAgentMeta.ts": 2,
       "src/agent/modelHandlers/ModelHandler.ts": 1,
       "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts": 1,
       "src/agent/runtime/AgentRunLifecycle.ts": 1,

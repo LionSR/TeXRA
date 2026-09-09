@@ -21,7 +21,11 @@ import {
   getExecutionRecords,
   type ResultMeta,
 } from '@agent/storage';
-import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { WorkflowRunAbortError } from '@agent/workflowScript';
+import {
+  prepareAgentDefinition,
+  type PreparedAgentDefinition,
+} from '@agent/runtime/AgentLaunchContext';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -32,6 +36,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
+  AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
@@ -131,6 +136,20 @@ const stableExecutions = new Map<
   }
 >();
 
+/** Resolve the definition once before either in-band launch path registers it. */
+const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
+  options: InBandSubagentDeliveryOptions,
+) {
+  options.signal?.throwIfAborted();
+  return yield* prepareAgentDefinition({
+    config: AgentConfigSchema.parse(options.configPayload),
+    session: options.session,
+    enforceCategory: true,
+    signal: options.signal,
+    suppressErrorNotification: true,
+  });
+});
+
 /**
  * Execute one child through the one shared driver and read its typed result
  * back from the durable record. The child runs under the same detached
@@ -150,19 +169,11 @@ const stableExecutions = new Map<
 const executeInBand = Effect.fn('executeInBand')(
   function* (
     options: InBandSubagentDeliveryOptions,
+    definition: PreparedAgentDefinition,
     mode: PersistenceMode,
     executionId: ExecutionId,
     stableAttempt?: StableSubagentAttempt,
   ): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
-    options.signal?.throwIfAborted();
-
-    const definition = yield* prepareAgentDefinition({
-      config: AgentConfigSchema.parse(options.configPayload),
-      session: options.session,
-      enforceCategory: true,
-      signal: options.signal,
-      suppressErrorNotification: true,
-    });
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
@@ -430,12 +441,30 @@ export const executeStableSubagentInBand = Effect.fn(
             // Publish the physical attempt id before resolving mutable launch state.
             options.onActiveExecutionId?.(executionId);
             const prepared = yield* options.prepare();
+            const launch = {
+              ...prepared,
+              parentExecutionId: options.parentExecutionId,
+              signal: options.signal,
+            };
+            const definition = yield* prepareInBandDefinition(launch);
+            // Validate the current definition, not metadata left by an earlier
+            // catalog load. Recovery returned above without loading it again.
+            if (
+              definition.config.agentCategory === AgentCategory.Workflow &&
+              definition.config.inputFiles.length === 0 &&
+              definition.setting.defaultOutputFiles.length === 0
+            ) {
+              return yield* Effect.fail(
+                new WorkflowRunAbortError(
+                  `Workflow agent '${launch.agentName}' edits files: pass options.inputFiles ` +
+                    `with files that still exist (its result carries output files and ` +
+                    `diffs, not response text).`,
+                ),
+              );
+            }
             const completed = yield* executeInBand(
-              {
-                ...prepared,
-                parentExecutionId: options.parentExecutionId,
-                signal: options.signal,
-              },
+              launch,
+              definition,
               'required-result',
               executionId,
               attempt,
@@ -459,8 +488,10 @@ export const executeSubagentForDeliveryInBand = Effect.fn(
 )(function* (
   options: InBandSubagentDeliveryOptions,
 ): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
+  const definition = yield* prepareInBandDefinition(options);
   return yield* executeInBand(
     options,
+    definition,
     'best-effort-delivery',
     generateExecutionId(),
   );

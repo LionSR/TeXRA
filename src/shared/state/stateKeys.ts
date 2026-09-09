@@ -103,7 +103,6 @@ export enum GlobalStateKey {
 
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',
-  REMOTE_AGENT_META_CACHE = 'texra.remoteAgentMetaCache',
 
   // Endpoint settings
   ENDPOINT_OPENAI = 'texra.endpoint.openai',

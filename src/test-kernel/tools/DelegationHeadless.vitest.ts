@@ -3,6 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { Effect } from 'effect';
+import { it as effectIt } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -42,6 +43,7 @@ function executeStableSubagentInBand(
 const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
+  prepareAgentDefinition: vi.fn(),
   resumeToolUseTurn: vi.fn(),
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
@@ -56,8 +58,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
-  prepareAgentDefinition: ({ config }: { config: unknown }) =>
-    Effect.succeed({ config }),
+  prepareAgentDefinition: mocks.prepareAgentDefinition,
 }));
 
 // Delegation resolves targets through the scope resolver; with no active run
@@ -413,6 +414,10 @@ describe('headless delegation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.prepareAgentDefinition.mockImplementation(
+      ({ config }: { config: unknown }) =>
+        Effect.succeed({ config, setting: { defaultOutputFiles: [] } }),
+    );
     mocks.registerExecution.mockReturnValue(Effect.void);
     mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
     restoreAgentEngine = provideAgentEngine({
@@ -467,6 +472,58 @@ describe('headless delegation', () => {
       files: [],
     });
   });
+
+  effectIt.effect(
+    'validates workflow inputs against its once-loaded definition before registration',
+    () =>
+      Effect.gen(function* () {
+        const setting = {
+          defaultOutputFiles: [] as string[],
+          tools: ['read_file'],
+        };
+        mocks.prepareAgentDefinition.mockImplementation(
+          ({ config }: { config: unknown }) =>
+            Effect.succeed({ config, setting }),
+        );
+        const options = delegationOptions({
+          configPayload: {
+            agent: 'review',
+            agentSource: 'remote',
+            agentCategory: AgentCategory.Workflow,
+            model: 'deepseekT',
+          },
+        });
+        const { parentExecutionId, signal, ...prepared } = options;
+        const run = () =>
+          executeStableSubagentInBandEffect({
+            executionId: IN_BAND_LOGICAL_EXECUTION_ID,
+            parentExecutionId,
+            session: prepared.session,
+            signal,
+            prepare: () => Effect.succeed(prepared),
+          });
+        expect(yield* Effect.flip(run())).toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining('pass options.inputFiles'),
+        });
+        expect(mocks.registerExecution).not.toHaveBeenCalled();
+        setting.defaultOutputFiles = ['generated.tex'];
+        mocks.prepareAgentDefinition.mockClear();
+        mocks.executeAgent.mockResolvedValue({
+          category: 'workflow',
+          outcome: 'completed',
+          outputs: [],
+          files: [],
+        });
+        yield* run();
+        expect(mocks.prepareAgentDefinition).toHaveBeenCalledOnce();
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          expect.objectContaining({ setting }),
+          expect.any(String),
+          expect.any(Object),
+        );
+      }),
+  );
 
   afterEach(async () => {
     const session = defaultSession();
