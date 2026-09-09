@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { createFlushableDebounce } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -83,7 +84,7 @@ function watchRepository(
       pendingBaseRef = undefined;
       pendingBranchName = undefined;
       if (lastName !== undefined) {
-        AgentReviewService.clear();
+        effectRuntime().runFork(AgentReviewService.clear());
       }
       lastName = name;
       lastCommit = commit;

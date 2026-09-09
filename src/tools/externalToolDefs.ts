@@ -54,12 +54,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * `packages/cli/package.json` declares as `engines.node`, so `texra doctor`
  * and npm never disagree about what runs.
  *
- * The floor is 22.13.0 because the persistence substrate opens
- * `node:sqlite`, and below 22.13 that module is not a built-in at all without
- * `--experimental-sqlite`, a flag the published bare `#!/usr/bin/env node`
- * shebang cannot pass (stage 0 spike, 2026-09-06).
+ * The official Effect SQLite client requires the `node:sqlite` backup,
+ * columns and setReturnArrays APIs. Node 22.16.0 and Node 24 provide all
+ * three; Node 23 lacks setReturnArrays.
  */
-export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '>=22.13.0';
+export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.16.0 || >=24.0.0';
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 

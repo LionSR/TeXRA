@@ -12,6 +12,7 @@ import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const resumeToolUseFromResumeDataMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/executeAgent', async (importActual) => ({
@@ -21,13 +22,29 @@ vi.mock('@agent/runtime/executeAgent', async (importActual) => ({
 
 const retrieveSessionResumeDataMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: retrieveSessionResumeDataMock,
+  retrieveSessionResumeData: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => retrieveSessionResumeDataMock(...args),
+      catch: ensureError,
+    }),
 }));
 
 const getExecutionStoreMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/ExecutionKVStore')>()),
   getExecutionStore: getExecutionStoreMock,
+  getExecutionRecords: () => {
+    const store = getExecutionStoreMock();
+    return {
+      readConfig: () =>
+        Effect.tryPromise({
+          try: () => store.readConfig(),
+          catch: ensureError,
+        }),
+      readMeta: () =>
+        Effect.tryPromise({ try: () => store.readMeta(), catch: ensureError }),
+    };
+  },
 }));
 
 // The refusal path re-reads the durable facts, which the fixtures below do
@@ -35,7 +52,8 @@ vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
 const classifyRunMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/runClassification', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/runClassification')>()),
-  classifyRun: classifyRunMock,
+  classifyRun: (...args: unknown[]) =>
+    Effect.promise(() => classifyRunMock(...args)),
 }));
 
 const inspectExecutionLeaseMock = vi.hoisted(() => vi.fn());
@@ -44,7 +62,7 @@ vi.mock('@agent/storage/executionLease', async (importActual) => ({
   inspectExecutionLease: inspectExecutionLeaseMock,
 }));
 
-const EXECUTION = 'exec:resume' as ExecutionId;
+const EXECUTION = 'aabbcc' as ExecutionId;
 const STREAM = 'stream:resume-ownership' as StreamTabId;
 const completed = {
   category: 'toolUse' as const,
@@ -139,14 +157,18 @@ describe('resumeRun tool-use queue ownership', () => {
       Effect.gen(function* () {
         const session = createSession();
         const preload = createDeferred<void>();
+        const preloadStarted = createDeferred<void>();
         vi.mocked(session.snapshots.preload).mockReturnValueOnce(
-          Effect.promise(() => preload.promise),
+          Effect.promise(() => {
+            preloadStarted.resolve();
+            return preload.promise;
+          }),
         );
 
         const resumed = yield* Effect.forkChild(
           resumeStream(STREAM, { session, executeWorkflow }),
-          { startImmediately: true },
         );
+        yield* Effect.promise(() => preloadStarted.promise);
         expect(
           session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
         ).toEqual({ kind: 'queued' });
@@ -169,14 +191,18 @@ describe('resumeRun tool-use queue ownership', () => {
     Effect.gen(function* () {
       const session = createSession();
       const preload = createDeferred<void>();
+      const preloadStarted = createDeferred<void>();
       vi.mocked(session.snapshots.preload).mockReturnValueOnce(
-        Effect.promise(() => preload.promise),
+        Effect.promise(() => {
+          preloadStarted.resolve();
+          return preload.promise;
+        }),
       );
 
       const resumed = yield* Effect.forkChild(
         resumeStream(STREAM, { session, executeWorkflow }),
-        { startImmediately: true },
       );
+      yield* Effect.promise(() => preloadStarted.promise);
       expect(
         session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
       ).toEqual({ kind: 'queued' });
@@ -235,7 +261,6 @@ describe('resumeRun tool-use queue ownership', () => {
 
       const first = yield* Effect.forkChild(
         resumeRun(EXECUTION, { session, executeWorkflow }),
-        { startImmediately: true },
       );
       yield* Effect.promise(() =>
         vi.waitFor(() =>
@@ -276,7 +301,6 @@ describe('resumeRun tool-use queue ownership', () => {
           recovery: submission.lease,
           executeWorkflow,
         }),
-        { startImmediately: true },
       );
       session.followUps.terminalize(STREAM);
       config.resolve(snapshot().agentConfig);
@@ -319,7 +343,6 @@ describe('resumeRun tool-use queue ownership', () => {
 
       const resuming = yield* Effect.forkChild(
         resumeRun(EXECUTION, { session, executeWorkflow }),
-        { startImmediately: true },
       );
       yield* Effect.promise(() =>
         vi.waitFor(() =>

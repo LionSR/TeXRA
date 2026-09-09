@@ -11,40 +11,35 @@
  * same schema and transaction implementation in SQLite memory. A failed file
  * open is an error and never selects the ephemeral mode.
  *
- * This layer validates, redacts, and serializes the complete batch before
- * beginning its transaction (C3, C6). It also owns the envelope C1 gives its
+ * Before its write transaction, this layer validates, redacts, and serializes
+ * the complete batch (C3, C6). It also owns the envelope C1 gives its
  * own columns: the writer
  * (C5, from `ProcessIdentity`), the publish clock, and the `seq` and
  * `commit` ordinals, none of which a caller can supply.
  *
- * `node:sqlite` and `node:fs` are used directly rather than through a
- * `Platform` port on purpose: SQLite opens the path itself, and C1 requires
- * the file and its WAL to be a real local filesystem, so a virtual filesystem
- * port could not carry them. `node:sqlite` is experimental on every host
- * floor measured for stage 0, so this module confines itself to
- * `DatabaseSync`, `StatementSync`, and pragmas, the surface every floor has;
- * `backup` and `StatementSync.columns()` arrived only in Node 22.16, after
- * the approved 22.13 floor. Neither belongs to this implementation.
+ * The official Node SQLite driver owns the scoped connection.
+ * Effect SQL owns statement execution, connection reservation and transactions;
+ * this layer owns the C1 schema, claims, validation and committed wake levels.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync, type StatementSync } from 'node:sqlite';
-
+import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
+import * as SqlClient from 'effect/unstable/sql/SqlClient';
+import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
 import {
+  Cause,
   Clock,
+  Scope,
   Effect,
   Exit,
   Layer,
-  Semaphore,
   Result,
   Stream,
   SubscriptionRef,
 } from 'effect';
 import { z } from 'zod';
-
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
   AggregateIdSchema,
@@ -59,6 +54,7 @@ import {
   referencedAggregates,
   type AggregateId,
   type CommitOrdinal,
+  type ExecutionId,
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -77,10 +73,8 @@ import {
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
-
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
-
 /**
  * The C1 schema. Two tables and nothing else app-owned on disk.
  *
@@ -129,11 +123,10 @@ CREATE TABLE IF NOT EXISTS event (
 CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);
 CREATE INDEX IF NOT EXISTS event_agg_commit   ON event(aggregate_id, "commit");
 CREATE INDEX IF NOT EXISTS event_type_commit  ON event(type, "commit");
+CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.parentStartCommit')) WHERE type = 'run.start.1';
 `;
-
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
-
 /** Listing arms of the present vocabulary; approval requests are a set. */
 const LISTING_TYPES = SessionEventDraftSchema.options
   .map((schema) => schema.shape.type.value)
@@ -144,7 +137,6 @@ const LISTING_TYPES = SessionEventDraftSchema.options
       type !== 'approval.resolved',
   )
   .map((type) => `${type}.1`);
-
 const READ_LISTING = `
 WITH latest AS (
   SELECT aggregate_id, type, MAX(seq) AS seq FROM event
@@ -164,10 +156,8 @@ WITH latest AS (
   )
 )
 SELECT * FROM selected
-WHERE json_extract(aggregateId, '$[0]') <> 'migration'
 ORDER BY "commit"
 `;
-
 const READ_STATE = `
 SELECT s.aggregate_id AS aggregateId, s.owner_id AS ownerId,
   s.closed, s.parent_id AS parentId,
@@ -177,12 +167,9 @@ SELECT s.aggregate_id AS aggregateId, s.owner_id AS ownerId,
     ELSE NULL END AS startCommit
 FROM event_sequence s
 WHERE s.aggregate_id IN (SELECT value FROM json_each(?))
-  AND json_extract(s.aggregate_id, '$[0]') <> 'migration'
 `;
-
 const PayloadSchema = z.record(z.string(), z.unknown());
 const StoredTypeSchema = z.string().endsWith('.1');
-
 /** Stored versions are checked before reconstructing the typed event. */
 function decodeEvent(row: Record<string, unknown>): SessionEvent {
   const payload = Result.getOrThrow(
@@ -198,7 +185,6 @@ function decodeEvent(row: Record<string, unknown>): SessionEvent {
     type: StoredTypeSchema.parse(row.type).slice(0, -2),
   });
 }
-
 /** First append claims the aggregate; later appends require that same claim. */
 const NEXT_SEQ = `
 INSERT INTO event_sequence (aggregate_id, seq, owner_id)
@@ -207,7 +193,6 @@ ON CONFLICT(aggregate_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id AND event_sequence.closed = 0
 RETURNING seq
 `;
-
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
 INSERT INTO event (aggregate_id, seq, type, owner_id, at, data)
@@ -215,7 +200,6 @@ VALUES (?, ?, ?, ?, ?,
   CASE WHEN ? IS NULL THEN ? ELSE json_set(?, '$.parentStartCommit', ?) END)
 RETURNING "commit" AS "commit"
 `;
-
 export const databaseLayer = (
   mode: 'persistent' | 'ephemeral',
 ): Layer.Layer<
@@ -234,111 +218,145 @@ export const databaseLayer = (
           : ':memory:';
       const openFailed = (cause: unknown): DatabaseOpenFailed =>
         new DatabaseOpenFailed({ path, cause });
-
-      // The connection is scoped before it is configured, so a pragma that
-      // does not verify or a schema that does not apply closes the handle it
-      // failed on instead of leaving the file and its WAL locked for the
-      // life of the process.
-      const db = yield* Effect.acquireRelease(
-        Effect.try({
-          try: () => {
-            if (mode === 'ephemeral') return new DatabaseSync(path);
-            mkdirSync(roots.storage, { recursive: true });
-            return new DatabaseSync(
-              localDatabasePath(roots.storage, SESSION_DATABASE_FILE),
-            );
-          },
-          catch: openFailed,
-        }),
-        (connection) => Effect.sync(() => connection.close()),
-      );
-      const { nextSeq, insertEvent } = yield* Effect.try({
-        try: () => configure(db, mode),
+      const filename = yield* Effect.try({
+        try: () => {
+          if (mode === 'ephemeral') return ':memory:';
+          mkdirSync(roots.storage, { recursive: true });
+          return localDatabasePath(roots.storage, SESSION_DATABASE_FILE);
+        },
         catch: openFailed,
       });
-
+      const sql = yield* SqliteClient.make({
+        filename,
+        disableWAL: mode === 'ephemeral',
+        busyTimeout: '5 seconds',
+      }).pipe(mapDatabaseFailure(openFailed));
+      yield* configure(sql, mode).pipe(mapDatabaseFailure(openFailed));
       const level = yield* SubscriptionRef.make(0);
-      const gate = yield* Semaphore.make(1);
-      const writeFailed = (cause: unknown): DatabaseWriteFailed =>
-        new DatabaseWriteFailed({ path, cause });
-
-      const readFailed = (cause: unknown): DatabaseReadFailed =>
-        new DatabaseReadFailed({ path, cause });
-      const query = <A>(read: () => A): Effect.Effect<A, DatabaseReadFailed> =>
-        gate.withPermit(Effect.try({ try: read, catch: readFailed }));
-      const highWater = db.prepare(
-        "SELECT seq FROM sqlite_sequence WHERE name = 'event'",
-      );
-      const currentCommit = (): CommitOrdinal => {
-        const row = highWater.get();
+      const observedCommit = yield* SubscriptionRef.make(0);
+      const highWater = "SELECT seq FROM sqlite_sequence WHERE name = 'event'";
+      const commitFromRows = (
+        rows: readonly Readonly<Record<string, unknown>>[],
+      ) => {
+        const row = rows[0];
         return row === undefined ? 0 : z.int().nonnegative().parse(row.seq);
       };
-      const observedCommit = yield* SubscriptionRef.make(currentCommit());
-      const listing = db.prepare(READ_LISTING);
-      const state = db.prepare(READ_STATE);
+      const writeFailed = (cause: unknown): DatabaseWriteFailed =>
+        new DatabaseWriteFailed({ path, cause });
+      const readFailed = (cause: unknown): DatabaseReadFailed =>
+        new DatabaseReadFailed({ path, cause });
+      const query = <A>(
+        read: Effect.Effect<A, unknown>,
+      ): Effect.Effect<A, DatabaseReadFailed> =>
+        read.pipe(mapDatabaseFailure(readFailed));
+      const currentCommit = sql
+        .unsafe<Record<string, unknown>>(highWater, [])
+        .pipe(Effect.map(commitFromRows));
+      yield* SubscriptionRef.set(
+        observedCommit,
+        yield* currentCommit.pipe(mapDatabaseFailure(openFailed)),
+      );
+      const listing = READ_LISTING;
+      const state = READ_STATE;
       const dependents = `WITH RECURSIVE dependents(aggregate_id) AS (
         SELECT aggregate_id FROM event_sequence WHERE aggregate_id = ?
         UNION ALL
         SELECT child.aggregate_id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.aggregate_id
       )`;
-      const dependentIds = db.prepare(`${dependents}
-        SELECT aggregate_id FROM dependents ORDER BY aggregate_id`);
-      const unownedDependent = db.prepare(`${dependents}
+      const dependentIds = `${dependents}
+        SELECT aggregate_id FROM dependents ORDER BY aggregate_id`;
+      const unownedDependent = `${dependents}
         SELECT aggregate_id FROM event_sequence
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
           AND closed = 0 AND owner_id IS NOT ?
         LIMIT 1
-      `);
-      const deletionExecutions = db.prepare(`${dependents}
+      `;
+      const deletionExecutions = `${dependents}
         SELECT json_extract(aggregate_id, '$[1]') AS executionId
         FROM event_sequence
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
           AND json_extract(aggregate_id, '$[0]') = 'execution'
         ORDER BY executionId
-      `);
-      const closeDependents = db.prepare(`${dependents}
+      `;
+      const closeDependents = `${dependents}
         UPDATE event_sequence SET closed = 1
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
-      `);
-      const all = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
+      `;
+      const all = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
-        ORDER BY e."commit"`);
-      const aggregate = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
+        ORDER BY e."commit"`;
+      const executionRecords = `
+        WITH own_stream AS (
+          SELECT stream.aggregate_id AS id FROM event_sequence execution
+          JOIN event_sequence stream ON stream.aggregate_id = execution.parent_id
+          WHERE execution.aggregate_id = ? AND execution.closed = 0 AND stream.closed = 0
+        ),
+        latest AS (
+          SELECT aggregate_id, type, MAX(seq) AS seq FROM event
+          WHERE EXISTS (SELECT 1 FROM own_stream) AND (
+            aggregate_id = ?
+            OR (aggregate_id = (SELECT id FROM own_stream) AND type IN ('run.start.1', 'status.1', 'stream.removed.1'))
+          )
+          GROUP BY aggregate_id, type
+        )
+        SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq)
+        ORDER BY "commit"
+      `;
+      const executionChildren = `
+        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?),
+        parent AS (SELECT "commit" AS start FROM event WHERE aggregate_id = (SELECT id FROM own_stream) AND type = 'run.start.1'),
+        children AS (SELECT aggregate_id AS id, data FROM event INDEXED BY event_parent_start
+          WHERE type = 'run.start.1' AND json_extract(data, '$.parentStartCommit') = (SELECT start FROM parent)),
+        relevant AS (
+          SELECT id, 'run.start.1' AS type FROM children
+          UNION ALL SELECT id, 'stream.removed.1' FROM children
+          UNION ALL SELECT json_array('execution',json_extract(data,'$.executionId')), 'execution.launchLabel.1' FROM children
+          UNION ALL SELECT id, 'run.start.1' FROM own_stream
+          UNION ALL SELECT id, 'stream.removed.1' FROM own_stream
+        ),
+        latest AS (SELECT e.aggregate_id,e.type,MAX(e.seq) AS seq FROM relevant r JOIN event e ON e.aggregate_id=r.id AND e.type=r.type GROUP BY e.aggregate_id,e.type)
+        SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq) ORDER BY "commit"
+      `;
+      const aggregate = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
-        ORDER BY e.seq`);
-      const after = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
+        ORDER BY e.seq`;
+      const after = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
           AND e."commit" > ? AND e."commit" <= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
-        ORDER BY e."commit"`);
+        ORDER BY e."commit"`;
       const inputTypes = JSON.stringify([
         ...LISTING_TYPES,
         'approval.requested.1',
         'approval.resolved.1',
       ]);
-      const inputRows = db.prepare(`
+      const inputRows = `
         SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.type IN (SELECT value FROM json_each(?))
           AND e."commit" > ? AND e."commit" <= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         UNION ALL
         SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
           AND e.type NOT IN (SELECT value FROM json_each(?))
           AND e."commit" > ? AND e."commit" <= ?
-          AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
         ORDER BY "commit"
-      `);
-      const dataVersion = db.prepare('PRAGMA data_version');
-      let version = dataVersion.get()?.data_version;
+      `;
+      const dataVersion = 'PRAGMA data_version';
+      let version = (yield* sql
+        .unsafe<Record<string, unknown>>(dataVersion, [])
+        .pipe(mapDatabaseFailure(openFailed)))[0]?.data_version;
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
           Stream.runForEach(() =>
             Effect.gen(function* () {
-              const next = yield* query(() => dataVersion.get()?.data_version);
+              const next = yield* query(
+                Effect.gen(function* () {
+                  return (yield* sql.unsafe<Record<string, unknown>>(
+                    dataVersion,
+                    [],
+                  ))[0]?.data_version;
+                }),
+              );
               if (next === version) return;
               version = next;
               yield* SubscriptionRef.set(
@@ -350,98 +368,121 @@ export const databaseLayer = (
           ),
         ),
       );
-
-      const transaction = <A, E>(
-        mode: 'read' | 'write',
-        body: () => A,
-        failed: (cause: unknown) => E,
-      ): Effect.Effect<A, E> =>
-        gate.withPermit(
-          Effect.uninterruptible(
-            Effect.acquireUseRelease(
-              Effect.try({
-                try: () =>
-                  db.exec(mode === 'write' ? 'BEGIN IMMEDIATE' : 'BEGIN'),
-                catch: failed,
-              }),
-              () => Effect.try({ try: body, catch: failed }),
-              (_, exit) =>
-                Exit.isSuccess(exit)
-                  ? Effect.try({
-                      try: () => db.exec('COMMIT'),
-                      catch: failed,
-                    }).pipe(
-                      Effect.tapError(() =>
-                        Effect.sync(() => db.exec('ROLLBACK')),
+      const transactions = (mode: 'read' | 'write') =>
+        SqlClient.makeWithTransaction({
+          transactionService: sql.transactionService,
+          spanAttributes: [['db.system.name', 'sqlite']],
+          acquireConnection: Effect.gen(function* () {
+            const scope = yield* Scope.make();
+            const connection = yield* Scope.provide(sql.reserve, scope);
+            // Publish the committed write before the reserved connection is
+            // released, including when interruption is pending after COMMIT.
+            yield* Scope.addFinalizerExit(scope, (exit) =>
+              mode === 'write' && Exit.isSuccess(exit)
+                ? Effect.gen(function* () {
+                    const committed = commitFromRows(
+                      yield* connection.executeUnprepared(
+                        highWater,
+                        [],
+                        undefined,
                       ),
-                    )
-                  : Effect.try({
-                      try: () => db.exec('ROLLBACK'),
-                      catch: failed,
-                    }),
-            ).pipe(
-              Effect.tap(() =>
-                mode === 'write'
-                  ? Effect.gen(function* () {
-                      yield* SubscriptionRef.set(
-                        observedCommit,
-                        currentCommit(),
-                      );
-                      yield* SubscriptionRef.update(level, (wake) => wake + 1);
-                    })
-                  : Effect.void,
+                    );
+                    yield* SubscriptionRef.set(observedCommit, committed);
+                    yield* SubscriptionRef.update(level, (wake) => wake + 1);
+                  }).pipe(Effect.orDie)
+                : Effect.void,
+            );
+            return [scope, connection] as const;
+          }),
+          begin: (connection) =>
+            connection.executeUnprepared(
+              mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE',
+              [],
+              undefined,
+            ),
+          commit: (connection) =>
+            connection.executeUnprepared('COMMIT', [], undefined).pipe(
+              Effect.orDie,
+              Effect.onError(() =>
+                connection
+                  .executeUnprepared('ROLLBACK', [], undefined)
+                  .pipe(Effect.orDie),
               ),
             ),
-          ),
+          rollback: (connection) =>
+            connection.executeUnprepared('ROLLBACK', [], undefined),
+          savepoint: (connection, id) =>
+            connection.executeUnprepared(
+              `SAVEPOINT effect_sql_${id}`,
+              [],
+              undefined,
+            ),
+          rollbackSavepoint: (connection, id) =>
+            connection.executeUnprepared(
+              `ROLLBACK TO SAVEPOINT effect_sql_${id}`,
+              [],
+              undefined,
+            ),
+        });
+      const readTransaction = transactions('read');
+      const writeTransaction = transactions('write');
+      const transaction = <A, E>(
+        mode: 'read' | 'write',
+        body: Effect.Effect<A, unknown>,
+        failed: (cause: unknown) => E,
+      ) =>
+        (mode === 'read' ? readTransaction(body) : writeTransaction(body)).pipe(
+          mapDatabaseFailure(failed),
         );
-      const transact = <A>(body: () => A) =>
+      const transact = <A>(body: Effect.Effect<A, unknown>) =>
         transaction('write', body, writeFailed);
-      const createExecution = db.prepare(`INSERT INTO event_sequence
-        (aggregate_id, seq, owner_id, parent_id) VALUES (?, 0, ?, ?)`);
-      const claim = db.prepare(`UPDATE event_sequence SET owner_id = ?
-        WHERE aggregate_id = ? AND owner_id IS ? AND closed = 0`);
-      const release = db.prepare(`UPDATE event_sequence SET owner_id = NULL
-        WHERE aggregate_id IN (SELECT value FROM json_each(?)) AND owner_id = ?`);
-      const latestInquiry = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
+      const createExecution = `INSERT INTO event_sequence
+        (aggregate_id, seq, owner_id, parent_id) VALUES (?, 0, ?, ?)`;
+      const claim = `UPDATE event_sequence SET owner_id = ?
+        WHERE aggregate_id = ? AND owner_id IS ? AND closed = 0 RETURNING aggregate_id`;
+      const release = `UPDATE event_sequence SET owner_id = NULL
+        WHERE aggregate_id IN (SELECT value FROM json_each(?)) AND owner_id = ?`;
+      const latestInquiry = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.type = 'inquiryThreadUpdated.1'
-        ORDER BY e.seq DESC LIMIT 1`);
-      const reparentInquiry =
-        db.prepare(`UPDATE event_sequence SET parent_id = ?
-        WHERE aggregate_id = ? AND owner_id = ? AND closed = 0`);
+        ORDER BY e.seq DESC LIMIT 1`;
+      const reparentInquiry = `UPDATE event_sequence SET parent_id = ?
+        WHERE aggregate_id = ? AND owner_id = ? AND closed = 0`;
       const cleanupLanes = new Map<AggregateId, PerKeyLane>();
-      const closedTombstone = db.prepare(`SELECT ${EVENT_COLUMNS},
+      const closedTombstone = `SELECT ${EVENT_COLUMNS},
         s.owner_id AS claimOwner FROM event e
         JOIN event_sequence s ON s.aggregate_id = e.aggregate_id
         WHERE e.aggregate_id = ? AND e."commit" = ?
-          AND e.seq = s.seq AND s.closed = 1 AND e.type = 'stream.removed.1'`);
-      const claimCleanup = db.prepare(`UPDATE event_sequence SET owner_id = ?
+          AND e.seq = s.seq AND s.closed = 1 AND e.type = 'stream.removed.1'`;
+      const claimCleanup = `UPDATE event_sequence SET owner_id = ?
         WHERE aggregate_id = ? AND owner_id IS ? AND closed = 1
           AND EXISTS (SELECT 1 FROM event e
             WHERE e.aggregate_id = event_sequence.aggregate_id
               AND e.seq = event_sequence.seq AND e."commit" = ?
-              AND e.type = 'stream.removed.1')`);
-      const collectClosed = db.prepare(`DELETE FROM event_sequence
+              AND e.type = 'stream.removed.1') RETURNING aggregate_id`;
+      const collectClosed = `DELETE FROM event_sequence
         WHERE aggregate_id = ? AND owner_id = ? AND closed = 1
           AND EXISTS (SELECT 1 FROM event e
             WHERE e.aggregate_id = event_sequence.aggregate_id
               AND e.seq = event_sequence.seq AND e."commit" = ?
-              AND e.type = 'stream.removed.1')`);
-      const openDependent = db.prepare(`${dependents}
+              AND e.type = 'stream.removed.1') RETURNING aggregate_id`;
+      const openDependent = `${dependents}
         SELECT aggregate_id FROM event_sequence
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
-          AND closed = 0 LIMIT 1`);
-      const readState = (
-        ids: readonly AggregateId[],
-      ): readonly AggregateState[] =>
-        state
-          .all(JSON.stringify(ids))
-          .map((row) => AggregateStateSchema.parse(row));
+          AND closed = 0 LIMIT 1`;
+      const readState = (ids: readonly AggregateId[]) =>
+        Effect.gen(function* () {
+          return (yield* sql.unsafe<Record<string, unknown>>(state, [
+            JSON.stringify(ids),
+          ])).map((row) => AggregateStateSchema.parse(row));
+        });
       const readDependents = (id: AggregateId) =>
-        readState(
-          dependentIds
-            .all(id)
-            .map((row) => AggregateIdSchema.parse(row.aggregate_id)),
-        );
+        Effect.gen(function* () {
+          return yield* readState(
+            (yield* sql.unsafe<Record<string, unknown>>(dependentIds, [
+              id,
+            ])).map((row) => AggregateIdSchema.parse(row.aggregate_id)),
+          );
+        });
       const proveReclaimable = (
         observed: readonly AggregateState[],
         mode?: DeletionMode,
@@ -474,213 +515,296 @@ export const databaseLayer = (
       const appendPrepared = (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
-      ): readonly SessionEvent[] =>
-        prepared.map(({ draft, payload }): SessionEvent => {
-          if (draft.type === 'inquiryThreadUpdated') {
-            // Inquiry writes borrow their claim for this transaction only.
-            claim.run(identity.ownerId, draft.aggregateId, null);
-            const previousRow = latestInquiry.get(draft.aggregateId);
-            const previous = previousRow ? decodeEvent(previousRow) : undefined;
-            if (previous && previous.type !== 'inquiryThreadUpdated') {
-              throw new Error(`Invalid inquiry history: ${draft.aggregateId}`);
-            }
-            const reopened =
-              previous?.status === 'answered' && draft.status === 'open';
-            if (previous && draft.turnCount < previous.turnCount) {
-              throw new Error(
-                `Inquiry update must preserve turn order: ${draft.threadId}`,
-              );
-            }
-            if (reopened && draft.turnCount <= previous.turnCount) {
-              throw new Error(
-                `Inquiry reopen must advance the turn: ${draft.threadId}`,
-              );
-            }
-            if (
-              previous &&
-              previous.parentStreamId !== draft.parentStreamId &&
-              !reopened
-            ) {
-              throw new Error(
-                `Only an answered inquiry can change parents: ${draft.aggregateId}`,
-              );
-            }
-            if (
-              previous?.status === 'open' &&
-              draft.status === 'open' &&
-              previous.turnCount !== draft.turnCount
-            ) {
-              throw new Error(
-                `An open inquiry cannot start another turn: ${draft.aggregateId}`,
-              );
-            }
-            if (previous?.status === 'dropped' && draft.status !== 'dropped') {
-              throw new Error(
-                `A dropped inquiry cannot reopen: ${draft.aggregateId}`,
-              );
-            }
-            if ((!previous || reopened) && draft.parentStreamId !== null) {
-              const parent = readState([
-                qualifyAggregateId('stream', draft.parentStreamId),
-              ])[0];
-              if (
-                !parent ||
-                parent.closed ||
-                parent.ownerId !== identity.ownerId
-              ) {
+      ) =>
+        Effect.forEach(prepared, ({ draft, payload }) =>
+          Effect.gen(function* () {
+            if (draft.type === 'inquiryThreadUpdated') {
+              // Inquiry writes borrow their claim for this transaction only.
+              yield* sql.unsafe<Record<string, unknown>>(claim, [
+                identity.ownerId,
+                draft.aggregateId,
+                null,
+              ]);
+              const previousRow = (yield* sql.unsafe<Record<string, unknown>>(
+                latestInquiry,
+                [draft.aggregateId],
+              ))[0];
+              const previous = previousRow
+                ? decodeEvent(previousRow)
+                : undefined;
+              if (previous && previous.type !== 'inquiryThreadUpdated') {
                 throw new Error(
-                  `Inquiry opening requires an owned open parent: ${draft.parentStreamId}`,
+                  `Invalid inquiry history: ${draft.aggregateId}`,
                 );
               }
-            }
-          }
-          const seq = nextSeq.get(draft.aggregateId, identity.ownerId)?.seq;
-          if (typeof seq !== 'number') {
-            throw new Error(
-              `Aggregate is closed or not owned: ${draft.aggregateId}`,
-            );
-          }
-          const target = aggregateTarget(draft.aggregateId);
-          if (
-            target.kind === 'stream' &&
-            (seq === 1) !== (draft.type === 'run.start')
-          ) {
-            throw new Error(
-              `A stream must begin with exactly one run.start: ${draft.aggregateId}`,
-            );
-          }
-          if (
-            (draft.type === 'run.start' || draft.type === 'stream.removed') &&
-            target.kind !== 'stream'
-          ) {
-            throw new Error(
-              `Stream lifecycle event has a non-stream target: ${draft.aggregateId}`,
-            );
-          }
-          if (draft.type === 'run.start') {
-            // The execution belongs to this stream from creation onward.
-            // Its first own event will advance seq from zero to one.
-            // An existing execution cannot be assigned to a second run.
-            createExecution.run(
-              qualifyAggregateId('execution', draft.executionId),
-              identity.ownerId,
-              draft.aggregateId,
-            );
-          }
-          // Capture the declared parent in this same transaction. A
-          // reused logical id must not redirect the child to a new run.
-          let parentStartCommit: number | undefined;
-          if (draft.type === 'run.start' && draft.parentStreamId != null) {
-            const parent = readState([
-              qualifyAggregateId('stream', draft.parentStreamId),
-            ])[0];
-            if (!parent || parent.closed || parent.startCommit === null) {
-              throw new Error(
-                `Child creation requires an open parent: ${draft.parentStreamId}`,
-              );
-            }
-            parentStartCommit = parent.startCommit;
-          }
-          // A tombstone names only execution directories owned by this
-          // lifecycle. Derive the targets under the same write permit
-          // and transaction as closure; no caller chooses cleanup paths.
-          const committedDraft =
-            draft.type === 'stream.removed'
-              ? {
-                  ...draft,
-                  executionIds: deletionExecutions
-                    .all(draft.aggregateId)
-                    .map((row) => ExecutionIdSchema.parse(row.executionId)),
+              const reopened =
+                previous?.status === 'answered' && draft.status === 'open';
+              if (previous && draft.turnCount < previous.turnCount) {
+                throw new Error(
+                  `Inquiry update must preserve turn order: ${draft.threadId}`,
+                );
+              }
+              if (reopened && draft.turnCount <= previous.turnCount) {
+                throw new Error(
+                  `Inquiry reopen must advance the turn: ${draft.threadId}`,
+                );
+              }
+              if (
+                previous &&
+                previous.parentStreamId !== draft.parentStreamId &&
+                !reopened
+              ) {
+                throw new Error(
+                  `Only an answered inquiry can change parents: ${draft.aggregateId}`,
+                );
+              }
+              if (
+                previous?.status === 'open' &&
+                draft.status === 'open' &&
+                previous.turnCount !== draft.turnCount
+              ) {
+                throw new Error(
+                  `An open inquiry cannot start another turn: ${draft.aggregateId}`,
+                );
+              }
+              if (
+                previous?.status === 'dropped' &&
+                draft.status !== 'dropped'
+              ) {
+                throw new Error(
+                  `A dropped inquiry cannot reopen: ${draft.aggregateId}`,
+                );
+              }
+              if ((!previous || reopened) && draft.parentStreamId !== null) {
+                const parent = (yield* readState([
+                  qualifyAggregateId('stream', draft.parentStreamId),
+                ]))[0];
+                if (
+                  !parent ||
+                  parent.closed ||
+                  parent.ownerId !== identity.ownerId
+                ) {
+                  throw new Error(
+                    `Inquiry opening requires an owned open parent: ${draft.parentStreamId}`,
+                  );
                 }
-              : draft;
-          const committedPayload =
-            draft.type === 'stream.removed'
-              ? payloadOf(committedDraft)
-              : payload;
-          const commit = insertEvent.get(
-            draft.aggregateId,
-            seq,
-            `${draft.type}.1`,
-            identity.ownerId,
-            at,
-            parentStartCommit ?? null,
-            committedPayload,
-            committedPayload,
-            parentStartCommit ?? null,
-          )?.commit;
-          if (typeof commit !== 'number') {
-            throw new Error(
-              `No commit assigned for aggregate ${draft.aggregateId}`,
-            );
-          }
-          if (draft.type === 'inquiryThreadUpdated') {
-            reparentInquiry.run(
-              draft.parentStreamId === null
-                ? null
-                : qualifyAggregateId('stream', draft.parentStreamId),
+              }
+            }
+            const seq = (yield* sql.unsafe<Record<string, unknown>>(NEXT_SEQ, [
               draft.aggregateId,
               identity.ownerId,
-            );
-            release.run(JSON.stringify([draft.aggregateId]), identity.ownerId);
-          }
-          if (draft.type === 'stream.removed') {
-            // C5/C9: admission must hold every open dependent claim.
-            // This check shares the write transaction with the tombstone
-            // and recursive closure, so no claimant can change between them.
-            const unowned = unownedDependent.get(
-              draft.aggregateId,
-              identity.ownerId,
-            );
-            if (unowned) {
+            ]))[0]?.seq;
+            if (typeof seq !== 'number') {
               throw new Error(
-                `Deletion requires the dependent claim: ${unowned.aggregate_id}`,
+                `Aggregate is closed or not owned: ${draft.aggregateId}`,
               );
             }
-            closeDependents.run(draft.aggregateId);
-          }
-          return {
-            ...committedDraft,
-            ...(parentStartCommit === undefined ? {} : { parentStartCommit }),
-            seq,
-            commit,
-            ownerId: identity.ownerId,
-            at,
-          };
-        });
+            const target = aggregateTarget(draft.aggregateId);
+            if (
+              target.kind === 'stream' &&
+              (seq === 1) !== (draft.type === 'run.start')
+            ) {
+              throw new Error(
+                `A stream must begin with exactly one run.start: ${draft.aggregateId}`,
+              );
+            }
+            if (
+              (draft.type === 'run.start' || draft.type === 'stream.removed') &&
+              target.kind !== 'stream'
+            ) {
+              throw new Error(
+                `Stream lifecycle event has a non-stream target: ${draft.aggregateId}`,
+              );
+            }
+            if (draft.type === 'run.start') {
+              // The execution belongs to this stream from creation onward.
+              // Its first own event will advance seq from zero to one.
+              // An existing execution cannot be assigned to a second run.
+              yield* sql.unsafe<Record<string, unknown>>(createExecution, [
+                qualifyAggregateId('execution', draft.executionId),
+                identity.ownerId,
+                draft.aggregateId,
+              ]);
+            }
+            // Capture the declared parent in this same transaction. A
+            // reused logical id must not redirect the child to a new run.
+            let parentStartCommit: number | undefined;
+            let parentExecutionId: ExecutionId | undefined;
+            if (draft.type === 'run.start' && draft.parentStreamId != null) {
+              const parent = (yield* readState([
+                qualifyAggregateId('stream', draft.parentStreamId),
+              ]))[0];
+              if (!parent || parent.closed || parent.startCommit === null) {
+                throw new Error(
+                  `Child creation requires an open parent: ${draft.parentStreamId}`,
+                );
+              }
+              parentStartCommit = parent.startCommit;
+              const parentRow = (yield* sql.unsafe<Record<string, unknown>>(
+                `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? AND e.seq = ?`,
+                [qualifyAggregateId('stream', draft.parentStreamId), 1],
+              ))[0];
+              if (!parentRow) throw new Error('Parent creation row is missing');
+              const parentCreation = decodeEvent(parentRow);
+              if (parentCreation.type !== 'run.start')
+                throw new Error('Parent creation row is missing');
+              parentExecutionId = parentCreation.executionId;
+            }
+            // A tombstone names only execution directories owned by this
+            // lifecycle. Derive the targets under the same write permit
+            // and transaction as closure; no caller chooses cleanup paths.
+            const committedDraft =
+              draft.type === 'stream.removed'
+                ? {
+                    ...draft,
+                    executionIds: (yield* sql.unsafe<Record<string, unknown>>(
+                      deletionExecutions,
+                      [draft.aggregateId],
+                    )).map((row) => ExecutionIdSchema.parse(row.executionId)),
+                  }
+                : {
+                    ...draft,
+                    ...(parentExecutionId === undefined
+                      ? {}
+                      : { parentExecutionId }),
+                  };
+            const committedPayload =
+              draft.type === 'stream.removed' || parentExecutionId !== undefined
+                ? payloadOf(committedDraft)
+                : payload;
+            const commit = (yield* sql.unsafe<Record<string, unknown>>(
+              INSERT_EVENT,
+              [
+                draft.aggregateId,
+                seq,
+                `${draft.type}.1`,
+                identity.ownerId,
+                at,
+                parentStartCommit ?? null,
+                committedPayload,
+                committedPayload,
+                parentStartCommit ?? null,
+              ],
+            ))[0]?.commit;
+            if (typeof commit !== 'number') {
+              throw new Error(
+                `No commit assigned for aggregate ${draft.aggregateId}`,
+              );
+            }
+            if (draft.type === 'inquiryThreadUpdated') {
+              yield* sql.unsafe<Record<string, unknown>>(reparentInquiry, [
+                draft.parentStreamId === null
+                  ? null
+                  : qualifyAggregateId('stream', draft.parentStreamId),
+                draft.aggregateId,
+                identity.ownerId,
+              ]);
+              yield* sql.unsafe<Record<string, unknown>>(release, [
+                JSON.stringify([draft.aggregateId]),
+                identity.ownerId,
+              ]);
+            }
+            if (draft.type === 'stream.removed') {
+              // C5/C9: admission must hold every open dependent claim.
+              // This check shares the write transaction with the tombstone
+              // and recursive closure, so no claimant can change between them.
+              const unowned = (yield* sql.unsafe<Record<string, unknown>>(
+                unownedDependent,
+                [draft.aggregateId, identity.ownerId],
+              ))[0];
+              if (unowned) {
+                throw new Error(
+                  `Deletion requires the dependent claim: ${unowned.aggregate_id}`,
+                );
+              }
+              yield* sql.unsafe<Record<string, unknown>>(closeDependents, [
+                draft.aggregateId,
+              ]);
+            }
+            return {
+              ...committedDraft,
+              ...(parentStartCommit === undefined
+                ? {}
+                : { parentStartCommit, parentExecutionId }),
+              seq,
+              commit,
+              ownerId: identity.ownerId,
+              at,
+            };
+          }),
+        );
       return {
         observedCommit,
         level,
         currentCommit: query(currentCommit),
         readAll: (fromCommit, throughCommit) =>
-          query(() =>
-            all
-              .all(fromCommit, throughCommit ?? currentCommit())
-              .map(decodeEvent),
+          query(
+            Effect.gen(function* () {
+              return (yield* sql.unsafe<Record<string, unknown>>(all, [
+                fromCommit,
+                throughCommit ?? (yield* currentCommit),
+              ])).map(decodeEvent);
+            }),
           ),
         readListing: () =>
-          query(() =>
-            listing.all(JSON.stringify(LISTING_TYPES)).map(decodeEvent),
+          query(
+            Effect.gen(function* () {
+              return (yield* sql.unsafe<Record<string, unknown>>(listing, [
+                JSON.stringify(LISTING_TYPES),
+              ])).map(decodeEvent);
+            }),
+          ),
+        readExecutionRecords: (id) =>
+          query(
+            Effect.gen(function* () {
+              return (yield* sql.unsafe<Record<string, unknown>>(
+                executionRecords,
+                [id, id],
+              )).map(decodeEvent);
+            }),
+          ),
+        readExecutionChildren: (id) =>
+          query(
+            Effect.gen(function* () {
+              return (yield* sql.unsafe<Record<string, unknown>>(
+                executionChildren,
+                [id],
+              )).map(decodeEvent);
+            }),
           ),
         readAggregate: (id, fromSeq) =>
-          query(() => aggregate.all(id, fromSeq).map(decodeEvent)),
+          query(
+            Effect.gen(function* () {
+              return (yield* sql.unsafe<Record<string, unknown>>(aggregate, [
+                id,
+                fromSeq,
+              ])).map(decodeEvent);
+            }),
+          ),
         aggregatesAfterCommit: (ids, afterCommit, throughCommit) =>
-          query(() =>
-            after
-              .all(
+          query(
+            Effect.gen(function* () {
+              return (yield* sql.unsafe<Record<string, unknown>>(after, [
                 JSON.stringify(ids),
                 afterCommit,
-                throughCommit ?? currentCommit(),
-              )
-              .map(decodeEvent),
+                throughCommit ?? (yield* currentCommit),
+              ])).map(decodeEvent);
+            }),
           ),
-        aggregateState: (ids) => query(() => readState(ids)),
+        aggregateState: (ids) =>
+          query(
+            Effect.gen(function* () {
+              return yield* readState(ids);
+            }),
+          ),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
           transaction(
             'read',
-            () => {
-              const cursor = currentCommit();
-              const events = inputRows
-                .all(
+            Effect.gen(function* () {
+              const cursor = yield* currentCommit;
+              const events = (yield* sql.unsafe<Record<string, unknown>>(
+                inputRows,
+                [
                   inputTypes,
                   fromCommit,
                   cursor,
@@ -688,8 +812,8 @@ export const databaseLayer = (
                   inputTypes,
                   fromCommit,
                   cursor,
-                )
-                .map(decodeEvent);
+                ],
+              )).map(decodeEvent);
               const checked = new Set(checkedIds);
               for (const event of events) {
                 for (const id of referencedAggregates(event)) checked.add(id);
@@ -699,15 +823,19 @@ export const databaseLayer = (
                 cursor,
                 events,
                 checkedAggregateIds,
-                state: readState(checkedAggregateIds),
+                state: yield* readState(checkedAggregateIds),
               };
-            },
+            }),
             readFailed,
           ),
         acquireClaims: (ids) =>
           Effect.gen(function* () {
-            if (ids.length === 0) return;
-            const observed = yield* query(() => readState(ids));
+            if (ids.length === 0) return [];
+            const observed = yield* query(
+              Effect.gen(function* () {
+                return yield* readState(ids);
+              }),
+            );
             if (
               observed.length !== new Set(ids).size ||
               observed.some((row) => row.closed)
@@ -717,18 +845,26 @@ export const databaseLayer = (
               );
             }
             yield* proveReclaimable(observed);
-            yield* transact(() => {
-              for (const row of observed) {
-                if (
-                  claim.run(identity.ownerId, row.aggregateId, row.ownerId)
-                    .changes !== 1
-                ) {
-                  throw new Error(
-                    `Claim changed before acquisition: ${row.aggregateId}`,
-                  );
+            return yield* transact(
+              Effect.gen(function* () {
+                for (const row of observed) {
+                  if (
+                    (yield* sql.unsafe<Record<string, unknown>>(claim, [
+                      identity.ownerId,
+                      row.aggregateId,
+                      row.ownerId,
+                    ])).length !== 1
+                  ) {
+                    throw new Error(
+                      `Claim changed before acquisition: ${row.aggregateId}`,
+                    );
+                  }
                 }
-              }
-            });
+                return observed
+                  .filter((row) => row.ownerId !== identity.ownerId)
+                  .map((row) => row.aggregateId);
+              }),
+            );
           }),
         removeStream: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
@@ -738,7 +874,9 @@ export const databaseLayer = (
             });
             const observed = yield* transaction(
               'read',
-              () => readDependents(id),
+              Effect.gen(function* () {
+                return yield* readDependents(id);
+              }),
               readFailed,
             );
             if (observed.length === 0 || observed.some((row) => row.closed)) {
@@ -765,55 +903,67 @@ export const databaseLayer = (
                 prepareEventDraft({ type: 'stream.removed', aggregateId: id }),
               catch: writeFailed,
             });
-            return yield* transact(() => {
-              const current = readDependents(id);
-              const observedById = new Map(
-                observed.map((row) => [row.aggregateId, row]),
-              );
-              if (
-                current.length !== observed.length ||
-                !current.every((row) => {
-                  const before = observedById.get(row.aggregateId);
-                  return (
-                    before !== undefined &&
-                    !row.closed &&
-                    before.startCommit === row.startCommit &&
-                    before.parentId === row.parentId
-                  );
-                })
-              ) {
-                throw new Error(
-                  `Deletion dependents changed before acquisition: ${id}`,
+            return yield* transact(
+              Effect.gen(function* () {
+                const current = yield* readDependents(id);
+                const observedById = new Map(
+                  observed.map((row) => [row.aggregateId, row]),
                 );
-              }
-              for (const row of observed) {
                 if (
-                  claim.run(identity.ownerId, row.aggregateId, row.ownerId)
-                    .changes !== 1
+                  current.length !== observed.length ||
+                  !current.every((row) => {
+                    const before = observedById.get(row.aggregateId);
+                    return (
+                      before !== undefined &&
+                      !row.closed &&
+                      before.startCommit === row.startCommit &&
+                      before.parentId === row.parentId
+                    );
+                  })
                 ) {
                   throw new Error(
-                    `Deletion claim changed before acquisition: ${row.aggregateId}`,
+                    `Deletion dependents changed before acquisition: ${id}`,
                   );
                 }
-              }
-              return appendPrepared([removal], at);
-            });
+                for (const row of observed) {
+                  if (
+                    (yield* sql.unsafe<Record<string, unknown>>(claim, [
+                      identity.ownerId,
+                      row.aggregateId,
+                      row.ownerId,
+                    ])).length !== 1
+                  ) {
+                    throw new Error(
+                      `Deletion claim changed before acquisition: ${row.aggregateId}`,
+                    );
+                  }
+                }
+                return yield* appendPrepared([removal], at);
+              }),
+            );
           }),
         collectDeletion: (id, tombstoneCommit, cleanup) =>
           Effect.gen(function* () {
-            const observed = yield* query(() => {
-              const row = closedTombstone.get(id, tombstoneCommit);
-              if (!row)
-                throw new Error(`Deletion record is no longer current: ${id}`);
-              const tombstone = decodeEvent(row);
-              if (tombstone.type !== 'stream.removed') {
-                throw new Error(`Expected a deletion record: ${id}`);
-              }
-              return {
-                tombstone,
-                owner: OwnerIdSchema.nullable().parse(row.claimOwner),
-              };
-            });
+            const observed = yield* query(
+              Effect.gen(function* () {
+                const row = (yield* sql.unsafe<Record<string, unknown>>(
+                  closedTombstone,
+                  [id, tombstoneCommit],
+                ))[0];
+                if (!row)
+                  throw new Error(
+                    `Deletion record is no longer current: ${id}`,
+                  );
+                const tombstone = decodeEvent(row);
+                if (tombstone.type !== 'stream.removed') {
+                  throw new Error(`Expected a deletion record: ${id}`);
+                }
+                return {
+                  tombstone,
+                  owner: OwnerIdSchema.nullable().parse(row.claimOwner),
+                };
+              }),
+            );
             const owner = observed.owner;
             if (owner !== null && owner !== identity.ownerId) {
               const verdict = yield* Effect.tryPromise({
@@ -829,20 +979,22 @@ export const databaseLayer = (
               }
             }
             yield* Effect.acquireUseRelease(
-              transact(() => {
-                if (
-                  claimCleanup.run(
-                    identity.ownerId,
-                    id,
-                    observed.owner,
-                    tombstoneCommit,
-                  ).changes !== 1
-                ) {
-                  throw new Error(
-                    `Deletion claim changed before cleanup: ${id}`,
-                  );
-                }
-              }),
+              transact(
+                Effect.gen(function* () {
+                  if (
+                    (yield* sql.unsafe<Record<string, unknown>>(claimCleanup, [
+                      identity.ownerId,
+                      id,
+                      observed.owner,
+                      tombstoneCommit,
+                    ])).length !== 1
+                  ) {
+                    throw new Error(
+                      `Deletion claim changed before cleanup: ${id}`,
+                    );
+                  }
+                }),
+              ),
               () =>
                 Effect.gen(function* () {
                   // Filesystem promises cannot be undone by fiber interruption.
@@ -850,39 +1002,55 @@ export const databaseLayer = (
                   yield* cleanup(observed.tombstone.executionIds).pipe(
                     Effect.uninterruptible,
                   );
-                  yield* transact(() => {
-                    if (openDependent.get(id)) {
-                      throw new Error(`Deletion has an open dependent: ${id}`);
-                    }
-                    if (
-                      collectClosed.run(id, identity.ownerId, tombstoneCommit)
-                        .changes !== 1
-                    ) {
-                      throw new Error(
-                        `Deletion claim or tombstone changed during cleanup: ${id}`,
-                      );
-                    }
-                  });
+                  yield* transact(
+                    Effect.gen(function* () {
+                      if (
+                        (yield* sql.unsafe<Record<string, unknown>>(
+                          openDependent,
+                          [id],
+                        ))[0]
+                      ) {
+                        throw new Error(
+                          `Deletion has an open dependent: ${id}`,
+                        );
+                      }
+                      if (
+                        (yield* sql.unsafe<Record<string, unknown>>(
+                          collectClosed,
+                          [id, identity.ownerId, tombstoneCommit],
+                        )).length !== 1
+                      ) {
+                        throw new Error(
+                          `Deletion claim or tombstone changed during cleanup: ${id}`,
+                        );
+                      }
+                    }),
+                  );
                 }),
               (_, exit) =>
                 Exit.isFailure(exit)
-                  ? transact(() => {
-                      claimCleanup.run(
-                        null,
-                        id,
-                        identity.ownerId,
-                        tombstoneCommit,
-                      );
-                    })
+                  ? transact(
+                      Effect.gen(function* () {
+                        yield* sql.unsafe<Record<string, unknown>>(
+                          claimCleanup,
+                          [null, id, identity.ownerId, tombstoneCommit],
+                        );
+                      }),
+                    )
                   : Effect.void,
             );
           }).pipe(withPerKeyLane(cleanupLanes, id)),
         releaseClaims: (ids) =>
           ids.length === 0
             ? Effect.void
-            : transact(() => {
-                release.run(JSON.stringify(ids), identity.ownerId);
-              }),
+            : transact(
+                Effect.gen(function* () {
+                  yield* sql.unsafe<Record<string, unknown>>(release, [
+                    JSON.stringify(ids),
+                    identity.ownerId,
+                  ]);
+                }),
+              ),
         appendAll: (input) =>
           Effect.gen(function* () {
             if (input.length === 0) return [];
@@ -892,17 +1060,19 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            return yield* transact(() => appendPrepared(prepared, at));
+            return yield* transact(
+              Effect.gen(function* () {
+                return yield* appendPrepared(prepared, at);
+              }),
+            );
           }),
       };
     }),
-  );
-
+  ).pipe(Layer.provide(Reactivity.layer));
 function prepareEventDraft(input: SessionEventDraft) {
   const draft = redactTraceDraft(SessionEventDraftSchema.parse(input));
   return { draft, payload: payloadOf(draft) };
 }
-
 /**
  * Serialize the validated draft before opening the transaction. Draft parsing
  * removes caller-supplied envelope fields; the type and aggregate key have
@@ -913,14 +1083,13 @@ function payloadOf(draft: SessionEventDraft): string {
   const { type, aggregateId, ...payload } = draft;
   return JSON.stringify(payload);
 }
-
 /**
- * Bring an open connection to the state C1 requires, and prepare the two
- * statements the write path binds.
+ * Bring the official driver's scoped connection to the state C1 requires.
  *
- * The pragma order is load-bearing, not stylistic. `PRAGMA busy_timeout` is
- * the first statement on every connection because `PRAGMA journal_mode = WAL`
- * itself takes an exclusive lock: the stage 0 spike killed a writer outright
+ * The official driver sets `PRAGMA busy_timeout` before enabling WAL; this
+ * function verifies the resulting journal mode. That order is load-bearing
+ * because `PRAGMA journal_mode = WAL` itself takes an exclusive lock: the
+ * stage 0 spike killed a writer outright
  * with `SQLITE_BUSY_RECOVERY` when a second process opened the same database
  * while the timeout was still unset, and setting it first removed the failure
  * entirely. With the timeout set, a second writer blocks and then commits;
@@ -937,39 +1106,66 @@ function payloadOf(draft: SessionEventDraft): string {
  * are separate counters, since a claim-only change must wake readers even
  * when the event ordinal does not change.
  */
-function configure(
-  db: DatabaseSync,
+const configure = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
   mode: 'persistent' | 'ephemeral',
-): {
-  readonly nextSeq: StatementSync;
-  readonly insertEvent: StatementSync;
-} {
-  db.exec('PRAGMA busy_timeout = 5000');
-  if (mode === 'persistent') db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA foreign_keys = ON');
-  db.exec('PRAGMA synchronous = NORMAL');
-  verifyPragma(db, 'journal_mode', mode === 'persistent' ? 'wal' : 'memory');
-  verifyPragma(db, 'foreign_keys', 1);
-  db.exec(SCHEMA);
-  return {
-    nextSeq: db.prepare(NEXT_SEQ),
-    insertEvent: db.prepare(INSERT_EVENT),
-  };
-}
+) {
+  yield* sql.unsafe('PRAGMA foreign_keys = ON', []);
+  yield* sql.unsafe('PRAGMA synchronous = NORMAL', []);
+  yield* verifyPragma(
+    sql,
+    'journal_mode',
+    mode === 'persistent' ? 'wal' : 'memory',
+  );
+  yield* verifyPragma(sql, 'foreign_keys', 1);
+  // The official driver prepares one statement at a time. This fixed schema
+  // contains only DDL statements, with no semicolons inside SQL literals.
+  for (const statement of SCHEMA.split(';')
+    .map((sql) => sql.trim())
+    .filter(Boolean)) {
+    yield* sql.unsafe(statement, []);
+  }
+});
 
-/** C1 requires every connection to verify its pragmas rather than assume
- *  them: a WAL that silently fell back to a rollback journal, or foreign keys
- *  silently off, would turn the cascade guarantees into wishes. */
-function verifyPragma(
-  db: DatabaseSync,
+const verifyPragma = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
   pragma: string,
   expected: string | number,
-): void {
-  const row = db.prepare(`PRAGMA ${pragma}`).get();
+) {
+  const row = (yield* sql.unsafe<Record<string, unknown>>(
+    `PRAGMA ${pragma}`,
+    [],
+  ))[0];
   const value = row?.[pragma];
   if (value !== expected) {
-    throw new Error(
-      `PRAGMA ${pragma} is ${String(value)}, expected ${String(expected)}`,
+    return yield* Effect.fail(
+      new Error(
+        `PRAGMA ${pragma} is ${String(value)}, expected ${String(expected)}`,
+      ),
     );
   }
+});
+
+/** Preserve interruption and each SQL/validation failure at the database boundary. */
+function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
+  return <A, R>(
+    operation: Effect.Effect<A, unknown, R>,
+  ): Effect.Effect<A, E, R> =>
+    operation.pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.fromReasons(
+            cause.reasons.map((reason) =>
+              reason._tag === 'Interrupt'
+                ? reason
+                : Cause.makeFailReason(
+                    failed(
+                      reason._tag === 'Fail' ? reason.error : reason.defect,
+                    ),
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
 }

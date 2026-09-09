@@ -1,6 +1,8 @@
 import { Console } from 'node:console';
+import { Effect, Fiber } from 'effect';
+import { it } from '@effect/vitest';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { FakeStdin, FakeStdout } from '@test/support/inkTestHarness.ts';
@@ -27,8 +29,12 @@ const ONBOARDING_WAIT_OPTIONS = Object.freeze({
   timeoutMessage: 'Timed out waiting for onboarding interaction',
 });
 
-function waitForOnboarding(condition: () => boolean): Promise<void> {
-  return waitForCondition(condition, ONBOARDING_WAIT_OPTIONS);
+function waitForOnboarding(
+  condition: () => boolean,
+): Effect.Effect<void, unknown> {
+  return Effect.tryPromise(() =>
+    waitForCondition(condition, ONBOARDING_WAIT_OPTIONS),
+  );
 }
 
 const originalStdin = Object.getOwnPropertyDescriptor(process, 'stdin');
@@ -64,59 +70,68 @@ afterEach(() => {
 });
 
 describe('provider-key onboarding flow', () => {
-  it('saves the submitted key without exposing it', async () => {
-    const providerKey = 'sk-ant-integration-secret';
+  it.live(
+    'saves the submitted key without exposing it',
+    () =>
+      Effect.gen(function* () {
+        const providerKey = 'sk-ant-integration-secret';
 
-    Object.defineProperty(console, 'Console', {
-      value: Console,
-      configurable: true,
-    });
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout(100, 30);
-    const stderr = new FakeStdout(100, 30);
-    Object.defineProperties(process, {
-      stdin: { value: stdin, configurable: true },
-      stdout: { value: stdout, configurable: true },
-      stderr: { value: stderr, configurable: true },
-    });
+        Object.defineProperty(console, 'Console', {
+          value: Console,
+          configurable: true,
+        });
+        const stdin = new FakeStdin();
+        const stdout = new FakeStdout(100, 30);
+        const stderr = new FakeStdout(100, 30);
+        Object.defineProperties(process, {
+          stdin: { value: stdin, configurable: true },
+          stdout: { value: stdout, configurable: true },
+          stderr: { value: stderr, configurable: true },
+        });
 
-    const { runCliOnboarding } = await import('@cli/onboarding/runOnboarding');
-    const resultPromise = runCliOnboarding(createFakePlatform(), false);
+        const { runCliOnboarding } = yield* Effect.promise(
+          () => import('@cli/onboarding/runOnboarding'),
+        );
+        const result = yield* Effect.forkChild(
+          runCliOnboarding(createFakePlatform(), false),
+        );
 
-    // Ink attaches its input stream before the active Select handler has
-    // necessarily committed. Wait for both input attachment and the rendered
-    // picker so the shortcut cannot be discarded during a loaded CI run.
-    await waitForOnboarding(
-      () =>
-        stdin.listenerCount('readable') > 0 &&
-        stdout.output.includes('Choose how to power model calls'),
-    );
-    stdin.write('2');
-    await waitForOnboarding(() =>
-      stdout.output.includes('Choose your provider:'),
-    );
-    stdin.write('\r');
-    await waitForOnboarding(() =>
-      stdout.output.includes('enter your API key (hidden)'),
-    );
-    stdin.write(providerKey);
-    await waitForOnboarding(() => stdout.output.includes('•'));
-    stdin.write('\r');
+        // Ink attaches its input stream before the active Select handler has
+        // necessarily committed. Wait for both input attachment and the rendered
+        // picker so the shortcut cannot be discarded during a loaded CI run.
+        yield* waitForOnboarding(
+          () =>
+            stdin.listenerCount('readable') > 0 &&
+            stdout.output.includes('Choose how to power model calls'),
+        );
+        stdin.write('2');
+        yield* waitForOnboarding(() =>
+          stdout.output.includes('Choose your provider:'),
+        );
+        stdin.write('\r');
+        yield* waitForOnboarding(() =>
+          stdout.output.includes('enter your API key (hidden)'),
+        );
+        stdin.write(providerKey);
+        yield* waitForOnboarding(() => stdout.output.includes('•'));
+        stdin.write('\r');
 
-    await expect(resultPromise).resolves.toEqual({
-      configured: true,
-      declined: false,
-    });
-    expect(mocks.saveProviderApiKey).toHaveBeenCalledWith(
-      'anthropic',
-      providerKey,
-    );
-    expect(mocks.writeTextStdout).toHaveBeenCalledWith(
-      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment).',
-    );
-    expect(mocks.writeTextStdout).not.toHaveBeenCalledWith(
-      expect.stringContaining(providerKey),
-    );
-    expect(stdout.output).not.toContain(providerKey);
-  }, 30_000);
+        expect(yield* Fiber.join(result)).toEqual({
+          configured: true,
+          declined: false,
+        });
+        expect(mocks.saveProviderApiKey).toHaveBeenCalledWith(
+          'anthropic',
+          providerKey,
+        );
+        expect(mocks.writeTextStdout).toHaveBeenCalledWith(
+          'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment).',
+        );
+        expect(mocks.writeTextStdout).not.toHaveBeenCalledWith(
+          expect.stringContaining(providerKey),
+        );
+        expect(stdout.output).not.toContain(providerKey);
+      }),
+    30_000,
+  );
 });

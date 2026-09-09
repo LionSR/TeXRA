@@ -24,6 +24,12 @@ import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { GoalStateSchema } from './goal';
+import {
+  ExecutionRunRecordSchema,
+  ExecutionWorkspaceFilesSchema,
+  ResultMetaSchema,
+} from './executionRecords';
+import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { InquiryThreadUpdatedEventSchema } from './inquiry';
 import { PlanSchema } from './plan';
@@ -87,14 +93,7 @@ export function ownerPid(ownerId: OwnerId): number {
 
 /** C2 separates independent lifecycles even when their logical ids coincide. */
 const AggregateKeySchema = z.tuple([
-  z.enum([
-    'stream',
-    'execution',
-    'workflow-checkpoint',
-    'inquiry',
-    'session',
-    'migration',
-  ]),
+  z.enum(['stream', 'execution', 'workflow-checkpoint', 'inquiry', 'session']),
   z.string().min(1),
 ]);
 
@@ -215,6 +214,8 @@ const RunStartEventSchema = durable('run.start', {
   parentStreamId: StreamTabIdSchema.nullish(),
   /** The declared parent's creation commit, assigned by the database. */
   parentStartCommit: z.int().positive().optional(),
+  /** Parent identity captured with its creation coordinate, surviving collection. */
+  parentExecutionId: ExecutionIdSchema.optional(),
   /**
    * Launched in the background whoever is watching (a delegated child); the
    * launch fact half of the old `suppressViewSwitch`, which the frozen NDJSON
@@ -235,6 +236,7 @@ const StreamRemovedEventSchema = durable('stream.removed', {
 
 const RunStartDraftSchema = RunStartEventSchema.omit({
   parentStartCommit: true,
+  parentExecutionId: true,
 });
 const StreamRemovedDraftSchema = StreamRemovedEventSchema.omit({
   executionIds: true,
@@ -246,7 +248,7 @@ const StreamRemovedDraftSchema = StreamRemovedEventSchema.omit({
  * facts with the payload flattened. `stream.removed` is the tombstone: the
  * last row of its aggregate, final (PRD 5.2, "Existence").
  */
-export const SessionEventDraftSchema = z.discriminatedUnion('type', [
+const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   RunStartDraftSchema,
   /**
    * Every activation of a run, the first launch and each resume (PRD 6,
@@ -337,15 +339,42 @@ export const SessionEventDraftSchema = z.discriminatedUnion('type', [
     }),
   ),
 ]);
-export const SessionEventSchema = z.discriminatedUnion('type', [
+const ExecutionEventDraftSchema = z.discriminatedUnion('type', [
+  durable(
+    'execution.config',
+    { record: ExecutionRunRecordSchema },
+    'execution',
+  ),
+  durable('execution.launchLabel', { label: z.string() }, 'execution'),
+  durable('execution.description', { description: z.string() }, 'execution'),
+  durable('execution.report', { report: z.string().nullable() }, 'execution'),
+  durable('execution.result', { result: ResultMetaSchema }, 'execution'),
+  durable(
+    'execution.workspaceFiles',
+    { paths: ExecutionWorkspaceFilesSchema },
+    'execution',
+  ),
+  durable(
+    'execution.workflow',
+    { workflow: WorkflowExecutionSnapshotSchema },
+    'execution',
+  ),
+]);
+export const SessionEventDraftSchema = z.discriminatedUnion('type', [
+  ...DisplaySessionEventDraftSchema.options,
+  ...ExecutionEventDraftSchema.options,
+]);
+const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope).refine(
     (event) =>
       (event.parentStreamId == null) ===
-      (event.parentStartCommit === undefined),
-    'A declared parent requires its creation commit, and a root has neither.',
+        (event.parentStartCommit === undefined) &&
+      (event.parentStreamId == null) ===
+        (event.parentExecutionId === undefined),
+    'A declared parent requires its creation commit and execution ID; a root has neither.',
   ),
   StreamRemovedEventSchema.extend(envelope),
-  ...SessionEventDraftSchema.options
+  ...DisplaySessionEventDraftSchema.options
     .filter(
       (
         schema,
@@ -357,6 +386,14 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
         schema.shape.type.value !== 'stream.removed',
     )
     .map((schema) => schema.extend(envelope)),
+]);
+export type DisplaySessionEventDraft = z.infer<
+  typeof DisplaySessionEventDraftSchema
+>;
+export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
+export const SessionEventSchema = z.discriminatedUnion('type', [
+  ...DisplaySessionEventSchema.options,
+  ...ExecutionEventDraftSchema.options.map((schema) => schema.extend(envelope)),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
@@ -430,7 +467,7 @@ export function listingTypeOf(
 export const FoldEventSchema = z.object({
   _tag: z.literal('event'),
   read: z.enum(['listing', 'aggregate', 'all']),
-  event: SessionEventSchema,
+  event: DisplaySessionEventSchema,
 });
 
 /**
@@ -515,3 +552,11 @@ const FoldInputSchema = z.discriminatedUnion('_tag', [
   }),
 ]);
 export type FoldInput = z.infer<typeof FoldInputSchema>;
+
+/** Execution metadata is private; hosts receive explicit display facts only. */
+export function isDisplaySessionEvent(
+  event: SessionEvent,
+): event is DisplaySessionEvent {
+  const kind = aggregateTarget(event.aggregateId).kind;
+  return kind === 'stream' || kind === 'inquiry' || kind === 'session';
+}

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
 import type { ResultEvent } from '@agent/trace';
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   ToolUseAgentConfigSchema,
@@ -43,6 +43,7 @@ const resumeToolUseFromResumeData = vi.spyOn(
   'resumeToolUseFromResumeData',
 );
 
+let testSession: SessionHandle;
 const stream = 'headless-resume' as StreamTabId;
 const executionId = 'abc123' as ExecutionId;
 const config = ToolUseAgentConfigSchema.parse({
@@ -60,13 +61,11 @@ const workflowConfig = AgentConfigSchema.parse({
 async function persistRunRecord(
   category: 'toolUse' | 'workflow',
 ): Promise<void> {
-  const store = getExecutionStore(executionId);
-  await store.writeMeta({
-    timestamp: '2026-08-23T00:00:00.000Z',
-    streamId: stream,
-    identity: { kind: 'agent', agent: 'proofreader' },
-  });
-  await store.writeRunRecord(category === 'toolUse' ? config : workflowConfig);
+  await Effect.runPromise(
+    getExecutionRecords(testSession, executionId).writeRunRecord(
+      category === 'toolUse' ? config : workflowConfig,
+    ),
+  );
 }
 
 function failedResult(
@@ -151,8 +150,7 @@ async function createResumeHarness(): Promise<{
   session: SessionHandle;
   dispose(): void;
 }> {
-  const session = createProcessSession();
-  publishTestRunStart(session, stream, executionId);
+  const session = testSession;
   session.publish([
     {
       type: 'run.config',
@@ -177,11 +175,13 @@ async function createResumeHarness(): Promise<{
 
 async function mockWorkflowResume(): Promise<void> {
   await persistRunRecord('workflow');
-  retrieveSessionResumeData.mockResolvedValue({
-    type: 'workflow',
-    agentConfig: workflowConfig,
-    executionId,
-  });
+  retrieveSessionResumeData.mockReturnValue(
+    Effect.succeed({
+      type: 'workflow',
+      agentConfig: workflowConfig,
+      executionId,
+    }),
+  );
 }
 
 /** Hold workflow resume data retrieval open until the test releases it. */
@@ -192,16 +192,28 @@ async function gateWorkflowResume(): Promise<{
   await persistRunRecord('workflow');
   const started = createDeferred();
   const gate = createDeferred();
-  retrieveSessionResumeData.mockImplementation(async () => {
-    started.resolve();
-    await gate.promise;
-    return { type: 'workflow', agentConfig: workflowConfig, executionId };
-  });
+  retrieveSessionResumeData.mockImplementation(() =>
+    Effect.tryPromise({
+      try: async () => {
+        started.resolve();
+        await gate.promise;
+        return {
+          type: 'workflow' as const,
+          agentConfig: workflowConfig,
+          executionId,
+        };
+      },
+      catch: ensureError,
+    }),
+  );
   return { started: started.promise, release: () => gate.resolve() };
 }
 
 describe('desktop process resume owner', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    testSession = createProcessSession();
+    publishTestRunStart(testSession, stream, executionId);
+    await testSession.settlePublications();
     retrieveSessionResumeData.mockReset();
     resumeToolUseFromResumeData.mockReset();
     runAgent.mockReset().mockReturnValue(Effect.succeed(completedRunResult()));
@@ -273,8 +285,10 @@ describe('desktop process resume owner', () => {
 
   it('presents one tool-use failure after lifecycle startup and restores follow-ups', async () => {
     await persistRunRecord('toolUse');
-    retrieveSessionResumeData.mockResolvedValue(
-      createToolUseResumeData({ streamId: stream, executionId }),
+    retrieveSessionResumeData.mockReturnValue(
+      Effect.succeed(
+        createToolUseResumeData({ streamId: stream, executionId }),
+      ),
     );
     const harness = await createResumeHarness();
     const flow = harness.session.followUps.claimLive(stream, 'flow')!;

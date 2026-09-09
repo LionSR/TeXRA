@@ -393,7 +393,7 @@ export function loadWorkspaceCliConfig(
 
 /**
  * The user-level layer of `texra.approvalPolicy`
- * (`~/.texra/global-storage/config.json`).
+ * (`~/.texra/v1/global-storage/config.json`).
  *
  * The extension and desktop hosts resolve this row through `workspaceRoots().config`,
  * which layers the project `.texra/config.json` over the user file. The CLI

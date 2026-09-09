@@ -116,6 +116,11 @@ function sessionLog() {
 }
 
 function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
+  const parentCreation = log.events.find(
+    (event) =>
+      event.type === 'run.start' &&
+      event.aggregateId === JSON.stringify(['stream', parentStreamId]),
+  );
   log.emit(streamId, at, {
     type: 'run.start',
     executionId,
@@ -130,11 +135,8 @@ function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
     ...(parentStreamId
       ? {
           parentStreamId,
-          parentStartCommit: log.events.find(
-            (event) =>
-              event.type === 'run.start' &&
-              event.aggregateId === JSON.stringify(['stream', parentStreamId]),
-          )?.commit,
+          parentStartCommit: parentCreation?.commit,
+          parentExecutionId: parentCreation?.executionId,
         }
       : {}),
   });

@@ -1,4 +1,6 @@
+import { Effect } from 'effect';
 import { defineCommand } from 'citty';
+import type { SessionHandle } from '@agent/runtime';
 
 import { getVisibleAgents, refresh } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -13,7 +15,8 @@ import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 
 import {
   firstRunSetupAgentOverride,
@@ -81,31 +84,41 @@ import { type CliContext } from '../runtime/cliContext';
 
 const log = createLog('orchestrate');
 
-async function canLaunchWithDefaultModel(
+const canLaunchWithDefaultModel = Effect.fn(function* (
   context: CliContext,
   models: readonly CliModelAccess[],
-): Promise<boolean> {
+  session: SessionHandle,
+): Effect.fn.Return<boolean, Error> {
   if (models.length === 0) return true;
 
-  const defaults = await resolveChatDefaults({
-    cwd: context.cwd,
-    envAgent: context.envAgent,
-    envModel: context.envModel,
-    quiet: context.quietLogs,
-  });
-  try {
-    await selectCliRunnableModel(defaults.model, {
-      fallbackReason: defaults.modelSource,
-      accessList: models,
-    });
-    return true;
-  } catch (error) {
-    log.warn(
-      `Unable to select the default CLI model: ${toErrorMessage(error)}`,
-    );
-    return false;
-  }
-}
+  const defaults = yield* resolveChatDefaults(
+    {
+      cwd: context.cwd,
+      envAgent: context.envAgent,
+      envModel: context.envModel,
+      quiet: context.quietLogs,
+    },
+    session,
+  );
+  return yield* Effect.tryPromise({
+    try: () =>
+      selectCliRunnableModel(defaults.model, {
+        fallbackReason: defaults.modelSource,
+        accessList: models,
+      }),
+    catch: ensureError,
+  }).pipe(
+    Effect.as(true),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        log.warn(
+          `Unable to select the default CLI model: ${toErrorMessage(error)}`,
+        );
+        return false;
+      }),
+    ),
+  );
+});
 
 async function runOrchestration(context: CliContext): Promise<number> {
   const terminalFailure = interactiveTerminalFailure(context);
@@ -134,13 +147,16 @@ async function runOrchestration(context: CliContext): Promise<number> {
     ...context,
     quietLogs: true,
   });
+  const session = await initializeCliTranscriptSession();
   // First-run gate: a credential-less interactive user picks sign-in or a key
   // here instead of landing on a launcher full of "login required" models. On
   // success the models read below re-reads the freshly-set credentials
   // in-process — the key paths invalidate the relevant caches — so no
   // relaunch is needed.
   const { maybeRunCliOnboarding } = await import('../onboarding/runOnboarding');
-  const onboarding = await maybeRunCliOnboarding(services, context);
+  const onboarding = await effectRuntime().runPromise(
+    maybeRunCliOnboarding(services, context),
+  );
   if (onboarding.declined) {
     // The user saw the picker and chose "Skip for now"; the skip summary already
     // printed. Exit cleanly instead of dropping into a launcher full of
@@ -201,12 +217,18 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // after an agent/team choice. Best-effort: an unavailable registry just
     // launches with the default model instead of blocking the launcher.
     const [models, statusLines] = await Promise.all([
-      getCliModelAccessList().catch((): readonly CliModelAccess[] => []),
+      effectRuntime().runPromise(
+        Effect.tryPromise({
+          try: () => getCliModelAccessList(),
+          catch: ensureError,
+        }).pipe(
+          Effect.catch(() => Effect.succeed([] as readonly CliModelAccess[])),
+        ),
+      ),
       loadCliApiStatus(authProfile),
     ]);
-    const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
-      context,
-      models,
+    const allowDefaultModelLaunch = await effectRuntime().runPromise(
+      canLaunchWithDefaultModel(context, models, session),
     );
     const { runOrchestrationTui } =
       await import('../orchestration/runOrchestrationTui');
@@ -332,20 +354,18 @@ async function runOrchestration(context: CliContext): Promise<number> {
         continue launcher;
       }
       case 'account': {
-        try {
-          if (action.provider === 'chatgpt' || action.provider === 'grok') {
-            if (action.operation === 'sign-out') {
-              writeTextStdout(
-                subscriptionSignOutOutcomeMessage(
-                  action.provider,
-                  await effectRuntime().runPromise(
-                    signOutCliSubscription(action.provider),
+        await effectRuntime().runPromise(
+          Effect.gen(function* () {
+            if (action.provider === 'chatgpt' || action.provider === 'grok') {
+              if (action.operation === 'sign-out') {
+                writeTextStdout(
+                  subscriptionSignOutOutcomeMessage(
+                    action.provider,
+                    yield* signOutCliSubscription(action.provider),
                   ),
-                ),
-              );
-            } else {
-              const result = await effectRuntime().runPromise(
-                updateCliModelAccess(
+                );
+              } else {
+                const result = yield* updateCliModelAccess(
                   context,
                   {
                     kind: 'subscription-preference',
@@ -353,32 +373,38 @@ async function runOrchestration(context: CliContext): Promise<number> {
                     state: 'on',
                   },
                   { writeProgress: writeTextStdout },
-                ),
-              );
-              writeTextStdout(result.message);
+                );
+                writeTextStdout(result.message);
+              }
+            } else if (action.operation === 'sign-out') {
+              yield* Effect.tryPromise({
+                try: signOutCliSupabase,
+                catch: ensureError,
+              });
+              writeTextStdout(RESEARCHER_ACCESS_AUTH.signedOut);
+            } else {
+              yield* Effect.tryPromise({
+                try: () => runLoginCommand(context, loginInitFromArgs({})),
+                catch: ensureError,
+              });
             }
-          } else if (action.operation === 'sign-out') {
-            await signOutCliSupabase();
-            writeTextStdout(RESEARCHER_ACCESS_AUTH.signedOut);
-          } else {
-            await runLoginCommand(context, loginInitFromArgs({}));
-          }
-        } catch (error: unknown) {
-          writeErrorStderr(error);
-        }
+          }).pipe(
+            Effect.catch((error) => Effect.sync(() => writeErrorStderr(error))),
+          ),
+        );
         continue launcher;
       }
       case 'set-model-access': {
-        try {
-          const result = await effectRuntime().runPromise(
-            updateCliModelAccess(context, action.access, {
-              writeProgress: writeTextStdout,
-            }),
-          );
-          writeTextStdout(result.message);
-        } catch (error: unknown) {
-          writeErrorStderr(error);
-        }
+        await effectRuntime().runPromise(
+          updateCliModelAccess(context, action.access, {
+            writeProgress: writeTextStdout,
+          }).pipe(
+            Effect.tap((result) =>
+              Effect.sync(() => writeTextStdout(result.message)),
+            ),
+            Effect.catch((error) => Effect.sync(() => writeErrorStderr(error))),
+          ),
+        );
         continue launcher;
       }
       case 'help': {

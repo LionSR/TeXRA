@@ -43,6 +43,15 @@ export * from './workflowCallProgress';
 export * from './workflowExecutionSnapshot';
 export * from './workflowScriptDelivery';
 
+export {
+  AgentFinalResultSchema,
+  NonAgentRunRecordSchema,
+  ResultMetaSchema,
+  type AgentFinalResult,
+  type ResultDiffSummary,
+  type ResultMeta,
+} from './executionRecords';
+
 // Layer 3: Depends on layer 2
 export * from './log';
 export * from './streamLogEntry';

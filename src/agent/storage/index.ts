@@ -17,6 +17,7 @@ export {
   type ExecutionKVStore,
   type ChildRecord,
   getExecutionStore,
+  getExecutionRecords,
   clearStoreCache,
   isReservedKvKeyName,
 } from './ExecutionKVStore';
@@ -32,8 +33,8 @@ export {
 export {
   finalizeRun,
   registerExecution,
+  readExecutionChildren,
   type FinalizeExecutionInput,
-  writeWorkflowExecutionSnapshot,
 } from './executionLifecycle';
 export {
   type AgentExecutionListingEntry,
@@ -53,5 +54,4 @@ export {
   ExecutionLeaseLostError,
   executionHeldMessage,
 } from './executionLease';
-export { persistChildRunResultMeta } from './childRunPersistence';
 export { resolveChildRunOutput } from './childRunOutput';

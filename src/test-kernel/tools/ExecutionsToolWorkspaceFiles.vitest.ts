@@ -6,6 +6,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { Effect } from 'effect';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { flowKey } from '@agent/node/persistedFlow';
@@ -19,6 +20,10 @@ import {
   aggregateId,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
+import {
+  createFakeKv,
+  createFakeExecutionRecords,
+} from '@test/support/FakeExecutionKVStore';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import {
   createTempDirPlatform,
@@ -32,6 +37,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { withTempDir } from '@test/support/tempDirPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
+import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 
 const tempDirs = useTempDirs();
@@ -53,23 +59,62 @@ vi.mock('@agent/storage/ExecutionKVStore', async () => {
   >('@agent/storage/ExecutionKVStore');
   return {
     ...actual,
-    getExecutionStore: vi.fn(() => ({
-      readConfig: mocks.readConfig,
-      readRunRecord: mocks.readConfig,
-      readMeta: mocks.readMeta,
-      readChildren: mocks.readChildren,
-      readReport: mocks.readReport,
-      readResultMeta: mocks.readResultMeta,
-      readTurnState: mocks.readTurnState,
-      readWorkspaceFiles: mocks.readWorkspaceFiles,
-    })),
+    getExecutionStore: vi.fn((id: ExecutionId) =>
+      createFakeKv(id, { readTurnState: mocks.readTurnState }),
+    ),
+    getExecutionRecords: vi.fn(() =>
+      createFakeExecutionRecords({
+        readConfig: () =>
+          Effect.tryPromise({
+            try: () => mocks.readConfig(),
+            catch: ensureError,
+          }),
+        readRunRecord: () =>
+          Effect.tryPromise({
+            try: () => mocks.readConfig(),
+            catch: ensureError,
+          }),
+        readMeta: () =>
+          Effect.tryPromise({
+            try: () => mocks.readMeta(),
+            catch: ensureError,
+          }),
+        readReport: () =>
+          Effect.tryPromise({
+            try: () => mocks.readReport(),
+            catch: ensureError,
+          }),
+        readResultMeta: () =>
+          Effect.tryPromise({
+            try: () => mocks.readResultMeta(),
+            catch: ensureError,
+          }),
+        readWorkspaceFiles: () =>
+          Effect.tryPromise({
+            try: () => mocks.readWorkspaceFiles(),
+            catch: ensureError,
+          }),
+      }),
+    ),
   };
 });
 
 vi.mock('@agent/storage', async () => {
   const actual =
     await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
-  return { ...actual, listExecutions: mocks.listExecutions };
+  return {
+    ...actual,
+    listExecutions: () =>
+      Effect.tryPromise({
+        try: () => mocks.listExecutions(),
+        catch: ensureError,
+      }),
+    readExecutionChildren: () =>
+      Effect.tryPromise({
+        try: () => mocks.readChildren(),
+        catch: ensureError,
+      }),
+  };
 });
 
 const config = {
@@ -111,8 +156,9 @@ describe('ExecutionsTool', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.listExecutions.mockReturnValue(Effect.succeed([]));
+    mocks.listExecutions.mockResolvedValue([]);
     mocks.readMeta.mockResolvedValue(null);
+    mocks.readTurnState.mockResolvedValue(null);
     mocks.readChildren.mockResolvedValue([]);
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
@@ -463,12 +509,6 @@ describe('ExecutionsTool', () => {
       const runDir = resolveRunStoragePath(executionId);
       await StorageFS.ensureDir(runDir);
       const kvFiles = [
-        'meta.json',
-        'config.json',
-        'report.json',
-        'workspace-files.json',
-        'result-meta.json',
-        'child-def456.json',
         'stable-subagent-attempt.json',
         'stable-subagent-sequence-abc123.json',
         'workflow-script-call-1.json',
@@ -477,7 +517,16 @@ describe('ExecutionsTool', () => {
       for (const name of kvFiles) {
         await StorageFS.write(path.join(runDir, name), '{}');
       }
-      const retiredKvFiles = ['conversation.json', 'todos.json'];
+      const retiredKvFiles = [
+        'conversation.json',
+        'todos.json',
+        'meta.json',
+        'config.json',
+        'report.json',
+        'workspace-files.json',
+        'result-meta.json',
+        'child-def456.json',
+      ];
       for (const name of retiredKvFiles) {
         await StorageFS.write(path.join(runDir, name), '{}');
       }

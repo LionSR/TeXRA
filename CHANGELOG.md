@@ -4,9 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Breaking Changes
+
+- TeXRA 1.0 starts with new session history. Earlier conversations and saved
+  runs remain on disk but are not imported or available to resume. Project
+  documents and research files are unchanged.
+
 ### Bug Fixes
 
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
+
+### CLI and Agent SDK
+
+#### Breaking Changes
+
+- Node.js 22.16.0 or later in 22.x, or Node.js 24 or later is required.
 
 ## [0.40.10] - 2026-09-06
 

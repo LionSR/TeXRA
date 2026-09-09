@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Integration test for the combined `texra setup` flow (agent-native
@@ -48,7 +49,7 @@ describe('texra setup combined flow', () => {
     mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
     mocks.runCliOnboarding
       .mockReset()
-      .mockResolvedValue({ configured: false, declined: true });
+      .mockReturnValue(Effect.succeed({ configured: false, declined: true }));
     mocks.runChat
       .mockReset()
       .mockResolvedValue({ exitCode: CliExitCode.Success });
@@ -78,10 +79,12 @@ describe('texra setup combined flow', () => {
   });
 
   it('routes platform init through the TUI-owning signal path, not headless init', async () => {
-    mocks.runCliOnboarding.mockResolvedValue({
-      configured: true,
-      declined: false,
-    });
+    mocks.runCliOnboarding.mockReturnValue(
+      Effect.succeed({
+        configured: true,
+        declined: false,
+      }),
+    );
 
     await runSetup(INTERACTIVE_CONTEXT);
 
@@ -91,10 +94,12 @@ describe('texra setup combined flow', () => {
   });
 
   it('runs the picker, then enters the setup-agent chat once configured', async () => {
-    mocks.runCliOnboarding.mockResolvedValue({
-      configured: true,
-      declined: false,
-    });
+    mocks.runCliOnboarding.mockReturnValue(
+      Effect.succeed({
+        configured: true,
+        declined: false,
+      }),
+    );
 
     const exit = await runSetup(INTERACTIVE_CONTEXT);
 

@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { runInSession } from '@agent/runtime/RunContext';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import {
@@ -289,10 +288,7 @@ const classifyRefusal = Effect.fn('classifyRefusal')(function* (
     ),
   );
   if (!executionId) return 'not_resumable';
-  const classification = yield* Effect.tryPromise({
-    try: async () => runInSession(session, () => classifyRun(executionId)),
-    catch: ensureError,
-  });
+  const classification = yield* classifyRun(executionId, session);
   return recordRunRefusal(streamId, session, classification);
 });
 

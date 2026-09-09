@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
 import {
@@ -23,8 +24,7 @@ const mocks = vi.hoisted(() => ({
   deliverChildRunFollowUp: vi.fn(),
   executeAgent: vi.fn(),
   finalizeRun: vi.fn(),
-  persistChildRunReport: vi.fn(),
-  persistChildRunResultMeta: vi.fn(),
+  persistChildRunDelivery: vi.fn(),
   readConfig: vi.fn(),
   writeTurnState: vi.fn(),
   resumeToolUseTurn: vi.fn(),
@@ -59,10 +59,16 @@ vi.mock('@tools/delegation/subagentResults', async (importOriginal) => {
 
 vi.mock('@agent/storage', () => ({
   finalizeRun: mocks.finalizeRun,
-  getExecutionStore: vi.fn(() => ({
+  getExecutionRecords: vi.fn(() => ({
     readConfig: mocks.readConfig,
+  })),
+  getExecutionStore: vi.fn(() => ({
     writeTurnState: mocks.writeTurnState,
   })),
+}));
+
+vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
+  persistChildRunDelivery: mocks.persistChildRunDelivery,
 }));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
@@ -79,10 +85,6 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
-vi.mock('@agent/storage/childRunPersistence', () => ({
-  persistChildRunReport: mocks.persistChildRunReport,
-  persistChildRunResultMeta: mocks.persistChildRunResultMeta,
-}));
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import {
@@ -148,12 +150,13 @@ function baseParams(
 ) {
   if (parentSession !== defaultSession()) ownedSessions.add(parentSession);
   return {
-    config: AgentConfigSchema.parse({
-      agent: 'review',
-      model: 'gpt5',
-      agentCategory,
-    }),
-    agentCategoryExplicit: true,
+    definition: {
+      config: AgentConfigSchema.parse({
+        agent: 'review',
+        model: 'gpt5',
+        agentCategory,
+      }),
+    } as PreparedAgentDefinition,
     executionId: 'exec-1' as ExecutionId,
     agentName: 'review',
     parentStreamId: 'orchestrator-stream' as StreamTabId,
@@ -210,10 +213,9 @@ describe('NativeSubagentStrategy', () => {
     mocks.deliverChildRunFollowUp.mockReturnValue(
       Effect.succeed({ kind: 'delivered' }),
     );
-    mocks.persistChildRunReport.mockResolvedValue(undefined);
-    mocks.persistChildRunResultMeta.mockResolvedValue(undefined);
+    mocks.persistChildRunDelivery.mockReturnValue(Effect.void);
     mocks.writeTurnState.mockResolvedValue(undefined);
-    mocks.finalizeRun.mockResolvedValue({ ok: true });
+    mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   });
 
   afterEach(() => {
@@ -241,9 +243,9 @@ describe('NativeSubagentStrategy', () => {
       strategy.launch(fakePorts(), new AbortController().signal),
     );
     expect(mocks.executeAgent).toHaveBeenLastCalledWith(
-      params.config,
+      params.definition,
       params.executionId,
-      expect.objectContaining({ enforceCategory: true }),
+      expect.objectContaining({ isSubagent: true }),
     );
     expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
 
@@ -289,11 +291,10 @@ describe('NativeSubagentStrategy', () => {
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
-      params.config,
+      params.definition,
       params.executionId,
       expect.objectContaining({
         isSubagent: true,
-        enforceCategory: true,
         parentStreamId: params.parentStreamId,
         stopAfterCycle: true,
         workflowPhase: 'review',
@@ -327,8 +328,10 @@ describe('NativeSubagentStrategy', () => {
 
     expect(recordCost).toHaveBeenCalledOnce();
     expect(recordCost).toHaveBeenCalledWith(0.29);
-    expect(mocks.persistChildRunResultMeta).toHaveBeenCalledWith(
+    expect(mocks.persistChildRunDelivery).toHaveBeenCalledWith(
+      params.session,
       params.executionId,
+      expect.any(String),
       expect.objectContaining({
         result: expect.objectContaining({ cost: 0.29, outcome: 'failed' }),
       }),
@@ -356,8 +359,10 @@ describe('NativeSubagentStrategy', () => {
     });
     await completion;
 
-    expect(mocks.persistChildRunResultMeta).toHaveBeenCalledWith(
+    expect(mocks.persistChildRunDelivery).toHaveBeenCalledWith(
+      params.session,
       params.executionId,
+      expect.any(String),
       expect.objectContaining({
         producer: 'subagent',
         result: expect.objectContaining({
@@ -444,9 +449,13 @@ describe('NativeSubagentStrategy', () => {
       strategy.launch(fakePorts(), new AbortController().signal),
     );
 
-    mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
-    mocks.retrieveSessionResumeData.mockResolvedValue(
-      createToolUseResumeData({ executionId: params.executionId }),
+    mocks.readConfig.mockReturnValue(
+      Effect.succeed({ agentCategory: 'toolUse' }),
+    );
+    mocks.retrieveSessionResumeData.mockReturnValue(
+      Effect.succeed(
+        createToolUseResumeData({ executionId: params.executionId }),
+      ),
     );
     const turn = new AbortController();
     const replacementInterrupt = vi.fn();
@@ -607,9 +616,13 @@ describe('NativeSubagentStrategy', () => {
 
     await launchWaitingTurn(params, strategy);
 
-    mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
-    mocks.retrieveSessionResumeData.mockResolvedValue(
-      createToolUseResumeData({ executionId: params.executionId }),
+    mocks.readConfig.mockReturnValue(
+      Effect.succeed({ agentCategory: 'toolUse' }),
+    );
+    mocks.retrieveSessionResumeData.mockReturnValue(
+      Effect.succeed(
+        createToolUseResumeData({ executionId: params.executionId }),
+      ),
     );
     const resumeError = new Error('resume storage unreadable');
     mocks.resumeToolUseTurn.mockRejectedValueOnce(resumeError);
@@ -675,8 +688,8 @@ describe('NativeSubagentStrategy', () => {
       executionId,
       streamId: childStreamId,
     });
-    mocks.readConfig.mockResolvedValue(config);
-    mocks.retrieveSessionResumeData.mockResolvedValue(resume);
+    mocks.readConfig.mockReturnValue(Effect.succeed(config));
+    mocks.retrieveSessionResumeData.mockReturnValue(Effect.succeed(resume));
     mocks.resumeToolUseTurn.mockImplementation(async (_snapshot, options) => {
       options.onRun?.(handle);
       session.status.transitionToWaiting(childStreamId, 'wait');
@@ -771,7 +784,7 @@ describe('NativeSubagentStrategy', () => {
       // The test handle has no provider. Release it and interrupt the real
       // child activation, then join the loop before clearing its session.
       session.executions.untrack(executionId);
-      session.executions.kill(executionId);
+      await Effect.runPromise(session.executions.kill(executionId).settlement);
       await completion;
       session.followUps.terminalize(childStreamId);
       session.status.clearStream(childStreamId);

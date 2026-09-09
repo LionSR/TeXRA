@@ -2,13 +2,12 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
+import { Effect, Scope } from 'effect';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { platform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import type { Disposable } from '@platform/interfaces';
 import { unique } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe at the call site below since the input is always a relative
 // path from path.relative behind an isStrictlyWithin check.
@@ -17,7 +16,6 @@ import {
   isStrictlyWithin,
   toPosixPath,
 } from '@utils/core/pathCore';
-import type { Stats } from 'node:fs';
 
 const STDIN_INPUT_TOKEN = '-';
 // LaTeX derives auxiliary filenames from the input basename; leading-dot
@@ -45,22 +43,24 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
     : absolutePath;
 }
 
-function normalizeCliInputPathForRun(
-  candidate: string,
-  cwd: string,
-  flagLabel: string,
-  options: WorkflowInputExpansionOptions,
-): string {
-  if (
-    options.requireWorkspaceFiles === true &&
-    !isPathWithin(cwd, resolveAgainstCwd(candidate, cwd))
-  ) {
-    throw new CliUsageError(
-      `${flagLabel}: file is outside --cwd: ${candidate}`,
-    );
-  }
-  return normalizeCliInputPath(candidate, cwd);
-}
+const normalizeCliInputPathForRun = Effect.fn('normalizeCliInputPathForRun')(
+  function* (
+    candidate: string,
+    cwd: string,
+    flagLabel: string,
+    options: WorkflowInputExpansionOptions,
+  ): Effect.fn.Return<string, CliUsageError> {
+    if (
+      options.requireWorkspaceFiles === true &&
+      !isPathWithin(cwd, resolveAgainstCwd(candidate, cwd))
+    ) {
+      return yield* Effect.fail(
+        new CliUsageError(`${flagLabel}: file is outside --cwd: ${candidate}`),
+      );
+    }
+    return normalizeCliInputPath(candidate, cwd);
+  },
+);
 
 function isStdinWorkflowInputSpec(inputSpec: string): boolean {
   return inputSpec.trim() === STDIN_INPUT_TOKEN;
@@ -69,7 +69,7 @@ function isStdinWorkflowInputSpec(inputSpec: string): boolean {
 interface WorkflowInputExpansionOptions {
   readonly allowEmpty?: boolean;
   readonly requireWorkspaceFiles?: boolean;
-  readonly stdinInputFile?: () => Promise<string>;
+  readonly readStdinText?: () => Promise<string>;
 }
 
 type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
@@ -77,12 +77,8 @@ type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
 interface PreparedWorkflowInputExpansion {
   readonly entries: WorkflowInputExpansionEntry[];
   readonly flagLabel: string;
-  readonly stdinInputFile?: () => Promise<string>;
+  readonly readStdinText?: () => Promise<string>;
 }
-
-type StdinWorkflowInputMaterializer = (() => Promise<string>) & {
-  cleanup: () => Promise<void>;
-};
 
 export function hasMixedStdinWorkflowInputSpecs(
   inputSpecs: readonly string[],
@@ -93,86 +89,44 @@ export function hasMixedStdinWorkflowInputSpecs(
   return distinctSpecs.has(STDIN_INPUT_TOKEN) && distinctSpecs.size > 1;
 }
 
-export function createStdinWorkflowInputMaterializer(options: {
-  readonly readStdinText: () => Promise<string>;
-  readonly tempDir: string;
-}): StdinWorkflowInputMaterializer {
-  let materialized: Promise<string> | undefined;
-  let materializedPath: string | undefined;
-  let shutdownCleanup: Disposable | undefined;
-  let cleanupStarted = false;
-  let cleanupPromise: Promise<void> | undefined;
-  const inputFile = (() => {
-    materialized ??= materializeStdinWorkflowInput(options).then(
-      (inputPath) => {
-        materializedPath = inputPath;
-        if (cleanupStarted) {
-          void fs
-            .rm(path.dirname(inputPath), { recursive: true, force: true })
-            .catch(() => undefined);
-        }
-        return inputPath;
-      },
+const materializeStdinWorkflowInput = Effect.fn(
+  'materializeStdinWorkflowInput',
+)(function* (
+  readStdinText: () => Promise<string>,
+  tempDir: string,
+): Effect.fn.Return<string, Error, Scope.Scope> {
+  // No resource exists while stdin is pending. Interruption cannot leave a
+  // Promise continuation that creates a directory after shutdown.
+  const text = yield* Effect.tryPromise({
+    try: readStdinText,
+    catch: ensureError,
+  });
+  if (text.trim().length === 0)
+    return yield* Effect.fail(
+      new CliUsageError(
+        'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.',
+      ),
     );
-    return materialized;
-  }) as StdinWorkflowInputMaterializer;
-  inputFile.cleanup = async () => {
-    cleanupStarted = true;
-    cleanupPromise ??= (async () => {
-      shutdownCleanup?.dispose();
-      shutdownCleanup = undefined;
-      if (materializedPath) {
-        await fs.rm(path.dirname(materializedPath), {
-          recursive: true,
-          force: true,
-        });
-      }
-    })();
-    await cleanupPromise;
-  };
-  shutdownCleanup = platform().lifecycle.onShutdown(
-    SHUTDOWN_PHASE.BEFORE,
-    inputFile.cleanup,
-  );
-  return inputFile;
-}
-
-async function materializeStdinWorkflowInput(options: {
-  readonly readStdinText: () => Promise<string>;
-  readonly tempDir: string;
-}): Promise<string> {
-  const text = await options.readStdinText();
-  if (text.trim().length === 0) {
-    throw new CliUsageError(
-      'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.',
-    );
-  }
-  const inputDir = await fs.mkdtemp(
-    path.join(options.tempDir, `${STDIN_TEMP_PREFIX}${process.pid}-`),
+  const inputDir = yield* Effect.acquireRelease(
+    Effect.tryPromise({
+      try: () =>
+        fs.mkdtemp(path.join(tempDir, `${STDIN_TEMP_PREFIX}${process.pid}-`)),
+      catch: ensureError,
+    }),
+    (directory) =>
+      Effect.tryPromise({
+        try: () => fs.rm(directory, { recursive: true, force: true }),
+        catch: ensureError,
+      }).pipe(Effect.orDie),
   );
   const inputFile = path.join(inputDir, STDIN_WORKFLOW_INPUT_BASENAME);
-  try {
-    await fs.writeFile(inputFile, text, { encoding: 'utf8', flag: 'wx' });
-  } catch (error) {
-    await fs.rm(inputDir, { recursive: true, force: true }).catch(() => {
-      // Preserve the original write failure for the caller.
-    });
-    throw error;
-  }
+  // Finish this finite local write before the scope removes its directory.
+  yield* Effect.tryPromise({
+    try: () => fs.writeFile(inputFile, text, { encoding: 'utf8', flag: 'wx' }),
+    catch: ensureError,
+  }).pipe(Effect.uninterruptible);
   return inputFile;
-}
-
-function requireStdinWorkflowInputFile(
-  flagLabel: string,
-  options: WorkflowInputExpansionOptions,
-): () => Promise<string> {
-  if (!options.stdinInputFile) {
-    throw new CliUsageError(
-      `${flagLabel}: '-' requires stdin input to be configured.`,
-    );
-  }
-  return options.stdinInputFile;
-}
+});
 
 /**
  * Expand a single user-supplied path spec into the absolute / cwd-relative
@@ -185,119 +139,147 @@ function requireStdinWorkflowInputFile(
  * Defaults to `--input` for the common case; callers that pass context paths
  * (multi-agent `--context`) should override.
  */
-async function expandWorkflowInputSpec(
+const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
   inputSpec: string,
   cwd: string,
   flagLabel: string = '--input',
   options: WorkflowInputExpansionOptions = {},
-): Promise<string[]> {
+): Effect.fn.Return<string[], Error> {
   const trimmed = inputSpec.trim();
   if (!trimmed) return [];
 
-  const normalizeMatches = (matches: string[]): string[] =>
-    matches
-      .toSorted()
-      .map((match) =>
-        normalizeCliInputPathForRun(match, cwd, flagLabel, options),
-      );
+  const normalizeMatches = (matches: string[]) =>
+    Effect.forEach(matches.toSorted(), (match) =>
+      normalizeCliInputPathForRun(match, cwd, flagLabel, options),
+    );
 
   const absolutePath = resolveAgainstCwd(trimmed, cwd);
   // Prefer an exact existing path even when its valid filename contains glob
   // syntax. Windows glob mode deliberately has no backslash escape channel.
-  let stats: Stats | null = null;
-  try {
-    stats = await fs.stat(absolutePath);
-  } catch (error: unknown) {
-    if (!isFileNotFoundError(error) && !isNotADirectoryError(error)) {
-      throw error;
-    }
-  }
+  const stats = yield* Effect.tryPromise({
+    try: () => fs.stat(absolutePath),
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((error) =>
+      isFileNotFoundError(error) || isNotADirectoryError(error)
+        ? Effect.succeed(null)
+        : Effect.fail(error),
+    ),
+  );
 
   const globOptions = workflowInputGlobOptions(process.platform);
   if (!stats && hasMagic(trimmed, globOptions)) {
     const isAbsolute = path.isAbsolute(trimmed);
-    const matches = await glob(trimmed, {
-      cwd: isAbsolute ? undefined : cwd,
-      absolute: isAbsolute,
-      nodir: true,
-      ...globOptions,
+    const matches = yield* Effect.tryPromise({
+      try: () =>
+        glob(trimmed, {
+          cwd: isAbsolute ? undefined : cwd,
+          absolute: isAbsolute,
+          nodir: true,
+          ...globOptions,
+        }),
+      catch: ensureError,
     });
     if (matches.length === 0) {
-      throw new CliUsageError(`${flagLabel}: no files matched: ${trimmed}`);
+      return yield* Effect.fail(
+        new CliUsageError(`${flagLabel}: no files matched: ${trimmed}`),
+      );
     }
-    return normalizeMatches(matches);
+    return yield* normalizeMatches(matches);
   }
 
   if (stats?.isDirectory()) {
     // Validate the directory itself before globbing its contents.
-    void normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options);
-    const matches = await glob('**/*.tex', {
-      cwd: absolutePath,
-      absolute: true,
-      nodir: true,
+    yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options);
+    const matches = yield* Effect.tryPromise({
+      try: () =>
+        glob('**/*.tex', {
+          cwd: absolutePath,
+          absolute: true,
+          nodir: true,
+        }),
+      catch: ensureError,
     });
     if (matches.length === 0) {
-      throw new CliUsageError(
-        `No .tex input files found in directory: ${trimmed}`,
+      return yield* Effect.fail(
+        new CliUsageError(`No .tex input files found in directory: ${trimmed}`),
       );
     }
-    return normalizeMatches(matches);
+    return yield* normalizeMatches(matches);
   }
 
   // Fail fast with a Usage error (exit 2) instead of paying full platform
   // init + agent loading just to ENOENT inside the agent run (exit 1).
   if (!stats) {
-    throw new CliUsageError(`${flagLabel}: file not found: ${trimmed}`);
+    return yield* Effect.fail(
+      new CliUsageError(`${flagLabel}: file not found: ${trimmed}`),
+    );
   }
-  return [normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options)];
-}
+  return [yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options)];
+});
 
-async function prepareWorkflowInputExpansion(
+const prepareWorkflowInputExpansion = Effect.fn(
+  'prepareWorkflowInputExpansion',
+)(function* (
   inputSpecs: readonly string[],
   cwd: string,
   flagLabel: string,
   options: WorkflowInputExpansionOptions,
-): Promise<PreparedWorkflowInputExpansion> {
+): Effect.fn.Return<PreparedWorkflowInputExpansion, Error> {
   const entries: WorkflowInputExpansionEntry[] = [];
-  let stdinInputFile: (() => Promise<string>) | undefined;
+  let readStdinText: (() => Promise<string>) | undefined;
   for (const spec of inputSpecs) {
     if (isStdinWorkflowInputSpec(spec)) {
-      stdinInputFile = requireStdinWorkflowInputFile(flagLabel, options);
+      if (!options.readStdinText)
+        return yield* Effect.fail(
+          new CliUsageError(
+            `${flagLabel}: '-' requires stdin input to be configured.`,
+          ),
+        );
+      readStdinText = options.readStdinText;
       entries.push('stdin');
       continue;
     }
-    entries.push(await expandWorkflowInputSpec(spec, cwd, flagLabel, options));
+    entries.push(yield* expandWorkflowInputSpec(spec, cwd, flagLabel, options));
   }
-  return { entries, flagLabel, stdinInputFile };
-}
+  return { entries, flagLabel, readStdinText };
+});
 
-async function finishWorkflowInputExpansion(
-  prepared: PreparedWorkflowInputExpansion,
-  cwd: string,
-  options: WorkflowInputExpansionOptions,
-): Promise<{ readonly files: string[]; readonly stdinPath?: string }> {
-  const expanded: string[] = [];
-  const stdinPath = prepared.stdinInputFile
-    ? normalizeCliInputPathForRun(
-        await prepared.stdinInputFile(),
-        cwd,
-        prepared.flagLabel,
-        options,
-      )
-    : undefined;
-  for (const entry of prepared.entries) {
-    if (entry === 'stdin') {
-      if (stdinPath) expanded.push(stdinPath);
-      continue;
+const finishWorkflowInputExpansion = Effect.fn('finishWorkflowInputExpansion')(
+  function* (
+    prepared: PreparedWorkflowInputExpansion,
+    cwd: string,
+    options: WorkflowInputExpansionOptions,
+  ): Effect.fn.Return<
+    { readonly files: string[]; readonly stdinPath?: string },
+    Error,
+    Scope.Scope
+  > {
+    const expanded: string[] = [];
+    const stdinPath = prepared.readStdinText
+      ? yield* normalizeCliInputPathForRun(
+          yield* materializeStdinWorkflowInput(prepared.readStdinText, cwd),
+          cwd,
+          prepared.flagLabel,
+          options,
+        )
+      : undefined;
+    for (const entry of prepared.entries) {
+      if (entry === 'stdin') {
+        if (stdinPath) expanded.push(stdinPath);
+        continue;
+      }
+      expanded.push(...entry);
     }
-    expanded.push(...entry);
-  }
-  const deduped = unique(expanded);
-  if (deduped.length === 0 && options.allowEmpty !== true) {
-    throw new CliUsageError('At least one workflow input file is required.');
-  }
-  return { files: deduped, stdinPath };
-}
+    const deduped = unique(expanded);
+    if (deduped.length === 0 && options.allowEmpty !== true) {
+      return yield* Effect.fail(
+        new CliUsageError('At least one workflow input file is required.'),
+      );
+    }
+    return { files: deduped, stdinPath };
+  },
+);
 
 interface ExpandedRunInputs {
   readonly inputFiles: string[];
@@ -314,47 +296,49 @@ interface ExpandedRunInputs {
  * `--context` is expanded with the same helper so a missing path fails as a
  * Usage error (exit 2) attributed to `--context`.
  */
-export async function expandRunInputs(
+export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
   options: {
     readonly allowEmptyInput?: boolean;
     readonly requireWorkspaceFiles?: boolean;
-    readonly stdinInputFile?: () => Promise<string>;
+    readonly readStdinText?: () => Promise<string>;
   } = {},
-): Promise<ExpandedRunInputs> {
+): Effect.fn.Return<ExpandedRunInputs, Error, Scope.Scope> {
   if (
     inputSpecs.some(isStdinWorkflowInputSpec) &&
     contextSpecs.some(isStdinWorkflowInputSpec)
   ) {
-    throw new CliUsageError(
-      'Use `-` for either --input or --context, not both; stdin can only be read once.',
+    return yield* Effect.fail(
+      new CliUsageError(
+        'Use `-` for either --input or --context, not both; stdin can only be read once.',
+      ),
     );
   }
 
   const shared = {
     requireWorkspaceFiles: options.requireWorkspaceFiles,
-    stdinInputFile: options.stdinInputFile,
+    readStdinText: options.readStdinText,
   };
-  const inputExpansion = await prepareWorkflowInputExpansion(
+  const inputExpansion = yield* prepareWorkflowInputExpansion(
     inputSpecs,
     cwd,
     '--input',
     shared,
   );
-  const contextExpansion = await prepareWorkflowInputExpansion(
+  const contextExpansion = yield* prepareWorkflowInputExpansion(
     contextSpecs,
     cwd,
     '--context',
     shared,
   );
 
-  const inputs = await finishWorkflowInputExpansion(inputExpansion, cwd, {
+  const inputs = yield* finishWorkflowInputExpansion(inputExpansion, cwd, {
     ...shared,
     allowEmpty: options.allowEmptyInput,
   });
-  const contexts = await finishWorkflowInputExpansion(contextExpansion, cwd, {
+  const contexts = yield* finishWorkflowInputExpansion(contextExpansion, cwd, {
     ...shared,
     allowEmpty: true,
   });
@@ -364,7 +348,7 @@ export async function expandRunInputs(
     // `-` is rejected above when it appears in both, so at most one is set.
     stdinInputPath: inputs.stdinPath ?? contexts.stdinPath,
   };
-}
+});
 
 /**
  * Own the stdin-temp-file lifecycle for headless runs that accept --input /
@@ -372,7 +356,7 @@ export async function expandRunInputs(
  * removes the temporary stdin file whether expansion, execution, or output
  * handling fails.
  */
-export async function withExpandedRunInputs<T>(
+export function withExpandedRunInputs<T, E>(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
@@ -381,20 +365,17 @@ export async function withExpandedRunInputs<T>(
     readonly allowEmptyInput?: boolean;
     readonly requireWorkspaceFiles?: boolean;
   },
-  run: (inputs: ExpandedRunInputs) => Promise<T>,
-): Promise<T> {
-  const stdinInputFile = createStdinWorkflowInputMaterializer({
-    readStdinText: options.readStdinText,
-    tempDir: cwd,
-  });
-  try {
-    const inputs = await expandRunInputs(inputSpecs, contextSpecs, cwd, {
-      allowEmptyInput: options.allowEmptyInput,
-      requireWorkspaceFiles: options.requireWorkspaceFiles,
-      stdinInputFile,
-    });
-    return await run(inputs);
-  } finally {
-    await stdinInputFile.cleanup();
-  }
+  run: (inputs: ExpandedRunInputs) => Effect.Effect<T, E>,
+): Effect.Effect<T, E | Error> {
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const inputs = yield* expandRunInputs(
+        inputSpecs,
+        contextSpecs,
+        cwd,
+        options,
+      );
+      return yield* run(inputs);
+    }),
+  );
 }

@@ -2,7 +2,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import {
   WorkflowRunAbortError,
   type WorkflowAgentInvocation,
@@ -136,30 +136,26 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       // Model resolves before any file I/O so an unavailable/invalid
       // declared model fails the call without touching the filesystem.
       const model = yield* workflowScriptModelSelection(call, parent);
-      const [inputs, context, media] = yield* Effect.tryPromise({
-        try: () =>
-          Promise.all([
-            resolveInvocationFileList(
-              runScope.session,
-              runExecutionId,
-              'Input file',
-              call.options.inputFiles ?? [],
-            ),
-            resolveInvocationFileList(
-              runScope.session,
-              runExecutionId,
-              'Context file',
-              call.options.contextFiles ?? [],
-            ),
-            resolveInvocationFileList(
-              runScope.session,
-              runExecutionId,
-              'Media file',
-              call.options.mediaFiles ?? [],
-            ),
-          ]),
-        catch: ensureError,
-      });
+      const [inputs, context, media] = yield* Effect.all([
+        resolveInvocationFileList(
+          runScope.session,
+          runExecutionId,
+          'Input file',
+          call.options.inputFiles ?? [],
+        ),
+        resolveInvocationFileList(
+          runScope.session,
+          runExecutionId,
+          'Context file',
+          call.options.contextFiles ?? [],
+        ),
+        resolveInvocationFileList(
+          runScope.session,
+          runExecutionId,
+          'Media file',
+          call.options.mediaFiles ?? [],
+        ),
+      ]);
       const inputFiles = inputs.map(({ file }) => file);
       const contextFiles = context.map(({ file }) => file);
       const mediaFiles = media.map(({ file }) => file);
@@ -313,13 +309,10 @@ export function createWorkflowScriptAgentRunner(
         });
         if (invocation.report !== undefined) {
           const recoveredMeta = yield* Effect.exit(
-            Effect.tryPromise({
-              try: () =>
-                runInSession(runScope.session, () =>
-                  getExecutionStore(completed.executionId).readMeta(),
-                ),
-              catch: ensureError,
-            }),
+            getExecutionRecords(
+              runScope.session,
+              completed.executionId,
+            ).readMeta(),
           );
           if (Exit.isSuccess(recoveredMeta)) {
             const recoveredStreamId = recoveredMeta.value?.streamId;

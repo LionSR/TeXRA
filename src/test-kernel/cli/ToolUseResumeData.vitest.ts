@@ -1,10 +1,11 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/runtime';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
-  isCliRunResumable,
+  isCliRunResumable as isCliRunResumableEffect,
   type CliRunResumabilityFacts,
 } from '@cli/runtime/toolUseResumeData';
 import {
@@ -12,10 +13,17 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 
 setupPlatform({ workspacePath: '/workspace/cli-resume-listing' });
+
+function isCliRunResumable(facts: CliRunResumabilityFacts): Promise<boolean> {
+  return Effect.runPromise(
+    isCliRunResumableEffect(facts, createProcessSession()),
+  );
+}
 
 const config = {
   agent: 'correct',

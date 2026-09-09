@@ -586,7 +586,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         // funnel and setup launch preflight.
         hasAnyUsableSetupCredential(),
         effectRuntime()
-          .runPromise(listExecutions())
+          .runPromise(listExecutions(defaultSession()))
           .then((entries) => entries.length > 0),
       ]);
       await backfillFirstRunDone(context.globalState, {

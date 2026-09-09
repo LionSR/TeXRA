@@ -106,7 +106,8 @@ vi.mock('@cli/onboarding/runOnboarding', () => ({
 }));
 
 vi.mock('@cli/runtime/chatDefaults', () => ({
-  resolveChatDefaults: mocks.resolveChatDefaults,
+  resolveChatDefaults: (...args: unknown[]) =>
+    Effect.tryPromise(() => mocks.resolveChatDefaults(...args)),
 }));
 
 vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
@@ -273,10 +274,12 @@ describe('runChat signal ownership wiring', () => {
     });
     mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);
     mocks.setCliHelperModel.mockResolvedValue(undefined);
-    mocks.maybeRunCliOnboarding.mockResolvedValue({
-      configured: false,
-      declined: false,
-    });
+    mocks.maybeRunCliOnboarding.mockReturnValue(
+      Effect.succeed({
+        configured: false,
+        declined: false,
+      }),
+    );
     mocks.resolveChatDefaults.mockResolvedValue({
       agent: 'assistant',
       model: 'gpt-test',

@@ -824,6 +824,14 @@ continuation and has no sub-agents yet). OpenCode does not use
 
 ## 3. Sequencing: the runtime is lane D of the cutover
 
+The 2026-09-08 owner amendment in the substrate proposal §8 permits a
+smaller, independently safe cleanup and audio-loading release (#12124) before this
+runtime work. #12108's metadata replacement remains held until conversion
+preserves existing history and resume access. Lane D continues as a
+follow-up. This changes release sequencing, not its joint replacement
+obligations or the outstanding D4 decision; checkpoint writers and their
+file-lease fences remain together until replaced.
+
 The owner's rule is no intermediate projectors or adapters, only the target
 architecture. The first draft of this section had two intermediates: a
 release-N `checkpoint` column that the old `persistedFlow.ts` would update
@@ -973,8 +981,10 @@ compresses when the phase ceremony goes. `output/` (3,482) and
    as in §3; record the R4 and 13.C reversal in the migration PRD; add the
    six row types to the one-fold PRD §6 durable set; state the retention
    rule.
-1. Foundation: `RunLedger` service over `SessionEvents`, the six
-   `AgentEvent` arms with Zod schemas, `foldRunState` in `src/shared`, the
+1. Foundation: `RunLedger` service over `SessionEvents`, the Zod row
+   vocabulary and `SessionEventDraftSchema` placement specified by the
+   [PR 1 foundation proposal](./2026-09-08-pr1-run-ledger-foundation.md#28-the-arms-in-sessioneventts),
+   `foldRunState` in `src/shared`, the
    in-memory ledger layer, one ledger test and one fold test. Nothing
    deleted yet; nothing in production calls it yet.
 2. Both families on the ledger, one PR: `ModelInvoker`, `Tools`,

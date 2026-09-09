@@ -1,11 +1,13 @@
+import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { it as effectIt } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
+import { finalizeRun } from '@agent/storage/executionLifecycle';
 import type {
   AgentExecutionHandle,
   LiveToolUseFlowContext,
@@ -13,7 +15,10 @@ import type {
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { ExecutionBusy } from '@agent/runtime/executionLanes';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { statusDraft } from '@agent/runtime/SessionEvents';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
@@ -28,11 +33,13 @@ import {
   AgentCategory,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { eventsOfType, recordChildRosters } from '../progressTestUtils';
@@ -109,7 +116,9 @@ function createRegistry(
   options: {
     approvals?: ReturnType<typeof createSessionApprovals>;
     publishResult?: (event: ResultEvent, streamId: StreamTabId) => void;
-    releaseRootExecutionLease?: (executionId: ExecutionId) => Promise<void>;
+    releaseRootExecutionLease?: (
+      executionId: ExecutionId,
+    ) => Effect.Effect<void, Error>;
   } = {},
 ): {
   events: PublishedEvents;
@@ -132,7 +141,8 @@ function createRegistry(
     publish: (drafts) => events.published.push(...drafts),
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     publishResult: () => {},
-    releaseRootExecutionLease: async () => {},
+    releaseRootExecutionLease: () => Effect.void,
+    finalizeExecution: (input) => finalizeRun(defaultSession(), input),
     ...options,
   });
   return { events, streamStatus, registry };
@@ -210,11 +220,34 @@ function trackSuspendedWaitingHandle(
     options.overrides,
   );
   registry.track(handle);
-  handle.suspend(options.cleanup ?? (() => {}));
+  handle.suspend(
+    Effect.tryPromise({
+      try: async () => {
+        await options.cleanup?.();
+      },
+      catch: ensureError,
+    }),
+  );
   seedStreamStatusForTest(streamStatus, options.childStreamId, {
     phase: STREAM_PHASE.WAITING,
   });
   return handle;
+}
+
+/** Exercise synchronous stop admission and run its native settlement at the test boundary. */
+function killRegistry(
+  registry: ExecutionRegistry,
+  ...args: Parameters<ExecutionRegistry['kill']>
+): boolean {
+  const stop = registry.kill(...args);
+  Effect.runFork(stop.settlement);
+  return stop.accepted;
+}
+function stopRegistry(
+  registry: ExecutionRegistry,
+  ...args: Parameters<ExecutionRegistry['stopAgentStream']>
+): void {
+  Effect.runFork(registry.stopAgentStream(...args));
 }
 
 describe('executionRegistry', () => {
@@ -257,7 +290,7 @@ describe('executionRegistry', () => {
       'stream-waiting-cleanup-completion' as StreamTabId,
     );
     const cleanupFinished = createDeferred();
-    handle.suspend(() => cleanupFinished.promise);
+    handle.suspend(Effect.promise(() => cleanupFinished.promise));
 
     const teardown = handle.beginSuspendedTermination();
     expect(teardown).toBeDefined();
@@ -266,9 +299,17 @@ describe('executionRegistry', () => {
     // cannot start a second teardown or publish a second terminal outcome.
     expect(handle.beginSuspendedTermination()).toBeUndefined();
     let observedCompletion = false;
-    const observation = teardown?.then(() => {
-      observedCompletion = true;
-    });
+    const observation =
+      teardown &&
+      Effect.runPromise(
+        teardown.pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              observedCompletion = true;
+            }),
+          ),
+        ),
+      );
     await Promise.resolve();
     expect(observedCompletion).toBe(false);
 
@@ -388,7 +429,7 @@ describe('executionRegistry', () => {
         interrupt,
       );
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
 
       expect(interrupt).toHaveBeenCalledOnce();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
@@ -420,7 +461,7 @@ describe('executionRegistry', () => {
         cleanup,
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
       await handle.result;
 
       expect(cleanup).toHaveBeenCalledOnce();
@@ -458,7 +499,7 @@ describe('executionRegistry', () => {
         overrides: { trace },
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
       await handle.result;
 
       expect(publishResult).toHaveBeenCalledExactlyOnceWith(
@@ -512,7 +553,7 @@ describe('executionRegistry', () => {
         },
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
       await Promise.resolve();
       expect(publishResult).not.toHaveBeenCalled();
       expect(registry.getHandle(executionId)).toBe(handle);
@@ -551,7 +592,7 @@ describe('executionRegistry', () => {
         cleanup: () => cleanupGate,
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
 
       const successorInterrupt = vi.fn();
       const successor = trackInterruptibleHandle(
@@ -593,7 +634,7 @@ describe('executionRegistry', () => {
         childStreamId,
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
       await expect(handle.result).resolves.toMatchObject({
         type: 'result',
         outcome: RUN_OUTCOME.CANCELLED,
@@ -612,11 +653,13 @@ describe('executionRegistry', () => {
       'parent-waiting-kill-metadata-failure' as StreamTabId;
     const childStreamId = 'child-waiting-kill-metadata-failure' as StreamTabId;
     const durabilityError = new Error('metadata disk write failed');
-    storageMocks.finalizeRun.mockResolvedValueOnce({
-      ok: false,
-      outcomePersisted: false,
-      error: durabilityError,
-    });
+    storageMocks.finalizeRun.mockReturnValueOnce(
+      Effect.succeed({
+        ok: false,
+        outcomePersisted: false,
+        error: durabilityError,
+      }),
+    );
     channelTraceMocks.warn.mockClear();
 
     try {
@@ -626,7 +669,7 @@ describe('executionRegistry', () => {
         childStreamId,
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
 
       await expect(handle.result).resolves.toMatchObject({
         type: 'result',
@@ -657,7 +700,7 @@ describe('executionRegistry', () => {
     const executionId = 'exec-waiting-cleanup-failure' as ExecutionId;
     const childStreamId = 'child-waiting-cleanup-failure' as StreamTabId;
     const cleanupError = new Error('transcript reload failed');
-    storageMocks.finalizeRun.mockResolvedValueOnce({ ok: true });
+    storageMocks.finalizeRun.mockReturnValueOnce(Effect.succeed({ ok: true }));
     channelTraceMocks.warn.mockClear();
 
     try {
@@ -668,16 +711,19 @@ describe('executionRegistry', () => {
         cleanup: () => Promise.reject(cleanupError),
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
-          executionId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          // A stopped WAITING run keeps its checkpoint: this is precisely the
-          // run a user resumes (#11315).
-          flowRecord: 'preserve',
-        });
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+          defaultSession(),
+          {
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            // A stopped WAITING run keeps its checkpoint: this is precisely the
+            // run a user resumes (#11315).
+            flowRecord: 'preserve',
+          },
+        );
       });
       expect(channelTraceMocks.warn).toHaveBeenCalledWith(
         'Waiting-execution cleanup failed; continuing terminal persistence',
@@ -694,11 +740,13 @@ describe('executionRegistry', () => {
     const childStreamId =
       'child-waiting-kill-flow-retain-failure' as StreamTabId;
     const cleanupError = new Error('flow retention failed');
-    storageMocks.finalizeRun.mockResolvedValueOnce({
-      ok: false,
-      outcomePersisted: true,
-      error: cleanupError,
-    });
+    storageMocks.finalizeRun.mockReturnValueOnce(
+      Effect.succeed({
+        ok: false,
+        outcomePersisted: true,
+        error: cleanupError,
+      }),
+    );
     channelTraceMocks.warn.mockClear();
 
     try {
@@ -709,16 +757,19 @@ describe('executionRegistry', () => {
         childStreamId,
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
-          executionId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          // A stopped WAITING run keeps its checkpoint: this is precisely the
-          // run a user resumes (#11315).
-          flowRecord: 'preserve',
-        });
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+          defaultSession(),
+          {
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            // A stopped WAITING run keeps its checkpoint: this is precisely the
+            // run a user resumes (#11315).
+            flowRecord: 'preserve',
+          },
+        );
       });
       expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
         'Failed to finalize stopped waiting execution',
@@ -749,7 +800,7 @@ describe('executionRegistry', () => {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
 
-      expect(registry.kill(executionId)).toBe(false);
+      expect(killRegistry(registry, executionId)).toBe(false);
 
       expect(streamStatus.get(childStreamId)).toBeUndefined();
       expect(registry.getHandle(executionId)).toBe(handle);
@@ -777,7 +828,7 @@ describe('executionRegistry', () => {
         phase: STREAM_PHASE.WAITING,
       });
 
-      expect(registry.kill(executionId)).toBe(false);
+      expect(killRegistry(registry, executionId)).toBe(false);
 
       expect(registry.getHandle(executionId)).toBe(handle);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
@@ -797,11 +848,13 @@ describe('executionRegistry', () => {
     const teardown = vi.fn();
     storageMocks.finalizeRun.mockClear();
     let releasePersist: (() => void) | undefined;
-    storageMocks.finalizeRun.mockImplementationOnce(
-      async () =>
-        new Promise((resolve) => {
-          releasePersist = () => resolve({ ok: true });
-        }),
+    storageMocks.finalizeRun.mockImplementationOnce(() =>
+      Effect.promise(
+        () =>
+          new Promise((resolve) => {
+            releasePersist = () => resolve({ ok: true });
+          }),
+      ),
     );
 
     try {
@@ -812,17 +865,20 @@ describe('executionRegistry', () => {
         cleanup: teardown,
       });
 
-      const finalized = finalizeRunTerminal({
-        handle,
-        executions: registry,
-        streamStatus,
-        outcome: RUN_OUTCOME.COMPLETED,
-        isSubagent: true,
-        persistence: { kind: 'finalize', flowRecord: 'delete' },
-      });
+      const finalized = Effect.runPromise(
+        finalizeRunTerminal({
+          session: defaultSession(),
+          handle,
+          executions: registry,
+          streamStatus,
+          outcome: RUN_OUTCOME.COMPLETED,
+          isSubagent: true,
+          persistence: { kind: 'finalize', flowRecord: 'delete' },
+        }),
+      );
       await vi.waitFor(() => expect(releasePersist).toBeDefined());
 
-      expect(registry.kill(executionId)).toBe(false);
+      expect(killRegistry(registry, executionId)).toBe(false);
 
       releasePersist?.();
       await finalized;
@@ -830,11 +886,14 @@ describe('executionRegistry', () => {
       await expect(handle.result).resolves.toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
       });
-      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith({
-        executionId,
-        outcome: RUN_OUTCOME.COMPLETED,
-        flowRecord: 'delete',
-      });
+      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
+        defaultSession(),
+        {
+          executionId,
+          outcome: RUN_OUTCOME.COMPLETED,
+          flowRecord: 'delete',
+        },
+      );
       expect(registry.getHandle(executionId)).toBeUndefined();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
@@ -849,32 +908,32 @@ describe('executionRegistry', () => {
     // the earlier genuine WAITING suspension, so a kill landing in that window
     // tears it down off that fact alone — no phase or substate is consulted.
     const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-resuming-window-kill-test' as ExecutionId;
+    const executionId = 'eec-abcdef' as ExecutionId;
     const parentStreamId = 'parent-resuming-window-kill-test' as StreamTabId;
     const childStreamId = 'child-resuming-window-kill-test' as StreamTabId;
     const cleanup = vi.fn();
-    const store = getExecutionStore(executionId);
+    const store = getExecutionRecords(defaultSession(), executionId);
 
     try {
-      await store.writeMeta({
-        timestamp: '2026-07-10T00:00:00.000Z',
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
-      await store.writeResultMeta({
-        producer: 'subagent',
-        agentName: 'test-subagent',
-        wallTimeMs: 1,
-        result: {
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          response: 'interim response',
-          files: [],
-          cost: 0,
-        },
-      });
+      publishTestRunStart(defaultSession(), childStreamId, executionId);
+      await defaultSession().settlePublications();
+      await Effect.runPromise(
+        store.writeResultMeta({
+          producer: 'subagent',
+          agentName: 'test-subagent',
+          wallTimeMs: 1,
+          result: {
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.COMPLETED,
+            response: 'interim response',
+            files: [],
+            cost: 0,
+          },
+        }),
+      );
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
-      handle.suspend(cleanup);
+      handle.suspend(Effect.sync(cleanup));
       // Mirrors resumeQueuedToolUseFromResumeData's status flip that runs ahead of
       // the resumed run's own context — RUNNING phase, RESUMING substate.
       seedStreamStatusForTest(streamStatus, childStreamId, {
@@ -882,16 +941,20 @@ describe('executionRegistry', () => {
         substate: STREAM_SUBSTATE.RESUMING,
       });
 
-      expect(registry.kill(executionId)).toBe(true);
+      expect(killRegistry(registry, executionId)).toBe(true);
       await handle.result;
 
       expect(cleanup).toHaveBeenCalledOnce();
       expect(registry.getHandle(executionId)).toBeUndefined();
       await vi.waitFor(async () => {
-        await expect(store.readMeta()).resolves.toMatchObject({
+        await expect(
+          Effect.runPromise(store.readMeta()),
+        ).resolves.toMatchObject({
           outcome: RUN_OUTCOME.CANCELLED,
         });
-        await expect(store.readResultMeta()).resolves.toMatchObject({
+        await expect(
+          Effect.runPromise(store.readResultMeta()),
+        ).resolves.toMatchObject({
           result: {
             outcome: RUN_OUTCOME.CANCELLED,
             response: 'interim response',
@@ -941,7 +1004,7 @@ describe('executionRegistry', () => {
         childInterrupt,
       );
 
-      registry.stopAgentStream(rootStreamId);
+      stopRegistry(registry, rootStreamId);
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).toHaveBeenCalledOnce();
@@ -989,7 +1052,7 @@ describe('executionRegistry', () => {
         { agentName: 'test-grandchild' },
       );
 
-      expect(registry.kill('exec-child-cascade-test')).toBe(true);
+      expect(killRegistry(registry, 'exec-child-cascade-test')).toBe(true);
 
       expect(childInterrupt).toHaveBeenCalledOnce();
       expect(grandchildInterrupt).toHaveBeenCalledOnce();
@@ -1031,7 +1094,7 @@ describe('executionRegistry', () => {
       );
 
       expect(
-        registry.kill('exec-child-detach-kill-test', {
+        killRegistry(registry, 'exec-child-detach-kill-test', {
           detachActiveChildren: true,
         }),
       ).toBe(true);
@@ -1095,7 +1158,7 @@ describe('executionRegistry', () => {
         { agentName: 'test-grandchild' },
       );
 
-      registry.stopAgentStream(rootStreamId, {
+      stopRegistry(registry, rootStreamId, {
         detachActiveChildren: true,
       });
 
@@ -1175,7 +1238,7 @@ describe('executionRegistry', () => {
         descendantInterrupt,
       );
 
-      registry.stopAgentStream(childStreamId, {
+      stopRegistry(registry, childStreamId, {
         detachActiveChildren: true,
       });
 
@@ -1205,7 +1268,7 @@ describe('executionRegistry', () => {
     const streamId = 'ownerless-stop-policy-test' as StreamTabId;
 
     try {
-      registry.stopAgentStream(streamId);
+      stopRegistry(registry, streamId);
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(eventsOfType(recorded.events, 'status').at(-1)).toMatchObject({
@@ -1225,7 +1288,7 @@ describe('executionRegistry', () => {
         phase: STREAM_PHASE.COMPLETED,
       });
 
-      registry.stopAgentStream(streamId);
+      stopRegistry(registry, streamId);
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
@@ -1378,7 +1441,7 @@ describe('executionRegistry', () => {
         childInterrupt,
       );
 
-      registry.stopAgentStream(parentStreamId, {
+      stopRegistry(registry, parentStreamId, {
         detachActiveChildren: true,
       });
 

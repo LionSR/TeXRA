@@ -1,16 +1,16 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
+import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript';
 
 describe('AgentTrace error data', () => {
   it('emits error data with stack', () => {
-    const store = StreamLogStore.ephemeral('test');
+    const store = new StreamLog();
     const logger = createTestRunTrace('TestErrorLogger', store).trace;
     const err = new Error('test failure');
     logger.error(`Error occurred: ${err.message}`, { data: err });
-    const log = store.get('TestErrorLogger');
+    const log = store;
     const captured = log?.getRange(0, log.head).at(-1) as
       { data: Error } | undefined;
     assert.ok(captured);

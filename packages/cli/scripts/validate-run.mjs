@@ -6,7 +6,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -108,17 +107,6 @@ function assertSuccess(result, label) {
     result.status === 0,
     `${label} failed with exit ${result.status}${result.signal ? ` signal ${result.signal}` : ''}${result.error ? ` error ${result.error}` : ''}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
   );
-}
-
-function readNamedFiles(root, name) {
-  if (!existsSync(root)) return [];
-  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
-    const entryPath = path.join(root, entry.name);
-    if (entry.isDirectory()) return readNamedFiles(entryPath, name);
-    return entry.isFile() && entry.name === name
-      ? [readFileSync(entryPath, 'utf8')]
-      : [];
-  });
 }
 
 function assertUsageError(result, label, expectedText) {
@@ -936,7 +924,7 @@ function validateWorkflowScriptAgentRunCommand() {
   );
   try {
     const home = path.join(cwd, 'home');
-    const globalStorage = path.join(home, '.texra', 'global-storage');
+    const globalStorage = path.join(home, '.texra', 'v1', 'global-storage');
     const customAgents = path.join(globalStorage, 'custom_agents');
     const validationFlagPath = path.join(
       cwd,
@@ -1012,15 +1000,40 @@ prompts:
       workflowCompletedIndex >= 0 && parentResultIndex > workflowCompletedIndex,
       'workflow-script run should wait for and return the terminal child report to the headless parent',
     );
-    const reports = readNamedFiles(home, 'report.json').join('\n');
+    const childId = records[workflowCompletedIndex].payload.streamId.slice(
+      'workflow-script#'.length,
+    );
+    const history = run(
+      process.execPath,
+      [
+        binaryPath,
+        'history',
+        'show',
+        childId,
+        '--cwd',
+        cwd,
+        '--output-format',
+        'json',
+      ],
+      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
+    );
+    assertSuccess(history, 'texra history show workflow-script child');
+    const { report } = parseJson(
+      history.stdout,
+      'workflow-script child history',
+    );
     assert(
-      reports.includes('<workflow-script-result'),
+      typeof report === 'string',
+      'workflow-script child history should contain its saved report',
+    );
+    assert(
+      report.includes('<workflow-script-result'),
       'workflow-script run should persist its terminal child report',
     );
     assert(
-      reports.includes('(±23,±22)') &&
-        reports.includes('det(I+A)=4') &&
-        reports.includes('1/4'),
+      report.includes('(±23,±22)') &&
+        report.includes('det(I+A)=4') &&
+        report.includes('1/4'),
       'workflow-script run should contain all structured mathematical results',
     );
   } finally {

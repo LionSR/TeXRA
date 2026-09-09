@@ -29,7 +29,9 @@ import type { ConfigProvider, StateStore } from './interfaces';
 export interface WorkspaceRoots {
   /** Canonical physical workspace root, or undefined when no folder is open. */
   readonly workspace: string | undefined;
-  /** Per-workspace storage root (memory, runs, transcripts). */
+  /** Application-owned storage for this project's TeXRA 1.0 state. Custom
+   * hosts must keep this separate from earlier release storage directories;
+   * session services use this exact root without importing previous state. */
   readonly storage: string;
   /** Workspace-scoped configuration (project `.texra/config.json` plus global). */
   readonly config: ConfigProvider;

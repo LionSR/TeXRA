@@ -4,10 +4,7 @@ import { Effect } from 'effect';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type {
-  LatexAgentRunEntry,
-  LatexExecutionDiscoveryPort,
-} from '@latex/latexdiff/executionDiscovery';
+import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -31,7 +28,7 @@ const { discoverLatestExecutionOutputs } =
 const { scanRunDirForOutputs } =
   await import('@latex/latexdiff/runOutputFiles');
 
-function matchingExecution(id: string): LatexAgentRunEntry {
+function matchingExecution(id: string) {
   return {
     id,
     timestamp: '2026-01-01T00:00:00.000Z',
@@ -41,15 +38,21 @@ function matchingExecution(id: string): LatexAgentRunEntry {
   };
 }
 
-function discoveryWith(entries: readonly LatexAgentRunEntry[]): {
+function discoveryWith(
+  entries: readonly ReturnType<typeof matchingExecution>[],
+): {
   discovery: LatexExecutionDiscoveryPort;
   readStreamId: ReturnType<typeof vi.fn>;
 } {
-  const readStreamId = vi.fn(() => Effect.succeed(undefined));
+  const readStreamId = vi.fn(async (_id: string) => undefined);
   return {
     discovery: {
       listAgentRuns: () => Effect.succeed(entries),
-      readStreamId,
+      readStreamId: (id) =>
+        Effect.tryPromise({
+          try: () => readStreamId(id),
+          catch: (error) => error as Error,
+        }),
     },
     readStreamId,
   };
@@ -111,9 +114,7 @@ describe('discoverLatestExecutionOutputs', () => {
       matchingExecution('exec-registered'),
     ]);
     // Registered under a stream the agent/model config would NOT derive.
-    readStreamId.mockReturnValue(
-      Effect.succeed('polish@earlierModel#exec-registered'),
-    );
+    readStreamId.mockResolvedValue('polish@earlierModel#exec-registered');
     const rounds = { 0: [] };
     mocks.read.mockReturnValue(Effect.succeed({ outputFilesByRound: rounds }));
 

@@ -18,6 +18,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 export interface ExecutionStatusInfo {
   status: StreamPhase | 'unknown';
@@ -65,8 +66,8 @@ export interface ExecutionInterruptHandler {
  * stream phase to learn whether a run is really suspended.
  */
 type RunSuspension =
-  | { readonly state: 'parked'; readonly teardown: () => void | Promise<void> }
-  | { readonly state: 'terminating'; readonly completion: Promise<void> };
+  | { readonly state: 'parked'; readonly teardown: Effect.Effect<void, Error> }
+  | { readonly state: 'terminating' };
 
 /**
  * How far the run's exactly-once terminal outcome has progressed.
@@ -308,38 +309,29 @@ export class AgentExecutionHandle<
    * `ExecutionRegistry.terminate()` reaches a suspended run through
    * {@link beginSuspendedTermination} instead of a live interrupt (#7287).
    */
-  suspend(teardown: () => void | Promise<void>): void {
+  suspend(teardown: Effect.Effect<void, Error>): void {
     this.suspension = { state: 'parked', teardown };
   }
 
-  /** True once a stop claimed this suspended run and its teardown began. */
+  /** True once a stop claimed this suspended run and owns its teardown. */
   get suspendedTerminationStarted(): boolean {
     return this.suspension?.state === 'terminating';
   }
 
   /**
-   * Claim the terminal outcome of a run parked at WAITING and start its
-   * teardown, returning the teardown's completion. Returns undefined when this
+   * Claim the terminal outcome of a run parked at WAITING and return its
+   * native teardown. Returns undefined when this
    * handle never parked, when a stop already claimed it, or when a
    * `finalizeRunTerminal` already claimed the run's terminal outcome. The whole
    * transition is synchronous, so a stop and a concurrent finalize of the same
    * handle cannot both proceed.
    */
-  beginSuspendedTermination(): Promise<void> | undefined {
+  beginSuspendedTermination(): Effect.Effect<void, Error> | undefined {
     if (this.suspension?.state !== 'parked') return undefined;
     if (!this.claimTerminalFinalize()) return undefined;
     const { teardown } = this.suspension;
-    // Call `teardown()` synchronously, not via a microtask: the doc above
-    // contracts that the whole transition happens in one step.
-    const completion = (async (): Promise<void> => {
-      await teardown();
-    })();
-    // The registry normally awaits this before terminal persistence. Retain a
-    // rejection handler for the lease-loss branch, which intentionally skips
-    // durable finalization but must not create an unhandled rejection.
-    void completion.catch(() => undefined);
-    this.suspension = { state: 'terminating', completion };
-    return completion;
+    this.suspension = { state: 'terminating' };
+    return teardown;
   }
 }
 

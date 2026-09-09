@@ -268,6 +268,8 @@ event
   INDEX (aggregate_id, type, seq)                   -- latest-of-type per stream
   INDEX (aggregate_id, "commit")                    -- bounded cross-aggregate resume reads
   INDEX (type, "commit")                            -- listing tier across streams
+  INDEX (json_extract(data, '$.parentStartCommit')) WHERE type = 'run.start.1'
+                                                    -- authored child edges by parent incarnation
 
 event_sequence
   aggregate_id  TEXT PRIMARY KEY                    -- kind-qualified AggregateId (C2)
@@ -365,7 +367,11 @@ physically until retention. `run.start` is `seq` 1 and creates the open row
 in the same transaction. A child's declared parent edge pairs the logical
 `parentStreamId` with `parentStartCommit`, the parent's `run.start` commit.
 The commit distinguishes parent incarnations even if a logical id is reused
-after physical retention. C9 defines the effective parent used for routing.
+after physical retention. The database also stamps the parent's execution id
+from that same creation row; callers cannot author it independently. This
+immutable coordinate preserves the existing child metadata's parent execution
+identity after the parent is explicitly deleted, without retaining the parent
+row or changing deletion policy. C9 defines the effective parent used for routing.
 
 A workflow journal lives on
 `aggregateId('workflow-checkpoint', checkpointId)`, independently of any
@@ -418,6 +424,17 @@ Redaction has three owners and they are not interchangeable.
   but every display/export projection applies this same redaction boundary.
   Transport framers forward display values, never raw execution payloads.
   **Display truncation and bounding are also the fold's**.
+
+Current execution metadata is private at the event-schema boundary. Its raw
+configuration, report, result, workflow, workspace-file, description, and
+launch-label rows are excluded from the public display-event union. Typed
+execution accessors read the private database projection; renderers receive
+only the existing redacted display facts. Database `all` remains exhaustive,
+while the public session/NDJSON projection includes every public row and
+excludes private execution payloads. Filtering a private-only batch must still
+advance the captured committed cursor and complete the publication drain.
+This separation is required by C3 independently of the unresolved D4 runtime
+rows; it makes no decision about their retention or scrubbing.
 
 One residue to name plainly. Until the view-state PRD collapses the fold
 (events straight to `TranscriptRow`), message text is durable twice: in the
@@ -519,12 +536,13 @@ channel and never advance a durable cursor; they are not batch members.
 The write remains in the publish path, never in a subscriber, and no
 publisher waits for a remote renderer.
 
-**C7. Read path.** Five read queries, bounded reads, and one wake level:
+**C7. Read path.** Indexed read families, bounded reads, and one wake level:
 
 - `all(fromCommit, throughCommit?)`: events with `"commit" > fromCommit` in
   commit order. The optional inclusive upper bound makes one finite read;
-  without it, this supplies the table tail and the frozen NDJSON projection,
-  which needs every row including transcript rows of unsubscribed streams.
+  without it, this supplies the database table tail. The frozen NDJSON
+  projection needs every public row, including transcript rows of unsubscribed
+  streams, with the private execution payloads excluded as required by C3.
 - `listing()`: the cold listing hydrate of C8, one indexed query: the
   latest-of-type row per aggregate over `(aggregate_id, type, seq)` for the
   listing fact types, plus the outstanding-approval set, **returned in
@@ -552,6 +570,19 @@ parentId, startCommit }`. For streams, `startCommit` is obtained from the
   is explicitly unclaimed. The finite input read below reads this state and
   the bounded event prefix in one transaction. Only the listed or opened
   aggregates are checked; no transcript bodies are read.
+- Private execution-record reads select the latest named metadata rows for
+  one qualified execution and its owning stream's creation and lifecycle
+  facts in one captured database prefix.
+  They use the aggregate/type indexes and the execution's ownership edge;
+  they read neither transcript bodies nor unrelated execution metadata.
+  Child-record reads select direct authored children by `parentStartCommit`,
+  using the partial creation-row index in C1, and include only the creation,
+  launch-label, and removal facts needed for that relation. The logical child
+  edge is not the sequence table's ownership/deletion edge: repurposing
+  `event_sequence.parent_id` would change which records deletion owns.
+  These are private query specializations, not a second store or public
+  transport interface. Global history listing retains the session-wide
+  indexed listing query.
 - `PRAGMA data_version`: changes when another connection commits. It is
   connection-local and does not move for the connection's own commits, so it
   is a wake trigger only, never a level in the `commit` number space.
@@ -791,11 +822,13 @@ the owner has not yet ratified.
 
 ### 6.2 Stages
 
-Stages are lanes on one branch and ship in one release (§8).
+Stages are lanes on one branch. The 2026-09-08 owner ruling in §8 permits
+independently safe changes to merge as an intermediate step; the remaining
+stages follow separately.
 
 | Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Deletes in the same release                                                                                                                                                              | Companion step |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| 0     | Spike: `node:sqlite` on the CLI floor (raise `engines.node` to `>=22.13.0`, `packages/cli/package.json:37`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two local host processes on one local bucket; reject network/shared storage before open; kill -9 mid-transaction; `PRAGMA data_version` across processes. OpenCode's `packages/effect-sqlite-node` (MIT, ~200 LoC) is the starting client                                                    | nothing                                                                                                                                                                                  |                |
+| 0     | Spike: `node:sqlite` on the CLI floor (initially `>=22.13.0`; the September 8 official-client ruling selects CLI and SDK ranges `^22.16.0` or `>=24.0.0`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two local host processes on one local bucket; reject network/shared storage before open; kill -9 mid-transaction; `PRAGMA data_version` across processes. The official `@effect/sql-sqlite-node` client is selected under section 7            | nothing                                                                                                                                                                                  |                |
 | 1     | C1 schema and indexes; Effect `Database` layer parameterized by `WorkspaceRoots`; the C6 publisher behind `SessionEventHub`; the architecture test that fails any persistence write outside the database or the documents/export allowlist, and its sibling that fails a raw read of the execution row types outside `RunLedger` (or, better, a `Database` layer that only exposes those rows through `RunLedger`, so the query is unconstructible elsewhere and the test is unnecessary)          | nothing                                                                                                                                                                                  |                |
 | 2     | Listing tier: launcher history, resume picker, sessions rail, and the executions tool answered by C7/C8 indexed queries                                                                                                                                                                                                                                                                                                                                                                            | `streamLogSummaries/`, the mtime heuristic, `executionListing.ts` directory walks, `readExecutionStreamIndex`, `listExecutions` scans, the PR2 background hydration pass                 | S4, S5         |
 | 3     | C3 durable event set; transcript fold on hydrate reusing the recorder's live fold; `StreamLog` in-memory contract and `store-public-surface-baseline.json` unchanged                                                                                                                                                                                                                                                                                                                               | the 300 ms whole-array rewrite, `writeStream`/`hydrateStream`/`parsePersistedEntries`, `preservedRawEntries`, `seqNo` renumbering, the 50 KiB truncation and `toolOutput/` spill         |                |
@@ -887,34 +920,62 @@ on the same major (`4.0.0-beta.83`) and shows a shape worth copying exactly:
   `Schema.TaggedErrorClass`; named spans via `Effect.fn`. This is exactly the
   code that the cutover would otherwise hand-roll as promise plumbing and
   `p-queue` mutexes.
-- **Directly reusable:** `packages/effect-sqlite-node` (MIT) is an Effect
-  `SqlClient` over `node:sqlite` selected by a `#sqlite` import condition; the
-  vendored Drizzle adapter is about 3.4k lines. Copy, do not depend: OpenCode
-  publishes neither.
+- **Client selection:** use the official `@effect/sql-sqlite-node` package,
+  pinned to the same release as `effect`. The September 8 owner ruling
+  supersedes the earlier proposal to copy OpenCode's unpublished client.
+  Do not introduce a custom SQLite driver or VFS.
 
 ### Client selection at the approved host floor
 
 The September 6 comparison requested by the
 [delivery plan](2026-09-06-effect-runtime-delivery-plan.md#2-technology-choices-that-can-endure)
-retains the existing `Database` layer. The pinned official
+identified a host-floor constraint. The pinned official
 [`@effect/sql-sqlite-node` client](https://github.com/Effect-TS/effect/blob/effect%404.0.0-rc.112/packages/sql/sqlite-node/src/SqliteClient.ts#L32)
 statically imports `backup` from `node:sqlite`, and its ordinary statement path
 calls `StatementSync.columns()`. Both APIs were added in Node 22.16, after the
-approved 22.13.0 CLI floor. See the versioned Node histories for
+then-approved 22.13.0 CLI floor. See the versioned Node histories for
 [`backup`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#sqlitebackupsourcedb-destination-options)
 and [`columns`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#statementcolumns).
-Thus the unmodified client cannot serve every supported host. This is a source
-compatibility finding, not a throughput measurement of that client.
+On September 8 the owner selected the official client and approved raising the
+Node floor. The CLI and SDK require Node 22.16.0 or later in 22.x, or Node 24
+or later (`^22.16.0 || >=24.0.0`). The driver also uses
+[`StatementSync.setReturnArrays()`](https://nodejs.org/api/sqlite.html#statementsetreturnarraysenabled),
+which was added in Node 22.16.0 and 24.0.0 but is absent from Node 23.
+This resolves the source compatibility constraint without copying or replacing
+the driver.
+The API comparison is not a throughput measurement of that client.
 
 Its serialized connection and `BEGIN IMMEDIATE` fit the transaction model,
 but do not remove TeXRA's responsibility for C1 schema, C5 claims, C6 validation
 and redaction, C7 queries, or foreign-process wake detection. It also uses
 synchronous SQLite busy waits, so adopting it would not itself remove event-loop
-blocking. The current layer retains the measured API subset and the existing
-stage 0 contention evidence. No second SQL layer, compatibility shim, vendored
-fork, or further host-floor increase is selected. Scheduling improvements remain
+blocking. The `Database` layer retains the existing stage 0 contention evidence
+and owns application queries over the official client. Effect's public
+transaction constructor and reserved connection provide deferred read snapshots
+and commit publication before connection release. No custom statement executor,
+compatibility shim or vendored fork is selected. Scheduling improvements remain
 subject to measurement and C1's nonzero busy-timeout rule; no provider or tool
 work may be retried as a database transaction.
+
+TeXRA defines commit finalization through the official public
+`SqlClient.makeWithTransaction` callback. If `COMMIT` fails, that callback
+attempts `ROLLBACK` on the same reserved connection before returning the
+failure. It preserves both causes if rollback also fails. Converting the
+commit failure with `Effect.orDie` before attaching `Effect.onError` preserves
+that cause ordering through the constructor's finalization. The official
+constructor still owns transaction nesting, interruption and scope release;
+TeXRA does not replace its transaction engine or modify the dependency.
+
+The application regression uses a real deferred-constraint commit failure,
+verifies that it publishes no rows or notification, and then successfully
+appends through the same database connection. This supported composition
+removes the earlier upstream-adoption gate. No upstream contribution, fork
+or dependency patch is required or authorized.
+
+C9 continues to require confined generated-file deletion. It does not require
+SQLite admission and cleanup to share one physical directory handle. Cleanup
+owns its directory handle for the deletion operation; database admission remains
+subject to C1.
 
 Scope in this program:
 
@@ -971,6 +1032,39 @@ The SQLite PRD §8 non-goal is reversed to this scoped form; the reversal is
 recorded there and in §10.
 
 ## 8. Process: one cutover, no dual system
+
+### Owner amendment, 2026-09-08: safe intermediate release
+
+The owner authorizes independently safe changes to merge into main as an
+intermediate release so other work can proceed. This supersedes the
+requirement that every stage land in the same merge or release. The smaller
+release is constructed from main and retains its existing metadata readers,
+writers and resume behavior while adding the independent cleanup and audio
+loading corrections in #12124. It requires synchronization, validation and review of
+the actual combined head. It is not completion of the event-table-only
+objective.
+
+#12108 remains held: its event-only metadata readers cannot replace current
+file-backed execution metadata before faithful conversion preserves history and
+resume access, including supported child-run events. The owner explicitly
+rejects temporary loss of that access. The metadata change remains a
+follow-up, not part of this intermediate release.
+
+Official Effect SQL adoption (#12102), the coordinated runtime and checkpoint
+replacement (#11869), and the remaining historical-data work (#11867) continue
+as follow-ups. The runtime's separately recorded flow-checkpoint importer
+retirement remains in force. This sequencing ruling does not settle D4 or
+other outstanding data-meaning decisions, authorize dual writes or new
+compatibility adapters, or permit an unsafe intermediate read/write path.
+Each datum retains one authoritative representation; existing checkpoint
+writers and their file-lease fences remain together until their replacement.
+
+The final deletion ledger and combined validation remain obligations of
+#11867. Stage 7's retirement clock begins with the actual release of the
+importer and supported replacement, not this intermediate merge. No
+contribution to Effect's repository or local dependency fork is authorized.
+The original coordinated process below remains the target where it is not
+superseded by this amendment.
 
 The owner's constraint is that the migration be efficient and never run two
 systems. The SQLite PRD as written violates the second: eight stages, each its

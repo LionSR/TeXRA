@@ -81,15 +81,15 @@ export const UserFollowUpSupportSchema = z.enum(USER_FOLLOW_UP_SUPPORT);
 export type UserFollowUpSupport = z.infer<typeof UserFollowUpSupportSchema>;
 
 /** Core execution metadata that remains readable without workflow observability. */
-export const ExecutionMetaCoreSchema = z.object({
+const ExecutionMetaCoreSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
   /** Canonical terminal outcome — the ONE persisted terminal fact. */
   outcome: RunOutcomeSchema.optional(),
   /**
-   * What kind of run this execution is. Required at the write boundary
-   * ({@link RegisteredExecutionMeta}); optional here because this schema is
+   * What kind of run this execution is. Registration declares it at birth;
+   * optional here because this schema is
    * transitively the trace-export schema (immutable pre-migration exports).
    * A row without one lists as `incomplete`.
    */
@@ -113,18 +113,6 @@ export const ExecutionMetaSchema = ExecutionMetaCoreSchema.extend({
 });
 
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
-
-/**
- * The write-boundary shape: `registerExecution`, the only birth writer,
- * persists metadata with `identity` required. The shared read schema above
- * keeps it optional forever — it is transitively the trace-export schema, and
- * old binaries' read-modify-writes strip unknown fields — so requiredness
- * lives here, at the writer, not on every read.
- */
-export type RegisteredExecutionMeta = ExecutionMeta & {
-  identity: NonNullable<ExecutionMeta['identity']>;
-  userFollowUpSupport: NonNullable<ExecutionMeta['userFollowUpSupport']>;
-};
 
 export const STREAM_PHASE = {
   RUNNING: STREAM_STATUS.RUNNING,

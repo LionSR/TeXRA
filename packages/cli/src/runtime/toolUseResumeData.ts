@@ -1,10 +1,14 @@
+import { Effect } from 'effect';
 import {
   hasTerminalPersistedCompileRejection,
   retrieveSessionResumeData,
   type AgentConfig,
 } from '@agent/runtime';
-import { getExecutionStore } from '@agent/storage';
+
+import { getExecutionRecords } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -12,7 +16,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('CliToolUseResumeData');
 
@@ -64,9 +68,10 @@ export interface CliRunResumabilityFacts {
  * outcome field are outcome-less too but carry no stamped stream id, so they
  * are refused by the gate above without a read.
  */
-export async function isCliRunResumable(
+export const isCliRunResumable = Effect.fn('isCliRunResumable')(function* (
   facts: CliRunResumabilityFacts,
-): Promise<boolean> {
+  session: SessionHandle,
+): Effect.fn.Return<boolean> {
   if (!facts.checkpointPresent || !facts.streamId) return false;
   if (facts.agentCategory !== AgentCategory.Workflow) return true;
   if (
@@ -75,20 +80,26 @@ export async function isCliRunResumable(
   ) {
     return true;
   }
-  try {
-    return !(await hasTerminalPersistedCompileRejection(facts.id));
-  } catch (error) {
-    // A record that cannot be read is not evidence of a terminal rejection,
-    // and hiding the row would be the one silent refusal on this surface:
-    // every other unreadable checkpoint is advertised and refused at open as
-    // `unusable_checkpoint`. Advertise, and let the open path word it.
-    logger.warn(
-      `Advertising workflow ${facts.id} as resumable without reading its persisted state: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-    return true;
-  }
-}
+  return yield* Effect.tryPromise({
+    try: () =>
+      runWithWorkspaceRoots(session.roots, () =>
+        hasTerminalPersistedCompileRejection(facts.id),
+      ),
+    catch: ensureError,
+  }).pipe(
+    Effect.map((rejected) => !rejected),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        // An unreadable checkpoint is advertised here and refused at open time.
+        logger.warn(
+          `Advertising workflow ${facts.id} as resumable without reading its persisted state: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+        return true;
+      }),
+    ),
+  );
+});
 
 /**
  * The model a resume of this run would actually use. A tool-use session that
@@ -99,21 +110,32 @@ export async function isCliRunResumable(
  * Never throws: a checkpoint that cannot be loaded has no model to report, and
  * refusing such a run is the open path's job, not this row's.
  */
-export async function readCliResumedModel(
+export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
+  session: SessionHandle,
   id: ExecutionId,
   config: AgentConfig,
-): Promise<string | undefined> {
-  try {
-    // FK-first: the stream id stamped on execution metadata at registration is
-    // the reproduction contract — never re-derived from agent/model.
-    const streamId = (await getExecutionStore(id).readMeta())?.streamId;
-    if (!streamId) return undefined;
-    const resume = await retrieveSessionResumeData(streamId, id, config);
-    return resume?.type === 'toolUse' ? resume.agentConfig.model : undefined;
-  } catch (error) {
-    logger.debug(
-      `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
+): Effect.fn.Return<string | undefined> {
+  return yield* getExecutionRecords(session, id)
+    .readMeta()
+    .pipe(
+      Effect.flatMap((meta) =>
+        meta?.streamId
+          ? retrieveSessionResumeData(meta.streamId, id, config, session).pipe(
+              Effect.map((resume) =>
+                resume?.type === 'toolUse'
+                  ? resume.agentConfig.model
+                  : undefined,
+              ),
+            )
+          : Effect.succeed(undefined),
+      ),
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          logger.debug(
+            `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
+          );
+          return undefined;
+        }),
+      ),
     );
-    return undefined;
-  }
-}
+});

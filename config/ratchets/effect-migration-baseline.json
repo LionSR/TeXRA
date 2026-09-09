@@ -9,7 +9,6 @@
       "packages/cli/src/runtime/providerApiKey.ts": 2,
       "packages/cli/src/runtime/runExecution.ts": 1,
       "packages/cli/src/runtime/supabaseAuth.ts": 1,
-      "packages/cli/src/runtime/workflowInputs.ts": 1,
       "packages/desktop/src/main/desktopWorkspaceIpc.ts": 6,
       "packages/extension/src/commands/setup/setupAssistantCommand.ts": 4,
       "packages/extension/src/frontend/secretManager.ts": 1,
@@ -131,7 +130,7 @@
       "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
-      "src/agent/runtime/SessionHandle.ts": 5,
+      "src/agent/runtime/SessionHandle.ts": 3,
       "src/agent/runtime/bundledPrompts.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2

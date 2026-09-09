@@ -3,10 +3,7 @@ import { z } from 'zod';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
-import {
-  getExecutionStore,
-  writeWorkflowExecutionSnapshot,
-} from '@agent/storage';
+import { getExecutionStore, getExecutionRecords } from '@agent/storage';
 import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
@@ -22,6 +19,7 @@ import {
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { effectRuntime } from '@platform/processRuntime';
+import { aggregateId } from '@shared/schemas';
 import type { ToolResult, WorkflowAgentProposal } from '@shared/schemas';
 import {
   AgentCategory,
@@ -438,36 +436,28 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         );
         if (declined) return withScriptReference(declined, scriptPath);
 
-        // Capture any prior workflow snapshot *before* registerExecution overwrites
-        // meta.json. Deterministic meta.name reuses the same execution id, so a
-        // post-register read always sees a fresh meta with no workflow field and
-        // hydration would drop interrupted attempts, costs, and child identities.
-        // Strict read preserves absent-vs-malformed: corrupt present snapshots stop
-        // recovery rather than being treated as a clean first launch.
-        const runStore = runInSession(runScope.session, () =>
-          getExecutionStore(runExecutionId),
-        );
-        const priorMeta = yield* Effect.tryPromise({
-          try: () =>
-            runInSession(runScope.session, () => runStore.readMetaStrict()),
-          catch: (error) =>
-            workflowScriptToolError(
-              new ToolError(
-                `Failed to launch workflow script '${meta.name}': prior workflow execution snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
+        // Preserve the committed workflow snapshot when reopening this named execution.
+        const runStore = getExecutionRecords(runScope.session, runExecutionId);
+        const priorMeta = yield* runStore
+          .readMeta()
+          .pipe(
+            Effect.mapError((error) =>
+              workflowScriptToolError(
+                new ToolError(
+                  `Failed to launch workflow script '${meta.name}': prior workflow execution snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
+                ),
+                scriptPath,
               ),
-              scriptPath,
             ),
-        });
+          );
         const initialSnapshot = priorMeta?.workflow;
 
-        const registration = yield* Effect.exit(
-          Effect.tryPromise({
-            try: () =>
-              runInSession(runScope.session, () => {
-                // The durable record states only what the container run has: the
-                // workflow's name and the real model its agent steps will use. The
-                // fabricated AgentConfig above feeds the ephemeral live wire only.
-                return registerExecution(
+        const runResult = Effect.gen(function* () {
+          const launched = yield* Effect.uninterruptibleMask((restore) =>
+            Effect.gen(function* () {
+              const registration = yield* Effect.exit(
+                registerExecution(
+                  runScope.session,
                   runExecutionId,
                   {
                     name: meta.name,
@@ -480,6 +470,8 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                   meta.name,
                   {
                     streamId: runStreamId,
+                    category: runConfig.agentCategory,
+                    checkpointId,
                     identity: {
                       kind: 'multiAgentWorkflow',
                       workflowName: meta.name,
@@ -488,163 +480,167 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                     parentExecutionId: runScope.executionId,
                     description: childStreamDescription(meta.description),
                   },
+                ),
+              );
+              if (Exit.isFailure(registration)) {
+                const error = Cause.squash(registration.cause);
+                // A relaunch whose prior run is still in flight shares this deterministic
+                // id: the fresh-lease acquisition fails closed rather than starting a
+                // second competing run over the same journal. Point the model at the
+                // live run instead of erroring.
+                if (error instanceof ExecutionLeaseActiveError) {
+                  return withScriptReference(
+                    executed(
+                      [
+                        `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name and agent if it did not complete.`,
+                        `Execution ID: ${runExecutionId}`,
+                        `To check progress or collect the result: executions tool with path=/executions/${runExecutionId} and action=wait (returns immediately if it already finished).`,
+                      ].join('\n'),
+                      `Workflow script '${meta.name}' is already running`,
+                    ),
+                    scriptPath,
+                  );
+                }
+                throw workflowScriptToolError(
+                  new ToolError(
+                    `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
+                  ),
+                  scriptPath,
                 );
-              }),
-            catch: ensureError,
-          }),
-        );
-        if (Exit.isFailure(registration)) {
-          const error = Cause.squash(registration.cause);
-          // A relaunch whose prior run is still in flight shares this deterministic
-          // id: the fresh-lease acquisition fails closed rather than starting a
-          // second competing run over the same journal. Point the model at the
-          // live run instead of erroring.
-          if (error instanceof ExecutionLeaseActiveError) {
-            return withScriptReference(
-              executed(
-                [
-                  `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name and agent if it did not complete.`,
-                  `Execution ID: ${runExecutionId}`,
-                  `To check progress or collect the result: executions tool with path=/executions/${runExecutionId} and action=wait (returns immediately if it already finished).`,
-                ].join('\n'),
-                `Workflow script '${meta.name}' is already running`,
-              ),
-              scriptPath,
-            );
-          }
-          throw workflowScriptToolError(
-            new ToolError(
-              `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
-            ),
-            scriptPath,
-          );
-        }
+              }
 
-        const runResult = Effect.gen(function* () {
-          // Attempt-scoped setup runs inside the lease launch guard: it runs after
-          // the deterministic run lease is held, so a throw here must release the
-          // lease - otherwise the record survives for this process's lifetime and
-          // a prompt relaunch is refused.
-          const { childStreamId: runChildStreamId, completion: runCompletion } =
-            yield* startDetachedChildRunLoop({
-              session: runScope.session,
-              executionId: runExecutionId,
-              parentStreamId: runScope.streamId,
-              childStreamId: runStreamId,
-              agentName: meta.name,
-              recordCost,
-              createChildStream: () =>
-                Effect.gen(function* () {
-                  // A deterministic execution id may retain the prior attempt's report.
-                  // Clear it before starting this attempt so an interruption before
-                  // delivery cannot be mistaken for a newly persisted result.
-                  yield* Effect.tryPromise({
-                    try: () =>
-                      runInSession(runScope.session, () =>
-                        runStore.delete('report'),
-                      ),
-                    catch: ensureError,
-                  });
+              // Attempt-scoped setup runs inside the lease launch guard: it runs after
+              // the deterministic run lease is held, so a throw here must release the
+              // lease - otherwise the record survives for this process's lifetime and
+              // a prompt relaunch is refused.
+              return yield* startDetachedChildRunLoop({
+                session: runScope.session,
+                executionId: runExecutionId,
+                parentStreamId: runScope.streamId,
+                childStreamId: runStreamId,
+                agentName: meta.name,
+                recordCost,
+                createChildStream: () =>
+                  Effect.gen(function* () {
+                    yield* restore(Effect.void);
+                    // A deterministic execution id may retain the prior attempt's report.
+                    // Clear it before starting this attempt so an interruption before
+                    // delivery cannot be mistaken for a newly persisted result.
+                    yield* runStore.clearReport();
 
-                  // meta.name deliberately reuses one deterministic stream across
-                  // launches. Reserve its writer while rehydrating so transcript
-                  // eviction cannot race a resumed run.
-                  return yield* createChildStream(
-                    runScope.session,
-                    runExecutionId,
-                    runScope.streamId,
-                    {
-                      streamPrefix: STREAM_PREFIX,
-                      run: {
-                        kind: 'multiAgentWorkflow',
-                        workflowName: meta.name,
+                    // meta.name deliberately reuses one deterministic stream across
+                    // launches. Reserve its writer while rehydrating so transcript
+                    // eviction cannot race a resumed run.
+                    return yield* createChildStream(
+                      runScope.session,
+                      runExecutionId,
+                      runScope.streamId,
+                      {
+                        streamPrefix: STREAM_PREFIX,
+                        run: {
+                          kind: 'multiAgentWorkflow',
+                          workflowName: meta.name,
+                        },
+                        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+                        description: meta.description,
+                        config: runConfig,
+                        checkpointId,
                       },
-                      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                      description: meta.description,
-                      config: runConfig,
-                      checkpointId,
-                    },
-                  );
-                }),
-              buildLaunch: (childStream) =>
-                Effect.sync(() => {
-                  // A proposal-bypass approval carries the same explicit child edit
-                  // grant as delegate_agent/delegate_workflow. A human one-off approval
-                  // inherits only the parent's ordinary per-kind bypass state.
-                  configureDelegatedChildApprovals(
-                    childStream.childStreamId,
-                    runScope.streamId,
-                    proposalDecision.autoApproved ? 'auto-approved' : 'inherit',
-                    runScope.session,
-                  );
+                    );
+                  }),
+                buildLaunch: (childStream) =>
+                  Effect.sync(() => {
+                    // A proposal-bypass approval carries the same explicit child edit
+                    // grant as delegate_agent/delegate_workflow. A human one-off approval
+                    // inherits only the parent's ordinary per-kind bypass state.
+                    configureDelegatedChildApprovals(
+                      childStream.childStreamId,
+                      runScope.streamId,
+                      proposalDecision.autoApproved
+                        ? 'auto-approved'
+                        : 'inherit',
+                      runScope.session,
+                    );
 
-                  return {
-                    strategy: createWorkflowScriptStrategy({
-                      fingerprintAgentDependencies: (options) =>
-                        fingerprintWorkflowAgentDependencies(
-                          runScope.session,
-                          runExecutionId,
-                          options,
-                        ),
-                      session: runScope.session,
-                      executionId: runExecutionId,
-                      logger: childStream.logger,
-                      store,
-                      checkpointId,
-                      script,
-                      scriptPath,
-                      args: input.args,
-                      files,
-                      name: meta.name,
-                      workflowControls: runScope.session.workflowControls,
-                      initialSnapshot,
-                      onSnapshot: (snapshot) =>
-                        writeWorkflowExecutionSnapshot(
-                          runExecutionId,
-                          snapshot,
-                        ),
-                      ...(parent.stopAfterCycle && {
-                        deliveryMode: 'persistOnly' as const,
+                    return {
+                      strategy: createWorkflowScriptStrategy({
+                        fingerprintAgentDependencies: (options) =>
+                          effectRuntime().runPromise(
+                            fingerprintWorkflowAgentDependencies(
+                              runScope.session,
+                              runExecutionId,
+                              options,
+                            ),
+                          ),
+                        session: runScope.session,
+                        executionId: runExecutionId,
+                        logger: childStream.logger,
+                        store,
+                        checkpointId,
+                        script,
+                        scriptPath,
+                        args: input.args,
+                        files,
+                        name: meta.name,
+                        workflowControls: runScope.session.workflowControls,
+                        initialSnapshot,
+                        onSnapshot: async (snapshot) => {
+                          runScope.session.publish([
+                            {
+                              type: 'execution.workflow',
+                              aggregateId: aggregateId(
+                                'execution',
+                                runExecutionId,
+                              ),
+                              workflow: snapshot,
+                            },
+                          ]);
+                          await runScope.session.settlePublications();
+                        },
+                        ...(parent.stopAfterCycle && {
+                          deliveryMode: 'persistOnly' as const,
+                        }),
+                        createRunAgent: (hooks) => {
+                          const runAgent = createWorkflowScriptAgentRunner(
+                            parent,
+                            defaultAgent,
+                            checkpointId,
+                            {
+                              executionId: runExecutionId,
+                              streamId: childStream.childStreamId,
+                            },
+                            hooks,
+                          );
+                          return (invocation) =>
+                            effectRuntime().runPromise(runAgent(invocation));
+                        },
                       }),
-                      createRunAgent: (hooks) => {
-                        const runAgent = createWorkflowScriptAgentRunner(
-                          parent,
-                          defaultAgent,
-                          checkpointId,
-                          {
-                            executionId: runExecutionId,
-                            streamId: childStream.childStreamId,
-                          },
-                          hooks,
-                        );
-                        return (invocation) =>
-                          effectRuntime().runPromise(runAgent(invocation));
-                      },
-                    }),
-                    // Detached callers do not await completion. Own late finalization
-                    // failures here as trace diagnostics; the child loop already owns
-                    // its one user-facing result/error delivery.
-                    ...(!parent.stopAfterCycle && {
-                      onLoopFailed: (error: unknown): void => {
-                        childStream.logger.error(
-                          `Workflow script '${meta.name}' run loop failed after launch`,
-                          { data: error },
-                        );
-                      },
-                    }),
-                  };
-                }),
-            });
+                      // Detached callers do not await completion. Own late finalization
+                      // failures here as trace diagnostics; the child loop already owns
+                      // its one user-facing result/error delivery.
+                      ...(!parent.stopAfterCycle && {
+                        onLoopFailed: (error: unknown): void => {
+                          childStream.logger.error(
+                            `Workflow script '${meta.name}' run loop failed after launch`,
+                            { data: error },
+                          );
+                        },
+                      }),
+                    };
+                  }),
+              });
+            }),
+          );
+          if ('status' in launched) return launched;
+          const { childStreamId: runChildStreamId, completion: runCompletion } =
+            launched;
 
           if (parent.stopAfterCycle) {
             yield* Fiber.join(runCompletion);
-            const [report, runMeta] = yield* Effect.tryPromise({
-              try: () =>
-                runInSession(runScope.session, () =>
-                  Promise.all([runStore.readReport(), runStore.readMeta()]),
-                ),
-              catch: ensureError,
-            });
+            const [report, runMeta] = yield* Effect.all([
+              runStore.readReport(),
+              runStore.readMeta(),
+            ]);
             if (!report) {
               throw new Error(
                 `Workflow script '${meta.name}' completed without a persisted report.`,

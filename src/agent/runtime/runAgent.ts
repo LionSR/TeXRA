@@ -1,19 +1,16 @@
 import { Cause, Effect, Exit } from 'effect';
 
-import { registerExecution } from '@agent/storage';
+import { registerExecution, getExecutionRecords } from '@agent/storage';
 import {
-  clearTerminalExecutionState,
+  acquireResumedExecutionOwnership,
   finalizeRun,
 } from '@agent/storage/executionLifecycle';
-import { acquireResumedExecutionLease } from '@agent/storage/executionLease';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
   RUN_OUTCOME,
   type ExecutionId,
-  type RunOutcome,
-  type StreamTabId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import {
@@ -22,6 +19,7 @@ import {
   linkAbortSignals,
 } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
+import { prepareAgentDefinition } from './AgentLaunchContext';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { AgentExecutionHandle } from './ExecutionHandle';
@@ -38,7 +36,6 @@ import type { AgentFlowResult } from './AgentFlowResult';
 export interface RunAgentOptions extends Pick<
   ExecuteAgentOptions,
   | 'suppressErrorNotification'
-  | 'enforceCategory'
   | 'stopAfterCycle'
   | 'approvalPromptsUnavailable'
   | 'onApprovalPolicyDenial'
@@ -53,6 +50,8 @@ export interface RunAgentOptions extends Pick<
   | 'openWorkflowOutput'
 > {
   readonly session: SessionHandle;
+  /** Reject an explicitly supplied category that differs from the resolved definition. */
+  readonly enforceCategory?: boolean;
   /**
    * Persist host-owned final state before the ordinary session drain. Return
    * true when the hook already drained artifacts and disposed of ownership.
@@ -106,13 +105,21 @@ export const runAgent = Effect.fn('runAgent')(function* (
   const executionId = request.executionId ?? generateExecutionId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
+  const prior = shouldRegister
+    ? null
+    : yield* getExecutionRecords(runSession, executionId).readMeta();
+  if (!shouldRegister && !prior?.streamId)
+    return yield* Effect.fail(
+      new Error(`Execution metadata not found for ${executionId}`),
+    );
   const launchAbortController = new AbortController();
   const detachLaunchAbortLink = linkAbortSignals(
     [executeAgentOptions.launchSignal],
     launchAbortController,
   );
   const launchSignal = launchAbortController.signal;
-  const launchStreamId = getStreamTabId(request.config.agent, { executionId });
+  const launchStreamId =
+    prior?.streamId ?? getStreamTabId(request.config.agent, { executionId });
   const launchHandle = runSession.executions.getHandle(executionId)
     ? undefined
     : new AgentExecutionHandle(
@@ -134,7 +141,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
       executionId,
       Effect.gen(function* () {
         // Resolve the selected model before registering the execution.
-        const config = preferHelperModel
+        const requestedConfig = preferHelperModel
           ? yield* Effect.tryPromise({
               try: async () =>
                 runInSession(runSession, () =>
@@ -143,50 +150,49 @@ export const runAgent = Effect.fn('runAgent')(function* (
               catch: ensureError,
             })
           : request.config;
+        const definition = yield* prepareAgentDefinition({
+          config: requestedConfig,
+          session: runSession,
+          enforceCategory: request.kind === 'resume' || options.enforceCategory,
+          signal: launchSignal,
+          suppressErrorNotification: options.suppressErrorNotification,
+        });
+        const { config } = definition;
         const userFollowUpSupport =
           config.agentCategory === AgentCategory.ToolUse &&
           executeAgentOptions.stopAfterCycle !== true
             ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
-        yield* Effect.tryPromise({
-          try: async () =>
-            runInSession(runSession, async () => {
-              if (shouldRegister) {
-                await registerExecution(executionId, config, config.agent, {
-                  streamId: launchStreamId,
-                  identity: { kind: 'agent', agent: config.agent },
-                  userFollowUpSupport,
-                });
-              } else {
-                await acquireResumedExecutionLease(executionId);
-              }
-            }),
-          catch: ensureError,
-        });
+        if (shouldRegister) {
+          yield* registerExecution(
+            runSession,
+            executionId,
+            config,
+            config.agent,
+            {
+              streamId: launchStreamId,
+              identity: { kind: 'agent', agent: config.agent },
+              userFollowUpSupport,
+            },
+          );
+        } else {
+          yield* acquireResumedExecutionOwnership(
+            runSession,
+            executionId,
+            launchStreamId,
+          );
+        }
 
         let lifecycleStarted = false;
-        let previousTerminalOutcome: RunOutcome | undefined;
-        let resumedStreamId: StreamTabId | undefined;
         const callerOnRun = executeAgentOptions.onRun;
         const execution = yield* Effect.exit(
           Effect.gen(function* () {
             onExecutionLeaseAcquired?.(executionId);
-            if (!shouldRegister) {
-              const cleared = yield* Effect.tryPromise({
-                try: async () =>
-                  runInSession(runSession, () =>
-                    clearTerminalExecutionState(executionId),
-                  ),
-                catch: ensureError,
-              });
-              resumedStreamId = cleared.streamId;
-              previousTerminalOutcome = cleared.previousOutcome;
-            }
-            return yield* executeAgent(config, executionId, {
+            return yield* executeAgent(definition, executionId, {
               ...executeAgentOptions,
               launchSignal,
               session: runSession,
-              streamTabIdOverride: resumedStreamId,
+              streamTabIdOverride: prior?.streamId,
               userFollowUpSupport,
               onRun: async (handle) => {
                 lifecycleStarted = true;
@@ -202,19 +208,13 @@ export const runAgent = Effect.fn('runAgent')(function* (
           failures.push(error);
           const restoredOutcome = shouldRegister
             ? RUN_OUTCOME.FAILED
-            : previousTerminalOutcome;
+            : prior?.outcome;
           if (!lifecycleStarted && restoredOutcome !== undefined) {
             const finalization = yield* Effect.exit(
-              Effect.tryPromise({
-                try: async () =>
-                  runInSession(runSession, () =>
-                    finalizeRun({
-                      executionId,
-                      outcome: restoredOutcome,
-                      flowRecord: shouldRegister ? 'delete' : 'preserve',
-                    }),
-                  ),
-                catch: ensureError,
+              finalizeRun(runSession, {
+                executionId,
+                outcome: restoredOutcome,
+                flowRecord: shouldRegister ? 'delete' : 'preserve',
               }),
             );
             if (Exit.isFailure(finalization))
@@ -235,13 +235,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           failures.push(Cause.squash(artifacts.cause));
         if (Exit.isFailure(artifacts) || artifacts.value !== true) {
           const release = yield* Effect.exit(
-            Effect.tryPromise({
-              try: async () =>
-                runInSession(runSession, () =>
-                  runSession.releaseExecutionLease(executionId),
-                ),
-              catch: ensureError,
-            }),
+            runSession.releaseExecutionLease(executionId),
           );
           if (Exit.isFailure(release))
             failures.push(Cause.squash(release.cause));

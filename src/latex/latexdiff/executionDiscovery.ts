@@ -6,7 +6,7 @@ import type { Effect } from 'effect';
  * implementation and hosts inject it; latex owns the narrow contract so
  * `outputDiscovery.ts` never reaches into `@agent/storage` itself.
  */
-export interface LatexAgentRunEntry {
+interface LatexAgentRunEntry {
   readonly id: ExecutionId;
   readonly timestamp: string;
   readonly agent: string;

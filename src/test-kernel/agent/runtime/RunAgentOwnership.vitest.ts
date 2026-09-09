@@ -1,11 +1,15 @@
+import { getEventListeners } from 'node:events';
+
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   validateOwnedExecutionLease: vi.fn(),
   acquireResumedExecutionLease: vi.fn(),
-  clearTerminalExecutionState: vi.fn(),
+  prepareAgentDefinition: vi.fn(),
+  readMeta: vi.fn(),
   executeAgent: vi.fn(),
   finalizeRun: vi.fn(),
   registerExecution: vi.fn(),
@@ -13,8 +17,19 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  finalizeRun: mocks.finalizeRun,
-  registerExecution: mocks.registerExecution,
+  finalizeRun: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.finalizeRun(...args),
+      catch: ensureError,
+    }),
+  registerExecution: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.registerExecution(...args),
+      catch: ensureError,
+    }),
+  getExecutionRecords: () => ({
+    readMeta: () => Effect.sync(() => mocks.readMeta()),
+  }),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
@@ -23,9 +38,18 @@ vi.mock('@agent/storage/executionLease', () => ({
   validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
 }));
 
-vi.mock('@agent/storage/executionLifecycle', () => ({
-  clearTerminalExecutionState: mocks.clearTerminalExecutionState,
-  finalizeRun: mocks.finalizeRun,
+vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
+  finalizeRun: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.finalizeRun(...args),
+      catch: ensureError,
+    }),
+}));
+
+vi.mock('@agent/runtime/AgentLaunchContext', () => ({
+  prepareAgentDefinition: (...args: unknown[]) =>
+    Effect.sync(() => mocks.prepareAgentDefinition(...args)),
 }));
 
 vi.mock('@agent/runtime/executeAgent', async () => {
@@ -85,6 +109,8 @@ const SESSION = {
     ),
   },
   flushArtifacts,
+  acquireExecutionClaims: () => Effect.succeed(Effect.void),
+  graph: { releaseExecutionClaims: () => Effect.void },
   settlePublications: vi.fn(async () => {}),
   releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
 } as never;
@@ -116,10 +142,10 @@ describe('runAgent execution ownership', () => {
     trackedHandle = undefined;
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
-    mocks.clearTerminalExecutionState.mockResolvedValue({
-      previousOutcome: undefined,
-      streamId: 'assistant#run-agent-owner',
-    });
+    mocks.prepareAgentDefinition.mockImplementation(({ config }) => ({
+      config,
+    }));
+    mocks.readMeta.mockReturnValue({ streamId: 'assistant#run-agent-owner' });
     mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
     mocks.validateOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
@@ -153,6 +179,26 @@ describe('runAgent execution ownership', () => {
     expect(partiallyTrackedHandle?.interrupt()).toBe(false);
   });
 
+  it.effect(
+    'does not retain an abort listener when resume metadata is missing',
+    () =>
+      Effect.gen(function* () {
+        const signal = new AbortController().signal;
+        mocks.readMeta.mockReturnValueOnce(null);
+        expect(
+          yield* Effect.flip(
+            runAgent(
+              { kind: 'resume', config: CONFIG, executionId: EXECUTION_ID },
+              { session: SESSION, launchSignal: signal },
+            ),
+          ),
+        ).toMatchObject({
+          message: `Execution metadata not found for ${EXECUTION_ID}`,
+        });
+        expect(getEventListeners(signal, 'abort')).toEqual([]);
+      }),
+  );
+
   it('makes a fresh launch interruptible before registration settles', async () => {
     let finishRegistration!: () => void;
     mocks.registerExecution.mockImplementationOnce(
@@ -178,6 +224,7 @@ describe('runAgent execution ownership', () => {
     // #9590 obligation 1: registration carries the birth stream identity and
     // completes before the run — so before any transcript/snapshot fact.
     expect(mocks.registerExecution).toHaveBeenCalledWith(
+      SESSION,
       EXECUTION_ID,
       CONFIG,
       CONFIG.agent,
@@ -204,44 +251,32 @@ describe('runAgent execution ownership', () => {
     );
     expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
+  it.effect(
+    'registers the resolved category and passes the same definition to execution',
+    () =>
+      Effect.gen(function* () {
+        const definition = { config: { ...CONFIG, agentCategory: 'workflow' } };
+        mocks.prepareAgentDefinition.mockReturnValueOnce(definition);
 
-  // A workflow resume reuses the execution record, so the previous run's
-  // terminal outcome is still on disk and would be projected onto every result
-  // envelope this run writes (`readResultMeta`) until it finalizes.
-  it('clears the previous run terminal facts before a resumed run executes', async () => {
-    const order: string[] = [];
-    mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
-      order.push('clear');
-      return {
-        previousOutcome: undefined,
-        streamId: 'assistant#run-agent-owner',
-      };
-    });
-    mocks.executeAgent.mockImplementationOnce(async () => {
-      order.push('execute');
-      return EXECUTE_RESULT;
-    });
+        yield* runAgent(
+          { kind: 'fresh', config: CONFIG, executionId: EXECUTION_ID },
+          { session: SESSION },
+        );
 
-    await launch();
-
-    expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(
-      EXECUTION_ID,
-    );
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      CONFIG,
-      EXECUTION_ID,
-      expect.objectContaining({
-        streamTabIdOverride: 'assistant#run-agent-owner',
+        expect(mocks.registerExecution).toHaveBeenCalledWith(
+          SESSION,
+          EXECUTION_ID,
+          definition.config,
+          CONFIG.agent,
+          expect.objectContaining({ userFollowUpSupport: 'unsupported' }),
+        );
+        expect(mocks.executeAgent).toHaveBeenCalledWith(
+          definition,
+          EXECUTION_ID,
+          expect.any(Object),
+        );
       }),
-    );
-    expect(order).toEqual(['clear', 'execute']);
-  });
-
-  it('leaves a freshly registered run without a terminal-fact clear', async () => {
-    await launch({ kind: 'fresh' });
-
-    expect(mocks.clearTerminalExecutionState).not.toHaveBeenCalled();
-  });
+  );
 
   it('persists an early launch error before releasing ownership', async () => {
     const order: string[] = [];
@@ -257,7 +292,7 @@ describe('runAgent execution ownership', () => {
     await expect(launch({ kind: 'fresh' })).rejects.toBe(launchError);
 
     expect(order).toEqual(['finalize', 'release']);
-    expect(mocks.finalizeRun).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
       executionId: EXECUTION_ID,
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
@@ -279,15 +314,15 @@ describe('runAgent execution ownership', () => {
 
   it('restores a cancelled outcome when resume fails before lifecycle startup', async () => {
     const launchError = new Error('resume launch failed');
-    mocks.clearTerminalExecutionState.mockResolvedValueOnce({
-      previousOutcome: RUN_OUTCOME.CANCELLED,
+    mocks.readMeta.mockReturnValueOnce({
+      outcome: RUN_OUTCOME.CANCELLED,
       streamId: 'assistant#run-agent-owner',
     });
     mocks.executeAgent.mockRejectedValueOnce(launchError);
 
     await expect(launch()).rejects.toBe(launchError);
 
-    expect(mocks.finalizeRun).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
       executionId: EXECUTION_ID,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
@@ -329,7 +364,7 @@ describe('runAgent execution ownership', () => {
     await launch({ kind: 'fresh', openWorkflowOutput });
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
-      CONFIG,
+      { config: CONFIG },
       EXECUTION_ID,
       expect.objectContaining({ openWorkflowOutput }),
     );

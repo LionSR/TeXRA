@@ -6,33 +6,50 @@
  * with no cross-store mutations or error-swallowing policies.
  */
 
-import type { RunRecord } from '@agent/core/definition/RunRecord';
+import { Cause, Effect, Exit } from 'effect';
+
+import { isRemoteAgent } from '@agent/index';
+import {
+  isAgentRunRecord,
+  type RunRecord,
+} from '@agent/core/definition/RunRecord';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
 import { flowKey } from '@agent/node/persistedFlow';
 
 import { createLog } from '@logger/logUtils';
-import {
-  runWithWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+import { type WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   RUN_OUTCOME,
+  AgentCategory,
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  aggregateId,
+  aggregateTarget,
+  type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
-  WorkflowExecutionSnapshotSchema,
+  type AggregateId,
   type ExecutionId,
   type ExecutionMeta,
-  type RegisteredExecutionMeta,
   type RunIdentity,
   type RunOutcome,
   type StreamTabId,
   type UserFollowUpSupport,
-  type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
-import { KeyedMutex, throwAggregated } from '@utils/core';
+import { KeyedMutex } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
+import { ensureError } from '@utils/errors/errorMessage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getExecutionStore } from './ExecutionKVStore';
+import {
+  getExecutionStore,
+  getExecutionRecords,
+  executionMetaFromEvents,
+  type ChildRecord,
+} from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
+  acquireResumedExecutionLease,
   releaseOwnedExecutionLease,
 } from './executionLease';
 
@@ -48,56 +65,33 @@ function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
-/** Return whether readable persisted metadata directly links to a parent. */
-export async function hasPersistedParent(
+/** Parentage is projected from the declared creation edge. */
+export const hasPersistedParent = (
   executionId: ExecutionId,
-): Promise<boolean> {
-  const meta = await getExecutionStore(executionId).readMeta();
-  return meta?.parentExecutionId !== undefined;
-}
+  session: SessionHandle,
+): Effect.Effect<boolean, Error> =>
+  getExecutionRecords(session, executionId)
+    .readMeta()
+    .pipe(Effect.map((meta) => meta?.parentExecutionId !== undefined));
 
-/** Read persisted follow-up capability, failing closed for absent metadata. */
-export async function getPersistedUserFollowUpSupport(
+export const getPersistedUserFollowUpSupport = (
   executionId: ExecutionId,
-): Promise<UserFollowUpSupport> {
-  const meta = await getExecutionStore(executionId).readMeta();
-  return meta?.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
-}
+  session: SessionHandle,
+): Effect.Effect<UserFollowUpSupport, Error> =>
+  getExecutionRecords(session, executionId)
+    .readMeta()
+    .pipe(
+      Effect.map(
+        (meta) =>
+          meta?.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      ),
+    );
 
-// ---------------------------------------------------------------------------
-// Per-execution write serialization — read-modify-write cycles on meta run one
-// at a time per execution so that concurrent terminal-outcome /
-// session-description writes never race and silently drop each other's
-// fields. Different executions proceed independently.
-// ---------------------------------------------------------------------------
-
-const metaWriteLocks = new KeyedMutex<ExecutionId>();
-
-/** Run a read-modify-write cycle on an execution's metadata under its lock. */
-function enqueueMetaUpdate(
-  executionId: ExecutionId,
-  updater: (existing: ExecutionMeta) => Partial<ExecutionMeta>,
-): Promise<void> {
-  return metaWriteLocks.runExclusive(executionId, async () => {
-    const store = getExecutionStore(executionId);
-    const existing = await store.readMeta();
-    if (!existing) {
-      throw new Error(`Execution metadata not found for ${executionId}`);
-    }
-    await store.writeMeta({ ...existing, ...updater(existing) });
-  });
-}
-
-/** Persist the workflow runner's canonical execution snapshot on its run. */
-export function writeWorkflowExecutionSnapshot(
-  executionId: ExecutionId,
-  workflow: WorkflowExecutionSnapshot,
-): Promise<void> {
-  const canonical = WorkflowExecutionSnapshotSchema.parse(workflow);
-  return enqueueMetaUpdate(executionId, () => ({ workflow: canonical }));
-}
-
-interface RegisterExecutionOptions {
+export interface RegisterExecutionOptions {
+  readonly parentStreamId?: StreamTabId;
+  readonly checkpointId?: string;
+  readonly background?: boolean;
+  readonly category?: AgentCategory;
   readonly streamId: StreamTabId;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
@@ -118,96 +112,210 @@ interface RegisterExecutionOptions {
  * Register a new execution: persist config, metadata, and parent linkage.
  * Awaits all writes before returning.
  */
-export async function registerExecution(
+export const registerExecution = Effect.fn('registerExecution')(function* (
+  session: SessionHandle,
   executionId: ExecutionId,
   record: RunRecord,
   agentName: string,
   options: RegisterExecutionOptions,
-): Promise<void> {
-  const {
-    streamId,
-    identity,
-    userFollowUpSupport,
-    parentExecutionId,
-    description,
-  } = options;
-  await acquireFreshExecutionLease(executionId);
-  try {
-    const timestamp = new Date().toISOString();
-    const store = getExecutionStore(executionId);
-    const meta: RegisteredExecutionMeta = {
-      schemaVersion: 1,
-      timestamp,
-      streamId,
-      identity,
-      userFollowUpSupport:
-        userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      parentExecutionId,
-      ...(description ? { description } : {}),
-    };
-    const persistedRecord = pinExecutionWorkingDirectory(record);
-
-    const writes: Promise<void>[] = [
-      store.writeRunRecord(persistedRecord),
-      store.writeMeta(meta),
+): Effect.fn.Return<void, Error> {
+  const lease = yield* Effect.tryPromise({
+    try: () =>
+      runInSession(session, () => acquireFreshExecutionLease(executionId)),
+    catch: ensureError,
+  });
+  let releaseClaims: Effect.Effect<void, Error> = Effect.void;
+  const registration = yield* Effect.exit(
+    Effect.gen(function* () {
+      const records = getExecutionRecords(session, executionId);
+      const prior = yield* records.readMeta();
+      if (prior !== null)
+        releaseClaims = yield* session.acquireExecutionClaims(
+          executionId,
+          options.streamId,
+        );
+      const parent =
+        options.parentExecutionId === undefined
+          ? null
+          : yield* getExecutionRecords(
+              session,
+              options.parentExecutionId,
+            ).readMeta();
+      if (options.parentExecutionId !== undefined && parent === null)
+        return yield* Effect.fail(
+          new Error(
+            `Parent execution ${options.parentExecutionId} is unavailable.`,
+          ),
+        );
+      const pinned = runInSession(session, () =>
+        pinExecutionWorkingDirectory(record),
+      );
+      const target = aggregateId('stream', options.streamId);
+      const category = isAgentRunRecord(pinned)
+        ? pinned.agentCategory
+        : (options.category ?? AgentCategory.ToolUse);
+      const background =
+        options.background ?? options.parentExecutionId !== undefined;
+      const events: SessionEventDraft[] = [];
+      if (prior === null) {
+        events.push({
+          type: 'run.start',
+          aggregateId: target,
+          executionId,
+          identity: options.identity,
+          userFollowUpSupport:
+            options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+          category,
+          isRemote:
+            options.identity.kind === 'agent' &&
+            isRemoteAgent(options.identity.agent),
+          worktree: launchWorktreeInfo(pinned.workingDirectory),
+          parentStreamId:
+            parent === null ? options.parentStreamId : parent.streamId,
+          background,
+          approvalPolicy: session.approvalPolicySnapshotFor(options.streamId),
+          checkpointId: options.checkpointId,
+        });
+      }
+      events.push(
+        {
+          type: 'execution.launchLabel',
+          aggregateId: aggregateId('execution', executionId),
+          label: agentName,
+        },
+        {
+          type: 'execution.config',
+          aggregateId: aggregateId('execution', executionId),
+          record: pinned,
+        },
+        {
+          type: 'run.activate',
+          aggregateId: target,
+          category,
+          background,
+          ...(options.identity.kind === 'agent' &&
+          options.identity.tool === undefined
+            ? { isRemote: isRemoteAgent(options.identity.agent) }
+            : {}),
+        },
+      );
+      if (
+        options.identity.kind === 'agent' &&
+        options.identity.tool === undefined
+      )
+        events.push({
+          type: 'status',
+          aggregateId: target,
+          phase: STREAM_PHASE.RUNNING,
+          substate: STREAM_SUBSTATE.STARTING,
+          runStartedAt: Date.now(),
+          cause: 'lifecycle',
+        });
+      if (options.description !== undefined)
+        events.push(
+          {
+            type: 'execution.description',
+            aggregateId: aggregateId('execution', executionId),
+            description: options.description,
+          },
+          {
+            type: 'updateStreamDescription',
+            aggregateId: target,
+            description: options.description,
+          },
+        );
+      yield* session
+        .commitRegistration(events)
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.fail(ensureError(Cause.squash(cause))),
+          ),
+        );
+    }),
+  );
+  if (Exit.isFailure(registration)) {
+    const cause = Cause.squash(registration.cause);
+    const claimRelease = yield* Effect.exit(releaseClaims);
+    const release = yield* Effect.exit(
+      lease === 'existing'
+        ? Effect.void
+        : Effect.tryPromise({
+            try: () =>
+              runInSession(session, () =>
+                releaseOwnedExecutionLease(executionId),
+              ),
+            catch: ensureError,
+          }),
+    );
+    const failures = [
+      cause,
+      ...[claimRelease, release].flatMap((exit) =>
+        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+      ),
     ];
-    if (parentExecutionId) {
-      writes.push(
-        getExecutionStore(parentExecutionId).writeChild(executionId, {
-          agent: agentName,
-          timestamp,
-        }),
-      );
-    }
-
-    const results = await Promise.allSettled(writes);
-    const errors = results.flatMap((result) =>
-      result.status === 'rejected' ? [result.reason] : [],
+    return yield* Effect.fail(
+      failures.length > 1
+        ? new AggregateError(
+            failures,
+            `Execution registration and lease rollback failed for ${executionId}`,
+          )
+        : ensureError(cause),
     );
-    throwAggregated(
-      errors,
-      `Multiple execution registration writes failed for ${executionId}`,
-    );
-  } catch (error) {
-    try {
-      await releaseOwnedExecutionLease(executionId);
-    } catch (releaseError) {
-      throw new AggregateError(
-        [error, releaseError],
-        `Execution registration and lease rollback failed for ${executionId}`,
-      );
-    }
-    throw error;
   }
-}
+});
 
-/**
- * Drop the previous run's terminal facts as a persisted execution is admitted
- * for resumption. `meta.outcome` owns "how did this run end" and every reader
- * projects it onto the turn-owned result envelope (`readResultMeta`), so
- * an execution that resumes while still carrying its interrupted predecessor's
- * outcome relabels every turn the resumed run writes until its next terminal
- * finalize.
- *
- * Metadata that is absent or unreadable is left alone: `readResultMeta` reads
- * the same metadata, so there is no outcome to project either way, and the
- * store already warns about metadata it could not parse.
- */
-export async function clearTerminalExecutionState(
+/** Admit a resumed turn and return rollback for only this admission's resources. */
+export const acquireResumedExecutionOwnership = Effect.fn(
+  'acquireResumedExecutionOwnership',
+)(function* (
+  session: SessionHandle,
   executionId: ExecutionId,
-): Promise<{
-  readonly previousOutcome: RunOutcome | undefined;
-  readonly streamId: StreamTabId | undefined;
-}> {
-  const meta = await getExecutionStore(executionId).readMeta();
-  if (meta?.outcome !== undefined) {
-    await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
+  streamId: StreamTabId,
+): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
+  const lease = yield* Effect.tryPromise({
+    try: () =>
+      runInSession(session, () => acquireResumedExecutionLease(executionId)),
+    catch: ensureError,
+  });
+  const releaseLease =
+    lease === 'existing'
+      ? Effect.void
+      : Effect.tryPromise({
+          try: () =>
+            runInSession(session, () =>
+              releaseOwnedExecutionLease(executionId),
+            ),
+          catch: ensureError,
+        });
+  const claims = yield* Effect.exit(
+    session.acquireExecutionClaims(executionId, streamId),
+  );
+  if (Exit.isFailure(claims)) {
+    const release = yield* Effect.exit(releaseLease);
+    return yield* Effect.fail(
+      Exit.isFailure(release)
+        ? new AggregateError(
+            [Cause.squash(claims.cause), Cause.squash(release.cause)],
+            `Execution admission and lease rollback failed for ${executionId}`,
+          )
+        : ensureError(Cause.squash(claims.cause)),
+    );
   }
-  return {
-    previousOutcome: meta?.outcome,
-    streamId: meta?.streamId,
-  };
-}
+  return Effect.gen(function* () {
+    const releasedClaims = yield* Effect.exit(claims.value);
+    const releasedLease = yield* Effect.exit(releaseLease);
+    const failures = [releasedClaims, releasedLease].flatMap((exit) =>
+      Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+    );
+    if (failures.length > 0)
+      return yield* Effect.fail(
+        new AggregateError(
+          failures,
+          `Execution admission rollback failed for ${executionId}`,
+        ),
+      );
+  });
+});
 
 /**
  * The one rule for whether a run's resume checkpoint (`flow_<id>.json`)
@@ -277,16 +385,61 @@ export type FinalizeExecutionResult =
  * persistence failure comes back as an `ok: false` result (and through
  * `report`, when given).
  */
-export async function finalizeRun(
+export const finalizeRun = Effect.fn('finalizeRun')(function* (
+  session: SessionHandle,
   input: FinalizeExecutionInput,
-): Promise<FinalizeExecutionResult> {
+): Effect.fn.Return<FinalizeExecutionResult> {
   const { executionId, outcome, flowRecord, keepExistingOutcome } = input;
-  const deleteFlowRecord = (): Promise<void> =>
-    getExecutionStore(executionId).delete(flowKey(executionId));
-  const failed = (
-    error: unknown,
-    outcomePersisted: boolean,
-  ): FinalizeExecutionResult => {
+  const status = yield* Effect.exit(
+    session.updateRecordFacts(executionId, (rows) => {
+      const meta = executionMetaFromEvents(rows, executionId);
+      if (!meta?.streamId)
+        throw new Error(`Execution metadata not found for ${executionId}`);
+      const persisted =
+        keepExistingOutcome === true && meta.outcome !== undefined
+          ? meta.outcome
+          : outcome;
+      return {
+        events:
+          meta.outcome === persisted
+            ? []
+            : [
+                ...session.statusClosureFacts(meta.streamId, persisted),
+                {
+                  type: 'status' as const,
+                  aggregateId: aggregateId('stream', meta.streamId),
+                  phase: persisted,
+                  cause: 'lifecycle',
+                },
+              ],
+        value: persisted,
+      };
+    }),
+  );
+  const deletion = yield* Effect.exit(
+    flowRecord === 'delete'
+      ? Effect.tryPromise({
+          try: () =>
+            runInSession(session, () =>
+              getExecutionStore(executionId).delete(flowKey(executionId)),
+            ),
+          catch: ensureError,
+        })
+      : Effect.void,
+  );
+  if (Exit.isFailure(status) || Exit.isFailure(deletion)) {
+    const failures = [
+      ...(Exit.isFailure(status) ? [Cause.squash(status.cause)] : []),
+      ...(Exit.isFailure(deletion) ? [Cause.squash(deletion.cause)] : []),
+    ];
+    const error =
+      failures.length === 1
+        ? failures[0]
+        : new AggregateError(
+            failures,
+            `Terminal status and flow deletion failed for ${executionId}`,
+          );
+    const outcomePersisted = Exit.isSuccess(status);
     input.report?.(
       new Error(
         outcomePersisted
@@ -296,66 +449,9 @@ export async function finalizeRun(
       ),
     );
     return { ok: false, error, outcomePersisted };
-  };
-  // What the meta carries once the write below returns. Assigned inside the
-  // updater, which runs under the per-execution meta lock, so a retained
-  // outcome is read in the same locked cycle that decided to keep it.
-  let persistedOutcome = outcome;
-  try {
-    // Persist the canonical terminal outcome — the one terminal write.
-    await enqueueMetaUpdate(executionId, (existing) => {
-      if (keepExistingOutcome === true && existing.outcome != null) {
-        persistedOutcome = existing.outcome;
-        return {};
-      }
-      return { outcome };
-    });
-  } catch (error) {
-    // The caller's disposition stands even when the outcome write failed: a
-    // checkpoint is deleted only on request, never to fail closed.
-    if (flowRecord === 'delete') {
-      try {
-        await deleteFlowRecord();
-      } catch (deleteError) {
-        return failed(
-          new AggregateError(
-            [error, deleteError],
-            `Terminal metadata and flow deletion failed for ${executionId}`,
-          ),
-          false,
-        );
-      }
-    }
-    return failed(error, false);
   }
-
-  if (flowRecord === 'delete') {
-    try {
-      await deleteFlowRecord();
-    } catch (error) {
-      return failed(error, true);
-    }
-  }
-  return { ok: true, outcome: persistedOutcome };
-}
-
-/** Persist an AI-generated session description on an existing execution's metadata. */
-export async function writeSessionDescription(
-  executionId: ExecutionId,
-  description: string,
-): Promise<void> {
-  // Best-effort, serialized with other meta updates for the same execution to
-  // prevent read-modify-write races (e.g. against terminal status). Never
-  // throws: the description is presentation metadata, not lifecycle state.
-  try {
-    await enqueueMetaUpdate(executionId, () => ({ description }));
-  } catch (err) {
-    // Swallow and log — don't let storage I/O errors disrupt execution lifecycle.
-    log.debug(
-      `Failed to persist session description for ${executionId}: ${toErrorMessage(err)}`,
-    );
-  }
-}
+  return { ok: true, outcome: status.value };
+});
 
 /**
  * The execution→stream foreign key: the `streamId` stamped on execution
@@ -370,26 +466,60 @@ export async function writeSessionDescription(
  * `readMeta()`. Absence is a plain `null`: no execution metadata at all and
  * metadata predating stamped streams are the same answer to every caller.
  */
-export async function resolveStreamForExecution(
-  executionId: ExecutionId,
-  roots: WorkspaceRoots,
-): Promise<{
-  readonly streamId: StreamTabId;
-  readonly meta: ExecutionMeta;
-} | null> {
-  const meta = await runWithWorkspaceRoots(roots, () =>
-    getExecutionStore(executionId).readMeta(),
-  );
-  if (!meta?.streamId) return null;
-  return { streamId: meta.streamId, meta };
-}
+export const resolveStreamForExecution = Effect.fn('resolveStreamForExecution')(
+  function* (executionId: ExecutionId, session: SessionHandle) {
+    const meta = yield* getExecutionRecords(session, executionId).readMeta();
+    return meta?.streamId ? { streamId: meta.streamId, meta } : null;
+  },
+);
 
-/** Read the registered run configuration in its owning workspace. */
-export function readExecutionRunRecord(
+/** Read the canonical run configuration from the owning database. */
+export const readExecutionRunRecord = (
   executionId: ExecutionId,
-  roots: WorkspaceRoots,
-): Promise<RunRecord | null> {
-  return runWithWorkspaceRoots(roots, () =>
-    getExecutionStore(executionId).readRunRecord(),
-  );
-}
+  session: SessionHandle,
+): Effect.Effect<RunRecord | null, Error> =>
+  getExecutionRecords(session, executionId).readRunRecord();
+
+/** Child labels and parentage come from the same immutable launch fact. */
+export const readExecutionChildren = Effect.fn('readExecutionChildren')(
+  function* (
+    session: SessionHandle,
+    executionId: ExecutionId,
+  ): Effect.fn.Return<ChildRecord[], Error> {
+    const rows = yield* session.readExecutionChildren(executionId);
+    const parent = rows.find(
+      (row) => row.type === 'run.start' && row.executionId === executionId,
+    );
+    if (parent?.type !== 'run.start') return [];
+    const closed = new Set(
+      rows
+        .filter((row) => row.type === 'stream.removed')
+        .map((row) => row.aggregateId),
+    );
+    if (closed.has(parent.aggregateId)) return [];
+    const labels = new Map<AggregateId, string>();
+    for (const row of rows) {
+      if (row.type === 'execution.launchLabel')
+        labels.set(row.aggregateId, row.label);
+    }
+    return rows.flatMap((row) => {
+      if (
+        row.type !== 'run.start' ||
+        row.parentStartCommit !== parent.commit ||
+        row.parentStreamId !== aggregateTarget(parent.aggregateId).id ||
+        closed.has(row.aggregateId)
+      )
+        return [];
+      const label = labels.get(aggregateId('execution', row.executionId));
+      if (label === undefined)
+        throw new Error(`Child launch label missing for ${row.executionId}`);
+      return [
+        {
+          id: row.executionId,
+          agent: label,
+          timestamp: new Date(row.at).toISOString(),
+        },
+      ];
+    });
+  },
+);

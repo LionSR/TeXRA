@@ -137,7 +137,9 @@ describe('desktop platform adapters', () => {
         const other = new WorkspaceStorageProvider(root, '/workspace/b');
         const noWorkspace = new WorkspaceStorageProvider(root, undefined);
 
-        expect(first.getGlobalStoragePath()).toBe(join(root, 'global-storage'));
+        expect(first.getGlobalStoragePath()).toBe(
+          join(root, 'v1', 'global-storage'),
+        );
         expect(first.getStoragePath()).toBe(same.getStoragePath());
         expect(first.getStoragePath()).not.toBe(other.getStoragePath());
         expect(noWorkspace.getStoragePath()).toMatch(/workspace-storage/);

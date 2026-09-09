@@ -12,7 +12,11 @@ import { Cause, Effect, Exit, Semaphore, type Fiber } from 'effect';
 //
 // Host-agnostic, VS Code-free.
 
-import { getExecutionStore, type ResultMeta } from '@agent/storage';
+import {
+  finalizeRun,
+  getExecutionStore,
+  type ResultMeta,
+} from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type {
@@ -22,7 +26,6 @@ import type {
 import {
   assertOwnedExecutionLease,
   ExecutionLeaseLostError,
-  releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage/executionLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
@@ -354,7 +357,7 @@ export interface ChildRunLoopParams<TTurn> {
     readonly error?: unknown;
   }) => void;
   /** Publish caller-owned state after final artifacts drain, before lease release. */
-  readonly afterArtifactsDrained?: () => void | Promise<void>;
+  readonly afterArtifactsDrained?: Effect.Effect<void, Error>;
 }
 
 /**
@@ -674,13 +677,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   // persistence failure is then this turn's failure, thrown once the turn
   // is settled, and the delivery never reaches the parent.
   const persisted = yield* Effect.exit(
-    Effect.tryPromise({
-      try: () =>
-        runInSession(params.session, () =>
-          persistChildRunDelivery(executionId, msg, stampedMeta),
-        ),
-      catch: ensureError,
-    }),
+    persistChildRunDelivery(params.session, executionId, msg, stampedMeta),
   );
   // Completion follows acceptance under the same permit. The body scope also
   // drains acceptance writes when formatting or provider work fails.
@@ -762,29 +759,47 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
 });
 
 /**
- * Run pre-handoff launch work under one failure policy: if the operation
- * throws before the child run loop has taken over the execution, release the
- * fresh lease before the error propagates; a failed launch must not leave a
- * record that refuses a prompt relaunch for this process's whole lifetime.
- * Post-handoff work must stay outside this guard: once the run loop owns the
- * lease, releasing it would yank ownership from a live child.
+ * Own admitted execution cleanup until the child loop takes over. Failure or
+ * interruption records the terminal outcome and releases canonical and file
+ * claims before propagating the original cause. Post-handoff work stays outside
+ * this owner because the live child then owns its own settlement.
  */
 export function runWithOwnedExecutionLeaseLaunchGuard<A, E, R>(
+  session: SessionHandle,
   executionId: ExecutionId,
   operation: Effect.Effect<A, E, R>,
-): Effect.Effect<A, Error, R> {
+): Effect.Effect<A, E | Error, R> {
   return operation.pipe(
-    Effect.catchCause((cause) =>
-      Effect.gen(function* () {
-        const error = yield* Effect.promise(() =>
-          releaseOwnedExecutionLeaseAfterFailure(
+    Effect.onExit((exit) => {
+      if (Exit.isSuccess(exit)) return Effect.void;
+      return Effect.gen(function* () {
+        const finalized = yield* Effect.exit(
+          finalizeRun(session, {
             executionId,
-            Cause.squash(cause),
-          ),
+            outcome: Cause.hasInterrupts(exit.cause)
+              ? RUN_OUTCOME.CANCELLED
+              : RUN_OUTCOME.FAILED,
+            flowRecord: 'preserve',
+          }),
         );
-        return yield* Effect.fail(ensureError(error));
-      }),
-    ),
+        const released = yield* Effect.exit(
+          session.releaseExecutionLease(executionId),
+        );
+        const failures: unknown[] = [];
+        if (Exit.isFailure(finalized))
+          failures.push(Cause.squash(finalized.cause));
+        else if (!finalized.value.ok) failures.push(finalized.value.error);
+        if (Exit.isFailure(released))
+          failures.push(Cause.squash(released.cause));
+        if (failures.length > 0)
+          return yield* Effect.fail(
+            new AggregateError(
+              failures,
+              `Execution ${executionId} launch cleanup failed`,
+            ),
+          );
+      });
+    }),
   );
 }
 
@@ -1198,30 +1213,25 @@ export function startChildRunLoop<TTurn>(
             const handle =
               runSession.executions.getAgentHandleByStream(childStreamId);
             if (handle) {
-              yield* Effect.tryPromise({
-                try: () =>
-                  runInSession(runSession, () =>
-                    finalizeRunTerminal({
-                      handle,
-                      executions: runSession.executions,
-                      streamStatus: runSession.status,
-                      outcome,
-                      error:
-                        sawTurnFailure && lastTurnErr !== undefined
-                          ? {
-                              kind: classifyAgentError(lastTurnErr),
-                              message: toErrorMessage(lastTurnErr),
-                            }
-                          : undefined,
-                      isSubagent: handle.isChildExecution,
-                      flushArtifacts: () => runSession.flushArtifacts(),
-                      persistence: {
-                        kind: 'finalize',
-                        flowRecord: retainFlowRecordUnlessCompleted,
-                      },
-                    }),
-                  ),
-                catch: ensureError,
+              yield* finalizeRunTerminal({
+                session: runSession,
+                handle,
+                executions: runSession.executions,
+                streamStatus: runSession.status,
+                outcome,
+                error:
+                  sawTurnFailure && lastTurnErr !== undefined
+                    ? {
+                        kind: classifyAgentError(lastTurnErr),
+                        message: toErrorMessage(lastTurnErr),
+                      }
+                    : undefined,
+                isSubagent: handle.isChildExecution,
+                flushArtifacts: () => runSession.flushArtifacts(),
+                persistence: {
+                  kind: 'finalize',
+                  flowRecord: retainFlowRecordUnlessCompleted,
+                },
               });
             }
           }
@@ -1235,15 +1245,10 @@ export function startChildRunLoop<TTurn>(
         }),
       );
       const released = yield* Effect.exit(
-        Effect.tryPromise({
-          try: () =>
-            runInSession(runSession, () =>
-              runSession.releaseExecutionLease(executionId, async () => {
-                if (!sawTurnFailure) await params.afterArtifactsDrained?.();
-              }),
-            ),
-          catch: ensureError,
-        }),
+        runSession.releaseExecutionLease(
+          executionId,
+          !sawTurnFailure ? params.afterArtifactsDrained : Effect.void,
+        ),
       );
       if (Exit.isFailure(released)) {
         logger.warn('Failed to persist final child-run artifacts', {

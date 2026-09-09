@@ -10,10 +10,12 @@
 // runs, and both entry points already reject those before calling it, so
 // `texra run` / `--print` / piped output stay byte-identical (headless parity).
 
+import { Cause, Effect } from 'effect';
 import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
 import { listExecutions } from '@agent/storage';
+import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
@@ -52,6 +54,7 @@ import {
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
 import { assertNever } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { signInCliSubscription } from '../runtime/subscriptionLogin';
@@ -128,84 +131,118 @@ interface OnboardingResolution extends CliOnboardingResult {
  * previously declined. Otherwise returns immediately without rendering or
  * emitting anything.
  */
-export async function maybeRunCliOnboarding(
-  services: CliPlatformServices,
-  context: OnboardingGateContext,
-): Promise<CliOnboardingResult> {
-  // context.* carries the parsed intent (headless / non-TTY / dumb); the final
-  // `process.stdout.isTTY` is the authoritative "Ink can actually mount here"
-  // check at the call site (same guard runCliOnboarding uses for the
-  // context-less `texra setup` path). Defense-in-depth before we render.
-  if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
-    return NO_ONBOARDING_RESULT;
-  }
-  const { globalState } = services;
-  const hasCredential = await hasUsableSetupCredential(
-    services.secrets,
-    credentialLog.warn,
-  );
-  // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
-  // with execution history never enters State 0/1. Credential presence alone
-  // does not prove this is an upgrader: fresh installs can inherit env keys.
-  // One-shot and best-effort: if a credential appears after a previous skip,
-  // the stale skip is cleared below so a later sign-out re-enters State 0.
-  const needsFirstRunBackfill =
-    globalState.get<boolean | undefined>(
-      GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-    ) === undefined;
-  const hasRunHistory = needsFirstRunBackfill
-    ? await effectRuntime()
-        .runPromise(listExecutions())
-        .then(
-          (entries) => entries.length > 0,
-          (error: unknown) => {
-            warnOnboardingFailure('Run-history check', error);
-            return false;
-          },
+export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
+  function* (
+    services: CliPlatformServices,
+    context: OnboardingGateContext,
+  ): Effect.fn.Return<CliOnboardingResult, Error> {
+    // context.* carries the parsed intent (headless / non-TTY / dumb); the final
+    // `process.stdout.isTTY` is the authoritative "Ink can actually mount here"
+    // check at the call site (same guard runCliOnboarding uses for the
+    // context-less `texra setup` path). Defense-in-depth before we render.
+    if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
+      return NO_ONBOARDING_RESULT;
+    }
+    const { globalState } = services;
+    const hasCredential = yield* Effect.tryPromise({
+      try: () => hasUsableSetupCredential(services.secrets, credentialLog.warn),
+      catch: ensureError,
+    });
+    // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
+    // with execution history never enters State 0/1. Credential presence alone
+    // does not prove this is an upgrader: fresh installs can inherit env keys.
+    // One-shot and best-effort: if a credential appears after a previous skip,
+    // the stale skip is cleared below so a later sign-out re-enters State 0.
+    const needsFirstRunBackfill =
+      (yield* Effect.try({
+        try: () =>
+          globalState.get<boolean | undefined>(
+            GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+          ),
+        catch: ensureError,
+      })) === undefined;
+    const hasRunHistory = needsFirstRunBackfill
+      ? yield* Effect.tryPromise({
+          try: () => initializeCliTranscriptSession(),
+          catch: ensureError,
+        }).pipe(
+          Effect.flatMap((session) => listExecutions(session)),
+          Effect.map((entries) => entries.length > 0),
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              warnOnboardingFailure('Run-history check', error);
+              return false;
+            }),
+          ),
         )
-    : false;
-  // LAST_KNOWN_VERSION is stamped by desktop/extension startup and is the
-  // reliable prior-install signal shared across hosts.
-  const hasPriorInstall =
-    needsFirstRunBackfill &&
-    globalState.get<string | undefined>(GlobalStateKey.LAST_KNOWN_VERSION) !==
-      undefined;
-  await backfillFirstRunDone(globalState, {
-    hasCredential,
-    hasPriorInstall,
-    hasRunHistory,
-  }).catch((error: unknown) =>
-    warnOnboardingFailure('First-run backfill write', error),
-  );
-  // Route through the same funnel-transition planner the extension/desktop
-  // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
-  // is discarded: the CLI has no launcher agent list to steer. Clearing a
-  // stale skip must stay decoupled from the 3-way state — an
-  // already-credentialed launch clears a stale skip (the PRD's "configuring a
-  // credential clears the flag") even when firstRunDone is also true, which
-  // `transition.clearDeclined` captures directly.
-  const transition = planOnboardingFunnelTransition(undefined, {
-    hasCredential,
-    ...readOnboardingFlags(globalState),
-  });
-  if (transition.clearDeclined) {
-    await setOnboardingDeclined(globalState, false).catch((error: unknown) =>
-      warnOnboardingFailure('Clearing the stale skip flag', error),
+      : false;
+    // LAST_KNOWN_VERSION is stamped by desktop/extension startup and is the
+    // reliable prior-install signal shared across hosts.
+    const hasPriorInstall =
+      needsFirstRunBackfill &&
+      (yield* Effect.try({
+        try: () =>
+          globalState.get<string | undefined>(
+            GlobalStateKey.LAST_KNOWN_VERSION,
+          ),
+        catch: ensureError,
+      })) !== undefined;
+    yield* Effect.tryPromise({
+      try: () =>
+        backfillFirstRunDone(globalState, {
+          hasCredential,
+          hasPriorInstall,
+          hasRunHistory,
+        }),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() =>
+          warnOnboardingFailure('First-run backfill write', error),
+        ),
+      ),
     );
-  }
-  // `configured` stays false for both 'done' and 'setup': an
-  // already-credentialed or already-completed launch is not a post-picker
-  // continuation, so the setup agent only takes the session right after the
-  // picker actually configures a credential in this process.
-  if (transition.state !== 'needs-credential') {
-    return NO_ONBOARDING_RESULT;
-  }
-  return runOnboardingFlow({
-    globalState,
-    firstRun: true,
-    colorEnabled: context.stdoutColorEnabled,
-  });
-}
+    // Route through the same funnel-transition planner the extension/desktop
+    // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
+    // is discarded: the CLI has no launcher agent list to steer. Clearing a
+    // stale skip must stay decoupled from the 3-way state: an
+    // already-credentialed launch clears a stale skip (the PRD's "configuring a
+    // credential clears the flag") even when firstRunDone is also true, which
+    // `transition.clearDeclined` captures directly.
+    const flags = yield* Effect.try({
+      try: () => readOnboardingFlags(globalState),
+      catch: ensureError,
+    });
+    const transition = planOnboardingFunnelTransition(undefined, {
+      hasCredential,
+      ...flags,
+    });
+    if (transition.clearDeclined) {
+      yield* Effect.tryPromise({
+        try: () => setOnboardingDeclined(globalState, false),
+        catch: ensureError,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() =>
+            warnOnboardingFailure('Clearing the stale skip flag', error),
+          ),
+        ),
+      );
+    }
+    // `configured` stays false for both 'done' and 'setup': an
+    // already-credentialed or already-completed launch is not a post-picker
+    // continuation, so the setup agent only takes the session right after the
+    // picker actually configures a credential in this process.
+    if (transition.state !== 'needs-credential') {
+      return NO_ONBOARDING_RESULT;
+    }
+    return yield* runOnboardingFlow({
+      globalState: services.globalState,
+      firstRun: true,
+      colorEnabled: context.stdoutColorEnabled,
+    });
+  },
+);
 
 /**
  * `texra setup`'s State 0 step: show the picker unconditionally — the command
@@ -214,67 +251,82 @@ export async function maybeRunCliOnboarding(
  * (re)configuration is `texra login`'s job. Still TTY-only — the command
  * rejects headless before calling this.
  */
-export async function runCliOnboarding(
+export const runCliOnboarding = Effect.fn('runCliOnboarding')(function* (
   services: CliPlatformServices,
   colorEnabled = true,
-): Promise<CliOnboardingResult> {
+): Effect.fn.Return<CliOnboardingResult, Error> {
   if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;
-  return runOnboardingFlow({
+  return yield* runOnboardingFlow({
     globalState: services.globalState,
     firstRun: false,
     colorEnabled,
   });
-}
+});
 
-async function runOnboardingFlow(options: {
+const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
   readonly globalState: StateStore;
   readonly firstRun: boolean;
   readonly colorEnabled?: boolean;
-}): Promise<CliOnboardingResult> {
+}): Effect.fn.Return<CliOnboardingResult, Error> {
   // `interactive`: both callers reject non-TTY output before reaching this
   // flow. Keep that product boundary authoritative when a real PTY also has CI
   // set; Ink otherwise disables interactive rendering from its CI heuristic.
   // The visible-screen clear keeps scrollback intact so the summary below
   // lands there.
-  const chosen = await renderCliPrompt<OnboardingResolution>(
-    (resolve) => (
-      <OnboardingApp
-        pickerSubtitle={
-          options.firstRun
-            ? 'No provider API key is configured. Choose how to power model calls:'
-            : 'Choose how to power model calls:'
-        }
-        onResolve={resolve}
-      />
-    ),
-    {
-      stdout: process.stdout,
-      stderr: process.stderr,
-      colorEnabled: options.colorEnabled,
-      interactive: true,
-    },
-  );
+  const chosen = yield* Effect.tryPromise({
+    try: () =>
+      renderCliPrompt<OnboardingResolution>(
+        (resolve) => (
+          <OnboardingApp
+            pickerSubtitle={
+              options.firstRun
+                ? 'No provider API key is configured. Choose how to power model calls:'
+                : 'Choose how to power model calls:'
+            }
+            onResolve={resolve}
+          />
+        ),
+        {
+          stdout: process.stdout,
+          stderr: process.stderr,
+          colorEnabled: options.colorEnabled,
+          interactive: true,
+        },
+      ),
+    catch: ensureError,
+  });
   const resolution: OnboardingResolution = chosen ?? NO_ONBOARDING_RESULT;
 
   if (resolution.declined) {
     // Best-effort: persist the decline so we don't re-prompt next launch. If the
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
-    try {
-      await setOnboardingDeclined(options.globalState, true);
-    } catch {
-      writeTextStderr(
-        "Note: couldn't save your choice, so you may be asked again next time.",
-      );
-    }
+    yield* Effect.tryPromise({
+      try: () => setOnboardingDeclined(options.globalState, true),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch(() =>
+        Effect.sync(() =>
+          writeTextStderr(
+            "Note: couldn't save your choice, so you may be asked again next time.",
+          ),
+        ),
+      ),
+    );
   } else if (resolution.configured) {
     // Clear any prior "skip" now that credentials exist — otherwise a user who
     // skipped, then configured via `texra setup` (which bypasses the gate), then
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
-    await setOnboardingDeclined(options.globalState, false).catch(
-      (error: unknown) =>
-        warnOnboardingFailure('Clearing the stale skip flag', error),
+    yield* Effect.tryPromise({
+      try: () => setOnboardingDeclined(options.globalState, false),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() =>
+          warnOnboardingFailure('Clearing the stale skip flag', error),
+        ),
+      ),
     );
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
@@ -282,7 +334,7 @@ async function runOnboardingFlow(options: {
   // process — orchestrate/chat into their session, `texra setup` into the
   // setup-agent chat.
   return { configured: resolution.configured, declined: resolution.declined };
-}
+});
 
 type Screen = 'picker' | 'chatgpt-progress' | 'key-provider' | 'key-entry';
 
@@ -371,19 +423,28 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
         }}
         onSubmit={(key) => {
           setSaving(true);
-          void (async () => {
-            try {
-              await saveProviderApiKey(keyProvider, key);
-              finish({
-                configured: true,
-                declined: false,
-                summary: formatSavedKeySummary(keyProvider),
-              });
-            } catch (saveError: unknown) {
-              setSaving(false);
-              setError(toErrorMessage(saveError));
-            }
-          })();
+          void effectRuntime().runPromise(
+            Effect.tryPromise({
+              try: () => saveProviderApiKey(keyProvider, key),
+              catch: ensureError,
+            }).pipe(
+              Effect.tap(() =>
+                Effect.sync(() =>
+                  finish({
+                    configured: true,
+                    declined: false,
+                    summary: formatSavedKeySummary(keyProvider),
+                  }),
+                ),
+              ),
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  setSaving(false);
+                  setError(toErrorMessage(Cause.squash(cause)));
+                }),
+              ),
+            ),
+          );
         }}
       />
     );
@@ -489,34 +550,43 @@ function ChatGptProgressStep(
       : 'Preparing ChatGPT sign-in...',
   );
 
-  useCancellableEffect(async (isCancelled) => {
-    try {
-      const account = await effectRuntime().runPromise(
-        signInCliSubscription(
-          'chatgpt',
-          { device, noBrowser: false },
-          {
-            writeProgress: (next) => {
-              if (!isCancelled()) setMessage(next);
+  useCancellableEffect(
+    (isCancelled) =>
+      effectRuntime().runPromise(
+        Effect.gen(function* () {
+          const account = yield* signInCliSubscription(
+            'chatgpt',
+            { device, noBrowser: false },
+            {
+              writeProgress: (next) => {
+                if (!isCancelled()) setMessage(next);
+              },
             },
-          },
-        ),
-      );
-      const update =
-        await subscriptionProvider('chatgpt').setPreferSubscription(true);
-      if (!update.effective) {
-        if (!isCancelled()) {
-          props.onError(
-            'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Add a provider API key instead.',
           );
-        }
-        return;
-      }
-      if (!isCancelled()) props.onSuccess(account);
-    } catch (loginError: unknown) {
-      if (!isCancelled()) props.onError(toErrorMessage(loginError));
-    }
-  }, []);
+          const update = yield* Effect.tryPromise({
+            try: () =>
+              subscriptionProvider('chatgpt').setPreferSubscription(true),
+            catch: ensureError,
+          });
+          if (!update.effective) {
+            if (!isCancelled())
+              props.onError(
+                'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Add a provider API key instead.',
+              );
+            return;
+          }
+          if (!isCancelled()) props.onSuccess(account);
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              if (!isCancelled())
+                props.onError(toErrorMessage(Cause.squash(cause)));
+            }),
+          ),
+        ),
+      ),
+    [],
+  );
 
   return (
     <BorderedPanel

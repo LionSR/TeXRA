@@ -516,90 +516,96 @@ export class BashTool extends defineTool({
       parentExecutionId: ExecutionId | undefined,
       cwd?: string,
     ) {
-      const executionId = generateExecutionId();
-      const preview = previewLabel(command);
-      const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
-        executionId,
-      });
+      return yield* Effect.uninterruptibleMask((restore) =>
+        Effect.gen(function* () {
+          const executionId = generateExecutionId();
+          const preview = previewLabel(command);
+          const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
+            executionId,
+          });
 
-      const syntheticConfig = AgentConfigSchema.parse({
-        agent: 'bash',
-        instruction: command,
-        agentCategory: AgentCategory.ToolUse,
-      });
+          const syntheticConfig = AgentConfigSchema.parse({
+            agent: 'bash',
+            instruction: command,
+            agentCategory: AgentCategory.ToolUse,
+          });
 
-      // The durable record states only what a shell command has: no execution
-      // mode, no model. The synthetic AgentConfig above feeds the ephemeral
-      // live wire only.
-      yield* Effect.tryPromise({
-        try: () =>
-          runInSession(session, () =>
-            registerExecution(
-              executionId,
-              { name: 'bash', instruction: command },
-              'bash',
-              {
-                streamId: childStreamId,
-                identity: { kind: 'process', tool: 'bash' },
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                parentExecutionId,
-                description: childStreamDescription(command),
-              },
-            ),
-          ),
-        catch: ensureError,
-      });
+          // The durable record states only what a shell command has: no execution
+          // mode, no model. The synthetic AgentConfig above feeds the ephemeral
+          // live wire only.
+          yield* registerExecution(
+            session,
+            executionId,
+            { name: 'bash', instruction: command },
+            'bash',
+            {
+              streamId: childStreamId,
+              identity: { kind: 'process', tool: 'bash' },
+              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+              parentExecutionId,
+              parentStreamId,
+              background: true,
+              category: AgentCategory.ToolUse,
+              description: childStreamDescription(command),
+            },
+          );
 
-      yield* startDetachedChildRunLoop({
-        session,
-        executionId,
-        parentStreamId,
-        childStreamId,
-        agentName: 'bash',
-        // A background shell is an external process on no model budget, like
-        // the agent-CLI children (see the child-run concurrency budget note).
-        budgeted: false,
-        createChildStream: () =>
-          createChildStream(session, executionId, parentStreamId, {
-            streamPrefix: BASH_CHILD_STREAM_PREFIX,
-            run: { kind: 'process', tool: 'bash' },
-            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-            description: command,
-            config: syntheticConfig,
-          }),
-        buildLaunch: (childStream) =>
-          Effect.sync(() => {
-            return {
-              strategy: createBackgroundBashStrategy({
-                executionId,
-                command,
-                timeoutMs,
-                cwd,
-                logger: childStream.logger,
+          yield* startDetachedChildRunLoop({
+            session,
+            executionId,
+            parentStreamId,
+            childStreamId,
+            agentName: 'bash',
+            // A background shell is an external process on no model budget, like
+            // the agent-CLI children (see the child-run concurrency budget note).
+            budgeted: false,
+            createChildStream: () =>
+              restore(Effect.void).pipe(
+                Effect.andThen(
+                  createChildStream(session, executionId, parentStreamId, {
+                    streamPrefix: BASH_CHILD_STREAM_PREFIX,
+                    run: { kind: 'process', tool: 'bash' },
+                    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+                    description: command,
+                    config: syntheticConfig,
+                  }),
+                ),
+              ),
+            buildLaunch: (childStream) =>
+              Effect.sync(() => {
+                return {
+                  strategy: createBackgroundBashStrategy({
+                    executionId,
+                    command,
+                    timeoutMs,
+                    cwd,
+                    logger: childStream.logger,
+                  }),
+                  // Nobody awaits this run: own late loop failures here as trace
+                  // diagnostics, since the loop already owns its one user-facing
+                  // result delivery.
+                  onLoopFailed: (error: unknown): void => {
+                    childStream.logger.error(
+                      'Background command run loop failed after launch',
+                      { data: error },
+                    );
+                  },
+                };
               }),
-              // Nobody awaits this run: own late loop failures here as trace
-              // diagnostics, since the loop already owns its one user-facing
-              // result delivery.
-              onLoopFailed: (error: unknown): void => {
-                childStream.logger.error(
-                  'Background command run loop failed after launch',
-                  { data: error },
-                );
-              },
-            };
-          }),
-      });
+          });
 
-      return executed(
-        [
-          `Command launched in background.`,
-          `Execution ID: ${executionId}`,
-          `Stream tab: ${childStreamId}`,
-          'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
-          `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
-          `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,
-        ].join('\n'),
-        `Launched background: ${preview}`,
+          return executed(
+            [
+              `Command launched in background.`,
+              `Execution ID: ${executionId}`,
+              `Stream tab: ${childStreamId}`,
+              'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
+              `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
+              `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,
+            ].join('\n'),
+            `Launched background: ${preview}`,
+          );
+        }),
       );
     },
   );

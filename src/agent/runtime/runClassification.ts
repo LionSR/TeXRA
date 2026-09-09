@@ -22,6 +22,10 @@
  * The first, second, and last kinds are all shown as one unavailable state
  * whose detail is the text of the fact; Delete is the user's only action.
  */
+import { Effect } from 'effect';
+
+import { runInSession } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { inspectExecutionLease } from '@agent/storage/executionLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import {
@@ -30,7 +34,7 @@ import {
 } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, RunOutcome } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunClassification');
 
@@ -58,10 +62,11 @@ type RunFactsClassification = Exclude<
 >;
 
 /** The one mapping from durable resumability facts to this vocabulary. */
-async function classifyRunFacts(
+const classifyRunFacts = Effect.fn('classifyRunFacts')(function* (
   executionId: ExecutionId,
-): Promise<RunFactsClassification> {
-  const facts = await deriveResumability(executionId);
+  session: SessionHandle,
+): Effect.fn.Return<RunFactsClassification> {
+  const facts = yield* deriveResumability(executionId, session);
   if (facts.kind === 'checkpoint') {
     return { kind: 'resumable', outcome: facts.outcome };
   }
@@ -70,22 +75,26 @@ async function classifyRunFacts(
   }
   log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
   return { kind: 'unclassified', cause: facts.cause, fault: facts.fault };
-}
+});
 
 /** Classify one execution. Never throws: an unreadable fact is `unclassified`. */
-export async function classifyRun(
+export const classifyRun = Effect.fn('classifyRun')(function* (
   executionId: ExecutionId,
-): Promise<RunClassification> {
-  try {
-    const lease = await inspectExecutionLease(executionId);
-    if (lease.status === 'owned') return { kind: 'owned_here' };
-    if (lease.status === 'held') {
-      return { kind: 'held_elsewhere', owner: lease.owner };
-    }
-  } catch (error) {
+  session: SessionHandle,
+): Effect.fn.Return<RunClassification> {
+  const leaseResult = yield* Effect.tryPromise({
+    try: () => runInSession(session, () => inspectExecutionLease(executionId)),
+    catch: ensureError,
+  }).pipe(Effect.result);
+  if (leaseResult._tag === 'Failure') {
+    const error = leaseResult.failure;
     const cause = `lease unreadable (${toErrorMessage(error)})`;
     log.warn(`Cannot classify ${executionId}: ${cause}`, { data: error });
     return { kind: 'unclassified', cause, fault: 'lease-unreadable' };
   }
-  return classifyRunFacts(executionId);
-}
+  const lease = leaseResult.success;
+  if (lease.status === 'owned') return { kind: 'owned_here' };
+  if (lease.status === 'held')
+    return { kind: 'held_elsewhere', owner: lease.owner };
+  return yield* classifyRunFacts(executionId, session);
+});

@@ -7,7 +7,7 @@ import { Cause, Effect, Option, Stream, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import { ExecutionLeaseActiveError, getExecutionStore } from '@agent/storage';
+import { ExecutionLeaseActiveError, getExecutionRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
@@ -685,11 +685,11 @@ export function createChatSessionController(
       // The durable record names the stream (FK stamped at registration) and
       // the config the TUI adopts before the run. Workflow runs resume
       // headless through `texra resume`, not inside a chat.
-      const store = getExecutionStore(id);
-      const [config, meta] = yield* Effect.all(
-        [hostPort(() => store.readConfig()), hostPort(() => store.readMeta())],
-        { concurrency: 'unbounded' },
-      );
+      const store = getExecutionRecords(runtimeSession, id);
+      const [config, meta] = yield* Effect.all([
+        store.readConfig(),
+        store.readMeta(),
+      ]);
       const streamId = meta?.streamId;
       let failure: string | undefined;
       if (!config || !streamId) {
@@ -887,9 +887,10 @@ export function createChatSessionController(
         const executionId = runMetadata.executionId;
         if (!executionId) return false;
 
-        const config =
-          runMetadata.config ??
-          (yield* hostPort(() => getExecutionStore(executionId).readConfig()));
+        const config = yield* getExecutionRecords(
+          runtimeSession,
+          executionId,
+        ).readConfig();
         if (!config) return false;
         if (isCancellationRequested()) return false;
         const parentStreamId = snapshotStore.getParentStreamId(streamId);

@@ -6,7 +6,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateTarget,
   type ActiveChildInfo,
-  type SessionEvent,
+  type DisplaySessionEvent,
   type StreamTabId,
 } from '@shared/schemas';
 import { roundStageFromStageStart } from '@shared/streams/stage';
@@ -66,7 +66,7 @@ export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
  * stream they name, as the public wire always did.
  */
 function projectCliSessionEvent(
-  event: SessionEvent,
+  event: DisplaySessionEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
   const streamId = aggregateTarget(event.aggregateId).id;
   switch (event.type) {

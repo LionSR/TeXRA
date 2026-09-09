@@ -8,6 +8,7 @@
  */
 import { Effect, SubscriptionRef } from 'effect';
 
+import { getExecutionRecords } from '@agent/storage';
 import { resolveAgentKey } from '@agent/index/agentRegistry';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import {
@@ -74,7 +75,10 @@ export interface HostRunActionPorts {
 export interface HostRunActions {
   resume(streamId: StreamTabId): Effect.Effect<void, Error>;
   runNew(streamId: StreamTabId): Effect.Effect<void, Error>;
-  runCompileFixer(streamId: StreamTabId): Promise<void>;
+  runCompileFixer(streamId: StreamTabId): Effect.Effect<void, Error>;
+  readConfig(
+    streamId: StreamTabId,
+  ): Effect.Effect<AgentConfig | undefined, Error>;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
@@ -116,6 +120,17 @@ export function createHostRunActions(
       snapshots.getKnownFilePaths(streamId, { workspaceOnly: true }),
   };
 
+  const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
+    streamId: StreamTabId,
+  ) {
+    yield* snapshots.preload([streamId]);
+    const { executionId } = getRunMetadata(streamId);
+    return executionId
+      ? ((yield* getExecutionRecords(session, executionId).readConfig()) ??
+          undefined)
+      : undefined;
+  });
+
   /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
   const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(function* (
     streamId: StreamTabId,
@@ -138,7 +153,9 @@ export function createHostRunActions(
         }),
       );
     }
-    const { config } = metadata;
+    const config = metadata.executionId
+      ? yield* getExecutionRecords(session, metadata.executionId).readConfig()
+      : null;
     if (!config) {
       return yield* Effect.fail(
         new Rejected({
@@ -272,8 +289,7 @@ export function createHostRunActions(
           return;
         }
       }
-      yield* snapshots.preload([streamId]);
-      const { config } = snapshots.getRunMetadata(streamId);
+      const config = yield* readConfig(streamId);
       if (!config) {
         yield* hostPort(() =>
           ports.showInfo(
@@ -375,25 +391,34 @@ export function createHostRunActions(
         catch: ensureError,
       });
     }),
-    async runCompileFixer(streamId) {
+    readConfig,
+    runCompileFixer: Effect.fn(function* (streamId) {
       if (!view().streams.has(streamId)) {
-        throw new Unavailable({
-          streamId,
-          reason: 'The stream is no longer open.',
-        });
+        return yield* Effect.fail(
+          new Unavailable({
+            streamId,
+            reason: 'The stream is no longer open.',
+          }),
+        );
       }
-      await applyFollowUpPlan(
-        await followUp.planCompileFixerForStream(streamId),
-        {
-          showInfo: ports.showInfo,
-          showWarning: ports.showWarning,
-          showError: ports.showError,
-          logError: ports.logError,
-          runCompileFixer: (request) =>
-            ports.runExecutionRequest(request, { preferHelperModel: true }),
-        },
-      );
-    },
+      const config = yield* readConfig(streamId);
+      const plan = yield* Effect.tryPromise({
+        try: () => followUp.planCompileFixerForStream(streamId, config),
+        catch: ensureError,
+      });
+      yield* Effect.tryPromise({
+        try: () =>
+          applyFollowUpPlan(plan, {
+            showInfo: ports.showInfo,
+            showWarning: ports.showWarning,
+            showError: ports.showError,
+            logError: ports.logError,
+            runCompileFixer: (request) =>
+              ports.runExecutionRequest(request, { preferHelperModel: true }),
+          }),
+        catch: ensureError,
+      });
+    }),
     useOwnApiKey(request) {
       if (request.exhaustionReason === 'copilot-subscription') {
         return copilotFallback(request);

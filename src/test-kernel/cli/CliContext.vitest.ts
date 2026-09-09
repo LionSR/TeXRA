@@ -49,7 +49,7 @@ const tempDirs = useTempDirs();
 
 /**
  * Every `buildCliContext` call here gets an empty user-level storage root: the
- * developer's own `~/.texra/global-storage/config.json` must never decide an
+ * developer's own `~/.texra/v1/global-storage/config.json` must never decide an
  * assertion. Tests that exercise the user layer pass their own `storageRoot`.
  */
 async function cliContext(init: BuildCliContextInit): Promise<CliContext> {

@@ -5,16 +5,24 @@ import {
   clearStoreCache,
   createLatexExecutionDiscovery,
   getExecutionStore,
+  getExecutionRecords,
   isUserVisibleExecution,
   listExecutions,
 } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import * as logger from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import {
+  aggregateId,
+  type ExecutionId,
+  type ExecutionMeta,
+  type StreamTabId,
+} from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 function config(
@@ -31,23 +39,88 @@ function config(
   });
 }
 
+let session: SessionHandle;
+async function writeMetadata(
+  id: ExecutionId,
+  meta: Omit<ExecutionMeta, 'schemaVersion'>,
+): Promise<void> {
+  const existing = await Effect.runPromise(
+    getExecutionRecords(session, id).readMeta(),
+  );
+  const streamId = (meta.streamId ??
+    existing?.streamId ??
+    `stream-${id}`) as StreamTabId;
+  if (!existing) {
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(Date.parse(meta.timestamp));
+    try {
+      await Effect.runPromise(
+        session.commit([
+          {
+            type: 'run.start',
+            aggregateId: aggregateId('stream', streamId),
+            executionId: id,
+            identity: meta.identity,
+            category: 'toolUse',
+            isRemote: false,
+            userFollowUpSupport: 'unsupported',
+            parentStreamId: meta.parentExecutionId
+              ? (
+                  await Effect.runPromise(
+                    getExecutionRecords(
+                      session,
+                      meta.parentExecutionId,
+                    ).readMeta(),
+                  )
+                )?.streamId
+              : undefined,
+          },
+        ]),
+      );
+    } finally {
+      clock.mockRestore();
+    }
+  }
+  if (meta.description)
+    await Effect.runPromise(
+      session.commit([
+        {
+          type: 'execution.description',
+          aggregateId: aggregateId('execution', id),
+          description: meta.description,
+        },
+      ]),
+    );
+  if (meta.outcome)
+    await Effect.runPromise(
+      session.commit([
+        {
+          type: 'status',
+          aggregateId: aggregateId('stream', streamId),
+          phase: meta.outcome,
+          cause: 'test outcome',
+        },
+      ]),
+    );
+}
 async function writeExecution(
   id: ExecutionId,
   timestamp: string,
   agentConfig?: AgentConfig,
   parentExecutionId?: ExecutionId,
 ): Promise<void> {
-  const store = getExecutionStore(id);
-  // Current-era registration always stamps identity into the first meta
-  // write; an identity-less row models the pre-identity (incomplete) case.
-  await store.writeMeta({
+  await writeMetadata(id, {
     timestamp,
     parentExecutionId,
     ...(agentConfig
       ? { identity: { kind: 'agent', agent: agentConfig.agent } }
       : {}),
   });
-  if (agentConfig) await store.writeRunRecord(agentConfig);
+  if (agentConfig)
+    await Effect.runPromise(
+      getExecutionRecords(session, id).writeRunRecord(agentConfig),
+    );
 }
 
 describe('execution listing normalization', () => {
@@ -55,15 +128,16 @@ describe('execution listing normalization', () => {
 
   beforeEach(() => {
     clearStoreCache();
+    session = createProcessSession();
   });
 
   it('sees executions written by another host after an earlier listing', async () => {
-    expect(await Effect.runPromise(listExecutions())).toEqual([]);
+    expect(await Effect.runPromise(listExecutions(session))).toEqual([]);
 
     const id = 'eee555' as ExecutionId;
     await writeExecution(id, '2026-07-15T11:00:00.000Z', config('assistant'));
 
-    expect(await Effect.runPromise(listExecutions())).toEqual([
+    expect(await Effect.runPromise(listExecutions(session))).toEqual([
       expect.objectContaining({
         id,
         kind: 'run',
@@ -83,7 +157,7 @@ describe('execution listing normalization', () => {
       new Error('stat failed'),
     );
 
-    expect(await Effect.runPromise(listExecutions())).toEqual([
+    expect(await Effect.runPromise(listExecutions(session))).toEqual([
       expect.objectContaining({ id, kind: 'run', checkpointPresent: false }),
     ]);
   });
@@ -91,17 +165,17 @@ describe('execution listing normalization', () => {
   it('sees metadata replaced by another host after an earlier listing', async () => {
     const id = 'fff666' as ExecutionId;
     await writeExecution(id, '2026-07-15T12:00:00.000Z', config('assistant'));
-    expect(await Effect.runPromise(listExecutions())).toEqual([
+    expect(await Effect.runPromise(listExecutions(session))).toEqual([
       expect.not.objectContaining({ description: expect.any(String) }),
     ]);
 
-    await getExecutionStore(id).writeMeta({
+    await writeMetadata(id, {
       timestamp: '2026-07-15T12:00:00.000Z',
       description: 'Updated by another host',
       outcome: 'completed',
     });
 
-    expect(await Effect.runPromise(listExecutions())).toEqual([
+    expect(await Effect.runPromise(listExecutions(session))).toEqual([
       expect.objectContaining({
         id,
         description: 'Updated by another host',
@@ -115,7 +189,7 @@ describe('execution listing normalization', () => {
     const agentConfig = config('assistant');
     await writeExecution(id, '2026-07-15T10:00:00.000Z', agentConfig);
 
-    const entries = await Effect.runPromise(listExecutions());
+    const entries = await Effect.runPromise(listExecutions(session));
 
     expect(entries).toEqual([
       {
@@ -125,6 +199,7 @@ describe('execution listing normalization', () => {
         identity: { kind: 'agent', agent: 'assistant' },
         record: agentConfig,
         checkpointPresent: false,
+        streamId: `stream-${id}`,
       },
     ]);
     expect(entries.filter(isUserVisibleExecution)).toHaveLength(1);
@@ -137,12 +212,12 @@ describe('execution listing normalization', () => {
     const processId = 'bbb222' as ExecutionId;
     const customBashAgentId = 'ccc333' as ExecutionId;
     const incompleteId = 'ddd444' as ExecutionId;
-    const processStore = getExecutionStore(processId);
-    await processStore.writeMeta({
+    const processStore = getExecutionRecords(session, processId);
+    await writeMetadata(processId, {
       timestamp: '2026-07-15T09:00:00.000Z',
       identity: { kind: 'process', tool: 'assistant' },
     });
-    await processStore.writeRunRecord(config('assistant'));
+    await Effect.runPromise(processStore.writeRunRecord(config('assistant')));
     await writeExecution(
       customBashAgentId,
       '2026-07-15T08:00:00.000Z',
@@ -150,7 +225,7 @@ describe('execution listing normalization', () => {
     );
     await writeExecution(incompleteId, '2026-07-15T07:00:00.000Z');
 
-    const entries = await Effect.runPromise(listExecutions());
+    const entries = await Effect.runPromise(listExecutions(session));
 
     expect(entries.map(({ kind }) => kind)).toEqual([
       'run',
@@ -170,6 +245,7 @@ describe('execution listing normalization', () => {
     expect(entries[2]).toEqual({
       kind: 'incomplete',
       id: incompleteId,
+      streamId: `stream-${incompleteId}`,
       timestamp: '2026-07-15T07:00:00.000Z',
       checkpointPresent: false,
     });
@@ -178,14 +254,16 @@ describe('execution listing normalization', () => {
 
   it('lists an honest non-agent record as kind run without fabricated fields', async () => {
     const id = 'abe001' as ExecutionId;
-    const store = getExecutionStore(id);
-    await store.writeMeta({
+    const store = getExecutionRecords(session, id);
+    await writeMetadata(id, {
       timestamp: '2026-07-15T04:00:00.000Z',
       identity: { kind: 'process', tool: 'bash' },
     });
-    await store.writeRunRecord({ name: 'bash', instruction: 'ls -la' });
+    await Effect.runPromise(
+      store.writeRunRecord({ name: 'bash', instruction: 'ls -la' }),
+    );
 
-    const entries = await Effect.runPromise(listExecutions());
+    const entries = await Effect.runPromise(listExecutions(session));
     const entry = entries.find((candidate) => candidate.id === id);
     expect(entry).toMatchObject({
       kind: 'run',
@@ -208,12 +286,12 @@ describe('execution listing normalization', () => {
     const firstId = 'abc777' as ExecutionId;
     const secondId = 'abc778' as ExecutionId;
     for (const id of [firstId, secondId]) {
-      const store = getExecutionStore(id);
-      await store.writeMeta({ timestamp: '2026-07-15T06:00:00.000Z' });
-      await store.writeRunRecord(config('assistant'));
+      const store = getExecutionRecords(session, id);
+      await writeMetadata(id, { timestamp: '2026-07-15T06:00:00.000Z' });
+      await Effect.runPromise(store.writeRunRecord(config('assistant')));
     }
 
-    const entries = await Effect.runPromise(listExecutions());
+    const entries = await Effect.runPromise(listExecutions(session));
 
     expect(entries.map(({ kind }) => kind)).toEqual([
       'incomplete',
@@ -221,7 +299,11 @@ describe('execution listing normalization', () => {
     ]);
     // The row stays unstamped on disk: readers never reconstruct identity.
     expect(
-      (await getExecutionStore(firstId).readMeta())?.identity,
+      (
+        await Effect.runPromise(
+          getExecutionRecords(session, firstId).readMeta(),
+        )
+      )?.identity,
     ).toBeUndefined();
   });
 
@@ -243,15 +325,17 @@ describe('execution listing normalization', () => {
         toolUseAgentKeys: ['research', 'review'],
       },
     };
-    const store = getExecutionStore(id);
-    await store.writeMeta({
+    const store = getExecutionRecords(session, id);
+    await writeMetadata(id, {
       timestamp: '2026-07-15T05:00:00.000Z',
       identity: { kind: 'agent', agent: 'orchestrator' },
     });
     // Persist the raw legacy bytes, bypassing the current input type.
-    await store.writeRunRecord(legacyTeamRunConfig as unknown as AgentConfig);
+    await Effect.runPromise(
+      store.writeRunRecord(legacyTeamRunConfig as unknown as AgentConfig),
+    );
 
-    const entries = await Effect.runPromise(listExecutions());
+    const entries = await Effect.runPromise(listExecutions(session));
     const entry = entries.find((candidate) => candidate.id === id);
     expect(entry).toMatchObject({
       kind: 'run',
@@ -281,7 +365,7 @@ describe('execution listing normalization', () => {
       rootId,
     );
 
-    const entries = await Effect.runPromise(listExecutions());
+    const entries = await Effect.runPromise(listExecutions(session));
 
     // The raw listing still carries the child so tool-facing callers can walk
     // the lineage; only the history-listing filter drops it.
@@ -295,27 +379,31 @@ describe('execution listing normalization', () => {
     const rootId = 'ab1001' as ExecutionId;
     const childId = 'ab1002' as ExecutionId;
     const processId = 'ab1003' as ExecutionId;
-    const rootStore = getExecutionStore(rootId);
-    await rootStore.writeMeta({
+    const rootStore = getExecutionRecords(session, rootId);
+    await writeMetadata(rootId, {
       timestamp: '2026-07-15T10:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
       streamId: 'assistant@deepseekT#ab1001',
     });
-    await rootStore.writeRunRecord(config('assistant', ['main.tex']));
+    await Effect.runPromise(
+      rootStore.writeRunRecord(config('assistant', ['main.tex'])),
+    );
     await writeExecution(
       childId,
       '2026-07-15T09:00:00.000Z',
       config('delegated', ['child.tex']),
       rootId,
     );
-    const processStore = getExecutionStore(processId);
-    await processStore.writeMeta({
+    const processStore = getExecutionRecords(session, processId);
+    await writeMetadata(processId, {
       timestamp: '2026-07-15T08:00:00.000Z',
       identity: { kind: 'process', tool: 'bash' },
     });
-    await processStore.writeRunRecord({ name: 'bash', instruction: 'ls -la' });
+    await Effect.runPromise(
+      processStore.writeRunRecord({ name: 'bash', instruction: 'ls -la' }),
+    );
 
-    const discovery = createLatexExecutionDiscovery();
+    const discovery = createLatexExecutionDiscovery(session);
 
     // Unlike a history listing, latexdiff discovery keeps delegated children
     // and drops non-agent rows.
@@ -338,8 +426,8 @@ describe('execution listing normalization', () => {
     expect(await Effect.runPromise(discovery.readStreamId(rootId))).toBe(
       'assistant@deepseekT#ab1001',
     );
-    expect(
-      await Effect.runPromise(discovery.readStreamId(childId)),
-    ).toBeUndefined();
+    expect(await Effect.runPromise(discovery.readStreamId(childId))).toBe(
+      `stream-${childId}`,
+    );
   });
 });

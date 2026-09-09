@@ -1,9 +1,12 @@
+import { Effect } from 'effect';
 import { defineCommand } from 'citty';
 
 import type { AgentConfigPayload } from '@agent/runtime';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
+import { effectRuntime } from '@platform/processRuntime';
 import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
@@ -13,6 +16,7 @@ import {
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   cliMultiAgentPresetListRecord,
@@ -110,23 +114,32 @@ async function runMultiAgentShow(
   return CliExitCode.Success;
 }
 
-export async function runMultiAgentPreset(
+export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   context: CliContext,
   init: MultiAgentRunInit,
-): Promise<number> {
-  const instruction = await resolveFileBackedInstruction(init, context.cwd);
+): Effect.fn.Return<number, Error> {
+  const instruction = yield* Effect.tryPromise({
+    try: () => resolveFileBackedInstruction(init, context.cwd),
+    catch: ensureError,
+  });
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {
     throw new CliUsageError(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
   }
-  await initCliPlatform({ ...context, quietLogs: true });
+  yield* Effect.tryPromise({
+    try: () => initCliPlatform({ ...context, quietLogs: true }),
+    catch: ensureError,
+  });
 
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
-  const { plan, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentRunPlan(init, {
-      reloadRemoteAgents: !rejectsHeadlessAsk,
-    });
+  const { plan, remoteCatalogRefreshAttempted } = yield* Effect.tryPromise({
+    try: () =>
+      loadCliMultiAgentRunPlan(init, {
+        reloadRemoteAgents: !rejectsHeadlessAsk,
+      }),
+    catch: ensureError,
+  });
   if (rejectsHeadlessAsk) {
     writeTextStderr(
       `Cannot run multi-agent preset "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
@@ -166,9 +179,12 @@ export async function runMultiAgentPreset(
   // A team run drives a tool-use orchestrator, so it follows the `chat`
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
-  const model = await selectCliRunModel(context, init.model, 'chat');
+  const model = yield* Effect.tryPromise({
+    try: () => selectCliRunModel(context, init.model, 'chat'),
+    catch: ensureError,
+  });
   const runContext = buildHeadlessRunContext(context);
-  return withExpandedRunInputs(
+  return yield* withExpandedRunInputs(
     init.inputFiles,
     init.contextFiles,
     runContext.cwd,
@@ -177,73 +193,74 @@ export async function runMultiAgentPreset(
       requireWorkspaceFiles: true,
       readStdinText: readCliStdinText,
     },
-    async ({ inputFiles, contextFiles, stdinInputPath }) => {
-      if (runContext.approvalPolicy === 'never') {
-        writeTextStderr(
-          `WARN preset ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
-        );
-      }
+    ({ inputFiles, contextFiles, stdinInputPath }) =>
+      Effect.gen(function* () {
+        if (runContext.approvalPolicy === 'never') {
+          writeTextStderr(
+            `WARN preset ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+          );
+        }
 
-      // Preserve the user's launch input without copying the model-only
-      // directive assembled into config.instruction below.
-      const displayInstruction =
-        instruction ||
-        [
-          formatAttachedFileList('Attached input files:', init.inputFiles),
-          formatAttachedFileList(
-            'Attached read-only context files:',
-            init.contextFiles,
-          ),
-        ]
-          .filter(filterNotNullish)
-          .join('\n\n');
-      const config: AgentConfigPayload = {
-        agent: rootAgent.name,
-        model,
-        inputFiles,
-        contextFiles,
-        instruction: formatMultiAgentRunInstruction(plan.preset, {
+        // Preserve the user's launch input without copying the model-only
+        // directive assembled into config.instruction below.
+        const displayInstruction =
+          instruction ||
+          [
+            formatAttachedFileList('Attached input files:', init.inputFiles),
+            formatAttachedFileList(
+              'Attached read-only context files:',
+              init.contextFiles,
+            ),
+          ]
+            .filter(filterNotNullish)
+            .join('\n\n');
+        const config: AgentConfigPayload = {
+          agent: rootAgent.name,
+          model,
           inputFiles,
           contextFiles,
-          instruction,
-          approvalContext: runContext,
+          instruction: formatMultiAgentRunInstruction(plan.preset, {
+            inputFiles,
+            contextFiles,
+            instruction,
+            approvalContext: runContext,
+            workingDirectory: runContext.cwd,
+          }),
+          displayInstruction,
           workingDirectory: runContext.cwd,
-        }),
-        displayInstruction,
-        workingDirectory: runContext.cwd,
-        agentCategory: AgentCategory.ToolUse,
-        cli: { multiAgentPresetId: plan.preset.id },
-        delegationAgentScope: byCategory((category) => [
-          ...plan.agentKeys[category],
-        ]),
-      };
+          agentCategory: AgentCategory.ToolUse,
+          cli: { multiAgentPresetId: plan.preset.id },
+          delegationAgentScope: byCategory((category) => [
+            ...plan.agentKeys[category],
+          ]),
+        };
 
-      const execution = await executeCliToolUseConfig(config, runContext, {
-        stopAfterCycle: true,
-        recoveryInputIsDurable: stdinInputPath === undefined,
-        categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
-      });
-      if (!execution.ok) return execution.exitCode;
+        const execution = yield* executeCliToolUseConfig(config, runContext, {
+          stopAfterCycle: true,
+          recoveryInputIsDurable: stdinInputPath === undefined,
+          categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
+        });
+        if (!execution.ok) return execution.exitCode;
 
-      const payload = {
-        preset: {
-          id: plan.preset.id,
-          name: plan.preset.name,
-          source: plan.preset.source,
-        },
-        rootAgent: plan.rootAgent?.name,
-        result: execution.result,
-      };
-      emitCliResult(runContext, {
-        json: payload,
-        ndjson: { kind: 'multi-agent-result', ...payload },
-        text: toolUseResultText(execution.result),
-      });
+        const payload = {
+          preset: {
+            id: plan.preset.id,
+            name: plan.preset.name,
+            source: plan.preset.source,
+          },
+          rootAgent: plan.rootAgent?.name,
+          result: execution.result,
+        };
+        emitCliResult(runContext, {
+          json: payload,
+          ndjson: { kind: 'multi-agent-result', ...payload },
+          text: toolUseResultText(execution.result),
+        });
 
-      return execution.exitCode;
-    },
+        return execution.exitCode;
+      }),
   );
-}
+});
 
 const multiAgentListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List multi-agent team presets' },
@@ -314,13 +331,16 @@ const multiAgentRunCommand = withUsageSections(
           'File whose contents are passed before --instruction when both are set',
       },
     },
-    run: (context, ctx) =>
-      runMultiAgentPreset(context, {
+    run: async (context, ctx) => {
+      const init = {
         preset: ctx.args.preset,
         ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
         agent: optString(ctx.args.agent),
         model: optString(ctx.args.model),
-      }),
+      };
+      await installCliProcessRuntime();
+      return effectRuntime().runPromise(runMultiAgentPreset(context, init));
+    },
   }),
   [
     {

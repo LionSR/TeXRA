@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { getHelperModelName } from '@agent/runtime';
+import { getHelperModelName, type SessionHandle } from '@agent/runtime';
 import { createLatexExecutionDiscovery } from '@agent/storage';
 import {
   validateExecutionRequest,
@@ -16,10 +16,7 @@ import {
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
-import {
-  runLatexdiffForExecution,
-  type RunLatexdiffForExecutionParams,
-} from '@latex/latexdiff/runLatexdiff';
+import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
@@ -54,7 +51,7 @@ type DesktopProgressFileActionUi = Pick<
  * full progress bridge.
  */
 interface DesktopProgressFileActionHost {
-  readonly snapshots: RunLatexdiffForExecutionParams['snapshots'];
+  readonly session: SessionHandle;
   startExecution(request: ValidatedExecutionRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
@@ -217,7 +214,7 @@ export class DesktopProgressFileActions {
     try {
       const { outcome } = await effectRuntime().runPromise(
         runLatexdiffForExecution({
-          snapshots: this.host.snapshots,
+          snapshots: this.host.session.snapshots,
           filesystem: nodeFilesystem,
           agent: scan?.agent ?? '',
           model: scan?.model ?? '',
@@ -227,7 +224,7 @@ export class DesktopProgressFileActions {
           outputsByRound: hasOutputs ? runContext.outputsByRound : null,
           mathMarkup: DEFAULT_MATH_MARKUP,
           generateBetweenRoundDiffs: true,
-          executionDiscovery: createLatexExecutionDiscovery(),
+          executionDiscovery: createLatexExecutionDiscovery(this.host.session),
           latexdiff: {
             channel: DESKTOP_LATEXDIFF_CHANNEL,
             service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),

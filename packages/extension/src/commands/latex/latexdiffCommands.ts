@@ -423,15 +423,16 @@ async function handleRunLatexdiff(
             increment: 0,
             message: 'Preparing LaTeX diffs...',
           });
+          const session = defaultSession();
           return effectRuntime().runPromise(
             runLatexdiffForExecution({
-              snapshots: defaultSession().snapshots,
+              snapshots: session.snapshots,
               filesystem: nodeFilesystem,
               ...config,
               outputsByRound,
               mathMarkup,
               generateBetweenRoundDiffs,
-              executionDiscovery: createLatexExecutionDiscovery(),
+              executionDiscovery: createLatexExecutionDiscovery(session),
               latexdiff: { channel: CHANNEL, service: latexdiffService },
               progress,
             }),

@@ -55,6 +55,11 @@ const mocks = vi.hoisted(() => ({
   computeModelOptionsData: vi.fn(),
 }));
 
+vi.mock('@agent/runtime/AgentLaunchContext', () => ({
+  prepareAgentDefinition: ({ config }: { config: unknown }) =>
+    Effect.succeed({ config }),
+}));
+
 // Delegation resolves targets through the scope resolver; with no active run
 // scope that is the workspace-visible roster, and identity matching is
 // agentRegistry's own rule — mirrored here rather than re-implemented.
@@ -70,6 +75,18 @@ vi.mock('@agent/index/agentRegistry', () => ({
 
 vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,
+  getExecutionRecords: (_session: unknown, executionId: ExecutionId) => ({
+    readMeta: () =>
+      Effect.tryPromise({
+        try: () => mocks.getExecutionStore(executionId).readMeta(),
+        catch: ensureError,
+      }),
+    readResultMeta: () =>
+      Effect.tryPromise({
+        try: () => mocks.getExecutionStore(executionId).readResultMeta(),
+        catch: ensureError,
+      }),
+  }),
   registerExecution: mocks.registerExecution,
 }));
 
@@ -94,20 +111,23 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
 }));
 
-// `persistChildRun*` moved to `@agent/storage/childRunPersistence`, which
-// imports the store module-internally rather than through the mocked
-// `@agent/storage` index; route it through the store spy the way the deleted
-// delegation-side module did.
-vi.mock('@agent/storage/childRunPersistence', () => ({
-  persistChildRunReport: async (executionId: ExecutionId, message: string) => {
-    await mocks.getExecutionStore(executionId).writeReport(message);
-  },
-  persistChildRunResultMeta: async (
+vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
+  persistChildRunDelivery: (
+    _session: unknown,
     executionId: ExecutionId,
+    message: string,
     resultMeta: unknown,
-  ) => {
-    await mocks.getExecutionStore(executionId).writeResultMeta(resultMeta);
-  },
+  ) =>
+    Effect.tryPromise({
+      try: async () => {
+        await mocks.getExecutionStore(executionId).writeReport(message);
+        if (resultMeta !== undefined)
+          await mocks
+            .getExecutionStore(executionId)
+            .writeResultMeta(resultMeta);
+      },
+      catch: ensureError,
+    }),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
@@ -321,6 +341,7 @@ function memoryExecutionStore() {
     write: vi.fn(async (key: string, value: unknown) => {
       kv.set(key, value);
     }),
+    readMeta: vi.fn(async () => null),
     readResultMeta: vi.fn(async () => resultMeta),
     writeReport: mocks.writeReport,
     writeResultMeta: vi.fn(async (value: unknown) => {
@@ -351,6 +372,7 @@ function completedChildStore(
     read: vi
       .fn()
       .mockResolvedValue(stableAttempt(logicalExecutionId, 'committed')),
+    readMeta: vi.fn(async () => null),
     readResultMeta: vi.fn().mockResolvedValue({
       producer: 'subagent',
       agentName: 'review',
@@ -391,6 +413,8 @@ describe('headless delegation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.registerExecution.mockReturnValue(Effect.void);
+    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
     restoreAgentEngine = provideAgentEngine({
       executeAgent: (...args) =>
         Effect.tryPromise({
@@ -450,7 +474,7 @@ describe('headless delegation', () => {
       // Test handles have no provider interrupt handler. Remove the fake
       // handle, then stop the real child activation that owns the loop.
       session.executions.untrack(executionId);
-      session.executions.kill(executionId);
+      await Effect.runPromise(session.executions.kill(executionId).settlement);
     }
     session.followUps.terminalize(PARENT_STREAM_ID);
     session.followUps.terminalize(CHILD_STREAM_ID);
@@ -466,10 +490,12 @@ describe('headless delegation', () => {
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({
-        agent: 'review',
-        agentCategory: AgentCategory.ToolUse,
-        instruction: expect.stringContaining('Check the proof.'),
-        model: 'deepseekT',
+        config: expect.objectContaining({
+          agent: 'review',
+          agentCategory: AgentCategory.ToolUse,
+          instruction: expect.stringContaining('Check the proof.'),
+          model: 'deepseekT',
+        }),
       }),
       expect.any(String),
       expect.objectContaining({
@@ -525,7 +551,9 @@ describe('headless delegation', () => {
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ agent: 'review' }),
+      expect.objectContaining({
+        config: expect.objectContaining({ agent: 'review' }),
+      }),
       result.executionId,
       expect.objectContaining({
         stopAfterCycle: true,
@@ -544,6 +572,7 @@ describe('headless delegation', () => {
     // as any detached child (this closed item 10's report gap).
     expect(mocks.writeReport).toHaveBeenCalled();
     expect(mocks.registerExecution).toHaveBeenCalledWith(
+      defaultSession(),
       result.executionId,
       expect.objectContaining({ agent: 'review' }),
       'review',
@@ -954,6 +983,7 @@ describe('headless delegation', () => {
     expect(stores.size).toBe(3);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
     expect(mocks.registerExecution).toHaveBeenCalledWith(
+      defaultSession(),
       completed.executionId,
       expect.anything(),
       'review',
@@ -1235,8 +1265,10 @@ describe('headless delegation', () => {
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({
-        agent: 'review',
-        agentSource: 'builtInToolUse',
+        config: expect.objectContaining({
+          agent: 'review',
+          agentSource: 'builtInToolUse',
+        }),
       }),
       expect.any(String),
       expect.anything(),
@@ -1250,7 +1282,8 @@ describe('headless delegation', () => {
     await withRunContext(parentRunContext(), () => callDelegateReview());
     await waitForChildren(defaultSession());
 
-    const instruction = mocks.executeAgent.mock.calls.at(-1)?.[0].instruction;
+    const instruction =
+      mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
     expect(instruction).toContain('Check the proof.');
     expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
   });
@@ -1269,10 +1302,12 @@ describe('headless delegation', () => {
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({
-        rootUserInstruction: parentInstruction,
-        instruction: expect.stringContaining(
-          `Parent user request (constraint context only):\n${parentInstruction}`,
-        ),
+        config: expect.objectContaining({
+          rootUserInstruction: parentInstruction,
+          instruction: expect.stringContaining(
+            `Parent user request (constraint context only):\n${parentInstruction}`,
+          ),
+        }),
       }),
       expect.any(String),
       expect.anything(),
@@ -1396,7 +1431,9 @@ describe('headless delegation', () => {
       expect(result.status).toBe('executed');
       expect(result.summary).toBe("Launched 'review' (async)");
       expect(mocks.executeAgent).toHaveBeenCalledWith(
-        expect.objectContaining({ agent: 'review' }),
+        expect.objectContaining({
+          config: expect.objectContaining({ agent: 'review' }),
+        }),
         expect.any(String),
         expect.anything(),
       );
@@ -1440,7 +1477,9 @@ describe('headless delegation', () => {
     expect(result.status).toBe('executed');
     expect(result.summary).toBe("Launched 'review' (async)");
     expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gpt5' }),
+      expect.objectContaining({
+        config: expect.objectContaining({ model: 'gpt5' }),
+      }),
       expect.any(String),
       expect.anything(),
     );

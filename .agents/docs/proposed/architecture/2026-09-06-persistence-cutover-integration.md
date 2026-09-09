@@ -42,8 +42,11 @@ The SQLite foundation adds the two STRICT tables, foreign-key cascades and
 indexes; scoped connection acquisition; verified WAL and foreign keys;
 busy timeout before configuration; batch sequence and commit allocation under
 one semaphore and transaction; rollback and post-commit wake level. The CLI
-Node floor is raised to 22.13.0. This is a substrate writer, not the C6 production
-publisher: it does not yet validate/redact published batches or check claims.
+Node floor was initially raised to 22.13.0; the September 8 official-client
+ruling selects `^22.16.0 || >=24.0.0` for the CLI and SDK: Node 23 lacks
+the official driver's required `setReturnArrays()` API. This foundation was a substrate
+writer, not the C6 production publisher: it did not yet validate/redact
+published batches or check claims.
 
 Persistent-open changes remove automatic ephemeral fallback from extension,
 desktop and CLI. Open failures reach the existing host error boundaries.

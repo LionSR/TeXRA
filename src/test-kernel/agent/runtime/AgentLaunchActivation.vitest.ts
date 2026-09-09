@@ -4,13 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   buildVars: vi.fn(),
-  clearTerminalExecutionState: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
   hasPersistedParent: vi.fn(),
   load: vi.fn(),
-  releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
 }));
@@ -31,22 +29,26 @@ vi.mock('@transcript', async (importActual) => ({
   createRunTrace: mocks.createTrace,
 }));
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
-vi.mock('@agent/storage/executionLifecycle', () => ({
-  clearTerminalExecutionState: mocks.clearTerminalExecutionState,
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@agent/storage/executionLifecycle')
+  >()),
   getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
   hasPersistedParent: mocks.hasPersistedParent,
 }));
-vi.mock('@agent/storage/executionLease', () => ({
+vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   assertOwnedExecutionLease: vi.fn(),
-  releaseOwnedExecutionLeaseAfterFailure:
-    mocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
 import { TraceEmitter } from '@agent/trace';
+import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { registerExecution } from '@agent/storage/executionLifecycle';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   executeAgent,
@@ -98,16 +100,19 @@ async function captureStartedLaunch(
     session: ReturnType<typeof createTestSession>,
   ) => Effect.Effect<unknown, Error>,
   options: {
+    readonly isSubagent?: boolean;
     readonly resumed?: { executionId: ExecutionId; streamId: StreamTabId };
   } = {},
 ): Promise<StartedLaunch> {
   const session = createTestSession();
-  if (options.resumed)
+  if (options.resumed) {
     publishTestRunStart(
       session,
       options.resumed.streamId,
       options.resumed.executionId,
     );
+    await session.settlePublications();
+  }
   const recordedSession = recordSessionEvents(session);
   const trace = new TraceEmitter();
   const handler = {
@@ -128,18 +133,28 @@ async function captureStartedLaunch(
   mocks.createHandler.mockResolvedValueOnce(handler);
   mocks.createTrace.mockReturnValueOnce({
     trace,
-    handleStatus: vi.fn(),
     dispose: vi.fn(),
   });
   mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
 
   try {
+    if (!options.resumed)
+      await Effect.runPromise(
+        registerExecution(session, 'f1e501', config, 'chat', {
+          streamId: getStreamTabId(config.agent, { executionId: 'f1e501' }),
+          identity: { kind: 'agent', agent: 'chat' },
+          background: options.isSubagent ?? false,
+        }),
+      );
     await expect(Effect.runPromise(run(session))).rejects.toBe(LAUNCH_FAILURE);
-    const starts = eventsOfType(recordedSession.events, 'run.start');
+    const starts = eventsOfType(await recordedSession.read(), 'run.start');
     expect(starts).toHaveLength(options.resumed ? 0 : 1);
-    const activations = eventsOfType(recordedSession.events, 'run.activate');
+    const activations = eventsOfType(
+      await recordedSession.read(),
+      'run.activate',
+    );
     expect(activations).toHaveLength(1);
-    const results = eventsOfType(recordedSession.events, 'result');
+    const results = eventsOfType(await recordedSession.read(), 'result');
     expect(results).toHaveLength(1);
     return {
       session,
@@ -202,12 +217,8 @@ describe('native agent launch activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
-    mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
-    mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
-      USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    );
-    mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
-      async (_executionId: ExecutionId, error: unknown) => error,
+    mocks.getPersistedUserFollowUpSupport.mockReturnValue(
+      Effect.succeed(USER_FOLLOW_UP_SUPPORT.UNSUPPORTED),
     );
   });
 
@@ -219,17 +230,23 @@ describe('native agent launch activation', () => {
     async ({ isSubagent }) => {
       // The subagent flag picks an `executeAgent` overload, so the literal
       // has to be visible at the call site rather than widened by `it.each`.
-      const launch = await captureStartedLaunch((session) =>
-        isSubagent
-          ? executeAgent(config, 'f1e501' as ExecutionId, {
-              session,
-              isSubagent: true,
-              modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
-            })
-          : executeAgent(config, 'f1e501' as ExecutionId, {
-              session,
-              modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
-            }),
+      const launch = await captureStartedLaunch(
+        (session) =>
+          prepareAgentDefinition({ config, session }).pipe(
+            Effect.flatMap((definition) =>
+              isSubagent
+                ? executeAgent(definition, 'f1e501' as ExecutionId, {
+                    session,
+                    isSubagent: true,
+                    modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+                  })
+                : executeAgent(definition, 'f1e501' as ExecutionId, {
+                    session,
+                    modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+                  }),
+            ),
+          ),
+        { isSubagent },
       );
 
       expectStartedThenFailed(launch, isSubagent === true);
@@ -246,14 +263,16 @@ describe('native agent launch activation', () => {
     async ({ isSubagent }) => {
       const executionId = 'ae5010' as ExecutionId;
       const streamId = 'resumed-stream' as StreamTabId;
-      mocks.hasPersistedParent.mockResolvedValueOnce(isSubagent);
+      mocks.hasPersistedParent.mockReturnValueOnce(Effect.succeed(isSubagent));
       const resume = createToolUseResumeData({
         executionId,
         streamId,
         agentConfig: config,
         shared: { modelHandlerCompatibilityKey: MODEL_HANDLER_KEY },
       });
-      mocks.retrieveSessionResumeData.mockResolvedValueOnce(resume);
+      mocks.retrieveSessionResumeData.mockReturnValueOnce(
+        Effect.succeed(resume),
+      );
 
       const launch = await captureStartedLaunch(
         (session) => resumeToolUseFromResumeData(resume, { session }),

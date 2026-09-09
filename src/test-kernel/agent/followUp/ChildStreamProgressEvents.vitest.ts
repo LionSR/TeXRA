@@ -3,11 +3,15 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { getExecutionRecords, registerExecution } from '@agent/storage';
+import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { runInSession } from '@agent/runtime/RunContext';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
@@ -60,15 +64,51 @@ const workflowRelaunchExecutionId = 'c11119' as ExecutionId;
 const workflowRelaunchChildStreamId = 'workflow-script#c11119' as StreamTabId;
 const setupRetryExecutionId = 'c11120' as ExecutionId;
 const setupRetryChildStreamId = 'workflow-script#c11120' as StreamTabId;
-const config = {
+const config = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
   agent: 'test-agent',
-} as unknown as AgentConfig;
+});
+
+const createRegisteredChildStream = Effect.fn('createRegisteredChildStream')(
+  function* (...args: Parameters<typeof createChildStream>) {
+    const [session, executionId, parentStreamId, options] = args;
+    yield* registerExecution(
+      session,
+      executionId,
+      options.config,
+      options.streamPrefix,
+      {
+        streamId: getStreamTabId(options.streamPrefix, { executionId }),
+        identity: options.run,
+        userFollowUpSupport: options.userFollowUpSupport,
+        parentStreamId,
+        background: true,
+        description: options.description,
+      },
+    );
+    const child = yield* createChildStream(...args).pipe(
+      Effect.onError(() =>
+        session.releaseExecutionLease(executionId).pipe(Effect.orDie),
+      ),
+    );
+    return {
+      ...child,
+      finalize: (input: Parameters<ChildStream['finalize']>[0]) =>
+        child
+          .finalize(input)
+          .pipe(
+            Effect.ensuring(
+              session.releaseExecutionLease(executionId).pipe(Effect.orDie),
+            ),
+          ),
+    };
+  },
+);
 
 function startBashChild(executionId: ExecutionId) {
   return Effect.runPromise(
-    createChildStream(defaultSession(), executionId, parentStreamId, {
+    createRegisteredChildStream(defaultSession(), executionId, parentStreamId, {
       streamPrefix: 'bash',
       run: { kind: 'process', tool: 'bash' },
       userFollowUpSupport: 'unsupported',
@@ -80,7 +120,7 @@ function startBashChild(executionId: ExecutionId) {
 
 function startCodexChild(executionId: ExecutionId, description: string) {
   return Effect.runPromise(
-    createChildStream(defaultSession(), executionId, parentStreamId, {
+    createRegisteredChildStream(defaultSession(), executionId, parentStreamId, {
       streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'codex', tool: 'codex' },
       userFollowUpSupport: 'terminalBacked',
@@ -94,7 +134,7 @@ describe('child stream progress events', () => {
   beforeEach(async () => {
     const session = createProcessSession();
     publishTestRunStart(session, parentStreamId);
-    await vi.waitFor(() => expect(session.now()).toBeGreaterThan(0));
+    await session.settlePublications();
   });
 
   it('publishes child stream lifecycle events through the session hub', async () => {
@@ -112,7 +152,7 @@ describe('child stream progress events', () => {
       }),
     );
 
-    expect(eventsOfType(recorded.events, 'run.start')).toContainEqual(
+    expect(eventsOfType(await recorded.read(), 'run.start')).toContainEqual(
       expect.objectContaining({
         aggregateId: qualifyAggregateId('stream', childStreamId),
         executionId,
@@ -124,7 +164,7 @@ describe('child stream progress events', () => {
     );
     // The activation beside the existence fact, with no `isRemote`: the
     // frozen NDJSON line for a child never carried one.
-    expect(eventsOfType(recorded.events, 'run.activate')).toMatchObject([
+    expect(eventsOfType(await recorded.read(), 'run.activate')).toMatchObject([
       {
         type: 'run.activate',
         aggregateId: qualifyAggregateId('stream', childStreamId),
@@ -132,21 +172,21 @@ describe('child stream progress events', () => {
         background: true,
       },
     ]);
-    expect(eventsOfType(recorded.events, 'run.config')).toContainEqual(
+    expect(eventsOfType(await recorded.read(), 'run.config')).toContainEqual(
       expect.objectContaining({
         aggregateId: qualifyAggregateId('stream', childStreamId),
         executionId,
       }),
     );
     expect(
-      eventsOfType(recorded.events, 'updateStreamDescription'),
+      eventsOfType(await recorded.read(), 'updateStreamDescription'),
     ).toContainEqual(
       expect.objectContaining({
         aggregateId: qualifyAggregateId('stream', childStreamId),
         description: 'Run a background bash command',
       }),
     );
-    expect(eventsOfType(recorded.events, 'status')).toEqual(
+    expect(eventsOfType(await recorded.read(), 'status')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           aggregateId: qualifyAggregateId('stream', childStreamId),
@@ -181,18 +221,20 @@ describe('child stream progress events', () => {
         }),
       ]),
     );
-    expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual(
+    expect(
+      eventsOfType(await recorded.read(), 'setParentStream'),
+    ).toContainEqual(
       expect.objectContaining({
         aggregateId: qualifyAggregateId('stream', childStreamId),
         parentStreamId,
       }),
     );
-    expect(eventsOfType(recorded.events, 'stream.removed')).toEqual([]);
+    expect(eventsOfType(await recorded.read(), 'stream.removed')).toEqual([]);
   });
 
   it('marks a deterministic child-stream relaunch as running', async () => {
     const firstRun = await Effect.runPromise(
-      createChildStream(
+      createRegisteredChildStream(
         defaultSession(),
         workflowRelaunchExecutionId,
         parentStreamId,
@@ -214,7 +256,7 @@ describe('child stream progress events', () => {
 
     const recorded = recordSessionEvents(defaultSession());
     const relaunched = await Effect.runPromise(
-      createChildStream(
+      createRegisteredChildStream(
         defaultSession(),
         workflowRelaunchExecutionId,
         parentStreamId,
@@ -241,7 +283,7 @@ describe('child stream progress events', () => {
           status: STREAM_PHASE.RUNNING,
         }),
       );
-      expect(eventsOfType(recorded.events, 'status')).toContainEqual(
+      expect(eventsOfType(await recorded.read(), 'status')).toContainEqual(
         expect.objectContaining({
           cause: 'resume',
           phase: STREAM_PHASE.RUNNING,
@@ -280,7 +322,7 @@ describe('child stream progress events', () => {
     try {
       await expect(
         Effect.runPromise(
-          createChildStream(
+          createRegisteredChildStream(
             defaultSession(),
             setupRetryExecutionId,
             parentStreamId,
@@ -289,13 +331,13 @@ describe('child stream progress events', () => {
         ),
       ).rejects.toThrow('execution setup failed');
       expect(
-        eventsOfType(recorded.events, 'stream.removed').map(
+        eventsOfType(await recorded.read(), 'stream.removed').map(
           (event) => event.aggregateId,
         ),
       ).not.toContain(qualifyAggregateId('stream', setupRetryChildStreamId));
       // Setup failed after the existence fact, so the started stream ended
       // with its terminal result instead of lingering as a ghost.
-      expect(eventsOfType(recorded.events, 'result')).toContainEqual(
+      expect(eventsOfType(await recorded.read(), 'result')).toContainEqual(
         expect.objectContaining({
           aggregateId: qualifyAggregateId('stream', setupRetryChildStreamId),
           outcome: RUN_OUTCOME.FAILED,
@@ -304,7 +346,7 @@ describe('child stream progress events', () => {
       );
 
       const retried = await Effect.runPromise(
-        createChildStream(
+        createRegisteredChildStream(
           defaultSession(),
           setupRetryExecutionId,
           parentStreamId,
@@ -313,14 +355,14 @@ describe('child stream progress events', () => {
       );
       expect(retried.childStreamId).toBe(setupRetryChildStreamId);
       expect(
-        eventsOfType(recorded.events, 'run.start').filter(
+        eventsOfType(await recorded.read(), 'run.start').filter(
           (event) =>
             event.aggregateId ===
             qualifyAggregateId('stream', setupRetryChildStreamId),
         ),
       ).toHaveLength(1);
       expect(
-        eventsOfType(recorded.events, 'run.activate').filter(
+        eventsOfType(await recorded.read(), 'run.activate').filter(
           (event) =>
             event.aggregateId ===
             qualifyAggregateId('stream', setupRetryChildStreamId),
@@ -343,7 +385,7 @@ describe('child stream progress events', () => {
     };
 
     const childStream = await Effect.runPromise(
-      createChildStream(
+      createRegisteredChildStream(
         defaultSession(),
         workflowRelaunchExecutionId,
         parentStreamId,
@@ -360,7 +402,7 @@ describe('child stream progress events', () => {
       ),
     );
 
-    expect(eventsOfType(recorded.events, 'run.start')).toContainEqual(
+    expect(eventsOfType(await recorded.read(), 'run.start')).toContainEqual(
       expect.objectContaining({
         identity: {
           kind: 'multiAgentWorkflow',
@@ -389,7 +431,7 @@ describe('child stream progress events', () => {
     const childStream = await startBashChild(executionId);
 
     expect(active.events).toEqual([]);
-    expect(eventsOfType(recorded.events, 'run.start')).toEqual([
+    expect(eventsOfType(await recorded.read(), 'run.start')).toEqual([
       expect.objectContaining({
         type: 'run.start',
         aggregateId: qualifyAggregateId('stream', childStreamId),
@@ -417,7 +459,7 @@ describe('child stream progress events', () => {
     );
 
     expect(active.events).toEqual([]);
-    expect(eventsOfType(recorded.events, 'stream.removed')).toEqual([]);
+    expect(eventsOfType(await recorded.read(), 'stream.removed')).toEqual([]);
     expect(
       defaultSession().transcripts.has(noProjectionAutoCloseChildStreamId),
     ).toBe(true);
@@ -436,7 +478,7 @@ describe('child stream progress events', () => {
       }),
     );
 
-    expect(eventsOfType(recorded.events, 'stream.removed')).toEqual([]);
+    expect(eventsOfType(await recorded.read(), 'stream.removed')).toEqual([]);
     const entries = await Effect.runPromise(
       defaultSession().transcripts.readEntries(childStreamId),
     );
@@ -444,6 +486,78 @@ describe('child stream progress events', () => {
       entries.some((entry) => entry.text === 'retained command output'),
     ).toBe(true);
   });
+
+  it.effect(
+    'cancels committed admission before launching detached work and releases both claims',
+    () =>
+      Effect.gen(function* () {
+        const session = defaultSession();
+        const committed = yield* Deferred.make<ExecutionId>();
+        const releasePublication = yield* Deferred.make<void>();
+        const commit = session.commitRegistration.bind(session);
+        const publication = vi
+          .spyOn(session, 'commitRegistration')
+          .mockImplementationOnce((events) =>
+            commit(events).pipe(
+              Effect.tap((rows) => {
+                const start = rows.find((row) => row.type === 'run.start');
+                if (!start) throw new Error('expected a committed child birth');
+                return Deferred.succeed(committed, start.executionId);
+              }),
+              Effect.tap(() => Deferred.await(releasePublication)),
+            ),
+          );
+        const startLoop = vi.fn(() => Effect.void);
+        try {
+          const launching = yield* Effect.forkChild(
+            launchAgentCliSession({
+              session,
+              parentStreamId,
+              parentExecutionId: undefined,
+              agentName: 'codex',
+              streamPrefix: 'codex',
+              description: 'Cancelled admission',
+              config,
+              registerFailedMessage: 'registration failed',
+              store: codexThreadsFor,
+              startLoop,
+              summary: 'unreachable',
+              launchedLine: 'unreachable',
+              followUpLine: 'unreachable',
+            }),
+          );
+          const id = yield* Deferred.await(committed);
+          const interrupting = yield* Effect.forkChild(
+            Fiber.interrupt(launching),
+            { startImmediately: true },
+          );
+          yield* Deferred.succeed(releasePublication, undefined);
+          yield* Fiber.join(interrupting);
+          const stopped = yield* Fiber.await(launching);
+          expect(
+            Exit.isFailure(stopped) && Cause.hasInterrupts(stopped.cause),
+          ).toBe(true);
+          expect(startLoop).not.toHaveBeenCalled();
+          expect(
+            (yield* getExecutionRecords(session, id).readMeta())?.outcome,
+          ).toBe(RUN_OUTCOME.CANCELLED);
+          expect(
+            yield* Effect.promise(() =>
+              runInSession(session, () => inspectExecutionLease(id)),
+            ),
+          ).toEqual({ status: 'free' });
+          expect(
+            Exit.isFailure(
+              yield* Effect.exit(
+                getExecutionRecords(session, id).writeReport('unowned'),
+              ),
+            ),
+          ).toBe(true);
+        } finally {
+          publication.mockRestore();
+        }
+      }),
+  );
 
   it.effect(
     'finalizes a child stream when agent CLI loop setup fails synchronously',
@@ -537,7 +651,7 @@ describe('child stream progress events', () => {
     );
 
     expect(
-      eventsOfType(recorded.events, 'status')
+      eventsOfType(await recorded.read(), 'status')
         .filter(
           (event) =>
             event.aggregateId ===
@@ -595,7 +709,7 @@ describe('child stream progress events', () => {
       STREAM_PHASE.CANCELLED,
     );
     expect(
-      eventsOfType(recorded.events, 'status').filter(
+      eventsOfType(await recorded.read(), 'status').filter(
         (event) =>
           event.aggregateId ===
           qualifyAggregateId('stream', stoppedChildStreamId),

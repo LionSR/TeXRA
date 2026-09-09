@@ -15,6 +15,8 @@ import { Data, Deferred, Duration, Effect } from 'effect';
 import {
   deriveResumability,
   getExecutionStore,
+  getExecutionRecords,
+  readExecutionChildren,
   listExecutionWorkspaceFiles,
   unwrapResultMeta,
   type ChildRecord,
@@ -261,7 +263,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     this: ExecutionsTool,
     context: ExecutionToolContext,
     input: ExecutionsToolInput,
-  ) {
+  ): Effect.fn.Return<ToolResult, Error | ExecutionsReadFailed> {
     const segments = getPathSegments(input.path);
     const [namespace, id, resource, ...rest] = segments;
 
@@ -442,12 +444,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly listExecutions = Effect.fn('ExecutionsTool.listExecutions')(
     function* (context: ExecutionToolContext, offset: number, limit: number) {
-      // The listing reads through the run's workspace storage root, which
-      // is AsyncLocalStorage-scoped: the fiber must start inside the bound
-      // frame or `StorageFS` resolves the process roots instead.
-      const entries = yield* executionsRead(context, () =>
-        effectRuntime().runPromise(listExecutions()),
-      );
+      const entries = yield* listExecutions(context.session);
 
       if (entries.length === 0) {
         return executed('No execution history found.');
@@ -461,7 +458,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // One page, not one directory — see DURABLE_READ_CONCURRENCY.
       const lines = yield* Effect.forEach(
         page,
-        (entry) => executionsRead(context, () => formatListingLine(entry)),
+        (entry) => formatListingLine(entry, context.session),
         { concurrency: DURABLE_READ_CONCURRENCY },
       );
 
@@ -485,13 +482,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       if (handle) {
         // Running execution: agent/status and task state are session-owned;
         // fetch only the remaining durable details from execution storage.
-        const store = context.inRunScope(() => getExecutionStore(executionId));
+        const records = getExecutionRecords(context.session, executionId);
         const todos = getRunningTodos(session, handle);
         const [meta, children, report] = yield* Effect.all(
           [
-            executionsRead(context, () => store.readMeta()),
-            executionsRead(context, () => store.readChildren()),
-            executionsRead(context, () => store.readReport()),
+            records.readMeta(),
+            readExecutionChildren(context.session, executionId),
+            records.readReport(),
           ],
           { concurrency: 3 },
         );
@@ -533,23 +530,24 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
 
       // Completed execution: full KV fetch
-      const store = context.inRunScope(() => getExecutionStore(executionId));
+      const records = getExecutionRecords(context.session, executionId);
       const [meta, record, children, todos, report] = yield* Effect.all(
         [
-          executionsRead(context, () => store.readMeta()),
-          executionsRead(context, () => store.readRunRecord()),
-          executionsRead(context, () => store.readChildren()),
+          records.readMeta(),
+          records.readRunRecord(),
+          readExecutionChildren(context.session, executionId),
           readCompletedRunTodos(executionId, session).pipe(
             Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
           ),
-          executionsRead(context, () => store.readReport()),
+          records.readReport(),
         ],
         { concurrency: 5 },
       );
 
       if (!meta && !record) {
-        const resumability = yield* executionsRead(context, () =>
-          deriveResumability(executionId),
+        const resumability = yield* deriveResumability(
+          executionId,
+          context.session,
         );
         if (resumability.kind !== 'checkpoint') {
           return yield* Effect.fail(
@@ -571,8 +569,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
       const category = executionDisplayCategory(identity, record);
-      const info = yield* executionsRead(context, () =>
-        getExecutionStatusInfo(executionId, meta),
+      const info = yield* getExecutionStatusInfo(
+        executionId,
+        context.session,
+        meta,
       );
       const lines = buildCompletedSummaryLines(
         executionId,
@@ -651,12 +651,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       Effect.forEach(
         children,
         (child) =>
-          executionsRead(context, async () =>
-            formatChildLine(
-              child,
-              await getExecutionStore(child.id).readMeta(),
+          getExecutionRecords(context.session, child.id)
+            .readMeta()
+            .pipe(
+              Effect.flatMap((meta) =>
+                formatChildLine(child, meta, context.session),
+              ),
             ),
-          ),
         { concurrency: DURABLE_READ_CONCURRENCY },
       ),
   );
@@ -708,9 +709,14 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      const success = context.session.executions.kill(executionId, {
-        detachActiveChildren: context.inRunScope(() => detachSubagentsOnStop()),
-      });
+      const success = yield* Effect.suspend(() => {
+        const stop = context.session.executions.kill(executionId, {
+          detachActiveChildren: context.inRunScope(() =>
+            detachSubagentsOnStop(),
+          ),
+        });
+        return stop.settlement.pipe(Effect.as(stop.accepted));
+      }).pipe(Effect.uninterruptible);
       if (success) {
         return executed(`Execution ${executionId} terminated.`);
       }
@@ -751,11 +757,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly showReport = Effect.fn('ExecutionsTool.showReport')(
     function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const store = context.inRunScope(() => getExecutionStore(executionId));
+      const records = getExecutionRecords(context.session, executionId);
       const [report, note] = yield* Effect.all(
         [
-          executionsRead(context, () => store.readReport()),
-          executionsRead(context, () => turnAttributionNote(store)),
+          records.readReport(),
+          turnAttributionNote(getExecutionStore(executionId), context.session),
         ],
         { concurrency: 2 },
       );
@@ -774,11 +780,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    */
   private readonly showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(
     function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const store = context.inRunScope(() => getExecutionStore(executionId));
+      const records = getExecutionRecords(context.session, executionId);
       const [resultMeta, note] = yield* Effect.all(
         [
-          executionsRead(context, () => store.readResultMeta()),
-          executionsRead(context, () => turnAttributionNote(store)),
+          records.readResultMeta(),
+          turnAttributionNote(getExecutionStore(executionId), context.session),
         ],
         { concurrency: 2 },
       );
@@ -803,8 +809,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       context: ExecutionToolContext,
       executionId: ExecutionId,
     ) {
-      const children = yield* executionsRead(context, () =>
-        getExecutionStore(executionId).readChildren(),
+      const children = yield* readExecutionChildren(
+        context.session,
+        executionId,
       );
       if (children.length === 0) {
         return executed(`No child executions found for ${executionId}.`);
@@ -819,10 +826,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly showConfig = Effect.fn('ExecutionsTool.showConfig')(
     function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const store = context.inRunScope(() => getExecutionStore(executionId));
-      const record = yield* executionsRead(context, () =>
-        store.readRunRecord(),
-      );
+      const records = getExecutionRecords(context.session, executionId);
+      const record = yield* records.readRunRecord();
 
       if (!record) {
         return yield* Effect.fail(
@@ -833,7 +838,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Filter out fields irrelevant to this agent's category. Identity comes
       // only from the stamped execution row; a pre-identity row (reader retired
       // per #9590 Stage 7) degrades to the config-derived category, loudly.
-      const meta = yield* executionsRead(context, () => store.readMeta());
+      const meta = yield* records.readMeta();
       const identity = meta?.identity;
       if (meta && !identity) {
         log.warn(
@@ -853,7 +858,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     offset: number,
     limit: number,
   ) {
-    const store = context.inRunScope(() => getExecutionStore(executionId));
+    const records = getExecutionRecords(context.session, executionId);
     const conversationResult = yield* readCompletedRunConversation(
       executionId,
       context.session,
@@ -864,9 +869,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
       // when the shared storage decision says it is resumable.
-      const meta = yield* executionsRead(context, () => store.readMeta());
-      const resumability = yield* executionsRead(context, () =>
-        deriveResumability(executionId),
+      const meta = yield* records.readMeta();
+      const resumability = yield* deriveResumability(
+        executionId,
+        context.session,
       );
       const exists =
         meta !== null ||
@@ -927,9 +933,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // The handle names the live child stream; liveness itself is resolved
       // below, from facts that outlive this process.
       const handle = context.session.executions.getHandle(executionId);
-      const meta = yield* executionsRead(context, () =>
-        getExecutionStore(executionId).readMeta(),
-      );
+      const meta = yield* getExecutionRecords(
+        context.session,
+        executionId,
+      ).readMeta();
       if (!meta && !handle) {
         return yield* Effect.fail(
           new ToolError(`Execution not found: ${executionId}`),
@@ -959,8 +966,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // No snapshot: `meta` was read before the transcript, and a command that
       // finished during that read must not be judged against the row as it
       // looked beforehand. One read of one execution can afford a fresh one.
-      const liveness = yield* executionsRead(context, () =>
-        resolveExecutionLiveness(executionId),
+      const liveness = yield* resolveExecutionLiveness(
+        executionId,
+        context.session,
       );
       const info = statusInfoFromLiveness(liveness);
       // The footer states the same reading as the header: "no handle in this
@@ -1083,12 +1091,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly listWorkspaceFiles = Effect.fn(
     'ExecutionsTool.listWorkspaceFiles',
   )(function* (context: ExecutionToolContext, executionId: ExecutionId) {
-    const store = context.inRunScope(() => getExecutionStore(executionId));
+    const records = getExecutionRecords(context.session, executionId);
     const [record, paths] = yield* Effect.all(
-      [
-        executionsRead(context, () => store.readRunRecord()),
-        executionsRead(context, () => store.readWorkspaceFiles()),
-      ],
+      [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
     const entries = yield* executionsRead(context, () =>
@@ -1117,12 +1122,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     filePath: string,
     viewRange?: [number, number],
   ) {
-    const store = context.inRunScope(() => getExecutionStore(executionId));
+    const records = getExecutionRecords(context.session, executionId);
     const [record, paths] = yield* Effect.all(
-      [
-        executionsRead(context, () => store.readRunRecord()),
-        executionsRead(context, () => store.readWorkspaceFiles()),
-      ],
+      [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
     const recordedPaths = new Set(

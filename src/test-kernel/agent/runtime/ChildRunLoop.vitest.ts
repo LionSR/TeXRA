@@ -17,8 +17,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
-  persistChildRunReport: vi.fn(),
-  persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
   releaseExecutionLeaseAfterArtifacts: vi.fn(
     async (_session: unknown, _executionId: ExecutionId) => {},
@@ -45,17 +43,13 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   assertOwnedExecutionLease: mocks.assertOwnedExecutionLease,
 }));
 
-vi.mock('@agent/storage/childRunPersistence', () => ({
-  persistChildRunReport: mocks.persistChildRunReport,
-  persistChildRunResultMeta: mocks.persistChildRunResultMeta,
-}));
-
 vi.mock('@agent/followUp/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords, getExecutionStore } from '@agent/storage';
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   startChildRunLoop,
@@ -281,11 +275,11 @@ beforeEach(async () => {
   // The loop's terminal drain is the session's one exit choreography; the
   // suite observes it through the same (session, executionId) spy as before.
   vi.spyOn(session, 'releaseExecutionLease').mockImplementation((executionId) =>
-    mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
+    Effect.promise(() =>
+      mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
+    ),
   );
-  mocks.finalizeRun.mockResolvedValue({ ok: true });
-  mocks.persistChildRunReport.mockResolvedValue(undefined);
-  mocks.persistChildRunResultMeta.mockResolvedValue(undefined);
+  mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   mocks.deliverChildRunFollowUp.mockReturnValue(
     Effect.succeed({ kind: 'delivered' }),
   );
@@ -498,8 +492,11 @@ describe('childRunLoop E2E fixtures', () => {
       // Interrupt the loop through its parent lineage: no turn handle is
       // tracked in this fixture, so the stop reaches the loop via its
       // child activation.
-      session.executions.stopAgentStream(PARENT_STREAM_ID);
+      const stopSettlement = Effect.runPromise(
+        session.executions.stopAgentStream(PARENT_STREAM_ID),
+      );
       await rejectTurn(1, createAbortError());
+      await stopSettlement;
 
       await vi.waitFor(() =>
         expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
@@ -537,6 +534,11 @@ describe('childRunLoop E2E fixtures', () => {
         formatStarted.resolve();
         return formattedDelivery.promise;
       },
+    );
+    publishTestRunStart(
+      session,
+      getStreamTabId('codex', { executionId }),
+      executionId,
     );
     const childStream = await Effect.runPromise(
       createChildStream(session, executionId, PARENT_STREAM_ID, {
@@ -659,10 +661,11 @@ describe('childRunLoop E2E fixtures', () => {
     await resolveTurn(1, { kind: 'terminal', value: 'saved' });
     await completion;
 
-    expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
-      executionId,
-      'delivered:saved',
-    );
+    expect(
+      await Effect.runPromise(
+        getExecutionRecords(session, executionId).readReport(),
+      ),
+    ).toBe('delivered:saved');
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
@@ -855,10 +858,11 @@ describe('childRunLoop E2E fixtures', () => {
     await resolveTurn(1, { kind: 'terminal', value: 'late' });
 
     await waitForLoopEnd(childStreamId);
-    expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
-      executionId,
-      'delivered:late',
-    );
+    expect(
+      await Effect.runPromise(
+        getExecutionRecords(session, executionId).readReport(),
+      ),
+    ).toBe('delivered:late');
     expect(releaseSessionOwnership).toHaveBeenCalledOnce();
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
@@ -901,11 +905,13 @@ describe('childRunLoop E2E fixtures', () => {
     // resumable-looking — would never settle or untrack.
     const { childStreamId, executionId } = loopIds('ghost-handle-stop');
     const { strategy, resolveTurn } = createFakeStrategy();
-    mocks.finalizeRun.mockResolvedValueOnce({
-      ok: false,
-      error: new Error('metadata disk full'),
-      outcomePersisted: false,
-    });
+    mocks.finalizeRun.mockReturnValueOnce(
+      Effect.succeed({
+        ok: false,
+        error: new Error('metadata disk full'),
+        outcomePersisted: false,
+      }),
+    );
 
     startLoop({ childStreamId, executionId }, strategy);
 
@@ -942,7 +948,7 @@ describe('childRunLoop E2E fixtures', () => {
     // The loop routes the cancellation through the durable outcome's only
     // writer; the interim result envelope is left exactly as its turn wrote
     // it, and reads project the durable outcome onto it.
-    expect(mocks.finalizeRun).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(session, {
       executionId,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
@@ -1114,6 +1120,11 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
     const executionId = 'fa11ed01' as ExecutionId;
+    publishTestRunStart(
+      session,
+      getStreamTabId('codex', { executionId }),
+      executionId,
+    );
     const childStream = await Effect.runPromise(
       createChildStream(session, executionId, PARENT_STREAM_ID, {
         streamPrefix: 'codex',
@@ -1130,8 +1141,11 @@ describe('childRunLoop E2E fixtures', () => {
     // Fires between the turn failure landing FAILED on the stream phase and
     // the loop's finalize, so the loop reports an interrupted run for a stream
     // whose phase already carries the failure.
+    const stopSettlements: Promise<void>[] = [];
     const interruptAfterFailure = vi.fn(() => {
-      session.executions.kill(executionId);
+      stopSettlements.push(
+        Effect.runPromise(session.executions.kill(executionId).settlement),
+      );
     });
 
     startLoop({ childStreamId, executionId }, strategy, {
@@ -1144,6 +1158,7 @@ describe('childRunLoop E2E fixtures', () => {
     await rejectTurn(1, new Error('turn blew up'));
     await waitForLoopEnd(childStreamId);
 
+    await Promise.all(stopSettlements);
     expect(interruptAfterFailure).toHaveBeenCalledOnce();
     expect(session.status.get(childStreamId)).toBe(STREAM_PHASE.FAILED);
     await expect(handle?.result).resolves.toMatchObject({
@@ -1154,6 +1169,7 @@ describe('childRunLoop E2E fixtures', () => {
       }),
     });
     expect(mocks.finalizeRun).toHaveBeenCalledWith(
+      session,
       expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
     );
   });

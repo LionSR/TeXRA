@@ -28,7 +28,7 @@
 
 import { Cause, Effect, Exit } from 'effect';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import {
   isWaitingFlowResult,
   type AgentFlowResult,
@@ -46,7 +46,7 @@ import type {
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -150,8 +150,7 @@ export interface ChildRunLaunchOptions {
 }
 
 interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
-  readonly config: AgentConfig;
-  readonly agentCategoryExplicit: boolean;
+  readonly definition: PreparedAgentDefinition;
   readonly executionId: ExecutionId;
   readonly parentExecutionId?: ExecutionId;
   readonly startedAt: number;
@@ -279,7 +278,7 @@ export function createNativeSubagentStrategy(
     // record. Keep it category-derived so a failed workflow subagent's record
     // never reads "tool-use".
     stageLabel:
-      params.config.agentCategory === AgentCategory.ToolUse
+      params.definition.config.agentCategory === AgentCategory.ToolUse
         ? 'Native tool-use subagent'
         : 'Native workflow subagent',
 
@@ -294,7 +293,6 @@ export function createNativeSubagentStrategy(
         Effect.gen(function* () {
           const executeOptions = {
             session: params.session,
-            enforceCategory: params.agentCategoryExplicit,
             parentStreamId: params.parentStreamId,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
@@ -309,7 +307,7 @@ export function createNativeSubagentStrategy(
             onRun,
           };
           const turn = yield* engine().executeAgent(
-            params.config,
+            params.definition,
             params.executionId,
             {
               ...executeOptions,
@@ -357,31 +355,28 @@ export function createNativeSubagentStrategy(
               ),
             );
           }
-          const resume = yield* Effect.tryPromise({
-            try: async () =>
-              runInSession(params.session, async () => {
-                const config = await getExecutionStore(
-                  params.executionId,
-                ).readConfig();
-                if (!config) {
-                  throw new Error(
-                    `Native subagent ${params.executionId} has no persisted config to resume.`,
-                  );
-                }
-                const saved = await retrieveSessionResumeData(
-                  streamId,
-                  params.executionId,
-                  config,
-                );
-                if (!saved || saved.type !== 'toolUse') {
-                  throw new Error(
-                    `Native subagent ${params.executionId} has no resumable tool-use snapshot.`,
-                  );
-                }
-                return saved;
-              }),
-            catch: ensureError,
-          });
+          const config = yield* getExecutionRecords(
+            params.session,
+            params.executionId,
+          ).readConfig();
+          if (!config)
+            return yield* Effect.fail(
+              new Error(
+                `Native subagent ${params.executionId} has no persisted config to resume.`,
+              ),
+            );
+          const resume = yield* retrieveSessionResumeData(
+            streamId,
+            params.executionId,
+            config,
+            params.session,
+          );
+          if (!resume || resume.type !== 'toolUse')
+            return yield* Effect.fail(
+              new Error(
+                `Native subagent ${params.executionId} has no resumable tool-use snapshot.`,
+              ),
+            );
 
           // childRunLoop already consumed this batch from the stream queue. A
           // queued-resume wrapper would append it to ToolUseSessionLifecycle,
@@ -480,7 +475,7 @@ export function createNativeSubagentStrategy(
             Effect.sync(() =>
               buildSubagentFailureResultMeta(
                 params.agentName,
-                params.config.agentCategory,
+                params.definition.config.agentCategory,
                 result,
                 wallTimeMs,
                 failureOptions,
@@ -499,7 +494,7 @@ export function createNativeSubagentStrategy(
           });
           return buildSubagentFailureResultMeta(
             params.agentName,
-            params.config.agentCategory,
+            params.definition.config.agentCategory,
             undefined,
             wallTimeMs,
             failureOptions,

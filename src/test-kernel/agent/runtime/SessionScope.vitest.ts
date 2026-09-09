@@ -31,7 +31,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       publishTestRunStart(launching, streamId);
       await launching.settlePublications();
       const lease = await Effect.runPromise(
-        launching.transcripts.loadAndAcquireWriter(streamId, streamId),
+        launching.transcripts.acquireRunResidency(streamId, streamId),
       );
       const handle = createRunTrace(streamId, lease);
       const detach = launching.attachRunTrace(handle, streamId);
@@ -65,7 +65,7 @@ describe('session-owned transcripts and follow-up queues', () => {
     publishTestRunStart(session, streamId);
     await session.settlePublications();
     const lease = await Effect.runPromise(
-      session.transcripts.loadAndAcquireWriter(streamId, streamId),
+      session.transcripts.acquireRunResidency(streamId, streamId),
     );
     const handle = createRunTrace(streamId, lease);
     const detach = session.attachRunTrace(handle, streamId);

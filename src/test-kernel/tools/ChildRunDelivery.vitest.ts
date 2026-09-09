@@ -4,16 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResultMeta } from '@agent/storage';
 
 const mocks = vi.hoisted(() => ({
-  writeResultMeta: vi.fn(),
-  writeReport: vi.fn(),
+  commit: vi.fn(),
   submitFollowUp: vi.fn(),
-}));
-
-vi.mock('@agent/storage/ExecutionKVStore', () => ({
-  getExecutionStore: vi.fn(() => ({
-    writeReport: mocks.writeReport,
-    writeResultMeta: mocks.writeResultMeta,
-  })),
 }));
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
@@ -21,10 +13,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import {
-  persistChildRunReport,
-  persistChildRunResultMeta,
-} from '@agent/storage/childRunPersistence';
+import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 describe('child run delivery', () => {
@@ -44,17 +34,33 @@ describe('child run delivery', () => {
       },
     } satisfies ResultMeta;
 
-    await persistChildRunReport('exec-1' as ExecutionId, 'payload');
-    await persistChildRunResultMeta('exec-1' as ExecutionId, resultMeta);
-    expect(mocks.writeReport).toHaveBeenCalledWith('payload');
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(resultMeta);
+    mocks.commit.mockReturnValue(Effect.succeed([]));
+    await Effect.runPromise(
+      persistChildRunDelivery(
+        { commit: mocks.commit } as unknown as SessionHandle,
+        'exec-1' as ExecutionId,
+        'payload',
+        resultMeta,
+      ),
+    );
+    expect(mocks.commit).toHaveBeenCalledWith([
+      expect.objectContaining({ type: 'execution.report', report: 'payload' }),
+      expect.objectContaining({ type: 'execution.result', result: resultMeta }),
+    ]);
   });
 
   it('propagates persistence failures', async () => {
     const err = new Error('disk full');
-    mocks.writeReport.mockRejectedValue(err);
+    mocks.commit.mockReturnValue(Effect.die(err));
     await expect(
-      persistChildRunReport('exec-1' as ExecutionId, 'payload'),
+      Effect.runPromise(
+        persistChildRunDelivery(
+          { commit: mocks.commit } as unknown as SessionHandle,
+          'exec-1' as ExecutionId,
+          'payload',
+          undefined,
+        ),
+      ),
     ).rejects.toBe(err);
   });
 

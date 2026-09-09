@@ -27,6 +27,7 @@ import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
+import { aggregateId } from '@shared/schemas';
 import type { RetryErrorInfo, SubagentProgressUpdate } from '@shared/schemas';
 import {
   RUN_OUTCOME,
@@ -325,7 +326,14 @@ export async function runToolUseFlow(
     const nextAgentConfig = { ...services.config, model };
     try {
       await persistModelSwitch(model);
-      await kv.writeRunRecord(nextAgentConfig);
+      runSession.publish([
+        {
+          type: 'execution.config',
+          aggregateId: aggregateId('execution', executionId),
+          record: nextAgentConfig,
+        },
+      ]);
+      await runSession.settlePublications();
     } catch (error) {
       nextHandler.dispose();
       throw error;
@@ -498,13 +506,18 @@ export async function runToolUseFlow(
       );
       activePersistedFlow = pf;
       pf.setServices(services);
-      // The flow record is the resume SSOT and the transcript sidecar owns
-      // completed-run display/export (#7246 Decision 1), so the only thing
-      // this projection persists per step is the touched workspace files.
-      pf.setProjection(async (s, store) => {
+      // Publish touched workspace files after each existing checkpoint step.
+      pf.setProjection(async (s) => {
         const currentTouchedFiles = extractTouchedFiles(s.stateSlices);
         if (currentTouchedFiles.length) {
-          await store.writeWorkspaceFiles(currentTouchedFiles);
+          runSession.publish([
+            {
+              type: 'execution.workspaceFiles',
+              aggregateId: aggregateId('execution', executionId),
+              paths: currentTouchedFiles,
+            },
+          ]);
+          await runSession.settlePublications();
         }
       });
       const firstFlowRun = !flowRunStarted;

@@ -728,7 +728,7 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).toHaveBeenCalledOnce();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-      expect(eventsOfType(recorded.events, 'status')).toEqual([
+      expect(eventsOfType(await recorded.read(), 'status')).toEqual([
         expect.objectContaining({
           phase: STREAM_PHASE.RUNNING,
           previousPhase: STREAM_PHASE.CANCELLED,
@@ -755,9 +755,7 @@ describe('ToolUseWaitNode', () => {
     });
     const createUserFollowUpMessages = appendUserFollowUpMessages();
     const info = vi.fn(() => {
-      expect(eventsOfType(recorded.events, 'status')).toContainEqual(
-        expect.objectContaining({ phase: STREAM_STATUS.RUNNING }),
-      );
+      expect(ownerSession.status.get(streamId)).toBe(STREAM_STATUS.RUNNING);
     });
     const streamId = 'test-stream' as StreamTabId;
     const logger = Object.assign(new TraceEmitter(), {
@@ -808,9 +806,7 @@ describe('ToolUseWaitNode', () => {
       );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
-      expect(eventsOfType(recorded.events, 'status')).toContainEqual(
-        expect.objectContaining({ phase: STREAM_STATUS.RUNNING }),
-      );
+      expect(ownerSession.status.get(streamId)).toBe(STREAM_STATUS.RUNNING);
       expect(info).toHaveBeenCalled();
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);

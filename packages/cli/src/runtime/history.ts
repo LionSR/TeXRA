@@ -5,7 +5,7 @@ import { Effect, Result, Stream } from 'effect';
 
 import {
   checkpointExists,
-  getExecutionStore,
+  getExecutionRecords,
   isUserVisibleExecution,
   listExecutions,
   listExecutionWorkspaceFiles,
@@ -16,6 +16,7 @@ import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { redactDisplayValue } from '@logger/redaction';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   ExecutionIdSchema,
@@ -153,17 +154,20 @@ export function parseCliHistoryId(raw: string): ExecutionId | undefined {
 }
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
+  const session = await initializeCliTranscriptSession();
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
   // is bounded here so a history full of failed workflow runs cannot open one
   // file handle burst per run. `Effect.forEach` preserves input order.
   return effectRuntime().runPromise(
-    listExecutions().pipe(
+    listExecutions(session).pipe(
       Effect.flatMap((entries) =>
         Effect.forEach(
           entries.filter(isUserVisibleExecution),
-          toCliHistoryEntry,
-          { concurrency: HISTORY_ENTRY_CONCURRENCY },
+          (entry) => toCliHistoryEntry(entry, session),
+          {
+            concurrency: HISTORY_ENTRY_CONCURRENCY,
+          },
         ),
       ),
     ),
@@ -175,7 +179,7 @@ export async function readCliHistoryDetails(
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
   const session = await initializeCliTranscriptSession();
-  const store = getExecutionStore(id);
+  const store = getExecutionRecords(session, id);
   const [
     meta,
     config,
@@ -185,37 +189,50 @@ export async function readCliHistoryDetails(
     persistedWorkspaceFilePaths,
     generatedFiles,
     checkpointPresent,
-  ] = await Promise.all([
-    store.readMeta(),
-    store.readConfig(),
-    store.readResultMeta(),
-    store.readReport(),
-    effectRuntime().runPromise(readCompletedRunConversation(id, session)),
-    store.readWorkspaceFiles(),
-    listRunGeneratedFiles(id),
-    checkpointExists(id),
-  ]);
+    currentModel,
+    resumable,
+  ] = await effectRuntime().runPromise(
+    Effect.gen(function* () {
+      const values = yield* Effect.all(
+        [
+          store.readMeta(),
+          store.readConfig(),
+          store.readResultMeta(),
+          store.readReport(),
+          readCompletedRunConversation(id, session),
+          store.readWorkspaceFiles(),
+          Effect.tryPromise(() => listRunGeneratedFiles(id)),
+          checkpointExists(id, session),
+        ],
+        { concurrency: 8 },
+      );
+      const currentModel = values[1]
+        ? yield* readCliResumedModel(session, id, values[1])
+        : undefined;
+      // The same rule the listing applies, from the same facts: `status` is a
+      // frozen contract, so `history show` must not answer it differently from
+      // `history list` for the run in the row the caller just read. A run whose
+      // config is missing or malformed has no category to resume under and no
+      // config for a host to adopt, so it is not offered, the listing never
+      // reaches this rule for such a row, which lists as incomplete.
+      const resumable =
+        values[1] !== null &&
+        (yield* isCliRunResumable(
+          {
+            id,
+            checkpointPresent: values[7],
+            streamId: values[0]?.streamId,
+            agentCategory: values[1].agentCategory,
+            outcome: values[0]?.outcome,
+          },
+          session,
+        ));
+      return [...values, currentModel, resumable] as const;
+    }),
+  );
   const conversation = conversationResult.conversation;
   const hasTranscriptEvidence =
     hasCompletedRunConversationEvidence(conversationResult);
-  // The same rule the listing applies, from the same facts: `status` is a
-  // frozen contract, so `history show` must not answer it differently from
-  // `history list` for the run in the row the caller just read. A run whose
-  // config is missing or malformed has no category to resume under and no
-  // config for a host to adopt, so it is not offered — the listing never
-  // reaches this rule for such a row, which lists as incomplete.
-  const resumable =
-    config !== null &&
-    (await isCliRunResumable({
-      id,
-      checkpointPresent,
-      streamId: meta?.streamId,
-      agentCategory: config.agentCategory,
-      outcome: meta?.outcome,
-    }));
-  const currentModel = config
-    ? await readCliResumedModel(id, config)
-    : undefined;
   const conversationPreview = createConversationPreview(conversation);
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
@@ -243,7 +260,7 @@ export async function readCliHistoryDetails(
   ) {
     return null;
   }
-  return {
+  return redactDisplayValue({
     id,
     status: resolveHistoryRunStatus({ resumable, outcome: meta?.outcome }),
     meta,
@@ -257,7 +274,7 @@ export async function readCliHistoryDetails(
     files,
     hasFlowRecord: checkpointPresent,
     currentModel,
-  };
+  });
 }
 
 /** Outcome of loading a stored execution's export input (see {@link readCliHistoryExportInput}). */
@@ -588,22 +605,22 @@ export function formatCliHistoryDetailsText(
 
 const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
   entry: AgentExecutionListingEntry,
+  session: SessionHandle,
 ) {
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const resumable = yield* Effect.tryPromise({
-    try: () =>
-      isCliRunResumable({
-        id: entry.id,
-        checkpointPresent: entry.checkpointPresent,
-        streamId: entry.streamId,
-        agentCategory: config.agentCategory,
-        outcome: entry.outcome,
-      }),
-    catch: (cause) => cause as Error,
-  });
-  return {
+  const resumable = yield* isCliRunResumable(
+    {
+      id: entry.id,
+      checkpointPresent: entry.checkpointPresent,
+      streamId: entry.streamId,
+      agentCategory: config.agentCategory,
+      outcome: entry.outcome,
+    },
+    session,
+  );
+  return redactDisplayValue({
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
@@ -618,7 +635,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     description: entry.description,
     teamPresetId: teamPresetId(config),
     parentExecutionId: entry.parentExecutionId,
-  };
+  });
 });
 
 function teamPresetId(config: AgentConfig | null): string | undefined {

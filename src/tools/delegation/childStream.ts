@@ -26,7 +26,6 @@ import type {
   UserFollowUpSupport,
 } from '@shared/schemas';
 import { createRunTrace } from '@transcript';
-import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -102,8 +101,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
     try: () => session.settlePublications(),
     catch: ensureError,
   });
-  const existing = session.hasStream(childStreamId);
-  const residency = yield* session.transcripts.loadAndAcquireWriter(
+  const residency = yield* session.transcripts.acquireRunResidency(
     childStreamId,
     executionId,
   );
@@ -129,53 +127,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
         runTrace.dispose();
       };
 
-      // The existence fact and its activation, one batch on the session (PRD
-      // one-fold-three-renderers, section 6, item 8): a child is activated
-      // exactly once, here, and the frozen NDJSON `setActiveStream` line
-      // projects from that. A background child never takes a host's focus:
-      // which stream a surface shows is that surface's own selection, so the
-      // fact carries no hint about it. `removeStream` permanently tombstones
-      // deterministic IDs in the CLI, so every fallible setup step above ran
-      // before this point; a failure here rolls back below without a fact.
-      session.publish([
-        ...(existing
-          ? []
-          : [
-              {
-                type: 'run.start' as const,
-                aggregateId: qualifyAggregateId('stream', childStreamId),
-                executionId,
-                identity: options.run,
-                userFollowUpSupport: options.userFollowUpSupport,
-                // Launch facts the fold reads verbatim (item 6). Remoteness is an
-                // agent-registry fact (a `source: 'remote'` entry); a process,
-                // agent-CLI, or workflow-script child has no registry entry and is
-                // never remote.
-                category: options.config.agentCategory,
-                isRemote: false,
-                worktree: launchWorktreeInfo(options.config.workingDirectory),
-                parentStreamId,
-                background: true,
-                // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
-                // the child is registered after this event by the delegation site;
-                // the queue publishes `approval.policy` for every value the edge
-                // changes.
-                approvalPolicy:
-                  session.approvalPolicySnapshotFor(childStreamId),
-                ...(options.checkpointId
-                  ? { checkpointId: options.checkpointId }
-                  : {}),
-              },
-            ]),
-        // No `isRemote`: the wire line never carried one for a child, which
-        // has no agent-registry entry to be remote.
-        {
-          type: 'run.activate',
-          aggregateId: qualifyAggregateId('stream', childStreamId),
-          category: options.config.agentCategory,
-          background: true,
-        },
-      ]);
+      // Registration already committed the launch and activation together.
       started = true;
       // Register local ownership before awaiting the creation commit. The start
       // batch is already queued, so its first event still precedes handle facts.
@@ -347,24 +299,19 @@ const finalizeChildStream = Effect.fn('finalizeChildStream')(function* (
     };
   }
 
-  yield* Effect.tryPromise({
-    try: () =>
-      runInSession(session, () =>
-        finalizeRunTerminal({
-          handle,
-          executions: session.executions,
-          streamStatus: session.status,
-          outcome,
-          error,
-          isSubagent: handle.isChildExecution,
-          stage: options.stage,
-          flushArtifacts: () => session.flushArtifacts(),
-          // No trace emit: child-stream results must stay out of `session.onResult`
-          // (host toast) consumers; the loop already presents them as follow-ups.
-          persistence: options.persistence ?? { kind: 'skip' },
-        }),
-      ),
-    catch: ensureError,
+  yield* finalizeRunTerminal({
+    session,
+    handle,
+    executions: session.executions,
+    streamStatus: session.status,
+    outcome,
+    error,
+    isSubagent: handle.isChildExecution,
+    stage: options.stage,
+    flushArtifacts: () => session.flushArtifacts(),
+    // No trace emit: child-stream results must stay out of `session.onResult`
+    // (host toast) consumers; the loop already presents them as follow-ups.
+    persistence: options.persistence ?? { kind: 'skip' },
   });
   disposeTrace();
 

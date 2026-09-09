@@ -92,6 +92,14 @@ export class Database extends Context.Service<
       readonly SessionEvent[],
       DatabaseReadFailed
     >;
+    /** Private metadata projection of one execution and its declared parent. */
+    readonly readExecutionRecords: (
+      id: AggregateId,
+    ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** Direct child creation edges and their labels from one captured prefix. */
+    readonly readExecutionChildren: (
+      id: AggregateId,
+    ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
@@ -104,7 +112,10 @@ export class Database extends Context.Service<
     /** Atomically acquire existing, open aggregates after proving prior owners dead. */
     readonly acquireClaims: (
       ids: readonly AggregateId[],
-    ) => Effect.Effect<void, DatabaseReadFailed | DatabaseWriteFailed>;
+    ) => Effect.Effect<
+      readonly AggregateId[],
+      DatabaseReadFailed | DatabaseWriteFailed
+    >;
     /** C9: recheck the owning tree, acquire its claims, append the tombstone
      *  and close all dependents in one transaction after liveness proofs.
      *  The recorded start identifies the lifetime admitted by the caller. */

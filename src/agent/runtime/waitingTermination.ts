@@ -7,10 +7,13 @@
  * lease, all on behalf of `ExecutionRegistry.terminate`.
  */
 
+import { Cause, Effect, Exit } from 'effect';
+
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
 import {
-  finalizeRun,
+  type FinalizeExecutionInput,
+  type FinalizeExecutionResult,
   retainFlowRecordUnlessCompleted,
 } from '@agent/storage/executionLifecycle';
 import {
@@ -18,6 +21,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { AgentExecutionHandle } from './ExecutionHandle';
 import type { ExecutionLanes } from './executionLanes';
 
@@ -32,7 +36,10 @@ export interface WaitingTerminationContext {
   readonly publishResult: (event: ResultEvent, streamId: StreamTabId) => void;
   readonly releaseRootExecutionLease: (
     executionId: ExecutionId,
-  ) => Promise<void>;
+  ) => Effect.Effect<void, Error>;
+  readonly finalizeExecution: (
+    input: FinalizeExecutionInput,
+  ) => Effect.Effect<FinalizeExecutionResult, Error>;
   readonly lanes: ExecutionLanes;
   readonly getHandle: (executionId: string) => AgentExecutionHandle | undefined;
   readonly untrackIfCurrent: (handle: AgentExecutionHandle) => boolean;
@@ -50,7 +57,8 @@ export class WaitingTermination {
    * The handle's own suspension is the single authority on both questions this
    * path used to cross-check: `runFlowWithLifecycle`'s WAITING branch is what
    * parks a handle, and `beginSuspendedTermination` claims the run's terminal
-   * outcome and starts the teardown in one synchronous step. So a handle that
+   * outcome in one synchronous step. The returned native settlement owns
+   * teardown and holds the execution lane until completion. So a handle that
    * never parked (one merely between its own interrupt-handler detach and
    * untrack during normal teardown) and a run whose terminal outcome
    * `finalizeRunTerminal` already claimed both leave this a no-op, with no
@@ -79,9 +87,11 @@ export class WaitingTermination {
    * stop of a suspended native subagent still surfaces a terminal event even
    * though the turn's own trace is already gone.
    */
-  terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
+  terminateWaitingHandle(
+    handle: AgentExecutionHandle,
+  ): Effect.Effect<void> | undefined {
     const teardown = handle.beginSuspendedTermination();
-    if (!teardown) return false;
+    if (!teardown) return undefined;
     const cancelledResult: ResultEvent = {
       type: 'result',
       outcome: RUN_OUTCOME.CANCELLED,
@@ -91,68 +101,89 @@ export class WaitingTermination {
       category: handle.category,
       isSubagent: handle.isChildExecution,
     };
-    const termination = this.finishWaitingTermination(
-      handle,
-      teardown,
-      cancelledResult,
-    ).catch(async (error: unknown) => {
-      // Durable finalization never ran, so recovery only settles what this
-      // generation privately owns. Each step is guarded on its own: a failure
-      // in one must not cost the others. A former generation owns only its
-      // private result — it must not mark, release, untrack, or cancel a
-      // locally reacquired successor, which is what `untrackIfCurrent` gates.
-      const recoveryFailures = [error];
-      let untracked = false;
-      try {
-        handle.settleResult(cancelledResult);
-      } catch (recoveryError) {
-        recoveryFailures.push(recoveryError);
-      }
-      try {
-        untracked = this.context.untrackIfCurrent(handle);
-        if (untracked) {
-          this.context.cancelStreamStatus(handle.childStreamId);
-        }
-      } catch (recoveryError) {
-        recoveryFailures.push(recoveryError);
-      }
-      // A lost lease is already gone: releasing it would reach whatever holds
-      // the record now. Every other failure still owes the release.
-      if (
-        untracked &&
-        !handle.isChildExecution &&
-        !(error instanceof ExecutionLeaseLostError)
-      ) {
-        try {
-          await this.context.releaseRootExecutionLease(handle.executionId);
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
-        }
-      }
-      logger.warn(
-        'Waiting-execution termination failed; settled the run without durable finalization',
-        { data: { executionId: handle.executionId, recoveryFailures } },
-      );
-    });
-    this.context.lanes.holdLive(handle.executionId, termination);
-    return true;
+    return this.context.lanes.holdLive(
+      handle.executionId,
+      this.finishWaitingTermination(handle, teardown, cancelledResult).pipe(
+        Effect.catchCause((cause) =>
+          Effect.gen({ self: this }, function* () {
+            const error = Cause.squash(cause);
+            // Durable finalization never ran, so recovery only settles what this
+            // generation privately owns. Each step is guarded on its own: a failure
+            // in one must not cost the others. A former generation owns only its
+            // private result, it must not mark, release, untrack, or cancel a
+            // locally reacquired successor, which is what `untrackIfCurrent` gates.
+            const recoveryFailures: unknown[] = [error];
+            let untracked = false;
+            const settled = yield* Effect.exit(
+              Effect.try({
+                try: () => handle.settleResult(cancelledResult),
+                catch: ensureError,
+              }),
+            );
+            if (Exit.isFailure(settled)) {
+              recoveryFailures.push(Cause.squash(settled.cause));
+            }
+            const untracking = yield* Effect.exit(
+              Effect.try({
+                try: () => {
+                  untracked = this.context.untrackIfCurrent(handle);
+                  if (untracked) {
+                    this.context.cancelStreamStatus(handle.childStreamId);
+                  }
+                },
+                catch: ensureError,
+              }),
+            );
+            if (Exit.isFailure(untracking)) {
+              recoveryFailures.push(Cause.squash(untracking.cause));
+            }
+            // A lost lease is already gone: releasing it would reach whatever holds
+            // the record now. Every other failure still owes the release.
+            if (
+              untracked &&
+              !handle.isChildExecution &&
+              !(error instanceof ExecutionLeaseLostError)
+            ) {
+              const released = yield* Effect.exit(
+                this.context.releaseRootExecutionLease(handle.executionId),
+              );
+              if (Exit.isFailure(released))
+                recoveryFailures.push(
+                  ensureError(Cause.squash(released.cause)),
+                );
+            }
+            logger.warn(
+              'Waiting-execution termination failed; settled the run without durable finalization',
+              { data: { executionId: handle.executionId, recoveryFailures } },
+            );
+          }),
+        ),
+        Effect.uninterruptible,
+      ),
+    );
   }
 
-  private async finishWaitingTermination(
+  private readonly finishWaitingTermination = Effect.fn(
+    'finishWaitingTermination',
+  )(function* (
+    this: WaitingTermination,
     handle: AgentExecutionHandle,
-    teardown: Promise<void>,
+    teardown: Effect.Effect<void, Error>,
     cancelledResult: ResultEvent,
-  ): Promise<void> {
-    try {
-      await teardown;
-    } catch (error) {
-      // Transcript closure and terminal execution metadata are independent
-      // durable facts; the terminal status still gets its own chance to land.
-      logger.warn(
-        'Waiting-execution cleanup failed; continuing terminal persistence',
-        { data: { executionId: handle.executionId, error } },
-      );
-    }
+  ) {
+    yield* teardown.pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          const error = ensureError(Cause.squash(cause));
+          // Transcript closure and terminal execution metadata are independent
+          // durable facts; the terminal status still gets its own chance to land.
+          logger.warn(
+            'Waiting-execution cleanup failed; continuing terminal persistence',
+            { data: { executionId: handle.executionId, error } },
+          );
+        }),
+      ),
+    );
 
     if (this.context.getHandle(handle.executionId) !== handle) {
       // `track` transfers the pending stop to a resumed successor. The old
@@ -172,8 +203,8 @@ export class WaitingTermination {
     this.context.untrackHandle(handle);
     this.context.cancelStreamStatus(handle.childStreamId);
 
-    try {
-      const finalization = await finalizeRun({
+    const finalize = Effect.gen({ self: this }, function* () {
+      const finalization = yield* this.context.finalizeExecution({
         executionId: handle.executionId,
         outcome: RUN_OUTCOME.CANCELLED,
         // A stopped WAITING run is exactly what a user resumes. Deleting its
@@ -189,16 +220,21 @@ export class WaitingTermination {
           },
         });
       }
-    } finally {
-      if (!handle.isChildExecution) {
-        try {
-          await this.context.releaseRootExecutionLease(handle.executionId);
-        } catch (error) {
-          logger.warn('Waiting-execution artifact flush failed', {
-            data: { executionId: handle.executionId, error },
-          });
-        }
-      }
-    }
-  }
+    });
+    return yield* finalize.pipe(
+      Effect.ensuring(
+        handle.isChildExecution
+          ? Effect.void
+          : this.context.releaseRootExecutionLease(handle.executionId).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  logger.warn('Waiting-execution artifact flush failed', {
+                    data: { executionId: handle.executionId, error },
+                  });
+                }),
+              ),
+            ),
+      ),
+    );
+  });
 }

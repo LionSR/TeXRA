@@ -21,10 +21,18 @@ const mocks = vi.hoisted(() => ({
   childLoopError: vi.fn(),
 }));
 
+vi.mock('@agent/runtime/AgentLaunchContext', () => ({
+  prepareAgentDefinition: ({ config }: { config: unknown }) =>
+    Effect.succeed({ config }),
+}));
+
 vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
-  runWithOwnedExecutionLeaseLaunchGuard: (_id: unknown, operation: unknown) =>
-    operation,
+  runWithOwnedExecutionLeaseLaunchGuard: (
+    ...args: Parameters<
+      typeof import('@agent/runtime/childRunLoop').runWithOwnedExecutionLeaseLaunchGuard
+    >
+  ) => args[2],
 }));
 
 // `executeSubagent` reports a late detached-loop failure through an inline
@@ -60,10 +68,6 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
 
 vi.mock('@agent/storage/executionLease', () => ({
   assertOwnedExecutionLease: vi.fn(),
-  runWithOwnedExecutionLeaseLaunchGuard: (
-    _executionId: string,
-    operation: () => unknown,
-  ) => operation(),
 }));
 
 vi.mock('@agent/runtime/RunContext', () => {
@@ -113,7 +117,7 @@ describe('executeSubagent childStreamId derivation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
-    mocks.registerExecution.mockResolvedValue(undefined);
+    mocks.registerExecution.mockReturnValue(Effect.void);
     mocks.tryUseRunContext.mockReturnValue({
       executionId: 'parent-exec',
       session: { tag: 'parent-session' },
@@ -171,6 +175,7 @@ describe('executeSubagent childStreamId derivation', () => {
     ];
     expect(loopParams.parentStreamId).toBe(orchestratorStreamId);
     expect(mocks.registerExecution).toHaveBeenCalledWith(
+      mocks.tryUseRunContext().session,
       loopParams.executionId,
       expect.any(Object),
       agentName,

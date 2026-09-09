@@ -16,7 +16,7 @@ import {
 
 // Local imports
 import type { AgentEvent } from '@agent/trace';
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import type {
   AgentPrompt,
@@ -48,6 +48,7 @@ import {
   type ToolResult,
   AgentCategory,
 } from '@shared/schemas';
+import { StreamLog } from '@shared/session/traceEntries';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -61,7 +62,6 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { BashTool } from '@tools/bash';
 import * as bashDelivery from '@tools/delegation/bashDelivery';
-import { StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import * as execUtils from '@utils/system/execUtils';
 
@@ -270,10 +270,7 @@ function traceWithEvents(streamId: StreamTabId): {
   events: AgentEvent[];
   dispose: () => void;
 } {
-  const runTrace = createTestRunTrace(
-    streamId,
-    StreamLogStore.ephemeral('test'),
-  );
+  const runTrace = createTestRunTrace(streamId, new StreamLog());
   const events: AgentEvent[] = [];
   const unsubscribe = runTrace.trace.subscribe((event) => events.push(event));
   return {
@@ -375,10 +372,7 @@ describe('BashTool', () => {
 
     const options = roundServices({
       toolName: 'bash',
-      logger: createTestRunTrace(
-        'BashToolTest',
-        StreamLogStore.ephemeral('test'),
-      ).trace,
+      logger: createTestRunTrace('BashToolTest', new StreamLog()).trace,
       streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
     });
@@ -824,17 +818,24 @@ describe('BashTool', () => {
     const launchResult = await launchBackgroundBash(parentStreamId);
     const { executionId } = launchedIds(launchResult);
     assert.ok(executionId, JSON.stringify(launchResult));
-    const store = getExecutionStore(executionId);
-    vi.spyOn(store, 'writeResultMeta').mockRejectedValueOnce(
-      new Error('result metadata disk full'),
+    const session = defaultSession();
+    const commit = session.commit.bind(session);
+    vi.spyOn(session, 'commit').mockImplementation((events) =>
+      events.some((event) => event.type === 'execution.result')
+        ? Effect.die(new Error('result metadata disk full'))
+        : commit(events),
     );
+    const records = getExecutionRecords(session, executionId);
 
     resolveCommand(DONE_EXEC_RESULT);
 
     // The manifest is what `/result` reads, so its loss is the run's failure
     // rather than a completed run with a silently missing result.
     await vi.waitFor(async () => {
-      assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.FAILED);
+      assert.equal(
+        (await Effect.runPromise(records.readMeta()))?.outcome,
+        RUN_OUTCOME.FAILED,
+      );
     });
     detachBackgroundRun(recorded, parentStreamId);
   });
@@ -858,9 +859,9 @@ describe('BashTool', () => {
 
     resolveCommand(DONE_EXEC_RESULT);
 
-    await vi.waitFor(() => {
+    await vi.waitFor(async () => {
       assert.equal(
-        recorded.events.some(
+        (await recorded.read()).some(
           (event) =>
             event.type === 'status' &&
             event.aggregateId === aggregateId('stream', childStreamId) &&
@@ -887,7 +888,9 @@ describe('BashTool', () => {
 
     // The user stop lands CANCELLED on the stream phase; only afterwards does
     // the killed process report its non-zero exit.
-    assert.equal(defaultSession().executions.kill(executionId), true);
+    const stopped = defaultSession().executions.kill(executionId);
+    assert.equal(stopped.accepted, true);
+    const stopSettlement = Effect.runPromise(stopped.settlement);
     assert.equal(
       defaultSession().status.get(childStreamId),
       STREAM_PHASE.CANCELLED,
@@ -900,9 +903,13 @@ describe('BashTool', () => {
       exitCode: 143,
     });
 
-    const store = getExecutionStore(executionId);
+    await stopSettlement;
+    const records = getExecutionRecords(defaultSession(), executionId);
     await vi.waitFor(async () => {
-      assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.CANCELLED);
+      assert.equal(
+        (await Effect.runPromise(records.readMeta()))?.outcome,
+        RUN_OUTCOME.CANCELLED,
+      );
     });
     detachBackgroundRun(recorded, parentStreamId, childStreamId);
   });

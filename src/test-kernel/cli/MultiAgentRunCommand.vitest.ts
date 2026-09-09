@@ -13,6 +13,9 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
+import { Effect } from 'effect';
+import { ensureError } from '@utils/errors/errorMessage';
+
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
@@ -77,16 +80,36 @@ vi.mock('@cli/runtime/runModel', () => ({
 }));
 
 vi.mock('@cli/runtime/runExecution', () => ({
-  executeCliToolUseConfig: mocks.executeCliToolUseConfig,
+  executeCliToolUseConfig: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.executeCliToolUseConfig(...args),
+      catch: ensureError,
+    }),
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
-  withExpandedRunInputs: mocks.withExpandedRunInputs,
+  withExpandedRunInputs: (
+    ...args: Parameters<
+      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs
+    >
+  ) =>
+    Effect.tryPromise({
+      try: () =>
+        mocks.withExpandedRunInputs(
+          ...args.slice(0, 4),
+          (inputs: Parameters<(typeof args)[4]>[0]) =>
+            Effect.runPromise(args[4](inputs)),
+        ),
+      catch: ensureError,
+    }),
 }));
 
 const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
 
-const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+const { runMultiAgentPreset: nativeRun } =
+  await import('@cli/commands/multiAgent');
+const runMultiAgentPreset = (...args: Parameters<typeof nativeRun>) =>
+  Effect.runPromise(nativeRun(...args));
 const { loadCliMultiAgentPresetPlanSet, loadCliMultiAgentRunPlan } =
   await import('@cli/runtime/multiAgentRunPlan');
 
@@ -214,6 +237,8 @@ describe('CLI multi-agent run command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(undefined);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(undefined);
     mockExpandedRunInputs({
       inputFiles: ['problem.tex'],
       contextFiles: [],

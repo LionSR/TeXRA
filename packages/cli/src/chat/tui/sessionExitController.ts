@@ -75,7 +75,7 @@ interface SessionExitControllerContext {
   readonly session: TuiSession;
   /**
    * The platform lifecycle host `runChat` received from the CLI composition
-   * root — these exit paths call `process.exit()` directly, so they run the
+   * root; these exit paths call `process.exit()` directly, so they run the
    * shutdown sequence themselves rather than leaving it to `bin/texra.ts`.
    */
   readonly lifecycle: LifecycleHost;

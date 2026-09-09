@@ -244,7 +244,7 @@ does not control their inputs. The hole is closable for testing by handing
 **candidate A can serve the five async importers directly; candidate B can
 serve them only through an adapter** that costs **two** extra filesystem calls
 per entry — a `Dirent` probe plus the symlink test — **and a run boundary for
-four of the five consumers** (below). Only the three `globSync` callers are closed to both. This paragraph
+three of the five consumers** (below). Only the three `globSync` callers are closed to both. This paragraph
 has been wrong six times in six directions: two importers, then unclosable,
 then independent of R-1, then requiring synchronous methods, then B excluded on
 a correctness objection this note's own §2 disproves, then a lead still calling
@@ -293,13 +293,16 @@ traversal actually calls. So:
   a second cost.** `FSOption.promises.lstat` must return a real `Promise`;
   Effect's `readLink`/`stat`/`readDirectory` return `Effect`s. Bridging them
   needs `runPromise` or an equivalent managed-runtime run **at each consumer**
-  — and four of the five async importers sit at non-boundary paths
-  (`src/agent/index/agentYamlScanner.ts`, `src/tools/glob.ts` — not a
-  `*Tool.ts` — `src/housekeeping/clean.ts`, `src/housekeeping/utils.ts`),
-  where the ratchet rejects a new `Effect.run*` exactly as it does for
-  `TraceEmitter.ts`. Only `packages/cli/src/runtime/workflowInputs.ts` is
-  already a boundary kind. So B needs the adapter built at an allowed boundary
-  and injected into four consumers, or a separate native seam for them — the
+  and three of the five async importers sit at non-boundary paths
+  (`src/agent/index/agentYamlScanner.ts`, `src/housekeeping/clean.ts`,
+  `src/housekeeping/utils.ts`), where the ratchet rejects a new `Effect.run*`
+  exactly as it does for `TraceEmitter.ts`. The CLI file
+  `packages/cli/src/runtime/workflowInputs.ts` is already a boundary kind.
+  `GlobTool.execute()` in `src/tools/glob.ts` also qualifies: the ratchet
+  recognizes the tool's `execute()` method regardless of its filename, so
+  an adapter callback constructed there can own the actual Promise boundary.
+  So B needs the adapter built at an allowed boundary and injected into three
+  consumers, or a separate native seam for them: the
   same structural cost this note found for the hub constructor, in a second
   place.
 
@@ -383,7 +386,7 @@ earlier revisions of this very sentence**:
    `readLink`-plus-`stat` symlink test. A's `lstat`-backed port carries the
    type out of the directory read and pays neither.
 2. **A run boundary.** The `promises` callbacks must return real `Promise`s,
-   so four of the five consumers need adapter construction at an allowed
+   so three of the five consumers need adapter construction at an allowed
    boundary plus injection (above).
 3. The per-entry cost compounds with tree size, which is exactly the shape
    R-1 measured at ~8×.
@@ -569,9 +572,10 @@ understates it by construction.
 The composition matters more than the total. **6 of the 27 are production** —
 `src/agent/trace/TraceEmitter.ts` itself, plus
 `packages/agent/src/effect/sessions.ts`, `ModelHandler.ts`,
-`SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and 11 are
-test-kernel, most passing a plain synchronous callback to `trace.subscribe`
-and reading events out of a local array on the next line. So the production
+`SessionHandle.ts`, `channelTrace.ts`, `runTrace.ts` — and 21 are
+test-kernel: 11 subscriber files and 10 additional constructor-only files.
+Most subscriber tests pass a plain synchronous callback to `trace.subscribe`
+and read events out of a local array on the next line. So the production
 blast radius is six files.
 
 **The synchronous `subscribe` facade is itself a third run-boundary site, and
@@ -588,7 +592,7 @@ and propagate that through every subscriber — **another injection chain the
 stated above, and the second time the note has held both halves of a fact in
 separate sections without joining them.
 
-**The eleven test files are cheaper than an earlier revision charged them.**
+**The eleven subscriber test files are cheaper than an earlier revision charged them.**
 That revision said each would need "a fiber, a scope and a drain". It would
 not: if `TraceEmitter.subscribe` stays a synchronous facade — possible only
 with the injected runtime just described — the adapter owns each

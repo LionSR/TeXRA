@@ -1,15 +1,16 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { listExecutions, type ExecutionListingEntry } from '@agent/storage';
+import { Effect } from 'effect';
+import type { SessionHandle } from '@agent/runtime';
+import type { ExecutionListingEntry } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   __resetUserConfigWarningDedupeForTests,
-  resolveChatDefaults,
+  resolveChatDefaults as nativeResolveChatDefaults,
 } from '@cli/runtime/chatDefaults';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -19,6 +20,7 @@ import * as logSinks from '@cli/runtime/logSinks';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { ensureError } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 /** A cwd with no `.texra` directory, so the workspace tier finds nothing. */
@@ -44,9 +46,20 @@ function enoentError(): NodeJS.ErrnoException {
   return error;
 }
 
+const mocks = vi.hoisted(() => ({
+  listExecutions: vi.fn(async (): Promise<ExecutionListingEntry[]> => []),
+}));
+const resolveChatDefaults = (
+  options: Parameters<typeof nativeResolveChatDefaults>[0],
+) => Effect.runPromise(nativeResolveChatDefaults(options, {} as SessionHandle));
+
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  listExecutions: vi.fn(),
+  listExecutions: () =>
+    Effect.tryPromise({
+      try: () => mocks.listExecutions(),
+      catch: ensureError,
+    }),
 }));
 
 // Spied, not stubbed: the workspace tiers below still read real `.texra`
@@ -60,7 +73,7 @@ vi.mock('@cli/runtime/cliConfig', async (importOriginal) => {
   };
 });
 
-const mockedListExecutions = vi.mocked(listExecutions);
+const mockedListExecutions = mocks.listExecutions;
 const mockedLoadWorkspaceCliConfig = vi.mocked(loadWorkspaceCliConfig);
 
 function historyEntry(
@@ -96,7 +109,7 @@ const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 beforeEach(() => {
   mockedLoadWorkspaceCliConfig.mockClear();
   mockedListExecutions.mockReset();
-  mockedListExecutions.mockReturnValue(Effect.succeed([]));
+  mockedListExecutions.mockResolvedValue([]);
   mockedReadJson.mockReset();
   // A missing user config (the common case) mirrors a real ENOENT rejection.
   mockedReadJson.mockRejectedValue(enoentError());
@@ -180,9 +193,7 @@ describe('CLI chat defaults', () => {
   });
 
   it('inherits only the model from recent single-agent tool-use history', async () => {
-    mockedListExecutions.mockReturnValueOnce(
-      Effect.succeed([historyEntry('research')]),
-    );
+    mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE },
@@ -197,9 +208,9 @@ describe('CLI chat defaults', () => {
   });
 
   it('ignores a history model that the CLI cannot run', async () => {
-    mockedListExecutions.mockReturnValueOnce(
-      Effect.succeed([historyEntry('research', { model: 'Copilot GPT-4o' })]),
-    );
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry('research', { model: 'Copilot GPT-4o' }),
+    ]);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE },
@@ -215,13 +226,11 @@ describe('CLI chat defaults', () => {
     // A `texra multi-agent run physicist` is stored as a tool-use execution
     // whose root is the team orchestrator. It must not affect plain
     // `texra chat` defaults — fall back to the built-ins instead.
-    mockedListExecutions.mockReturnValueOnce(
-      Effect.succeed([
-        historyEntry('leanOrchestrator', {
-          cli: { multiAgentPresetId: 'lean-project' },
-        }),
-      ]),
-    );
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry('leanOrchestrator', {
+        cli: { multiAgentPresetId: 'lean-project' },
+      }),
+    ]);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE },
@@ -239,12 +248,10 @@ describe('CLI chat defaults', () => {
   it.each(['bash', 'simplifier'])(
     'does not inherit %s as the default single-chat agent',
     async (agent) => {
-      mockedListExecutions.mockReturnValueOnce(
-        Effect.succeed([
-          historyEntry(agent, {}, '2026-05-21T08:02:00.000Z'),
-          historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
-        ]),
-      );
+      mockedListExecutions.mockResolvedValueOnce([
+        historyEntry(agent, {}, '2026-05-21T08:02:00.000Z'),
+        historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
+      ]);
 
       await expectChatDefaults(
         { cwd: NO_WORKSPACE },
@@ -258,18 +265,16 @@ describe('CLI chat defaults', () => {
   );
 
   it('skips a team run to reach an earlier single-agent model', async () => {
-    mockedListExecutions.mockReturnValueOnce(
-      Effect.succeed([
-        historyEntry(
-          'orchestrator',
-          {
-            cli: { multiAgentPresetId: 'physicist' },
-          },
-          '2026-05-21T08:02:00.000Z',
-        ),
-        historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
-      ]),
-    );
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry(
+        'orchestrator',
+        {
+          cli: { multiAgentPresetId: 'physicist' },
+        },
+        '2026-05-21T08:02:00.000Z',
+      ),
+      historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
+    ]);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE },
@@ -383,9 +388,7 @@ describe('CLI chat defaults', () => {
   });
 
   it('still loads history when only the agent is directly resolved', async () => {
-    mockedListExecutions.mockReturnValueOnce(
-      Effect.succeed([historyEntry('research')]),
-    );
+    mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE, agentOverride: 'simplifier' },

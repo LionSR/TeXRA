@@ -281,106 +281,121 @@ export const launchAgentCliSession = Effect.fn(
 )(function* (
   params: AgentCliLaunchParams,
 ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
-  const executionId = generateExecutionId();
-  const childStreamId = getStreamTabId(params.streamPrefix, { executionId });
-  // An external CLI drives this agent: the CLI is both the agent name and the
-  // driving tool, and `identity.tool` is what gates native-only affordances
-  // (resume/rerun) off for this cohort.
-  const identity = {
-    kind: 'agent',
-    agent: params.agentName,
-    tool: params.agentName,
-  } as const;
+  return yield* Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const executionId = generateExecutionId();
+      const childStreamId = getStreamTabId(params.streamPrefix, {
+        executionId,
+      });
+      // An external CLI drives this agent: the CLI is both the agent name and the
+      // driving tool, and `identity.tool` is what gates native-only affordances
+      // (resume/rerun) off for this cohort.
+      const identity = {
+        kind: 'agent',
+        agent: params.agentName,
+        tool: params.agentName,
+      } as const;
 
-  yield* Effect.tryPromise({
-    try: () =>
-      runInSession(params.session, () =>
-        registerExecution(executionId, params.config, params.agentName, {
+      const registry = params.store(params.session);
+      const loopSettled = Deferred.makeUnsafe<void>();
+      yield* registerExecution(
+        params.session,
+        executionId,
+        params.config,
+        params.agentName,
+        {
           streamId: childStreamId,
           identity,
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
           parentExecutionId: params.parentExecutionId,
+          parentStreamId: params.parentStreamId,
+          background: true,
           description: childStreamDescription(params.description),
-        }),
-      ),
-    // Keep the cause: registration aggregates real store-write failures
-    // (unwritable storage root, torn record) that the per-provider prefix
-    // alone cannot diagnose.
-    catch: (error) =>
-      new ToolError(
-        `${params.registerFailedMessage} ${toErrorMessage(error)}`,
-        { cause: error },
-      ),
-  });
-  // The launch guard owns the release-on-failure policy for every launch site
-  // (bash background, the two detached child paths, and this one): a failed
-  // launch must not leave a record that refuses a relaunch for the rest of the
-  // process's life.
-  const registry = params.store(params.session);
-  const loopSettled = Deferred.makeUnsafe<void>();
-  yield* Effect.forkDetach(
-    Effect.raceFirst(registry.persistenceDrain(), Deferred.await(loopSettled)),
-    { startImmediately: true },
-  );
-  const childStream = yield* runWithOwnedExecutionLeaseLaunchGuard(
-    executionId,
-    Effect.gen(function* () {
-      const stream = yield* createChildStream(
-        params.session,
-        executionId,
-        params.parentStreamId,
-        {
-          streamPrefix: params.streamPrefix,
-          run: identity,
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-          description: params.description,
-          config: params.config,
         },
-      );
-      const started = yield* Effect.exit(
-        Effect.suspend(() =>
-          params.startLoop({
-            childStream: stream,
-            executionId,
-            loopSettled,
-          }),
+      ).pipe(
+        Effect.mapError(
+          (error) =>
+            new ToolError(
+              `${params.registerFailedMessage} ${toErrorMessage(error)}`,
+              { cause: error },
+            ),
         ),
       );
-      if (Exit.isFailure(started)) {
-        const startError = Cause.squash(started.cause);
-        const finalized = yield* Effect.exit(
-          stream.finalize({
-            outcome: RUN_OUTCOME.FAILED,
-            error: startError,
-            persistence: { kind: 'finalize', flowRecord: 'delete' },
-          }),
-        );
-        if (Exit.isFailure(finalized)) {
-          return yield* Effect.fail(
-            new AggregateError(
-              [startError, Cause.squash(finalized.cause)],
-              `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
+      // The launch guard owns the release-on-failure policy for every launch site
+      // (bash background, the two detached child paths, and this one): a failed
+      // launch must not leave a record that refuses a relaunch for the rest of the
+      // process's life.
+      const childStream = yield* runWithOwnedExecutionLeaseLaunchGuard(
+        params.session,
+        executionId,
+        Effect.gen(function* () {
+          yield* restore(Effect.void);
+          yield* Effect.forkDetach(
+            Effect.raceFirst(
+              registry.persistenceDrain(),
+              Deferred.await(loopSettled),
+            ),
+            { startImmediately: true },
+          );
+
+          const stream = yield* createChildStream(
+            params.session,
+            executionId,
+            params.parentStreamId,
+            {
+              streamPrefix: params.streamPrefix,
+              run: identity,
+              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+              description: params.description,
+              config: params.config,
+            },
+          );
+          const started = yield* Effect.exit(
+            Effect.suspend(() =>
+              params.startLoop({
+                childStream: stream,
+                executionId,
+                loopSettled,
+              }),
             ),
           );
-        }
-        return yield* Effect.fail(ensureError(startError));
-      }
-      return stream;
-    }),
-  ).pipe(
-    Effect.uninterruptible,
-    Effect.onError(() => Deferred.succeed(loopSettled, undefined)),
-    Effect.mapError((cause) => new AgentCliCallFailed({ cause })),
-  );
+          if (Exit.isFailure(started)) {
+            const startError = Cause.squash(started.cause);
+            const finalized = yield* Effect.exit(
+              stream.finalize({
+                outcome: RUN_OUTCOME.FAILED,
+                error: startError,
+                persistence: { kind: 'finalize', flowRecord: 'delete' },
+              }),
+            );
+            if (Exit.isFailure(finalized)) {
+              return yield* Effect.fail(
+                new AggregateError(
+                  [startError, Cause.squash(finalized.cause)],
+                  `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
+                ),
+              );
+            }
+            return yield* Effect.fail(ensureError(startError));
+          }
+          return stream;
+        }),
+      ).pipe(
+        Effect.uninterruptible,
+        Effect.onError(() => Deferred.succeed(loopSettled, undefined)),
+        Effect.mapError((cause) => new AgentCliCallFailed({ cause })),
+      );
 
-  return executed(
-    [
-      params.launchedLine,
-      `Execution ID: ${executionId}`,
-      `Stream tab: ${childStream.childStreamId}`,
-      params.followUpLine,
-    ].join('\n'),
-    params.summary,
+      return executed(
+        [
+          params.launchedLine,
+          `Execution ID: ${executionId}`,
+          `Stream tab: ${childStream.childStreamId}`,
+          params.followUpLine,
+        ].join('\n'),
+        params.summary,
+      );
+    }),
   );
 });
 

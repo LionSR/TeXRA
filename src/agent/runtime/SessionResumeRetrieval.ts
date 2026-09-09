@@ -9,7 +9,10 @@
  * - Workflow: agentConfig + executionId + transcript-format key
  */
 
+import { Effect } from 'effect';
+
 import { deriveResumability } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   PersistedFlowStateError,
   type FlowRecord,
@@ -60,29 +63,36 @@ type ResumeAgentLabel = 'tool-use' | 'workflow';
  * resumable, `null` when there is nothing to resume, and throws when the
  * resume storage itself is unreadable (re-wrapped by the caller's catch).
  */
-async function probeResumableFlowRecord(
-  executionId: ExecutionId,
-  agentType: ResumeAgentLabel,
-): Promise<FlowRecord | null> {
-  const resumability = await deriveResumability(executionId);
-  if (resumability.kind === 'checkpoint') return resumability.flowRecord;
-  // Unreadable storage is a failure to report, never "nothing to resume":
-  // the caller's catch re-wraps it so hosts can word the difference. A record
-  // that is present but malformed is the one fault that names the checkpoint
-  // itself, so it throws the typed error the resume boundary refuses as
-  // unusable saved state; a metadata or transient read failure stays an
-  // untyped operational error there.
-  if (resumability.kind === 'unreadable') {
-    if (resumability.fault === 'checkpoint-malformed') {
-      throw new PersistedFlowStateError(executionId, 'unsupported-record');
+const probeResumableFlowRecord = Effect.fn('probeResumableFlowRecord')(
+  function* (
+    executionId: ExecutionId,
+    agentType: ResumeAgentLabel,
+    session: SessionHandle,
+  ): Effect.fn.Return<FlowRecord | null, Error> {
+    const resumability = yield* deriveResumability(executionId, session);
+    if (resumability.kind === 'checkpoint') return resumability.flowRecord;
+    // Unreadable storage is a failure to report, never "nothing to resume":
+    // the caller's catch re-wraps it so hosts can word the difference. A record
+    // that is present but malformed is the one fault that names the checkpoint
+    // itself, so it throws the typed error the resume boundary refuses as
+    // unusable saved state; a metadata or transient read failure stays an
+    // untyped operational error there.
+    if (resumability.kind === 'unreadable') {
+      if (resumability.fault === 'checkpoint-malformed') {
+        return yield* Effect.fail(
+          new PersistedFlowStateError(executionId, 'unsupported-record'),
+        );
+      }
+      return yield* Effect.fail(
+        new Error(`Unable to read resume storage: ${resumability.cause}`),
+      );
     }
-    throw new Error(`Unable to read resume storage: ${resumability.cause}`);
-  }
-  logger.warn('Execution is not resumable', {
-    data: { agentType, executionId },
-  });
-  return null;
-}
+    logger.warn('Execution is not resumable', {
+      data: { agentType, executionId },
+    });
+    return null;
+  },
+);
 
 /**
  * Wrap an unexpected retrieval failure (KV/IO error) so the resume boundary
@@ -115,130 +125,167 @@ function resumeRetrievalError(
  *   (e.g. a transient KV/IO error) so the caller can distinguish "nothing to
  *   resume" from "resume failed" instead of silently abandoning the session.
  */
-export async function retrieveSessionResumeData(
-  streamId: StreamTabId,
-  executionId: ExecutionId,
-  agentConfig: AgentConfig,
-  options: SessionResumeRetrievalOptions = {},
-): Promise<SessionResumeData | null> {
-  if (agentConfig.agentCategory === AgentCategory.ToolUse) {
-    return retrieveToolUseResumeData(
-      streamId,
-      executionId,
-      agentConfig,
-      options,
-    );
-  }
+export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
+  function* (
+    streamId: StreamTabId,
+    executionId: ExecutionId,
+    agentConfig: AgentConfig,
+    session: SessionHandle,
+    options: SessionResumeRetrievalOptions = {},
+  ): Effect.fn.Return<SessionResumeData | null, Error> {
+    if (agentConfig.agentCategory === AgentCategory.ToolUse) {
+      return yield* retrieveToolUseResumeData(
+        streamId,
+        executionId,
+        agentConfig,
+        session,
+        options,
+      );
+    }
 
-  if (agentConfig.agentCategory === AgentCategory.Workflow) {
-    return retrieveWorkflowResumeData(streamId, executionId, agentConfig);
-  }
+    if (agentConfig.agentCategory === AgentCategory.Workflow) {
+      return yield* retrieveWorkflowResumeData(
+        streamId,
+        executionId,
+        agentConfig,
+        session,
+      );
+    }
 
-  logger.warn(`Unknown agent config type for stream: ${streamId}`);
-  return null;
-}
+    logger.warn(`Unknown agent config type for stream: ${streamId}`);
+    return null;
+  },
+);
 
 /**
  * Retrieve resume data for a tool-use session.
  */
-async function retrieveToolUseResumeData(
-  streamId: StreamTabId,
-  executionId: ExecutionId,
-  agentConfig: AgentConfig,
-  options: SessionResumeRetrievalOptions,
-): Promise<ToolUseResumeData | null> {
-  try {
-    const flowRecord = await probeResumableFlowRecord(executionId, 'tool-use');
-    if (!flowRecord) return null;
-
-    const parsedShared = parseToolUseShared(flowRecord.shared);
-    if (!parsedShared.success) {
-      logger.warn(
-        `Invalid flow record structure for execution: ${executionId}`,
-        {
-          data: { error: parsedShared.error },
-        },
-      );
-      return null;
-    }
-
-    const { stateSlices } = parsedShared.data;
-    if (stateSlices === null) {
-      logger.warn(
-        `Invalid flow record structure for execution: ${executionId}`,
-      );
-      return null;
-    }
-
-    const currentConfig = {
-      ...agentConfig,
-      model: parsedShared.data.modelId ?? agentConfig.model,
-    };
-    const modelHandlerCompatibilityKey =
-      parsedShared.data.modelHandlerCompatibilityKey ??
-      inferPersistedModelHandlerCompatibilityKey(currentConfig.model);
-
-    const shared: PreparedShared = {
-      ...parsedShared.data,
-      stateSlices,
-      ...(modelHandlerCompatibilityKey !== undefined && {
-        modelHandlerCompatibilityKey,
-      }),
-    };
-
-    logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
-    return {
-      type: 'toolUse',
-      shared,
+const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
+  function* (
+    streamId: StreamTabId,
+    executionId: ExecutionId,
+    agentConfig: AgentConfig,
+    session: SessionHandle,
+    options: SessionResumeRetrievalOptions,
+  ): Effect.fn.Return<ToolUseResumeData | null, Error> {
+    const flowRecord = yield* probeResumableFlowRecord(
       executionId,
-      streamId,
-      ...(options.parentStreamId !== undefined && {
-        parentStreamId: options.parentStreamId,
-      }),
-      agentConfig: currentConfig,
-    };
-  } catch (error) {
-    throw resumeRetrievalError('tool-use', streamId, error);
-  }
-}
+      'tool-use',
+      session,
+    ).pipe(
+      Effect.mapError((error) =>
+        resumeRetrievalError('tool-use', streamId, error),
+      ),
+    );
+    return yield* Effect.try({
+      try: (): ToolUseResumeData | null => {
+        if (!flowRecord) return null;
+
+        const parsedShared = parseToolUseShared(flowRecord.shared);
+        if (!parsedShared.success) {
+          logger.warn(
+            `Invalid flow record structure for execution: ${executionId}`,
+            {
+              data: { error: parsedShared.error },
+            },
+          );
+          return null;
+        }
+
+        const { stateSlices } = parsedShared.data;
+        if (stateSlices === null) {
+          logger.warn(
+            `Invalid flow record structure for execution: ${executionId}`,
+          );
+          return null;
+        }
+
+        const currentConfig = {
+          ...agentConfig,
+          model: parsedShared.data.modelId ?? agentConfig.model,
+        };
+        const modelHandlerCompatibilityKey =
+          parsedShared.data.modelHandlerCompatibilityKey ??
+          inferPersistedModelHandlerCompatibilityKey(currentConfig.model);
+
+        const shared: PreparedShared = {
+          ...parsedShared.data,
+          stateSlices,
+          ...(modelHandlerCompatibilityKey !== undefined && {
+            modelHandlerCompatibilityKey,
+          }),
+        };
+
+        logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
+        return {
+          type: 'toolUse',
+          shared,
+          executionId,
+          streamId,
+          ...(options.parentStreamId !== undefined && {
+            parentStreamId: options.parentStreamId,
+          }),
+          agentConfig: currentConfig,
+        };
+      },
+      catch: (error) => resumeRetrievalError('tool-use', streamId, error),
+    });
+  },
+);
 
 /**
  * Retrieve resume data for a workflow session.
  * Verifies flow record exists before returning resume data.
  * Workflow flows read full persisted state via executionId during resume.
  */
-async function retrieveWorkflowResumeData(
-  streamId: StreamTabId,
-  executionId: ExecutionId,
-  agentConfig: AgentConfig,
-): Promise<WorkflowResumeData | null> {
-  try {
-    const flowRecord = await probeResumableFlowRecord(executionId, 'workflow');
-    if (!flowRecord) return null;
-
-    const parseResult = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
-    if (!parseResult.success) {
-      logger.warn(`Invalid workflow flow record for execution: ${executionId}`);
-      return null;
-    }
-
-    logger.debug('Retrieved workflow resume data for stream', {
-      data: {
-        streamId,
-        currentRound: parseResult.data.currentRound,
-        totalRounds: parseResult.data.totalRounds,
-      },
-    });
-    const modelHandlerCompatibilityKey =
-      parseResult.data.modelHandlerCompatibilityKey ??
-      inferPersistedModelHandlerCompatibilityKey(agentConfig.model);
-    return {
-      type: 'workflow',
-      agentConfig,
+const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
+  function* (
+    streamId: StreamTabId,
+    executionId: ExecutionId,
+    agentConfig: AgentConfig,
+    session: SessionHandle,
+  ): Effect.fn.Return<WorkflowResumeData | null, Error> {
+    const flowRecord = yield* probeResumableFlowRecord(
       executionId,
-      modelHandlerCompatibilityKey,
-    };
-  } catch (error) {
-    throw resumeRetrievalError('workflow', streamId, error);
-  }
-}
+      'workflow',
+      session,
+    ).pipe(
+      Effect.mapError((error) =>
+        resumeRetrievalError('workflow', streamId, error),
+      ),
+    );
+    return yield* Effect.try({
+      try: (): WorkflowResumeData | null => {
+        if (!flowRecord) return null;
+
+        const parseResult = ReflectionFlowStateSchema.safeParse(
+          flowRecord.shared,
+        );
+        if (!parseResult.success) {
+          logger.warn(
+            `Invalid workflow flow record for execution: ${executionId}`,
+          );
+          return null;
+        }
+
+        logger.debug('Retrieved workflow resume data for stream', {
+          data: {
+            streamId,
+            currentRound: parseResult.data.currentRound,
+            totalRounds: parseResult.data.totalRounds,
+          },
+        });
+        const modelHandlerCompatibilityKey =
+          parseResult.data.modelHandlerCompatibilityKey ??
+          inferPersistedModelHandlerCompatibilityKey(agentConfig.model);
+        return {
+          type: 'workflow',
+          agentConfig,
+          executionId,
+          modelHandlerCompatibilityKey,
+        };
+      },
+      catch: (error) => resumeRetrievalError('workflow', streamId, error),
+    });
+  },
+);

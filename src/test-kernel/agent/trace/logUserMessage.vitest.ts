@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { logUserMessage, type AgentTrace } from '@agent/trace';
 import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
+import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript';
 
 // #7508: the userMessage row's attachment-kind/count payload — logUserMessage
 // stamps data.attachments when attachments are present and stays byte-for-byte
@@ -11,10 +11,10 @@ import { StreamLogStore } from '@transcript';
 describe('logUserMessage', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
-  let store: StreamLogStore;
+  let store: StreamLog;
 
   beforeEach(() => {
-    store = StreamLogStore.ephemeral('test');
+    store = new StreamLog();
     const runTrace = createTestRunTrace('TestUserMessageLogger', store);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
@@ -25,7 +25,7 @@ describe('logUserMessage', () => {
   });
 
   function capturedEntries(): StreamLogEntry[] {
-    const log = store.get('TestUserMessageLogger');
+    const log = store;
     return log?.getRange(0, log.head) ?? [];
   }
 

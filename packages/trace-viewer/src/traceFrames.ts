@@ -16,8 +16,8 @@ import {
   STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type RunIdentity,
-  type SessionEvent,
-  type SessionEventDraft,
+  type DisplaySessionEvent,
+  type DisplaySessionEventDraft,
   type StreamPhase,
 } from '@shared/schemas';
 import {
@@ -134,7 +134,7 @@ export function traceDisplayName(trace: TraceDocument): string {
 }
 
 /** The listing facts of the run, in publish order, without envelopes. */
-function listingBodies(trace: TraceDocument): SessionEventDraft[] {
+function listingBodies(trace: TraceDocument): DisplaySessionEventDraft[] {
   const { snapshot, executionId } = trace;
   const agentConfig =
     'agentCategory' in trace.config ? trace.config : undefined;
@@ -146,7 +146,7 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
     identity.kind === 'multiAgentWorkflow'
       ? AgentCategory.Workflow
       : AgentCategory.ToolUse;
-  const bodies: SessionEventDraft[] = [
+  const bodies: DisplaySessionEventDraft[] = [
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('stream', trace.streamId),
@@ -275,17 +275,23 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
  * unfinished run as interrupted and every finished one as durably final.
  */
 function traceEvents(trace: TraceDocument): {
-  readonly listing: SessionEvent[];
-  readonly transcript: SessionEvent[];
+  readonly listing: DisplaySessionEvent[];
+  readonly transcript: DisplaySessionEvent[];
 } {
   const at = trace.entries[0]?.timestamp ?? 0;
   let seq = 0;
-  // The publisher's stamp (contract C2), as `SessionEventLog` would have
+  // The publisher's stamp (contract C2), as `DisplaySessionEventLog` would have
   // applied it: a draft is a distributive omit over the union, so the
   // spread cannot be typed back into the union without the assertion.
-  const stamp = (draft: SessionEventDraft): SessionEvent => {
+  const stamp = (draft: DisplaySessionEventDraft): DisplaySessionEvent => {
     seq += 1;
-    return { ...draft, seq, commit: seq, ownerId: null, at } as SessionEvent;
+    return {
+      ...draft,
+      seq,
+      commit: seq,
+      ownerId: null,
+      at,
+    } as DisplaySessionEvent;
   };
   const listing = listingBodies(trace).map(stamp);
   const transcript = trace.entries.map((entry) =>

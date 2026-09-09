@@ -210,7 +210,7 @@ describe('tool-use follow-up progress events', () => {
     );
 
     expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
-    expect(recorded.events).toEqual([]);
+    expect(await recorded.read()).toEqual([]);
   });
 
   it('queues follow-ups for resuming streams through registry admission', async () => {

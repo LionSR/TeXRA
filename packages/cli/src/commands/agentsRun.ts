@@ -1,6 +1,9 @@
+import { Effect } from 'effect';
 import type { AgentConfigPayload } from '@agent/runtime';
-
+import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
+
 import {
   CliUsageError,
   readCliStdinText,
@@ -15,6 +18,7 @@ import {
   resolveCliLaunchAgent,
 } from '../runtime/agents';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
@@ -38,22 +42,34 @@ interface ToolUseAgentRunInit {
   readonly instructionFile?: string;
 }
 
-export async function runToolUseAgent(
+export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   context: CliContext,
   init: ToolUseAgentRunInit,
-): Promise<number> {
-  const instruction = await resolveFileBackedInstruction(init, context.cwd);
+): Effect.fn.Return<number, Error> {
+  const instruction = yield* Effect.tryPromise({
+    try: () => resolveFileBackedInstruction(init, context.cwd),
+    catch: ensureError,
+  });
   if (!instruction) {
     throw new CliUsageError('Provide --instruction or --instruction-file.');
   }
 
-  await initLocalCliPlatform(context);
-  await resolveCliLaunchAgent(init.agent, 'agentsRun');
+  yield* Effect.tryPromise({
+    try: () => initLocalCliPlatform(context),
+    catch: ensureError,
+  });
+  yield* Effect.tryPromise({
+    try: () => resolveCliLaunchAgent(init.agent, 'agentsRun'),
+    catch: ensureError,
+  });
 
-  const model = await selectCliRunModel(context, init.model, 'chat');
+  const model = yield* Effect.tryPromise({
+    try: () => selectCliRunModel(context, init.model, 'chat'),
+    catch: ensureError,
+  });
   const runContext = buildHeadlessRunContext(context);
 
-  return withExpandedRunInputs(
+  return yield* withExpandedRunInputs(
     init.inputFiles,
     init.contextFiles,
     runContext.cwd,
@@ -62,39 +78,40 @@ export async function runToolUseAgent(
       requireWorkspaceFiles: true,
       readStdinText: readCliStdinText,
     },
-    async ({ inputFiles, contextFiles, stdinInputPath }) => {
-      const config: AgentConfigPayload = {
-        agent: init.agent,
-        model,
-        inputFiles,
-        contextFiles,
-        instruction: formatToolUseAgentRunInstruction({
+    ({ inputFiles, contextFiles, stdinInputPath }) =>
+      Effect.gen(function* () {
+        const config: AgentConfigPayload = {
+          agent: init.agent,
+          model,
           inputFiles,
           contextFiles,
-          instruction,
-        }),
-        displayInstruction: instruction,
-        workingDirectory: runContext.cwd,
-        agentCategory: AgentCategory.ToolUse,
-      };
+          instruction: formatToolUseAgentRunInstruction({
+            inputFiles,
+            contextFiles,
+            instruction,
+          }),
+          displayInstruction: instruction,
+          workingDirectory: runContext.cwd,
+          agentCategory: AgentCategory.ToolUse,
+        };
 
-      const execution = await executeCliToolUseConfig(config, runContext, {
-        stopAfterCycle: true,
-        recoveryInputIsDurable: stdinInputPath === undefined,
-        categoryMismatchMessage: `Agent "${init.agent}" resolved to a non tool-use run.`,
-      });
-      if (!execution.ok) return execution.exitCode;
+        const execution = yield* executeCliToolUseConfig(config, runContext, {
+          stopAfterCycle: true,
+          recoveryInputIsDurable: stdinInputPath === undefined,
+          categoryMismatchMessage: `Agent "${init.agent}" resolved to a non tool-use run.`,
+        });
+        if (!execution.ok) return execution.exitCode;
 
-      emitCliResult(runContext, {
-        json: execution.result,
-        ndjson: { kind: 'agent-result', result: execution.result },
-        text: toolUseResultText(execution.result),
-      });
+        emitCliResult(runContext, {
+          json: execution.result,
+          ndjson: { kind: 'agent-result', result: execution.result },
+          text: toolUseResultText(execution.result),
+        });
 
-      return execution.exitCode;
-    },
+        return execution.exitCode;
+      }),
   );
-}
+});
 
 export const agentsRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a tool-use agent headlessly' },
@@ -135,10 +152,13 @@ export const agentsRunCommand = defineCliCommand({
         'File whose contents are passed before --instruction when both are set',
     },
   },
-  run: (context, ctx) =>
-    runToolUseAgent(context, {
+  run: async (context, ctx) => {
+    const init = {
       agent: ctx.args.name,
       ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
       model: optString(ctx.args.model),
-    }),
+    };
+    await installCliProcessRuntime();
+    return effectRuntime().runPromise(runToolUseAgent(context, init));
+  },
 });

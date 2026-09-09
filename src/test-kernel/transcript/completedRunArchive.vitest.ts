@@ -1,16 +1,14 @@
 import { it as effectIt } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
-import { Effect } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   buildVars: vi.fn(),
-  clearTerminalExecutionState: vi.fn(),
   createHandler: vi.fn(),
   hasPersistedParent: vi.fn(),
   loadAgent: vi.fn(),
-  releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
   resolveAgent: vi.fn(),
 }));
 
@@ -34,27 +32,36 @@ vi.mock('@agent/prompt/userVars', async (importActual) => ({
 }));
 vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
-  clearTerminalExecutionState: launchMocks.clearTerminalExecutionState,
-  hasPersistedParent: launchMocks.hasPersistedParent,
+  hasPersistedParent: (...args: unknown[]) =>
+    Effect.promise(() => launchMocks.hasPersistedParent(...args)),
 }));
 vi.mock('@agent/storage/executionLease', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionLease')>()),
   acquireResumedExecutionLease: launchMocks.acquireResumedExecutionLease,
   assertOwnedExecutionLease: vi.fn(),
-  releaseOwnedExecutionLeaseAfterFailure:
-    launchMocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import {
+  clearStoreCache,
+  getExecutionStore,
+  getExecutionRecords,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
+import {
+  readCliHistoryDetails,
+  formatCliHistoryDetailsText,
+  cliHistoryDetailNdjsonRecord,
+} from '@cli/runtime/history';
+import { createHostRunActions } from '@controllers/session/hostRunActions';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   LOG_LEVELS,
@@ -65,6 +72,7 @@ import {
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
+import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -79,13 +87,14 @@ import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
+  assembleTrace,
+  injectStandaloneTrace,
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation as readCompletedRunConversationEffect,
   readCompletedRunTodos,
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
-import type { TranscriptWriter } from '@transcript/StreamLogStore';
 
 const tempDirs = useTempDirs();
 
@@ -102,11 +111,14 @@ async function stampStreamId(
   executionId: ExecutionId,
   streamId: StreamTabId,
 ): Promise<void> {
-  await getExecutionStore(executionId).writeMeta({
-    timestamp: '2026-07-07T00:00:00.000Z',
-    streamId,
-    identity: { kind: 'agent', agent: 'orchestrator' },
-  });
+  if (
+    !(await Effect.runPromise(
+      getExecutionRecords(taskSession, executionId).readMeta(),
+    ))
+  ) {
+    publishTestRunStart(taskSession, streamId, executionId);
+    await taskSession.settlePublications();
+  }
 }
 
 let taskSession: ReturnType<typeof createTestSession>;
@@ -132,7 +144,7 @@ async function seedTasks(
   await settleSessionEvents();
 }
 
-type LogRow = Parameters<TranscriptWriter['append']>[0];
+type LogRow = StreamLogAppendInput;
 
 let entryCounter = 0;
 
@@ -249,6 +261,102 @@ describe('completedRunArchive facade', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps private metadata exact while public events and exports redact its secrets', async () => {
+    taskSession.dispose();
+    taskSession = createProcessSession({
+      transcriptMode: { kind: 'persistent' },
+    });
+    const executionId = 'abc654abc654' as ExecutionId;
+    const streamId = 'stream:secret-export' as StreamTabId;
+    const secret = 'sk-private-export-key-1234567890';
+    const content = `  retained text ${secret}  `;
+    await stampStreamId(executionId, streamId);
+    const records = getExecutionRecords(taskSession, executionId);
+    const config = {
+      ...runConfig('orchestrator'),
+      instruction: content,
+      inputFiles: [`paper-${secret}.tex`],
+    };
+    await Effect.runPromise(records.writeRunRecord(config));
+    await Effect.runPromise(records.writeReport(content));
+    await Effect.runPromise(
+      taskSession.commit([
+        {
+          type: 'execution.description',
+          aggregateId: aggregateId('execution', executionId),
+          description: content,
+        },
+        {
+          type: 'updateStreamDescription',
+          aggregateId: aggregateId('stream', streamId),
+          description: content,
+        },
+        {
+          type: 'run.config',
+          aggregateId: aggregateId('stream', streamId),
+          executionId,
+          config,
+        },
+        {
+          type: 'response.finalized',
+          aggregateId: aggregateId('stream', streamId),
+          text: 'A public proof.',
+        },
+      ]),
+    );
+    expect(await Effect.runPromise(records.readConfig())).toEqual(config);
+    expect(await Effect.runPromise(records.readReport())).toBe(content);
+    expect((await Effect.runPromise(records.readMeta()))?.description).toBe(
+      content,
+    );
+    const runExecutionRequest = vi.fn(async () => undefined);
+    const actions = createHostRunActions({
+      session: taskSession,
+      runExecutionRequest,
+      loadModelOptions: async () => [],
+      promptForApiKey: async () => undefined,
+      showInfo: vi.fn(),
+      showWarning: vi.fn(),
+      showError: vi.fn(),
+      logError: vi.fn(),
+    });
+    await Effect.runPromise(actions.runNew(streamId));
+    expect(runExecutionRequest).toHaveBeenCalledWith({ config });
+    const trace = await Effect.runPromise(
+      assembleTrace(executionId, taskSession),
+    );
+    expect(trace.status).toBe('ok');
+    if (trace.status !== 'ok') throw new Error('Expected trace export');
+    const exportInput = await loadChatExportInput(executionId);
+    const details = await readCliHistoryDetails(executionId);
+    expect(details).not.toBeNull();
+    if (!details) throw new Error('Expected history details');
+    const publicRows = await Effect.runPromise(
+      Stream.runCollect(
+        taskSession.events.aggregate(aggregateId('stream', streamId), 1),
+      ),
+    );
+    const outputs = [
+      injectStandaloneTrace('<script type="module"></script>', trace.trace),
+      JSON.stringify(exportInput.exportInput),
+      formatCliHistoryDetailsText(details),
+      JSON.stringify(cliHistoryDetailNdjsonRecord(details)),
+      JSON.stringify(publicRows),
+      JSON.stringify(
+        SubscriptionRef.getUnsafe(taskSession.view).streams.get(streamId)
+          ?.inputFiles,
+      ),
+      JSON.stringify(
+        SubscriptionRef.getUnsafe(taskSession.view).streams.get(streamId)
+          ?.description,
+      ),
+    ];
+    for (const output of outputs) {
+      expect(output).not.toContain(secret);
+      expect(output).toContain('[redacted]');
+    }
+  });
+
   it('keeps concurrent exports of the same execution isolated by session roots', async () => {
     const executionId = 'abc456abc456' as ExecutionId;
     const streamId = 'stream:shared-execution-id' as StreamTabId;
@@ -259,20 +367,23 @@ describe('completedRunArchive facade', () => {
     try {
       await Promise.all(
         papers.map(async ({ session, label }) => {
-          await runWithWorkspaceRoots(session.roots, async () => {
-            const store = getExecutionStore(executionId);
-            await store.writeMeta({
-              timestamp: '2026-09-07T00:00:00.000Z',
-              description: label,
-              streamId,
-              identity: { kind: 'agent', agent: label },
-            });
-            await store.writeRunRecord({
+          publishTestRunStart(session, streamId, executionId);
+          await session.settlePublications();
+          await Effect.runPromise(
+            getExecutionRecords(session, executionId).writeRunRecord({
               ...runConfig(label),
               instruction: label,
-            });
-          });
-          publishTestRunStart(session, streamId, executionId);
+            }),
+          );
+          await Effect.runPromise(
+            session.commit([
+              {
+                type: 'execution.description',
+                aggregateId: aggregateId('execution', executionId),
+                description: label,
+              },
+            ]),
+          );
           session.publish([
             {
               type: 'response.finalized',
@@ -321,11 +432,12 @@ describe('completedRunArchive facade', () => {
     const streamId = 'orchestrator@deepseekproT#abc123abc123' as StreamTabId;
     await writeArchiveFixture(executionId, streamId);
 
-    const store = getExecutionStore(executionId);
-    await store.writeRunRecord({
-      ...runConfig('orchestrator'),
-      instruction: 'Fix the lemma.',
-    });
+    await Effect.runPromise(
+      getExecutionRecords(taskSession, executionId).writeRunRecord({
+        ...runConfig('orchestrator'),
+        instruction: 'Fix the lemma.',
+      }),
+    );
     await stampStreamId(executionId, streamId);
 
     const conversationResult = await readCompletedRunConversation(executionId);
@@ -432,14 +544,12 @@ describe('completedRunArchive facade', () => {
         );
 
         yield* Effect.promise(() => stampStreamId(executionId, streamId));
-        yield* Effect.promise(() =>
-          getExecutionStore(executionId).writeRunRecord(config),
-        );
-
         taskSession.dispose();
         const session = initializeDefaultSession({});
         taskSession = session;
         publishTestRunStart(session, streamId, executionId);
+        yield* Effect.promise(() => session.settlePublications());
+        yield* getExecutionRecords(session, executionId).writeRunRecord(config);
         session.publish([
           {
             type: 'log',
@@ -462,12 +572,15 @@ describe('completedRunArchive facade', () => {
         const launchFailure = new Error(
           'stop after resumed writer acquisition',
         );
-        launchMocks.acquireResumedExecutionLease.mockResolvedValue('existing');
-        launchMocks.clearTerminalExecutionState.mockResolvedValue(undefined);
-        launchMocks.hasPersistedParent.mockResolvedValue(false);
-        launchMocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
-          async (_executionId: ExecutionId, error: unknown) => error,
+        const leaseModule = yield* Effect.promise(() =>
+          vi.importActual<typeof import('@agent/storage/executionLease')>(
+            '@agent/storage/executionLease',
+          ),
         );
+        launchMocks.acquireResumedExecutionLease.mockImplementation(
+          leaseModule.acquireResumedExecutionLease,
+        );
+        launchMocks.hasPersistedParent.mockResolvedValue(false);
         launchMocks.resolveAgent.mockReturnValue({
           entry: { path: '/agents/orchestrator.yaml' },
         });
@@ -499,12 +612,12 @@ describe('completedRunArchive facade', () => {
           }),
         );
 
-        const loadAndAcquireWriter = logs.loadAndAcquireWriter.bind(logs);
+        const acquireRunResidency = logs.acquireRunResidency.bind(logs);
         const resumedWriter = vi
-          .spyOn(logs, 'loadAndAcquireWriter')
+          .spyOn(logs, 'acquireRunResidency')
           .mockImplementationOnce((requestedStreamId, ownerKey) =>
             Effect.gen(function* () {
-              const writer = yield* loadAndAcquireWriter(
+              const writer = yield* acquireRunResidency(
                 requestedStreamId,
                 ownerKey,
               );
@@ -537,9 +650,29 @@ describe('completedRunArchive facade', () => {
         ).toBe(launchFailure);
 
         expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
+        const released = yield* Effect.result(
+          getExecutionRecords(session, executionId).writeReport('late write'),
+        );
+        expect(released._tag).toBe('Failure');
         expect(
-          launchMocks.releaseOwnedExecutionLeaseAfterFailure,
-        ).toHaveBeenCalledWith(executionId, launchFailure);
+          (yield* Effect.exit(
+            session.commit([
+              {
+                type: 'log',
+                aggregateId: aggregateId('stream', streamId),
+                level: 'info',
+                message: 'late stream write',
+              },
+            ]),
+          ))._tag,
+        ).toBe('Failure');
+        expect(
+          yield* Effect.promise(() =>
+            runInSession(session, () =>
+              leaseModule.inspectExecutionLease(executionId),
+            ),
+          ),
+        ).toEqual({ status: 'free' });
         resumedWriter.mockRestore();
 
         const archived = yield* readCompletedRunConversationEffect(
@@ -649,25 +782,6 @@ describe('completedRunArchive facade', () => {
     expect(
       await Effect.runPromise(readCompletedRunTodos(executionId, taskSession)),
     ).toEqual([]);
-
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-07T00:00:00.000Z',
-    });
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint).toEqual({
-      status: 'executed',
-      output: [
-        'Conversation (0 messages):',
-        'Source: none',
-        'Stream: none',
-        'Returned message interval: [0, 0)',
-        'Next offset: none',
-        '',
-        '',
-      ].join('\n'),
-    });
   });
 
   it('reads a registered execution without sidecar or suffix scans, even when its transcript is empty (#9590 A1)', async () => {
@@ -677,7 +791,7 @@ describe('completedRunArchive facade', () => {
     // A decoy stream that a suffix scan would match; registration must make
     // it unreachable — the stamped (empty) stream is authoritative.
     await persistRows(
-      executionId,
+      'dec000001' as ExecutionId,
       new Map([
         [
           `other@model#${executionId}` as StreamTabId,

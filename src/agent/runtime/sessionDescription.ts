@@ -7,7 +7,6 @@
  * future agents can quickly understand each session.
  */
 
-import { writeSessionDescription } from '@agent/storage/executionLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -136,14 +135,19 @@ export async function generateSessionDescription(
     const description = cleanSessionDescription(text);
     if (!description) return;
 
-    await writeSessionDescription(executionId, description);
     session.publish([
+      {
+        type: 'execution.description',
+        aggregateId: qualifyAggregateId('execution', executionId),
+        description,
+      },
       {
         type: 'updateStreamDescription',
         aggregateId: qualifyAggregateId('stream', streamId),
         description,
       },
     ]);
+    await session.settlePublications();
     log.info(`Generated session description for ${executionId}`);
   } catch (err) {
     warnWithoutRejecting(

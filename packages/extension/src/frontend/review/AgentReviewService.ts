@@ -316,7 +316,8 @@ class AgentReviewServiceImpl {
             openWorkflowOutput: openFinalOutputIfAvailable,
             stopAfterCycle: true,
             session: run.session,
-            onRun: (handle) => this.reviewRuns.bind(run, handle),
+            onRun: (handle) =>
+              effectRuntime().runPromise(this.reviewRuns.bind(run, handle)),
             onStreamResolved: presentLaunchedProgressStream,
           },
         ),
@@ -448,22 +449,25 @@ class AgentReviewServiceImpl {
    * stopped; its future reports are rejected and its outcome is discarded.
    * The run slot stays occupied until that execution actually settles.
    */
-  clear(): void {
-    this.reviewRuns.discard();
+  clear(): ReturnType<AgentReviewRunController['discard']> {
+    const settlement = this.reviewRuns.discard();
     this.issues = [];
     this.dismissed.clear();
     this.summary = undefined;
     this.pendingCommitReview = undefined;
     this.publishIssues();
+    return settlement;
   }
 
   /** Stop the active review while preserving any findings already reported. */
-  stop(): void {
-    if (!this.reviewRuns.requestStop()) return;
+  stop(): ReturnType<AgentReviewRunController['discard']> {
+    const stop = this.reviewRuns.requestStop();
+    if (!stop.accepted) return stop.settlement;
     this.pendingCommitReview = undefined;
     this.summary = 'Stopping review…';
     void this.syncContextKeys();
     this.emitter.fire();
+    return stop.settlement;
   }
 
   /**

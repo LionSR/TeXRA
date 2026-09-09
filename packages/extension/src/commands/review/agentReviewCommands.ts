@@ -28,6 +28,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -131,7 +132,7 @@ export function registerAgentReviewCommands(
     },
     {
       id: 'texra.agentReview.stop',
-      handler: () => AgentReviewService.stop(),
+      handler: () => effectRuntime().runPromise(AgentReviewService.stop()),
     },
     {
       id: 'texra.agentReview.fixAllIssues',
@@ -142,7 +143,7 @@ export function registerAgentReviewCommands(
     { id: 'texra.agentReview.openIssue', handler: handleOpenIssue },
     {
       id: 'texra.agentReview.clear',
-      handler: () => AgentReviewService.clear(),
+      handler: () => effectRuntime().runPromise(AgentReviewService.clear()),
     },
   ]);
 }

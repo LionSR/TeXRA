@@ -1,5 +1,6 @@
 // Node imports
 import path from 'node:path';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
@@ -55,6 +56,7 @@ export class ProgressWorkflowFileActionsController {
   /** Apply an output-file request from either GUI host. */
   async handle(
     request: Extract<HostRequest, { kind: 'fileAction' }>,
+    config: AgentConfig | undefined,
   ): Promise<void> {
     const base = request.base ?? undefined;
     switch (request.action) {
@@ -63,7 +65,7 @@ export class ProgressWorkflowFileActionsController {
       case 'comparePrevious':
         return this.comparePrevious(request.file, request.prev ?? undefined);
       case 'accept':
-        return this.acceptFile(request.file, base, request.streamId);
+        return this.acceptFile(request.file, base, request.streamId, config);
       case 'merge':
         return this.mergeFile(request.file, base);
       case 'latexdiff':
@@ -139,6 +141,7 @@ export class ProgressWorkflowFileActionsController {
     file: string,
     base?: string,
     activeStream?: StreamTabId,
+    config?: AgentConfig,
   ): Promise<void> {
     const backup =
       file && activeStream
@@ -158,7 +161,7 @@ export class ProgressWorkflowFileActionsController {
 
     let copyMeta: AcceptCopyMeta | undefined;
     if (activeStream && file) {
-      copyMeta = this.buildCopyMeta(activeStream, file);
+      copyMeta = this.buildCopyMeta(activeStream, file, config);
     }
 
     const accepted = await this.executeWithBaseFile(
@@ -265,8 +268,8 @@ export class ProgressWorkflowFileActionsController {
   private buildCopyMeta(
     stream: StreamTabId,
     file: string,
+    config: AgentConfig | undefined,
   ): AcceptCopyMeta | undefined {
-    const { config } = this.deps.state.getRunMetadata(stream);
     if (!config) return undefined;
 
     // Use the matched entry's own `round` and prefer the most recent match:

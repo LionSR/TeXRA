@@ -141,7 +141,7 @@ export const openTexraConfigStores = Effect.fn(
 
 /**
  * Open the workspace state store. The CLI and desktop hosts address the same
- * physical `<storageRoot>/workspace-storage/<id>/state.json` in production, so
+ * physical `<storageRoot>/v1/workspace-storage/<id>/state.json` in production, so
  * the path is derived once here.
  */
 export const openNodeWorkspaceStateStore = Effect.fn(

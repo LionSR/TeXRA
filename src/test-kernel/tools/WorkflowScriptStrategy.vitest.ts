@@ -84,10 +84,12 @@ function strategyParams(
     executionId,
     session: currentSession(),
     fingerprintAgentDependencies: (options) =>
-      fingerprintWorkflowAgentDependencies(
-        currentSession(),
-        executionId,
-        options,
+      Effect.runPromise(
+        fingerprintWorkflowAgentDependencies(
+          currentSession(),
+          executionId,
+          options,
+        ),
       ),
     logger: new TraceEmitter(),
     store: getExecutionStore(executionId),

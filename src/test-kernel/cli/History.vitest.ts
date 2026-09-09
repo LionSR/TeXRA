@@ -40,20 +40,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', async () => {
   const actual =
     await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
-  const { createFakeKv } = await import('@test/support/FakeExecutionKVStore');
   return {
     ...actual,
-    getExecutionStore: vi.fn((executionId: ExecutionId) =>
-      createFakeKv(executionId, {
-        readConfig: mocks.readConfig,
-        readWorkspaceFiles: mocks.readWorkspaceFiles,
-        readMeta: mocks.readMeta,
-        readMetaStrict: mocks.readMeta,
-        readResultMeta: mocks.readResultMeta,
-        readReport: mocks.readReport,
-        exists: mocks.exists,
-      }),
-    ),
+    getExecutionRecords: vi.fn(() => ({
+      readConfig: () => Effect.tryPromise(() => mocks.readConfig()),
+      readWorkspaceFiles: () =>
+        Effect.tryPromise(() => mocks.readWorkspaceFiles()),
+      readMeta: () => Effect.tryPromise(() => mocks.readMeta()),
+      readResultMeta: () => Effect.tryPromise(() => mocks.readResultMeta()),
+      readReport: () => Effect.tryPromise(() => mocks.readReport()),
+    })),
     listExecutions: mocks.listExecutions,
   };
 });
@@ -66,7 +62,8 @@ vi.mock('@cli/runtime/toolUseResumeData', async () => {
   >('@cli/runtime/toolUseResumeData');
   return {
     ...actual,
-    readCliResumedModel: mocks.readCliResumedModel,
+    readCliResumedModel: () =>
+      Effect.tryPromise(() => mocks.readCliResumedModel()),
   };
 });
 
@@ -101,7 +98,6 @@ vi.mock('@cli/runtime/initPlatform', () => ({
 }));
 
 // Imported after vi.mock so the mocked dependencies are in place.
-import { getExecutionStore } from '@agent/storage';
 import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -529,9 +525,7 @@ describe('CLI history runtime', () => {
   });
 
   it('loads the stored config used by resume', async () => {
-    await expect(
-      getExecutionStore('a1' as ExecutionId).readConfig(),
-    ).resolves.toEqual(config);
+    await expect(mocks.readConfig()).resolves.toEqual(config);
   });
 
   it('shows the current resumable model without losing the startup model', async () => {

@@ -57,7 +57,9 @@ describe('external tool definitions', () => {
     expect(texraCli.toggleable).toBeUndefined();
     expect(texraCli.tools).toEqual([]);
     // The install guide must match the published Node engine range.
-    expect(texraCli.installGuide).toContain('requires Node.js >=22.13.0');
+    expect(texraCli.installGuide).toContain(
+      'requires Node.js ^22.16.0 || >=24.0.0',
+    );
   });
 
   it('detects the current TeXRA CLI process through the host checker', async () => {

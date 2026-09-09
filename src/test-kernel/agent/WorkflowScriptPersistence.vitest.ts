@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -10,18 +11,26 @@ import {
 import {
   clearStoreCache,
   getExecutionStore,
-  writeWorkflowExecutionSnapshot,
+  getExecutionRecords,
   type ExecutionKVStore,
 } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import {
+  aggregateId,
   WorkflowExecutionSnapshotSchema,
+  PersistedWorkflowExecutionSnapshotSchema,
   deriveWorkflowCounts,
   type ExecutionId,
+  type StreamTabId,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -36,7 +45,33 @@ const second = await agent('second')
 return [first, second]`;
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
-beforeEach(() => clearStoreCache());
+let session: SessionHandle;
+beforeEach(async () => {
+  clearStoreCache();
+  session = createProcessSession();
+  publishTestRunStart(
+    session,
+    'workflow-test-stream' as StreamTabId,
+    executionId,
+  );
+  await session.settlePublications();
+});
+function writeWorkflowExecutionSnapshot(
+  id: ExecutionId,
+  snapshot: WorkflowExecutionSnapshot,
+): Promise<void> {
+  return Effect.runPromise(
+    session
+      .commit([
+        {
+          type: 'execution.workflow',
+          aggregateId: aggregateId('execution', id),
+          workflow: snapshot,
+        },
+      ])
+      .pipe(Effect.asVoid),
+  );
+}
 
 // Runs `onFirstEntry` while the checkpoint holding exactly one journal entry
 // is being written; throwing from it leaves that write unperformed.
@@ -100,27 +135,34 @@ describe('workflow-script persistence', () => {
         updatedAt: timestamp,
         ...(terminal && { completedAt: timestamp }),
       };
-      await store.write('meta', {
-        timestamp,
-        workflow: {
-          lifecycle,
-          stages: [],
-          calls: [
-            {
-              id: 'historical-call',
-              label: 'Historical call',
-              agent: 'legacy-agent',
-              files: { input: [], context: [], media: [] },
-              attempts: [],
-              status,
+      await writeWorkflowExecutionSnapshot(
+        executionId,
+        WorkflowExecutionSnapshotSchema.parse(
+          {
+            timestamp,
+            workflow: {
+              lifecycle,
+              stages: [],
+              calls: [
+                {
+                  id: 'historical-call',
+                  label: 'Historical call',
+                  agent: 'legacy-agent',
+                  files: { input: [], context: [], media: [] },
+                  attempts: [],
+                  status,
+                  timestamps,
+                },
+              ],
               timestamps,
             },
-          ],
-          timestamps,
-        },
-      });
+          }.workflow,
+        ),
+      );
 
-      await expect(store.readMetaStrict()).resolves.toMatchObject({
+      await expect(
+        Effect.runPromise(getExecutionRecords(session, executionId).readMeta()),
+      ).resolves.toMatchObject({
         workflow: { calls: [{ status }] },
       });
     },
@@ -145,7 +187,6 @@ describe('workflow-script persistence', () => {
     async (_name, callPatch) => {
       const store = getExecutionStore(executionId);
       const timestamp = '2026-08-30T00:00:00.000Z';
-      await store.writeMeta({ timestamp });
       const live = 'status' in callPatch && callPatch.status === 'running';
       const workflow = {
         lifecycle: live ? 'active' : 'completed',
@@ -179,9 +220,9 @@ describe('workflow-script persistence', () => {
           writeWorkflowExecutionSnapshot(executionId, workflow),
         ),
       ).rejects.toThrow();
-      await expect(store.readMetaStrict()).resolves.not.toHaveProperty(
-        'workflow',
-      );
+      await expect(
+        Effect.runPromise(getExecutionRecords(session, executionId).readMeta()),
+      ).resolves.toMatchObject({ workflow: undefined });
     },
   );
 
@@ -206,12 +247,19 @@ return await agent('resume cancelled call', { id: 'cancelled-call' })`;
     priorSnapshot.calls[0]!.status = 'cancelled';
     priorSnapshot.calls[0]!.error =
       'Workflow cancelled before this call completed.';
-    await store.write('meta', {
-      timestamp: '2026-08-30T00:00:00.000Z',
-      workflow: priorSnapshot,
-    });
+    await writeWorkflowExecutionSnapshot(
+      executionId,
+      PersistedWorkflowExecutionSnapshotSchema.parse(
+        {
+          timestamp: '2026-08-30T00:00:00.000Z',
+          workflow: priorSnapshot,
+        }.workflow,
+      ),
+    );
 
-    const persisted = await store.readMetaStrict();
+    const persisted = await Effect.runPromise(
+      getExecutionRecords(session, executionId).readMeta(),
+    );
     expect(persisted?.workflow?.calls[0]).toMatchObject({
       status: 'cancelled',
     });
@@ -326,10 +374,15 @@ return [first, second]`;
       call.attempts[0]!.completedAt = undefined;
     }
 
-    await store.writeMeta({
-      timestamp: new Date(0).toISOString(),
-      workflow: interrupted,
-    });
+    await writeWorkflowExecutionSnapshot(
+      executionId,
+      WorkflowExecutionSnapshotSchema.parse(
+        {
+          timestamp: new Date(0).toISOString(),
+          workflow: interrupted,
+        }.workflow,
+      ),
+    );
     const snapshots: WorkflowExecutionSnapshot[] = [];
     const resumed = await runPersistedWorkflowScript({
       store,
@@ -339,10 +392,15 @@ return [first, second]`;
       runAgent: async () => 'resumed result',
       onSnapshot: async (snapshot) => {
         snapshots.push(snapshot);
-        await store.writeMeta({
-          timestamp: new Date(0).toISOString(),
-          workflow: snapshot,
-        });
+        await writeWorkflowExecutionSnapshot(
+          executionId,
+          WorkflowExecutionSnapshotSchema.parse(
+            {
+              timestamp: new Date(0).toISOString(),
+              workflow: snapshot,
+            }.workflow,
+          ),
+        );
       },
     });
 
@@ -364,7 +422,9 @@ return [first, second]`;
     const persistedSnapshot = WorkflowExecutionSnapshotSchema.parse(
       JSON.parse(JSON.stringify(resumed.snapshot)),
     );
-    await expect(store.readMeta()).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(getExecutionRecords(session, executionId).readMeta()),
+    ).resolves.toMatchObject({
       workflow: persistedSnapshot,
     });
   });

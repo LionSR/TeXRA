@@ -1,4 +1,8 @@
-import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+import { Effect } from 'effect';
+import type {
+  getExecutionRecords,
+  ExecutionKVStore,
+} from '@agent/storage/ExecutionKVStore';
 import type { ExecutionId } from '@shared/schemas';
 
 /**
@@ -25,22 +29,28 @@ export function createFakeKv(
     listKeys: async () => [...store.keys()],
     clear: async () => store.clear(),
     getExecutionId: () => executionId,
-    readMeta: async () => null,
-    readMetaStrict: async () => null,
-    readRunRecord: async () => null,
-    readConfig: async () => null,
-    readReport: async () => null,
-    readWorkspaceFiles: async () => [],
-    readChildren: async () => [],
-    readResultMeta: async () => null,
     readTurnState: async () => null,
-    writeMeta: async () => {},
-    writeRunRecord: async () => {},
-    writeReport: async () => {},
-    writeWorkspaceFiles: async () => {},
-    writeChild: async () => {},
-    writeResultMeta: async () => {},
     writeTurnState: async () => {},
+    ...overrides,
+  };
+}
+
+/** Native record fixture for suites that replace the database reader boundary. */
+export function createFakeExecutionRecords(
+  overrides: Partial<ReturnType<typeof getExecutionRecords>> = {},
+): ReturnType<typeof getExecutionRecords> {
+  return {
+    readMeta: () => Effect.succeed(null),
+    readRunRecord: () => Effect.succeed(null),
+    readConfig: () => Effect.succeed(null),
+    readReport: () => Effect.succeed(null),
+    readWorkspaceFiles: () => Effect.succeed([]),
+    readResultMeta: () => Effect.succeed(null),
+    writeRunRecord: () => Effect.void,
+    writeReport: () => Effect.void,
+    clearReport: () => Effect.void,
+    writeWorkspaceFiles: () => Effect.void,
+    writeResultMeta: () => Effect.void,
     ...overrides,
   };
 }
