@@ -14,10 +14,10 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
-import { StreamLogStore } from '@transcript';
 
 // Local file imports
 import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
@@ -51,11 +51,11 @@ async function* streamEvents(
 }
 
 async function createLogger(): Promise<{
-  store: StreamLogStore;
+  store: StreamLog;
   logger: AgentTrace;
 }> {
-  const store = StreamLogStore.ephemeral('test');
-  await store.clear();
+  const store = new StreamLog();
+
   return { store, logger: createTestRunTrace(streamId, store).trace };
 }
 
@@ -78,8 +78,8 @@ function threadOf(events: ThreadEvent[]): Thread {
   } as unknown as Thread;
 }
 
-function toolLogs(store: StreamLogStore): Record<string, unknown>[] {
-  const log = store.get(streamId);
+function toolLogs(store: StreamLog): Record<string, unknown>[] {
+  const log = store;
   const entries = log?.getRange(0, log.head) ?? [];
   return entries
     .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
@@ -252,8 +252,6 @@ describe('codex progress events', () => {
   });
 });
 
-function findTurnEntry(
-  store: StreamLogStore,
-): Record<string, unknown> | undefined {
+function findTurnEntry(store: StreamLog): Record<string, unknown> | undefined {
   return toolLogs(store).find((data) => data.toolName === CODEX_TURN_TOOL);
 }

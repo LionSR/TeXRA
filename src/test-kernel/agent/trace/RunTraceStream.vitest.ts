@@ -8,11 +8,11 @@ import {
   type AgentEvent,
 } from '@agent/trace';
 import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
+import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript';
 
-function streamEntries(store: StreamLogStore): StreamLogEntry[] {
-  return store.get('stream')?.getRange(0) ?? [];
+function streamEntries(store: StreamLog): StreamLogEntry[] {
+  return store.getRange(0);
 }
 
 function openDeferredThinking(
@@ -22,10 +22,8 @@ function openDeferredThinking(
 }
 
 /** Run against a fresh, test-local store. */
-function withStore(
-  run: (store: StreamLogStore, logger: AgentTrace) => void,
-): void {
-  const store = StreamLogStore.ephemeral('test');
+function withStore(run: (store: StreamLog, logger: AgentTrace) => void): void {
+  const store = new StreamLog();
   const handle = createTestRunTrace('stream', store);
   try {
     run(store, handle.trace);
@@ -65,7 +63,7 @@ describe('AgentTrace stream output', () => {
       logger.subscribe((event) => events.push(event));
       const thinking = openDeferredThinking(logger);
 
-      expect(store.get('stream')).toBeUndefined();
+      expect(store.toJSON()).toEqual([]);
 
       thinking.append('reasoning delta');
 
@@ -91,7 +89,7 @@ describe('AgentTrace stream output', () => {
       const thinking = openDeferredThinking(logger);
 
       expect(thinking.finalize()).toBe('');
-      expect(store.get('stream')).toBeUndefined();
+      expect(store.toJSON()).toEqual([]);
     });
   });
 
@@ -118,7 +116,7 @@ describe('AgentTrace stream output', () => {
         phaseOnly: true,
       });
 
-      expect(store.get('stream')).toBeUndefined();
+      expect(store.toJSON()).toEqual([]);
 
       output.append('hidden partial output');
 
@@ -148,10 +146,10 @@ describe('AgentTrace stream output', () => {
       stream.append('b');
       stream.append('c');
 
-      expect(store.get('stream')).toBeUndefined();
+      expect(store.toJSON()).toEqual([]);
       expect(vi.getTimerCount()).toBe(0);
       expect(stream.finalize()).toBe('abc');
-      expect(store.get('stream')).toBeUndefined();
+      expect(store.toJSON()).toEqual([]);
     });
   });
 });
@@ -184,7 +182,7 @@ describe('tool-use card input redaction', () => {
 
 describe('tool-use card groupId resolution', () => {
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
-    const store = StreamLogStore.ephemeral('test');
+    const store = new StreamLog();
     const logger = createTestRunTrace('stream', store).trace;
     const outer = logger.openStage('outer');
     const ref = await outer.within(async () =>
@@ -209,11 +207,11 @@ describe('tool-use card groupId resolution', () => {
 
 describe('per-trace stage scope (cross-trace isolation)', () => {
   it('a run stage opened on its own trace does not inherit an active stage from another trace', async () => {
-    const store = StreamLogStore.ephemeral('test');
+    const store = new StreamLog();
 
     // Orchestrator trace with an active "Task:" stage — mirrors a subagent
     // launched from inside a delegation tool's stage scope.
-    const orchestrator = createTestRunTrace('orchestrator', store).trace;
+    const orchestrator = createTestRunTrace('orchestrator').trace;
     const taskStage = orchestrator.openStage('Task: orchestrator');
 
     // Subagent run on a SEPARATE trace/stream, opened *inside* the
@@ -226,7 +224,7 @@ describe('per-trace stage scope (cross-trace isolation)', () => {
       subagent.openStage('Run: subagent');
     });
 
-    const entries = store.get('subagent')?.getRange(0) ?? [];
+    const entries = store.getRange(0);
     const runStage = entries.find((e) => e.text === 'Run: subagent');
     expect(runStage).toBeDefined();
     expect(runStage?.groupId).toBeUndefined();

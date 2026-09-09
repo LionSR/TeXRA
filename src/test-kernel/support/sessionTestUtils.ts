@@ -16,8 +16,8 @@ import {
 } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
 import { createTranscriptFold } from '@shared/session/traceFold';
-import { createRunTrace, StreamLogStore } from '@transcript';
-import type { TranscriptWriter } from '@transcript/StreamLogStore';
+import { StreamLog } from '@shared/session/traceEntries';
+import { createRunTrace } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 
 type TestSessionInit = SessionHandleInit;
@@ -94,9 +94,10 @@ export function publishTestRunStart(
 /** Exercise the pure transcript projection with deterministic source coordinates. */
 export function attachTestTranscriptFold(
   trace: AgentTrace,
-  writer: TranscriptWriter,
+  streamId: StreamTabId,
+  log: StreamLog,
 ) {
-  const fold = createTranscriptFold(writer);
+  const fold = createTranscriptFold(log);
   let seq = 0;
   const unsubscribe = trace.subscribe((event) => {
     if (!isTranscriptEvent(event)) return;
@@ -112,7 +113,7 @@ export function attachTestTranscriptFold(
         : event,
       {
         at: seq,
-        id: JSON.stringify([writer.streamId, seq]),
+        id: JSON.stringify([streamId, seq]),
         debug: isDebugModeEnabled(),
       },
     );
@@ -120,7 +121,7 @@ export function attachTestTranscriptFold(
   return {
     unsubscribe,
     handleStatus: (event: StatusEvent) => {
-      if (event.streamId === writer.streamId) fold.status(event.phase);
+      if (event.streamId === streamId) fold.status(event.phase);
     },
   };
 }
@@ -128,11 +129,10 @@ export function attachTestTranscriptFold(
 /** Standalone trace projection for tests that exercise formatting without a session. */
 export function createTestRunTrace(
   streamId: StreamTabId,
-  store: StreamLogStore,
+  log: StreamLog = new StreamLog(),
 ) {
-  const writer = store.acquireWriter(streamId, streamId);
-  const run = createRunTrace(streamId, writer);
-  const projection = attachTestTranscriptFold(run.trace, writer);
+  const run = createRunTrace(streamId);
+  const projection = attachTestTranscriptFold(run.trace, streamId, log);
   return {
     trace: run.trace,
     handleStatus: projection.handleStatus,

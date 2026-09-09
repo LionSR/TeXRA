@@ -4,8 +4,8 @@ import { vi } from 'vitest';
 // Local imports
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript';
 
 // Local file imports
 import { testRunScope } from './progressTestUtils';
@@ -26,8 +26,7 @@ export function baseRoundServices(
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
     },
-    logger: createTestRunTrace(traceLabel, StreamLogStore.ephemeral('test'))
-      .trace,
+    logger: createTestRunTrace(traceLabel, new StreamLog()).trace,
     onRoundFinalized: () => {},
     prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
     run: AgentRunStateSnapshotSchema.parse({}),

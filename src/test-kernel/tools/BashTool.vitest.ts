@@ -48,6 +48,7 @@ import {
   type ToolResult,
   AgentCategory,
 } from '@shared/schemas';
+import { StreamLog } from '@shared/session/traceEntries';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -61,7 +62,6 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { BashTool } from '@tools/bash';
 import * as bashDelivery from '@tools/delegation/bashDelivery';
-import { StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import * as execUtils from '@utils/system/execUtils';
 
@@ -270,10 +270,7 @@ function traceWithEvents(streamId: StreamTabId): {
   events: AgentEvent[];
   dispose: () => void;
 } {
-  const runTrace = createTestRunTrace(
-    streamId,
-    StreamLogStore.ephemeral('test'),
-  );
+  const runTrace = createTestRunTrace(streamId, new StreamLog());
   const events: AgentEvent[] = [];
   const unsubscribe = runTrace.trace.subscribe((event) => events.push(event));
   return {
@@ -375,10 +372,7 @@ describe('BashTool', () => {
 
     const options = roundServices({
       toolName: 'bash',
-      logger: createTestRunTrace(
-        'BashToolTest',
-        StreamLogStore.ephemeral('test'),
-      ).trace,
+      logger: createTestRunTrace('BashToolTest', new StreamLog()).trace,
       streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
     });

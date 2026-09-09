@@ -6,16 +6,10 @@ import {
   aggregateTarget,
   isTranscriptEvent,
   type SessionEvent,
-  type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
-import {
-  StreamLog,
-  type StreamLogAppendInput,
-  type StreamLogDelta,
-  type StreamLogUpdatePatch,
-} from '@shared/session/traceEntries';
+import { StreamLog, type StreamLogDelta } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { createListenerSet } from '@utils/core/listenerSet';
 import { ResidentStreamRegistry } from './ResidentStreamRegistry';
@@ -29,21 +23,12 @@ export type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
 
-export interface TranscriptWriter {
-  readonly streamId: StreamTabId;
-  append(entry: StreamLogAppendInput): StreamLogEntry;
-  appendSettled(entry: StreamLogAppendInput): StreamLogEntry;
-  update(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined;
-  settle(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined;
-  appendText(id: string, text: string): StreamLogEntry | undefined;
-  close(): void;
-}
-interface StreamWriterOwnership {
+interface StreamRunOwnership {
   readonly ownerKey: string;
   readonly tokens: Set<symbol>;
 }
-type TranscriptResidencyLeaseReason = 'writer' | 'focus';
-export interface TranscriptPresentationLease {
+type TranscriptResidencyLeaseReason = 'run' | 'focus';
+export interface TranscriptResidencyLease {
   readonly streamId: StreamTabId;
   close(): void;
 }
@@ -52,7 +37,7 @@ interface StreamState {
   fold?: ReturnType<typeof createTranscriptFold>;
   seq?: number;
   pins?: Set<TranscriptResidencyLeaseReason | symbol>;
-  writer?: StreamWriterOwnership;
+  runOwner?: StreamRunOwnership;
 }
 
 /** Every entry is derived with the same projection used by the live recorder. */
@@ -168,18 +153,14 @@ export class StreamLogStore {
     this.tryRelease(streamId);
   }
 
-  acquireWriter(streamId: StreamTabId, ownerKey: string): TranscriptWriter {
-    return this.createWriter(streamId, ownerKey, false);
-  }
-
-  loadAndAcquireWriter(streamId: StreamTabId, ownerKey: string) {
+  acquireRunResidency(streamId: StreamTabId, ownerKey: string) {
     return this.gate.withPermit(
       Effect.gen({ self: this }, function* () {
-        const writer = this.createWriter(streamId, ownerKey, true);
+        const residency = this.retainRun(streamId, ownerKey);
         yield* this.loadEntries(streamId).pipe(
-          Effect.onError(() => Effect.sync(() => writer.close())),
+          Effect.onError(() => Effect.sync(() => residency.close())),
         );
-        return writer;
+        return residency;
       }),
     );
   }
@@ -187,12 +168,12 @@ export class StreamLogStore {
   ensureLoaded(
     streamId: StreamTabId,
     options: { retainForPresentation: true },
-  ): Effect.Effect<TranscriptPresentationLease, Error>;
+  ): Effect.Effect<TranscriptResidencyLease, Error>;
   ensureLoaded(streamId: StreamTabId): Effect.Effect<void, Error>;
   ensureLoaded(
     streamId: StreamTabId,
     options?: { retainForPresentation: true },
-  ): Effect.Effect<void | TranscriptPresentationLease, Error> {
+  ): Effect.Effect<void | TranscriptResidencyLease, Error> {
     return Effect.gen({ self: this }, function* () {
       if (!options?.retainForPresentation) {
         this.acquireLease(streamId, 'focus');
@@ -254,7 +235,7 @@ export class StreamLogStore {
         const state = this.streams.get(streamId);
         if (
           state === undefined ||
-          (state.log === undefined && state.writer === undefined)
+          (state.log === undefined && state.runOwner === undefined)
         )
           return;
         // Hydration may already include this tail row. Aggregate sequence is
@@ -297,79 +278,42 @@ export class StreamLogStore {
     );
   }
 
-  private createWriter(
+  private retainRun(
     streamId: StreamTabId,
     ownerKey: string,
-    allowReleased: boolean,
-  ): TranscriptWriter {
+  ): TranscriptResidencyLease {
     if (!ownerKey.trim()) {
-      throw new Error('A transcript writer requires a non-empty owner key.');
-    }
-
-    if (
-      !allowReleased &&
-      this.mode.kind === 'persistent' &&
-      this.known.has(streamId) &&
-      this.streams.get(streamId)?.log === undefined
-    ) {
       throw new Error(
-        `Cannot acquire a writer for released stream ${streamId}. Run ensureLoaded() first.`,
+        'Transcript run residency requires a non-empty owner key.',
       );
     }
 
-    const current = this.streams.get(streamId)?.writer;
+    const current = this.streams.get(streamId)?.runOwner;
     if (current && current.ownerKey !== ownerKey) {
       throw new Error(
-        `Transcript stream ${streamId} is already owned by another writer.`,
+        `Transcript stream ${streamId} is already owned by another run.`,
       );
     }
     const ownership =
-      current ??
-      ({ ownerKey, tokens: new Set() } satisfies StreamWriterOwnership);
+      current ?? ({ ownerKey, tokens: new Set() } satisfies StreamRunOwnership);
     const token = Symbol(ownerKey);
     ownership.tokens.add(token);
-    const writerState = this.ensureStreamState(streamId);
-    writerState.writer = ownership;
-    this.acquireLease(streamId, 'writer');
+    const runState = this.ensureStreamState(streamId);
+    runState.runOwner = ownership;
+    this.acquireLease(streamId, 'run');
     let closed = false;
-
-    const assertOwned = (): void => {
-      if (closed || this.streams.get(streamId)?.writer !== ownership) {
-        throw new Error(`Transcript writer for ${streamId} has been released.`);
-      }
-    };
 
     return {
       streamId,
-      append: (entry) => {
-        assertOwned();
-        return this.appendEntry(streamId, entry, false);
-      },
-      appendSettled: (entry) => {
-        assertOwned();
-        return this.appendEntry(streamId, entry, true);
-      },
-      update: (id, patch) => {
-        assertOwned();
-        return this.mutateEntry(streamId, (log) => log.update(id, patch));
-      },
-      settle: (id, patch) => {
-        assertOwned();
-        return this.mutateEntry(streamId, (log) => log.settle(id, patch));
-      },
-      appendText: (id, text) => {
-        assertOwned();
-        return this.mutateEntry(streamId, (log) => log.appendText(id, text));
-      },
       close: () => {
         if (closed) return;
         closed = true;
         const state = this.streams.get(streamId);
-        if (!state || state.writer !== ownership) return;
+        if (!state || state.runOwner !== ownership) return;
         ownership.tokens.delete(token);
         if (ownership.tokens.size > 0) return;
-        state.writer = undefined;
-        this.releaseLease(streamId, 'writer');
+        state.runOwner = undefined;
+        this.releaseLease(streamId, 'run');
       },
     };
   }
@@ -383,32 +327,8 @@ export class StreamLogStore {
       (state) =>
         state.log === undefined &&
         (state.pins?.size ?? 0) === 0 &&
-        state.writer === undefined,
+        state.runOwner === undefined,
     );
-  }
-  private appendEntry(
-    streamId: StreamTabId,
-    entry: StreamLogAppendInput,
-    settled: boolean,
-  ): StreamLogEntry {
-    const state = this.ensureStreamState(streamId);
-    state.log ??= new StreamLog();
-    this.known.add(streamId);
-    const appended = settled
-      ? state.log.appendSettled(entry)
-      : state.log.append(entry);
-    this.notify(streamId);
-    return appended;
-  }
-  private mutateEntry(
-    streamId: StreamTabId,
-    apply: (log: StreamLog) => StreamLogEntry | undefined,
-  ): StreamLogEntry | undefined {
-    const log = this.get(streamId);
-    if (log === undefined) return;
-    const updated = apply(log);
-    if (updated !== undefined) this.notify(streamId);
-    return updated;
   }
   private acquireLease(
     streamId: StreamTabId,

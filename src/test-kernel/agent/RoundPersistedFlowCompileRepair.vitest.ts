@@ -19,9 +19,9 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { StreamLog } from '@shared/session/traceEntries';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
 /**
@@ -478,7 +478,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
       const kv = createFakeKv();
       const logger = new TraceEmitter();
       const streamId = `stream:reflection-round-${name}` as StreamTabId;
-      const store = StreamLogStore.ephemeral('test');
+      const store = new StreamLog();
       const control: OutcomeControl = {
         terminalOutcome,
         abortController: new AbortController(),
@@ -506,11 +506,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
         continueRounds: true,
       };
 
-      store.ensureStream(streamId);
-      const recorder = attachTestTranscriptFold(
-        logger,
-        store.acquireWriter(streamId, streamId),
-      );
+      const recorder = attachTestTranscriptFold(logger, streamId, store);
 
       try {
         const run = flow.run(shared);
@@ -520,20 +516,16 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
           await expect(run).resolves.toBe(terminalOutcome);
         }
 
-        const roundEndStatuses =
-          store
-            .get(streamId)
-            ?.getRange(0)
-            .flatMap((entry) => {
-              if (
-                entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
-                isObject(entry.data) &&
-                entry.data.kind === 'round'
-              ) {
-                return [entry.data.status];
-              }
-              return [];
-            }) ?? [];
+        const roundEndStatuses = store.getRange(0).flatMap((entry) => {
+          if (
+            entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
+            isObject(entry.data) &&
+            entry.data.kind === 'round'
+          ) {
+            return [entry.data.status];
+          }
+          return [];
+        });
 
         expect(roundEndStatuses).toEqual([
           RUN_OUTCOME.COMPLETED,

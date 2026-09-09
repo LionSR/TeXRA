@@ -1323,7 +1323,7 @@ async function seedRunningWorkflow(): Promise<void> {
   });
   seedPhase(childStreamId, STREAM_PHASE.RUNNING);
   const residency = await effectRuntime().runPromise(
-    session().transcripts.loadAndAcquireWriter(childStreamId, executionId),
+    session().transcripts.acquireRunResidency(childStreamId, executionId),
   );
   const runTrace = createRunTrace(childStreamId, residency);
   const detachRunTrace = session().attachRunTrace(runTrace, childStreamId);

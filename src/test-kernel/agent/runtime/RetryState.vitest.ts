@@ -48,6 +48,7 @@ import {
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
+import { StreamLog } from '@shared/session/traceEntries';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
@@ -55,7 +56,6 @@ import {
 } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
 // Local file imports
@@ -449,12 +449,9 @@ describe('ModelInvocationNode retry', () => {
     });
     const streamId = 'retry-diagnostics' as StreamTabId;
     const logger = new TraceEmitter();
-    const transcript = StreamLogStore.ephemeral('retry diagnostics test');
-    transcript.ensureStream(streamId);
-    const recorder = attachTestTranscriptFold(
-      logger,
-      transcript.acquireWriter(streamId, streamId),
-    );
+    const transcript = new StreamLog();
+
+    const recorder = attachTestTranscriptFold(logger, streamId, transcript);
     const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
     const session = sessionWithInteractions({
       requestRetry,
@@ -490,7 +487,7 @@ describe('ModelInvocationNode retry', () => {
 
       await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
 
-      const rows = transcript.get(streamId)?.getRange(0) ?? [];
+      const rows = transcript.getRange(0) ?? [];
       const diagnostics = rows
         .map((row) => row.data)
         .filter(
