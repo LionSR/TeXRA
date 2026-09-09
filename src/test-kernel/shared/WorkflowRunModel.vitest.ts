@@ -256,6 +256,7 @@ describe('workflow run model', () => {
     const current = {
       ...phaseGroup('Current', 1, 2),
       id: 'current-empty',
+      attemptId: 'a2',
     };
     const staleUntaggedCard = {
       ...taskRow({ id: 'old-call', phase: 'Old', status: 'failed' }),
@@ -272,35 +273,9 @@ describe('workflow run model', () => {
     });
 
     expect(model.tasks).toStrictEqual([]);
-    // Explicit old ownership is actionable. Missing ownership is not: mixed-
-    // version traces cannot distinguish an old call-less phase from this
-    // genuinely current one, so the compatible choice is to preserve it.
+    // A superseded empty phase is stale; the current attempt's own phase
+    // stands even before its calls arrive.
     expect(model.phases.map((phase) => phase.key)).toStrictEqual([current.id]);
-  });
-
-  it('deduplicates an untagged empty phase when the latest attempt owns its identity', () => {
-    const oldMap = {
-      ...phaseGroup('Map', 0, 1),
-      id: 'old-map',
-    };
-    const currentMap = {
-      ...phaseGroup('Map', 0, 1),
-      id: 'current-map',
-      attemptId: 'a2',
-    };
-
-    const model = workflowRunModel({
-      taskGroups: [oldMap, currentMap],
-      rows: [],
-      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      streamPhase: undefined,
-      runDurablyFinal: false,
-      childProgress: new Map(),
-    });
-
-    expect(model.phases.map((phase) => phase.key)).toStrictEqual([
-      currentMap.id,
-    ]);
   });
 
   it('uses a call-less tagged phase as the latest fallback boundary', () => {
@@ -335,33 +310,6 @@ describe('workflow run model', () => {
     expect(model.tasks).toStrictEqual([]);
     expect(model.phases.map((phase) => phase.key)).toStrictEqual([
       currentReview.id,
-    ]);
-  });
-
-  it('orders mixed-generation cards by the shared transcript fallback', () => {
-    const oldChild = {
-      ...taskRow({ id: 'old-child', phase: 'Map', attemptId: 'a1' }),
-      seqNo: 10,
-      timestamp: 10,
-    };
-    const resumedRoot = {
-      ...taskRow({ id: 'resumed-root', attemptId: 'a2' }),
-      timestamp: 20,
-    };
-
-    const model = workflowRunModel({
-      taskGroups: [],
-      // Tree pre-order places the newer root row before the older grouped
-      // child. Mixed-generation rows fall back to timestamps, not input order.
-      rows: [resumedRoot, oldChild],
-      plan: undefined,
-      streamPhase: undefined,
-      runDurablyFinal: false,
-      childProgress: new Map(),
-    });
-
-    expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
-      'resumed-root',
     ]);
   });
 

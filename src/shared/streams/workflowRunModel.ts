@@ -198,46 +198,26 @@ interface MutablePhase {
   declaredTasks: readonly WorkflowCallIdentity[];
 }
 
-function compareCardFallback(
-  left: WorkflowTaskRow,
-  right: WorkflowTaskRow,
-): number {
-  return left.timestamp - right.timestamp;
-}
-
 /**
  * Cards in deterministic transcript order, even when a caller collected a
- * group tree pre-order. Sequence and legacy rows are each ordered by their
- * own chronology, then kept as generation blocks ordered by their newest
- * facts. No causal key exists between generations, so this cannot recover an
- * interleaving across clock skew, but unlike a pairwise seq/time fallback it
- * is transitive and independent of input tree order except for truly
- * indistinguishable equal-time legacy facts, whose stable input order remains
- * the compatibility tie-break.
+ * group tree pre-order. Every `workflowTask` row carries a wire sequence —
+ * `StreamLogEntrySchema` requires `seqNo`, and the one live producer of
+ * seqNo-less rows (the CLI local-notice path) cannot emit this kind — so the
+ * ordering is causal, with timestamp only as a tie-break.
  */
 function workflowCardsInTranscriptOrder(
   rows: readonly TranscriptRow[],
 ): WorkflowTaskRow[] {
-  const sequenced: WorkflowTaskRow[] = [];
-  const legacy: WorkflowTaskRow[] = [];
-  for (const row of rows) {
-    if (row.kind !== 'workflowTask') continue;
-    (usableSequence(row.seqNo) === undefined ? legacy : sequenced).push(row);
-  }
-  sequenced.sort((left, right) =>
-    compareBySeqNo(
-      left,
-      right,
-      (row) => row.seqNo,
-      (row) => row.timestamp,
-    ),
-  );
-  legacy.sort(compareCardFallback);
-  if (sequenced.length === 0) return legacy;
-  if (legacy.length === 0) return sequenced;
-  return compareCardFallback(sequenced.at(-1)!, legacy.at(-1)!) <= 0
-    ? [...sequenced, ...legacy]
-    : [...legacy, ...sequenced];
+  return rows
+    .filter((row): row is WorkflowTaskRow => row.kind === 'workflowTask')
+    .sort((left, right) =>
+      compareBySeqNo(
+        left,
+        right,
+        (row) => row.seqNo,
+        (row) => row.timestamp,
+      ),
+    );
 }
 
 interface AttemptBoundary {
@@ -282,24 +262,21 @@ function latestWorkflowAttemptId(
     const attemptId = row.call.attemptId;
     if (attemptId === undefined) continue;
     const seqNo = usableSequence(row.seqNo);
+    if (seqNo === undefined) continue;
     const boundary: AttemptBoundary = {
       attemptId,
       timestamp: row.timestamp,
       stableKey: `card:${row.id}`,
-      ...(seqNo !== undefined ? { seqNo } : {}),
+      seqNo,
     };
-    if (seqNo === undefined) {
-      fallback = laterAttemptBoundaryByTime(fallback, boundary);
-    } else {
-      const previousSeqNo = sequenced?.seqNo;
-      if (
-        previousSeqNo === undefined ||
-        seqNo > previousSeqNo ||
-        (seqNo === previousSeqNo &&
-          laterAttemptBoundaryByTime(sequenced, boundary) === boundary)
-      ) {
-        sequenced = boundary;
-      }
+    const previousSeqNo = sequenced?.seqNo;
+    if (
+      previousSeqNo === undefined ||
+      seqNo > previousSeqNo ||
+      (seqNo === previousSeqNo &&
+        laterAttemptBoundaryByTime(sequenced, boundary) === boundary)
+    ) {
+      sequenced = boundary;
     }
   }
   for (const group of taskGroups) {
@@ -340,10 +317,6 @@ function interruptedTaskRow(row: WorkflowTaskRow): WorkflowTaskRow {
     metadataParts: formatWorkflowCallMetadataParts(call),
     ...(detail ? { detail } : {}),
   };
-}
-
-function phaseLogicalIdentity(phase: MutablePhase): string {
-  return `${phase.heading.phaseLabel}\u0000${phase.heading.phaseIndex ?? 'unknown'}`;
 }
 
 /** Counts over the statuses the cells PAINT, so a tally can never say
@@ -471,18 +444,6 @@ export function workflowRunModel(
     input.plan,
     input.workflowAttemptId,
   );
-  // Cards predate phase ownership. For an untagged legacy phase that did issue
-  // calls, those calls still prove which attempt owned the group; only a
-  // genuinely call-less untagged phase remains ambiguous.
-  const cardAttemptsByGroupId = new Map<string, Set<string>>();
-  for (const row of cards) {
-    const groupId = row.groupId;
-    const attemptId = row.call.attemptId;
-    if (groupId === undefined || attemptId === undefined) continue;
-    const attempts = cardAttemptsByGroupId.get(groupId) ?? new Set<string>();
-    attempts.add(attemptId);
-    cardAttemptsByGroupId.set(groupId, attempts);
-  }
   const tasks: WorkflowTaskRow[] = [];
   // A card issued outside any open phase has no group to sit under; it joins
   // one trailing "Unphased" phase rather than vanishing.
@@ -513,24 +474,13 @@ export function workflowRunModel(
     unphased.tasks.push(row);
   }
   // Phase ownership handles the call-less case that card references cannot:
-  // an explicitly superseded empty phase is stale. Untagged empty phases are
-  // preserved for traces written before phase ownership shipped on 2026-08-31
-  // unless the latest attempt opened the same title/index, which is the only
-  // evidence that the untagged copy is old. Retire this compatibility branch
-  // after 2026-11-30, when those pre-ownership traces leave support.
-  const latestOwnedPhaseIdentities = new Set(
-    phases
-      .filter((phase) => phase.attemptId === latestAttemptId)
-      .map(phaseLogicalIdentity),
-  );
+  // an explicitly superseded empty phase is stale. Every live producer tags
+  // its phases with the attempt that opened them.
   const opened = phases.filter(
     (phase) =>
       phase.tasks.length > 0 ||
       latestAttemptId === undefined ||
-      phase.attemptId === latestAttemptId ||
-      (phase.attemptId === undefined &&
-        (cardAttemptsByGroupId.get(phase.key)?.has(latestAttemptId) ?? true) &&
-        !latestOwnedPhaseIdentities.has(phaseLogicalIdentity(phase))),
+      phase.attemptId === latestAttemptId,
   );
   const ordered = [
     ...(input.plan
