@@ -25,6 +25,17 @@
       ],
       "project": ["src/**/*.{ts,mts}!", "scripts/*.mjs!"]
     },
+    "packages/llm": {
+      "entry": [
+        "src/openrouterChat.ts!",
+        "src/turn.ts!",
+        "src/openaiChat.ts!",
+        "src/openaiResponses.ts!",
+        "src/anthropicMessages.ts!",
+        "src/googleInteractions.ts!"
+      ],
+      "project": ["src/**/*.{ts,mts}!"]
+    },
     "packages/cli": {
       "entry": ["src/bin/texra.ts!", "scripts/**/*.{ts,tsx,mjs}!"],
       "project": ["src/**/*.{ts,tsx,mts}!"]
