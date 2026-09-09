@@ -236,15 +236,16 @@ A persisted projection is a second copy with a lifecycle, a rebuild rule, and
 a way to drift. A column holding `outcome` or `resumable` is remembered status,
 which the owner's rule and the companion's D7 forbid. So:
 
-**Recommendation.** Two tables per workspace database, `event` and
-`event_sequence`, and nothing else persisted. Every surface, the launcher list
+**Recommendation, qualified by the 2026-09-09 C1 amendment below.** The
+event substrate uses `event` and `event_sequence`; bounded mutable records
+may use the current-state tables named in C1. Every execution surface, the launcher list
 and the resume picker included, is an in-memory fold or an indexed query over
 events. A derived row is added only after a measured query is too slow and an
 index has been tried first. Record the journal PRD as absorbed, the SQLite PRD
 as amended (§3.2 "entries as rows" becomes "events as rows, entries as a
 fold"; §8 Effect non-goal reversed per §7), and ship it as one cutover (§8).
 
-## 6. Target: two tables, folds everywhere
+## 6. Target: event folds and bounded current records
 
 ### 6.1 The contract (jointly owned with the view-state PRD)
 
@@ -259,6 +260,13 @@ records. The previous CLI history implementation discards entries beyond
 that behavior: insertion, adjacent-duplicate suppression, and removal of
 excess rows are atomic. Immutable events would instead retain discarded
 input. This is an implementation choice, not a new retention ruling.
+
+History uses the same local-filesystem admission below as other SQLite
+records, including when the global-storage directory is mounted separately
+from workspace storage. Directory symbolic links are resolved and accepted
+when their target is a verified local filesystem; the database, WAL, and SHM
+files themselves cannot be symbolic links. The earlier writable-JSONL behavior
+does not provide an alternative storage path.
 
 **C1. Persisted schema.** The event substrate uses the two tables below.
 The separate `input_history` current-state table stores bounded CLI history;
