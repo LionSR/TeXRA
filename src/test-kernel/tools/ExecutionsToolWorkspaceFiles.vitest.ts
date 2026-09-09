@@ -135,6 +135,8 @@ const config = {
 const toolUseMeta = {
   timestamp: '2026-06-15T09:36:02.345Z',
   category: 'toolUse',
+  identity: { kind: 'agent', agent: 'assistant' },
+  streamId: 'assistant@deepseekT#abc123',
 } as const;
 
 /** Installs a real filesystem-backed storage root for sidecar persistence tests. */
