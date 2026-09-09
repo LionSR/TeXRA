@@ -55,8 +55,16 @@ export const runDailyUpdateCheck = ({
       latest !== undefined &&
       (!notifyOnce || previous?.lastNotifiedVersion !== latest)
     ) {
-      yield* notify(latest);
-      if (notifyOnce) yield* records.recordNotified(host, latest);
+      if (notifyOnce) {
+        yield* Effect.uninterruptible(
+          Effect.gen(function* () {
+            yield* notify(latest);
+            yield* records.recordNotified(host, latest);
+          }),
+        );
+      } else {
+        yield* notify(latest);
+      }
     }
     if (refreshed) {
       const stamp = records.recordChecked(host, nowMs);

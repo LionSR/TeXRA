@@ -761,12 +761,18 @@ export const databaseLayer = (
           throw new Error('Invalid global inquiry record');
         return event.record;
       };
+      const latestEventRow = (id: AggregateId) =>
+        sql
+          .unsafe<Record<string, unknown>>(
+            `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
+            [id],
+          )
+          .pipe(Effect.map((rows) => rows[0]));
       const readUpdateCheck = (host: string) =>
         Effect.gen(function* () {
-          const row = (yield* sql.unsafe<Record<string, unknown>>(
-            `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
-            [qualifyAggregateId('update-check', host)],
-          ))[0];
+          const row = yield* latestEventRow(
+            qualifyAggregateId('update-check', host),
+          );
           if (row === undefined) return null;
           const event = decodeEvent(row);
           if (event.type !== 'update.check.recorded')
@@ -775,10 +781,9 @@ export const databaseLayer = (
         });
       const readInquiryRecord = (id: string) =>
         Effect.gen(function* () {
-          const row = (yield* sql.unsafe<Record<string, unknown>>(
-            `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
-            [qualifyAggregateId('global-inquiry', id)],
-          ))[0];
+          const row = yield* latestEventRow(
+            qualifyAggregateId('global-inquiry', id),
+          );
           return row === undefined ? null : inquiryRecordFromRow(row);
         });
       return {
@@ -887,10 +892,7 @@ export const databaseLayer = (
         readDesktopProjects: (id) =>
           query(
             Effect.gen(function* () {
-              const row = (yield* sql.unsafe<Record<string, unknown>>(
-                `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
-                [id],
-              ))[0];
+              const row = yield* latestEventRow(id);
               return row === undefined ? undefined : decodeEvent(row);
             }),
           ),

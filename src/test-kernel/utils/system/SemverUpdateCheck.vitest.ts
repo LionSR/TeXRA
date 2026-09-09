@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it as effectIt } from '@effect/vitest';
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { TestClock } from 'effect/testing';
 import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
@@ -176,6 +176,35 @@ describe('runDailyUpdateCheck', () => {
           expect((yield* records.read('desktop'))?.lastNotifiedVersion).toBe(
             '1.1.0',
           );
+        }),
+      ),
+  );
+
+  effectIt.live(
+    'records an announced release before honoring interruption',
+    () =>
+      withRecords(
+        Effect.gen(function* () {
+          const records = yield* UpdateCheckRecords;
+          const checking = yield* Effect.forkChild(
+            Effect.withFiber((fiber) =>
+              runDailyUpdateCheck(
+                checkOptions({
+                  notifyOnce: true,
+                  fetchLatest: Effect.succeed({
+                    version: '1.1.0',
+                    refreshed: true,
+                  }),
+                  notify: () => Effect.sync(() => fiber.interruptUnsafe()),
+                }),
+              ),
+            ),
+          );
+          expect(Exit.isFailure(yield* Fiber.await(checking))).toBe(true);
+          expect(yield* records.read('desktop')).toEqual({
+            lastNotifiedVersion: '1.1.0',
+            lastCheckedAt: null,
+          });
         }),
       ),
   );

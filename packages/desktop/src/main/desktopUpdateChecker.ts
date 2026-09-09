@@ -108,6 +108,6 @@ const runDesktopUpdateCheck = ({
             await notify({ version });
           },
           catch: ensureError,
-        }).pipe(Effect.uninterruptible),
+        }),
     });
   });
