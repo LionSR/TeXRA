@@ -8,7 +8,7 @@ import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import {
   AgentFileLocationSchema,
-  PersistedRetryErrorInfoSchema,
+  RetryErrorInfoSchema,
   RoundOutputSchema,
 } from '@shared/schemas';
 
@@ -52,7 +52,7 @@ export const ReflectionFlowStateSchema = z.object({
   endTurn: z.boolean(),
 
   /** Distinguishes failure from cancellation during resume. */
-  lastError: PersistedRetryErrorInfoSchema.optional(),
+  lastError: RetryErrorInfoSchema.optional(),
 
   /** Provider-message format used by the persisted `context` messages. */
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),

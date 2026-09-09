@@ -155,12 +155,12 @@ function trackPromptEvents(): {
 }
 
 const credentialExhaustedRetry: RetryPermission = {
-  requestId: 'relay-limit-retry',
+  requestId: 'upstream-credit-retry',
   streamId: 'test-stream' as RetryPermission['streamId'],
   operation: 'Model request',
   errorMessage: 'HTTP 429 Too Many Requests',
   errorDetails: {
-    classification: { kind: 'relay-limit' },
+    classification: { kind: 'upstream-credit' },
     statusCode: 429,
   },
 };

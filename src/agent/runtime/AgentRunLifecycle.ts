@@ -346,7 +346,6 @@ function toFlowFailureError(error: RetryErrorInfo): Error {
     case 'context-window':
       attachContextWindowError(failure);
       break;
-    case 'relay-limit':
     case 'upstream-credit':
     case 'chatgpt-subscription':
     case 'copilot-subscription':
