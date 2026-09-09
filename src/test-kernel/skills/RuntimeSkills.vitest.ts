@@ -12,6 +12,7 @@ import {
   MESSAGE_TYPES,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { StreamLog } from '@shared/session/traceEntries';
 import {
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog,
@@ -21,7 +22,6 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const tempRoots = useTempDirs();
 
@@ -228,17 +228,16 @@ describe('runtime skills', () => {
     expect(result.catalog).not.toContain('skill-200');
 
     const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('bounded-skills');
+    const store = new StreamLog();
     const streamId = 'stream:bounded-skills';
-    store.ensureStream(streamId);
-    attachTestTranscriptFold(trace, store.acquireWriter(streamId, streamId));
+
+    attachTestTranscriptFold(trace, streamId, store);
 
     expect(() =>
       trace.emit({ type: 'skills.snapshot', skills: result.skills }),
     ).not.toThrow();
     expect(
       store
-        .get(streamId)
         ?.getRange(0)
         .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)
         ?.data,

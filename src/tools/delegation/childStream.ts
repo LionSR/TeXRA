@@ -101,7 +101,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
     try: () => session.settlePublications(),
     catch: ensureError,
   });
-  const residency = yield* session.transcripts.loadAndAcquireWriter(
+  const residency = yield* session.transcripts.acquireRunResidency(
     childStreamId,
     executionId,
   );

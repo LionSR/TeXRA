@@ -72,6 +72,7 @@ import {
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
+import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -94,7 +95,6 @@ import {
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
-import type { TranscriptWriter } from '@transcript/StreamLogStore';
 
 const tempDirs = useTempDirs();
 
@@ -144,7 +144,7 @@ async function seedTasks(
   await settleSessionEvents();
 }
 
-type LogRow = Parameters<TranscriptWriter['append']>[0];
+type LogRow = StreamLogAppendInput;
 
 let entryCounter = 0;
 
@@ -612,12 +612,12 @@ describe('completedRunArchive facade', () => {
           }),
         );
 
-        const loadAndAcquireWriter = logs.loadAndAcquireWriter.bind(logs);
+        const acquireRunResidency = logs.acquireRunResidency.bind(logs);
         const resumedWriter = vi
-          .spyOn(logs, 'loadAndAcquireWriter')
+          .spyOn(logs, 'acquireRunResidency')
           .mockImplementationOnce((requestedStreamId, ownerKey) =>
             Effect.gen(function* () {
-              const writer = yield* loadAndAcquireWriter(
+              const writer = yield* acquireRunResidency(
                 requestedStreamId,
                 ownerKey,
               );

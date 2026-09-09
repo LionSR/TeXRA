@@ -30,7 +30,6 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import {
   assembleTrace,
   StreamLogStore,

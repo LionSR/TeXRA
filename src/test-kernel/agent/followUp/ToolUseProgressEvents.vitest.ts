@@ -43,8 +43,8 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { StreamLog } from '@shared/session/traceEntries';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
 import {
@@ -339,12 +339,9 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
       const { host } = createRecordingHost();
       const logger = new TraceEmitter();
       const streamId = `stream:tool-use-round-${name}` as StreamTabId;
-      const store = StreamLogStore.ephemeral('test');
-      store.ensureStream(streamId);
-      const recorder = attachTestTranscriptFold(
-        logger,
-        store.acquireWriter(streamId, streamId),
-      );
+      const store = new StreamLog();
+
+      const recorder = attachTestTranscriptFold(logger, streamId, store);
       const node = createCycleNode(streamId, host, logger);
 
       try {
@@ -353,27 +350,22 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
         );
 
         expect(result.outcome).toBe(expectedOutcome);
-        const sessionStages =
-          store
-            .get(streamId)
-            ?.getRange(0)
-            .flatMap((entry) => {
-              if (
-                entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
-                isObject(entry.data) &&
-                entry.data.kind === 'session'
-              ) {
-                return [{ label: entry.text, status: entry.data.status }];
-              }
-              return [];
-            }) ?? [];
+        const sessionStages = store.getRange(0).flatMap((entry) => {
+          if (
+            entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
+            isObject(entry.data) &&
+            entry.data.kind === 'session'
+          ) {
+            return [{ label: entry.text, status: entry.data.status }];
+          }
+          return [];
+        });
         expect(sessionStages).toEqual([
           { label: 'Tool-use turn', status: expectedStatus },
         ]);
         expect(
           store
-            .get(streamId)
-            ?.getRange(0)
+            .getRange(0)
             .some(
               (entry) => isObject(entry.data) && entry.data.kind === 'round',
             ),

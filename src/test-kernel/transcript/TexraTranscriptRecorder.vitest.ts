@@ -14,13 +14,13 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { StreamLog } from '@shared/session/traceEntries';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
 /** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
@@ -31,13 +31,10 @@ function attachRecorder(streamId: StreamTabId = 'stream:test' as StreamTabId): {
   row: (id: string | undefined) => StreamLogEntry | undefined;
 } {
   const trace = new TraceEmitter();
-  const store = StreamLogStore.ephemeral('test');
-  store.ensureStream(streamId);
-  const recorder = attachTestTranscriptFold(
-    trace,
-    store.acquireWriter(streamId, streamId),
-  );
-  const rows = (): StreamLogEntry[] => store.get(streamId)?.getRange(0) ?? [];
+  const store = new StreamLog();
+
+  const recorder = attachTestTranscriptFold(trace, streamId, store);
+  const rows = (): StreamLogEntry[] => store.getRange(0);
   return {
     trace,
     handleStatus: recorder.handleStatus,
@@ -667,10 +664,9 @@ describe('attachTestTranscriptFold active skills', () => {
   it('redacts summaries before truncating the recorded projection', async () => {
     const trace = new TraceEmitter();
     const streamId = 'stream:skill-redaction' as StreamTabId;
-    const store = StreamLogStore.ephemeral('redacted transcript fixture');
-    store.ensureStream(streamId);
-    const writer = store.acquireWriter(streamId, streamId);
-    const recorder = attachTestTranscriptFold(trace, writer);
+    const store = new StreamLog();
+
+    const recorder = attachTestTranscriptFold(trace, streamId, store);
     const descriptionPrefix = `${'Review credentials carefully. '.padEnd(168, 'a')} `;
     const providerKey = 'sk-proj-redaction-example-1234567890abcdef';
 
@@ -685,10 +681,8 @@ describe('attachTestTranscriptFold active skills', () => {
       ],
     });
     recorder.unsubscribe();
-    writer.close();
     const persisted = store
-      .get(streamId)
-      ?.getRange(0)
+      .getRange(0)
       .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)?.data;
     expect(persisted).toStrictEqual({
       skills: [

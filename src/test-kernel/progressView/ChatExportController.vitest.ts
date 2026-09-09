@@ -27,7 +27,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import { StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files/storageFS';
 

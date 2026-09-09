@@ -124,21 +124,18 @@ describe('StreamLogStore event reads', () => {
             }),
         });
         const loading = yield* Effect.forkChild(
-          store.loadAndAcquireWriter(STREAM, 'execution'),
+          store.acquireRunResidency(STREAM, 'execution'),
         );
         yield* Deferred.await(entered);
         store.requestEviction(STREAM);
         yield* Deferred.succeed(release, undefined);
         const writer = yield* Fiber.join(loading);
         expect(store.get(STREAM)?.head).toBeGreaterThan(0);
-        const successor = store.acquireWriter(STREAM, 'execution');
+        const successor = yield* store.acquireRunResidency(STREAM, 'execution');
         writer.close();
         expect(store.get(STREAM)).toBeDefined();
         successor.close();
         expect(store.get(STREAM)).toBeUndefined();
-        expect(() => writer.appendText('response', 'late')).toThrow(
-          'has been released',
-        );
       }).pipe(Effect.provide(substrate)),
   );
 
@@ -161,7 +158,7 @@ describe('StreamLogStore event reads', () => {
             }),
         });
         const loading = yield* Effect.forkChild(
-          store.loadAndAcquireWriter(STREAM, 'execution'),
+          store.acquireRunResidency(STREAM, 'execution'),
         );
         yield* Deferred.await(entered);
         const suffix = yield* database.appendAll([
@@ -228,7 +225,7 @@ describe('StreamLogStore event reads', () => {
         const tail = yield* Effect.forkChild(store.acceptCommitted(suffix[0]!));
         yield* Effect.yieldNow;
         const loading = yield* Effect.forkChild(
-          store.loadAndAcquireWriter(STREAM, 'execution'),
+          store.acquireRunResidency(STREAM, 'execution'),
         );
         yield* Effect.yieldNow;
         yield* Deferred.succeed(release, undefined);

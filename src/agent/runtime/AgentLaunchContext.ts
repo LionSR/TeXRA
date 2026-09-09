@@ -450,7 +450,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     });
     const modelCell = new ModelCell(modelHandler, config.model);
 
-    const transcriptWriter = yield* session.transcripts.loadAndAcquireWriter(
+    const transcriptWriter = yield* session.transcripts.acquireRunResidency(
       streamId,
       executionId,
     );
