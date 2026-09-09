@@ -6,6 +6,7 @@ import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
@@ -44,6 +45,7 @@ import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
+import { appendLogUtilsLine } from '../desktopAppLog.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
@@ -90,6 +92,16 @@ export async function initializeElectronPlatform(
   mainDirname: string,
   agentResume: AgentResumePort,
 ): Promise<ElectronPlatformInitResult> {
+  // Give `logUtils` a real sink, like the extension (VS Code output channel)
+  // and CLI (console) hosts wire their own. Without this, every `createLog`/
+  // `logger.*` call in host-agnostic code (agent flows, tools, model
+  // handlers) falls through to logUtils' bare console.info fallback, which
+  // `installDesktopAppLog`'s console mirror then re-stamps as `[info]` in
+  // `texra-desktop.log` regardless of the line's real level.
+  setOutputChannelFactory((name) => ({
+    appendLine: (message) => appendLogUtilsLine(`[${name}] ${message}`),
+  }));
+
   // The default handler's console.error is mirrored into the desktop app log,
   // so shutdown-handler failures land at error severity like the other hosts.
   const lifecycle = createLifecycleHost();

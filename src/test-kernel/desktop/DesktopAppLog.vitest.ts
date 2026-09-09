@@ -22,6 +22,7 @@ interface DesktopAppLogModule {
     workspacePath?: string | undefined;
     maxBytes?: number | undefined;
   }): { path: string; text: string; truncated: boolean };
+  appendLogUtilsLine(line: string): void;
 }
 
 async function loadDesktopAppLogModule(): Promise<DesktopAppLogModule> {
@@ -129,5 +130,20 @@ describe('desktop app log', () => {
     const snapshot = readDesktopLogSnapshot({ workspacePath });
 
     expect(snapshot.text).toBe('Opened [path]/paper.tex');
+  });
+
+  it('writes logUtils lines through verbatim instead of re-stamping them via the console mirror', async () => {
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
+    configureElectronTestStub({ userDataPath: join(root, 'userData') });
+    const { installDesktopAppLog, appendLogUtilsLine, readDesktopLogSnapshot } =
+      await loadDesktopAppLogModule();
+
+    installDesktopAppLog();
+    appendLogUtilsLine('ERROR [2026-09-09 00:00:00.000] [channel] boom');
+
+    const snapshot = readDesktopLogSnapshot({});
+    const lastLine = snapshot.text.trim().split('\n').at(-1);
+
+    expect(lastLine).toBe('ERROR [2026-09-09 00:00:00.000] [channel] boom');
   });
 });

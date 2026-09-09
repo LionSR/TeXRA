@@ -134,6 +134,25 @@ function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
   }
 }
 
+/**
+ * Direct file sink for `logUtils.setOutputChannelFactory`. `logUtils` already
+ * tags every line with its own level and timestamp (`writeLine` in
+ * `logUtils.ts`), so this writes the line through verbatim instead of routing
+ * it through `console` and letting {@link installConsoleMirror} re-stamp it
+ * under whichever `console[level]` a caller happened to invoke — which is
+ * always `console.info` for the un-wired factory, mislabeling every ERROR/WARN
+ * line and duplicating the level/timestamp prefix.
+ */
+export function appendLogUtilsLine(line: string): void {
+  const path = resolveActiveLogFilePath();
+  if (path == null) return;
+  try {
+    appendFileSync(path, `${line}\n`);
+  } catch {
+    // Logging must never become a startup dependency.
+  }
+}
+
 function initializeDesktopLogFile(): string | undefined {
   try {
     const logDir = getDesktopLogDirectory();
