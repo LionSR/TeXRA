@@ -1,35 +1,35 @@
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
+import { it } from '@effect/vitest';
 
 const submitFollowUpMock = vi.hoisted(() => vi.fn());
 const getThreadSummaryMock = vi.hoisted(() => vi.fn());
-const listThreadsByStatusMock = vi.hoisted(() => vi.fn(async () => []));
+const listThreadsByStatusMock = vi.hoisted(() => vi.fn());
 const readExternalInquiryThreadMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: submitFollowUpMock,
 }));
 
-vi.mock('@platform/platform', () => ({
-  platform: () => ({
-    agentResume: { tryResumeStream: vi.fn(async () => false) },
-  }),
-}));
-
-vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
+const records = {
   getThreadSummary: getThreadSummaryMock,
   listThreadsByStatus: listThreadsByStatusMock,
   readExternalInquiryThread: readExternalInquiryThreadMock,
-}));
+  recordOpenQuestion: vi.fn(),
+  recordAnswerForOpenTurn: vi.fn(),
+  markDropped: vi.fn(),
+};
 
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
   type InquiryThreadId,
   type StreamTabId,
 } from '@shared/schemas';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
   createTestSession,
@@ -40,7 +40,6 @@ import {
   injectContinuationForAnsweredThread,
   type InjectionOutcome,
 } from '@tools/inquiry/inquiryContinuation';
-import type { ExternalInquiryThreadManifest } from '@tools/inquiry/externalInquiryStorage';
 import { recordSessionEvents } from '../agent/progressTestUtils';
 
 const THREAD = 'ei_aabbccdd0011' as InquiryThreadId;
@@ -87,9 +86,8 @@ function captureFacts(session: SessionHandle): {
   };
 }
 
-function answeredManifest(): ExternalInquiryThreadManifest {
+function answeredManifest(): InquiryThreadRecord {
   return {
-    schemaVersion: 1,
     threadId: THREAD,
     parentStreamId: STREAM,
     parentExecutionId: null,
@@ -114,151 +112,165 @@ describe('external inquiry continuation session routing', () => {
     submitFollowUpMock
       .mockReset()
       .mockReturnValue(Effect.succeed({ status: 'sent' }));
-    getThreadSummaryMock.mockResolvedValue({
-      threadId: THREAD,
-      parentStreamId: STREAM,
-      status: 'answered',
-      lastQuestionPreview: 'Check the boundary case.',
-      lastActivityIso: '2026-06-14T08:01:00.000Z',
-      turnCount: 1,
-    });
-    listThreadsByStatusMock.mockClear();
+    getThreadSummaryMock.mockReturnValue(
+      Effect.succeed({
+        threadId: THREAD,
+        parentStreamId: STREAM,
+        status: 'answered',
+        lastQuestionPreview: 'Check the boundary case.',
+        lastActivityIso: '2026-06-14T08:01:00.000Z',
+        turnCount: 1,
+      }),
+    );
+    listThreadsByStatusMock.mockReset().mockReturnValue(Effect.succeed([]));
     readExternalInquiryThreadMock.mockClear();
   });
 
-  it('passes the host-provided session through to sendFollowUp', async () => {
-    const session = sessionStub('desktop-session');
+  it.effect('passes the host-provided session through to sendFollowUp', () =>
+    Effect.gen(function* () {
+      const session = sessionStub('desktop-session');
 
-    const outcome: InjectionOutcome = await Effect.runPromise(
-      injectContinuationForAnsweredThread(THREAD, answeredManifest(), session),
-    );
-
-    expect(outcome).toBe('sent');
-    expect(submitFollowUpMock).toHaveBeenCalledWith(
-      STREAM,
-      expect.stringContaining('[inquiry] ei_aabbccdd0011 answered.'),
-      { session },
-    );
-  });
-
-  it('archives a turn-less manifest without dispatching a follow-up', async () => {
-    // The manifest schema does not require turns; the structural guard must
-    // archive (not crash) when there is no turn to fence against.
-    const outcome = await Effect.runPromise(
-      injectContinuationForAnsweredThread(
-        THREAD,
-        {
-          ...answeredManifest(),
-          turns: [],
-        },
-        sessionStub(),
-      ),
-    );
-
-    expect(outcome).toBe('archived');
-    expect(submitFollowUpMock).not.toHaveBeenCalled();
-  });
-
-  it('emits inquiry thread updates through the explicit session plane', async () => {
-    const session = createTestSession({ roots: paperRoots() });
-    publishTestRunStart(session, STREAM);
-    await session.settlePublications();
-    const explicit = captureFacts(session);
-    const fallback = captureFacts(defaultSession());
-
-    try {
-      await Effect.runPromise(
-        injectContinuationForAnsweredThread(
+      const outcome: InjectionOutcome =
+        yield* injectContinuationForAnsweredThread(
           THREAD,
           answeredManifest(),
           session,
-        ),
+        ).pipe(Effect.provideService(InquiryRecords, records));
+
+      expect(outcome).toBe('sent');
+      expect(submitFollowUpMock).toHaveBeenCalledWith(
+        STREAM,
+        expect.stringContaining('[inquiry] ei_aabbccdd0011 answered.'),
+        { session },
       );
-      await session.settlePublications();
+    }),
+  );
 
-      await session.settlePublications();
-      expect(await explicit.read()).toMatchObject([
-        {
-          type: 'inquiryThreadUpdated',
-          aggregateId: qualifyAggregateId('inquiry', THREAD),
-          threadId: THREAD,
-          parentStreamId: STREAM,
-          status: 'answered',
-          lastQuestionPreview: 'Check the boundary case.',
-          lastActivityIso: '2026-06-14T08:01:00.000Z',
-          turnCount: 1,
-          resumeOutcome: 'sent',
-        },
-      ]);
-      expect(await fallback.read()).toEqual([]);
-    } finally {
-      explicit.detach();
-      fallback.detach();
-      session.dispose();
-    }
-  });
-
-  it('does not emit an inquiry thread update when no summary is returned', async () => {
-    const session = createTestSession();
-    const { read, detach } = captureFacts(session);
-    getThreadSummaryMock.mockResolvedValueOnce(null);
-
-    try {
-      await Effect.runPromise(
-        injectContinuationForAnsweredThread(
+  it.effect(
+    'archives a turn-less manifest without dispatching a follow-up',
+    () =>
+      Effect.gen(function* () {
+        // The manifest schema does not require turns; the structural guard must
+        // archive (not crash) when there is no turn to fence against.
+        const outcome = yield* injectContinuationForAnsweredThread(
           THREAD,
-          answeredManifest(),
-          session,
-        ),
-      );
+          {
+            ...answeredManifest(),
+            turns: [],
+          },
+          sessionStub(),
+        ).pipe(Effect.provideService(InquiryRecords, records));
 
-      expect(await read()).toEqual([]);
-    } finally {
-      detach();
-      session.dispose();
-    }
-  });
+        expect(outcome).toBe('archived');
+        expect(submitFollowUpMock).not.toHaveBeenCalled();
+      }),
+  );
 
-  it.each([
+  it.effect(
+    'emits inquiry thread updates through the explicit session plane',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession({ roots: paperRoots() });
+        publishTestRunStart(session, STREAM);
+        yield* Effect.promise(() => session.settlePublications());
+        const explicit = captureFacts(session);
+        const fallback = captureFacts(defaultSession());
+
+        try {
+          yield* injectContinuationForAnsweredThread(
+            THREAD,
+            answeredManifest(),
+            session,
+          ).pipe(Effect.provideService(InquiryRecords, records));
+          yield* Effect.promise(() => session.settlePublications());
+
+          yield* Effect.promise(() => session.settlePublications());
+          expect(yield* Effect.promise(() => explicit.read())).toMatchObject([
+            {
+              type: 'inquiryThreadUpdated',
+              aggregateId: qualifyAggregateId('inquiry', THREAD),
+              threadId: THREAD,
+              parentStreamId: STREAM,
+              status: 'answered',
+              lastQuestionPreview: 'Check the boundary case.',
+              lastActivityIso: '2026-06-14T08:01:00.000Z',
+              turnCount: 1,
+              resumeOutcome: 'sent',
+            },
+          ]);
+          expect(yield* Effect.promise(() => fallback.read())).toEqual([]);
+        } finally {
+          explicit.detach();
+          fallback.detach();
+          session.dispose();
+        }
+      }),
+  );
+
+  it.effect(
+    'does not emit an inquiry thread update when no summary is returned',
+    () =>
+      Effect.gen(function* () {
+        const session = createTestSession();
+        const { read, detach } = captureFacts(session);
+        getThreadSummaryMock.mockReturnValueOnce(Effect.succeed(null));
+
+        try {
+          yield* injectContinuationForAnsweredThread(
+            THREAD,
+            answeredManifest(),
+            session,
+          ).pipe(Effect.provideService(InquiryRecords, records));
+
+          expect(yield* Effect.promise(() => read())).toEqual([]);
+        } finally {
+          detach();
+          session.dispose();
+        }
+      }),
+  );
+
+  it.effect.each([
     {
       name: 'threads the provided session to the wake decision',
       session: sessionStub('desktop-session'),
     },
   ])(
     'delegates queued wake decisions to the follow-up owner ($name)',
-    async ({ session }) => {
-      submitFollowUpMock.mockReturnValueOnce(
-        Effect.succeed({ status: 'queued' }),
-      );
+    ({ session }) =>
+      Effect.gen(function* () {
+        submitFollowUpMock.mockReturnValueOnce(
+          Effect.succeed({ status: 'queued' }),
+        );
 
-      const outcome = await Effect.runPromise(
-        injectContinuationForAnsweredThread(
+        const outcome = yield* injectContinuationForAnsweredThread(
           THREAD,
           answeredManifest(),
           session,
-        ),
-      );
+        ).pipe(Effect.provideService(InquiryRecords, records));
 
-      expect(outcome).toBe('queued');
-    },
+        expect(outcome).toBe('queued');
+      }),
   );
 
-  it('archives inquiries when the follow-up owner refuses a stale queue', async () => {
-    submitFollowUpMock.mockReturnValueOnce(
-      Effect.succeed({
-        status: 'failed' as const,
-        reason: 'not_resumable' as const,
+  it.effect(
+    'archives inquiries when the follow-up owner refuses a stale queue',
+    () =>
+      Effect.gen(function* () {
+        submitFollowUpMock.mockReturnValueOnce(
+          Effect.succeed({
+            status: 'failed' as const,
+            reason: 'not_resumable' as const,
+          }),
+        );
+
+        const outcome = yield* injectContinuationForAnsweredThread(
+          THREAD,
+          answeredManifest(),
+          sessionStub(),
+        ).pipe(Effect.provideService(InquiryRecords, records));
+
+        expect(outcome).toBe('archived');
       }),
-    );
-
-    const outcome = await Effect.runPromise(
-      injectContinuationForAnsweredThread(
-        THREAD,
-        answeredManifest(),
-        sessionStub(),
-      ),
-    );
-
-    expect(outcome).toBe('archived');
-  });
+  );
 });

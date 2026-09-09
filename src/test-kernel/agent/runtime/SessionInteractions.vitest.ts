@@ -523,7 +523,6 @@ describe('session.interactions request bookkeeping', () => {
           streamId,
           allowBypass: false,
           sessionLinks: null,
-          draft: null,
           transcript: null,
         }),
       ).toBeUndefined();

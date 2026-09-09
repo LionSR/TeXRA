@@ -1639,7 +1639,6 @@ if (SHOW_EXTERNAL_INQUIRY) {
     allowBypass: false,
     streamId: STREAM_ID,
     sessionLinks: null,
-    draft: null,
     transcript: null,
   });
   publish({

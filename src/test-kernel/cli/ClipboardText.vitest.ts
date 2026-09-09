@@ -1,4 +1,4 @@
-import { ManagedRuntime } from 'effect';
+import { Layer, ManagedRuntime } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const writeMock = vi.hoisted(() => vi.fn());
@@ -22,8 +22,12 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 import { writeClipboardText } from '@cli/runtime/clipboardText';
+import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { initProcessRuntime } from '@platform/processRuntime';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 describe('CLI clipboard text writer', () => {
@@ -90,7 +94,17 @@ describe('CLI clipboard text writer', () => {
       expect(execFileMock).toHaveBeenCalled();
     } finally {
       await disposeProcessRuntime();
-      initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+      const storage = createFakePlatform().storage;
+      initProcessRuntime(
+        ManagedRuntime.make(
+          Layer.merge(
+            testHttpClientLayer,
+            inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+              Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            ),
+          ),
+        ),
+      );
     }
   });
 

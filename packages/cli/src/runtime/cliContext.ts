@@ -35,6 +35,7 @@ export interface CliPromptRequest {
 
 /** Fully normalized CLI state produced by {@link buildCliContext}. */
 export interface CliContext {
+  readonly storageRoot?: string;
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
@@ -418,6 +419,7 @@ export async function buildCliContext(
     loadedConfig.values.outputFormat ??
     'text';
   return {
+    storageRoot: init.storageRoot,
     cwd,
     mode: cliMode(init.globalArgs, ambient),
     outputFormat,

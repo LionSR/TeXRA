@@ -327,8 +327,8 @@ every row; neither is derived from the other.
 latest-of-type lookup never has to disambiguate targets and no key column
 exists. A database `AggregateId` is the canonical encoding
 `aggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`, with kind
-`stream`, `execution`, `workflow-checkpoint`, `inquiry`, `session`, or
-`desktop-projects`.
+`stream`, `execution`, `workflow-checkpoint`, `inquiry`, `session`,
+`desktop-projects`, or `global-inquiry`.
 This encoding is injective even when logical ids coincide or contain
 punctuation. Raw logical ids never serve as database keys. The constructor
 accepts a kind and an unencoded logical id; encoded keys are a distinct type
@@ -393,6 +393,17 @@ stream and execution targets.
 During the import window, one reserved migration aggregate holds the
 workspace migration claim and its progress facts (§8). It is excluded from
 session reads and retired with the importer; it is not a third table.
+
+**Global inquiry content and project display facts (2026-09-09).** Full inquiry
+records live in the platform's global SQLite database, on independent
+`global-inquiry` aggregates. Their questions, answers, dispatch metadata and
+execution target are canonical. Each transition reads, validates and appends
+under one SQL write transaction, preserving global listing across projects.
+Project-local `inquiryThreadUpdated` events remain durable display and
+notification facts; they never reconstruct a thread or select a continuation
+target. Canonical persistence precedes the existing interaction/continuation
+and project publication steps; no cross-database atomic delivery is claimed.
+Panel drafts remain view state and are not part of canonical inquiry records.
 
 **C3. Durable event set.** Durable: every run-scoped `AgentEvent` except text,
 thinking, and tool-input deltas; `approval.requested`,
@@ -704,9 +715,12 @@ keeps #9952 from returning.
 **C9. Existence, deletion, retention.** `run.start` creates a run. Every aggregate
 records its current **owning lifecycle**, and only that, as a qualified key
 in `event_sequence.parent_id`: an execution's parent is its stream (from
-the `run.start` edge); an inquiry's parent is its most recent asker. An
-inquiry reopened after an answer changes parents, as
-`recordOpenQuestion` does today (`src/tools/inquiry/externalInquiryStorage.ts:250-323`).
+the `run.start` edge); a project-local inquiry display aggregate's parent is its most recent asker.
+Global canonical inquiry records have no project parent and retain their
+independent lifetime when a project display aggregate is deleted. The
+following reparenting rules apply to the project-local display facts. An
+inquiry reopened after an answer changes its display parent when the project
+notification commits through `src/controllers/session/Database.ts`.
 Its reopen transaction acquires the inquiry claim under C5 and uses the
 caller's current new-parent claim. It verifies both rows are open and
 caller-owned, verifies the latest inquiry state is answered,
@@ -1040,6 +1054,15 @@ The SQLite PRD §8 non-goal is reversed to this scoped form; the reversal is
 recorded there and in §10.
 
 ## 8. Process: one cutover, no dual system
+
+**Current status, 2026-09-09.** #12108 merged into `main` at
+`e999a790f7` under the accepted fresh-state TeXRA 1.0 policy in `AGENTS.md`.
+The September 8 intermediate-release and metadata-hold rulings below are
+historical and superseded by that decision. Development continues on `main`;
+existing pre-1.0 state is left untouched, with no importer or legacy reader.
+The proposed Stage 7 importer and its release-dependent retirement clock are
+removed work, not future requirements. The full programme is not complete:
+D4's execution/checkpoint decision remains unresolved.
 
 ### Owner amendment, 2026-09-08: safe intermediate release
 

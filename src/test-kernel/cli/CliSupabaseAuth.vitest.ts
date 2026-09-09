@@ -79,11 +79,27 @@ async function loadSupabaseAuth() {
   // `vi.resetModules()` gives the module graph a fresh `@platform/processRuntime`
   // whose runtime the shared fake-host install never reached; the module's own
   // `initializeCliSupabaseAuth` installs the auth run edge from it.
-  const [{ initProcessRuntime }, { ManagedRuntime }] = await Promise.all([
-    import('@platform/processRuntime'),
-    import('effect'),
-  ]);
-  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+  const [{ initProcessRuntime }, { Layer, ManagedRuntime }] = await Promise.all(
+    [import('@platform/processRuntime'), import('effect')],
+  );
+  const [{ inquiryRecordsLayer }, { ProcessIdentity }, { processOwnerId }] =
+    await Promise.all([
+      import('@controllers/session/inquiryRecords'),
+      import('@shared/session/sessionEvents'),
+      import('@platform/defaults/nodeProcesses'),
+    ]);
+  const { createFakePlatform } = await import('@test/support/FakePlatform');
+  const storage = createFakePlatform().storage;
+  initProcessRuntime(
+    ManagedRuntime.make(
+      Layer.merge(
+        testHttpClientLayer,
+        inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+          Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+        ),
+      ),
+    ),
+  );
   return import('@cli/runtime/supabaseAuth');
 }
 

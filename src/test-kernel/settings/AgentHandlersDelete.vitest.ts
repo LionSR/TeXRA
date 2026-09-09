@@ -1,10 +1,14 @@
 import * as path from 'node:path';
 
-import { Effect, ManagedRuntime } from 'effect';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { initProcessRuntime } from '@platform/processRuntime';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => ({
@@ -141,7 +145,17 @@ const APPLY_AGENT_MODE_PRESET = {
 describe('AgentHandlers custom-agent file actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+    const storage = createFakePlatform().storage;
+    initProcessRuntime(
+      ManagedRuntime.make(
+        Layer.merge(
+          testHttpClientLayer,
+          inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+            Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+          ),
+        ),
+      ),
+    );
   });
 
   it('logs notification failures after applying a team preset', async () => {

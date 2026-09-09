@@ -15,6 +15,7 @@ import { afterEach, beforeEach } from 'vitest';
 
 import type { Platform } from '@platform/platform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
@@ -58,7 +59,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { initProcessWorkspaceRoots },
     { effectRuntime, initProcessRuntime },
     { installAuthProgramEdge },
-    { ManagedRuntime },
+    { Layer, ManagedRuntime },
     { testHttpClientLayer },
   ] = await Promise.all([
     import('@platform/platform'),
@@ -79,7 +80,16 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   try {
     effectRuntime();
   } catch {
-    initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+    initProcessRuntime(
+      ManagedRuntime.make(
+        Layer.merge(
+          testHttpClientLayer,
+          // Suites using inquiries install the real service with their session
+          // graph. Any inquiry call on this bare fake host is a test error.
+          Layer.mock(InquiryRecords, {}),
+        ),
+      ),
+    );
   }
   // The auth run edge, unconditionally: a suite that reset modules gets a
   // fresh `@auth/authProgram` instance, and this install must land on it.

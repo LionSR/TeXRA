@@ -1,402 +1,254 @@
-import * as path from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { it } from '@effect/vitest';
+import { Effect, Layer, Result } from 'effect';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import * as logUtils from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import {
   ExternalInquiryPermissionSchema,
   ToolError,
-  type InquiryThreadId,
   type StreamTabId,
 } from '@shared/schemas';
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  getOpenTurnDraft,
-  listThreadsByStatus,
-  markDropped,
-  manifestToTranscript,
-  readExternalInquiryThread,
-  recordAnswerForOpenTurn,
-  recordOpenQuestion,
-} from '@tools/inquiry/externalInquiryStorage';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
+import { inquiryRecordToTranscript } from '@tools/inquiry/inquiryRecordFormatting';
 
 const STREAM_A = 'stream:a' as StreamTabId;
 const STREAM_B = 'stream:b' as StreamTabId;
 
-/**
- * Capture per-channel log lines. The storage module logs through `createLog`,
- * which routes through the module namespace and lands in the output sink;
- * observe the sink so these assertions pin the sink path without coupling to
- * the namespace seam (same capture pattern as ChannelTrace.vitest.ts).
- */
-function captureLogLines(): string[] {
-  const lines: string[] = [];
-  logUtils.setOutputChannelFactory(() => ({
-    appendLine(message: string) {
-      lines.push(message);
-    },
-  }));
-  return lines;
-}
-
-function threadDirFor(threadId: string): string {
-  return path.join(
-    platform().storage.getGlobalStoragePath(),
-    'ei_threads',
-    threadId,
-  );
-}
-
-async function writeTextFile(target: string, text: string): Promise<void> {
-  await platform().fs.writeFile(target, Buffer.from(text, 'utf8'));
-}
-
-async function readTextFile(target: string): Promise<string> {
-  return Buffer.from(await platform().fs.readFile(target)).toString('utf8');
-}
-
-/**
- * Seed a manifest that must read as missing, then assert the read is null and
- * loud. Returns the manifest path so tests can also assert the on-disk file
- * is preserved byte-for-byte.
- */
-async function expectUnreadableManifest(
-  threadId: string,
-  body: string,
-  expectedLog: string,
-): Promise<string> {
-  const threadDir = threadDirFor(threadId);
-  const manifestPath = path.join(threadDir, 'manifest.json');
-  await platform().fs.createDirectory(threadDir);
-  await writeTextFile(manifestPath, body);
-  const logLines = captureLogLines();
-
-  await expect(readExternalInquiryThread(threadId)).resolves.toBeNull();
-  expect(logLines.join('\n')).toContain(expectedLog);
-  return manifestPath;
-}
-
 describe('InquiryStorage', () => {
-  // Each test seeds threads against a fresh platform: state must not leak
-  // between tests in this file, so this installs (and resets) per test
-  // rather than once for the whole file.
-  setupPlatform();
-
-  afterEach(() => {
-    logUtils.setOutputChannelFactory(null);
+  let storage: string;
+  beforeEach(() => {
+    storage = mkdtempSync(join(tmpdir(), 'texra-inquiry-sql-'));
   });
+  afterEach(() => rmSync(storage, { recursive: true, force: true }));
+  const layer = Layer.unwrap(
+    Effect.sync(() =>
+      inquiryRecordsLayer(() => storage).pipe(
+        Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+      ),
+    ),
+  );
+  it.live('treats a fresh global database as empty', () =>
+    Effect.gen(function* () {
+      const records = yield* InquiryRecords;
+      expect(
+        yield* records.listThreadsByStatus({ status: 'any', scope: 'all' }),
+      ).toEqual([]);
+    }).pipe(Effect.provide(layer)),
+  );
+  it.live('opens, answers, and resolves a thread end-to-end', () =>
+    Effect.gen(function* () {
+      const records = yield* InquiryRecords;
+      const opened = yield* records.recordOpenQuestion({
+        parentStreamId: STREAM_A,
+        parentExecutionId: null,
+        question: 'What is the Sobolev constant?',
+        context: 'Use the sharp Euclidean inequality.',
+        suggestSearch: false,
+      });
 
-  it('treats a missing inquiry history directory as empty', async () => {
-    await expect(
-      listThreadsByStatus({ status: 'open', scope: 'all' }),
-    ).resolves.toEqual([]);
-  });
+      expect(opened.status).toBe('open');
+      expect(opened.parentStreamId).toBe(STREAM_A);
+      expect(opened.turns).toHaveLength(1);
+      expect(opened.turns.at(-1)?.suggestSearch).toBe(false);
 
-  it('surfaces inquiry history directory read failures', async () => {
-    const threadsDir = path.join(
-      platform().storage.getGlobalStoragePath(),
-      'ei_threads',
-    );
-    const readDirectorySpy = vi
-      .spyOn(platform().fs, 'readDirectory')
-      .mockRejectedValueOnce(
-        Object.assign(new Error('inquiry history is unreadable'), {
-          code: 'EACCES',
-        }),
+      const open = yield* records.listThreadsByStatus({
+        status: 'open',
+        scope: 'all',
+      });
+      expect(open).toHaveLength(1);
+      expect(open[0].status).toBe('open');
+
+      const answers = yield* Effect.all(
+        [1, 2].map(() =>
+          records.recordAnswerForOpenTurn({
+            threadId: opened.threadId,
+            turnIndex: 1,
+            answer: 'C = (n(n-2))^{-1} * ω_n^{2/n}',
+          }),
+        ),
+        { concurrency: 'unbounded' },
       );
+      expect(answers.filter((answer) => answer !== null)).toHaveLength(1);
+      const answered = yield* records.readExternalInquiryThread(
+        opened.threadId,
+      );
+      expect(answered).not.toBeNull();
+      expect(answered!.status).toBe('answered');
+      expect(answered!.turns.at(-1)).toMatchObject({
+        answer: 'C = (n(n-2))^{-1} * ω_n^{2/n}',
+      });
 
-    try {
-      await expect(
-        listThreadsByStatus({ status: 'open', scope: 'all' }),
-      ).rejects.toMatchObject({ code: 'EACCES' });
-      expect(readDirectorySpy).toHaveBeenCalledWith(threadsDir);
-    } finally {
-      readDirectorySpy.mockRestore();
-    }
-  });
+      const stillOpen = yield* records.listThreadsByStatus({
+        status: 'open',
+        scope: 'all',
+      });
+      expect(stillOpen).toHaveLength(0);
+    }).pipe(Effect.provide(layer)),
+  );
 
-  it('opens, answers, and resolves a thread end-to-end', async () => {
-    const opened = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'What is the Sobolev constant?',
-      context: 'Use the sharp Euclidean inequality.',
-      suggestSearch: false,
-    });
-
-    expect(opened.status).toBe('open');
-    expect(opened.parentStreamId).toBe(STREAM_A);
-    expect(opened.turns).toHaveLength(1);
-    expect(opened.turns.at(-1)?.suggestSearch).toBe(false);
-
-    const open = await listThreadsByStatus({ status: 'open', scope: 'all' });
-    expect(open).toHaveLength(1);
-    expect(open[0].status).toBe('open');
-
-    const answered = await recordAnswerForOpenTurn({
-      threadId: opened.threadId,
-      turnIndex: 1,
-      answer: 'C = (n(n-2))^{-1} * ω_n^{2/n}',
-    });
-    expect(answered).not.toBeNull();
-    expect(answered!.status).toBe('answered');
-    expect(answered!.turns.at(-1)).toMatchObject({
-      answer: 'C = (n(n-2))^{-1} * ω_n^{2/n}',
-    });
-
-    const stillOpen = await listThreadsByStatus({
-      status: 'open',
-      scope: 'all',
-    });
-    expect(stillOpen).toHaveLength(0);
-  });
-
-  it.each([
+  it.live.each([
     {
       name: 'rejects re-dispatch on an open thread',
-      retire: async (_threadId: InquiryThreadId) => {},
+      drop: false,
     },
     {
       name: 'rejects ask on a dropped thread',
-      retire: async (threadId: InquiryThreadId) => {
-        await markDropped({ threadId, turnIndex: 1 });
-      },
+      drop: true,
     },
-  ])('$name', async ({ retire }) => {
-    const opened = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-    await retire(opened.threadId);
+  ])('$name', ({ drop }) =>
+    Effect.gen(function* () {
+      const records = yield* InquiryRecords;
+      const opened = yield* records.recordOpenQuestion({
+        parentStreamId: STREAM_A,
+        parentExecutionId: null,
+        question: 'Q1',
+      });
+      if (drop)
+        yield* records.markDropped({ threadId: opened.threadId, turnIndex: 1 });
 
-    await expect(
-      recordOpenQuestion({
-        threadId: opened.threadId,
+      const rejection = yield* Effect.result(
+        records.recordOpenQuestion({
+          threadId: opened.threadId,
+          parentStreamId: STREAM_A,
+          parentExecutionId: null,
+          question: 'Q2',
+        }),
+      );
+      expect(Result.isFailure(rejection) && rejection.failure).toBeInstanceOf(
+        ToolError,
+      );
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.live(
+    'allows ask follow-up on an answered thread; status flips back to open',
+    () =>
+      Effect.gen(function* () {
+        const records = yield* InquiryRecords;
+        const t = yield* records.recordOpenQuestion({
+          parentStreamId: STREAM_A,
+          parentExecutionId: null,
+          question: 'Q1',
+        });
+        yield* records.recordAnswerForOpenTurn({
+          threadId: t.threadId,
+          turnIndex: 1,
+          answer: 'A1',
+        });
+
+        const followUp = yield* records.recordOpenQuestion({
+          threadId: t.threadId,
+          parentStreamId: STREAM_A,
+          parentExecutionId: null,
+          question: 'Q2 (follow-up)',
+        });
+
+        expect(followUp.status).toBe('open');
+        expect(followUp.turns).toHaveLength(2);
+        expect(followUp.turns.at(-1)?.question).toBe('Q2 (follow-up)');
+        expect(
+          yield* records.recordAnswerForOpenTurn({
+            threadId: t.threadId,
+            turnIndex: 1,
+            answer: 'A delayed answer to Q1',
+          }),
+        ).toBeNull();
+        expect(
+          yield* records.markDropped({ threadId: t.threadId, turnIndex: 1 }),
+        ).toBeNull();
+        expect(yield* records.readExternalInquiryThread(t.threadId)).toEqual(
+          followUp,
+        );
+      }).pipe(Effect.provide(layer)),
+  );
+
+  it.live('updates parentStreamId on cross-stream follow-up', () =>
+    Effect.gen(function* () {
+      const records = yield* InquiryRecords;
+      const t = yield* records.recordOpenQuestion({
+        parentStreamId: STREAM_A,
+        parentExecutionId: null,
+        question: 'Q1',
+      });
+      yield* records.recordAnswerForOpenTurn({
+        threadId: t.threadId,
+        turnIndex: 1,
+        answer: 'A1',
+      });
+
+      const fromB = yield* records.recordOpenQuestion({
+        threadId: t.threadId,
+        parentStreamId: STREAM_B,
+        parentExecutionId: null,
+        question: 'Q2 from B',
+      });
+      expect(fromB.parentStreamId).toBe(STREAM_B);
+
+      const openOnA = yield* records.listThreadsByStatus({
+        status: 'open',
+        scope: 'stream',
+        streamId: STREAM_A,
+      });
+      const openOnB = yield* records.listThreadsByStatus({
+        status: 'open',
+        scope: 'stream',
+        streamId: STREAM_B,
+      });
+      expect(openOnA).toHaveLength(0);
+      expect(openOnB).toHaveLength(1);
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.live('listThreadsByStatus filters by status and scope', () =>
+    Effect.gen(function* () {
+      const records = yield* InquiryRecords;
+      const t1 = yield* records.recordOpenQuestion({
+        parentStreamId: STREAM_A,
+        parentExecutionId: null,
+        question: 'Q1',
+      });
+      yield* records.recordAnswerForOpenTurn({
+        threadId: t1.threadId,
+        turnIndex: 1,
+        answer: 'A1',
+      });
+
+      const t2 = yield* records.recordOpenQuestion({
         parentStreamId: STREAM_A,
         parentExecutionId: null,
         question: 'Q2',
-      }),
-    ).rejects.toBeInstanceOf(ToolError);
-  });
+      });
 
-  it('allows ask follow-up on an answered thread; status flips back to open', async () => {
-    const t = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-    await recordAnswerForOpenTurn({
-      threadId: t.threadId,
-      turnIndex: 1,
-      answer: 'A1',
-    });
-
-    const followUp = await recordOpenQuestion({
-      threadId: t.threadId,
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q2 (follow-up)',
-    });
-
-    expect(followUp.status).toBe('open');
-    expect(followUp.turns).toHaveLength(2);
-    expect(followUp.turns.at(-1)?.question).toBe('Q2 (follow-up)');
-    expect(
-      await recordAnswerForOpenTurn({
-        threadId: t.threadId,
-        turnIndex: 1,
-        answer: 'A delayed answer to Q1',
-      }),
-    ).toBeNull();
-    expect(
-      await markDropped({ threadId: t.threadId, turnIndex: 1 }),
-    ).toBeNull();
-    expect(await readExternalInquiryThread(t.threadId)).toEqual(followUp);
-  });
-
-  it('updates parentStreamId on cross-stream follow-up', async () => {
-    const t = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-    await recordAnswerForOpenTurn({
-      threadId: t.threadId,
-      turnIndex: 1,
-      answer: 'A1',
-    });
-
-    const fromB = await recordOpenQuestion({
-      threadId: t.threadId,
-      parentStreamId: STREAM_B,
-      parentExecutionId: null,
-      question: 'Q2 from B',
-    });
-    expect(fromB.parentStreamId).toBe(STREAM_B);
-
-    const openOnA = await listThreadsByStatus({
-      status: 'open',
-      scope: 'stream',
-      streamId: STREAM_A,
-    });
-    const openOnB = await listThreadsByStatus({
-      status: 'open',
-      scope: 'stream',
-      streamId: STREAM_B,
-    });
-    expect(openOnA).toHaveLength(0);
-    expect(openOnB).toHaveLength(1);
-  });
-
-  it('listThreadsByStatus filters by status and scope', async () => {
-    const t1 = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-    await recordAnswerForOpenTurn({
-      threadId: t1.threadId,
-      turnIndex: 1,
-      answer: 'A1',
-    });
-
-    const t2 = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q2',
-    });
-
-    const t3 = await recordOpenQuestion({
-      parentStreamId: STREAM_B,
-      parentExecutionId: null,
-      question: 'Q3',
-    });
-    await markDropped({ threadId: t3.threadId, turnIndex: 1 });
-
-    const openOnA = await listThreadsByStatus({
-      status: 'open',
-      scope: 'stream',
-      streamId: STREAM_A,
-    });
-    expect(openOnA.map((t) => t.threadId)).toEqual([t2.threadId]);
-
-    const allDropped = await listThreadsByStatus({
-      status: 'dropped',
-      scope: 'all',
-    });
-    expect(allDropped.map((t) => t.threadId)).toEqual([t3.threadId]);
-
-    const answered = await listThreadsByStatus({
-      status: 'answered',
-      scope: 'all',
-    });
-    expect(answered.map((t) => t.threadId)).toEqual([t1.threadId]);
-  });
-
-  it('stamps schemaVersion on newly written manifests', async () => {
-    const t = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-
-    const manifestPath = path.join(threadDirFor(t.threadId), 'manifest.json');
-    const persisted = JSON.parse(await readTextFile(manifestPath)) as {
-      schemaVersion?: number;
-    };
-    expect(persisted.schemaVersion).toBe(1);
-  });
-
-  it('treats a corrupt manifest as missing (loud read) without clobbering it', async () => {
-    const manifestPath = await expectUnreadableManifest(
-      'ei_aabbccdd0033',
-      '{ not valid json',
-      'Unreadable external-inquiry manifest for ei_aabbccdd0033',
-    );
-
-    // A follow-up dispatch addressed at the corrupt thread reports
-    // not-found instead of silently overwriting the on-disk file.
-    await expect(
-      recordOpenQuestion({
-        threadId: 'ei_aabbccdd0033' as InquiryThreadId,
-        parentStreamId: STREAM_A,
+      const t3 = yield* records.recordOpenQuestion({
+        parentStreamId: STREAM_B,
         parentExecutionId: null,
-        question: 'Q?',
-      }),
-    ).rejects.toBeInstanceOf(ToolError);
-    expect(await readTextFile(manifestPath)).toBe('{ not valid json');
-  });
+        question: 'Q3',
+      });
+      yield* records.markDropped({ threadId: t3.threadId, turnIndex: 1 });
 
-  it('treats a schema-invalid manifest as missing (loud read)', async () => {
-    await expectUnreadableManifest(
-      'ei_aabbccdd0044',
-      JSON.stringify({ threadId: 42, turns: 'nope' }),
-      'Failed to parse external-inquiry manifest for ei_aabbccdd0044',
-    );
-  });
+      const openOnA = yield* records.listThreadsByStatus({
+        status: 'open',
+        scope: 'stream',
+        streamId: STREAM_A,
+      });
+      expect(openOnA.map((t) => t.threadId)).toEqual([t2.threadId]);
 
-  it('treats an unknown schemaVersion as unreadable, never as legacy data', async () => {
-    // Legacy-shaped body stamped with a future version: without the version
-    // gate this would fail the canonical arm and silently parse as a legacy
-    // thread (status rewritten to 'answered', parentStreamId to null).
-    const futureManifest = JSON.stringify({
-      schemaVersion: 2,
-      threadId: 'ei_aabbccdd0055',
-      createdAt: '2025-01-01T00:00:00.000Z',
-      updatedAt: '2025-01-02T00:00:00.000Z',
-      turns: [
-        {
-          turnIndex: 1,
-          timestamp: '2025-01-01T00:00:00.000Z',
-          question: 'Future Q',
-        },
-      ],
-    });
+      const allDropped = yield* records.listThreadsByStatus({
+        status: 'dropped',
+        scope: 'all',
+      });
+      expect(allDropped.map((t) => t.threadId)).toEqual([t3.threadId]);
 
-    const manifestPath = await expectUnreadableManifest(
-      'ei_aabbccdd0055',
-      futureManifest,
-      'Unsupported external-inquiry manifest schemaVersion 2 for ei_aabbccdd0055',
-    );
-
-    // The on-disk file is preserved byte-for-byte for the newer writer.
-    expect(await readTextFile(manifestPath)).toBe(futureManifest);
-  });
-
-  it('rejects an unversioned manifest without rewriting it', async () => {
-    const unversionedManifest = JSON.stringify({
-      threadId: 'ei_aabbccdd0066',
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      status: 'open',
-      createdAt: '2025-01-01T00:00:00.000Z',
-      updatedAt: '2025-01-02T00:00:00.000Z',
-      turns: [],
-    });
-
-    const manifestPath = await expectUnreadableManifest(
-      'ei_aabbccdd0066',
-      unversionedManifest,
-      'Failed to parse external-inquiry manifest for ei_aabbccdd0066',
-    );
-    expect(await readTextFile(manifestPath)).toBe(unversionedManifest);
-  });
-
-  it('rejects a version-stamped manifest whose canonical shape is invalid', async () => {
-    // schemaVersion present (current) but `status`/`parentStreamId` missing:
-    // the canonical schema rejects it.
-    await expectUnreadableManifest(
-      'ei_aabbccdd0077',
-      JSON.stringify({
-        schemaVersion: 1,
-        threadId: 'ei_aabbccdd0077',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-01-02T00:00:00.000Z',
-        turns: [],
-      }),
-      'Failed to parse external-inquiry manifest for ei_aabbccdd0077',
-    );
-  });
+      const answered = yield* records.listThreadsByStatus({
+        status: 'answered',
+        scope: 'all',
+      });
+      expect(answered.map((t) => t.threadId)).toEqual([t1.threadId]);
+    }).pipe(Effect.provide(layer)),
+  );
 });

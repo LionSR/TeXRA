@@ -67,6 +67,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { closeSession, openSession } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { databaseLayer } from '@controllers/session/Database';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { sessionRequests } from '@controllers/session/SessionRequests';
@@ -89,10 +90,12 @@ import {
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
@@ -547,7 +550,12 @@ describe('Sessions owner', () => {
           view: view.ref,
           executions: { stopAgentStream },
         } as unknown as SessionHandle;
-        const requests = sessionRequests(session, db, local);
+        const requests = sessionRequests(
+          session,
+          db,
+          local,
+          yield* InquiryRecords,
+        );
         // The displayed fold was built as SELF and considers this run writable.
         // This requesting process is OTHER; it must respect the current claim.
         yield* settle(view.ref, (v) => v.streams.has(STREAM));
@@ -572,7 +580,14 @@ describe('Sessions owner', () => {
         // A released claim is not held, even while the display still says so.
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
         expect(stopAgentStream).toHaveBeenCalledOnce();
-      }).pipe(Effect.provide(graph([runStart]))),
+      }).pipe(
+        Effect.provide(graph([runStart])),
+        Effect.provide(
+          inquiryRecordsLayer(() =>
+            createFakePlatform().storage.getGlobalStoragePath(),
+          ).pipe(Layer.provide(ProcessIdentity.layer(SELF))),
+        ),
+      ),
   );
 
   const open = (storagePath: string) =>

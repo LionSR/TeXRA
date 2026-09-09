@@ -299,7 +299,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // would only move the identical crash a few statements down while hiding
   // why. The check's own best-effort silence is the `Effect.ignoreCause`
   // below, which covers the part that actually runs on the runtime.
-  await installCliProcessRuntime();
+  await installCliProcessRuntime(context.storageRoot);
   const check = Effect.gen(function* () {
     const globalState = yield* openCliGlobalStateStore(
       createNodeStorageProvider(),

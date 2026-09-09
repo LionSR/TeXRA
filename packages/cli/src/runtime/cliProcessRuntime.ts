@@ -27,15 +27,19 @@
  */
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { tryProcessRuntime } from '@platform/processRuntime';
+import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 
 let pending: Promise<void> | null = null;
 
-export function installCliProcessRuntime(): Promise<void> {
+export function installCliProcessRuntime(storageRoot?: string): Promise<void> {
   if (tryProcessRuntime()) return Promise.resolve();
   if (pending) return pending;
+  const storage = createNodeStorageProvider({ storageRoot });
   pending = (async () => {
-    installProcessRuntime(await nodeProcesses.selfIdentity());
+    installProcessRuntime(await nodeProcesses.selfIdentity(), () =>
+      storage.getGlobalStoragePath(),
+    );
   })().finally(() => {
     pending = null;
   });

@@ -1,11 +1,15 @@
-import { Effect, ManagedRuntime } from 'effect';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { initProcessRuntime } from '@platform/processRuntime';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 import {
   physicistCatalog,
@@ -39,7 +43,17 @@ interface ControllerFixtureOptions {
 }
 
 beforeEach(() => {
-  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+  const storage = createFakePlatform().storage;
+  initProcessRuntime(
+    ManagedRuntime.make(
+      Layer.merge(
+        testHttpClientLayer,
+        inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
+          Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+        ),
+      ),
+    ),
+  );
 });
 
 function createControllerFixture(options: ControllerFixtureOptions = {}) {
