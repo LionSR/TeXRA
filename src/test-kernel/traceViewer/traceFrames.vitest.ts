@@ -114,7 +114,7 @@ function legacyTrace(
   };
 }
 
-describe('traceEvents legacy-status fallback (issue #7188)', () => {
+describe('traceEvents outcome derivation (issue #7188)', () => {
   it('replays workflow content without tool-use state', () => {
     const trace = legacyTrace();
     trace.entries.push(
@@ -332,8 +332,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
 
-
-  it('reports no durable outcome when neither meta.outcome nor snapshot.status is set', () => {
+  it('reports no durable outcome when meta.outcome is absent', () => {
     const trace = legacyTrace();
 
     // No terminal fact: an exported trace with no producer folds as an
