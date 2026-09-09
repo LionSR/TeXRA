@@ -917,12 +917,6 @@
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "entriesToOptionData"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "getCategoryAgent"
     },
     {
@@ -1290,12 +1284,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "LATEXDIFF_CHANGES_ONLY_SUBTYPE"
-    },
-    {
-      "file": "src/latex/latexdiff/diffCommandExecutor.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS"
     },
     {
       "file": "src/latex/latexdiff/diffCommandExecutor.ts",

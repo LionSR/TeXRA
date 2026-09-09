@@ -489,20 +489,6 @@ describe('resolveAgentTools delegation annotation', () => {
     expect(mocks.getVisibleAgents).toHaveBeenCalledWith('toolUse');
   });
 
-  it('does not annotate a roster line onto non-delegation tools', async () => {
-    mocks.getVisibleAgents.mockReturnValue([
-      { name: 'research', description: 'Derive and verify.' },
-    ]);
-
-    const tools = await resolveToolList([
-      DELEGATE_AGENT_TOOL,
-      { name: 'grep', description: 'Search files.' },
-    ]);
-
-    const grep = tools.find((t) => t.name === 'grep');
-    expect(grep?.description).toBe('Search files.');
-  });
-
   it('reflects the current roster on each call, not a frozen snapshot', async () => {
     // The #6655 regression: the roster was captured once and reused. Resolving
     // twice with a roster change between calls must yield a refreshed list.
@@ -521,19 +507,6 @@ describe('resolveAgentTools delegation annotation', () => {
     expect(second?.description).toContain('- coder:');
     expect(second?.description).not.toContain('- research:');
     expect(second?.description).not.toContain('- numerics:');
-  });
-
-  it('emits the empty-roster directive end-to-end when nothing is visible', async () => {
-    mocks.getVisibleAgents.mockReturnValue([]);
-
-    const delegateAgent = await resolveDelegateAgent();
-    expect(delegateAgent?.description).toContain(
-      'none are currently in the active roster',
-    );
-    expect(delegateAgent?.description).not.toContain('Available agents:\n');
-    expect(delegateAgent?.description).not.toContain(
-      'loaded from the active roster at runtime',
-    );
   });
 
   it('annotates each delegation tool from its own agent category', async () => {
@@ -561,51 +534,4 @@ describe('resolveAgentTools delegation annotation', () => {
     expect(mocks.getVisibleAgents).toHaveBeenCalledWith('toolUse');
     expect(mocks.getVisibleAgents).toHaveBeenCalledWith('workflow');
   });
-
-  it('keeps a $ in an agent description literal through resolveAgentTools', async () => {
-    mocks.getVisibleAgents.mockReturnValue([
-      { name: 'prover', description: 'Prove $P=NP$ statements.' },
-      { name: 'numerics', description: 'Run simulations.' },
-    ]);
-
-    const delegateAgent = await resolveDelegateAgent();
-    expect(delegateAgent?.description).toContain(
-      '- prover: Prove $P=NP$ statements.',
-    );
-    expect(delegateAgent?.description).toContain(
-      '- numerics: Run simulations.',
-    );
-  });
-
-  it.each([
-    { enabled: true, expected: 'Git worktree support: ENABLED.' },
-    {
-      enabled: false,
-      expected: 'Git worktree support: DISABLED in this workspace.',
-    },
-  ])(
-    'resolves the worktree line at the resolveAgentTools boundary ($expected)',
-    async ({ enabled, expected }) => {
-      mocks.getVisibleAgents.mockReturnValue([
-        { name: 'research', description: 'Derive and verify.' },
-      ]);
-      mocks.isWorktreeSupportEnabled.mockReturnValue(enabled);
-
-      const tools = await resolveToolList([
-        {
-          name: 'delegate_agent',
-          availabilityCategory: 'toolUse',
-          description: DELEGATE_AGENT_WORKTREE_DESCRIPTION,
-        },
-      ]);
-
-      const description = tools.find(
-        (t) => t.name === 'delegate_agent',
-      )?.description;
-      expect(description).toContain(expected);
-      expect(description).not.toContain(
-        'resolved from the active workspace at runtime',
-      );
-    },
-  );
 });

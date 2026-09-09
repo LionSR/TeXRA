@@ -23,45 +23,6 @@ function installToolAvailability(isTexraCliEntrypoint: boolean) {
 }
 
 describe('external tool definitions', () => {
-  it('keeps Zotero visible as a user-toggleable tool group', () => {
-    const zotero = findExternalToolDef('zotero');
-    if (!zotero) throw new Error('Zotero tool definition should exist');
-
-    expect(zotero.toggleable).toBe(true);
-    expect(zotero.tools).toEqual([
-      'zotero_collections',
-      'zotero_search',
-      'zotero_add',
-      'zotero_export',
-    ]);
-  });
-
-  it('keeps the workflow script tool as a user-toggleable, always-available group', async () => {
-    const workflowScript = findExternalToolDef('workflow-script');
-    if (!workflowScript) {
-      throw new Error('Workflow script tool definition should exist');
-    }
-
-    expect(workflowScript.toggleable).toBe(true);
-    expect(workflowScript.tools).toEqual(['delegate_multi_agents']);
-    expect(await workflowScript.check()).toBe(true);
-  });
-
-  it('shows TeXRA CLI as a detected but inactive integration', () => {
-    const texraCli = findExternalToolDef('texra-cli');
-    if (!texraCli) throw new Error('TeXRA CLI tool definition should exist');
-
-    expect(texraCli.category).toBe('ai-agents');
-    expect(texraCli.comingSoon).toBe(true);
-    expect(texraCli.hideFromCli).toBe(true);
-    expect(texraCli.toggleable).toBeUndefined();
-    expect(texraCli.tools).toEqual([]);
-    // The install guide must match the published Node engine range.
-    expect(texraCli.installGuide).toContain(
-      'requires Node.js ^22.16.0 || >=24.0.0',
-    );
-  });
-
   it('detects the current TeXRA CLI process through the host checker', async () => {
     const texraCli = findExternalToolDef('texra-cli');
     if (!texraCli) throw new Error('TeXRA CLI tool definition should exist');

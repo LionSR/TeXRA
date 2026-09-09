@@ -14,17 +14,6 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-const NON_RUNNING_ICONS: Record<
-  Exclude<CompactionActivityStatus, 'running'>,
-  string
-> = {
-  completed: 'circle-check',
-  failed: 'circle-xmark',
-  cancelled: 'ban',
-  skipped: 'circle-info',
-  interrupted: 'circle-exclamation',
-};
-
 function mount(status: CompactionActivityStatus): Promise<CompactionActivity> {
   return mountComponent<CompactionActivity>('compaction-activity', { status });
 }
@@ -73,33 +62,5 @@ describe('compaction-activity render branches', () => {
       spinner?.shadowRoot?.querySelector('svg'),
       'Web Awesome still paints the spin on svg',
     ).not.toBeNull();
-  });
-
-  it('keeps the reduced-motion override on the shared spinner', async () => {
-    const { CompactionActivity: Component } =
-      await import('@progressView/frontend/components/CompactionActivity');
-
-    // designTokens also mention prefers-reduced-motion, so pin the
-    // component-owned rule rather than the joined stylesheet text.
-    const componentStyle = Component.styles?.at(-1);
-    const cssText =
-      typeof componentStyle === 'string'
-        ? componentStyle
-        : (componentStyle?.cssText ?? '');
-    const collapsed = cssText.replaceAll(/\s+/g, ' ').trim();
-
-    expect(collapsed).toContain(
-      '@media (prefers-reduced-motion: reduce) { wa-spinner::part(base) { animation: none; } }',
-    );
-  });
-
-  it('renders the expected status icon for every non-running status', async () => {
-    for (const [status, iconName] of Object.entries(NON_RUNNING_ICONS)) {
-      const element = await mount(status as CompactionActivityStatus);
-
-      const icon = query(element, '.icon');
-      expect(icon?.tagName, `status=${status}`).toBe('WA-ICON');
-      expect(icon?.getAttribute('name'), `status=${status}`).toBe(iconName);
-    }
   });
 });

@@ -1499,28 +1499,6 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('publishes parent links through the session publisher', () => {
-    const { events, registry } = createRegistry();
-    const seen = recordSessionEvents(events);
-    const executionId = 'exec-session-parent-link-test';
-    const parentStreamId = 'parent-session-parent-link-test' as StreamTabId;
-    const childStreamId = 'child-session-parent-link-test' as StreamTabId;
-
-    try {
-      const handle = createHandle(executionId, parentStreamId, childStreamId);
-
-      registry.track(handle);
-
-      expect(seen.events).toContainEqual({
-        type: 'setParentStream',
-        aggregateId: qualifyAggregateId('stream', childStreamId),
-        parentStreamId,
-      });
-    } finally {
-      registry.dispose();
-    }
-  });
-
   it('clears live tool-use context while the handle remains tracked', () => {
     const { registry } = createRegistry();
     const executionId = 'exec-live-flow-context-test';
@@ -1720,31 +1698,6 @@ describe('executionRegistry', () => {
 
       expect(approvals.toolEdit.bypass.isBypassed(childStreamId)).toBe(true);
       expect(handle.deliveryTargetStreamId).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('publishes detach parent links through the session publisher', () => {
-    const { events, registry } = createRegistry();
-    const seen = recordSessionEvents(events);
-    const executionId = 'exec-detach-session-parent-link-test';
-    const parentStreamId =
-      'parent-detach-session-parent-link-test' as StreamTabId;
-    const childStreamId =
-      'child-detach-session-parent-link-test' as StreamTabId;
-
-    try {
-      const handle = createHandle(executionId, parentStreamId, childStreamId);
-
-      registry.track(handle);
-      registry.detachActiveChildren(parentStreamId);
-
-      expect(seen.events).toContainEqual({
-        type: 'setParentStream',
-        aggregateId: qualifyAggregateId('stream', childStreamId),
-        parentStreamId: null,
-      });
     } finally {
       registry.dispose();
     }

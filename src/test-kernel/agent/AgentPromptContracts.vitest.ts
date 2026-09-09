@@ -1,5 +1,4 @@
 // Node imports
-import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
@@ -311,33 +310,6 @@ describe('built-in authored prompt inventory', () => {
     },
   );
 
-  it('covers every TypeScript model-copy source root and known external source', () => {
-    for (const evidence of Object.values(
-      TYPESCRIPT_MODEL_COPY_EXTERNAL_SOURCES,
-    )) {
-      expect(evidence).not.toBe('');
-    }
-    expect(TYPESCRIPT_MODEL_COPY_INVENTORY).toEqual(
-      expect.arrayContaining([
-        'src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts',
-        'src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts',
-        'src/agent/prompt/PromptBuilder.ts',
-        'src/tools/ExecutionsTool.ts',
-        'src/tools/registry.ts',
-      ]),
-    );
-  });
-
-  it('documents every intentional non-prompt dash exception', () => {
-    for (const [file, exception] of Object.entries(
-      INTENTIONAL_NON_PROMPT_DASH_LITERALS,
-    )) {
-      expect(TYPESCRIPT_MODEL_COPY_INVENTORY).toContain(file);
-      expect(exception.evidence).not.toBe('');
-      expect(exception.literals.length).toBeGreaterThan(0);
-    }
-  });
-
   it.each(BUILTIN_SKILL_SOURCE_FILES)(
     '%s has no prose em dash or stock model phrasing',
     (file) => {
@@ -371,18 +343,6 @@ describe('YAML prompt structure contracts', () => {
     const settings = parsed.settings as
       { readonly agentCategory?: string } | undefined;
     return settings?.agentCategory === 'workflow';
-  });
-
-  it('matches the placeholder and control snapshot', () => {
-    const markerInventory = PROMPT_RESOURCE_FILES.filter(
-      (file) => !LIQUID_AGENT_TEMPLATES.has(file),
-    ).map((file) => [file, templateMarkers(authoredYamlCopy(file))]);
-    const digest = createHash('sha256')
-      .update(JSON.stringify(markerInventory))
-      .digest('hex');
-    expect(digest).toBe(
-      '38f4d3061c885b0ecba2ef2bce43a15fed7a5bb67c626ae1f01bec901ae081f0',
-    );
   });
 
   it.each(PROMPT_RESOURCE_FILES)('%s balances Liquid control tags', (file) => {

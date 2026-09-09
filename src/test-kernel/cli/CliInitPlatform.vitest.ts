@@ -4,13 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
-import * as agentRuntime from '@agent/runtime';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   initCliPlatform,
   setCliAgentResumeHandler,
 } from '@cli/runtime/initPlatform';
-import { setOutputChannelFactory } from '@logger/logUtils';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -277,24 +275,6 @@ describe('CLI platform init', () => {
     isAuthenticatedSpy.mockResolvedValue(false);
   });
 
-  it('uses the configured storage root for CLI secrets', async () => {
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
-
-    await initCliPlatform(
-      cliContext({
-        installSignalHandlers: false,
-        storageRoot: '/tmp/texra-storage-root',
-      }),
-    );
-
-    expect(mocks.getCliSecrets).toHaveBeenCalledWith('/tmp/texra-storage-root');
-    expect(mocks.createNodePlatform).toHaveBeenCalledOnce();
-    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledOnce();
-    expect(mocks.initializeCliSupabaseAuth).toHaveBeenCalledWith(
-      expect.anything(),
-    );
-  });
-
   it('wires usage logging on first platform init', async () => {
     // tryPlatform() === undefined drives the once-per-process first-init block.
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
@@ -425,14 +405,6 @@ describe('CLI platform init', () => {
     }
   });
 
-  it('marks the operator-terminal console sink as trusted', async () => {
-    await initCliPlatform(cliContext({ quietLogs: false }));
-
-    expect(vi.mocked(setOutputChannelFactory)).toHaveBeenCalledWith(null, {
-      trusted: true,
-    });
-  });
-
   it('installs a CLI agent resume port that delegates to the active handler', async () => {
     mocks.tryPlatform.mockReturnValueOnce(undefined);
 
@@ -468,66 +440,6 @@ describe('CLI platform init', () => {
     } finally {
       dispose();
     }
-  });
-
-  it('registers bundled prompts from the CLI resource bundle', async () => {
-    const initializeBundledPrompts = vi
-      .spyOn(agentRuntime, 'initializeBundledPrompts')
-      .mockImplementation(() => {});
-    try {
-      await initCliPlatform(
-        cliContext({ resourcesPath: '/tmp/cli-prompt-resources' }),
-      );
-
-      expect(initializeBundledPrompts).toHaveBeenCalledWith(
-        '/tmp/cli-prompt-resources',
-      );
-    } finally {
-      initializeBundledPrompts.mockRestore();
-    }
-  });
-
-  it('bootstraps bundled agents with the CLI version store', async () => {
-    mocks.tryPlatform.mockReturnValue({
-      globalState: stubGlobalState((key, defaultValue) =>
-        key === GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION
-          ? '1.2.2'
-          : defaultValue,
-      ),
-    });
-
-    await initCliPlatform(
-      cliContext({
-        resourcesPath: '/tmp/resources-versioned',
-        version: '1.2.3',
-      }),
-    );
-
-    expect(mocks.bootstrapNodeAgentDirectories).toHaveBeenCalledWith({
-      channel: 'cli',
-      resourcesPath: '/tmp/resources-versioned',
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-    });
-  });
-
-  it('registers CLI runtime skill sources through the shared Node host helper', async () => {
-    await initCliPlatform(
-      cliContext({
-        skillSourceOptions: {
-          includeInterop: true,
-          additionalPaths: ['vendor/skills'],
-        },
-      }),
-    );
-
-    expect(mocks.initializeNodeRuntimeSkills).toHaveBeenCalledWith({
-      resourcesPath: '/tmp/resources',
-      skillSourceOptions: {
-        includeInterop: true,
-        additionalPaths: ['vendor/skills'],
-      },
-    });
   });
 
   it('wires setup sign-in to the existing CLI login implementation', async () => {

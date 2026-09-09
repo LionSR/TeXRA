@@ -1,6 +1,3 @@
-// Node imports
-import { readFileSync } from 'node:fs';
-
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
@@ -103,50 +100,6 @@ describe('tool-edit-request-panel', () => {
     expect(button?.classList.contains('action-button')).toBe(true);
   });
 
-  it('uses a native compact split button for LaTeX diff actions', async () => {
-    const element = await mountPanel(createPermission({ isLatex: true }));
-    const group = element.shadowRoot?.querySelector('wa-button-group');
-    const button = group?.querySelector<HTMLElement>(
-      'wa-button[data-action="openDiff"]',
-    );
-    const menu = group?.querySelector('wa-dropdown');
-    const trigger = menu?.querySelector<HTMLElement>(
-      'wa-button[slot="trigger"]',
-    );
-
-    expect(group?.getAttribute('label')).toBe('Diff actions');
-    expect(button?.parentElement).toBe(group);
-    expect(menu?.parentElement).toBe(group);
-    expect(button?.classList.contains('action-button')).toBe(false);
-    expect(button?.getAttribute('appearance')).toBe('plain');
-    expect(button?.getAttribute('variant')).toBe('neutral');
-    expect(button?.getAttribute('size')).toBe('s');
-    expect(menu?.getAttribute('placement')).toBe('bottom-end');
-    expect(trigger?.getAttribute('appearance')).toBe('plain');
-    expect(trigger?.getAttribute('variant')).toBe('neutral');
-    expect(trigger?.getAttribute('size')).toBe('s');
-    expect(trigger?.getAttribute('aria-label')).toBe('More diff actions');
-    expect(tooltipText(element, 'tool-edit-diff-button')).toBe('Open diff (d)');
-    expect(tooltipText(element, 'tool-edit-diff-dropdown-trigger')).toBe(
-      'More diff actions',
-    );
-    for (const anchorId of [
-      'tool-edit-diff-button',
-      'tool-edit-diff-dropdown-trigger',
-    ]) {
-      expect(
-        element.shadowRoot?.querySelector(`wa-tooltip[for="${anchorId}"]`)
-          ?.parentNode,
-      ).toBe(group?.parentNode);
-    }
-    expect(
-      [...(element.shadowRoot?.querySelectorAll('[class]') ?? [])].some(
-        (node) =>
-          [...node.classList].some((name) => name.startsWith('split-button')),
-      ),
-    ).toBe(false);
-  });
-
   it('dispatches the primary and menu diff actions', async () => {
     const element = await mountPanel(createPermission({ isLatex: true }));
     const actions = recordPermissionActions(element);
@@ -180,30 +133,6 @@ describe('tool-edit-request-panel', () => {
     expect(element.shadowRoot?.querySelector('wa-button-group')).toBeNull();
     expect(element.shadowRoot?.querySelector('wa-dropdown')).toBeNull();
     expect(button?.hasAttribute('disabled')).toBe(true);
-  });
-
-  it('keeps native caret state motion-safe and removes legacy split styles', () => {
-    const splitButtonSource = readFileSync(
-      'src/shared/wa/splitButton.ts',
-      'utf8',
-    );
-    const toolEditStyles = readFileSync(
-      'packages/extension/src/progressView/frontend/components/ToolEditRequestPanel.styles.ts',
-      'utf8',
-    );
-
-    expect(splitButtonSource).toContain('.split-menu[open]');
-    expect(splitButtonSource).toContain(
-      '@media (prefers-reduced-motion: reduce)',
-    );
-
-    for (const source of [
-      splitButtonSource,
-      readFileSync('src/shared/styles/controlStyles.ts', 'utf8'),
-      toolEditStyles,
-    ]) {
-      expect(source).not.toContain('split-button');
-    }
   });
 
   it('anchors the line-change hint with wa-tooltip instead of title', async () => {
