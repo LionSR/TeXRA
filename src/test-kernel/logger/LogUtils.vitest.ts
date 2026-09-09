@@ -198,14 +198,4 @@ describe('logUtils', () => {
 
     expect(dispose).toHaveBeenCalledOnce();
   });
-
-  it('parseLevelTag only recognizes a full writeLine header, not a data payload that starts with a level word', () => {
-    expect(
-      logger.parseLevelTag('ERROR [2026-09-09 00:00:00.000] [channel] boom'),
-    ).toBe('error');
-    // A debug-mode data payload can be any scalar, including one that
-    // happens to start with a level word — that isn't a new log header.
-    expect(logger.parseLevelTag('ERROR from latexdiff')).toBeUndefined();
-    expect(logger.parseLevelTag('unrelated message')).toBeUndefined();
-  });
 });

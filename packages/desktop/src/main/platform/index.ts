@@ -45,7 +45,10 @@ import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { appendLogUtilsChannelLine } from '../desktopAppLog.js';
+import {
+  appendLogUtilsChannelLine,
+  appendLogUtilsContinuationLine,
+} from '../desktopAppLog.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
@@ -100,6 +103,8 @@ export async function initializeElectronPlatform(
   // `texra-desktop.log` regardless of the line's real level.
   setOutputChannelFactory((name) => ({
     appendLine: (message) => appendLogUtilsChannelLine(name, message),
+    appendContinuationLine: (message) =>
+      appendLogUtilsContinuationLine(name, message),
   }));
 
   // The default handler's console.error is mirrored into the desktop app log,

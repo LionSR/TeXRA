@@ -19,6 +19,7 @@ import {
 
 import { parseLevelTag } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
+import { LOG_LEVELS } from '@shared/schemas/log';
 import { normalizeFilePath } from '@utils/core';
 
 import { pathSeparatorVariants } from './desktopPathVariants.js';
@@ -159,40 +160,54 @@ function appendRawDesktopLogLine(line: string): boolean {
 }
 
 /**
- * Sink for `logUtils.setOutputChannelFactory`. A message that carries a
- * level tag (recovered via `parseLevelTag`, since `OutputSink.appendLine`
- * itself carries none) is a new `writeLine` header: write it through
- * {@link appendDesktopLogLine} at that real level instead of routing through
+ * Header sink for `logUtils.setOutputChannelFactory` (wired as
+ * `appendLine`) — always a new `writeLine` header, never a continuation:
+ * `writeLine`'s untagged debug-data companion line goes through
+ * {@link appendLogUtilsContinuationLine} instead (wired as
+ * `appendContinuationLine`), so this never needs to guess which one it got
+ * from the text. Recovers the real level via `parseLevelTag` (since
+ * `OutputSink.appendLine` itself carries none) and writes it through
+ * {@link appendDesktopLogLine} at that level instead of routing through
  * `console` and letting {@link installConsoleMirror} re-stamp it under
  * whichever `console[level]` a caller happened to invoke — which is always
- * `console.info` for the un-wired factory, mislabeling every ERROR/WARN line.
- * Matching {@link appendDesktopLogLine}'s `<ISO timestamp> [<level>]
+ * `console.info` for the un-wired factory, mislabeling every ERROR/WARN
+ * line. Matching {@link appendDesktopLogLine}'s `<ISO timestamp> [<level>]
  * <message>` shape (rather than writing `logUtils`' own already-tagged text
  * through verbatim) also matters beyond readability: `parseDesktopLogEntries`
  * (renderer/logsPane.ts) only recognizes that shape as the start of a new
- * entry, so any other shape would fold into whichever entry happened to
- * precede it and lose severity in the Logs tab regardless of what the text
- * says.
+ * entry.
  *
- * A message with no level tag is `writeLine`'s untagged debug-data companion
- * line for the header written just before it (`options.data`, gated on
- * `texra.logger.debugMode`) — write it through {@link appendRawDesktopLogLine}
- * instead, so it stays attached to that header as continuation text rather
- * than becoming its own falsely-`info`-level entry.
- *
- * Either way, falls back to `console[level]`/`console.info` when the file
- * write didn't land (log setup never completed, or this specific append hit
- * a full disk/permission error), so a file-logging failure doesn't go
- * completely dark the way it would if this only ever wrote to the file.
+ * Falls back to `console[level]` when the file write didn't land (log setup
+ * never completed, or this specific append hit a full disk/permission
+ * error), so a file-logging failure doesn't go completely dark the way it
+ * would if this only ever wrote to the file.
  */
 export function appendLogUtilsChannelLine(name: string, message: string): void {
-  const level = parseLevelTag(message);
+  const level = parseLevelTag(message) ?? LOG_LEVELS.INFO;
   const line = `[${name}] ${message}`;
-  if (level == null) {
-    if (!appendRawDesktopLogLine(line)) console.info(line);
-    return;
-  }
   if (!appendDesktopLogLine(level, line)) console[level](line);
+}
+
+/**
+ * Continuation sink for `logUtils.setOutputChannelFactory` (wired as
+ * `appendContinuationLine`) — `writeLine`'s untagged debug-data companion
+ * line for the header written just before it (`options.data`, gated on
+ * `texra.logger.debugMode`). Always raw, via {@link appendRawDesktopLogLine},
+ * so it stays attached to that header as continuation text in
+ * `parseDesktopLogEntries` (renderer/logsPane.ts) instead of becoming its
+ * own entry. No level parsing here: `data` is caller-supplied, arbitrary
+ * text — e.g. compiler output that itself happens to look like a real
+ * header (`'ERROR [2026-... ] compiler failed'`) — so nothing about its
+ * content is a trustworthy level or entry-boundary signal. It's `writeLine`
+ * calling a distinct sink method, not this function inspecting text, that
+ * makes the header/continuation distinction safe.
+ */
+export function appendLogUtilsContinuationLine(
+  name: string,
+  message: string,
+): void {
+  const line = `[${name}] ${message}`;
+  if (!appendRawDesktopLogLine(line)) console.info(line);
 }
 
 function initializeDesktopLogFile(): string | undefined {
