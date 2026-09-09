@@ -11,7 +11,7 @@ import {
   type TurnEvent,
   type TurnRequest,
 } from '@texra-ai/llm/turn';
-import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Stream, Redacted } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 const BASE_CONFIG = {
@@ -172,7 +172,10 @@ function call(index: number, overrides: Record<string, unknown> = {}): object {
 }
 
 function modelWith(fetch: typeof globalThis.fetch): Model {
-  return openaiChatModel(CONFIG, { apiKey: 'synthetic-not-a-secret', fetch });
+  return openaiChatModel(CONFIG, {
+    apiKey: Redacted.make('synthetic-not-a-secret'),
+    fetch,
+  });
 }
 
 const generate = (model: Model) =>
@@ -256,7 +259,7 @@ describe('native OpenAI Chat protocol', () => {
         );
         const model = openaiChatModel(
           { ...MINIMAX_CONFIG, outputMode: 'incremental' },
-          { apiKey: 'synthetic', fetch },
+          { apiKey: Redacted.make('synthetic'), fetch },
         );
         const prepared = yield* model.prepareTurn({ ...REQUEST, tools: TOOLS });
         assert(prepared.mode === 'foreground');
@@ -392,7 +395,7 @@ describe('native OpenAI Chat protocol', () => {
         });
         const model = openaiChatModel(
           { ...MINIMAX_CONFIG, outputMode: 'incremental' },
-          { apiKey: 'synthetic', fetch },
+          { apiKey: Redacted.make('synthetic'), fetch },
         );
         const turn = yield* model.prepareTurn(REQUEST);
         assert(turn.mode === 'foreground');
@@ -479,7 +482,7 @@ describe('native OpenAI Chat protocol', () => {
         );
         const model = openaiChatModel(
           { ...MINIMAX_CONFIG, outputMode: 'incremental' },
-          { apiKey: 'synthetic', fetch },
+          { apiKey: Redacted.make('synthetic'), fetch },
         );
         const failure = yield* Effect.flip(generate(model));
         expect(failure.kind).toBe(kind);
@@ -545,7 +548,10 @@ describe('native OpenAI Chat protocol', () => {
         reasoningSplit,
         requestedModel: 'MiniMax-01',
       });
-      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const model = openaiChatModel(config, {
+        apiKey: Redacted.make('synthetic'),
+        fetch,
+      });
       const prepared = await Effect.runPromise(
         model.prepareTurn({
           messages: [
@@ -859,7 +865,7 @@ describe('native OpenAI Chat protocol', () => {
           }),
         );
       const model = openaiChatModel(MINIMAX_CONFIG, {
-        apiKey: 'synthetic',
+        apiKey: Redacted.make('synthetic'),
         fetch,
       });
       if (kind !== undefined) {
@@ -896,7 +902,10 @@ describe('native OpenAI Chat protocol', () => {
       const fetch = vi
         .fn<typeof globalThis.fetch>()
         .mockImplementation(async () => response(sse(chunk())));
-      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const model = openaiChatModel(config, {
+        apiKey: Redacted.make('synthetic'),
+        fetch,
+      });
       const request: TurnRequest = {
         system: 'Exact system.',
         messages: [
@@ -994,7 +1003,7 @@ describe('native OpenAI Chat protocol', () => {
       const textOnly = openaiChatModel(
         { ...config, supportsImageInput: false },
         {
-          apiKey: 'synthetic',
+          apiKey: Redacted.make('synthetic'),
           fetch,
         },
       );
@@ -1023,7 +1032,10 @@ describe('native OpenAI Chat protocol', () => {
       supportsInputTokenEstimation: true,
       requiresPromptCacheKey: true,
     };
-    const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+    const model = openaiChatModel(config, {
+      apiKey: Redacted.make('synthetic'),
+      fetch,
+    });
     assert(model.estimateInputTokens !== undefined);
     const missingKey = await Effect.runPromise(
       Effect.flip(model.prepareTurn(REQUEST)),
@@ -1127,7 +1139,7 @@ describe('native OpenAI Chat protocol', () => {
     }
     expect(fetch).toHaveBeenCalledTimes(2);
     const ordinary = openaiChatModel(REASONING_CONFIGS[1], {
-      apiKey: 'synthetic',
+      apiKey: Redacted.make('synthetic'),
       fetch,
     });
     expect(ordinary.estimateInputTokens).toBeUndefined();
@@ -1182,7 +1194,7 @@ describe('native OpenAI Chat protocol', () => {
       const model = openaiChatModel(
         { ...REASONING_CONFIGS[1], supportsInputTokenEstimation: true },
         {
-          apiKey: 'synthetic',
+          apiKey: Redacted.make('synthetic'),
           fetch,
         },
       );
@@ -1228,7 +1240,7 @@ describe('native OpenAI Chat protocol', () => {
         ),
       );
       const model = openaiChatModel(config, {
-        apiKey: 'synthetic',
+        apiKey: Redacted.make('synthetic'),
         fetch,
       });
       const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
@@ -1304,7 +1316,7 @@ describe('native OpenAI Chat protocol', () => {
         ),
       );
       const model = openaiChatModel(REASONING_CONFIGS[1], {
-        apiKey: 'synthetic',
+        apiKey: Redacted.make('synthetic'),
         fetch,
       });
       const result = await Effect.runPromise(generate(model));
@@ -1439,7 +1451,10 @@ describe('native OpenAI Chat protocol', () => {
           ),
         ),
       );
-      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const model = openaiChatModel(config, {
+        apiKey: Redacted.make('synthetic'),
+        fetch,
+      });
       const completed = vi.fn();
       const failure = await Effect.runPromise(
         Effect.flip(
@@ -1488,7 +1503,10 @@ describe('native OpenAI Chat protocol', () => {
     'revalidates rehydrated $config.protocol controls before transport',
     async ({ config, controls }) => {
       const fetch = vi.fn<typeof globalThis.fetch>();
-      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const model = openaiChatModel(config, {
+        apiKey: Redacted.make('synthetic'),
+        fetch,
+      });
       const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
       const rehydrated = JSON.parse(JSON.stringify(prepared));
       Object.assign(rehydrated.controls, controls);
@@ -1595,7 +1613,10 @@ describe('native OpenAI Chat protocol', () => {
       const fetch = vi
         .fn<typeof globalThis.fetch>()
         .mockResolvedValue(response(sse(chunk())));
-      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const model = openaiChatModel(config, {
+        apiKey: Redacted.make('synthetic'),
+        fetch,
+      });
       const prepared = await Effect.runPromise(
         model.prepareTurn({ ...REQUEST, tools: TOOLS, ...request }),
       );
@@ -1740,7 +1761,10 @@ describe('native OpenAI Chat protocol', () => {
     request: Partial<TurnRequest>;
   }[])('rejects $name before transport', async ({ config, request }) => {
     const fetch = vi.fn<typeof globalThis.fetch>();
-    const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+    const model = openaiChatModel(config, {
+      apiKey: Redacted.make('synthetic'),
+      fetch,
+    });
     const failure = await Effect.runPromise(
       Effect.flip(model.prepareTurn({ ...REQUEST, tools: TOOLS, ...request })),
     );
@@ -1856,7 +1880,10 @@ describe('native OpenAI Chat protocol', () => {
             ),
           ),
         );
-      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const model = openaiChatModel(config, {
+        apiKey: Redacted.make('synthetic'),
+        fetch,
+      });
       const messages: TurnRequest['messages'] = [
         {
           role: 'user',
@@ -2172,7 +2199,10 @@ describe('native OpenAI Chat protocol', () => {
           ),
         )
         .mockResolvedValueOnce(response(sse(chunk())));
-      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const model = openaiChatModel(config, {
+        apiKey: Redacted.make('synthetic'),
+        fetch,
+      });
       const turn = await Effect.runPromise(
         model.prepareTurn({ ...REQUEST, tools: TOOLS }),
       );
@@ -2446,7 +2476,10 @@ describe('native OpenAI Chat protocol', () => {
       ),
     );
     const config = structuredClone(CONFIG);
-    const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+    const model = openaiChatModel(config, {
+      apiKey: Redacted.make('synthetic'),
+      fetch,
+    });
     const request = structuredClone(REQUEST);
     const prepared = await Effect.runPromise(model.prepareTurn(request));
     assert(prepared.mode === 'foreground');
@@ -2766,7 +2799,10 @@ describe('native OpenAI Chat protocol', () => {
       );
     const config = structuredClone(OPENAI_REASONING_CONFIG);
     Object.assign(config.defaults, { parallelToolCalls: false });
-    const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+    const model = openaiChatModel(config, {
+      apiKey: Redacted.make('synthetic'),
+      fetch,
+    });
     const choice = { name: 'search' };
     const turn = await Effect.runPromise(
       model.prepareTurn({ ...REQUEST, tools: TOOLS, toolChoice: choice }),
@@ -2859,7 +2895,10 @@ describe('native OpenAI Chat protocol', () => {
       config = REASONING_CONFIGS[0];
     if (scenario === 'Kimi tool media') config = REASONING_CONFIGS[1];
     if (scenario === 'GLM tool media') config = REASONING_CONFIGS[2];
-    const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+    const model = openaiChatModel(config, {
+      apiKey: Redacted.make('synthetic'),
+      fetch,
+    });
     const image = { kind: 'image', mimeType: 'image/png', base64: '' } as const;
     const content = {
       role: 'assistant',
@@ -3246,7 +3285,7 @@ describe('native OpenAI Chat protocol', () => {
           supportsInputTokenEstimation: true,
         };
       const model = openaiChatModel(config, {
-        apiKey: 'synthetic',
+        apiKey: Redacted.make('synthetic'),
         fetch,
       });
       const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
@@ -3380,7 +3419,10 @@ describe('native OpenAI Chat protocol', () => {
           ...REASONING_CONFIGS[1],
           supportsInputTokenEstimation: true,
         };
-      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const model = openaiChatModel(config, {
+        apiKey: Redacted.make('synthetic'),
+        fetch,
+      });
       const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
       assert(prepared.mode === 'foreground');
       if (phase === 'successful-take') {

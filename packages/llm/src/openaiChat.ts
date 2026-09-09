@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, Exit, Stream } from 'effect';
+import { Cause, Effect, Exit, Redacted, Stream } from 'effect';
 import { Sse } from 'effect/unstable/encoding';
 import OpenAI from 'openai';
 import { z } from 'zod';
@@ -7,6 +7,7 @@ import { z } from 'zod';
 // Local imports - canonical model contract
 import { openaiFailure } from './openaiError.js';
 import {
+  type ProviderCredential,
   InputTokenEstimateSchema,
   JsonObjectSchema,
   ModelConfigurationSchema,
@@ -823,7 +824,10 @@ const normalizeUsage = Effect.fn('llm.chatUsage')(function* (
 /** Direct Chat protocols; credentials and HTTP transport are foreign inputs. */
 export function openaiChatModel(
   configuration: ChatConfiguration,
-  transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
+  transport: {
+    readonly apiKey: ProviderCredential;
+    readonly fetch?: typeof fetch;
+  },
 ): Model {
   const config = ModelConfigurationSchema.parse(configuration);
   if (
@@ -854,7 +858,7 @@ export function openaiChatModel(
     });
   }
   const client = new OpenAI({
-    apiKey: transport.apiKey,
+    apiKey: Redacted.value(transport.apiKey),
     baseURL: config.deployment.endpoint,
     fetch: transport.fetch,
     maxRetries: 0,

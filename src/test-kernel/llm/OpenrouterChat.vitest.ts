@@ -10,7 +10,7 @@ import {
   type TurnEvent,
   type TurnRequest,
 } from '@texra-ai/llm/turn';
-import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
+import { Cause, Effect, Exit, Fiber, Stream, Redacted } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 const CONFIG = {
@@ -219,7 +219,7 @@ describe('native OpenRouter Chat', () => {
       );
     });
     const model = openrouterChatModel(CONFIG, {
-      apiKey: 'selected-key',
+      apiKey: Redacted.make('selected-key'),
       fetch,
     });
     const request: TurnRequest = {
@@ -418,7 +418,10 @@ describe('native OpenRouter Chat', () => {
         bodies.push(JSON.parse(String(init?.body)));
         return response(sse(frame(delta), frame({}, 'stop')));
       });
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+      const model = openrouterChatModel(CONFIG, {
+        apiKey: Redacted.make('key'),
+        fetch,
+      });
       const result = await run(model);
       await run(model, {
         messages: [
@@ -471,7 +474,7 @@ describe('native OpenRouter Chat', () => {
     });
     const fetch = vi.fn<typeof globalThis.fetch>(async () => response(body));
     const result = await run(
-      openrouterChatModel(CONFIG, { apiKey: 'key', fetch }),
+      openrouterChatModel(CONFIG, { apiKey: Redacted.make('key'), fetch }),
     );
     expect(result.content).toEqual([
       { kind: 'message', content: [{ kind: 'text', text: 'α\nβ' }] },
@@ -517,7 +520,10 @@ describe('native OpenRouter Chat', () => {
     ['non-PDF', CONFIG, { kind: 'document', mimeType: 'text/csv', base64: '' }],
   ] as const)('rejects %s before I/O', async (_, config, part) => {
     const fetch = vi.fn<typeof globalThis.fetch>();
-    const model = openrouterChatModel(config, { apiKey: 'key', fetch });
+    const model = openrouterChatModel(config, {
+      apiKey: Redacted.make('key'),
+      fetch,
+    });
     const exit = await Effect.runPromiseExit(
       model.prepareTurn({ messages: [{ role: 'user', content: [part] }] }),
     );
@@ -536,7 +542,10 @@ describe('native OpenRouter Chat', () => {
     'rejects %s and does not issue an automatic request',
     async (_, controls) => {
       const fetch = vi.fn<typeof globalThis.fetch>();
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+      const model = openrouterChatModel(CONFIG, {
+        apiKey: Redacted.make('key'),
+        fetch,
+      });
       const exit = await Effect.runPromiseExit(
         model.prepareTurn({ ...REQUEST, ...controls }),
       );
@@ -663,7 +672,10 @@ describe('native OpenRouter Chat', () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       response(sse(...frames)),
     );
-    const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+    const model = openrouterChatModel(CONFIG, {
+      apiKey: Redacted.make('key'),
+      fetch,
+    });
     const exit = await Effect.runPromiseExit(
       Effect.gen(function* () {
         const turn = yield* model.prepareTurn({ ...REQUEST, tools: TOOLS });
@@ -694,7 +706,10 @@ describe('native OpenRouter Chat', () => {
       const fetch = vi.fn<typeof globalThis.fetch>(async () =>
         response(wire, status),
       );
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+      const model = openrouterChatModel(CONFIG, {
+        apiKey: Redacted.make('key'),
+        fetch,
+      });
       const exit = await Effect.runPromiseExit(
         Effect.gen(function* () {
           const turn = yield* model.prepareTurn(REQUEST);
@@ -737,7 +752,10 @@ describe('native OpenRouter Chat', () => {
             : `data: ${JSON.stringify(frame({ content: 'partial' }, 'stop'))}\n\n`,
         );
       });
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+      const model = openrouterChatModel(CONFIG, {
+        apiKey: Redacted.make('key'),
+        fetch,
+      });
       const exit = await Effect.runPromiseExit(
         Effect.gen(function* () {
           const turn = yield* model.prepareTurn(REQUEST);
@@ -789,7 +807,10 @@ describe('native OpenRouter Chat', () => {
         });
         return Promise.resolve(response(body));
       });
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+      const model = openrouterChatModel(CONFIG, {
+        apiKey: Redacted.make('key'),
+        fetch,
+      });
       const fiber = Effect.runFork(
         Effect.gen(function* () {
           const turn = yield* model.prepareTurn(REQUEST);
@@ -854,7 +875,10 @@ describe('native OpenRouter Chat', () => {
       },
     });
     const fetch = vi.fn<typeof globalThis.fetch>(async () => response(body));
-    const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+    const model = openrouterChatModel(CONFIG, {
+      apiKey: Redacted.make('key'),
+      fetch,
+    });
     const exit = await Effect.runPromiseExit(
       Effect.gen(function* () {
         const turn = yield* model.prepareTurn(REQUEST);

@@ -2,12 +2,13 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Cause, Effect, Exit, Stream } from 'effect';
+import { Cause, Effect, Exit, Redacted, Stream } from 'effect';
 import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
+  type ProviderCredential,
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
@@ -586,7 +587,10 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
 /** Direct OpenRouter HTTP/SSE; selected credentials and transport are explicit. */
 export function openrouterChatModel(
   configuration: OpenRouterConfiguration,
-  transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
+  transport: {
+    readonly apiKey: ProviderCredential;
+    readonly fetch?: typeof fetch;
+  },
 ): Model {
   const config = ModelConfigurationSchema.parse(configuration);
   if (config.protocol !== 'openrouter-chat')
@@ -737,7 +741,7 @@ export function openrouterChatModel(
                 method: 'POST',
                 signal,
                 headers: {
-                  Authorization: `Bearer ${transport.apiKey}`,
+                  Authorization: `Bearer ${Redacted.value(transport.apiKey)}`,
                   'Content-Type': 'application/json',
                   Accept: 'text/event-stream',
                   'X-Title': 'TeXRA.ai',

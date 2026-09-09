@@ -4,11 +4,13 @@ import Anthropic, {
   APIConnectionError,
   APIUserAbortError,
 } from '@anthropic-ai/sdk';
-import { Cause, Effect, Exit, Stream } from 'effect';
+import { Cause, Effect, Exit, Redacted, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
+  ProviderCredentialSchema,
+  type ProviderCredential,
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
@@ -411,10 +413,16 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
 /** Stable Messages protocol, without a transcript owner, uploads or SDK emitters. */
 export function anthropicMessagesModel(
   configuration: AnthropicMessagesConfiguration,
-  transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
+  transport: {
+    readonly apiKey: ProviderCredential;
+    readonly fetch?: typeof fetch;
+  },
 ): Model {
   const config = ModelConfigurationSchema.parse(configuration);
-  if (config.protocol !== 'anthropic-messages' || !transport.apiKey) {
+  if (
+    config.protocol !== 'anthropic-messages' ||
+    !ProviderCredentialSchema.safeParse(transport.apiKey).success
+  ) {
     throw new ModelError({
       kind: 'invalid-request',
       message:
@@ -436,7 +444,7 @@ export function anthropicMessagesModel(
     deployment: config.deployment,
   };
   const client = new Anthropic({
-    apiKey: transport.apiKey,
+    apiKey: Redacted.value(transport.apiKey),
     authToken: null,
     baseURL: config.deployment.endpoint,
     fetch: transport.fetch,

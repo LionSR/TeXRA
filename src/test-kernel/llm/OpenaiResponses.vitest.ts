@@ -11,7 +11,7 @@ import {
   openaiResponsesWebSocketModel,
 } from '@texra-ai/llm/openai-responses';
 import { ContinuationSchema, RemoteOperationSchema } from '@texra-ai/llm/turn';
-import { Cause, Effect, Fiber, Stream } from 'effect';
+import { Cause, Effect, Fiber, Stream, Redacted } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -176,7 +176,10 @@ function response(frames: object[]): Response {
 }
 function modelWith(fetch: typeof globalThis.fetch, configuration = CONFIG) {
   return openaiResponsesModel(configuration, {
-    authentication: { kind: 'api-key', apiKey: 'synthetic-not-a-secret' },
+    authentication: {
+      kind: 'api-key',
+      apiKey: Redacted.make('synthetic-not-a-secret'),
+    },
     fetch,
   });
 }
@@ -256,7 +259,7 @@ describe('native OpenAI Responses protocol', () => {
               transport === 'websocket'
                 ? yield* openaiResponsesWebSocketModel(configuration, {
                     kind: 'api-key',
-                    apiKey: 'synthetic-not-a-secret',
+                    apiKey: Redacted.make('synthetic-not-a-secret'),
                   })
                 : modelWith(fetch, configuration);
             assert(model.estimateInputTokens);
@@ -579,7 +582,7 @@ describe('native OpenAI Responses protocol', () => {
               { ...configuration, supportsInputTokenEstimation: true },
               {
                 kind: 'api-key',
-                apiKey: 'synthetic-not-a-secret',
+                apiKey: Redacted.make('synthetic-not-a-secret'),
               },
             );
             const turn = yield* model.prepareTurn(REQUEST);
@@ -715,7 +718,7 @@ describe('native OpenAI Responses protocol', () => {
         Effect.gen(function* () {
           const model = yield* openaiResponsesWebSocketModel(configuration, {
             kind: 'api-key',
-            apiKey: 'synthetic-not-a-secret',
+            apiKey: Redacted.make('synthetic-not-a-secret'),
           });
           const turn = yield* model.prepareTurn(REQUEST);
           assert(turn.mode === 'foreground');
@@ -737,7 +740,7 @@ describe('native OpenAI Responses protocol', () => {
           expect(connections).toBe(1);
           const fresh = yield* openaiResponsesWebSocketModel(configuration, {
             kind: 'api-key',
-            apiKey: 'synthetic-not-a-secret',
+            apiKey: Redacted.make('synthetic-not-a-secret'),
           });
           expect(yield* Effect.flip(fresh.generateTurn(turn))).toMatchObject({
             kind: 'unsupported',
@@ -842,7 +845,7 @@ describe('native OpenAI Responses protocol', () => {
           Effect.gen(function* () {
             const model = yield* openaiResponsesWebSocketModel(configuration, {
               kind: 'api-key',
-              apiKey: 'synthetic-not-a-secret',
+              apiKey: Redacted.make('synthetic-not-a-secret'),
             });
             const turn = yield* model.prepareTurn(REQUEST);
             assert(turn.mode === 'foreground');
@@ -903,7 +906,7 @@ describe('native OpenAI Responses protocol', () => {
           Effect.flip(
             openaiResponsesWebSocketModel(configuration, {
               kind: 'codex',
-              accessToken: 'selected-token',
+              accessToken: Redacted.make('selected-token'),
               accountId: 'selected-account',
             }),
           ),
@@ -917,7 +920,7 @@ describe('native OpenAI Responses protocol', () => {
         Effect.flip(
           openaiResponsesWebSocketModel(configuration, {
             kind: 'codex',
-            accessToken: 'selected-token',
+            accessToken: Redacted.make('selected-token'),
             accountId: 'selected-account',
           }),
         ),
@@ -953,7 +956,7 @@ describe('native OpenAI Responses protocol', () => {
         Effect.gen(function* () {
           const model = yield* openaiResponsesWebSocketModel(selected, {
             kind: 'codex',
-            accessToken: 'selected-token',
+            accessToken: Redacted.make('selected-token'),
             accountId: 'selected-account',
           });
           const turn = yield* model.prepareTurn({ ...REQUEST, system: ' ' });
@@ -1010,7 +1013,7 @@ describe('native OpenAI Responses protocol', () => {
         Effect.gen(function* () {
           const model = yield* openaiResponsesWebSocketModel(configuration, {
             kind: 'api-key',
-            apiKey: 'synthetic-not-a-secret',
+            apiKey: Redacted.make('synthetic-not-a-secret'),
           });
           const turn = yield* model.prepareTurn(REQUEST);
           assert(turn.mode === 'foreground');
@@ -1055,7 +1058,7 @@ describe('native OpenAI Responses protocol', () => {
         Effect.gen(function* () {
           const model = yield* openaiResponsesWebSocketModel(configuration, {
             kind: 'api-key',
-            apiKey: 'synthetic-not-a-secret',
+            apiKey: Redacted.make('synthetic-not-a-secret'),
           });
           const turn = yield* model.prepareTurn(REQUEST);
           assert(turn.mode === 'foreground');
@@ -1099,7 +1102,7 @@ describe('native OpenAI Responses protocol', () => {
                   parallelToolCalls: true,
                 },
               },
-              { apiKey: 'synthetic-not-a-secret', fetch },
+              { apiKey: Redacted.make('synthetic-not-a-secret'), fetch },
             );
       vi.stubEnv(
         'OPENAI_CUSTOM_HEADERS',
@@ -2169,14 +2172,14 @@ describe('native OpenAI Responses protocol', () => {
     const configuration = SUBSCRIPTION_CONFIG;
     const authentication = {
       kind: 'codex' as const,
-      accessToken: 'selected-token',
+      accessToken: Redacted.make('selected-token'),
       accountId: 'selected-account',
     };
     const model = openaiResponsesModel(configuration, {
       authentication,
       fetch,
     });
-    authentication.accessToken = 'later-token';
+    authentication.accessToken = Redacted.make('later-token');
     authentication.accountId = 'later-account';
     const turn = await Effect.runPromise(
       model.prepareTurn({ ...REQUEST, system: '  selected instructions  ' }),

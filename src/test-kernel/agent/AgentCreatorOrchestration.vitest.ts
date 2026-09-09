@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
-import { Effect } from 'effect';
+import { Effect, Redacted } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -116,7 +116,7 @@ describe('agent creator orchestration', () => {
           parallelToolCalls: true,
         },
       },
-      { apiKey: 'synthetic', fetch: fetchModel },
+      { apiKey: Redacted.make('synthetic'), fetch: fetchModel },
     );
     // Development proof only: the production helper's configured routes remain unchanged.
     mocks.runHelperModelCompletion.mockImplementation(

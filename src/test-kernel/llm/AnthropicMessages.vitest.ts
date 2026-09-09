@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
-import { Cause, Effect, Fiber, Stream } from 'effect';
+import { Cause, Effect, Fiber, Stream, Redacted } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type {
   AnthropicMessagesConfiguration,
@@ -194,7 +194,7 @@ describe('canonical Anthropic Messages protocol', () => {
   const fetchModel = vi.fn<typeof fetch>();
   const model = (configuration = CONFIG) =>
     anthropicMessagesModel(configuration, {
-      apiKey: 'selected-key',
+      apiKey: Redacted.make('selected-key'),
       fetch: fetchModel,
     });
   beforeEach(() => {

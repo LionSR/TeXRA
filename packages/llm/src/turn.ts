@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Result, type Effect, type Stream } from 'effect';
+import { Data, Redacted, Result, type Effect, type Stream } from 'effect';
 import { z } from 'zod';
 
 const TextPartSchema = z
@@ -20,6 +20,22 @@ const InputPartSchema = z.discriminatedUnion('kind', [
     kind: z.enum(['audio', 'video', 'document']),
   }).readonly(),
 ]);
+/**
+ * A provider credential, sealed at the application's secret boundary and
+ * unwrapped only where it becomes an SDK argument or an HTTP header. Sealing
+ * keeps it out of a log, a trace, or `JSON.stringify`, which render it as
+ * `<redacted>`; the predicate keeps the header-injection check the raw string
+ * carried, applied to the value inside the seal.
+ */
+export const ProviderCredentialSchema = z.custom<Redacted.Redacted<string>>(
+  (value) =>
+    Redacted.isRedacted(value) &&
+    /^[^\r\n]+$/.test(Redacted.value(value as Redacted.Redacted<string>)),
+  { error: 'Expected a sealed, single-line provider credential.' },
+);
+
+export type ProviderCredential = Redacted.Redacted<string>;
+
 const BindingSchema = z.strictObject({
   requestedModel: z.string().min(1),
   deployment: z

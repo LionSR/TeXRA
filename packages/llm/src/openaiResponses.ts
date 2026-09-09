@@ -3,7 +3,15 @@ import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Cause, Clock, Effect, Exit, Stream, type Scope } from 'effect';
+import {
+  Cause,
+  Clock,
+  Effect,
+  Exit,
+  Redacted,
+  Stream,
+  type Scope,
+} from 'effect';
 import OpenAI from 'openai';
 import { WebSocket, createWebSocketStream } from 'ws';
 import { z } from 'zod';
@@ -24,6 +32,7 @@ import {
   ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
+  ProviderCredentialSchema,
   sameModelOrigin,
   type Model,
   type OpenAIResponsesConfiguration,
@@ -1288,19 +1297,13 @@ const ResponseAuthenticationSchema = z.discriminatedUnion('kind', [
   z
     .strictObject({
       kind: z.literal('api-key'),
-      apiKey: z
-        .string()
-        .min(1)
-        .regex(/^[^\r\n]+$/),
+      apiKey: ProviderCredentialSchema,
     })
     .readonly(),
   z
     .strictObject({
       kind: z.literal('codex'),
-      accessToken: z
-        .string()
-        .min(1)
-        .regex(/^[^\r\n]+$/),
+      accessToken: ProviderCredentialSchema,
       accountId: z
         .string()
         .min(1)
@@ -1321,10 +1324,11 @@ function responseAuthentication(
         'Ambient OpenAI headers cannot override the selected deployment.',
     });
   const authentication = ResponseAuthenticationSchema.parse(input);
+  // The seal opens here and nowhere else: `token` is the SDK's argument.
   return authentication.kind === 'api-key'
-    ? { token: authentication.apiKey, headers: {} }
+    ? { token: Redacted.value(authentication.apiKey), headers: {} }
     : {
-        token: authentication.accessToken,
+        token: Redacted.value(authentication.accessToken),
         headers: {
           ...(authentication.accountId !== null
             ? { 'chatgpt-account-id': authentication.accountId }

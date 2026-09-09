@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { it as effectIt } from '@effect/vitest';
 import { RemoteOperationSchema } from '@texra-ai/llm/turn';
 import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
-import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Fiber, Stream, Redacted } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelError, TurnRequest, TurnResult } from '@texra-ai/llm/turn';
@@ -27,7 +27,7 @@ function model(
       },
       defaults: { maxOutputTokens: 2048, store, thinkingLevel: 'high' },
     },
-    { apiKey: 'synthetic-key' },
+    { apiKey: Redacted.make('synthetic-key') },
   );
 }
 

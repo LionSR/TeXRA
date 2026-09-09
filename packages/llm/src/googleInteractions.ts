@@ -1,11 +1,13 @@
 // Third-party imports
 import { GoogleGenAI, type Interactions } from '@google/genai';
-import { Cause, Clock, Effect, Exit, Stream } from 'effect';
+import { Cause, Clock, Effect, Exit, Redacted, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
 import { prefixFingerprint } from './prefixFingerprint.js';
 import {
+  ProviderCredentialSchema,
+  type ProviderCredential,
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
@@ -586,10 +588,13 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
 export function googleInteractionsModel(
   configuration: GoogleInteractionsConfiguration,
-  transport: { readonly apiKey: string },
+  transport: { readonly apiKey: ProviderCredential },
 ): Model {
   const config = ModelConfigurationSchema.parse(configuration);
-  if (config.protocol !== 'google-interactions' || !transport.apiKey) {
+  if (
+    config.protocol !== 'google-interactions' ||
+    !ProviderCredentialSchema.safeParse(transport.apiKey).success
+  ) {
     throw new TypeError(
       'Google Interactions requires its configuration and an explicit API key.',
     );
@@ -602,7 +607,7 @@ export function googleInteractionsModel(
   };
   const client = new GoogleGenAI({
     enterprise: false,
-    apiKey: transport.apiKey,
+    apiKey: Redacted.value(transport.apiKey),
     apiVersion: 'v1beta',
     httpOptions: { baseUrl: config.deployment.endpoint },
   });
