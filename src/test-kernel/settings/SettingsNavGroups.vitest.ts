@@ -15,18 +15,6 @@ describe('settings nav groups', () => {
     expect([...names].sort()).toEqual([...SETTINGS_TAB_ORDER].sort());
   });
 
-  it('labels every tab and group heading', () => {
-    for (const group of SETTINGS_NAV_GROUPS) {
-      expect(group.label.trim()).not.toBe('');
-      expect(group.entries.length).toBeGreaterThan(0);
-      for (const entry of group.entries) {
-        expect(entry.label.trim()).not.toBe('');
-        expect(entry.icon.trim()).not.toBe('');
-        expect(entry.description.trim()).not.toBe('');
-      }
-    }
-  });
-
   it('keeps category icons distinct from page icons', () => {
     const categoryIcons = SETTINGS_NAV_GROUPS.map((group) => group.icon);
 

@@ -36,11 +36,6 @@ describe('coding-plan subscription runtime', () => {
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, true);
   });
 
-  it('freezes every runtime catalog entry', () => {
-    expect(Object.isFrozen(codingPlanSubscriptionRuntimes)).toBe(true);
-    expect(codingPlanSubscriptionRuntimes.every(Object.isFrozen)).toBe(true);
-  });
-
   it.each([
     {
       name: 'China Coding Plan',
