@@ -13,6 +13,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   StreamSnapshotSchema,
   StreamLogEntrySchema,
   type ExecutionId,
@@ -234,7 +235,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           timestamp: 120,
           groupId: 'root-run',
           text: 'Round',
-          data: { status: 'stopped', endTime: 120 },
+          data: { status: STREAM_PHASE.COMPLETED, endTime: 120 },
         }),
       ],
     };
@@ -272,7 +273,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           // No groupId — the bug: rounds have no ambient parent, so this is
           // indistinguishable from a root stage by groupId alone.
           text: 'r0',
-          data: { status: 'stopped', endTime: 120, kind: 'round' },
+          data: { status: STREAM_PHASE.COMPLETED, endTime: 120, kind: 'round' },
         }),
       ],
     };
@@ -323,7 +324,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           // across the stage.end merge, so this row has only its entry
           // position (second top-level stage entry, opened after root) to
           // distinguish it from root.
-          data: { status: 'stopped', endTime: 120 },
+          data: { status: STREAM_PHASE.COMPLETED, endTime: 120 },
         }),
       ],
     };

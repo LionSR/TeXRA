@@ -222,12 +222,12 @@ describe('selectWorkflowRunDetailLines', () => {
         taskGroups: projectTaskGroupsFromStreamLog([
           {
             seqNo: 1,
-            id: 'legacy-round',
+            id: 'untagged-round',
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             level: LOG_LEVELS.INFO,
             timestamp: 0,
             text: 'Round 3',
-            data: { status: 'stopped', endTime: 1_000, kind },
+            data: { status: STREAM_PHASE.COMPLETED, endTime: 1_000, kind },
           },
         ]),
         outputFilesByRound: {},

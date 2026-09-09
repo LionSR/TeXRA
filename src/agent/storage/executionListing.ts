@@ -166,9 +166,7 @@ export const listExecutions = Effect.fn('listExecutions')(function* (
         };
         const agentRecord = record && isAgentRunRecord(record) ? record : null;
         const identity = meta.identity;
-        if (!record || !identity) {
-          return { ...base, kind: 'incomplete' };
-        }
+        if (!record) return { ...base, kind: 'incomplete' };
         if (identity.kind === 'agent') {
           // An agent row's record is always an AgentConfig; anything else is
           // corrupt and lists as incomplete rather than lying about shape.

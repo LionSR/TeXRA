@@ -21,7 +21,7 @@ import {
   WebFetchPayloadSchema,
   WebSearchPayloadSchema,
 } from './progressView/data';
-import { GroupLogPayloadSchema, TraceGroupLogPayloadSchema } from './taskGroup';
+import { GroupLogPayloadSchema } from './taskGroup';
 import { ExtendedTokenUsageStatsSchema } from './usage';
 import { WorkflowCallProgressSchema } from './workflowCallProgress';
 
@@ -166,49 +166,3 @@ export type StreamLogEntry = z.infer<typeof StreamLogEntrySchema>;
 export type StreamLogEntryOf<
   T extends NonNullable<StreamLogEntry['messageType']>,
 > = Extract<StreamLogEntry, { messageType: T }>;
-
-const StreamLogEntryEnvelopeSchema = z.union([
-  logEntryBase.extend({
-    messageType: MessageTypeSchema.optional(),
-    data: z.unknown().optional(),
-  }),
-  GroupStreamLogEntrySchema.extend({ data: z.unknown().optional() }),
-]);
-
-/**
- * Recover a well-formed stream-log envelope with a malformed nested payload.
- * Exported traces are a permanent compatibility boundary: parse each row
- * independently, recover stale group display fields field-by-field, and
- * degrade any other malformed typed payload to a generic row so one old
- * nested payload cannot make the whole trace unusable.
- */
-export const TraceStreamLogEntrySchema = z
-  .unknown()
-  .transform((raw, context): StreamLogEntry => {
-    const canonical = StreamLogEntrySchema.safeParse(raw);
-    if (canonical.success) return canonical.data;
-
-    const envelope = StreamLogEntryEnvelopeSchema.safeParse(raw);
-    if (!envelope.success) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Invalid stream-log entry envelope',
-      });
-      return z.NEVER;
-    }
-
-    const entry = envelope.data;
-    if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) {
-      const recovered = TraceGroupLogPayloadSchema.safeParse(entry.data ?? {});
-      if (recovered.success) {
-        return StreamLogEntrySchema.parse({ ...entry, data: recovered.data });
-      }
-    }
-
-    return StreamLogEntrySchema.parse({
-      ...entry,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      data: entry.data,
-    });
-  });

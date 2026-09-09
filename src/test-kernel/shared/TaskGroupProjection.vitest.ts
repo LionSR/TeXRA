@@ -87,26 +87,6 @@ describe('task-group StreamLog projection', () => {
     ]);
   });
 
-  it.each([
-    ['stopped', RUN_OUTCOME.COMPLETED],
-    ['error', RUN_OUTCOME.FAILED],
-  ] as const)('normalizes legacy end status %s', (status, expected) => {
-    const [taskGroup] = projectTaskGroupsFromStreamLog([
-      entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
-        text: 'Run: auditor',
-        data: { status, endTime: 200 },
-      }),
-    ]);
-
-    expect(taskGroup).toEqual({
-      id: 'run-1',
-      name: 'Run: auditor',
-      startTime: 200,
-      endTime: 200,
-      status: expected,
-    });
-  });
-
   it('repairs a stale index before incrementally updating an existing group', () => {
     const taskGroups = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {

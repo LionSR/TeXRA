@@ -51,13 +51,8 @@ const ExecutionMetaCoreSchema = z.object({
   parentExecutionId: ExecutionIdSchema.optional(),
   /** Canonical terminal outcome — the ONE persisted terminal fact. */
   outcome: RunOutcomeSchema.optional(),
-  /**
-   * What kind of run this execution is. Registration declares it at birth;
-   * optional here because this schema is
-   * transitively the trace-export schema (immutable pre-migration exports).
-   * A row without one lists as `incomplete`.
-   */
-  identity: RunIdentitySchema.optional(),
+  /** What kind of run this execution is. Registration declares it at birth. */
+  identity: RunIdentitySchema,
   /** Runtime behavior declared by the execution source, not UI visibility. */
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   /** AI-generated summary of what the session aimed to accomplish. */

@@ -136,6 +136,7 @@ describe('trace-viewer TraceDataSchema', () => {
       trace({
         meta: {
           timestamp: '2026-07-05T00:00:00.000Z',
+          identity: { kind: 'agent', agent: 'assistant' },
           terminalStatus: EXECUTION_STATUS.ERROR,
           delegationDepth: 2,
         },
@@ -178,42 +179,23 @@ describe('trace-viewer TraceDataSchema', () => {
     expectTraceRejected(trace({ entries: [{ notAStreamLogEntry: true }] }));
   });
 
-  it('recovers malformed nested trace payloads without rejecting sibling entries', () => {
-    const parsed = parseTraceData(
+  it('rejects a trace whose nested payload is malformed', () => {
+    // The per-row recovery reader is gone: a row that fails the canonical
+    // entry schema fails the whole parse instead of degrading to a generic row.
+    expectTraceRejected(
       trace({
         entries: [
           {
             seqNo: 1,
-            id: 'bad-files',
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            level: LOG_LEVELS.INFO,
-            timestamp: 1,
-            messageType: MESSAGE_TYPES.FILE_LIST,
-            data: [{ path: '/tmp/incomplete' }],
-            text: 'Legacy files',
-          },
-          {
-            seqNo: 2,
-            id: 'legacy-group',
+            id: 'bad-group',
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             level: LOG_LEVELS.INFO,
-            timestamp: 2,
+            timestamp: 1,
             data: { status: 'future-status', kind: 'run', total: 3 },
           },
         ],
       }),
     );
-
-    expect(parsed.entries[0]).toMatchObject({
-      id: 'bad-files',
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'Legacy files',
-    });
-    expect(parsed.entries[1]).toMatchObject({
-      id: 'legacy-group',
-      data: { kind: 'run', total: 3 },
-    });
-    expect(parsed.entries[1]?.data).toHaveProperty('status', undefined);
   });
 
   it('rejects a null/undefined/primitive trace payload', () => {

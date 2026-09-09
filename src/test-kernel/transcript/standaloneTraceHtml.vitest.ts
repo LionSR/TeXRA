@@ -64,6 +64,7 @@ describe('injectStandaloneTrace', () => {
       meta: {
         schemaVersion: 1,
         timestamp: '2026-01-01T00:00:00.000Z',
+        identity: { kind: 'agent', agent: 'assistant' },
         description: '</script><img src=x onerror=alert(1)>',
       },
     });

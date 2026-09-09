@@ -113,9 +113,7 @@ async function writeExecution(
   await writeMetadata(id, {
     timestamp,
     parentExecutionId,
-    ...(agentConfig
-      ? { identity: { kind: 'agent', agent: agentConfig.agent } }
-      : {}),
+    identity: { kind: 'agent', agent: agentConfig?.agent ?? 'assistant' },
   });
   if (agentConfig)
     await Effect.runPromise(
@@ -171,6 +169,7 @@ describe('execution listing normalization', () => {
 
     await writeMetadata(id, {
       timestamp: '2026-07-15T12:00:00.000Z',
+      identity: { kind: 'agent', agent: 'assistant' },
       description: 'Updated by another host',
       outcome: 'completed',
     });
@@ -277,34 +276,6 @@ describe('execution listing normalization', () => {
       'model',
     );
     expect(entries.filter(isUserVisibleExecution)).toHaveLength(0);
-  });
-
-  it('lists an identity-less row as incomplete and never heals it', async () => {
-    // Rows registered before identity stamping lost their reader (#9590
-    // Stage 7): no derivation from config or stream-id prefixes, no
-    // write-back healing. They degrade to `incomplete`.
-    const firstId = 'abc777' as ExecutionId;
-    const secondId = 'abc778' as ExecutionId;
-    for (const id of [firstId, secondId]) {
-      const store = getExecutionRecords(session, id);
-      await writeMetadata(id, { timestamp: '2026-07-15T06:00:00.000Z' });
-      await Effect.runPromise(store.writeRunRecord(config('assistant')));
-    }
-
-    const entries = await Effect.runPromise(listExecutions(session));
-
-    expect(entries.map(({ kind }) => kind)).toEqual([
-      'incomplete',
-      'incomplete',
-    ]);
-    // The row stays unstamped on disk: readers never reconstruct identity.
-    expect(
-      (
-        await Effect.runPromise(
-          getExecutionRecords(session, firstId).readMeta(),
-        )
-      )?.identity,
-    ).toBeUndefined();
   });
 
   it('keeps agent-spawned child runs out of history listings', async () => {

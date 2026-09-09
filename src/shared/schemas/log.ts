@@ -10,18 +10,6 @@ export const LOG_LEVELS = {
 export const LogLevelSchema = z.enum(LOG_LEVELS);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
-/**
- * Historical terminal values retained by the task-group wire schema and trace
- * viewer for recorded GROUP_END payloads. Live writers emit RunOutcome values.
- */
-export const END_GROUP_STATUS = {
-  ERROR: 'error',
-  STOPPED: 'stopped',
-} as const;
-
-export const EndGroupStatusSchema = z.enum(END_GROUP_STATUS);
-export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
-
 export const MESSAGE_TYPES = {
   THINKING: 'thinking',
   SCRATCHPAD: 'scratchpad',

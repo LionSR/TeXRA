@@ -10,7 +10,6 @@ import {
   referencedAggregates,
   AgentCategory,
   AgentConfigFieldsSchema,
-  END_GROUP_STATUS,
   runIdentityDisplayName,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
@@ -78,15 +77,12 @@ function traceOutcome(trace: TraceDocument): StreamPhase | null {
     if (kind !== undefined) {
       if (NESTED_STAGE_KINDS.has(kind)) continue;
     } else if (entry.id !== rootStageId) {
-      // No `data.kind` to check: this entry predates kind-tagging. Only the
-      // entry at the root stage's fixed position can be the run's own
-      // GROUP_END; anything else sharing the "no parent" shape is a nested
-      // round, phase, or session.
+      // Untagged: only the entry at the root stage's fixed position can be the
+      // run's own GROUP_END; anything else sharing the "no parent" shape is a
+      // nested round, phase, or session.
       continue;
     }
     const { status } = entry.data;
-    if (status === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
-    if (status === END_GROUP_STATUS.STOPPED) return STREAM_PHASE.COMPLETED;
     if (status !== undefined) return status;
   }
   const status = trace.snapshot.status;
@@ -99,32 +95,17 @@ function recordName(config: TraceDocument['config']): string {
   return 'agentCategory' in config ? config.agent : config.name;
 }
 
-function legacyTraceIdentity(trace: TraceDocument): RunIdentity {
-  const { streamId } = trace;
-  const name = recordName(trace.config);
-  if (streamId.startsWith('workflow-script#')) {
-    return { kind: 'multiAgentWorkflow', workflowName: name };
-  }
-  if (streamId.startsWith('codex@')) {
-    return { kind: 'agent', agent: name, tool: 'codex' };
-  }
-  if (streamId.startsWith('claude@')) {
-    return { kind: 'agent', agent: name, tool: 'claude_code' };
-  }
-  if (streamId.startsWith('bash@')) return { kind: 'process', tool: 'bash' };
-  return { kind: 'agent', agent: name };
-}
-
 /**
- * The run's identity. The embedded ExecutionMeta carries it; pre-migration
- * exports have none and are not all agent runs (bash process and
- * workflow-script traces exist), so those classify from the trace's
- * stream-id prefix. An exported trace file is immutable, so this fallback
- * is permanent: it is the only place a stream-id prefix may be read as
- * evidence.
+ * The run's identity, from the embedded ExecutionMeta. A trace assembled for
+ * a run with no metadata at all carries none, so it classifies from the run
+ * record — the only other first-hand evidence in the document.
  */
 function traceIdentity(trace: TraceDocument): RunIdentity {
-  return trace.meta?.identity ?? legacyTraceIdentity(trace);
+  if (trace.meta) return trace.meta.identity;
+  const config = trace.config;
+  return 'agentCategory' in config
+    ? { kind: 'agent', agent: config.agent }
+    : { kind: 'process', tool: recordName(config) };
 }
 
 /** The run's display name: the same identity rule every host's stream tab

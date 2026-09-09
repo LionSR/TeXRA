@@ -2,14 +2,11 @@
 //
 // The session fold applies entries as they arrive and the CLI rebuilds the
 // same task groups from persisted entries. Both paths use this module so
-// ordering, legacy status recovery, and orphan GROUP_END behavior remain
-// identical.
+// ordering and orphan GROUP_END behavior remain identical.
 
 import {
-  END_GROUP_STATUS,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  type EndGroupStatus,
   type RunOutcome,
   type StreamLogEntry,
   type TaskGroup,
@@ -17,31 +14,13 @@ import {
 } from '@shared/schemas';
 
 /**
- * Normalize the two status vocabularies that can occur on a GROUP_END row.
- *
- * Current producers write `TaskGroupStatus`. A trace exported before the
- * status migration can still contain the legacy `EndGroupStatus`, so the
- * read projection maps it to the same canonical value used by persistence.
- *
- * Permanent, not a dated shim (ruled in
- * .agents/docs/archived/architecture/2026-07-03-session-scoped-runtime-architecture.md §8.3 and
- * recorded in §8.6). In-app this arm is unreachable — `StreamLogStore`
- * normalizes every persisted row at read (`normalizeGroupStatusEntry`). Its
- * one live input is the standalone trace viewer, which forwards a static
- * exported `trace.json`'s `trace.entries` verbatim into this same pipeline
- * (`packages/trace-viewer/src/replayTrace.ts`); those files are never
- * rewritten, so the legacy vocabulary never ages out. Removing the arm would
- * not delete dead code: `TraceGroupLogPayloadSchema.status` catches to
- * `undefined`, so a legacy 'error' would silently project as COMPLETED.
+ * The status a GROUP_END row settles its group on. Producers write
+ * `TaskGroupStatus`; an absent value means the group simply completed.
  */
 function taskGroupEndStatus(
-  value: TaskGroupStatus | EndGroupStatus | undefined,
+  value: TaskGroupStatus | undefined,
 ): TaskGroupStatus {
-  if (value === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
-  if (value === END_GROUP_STATUS.STOPPED || value === undefined) {
-    return STREAM_PHASE.COMPLETED;
-  }
-  return value;
+  return value ?? STREAM_PHASE.COMPLETED;
 }
 
 /**
@@ -66,8 +45,7 @@ function taskGroupEndStatus(
  * reads `completed` after settlement. Painting `cancelled` here would make
  * the same group read one way before the host exits and another way after.
  *
- * Display only: nothing here is written back to the log. `StreamLogStore`
- * owns the persisted normalization (`normalizeGroupStatusEntry`).
+ * Display only: nothing here is written back to the log.
  */
 export function taskGroupDisplayStatus(
   group: Pick<TaskGroup, 'status'>,
@@ -140,13 +118,8 @@ export function upsertTaskGroupFromStreamLog(
   };
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
-    // GROUP_START only carries the native status vocabulary because the run
-    // has not ended. Invalid or absent values therefore mean "running".
-    const startStatus =
-      payload.status === END_GROUP_STATUS.ERROR ||
-      payload.status === END_GROUP_STATUS.STOPPED
-        ? STREAM_PHASE.RUNNING
-        : (payload.status ?? STREAM_PHASE.RUNNING);
+    // The run has not ended, so an absent status means "running".
+    const startStatus = payload.status ?? STREAM_PHASE.RUNNING;
     const name = entry.text ?? payload.name ?? entry.id;
     const nextGroup: TaskGroup = {
       id: entry.id,
