@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
@@ -97,7 +98,7 @@ describe('InputBar history arrow boundaries', () => {
   it('clamps at the oldest entry and restores the draft at the newest boundary', async () => {
     const { ink, React } = await loadInk();
     const history: InputHistory = {
-      push: async () => undefined,
+      push: () => Effect.void,
       reverseFind: () => undefined,
       at: (index) => ['first command', 'second command'][index],
       length: () => 2,

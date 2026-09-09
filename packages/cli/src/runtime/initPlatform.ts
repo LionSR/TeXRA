@@ -73,13 +73,13 @@ type CliPlatformInitOptions = Pick<
  * The platform services the CLI entry points read immediately after init.
  *
  * `initCliPlatform` already holds the whole `Platform` it just built (or the
- * one an earlier init installed), so it hands these three back instead of
+ * one an earlier init installed), so it hands these capabilities back instead of
  * leaving each caller to re-enter the ambient `platform()` singleton for a
  * value the composition root was holding all along.
  */
 export type CliPlatformServices = Pick<
   Platform,
-  'globalState' | 'secrets' | 'lifecycle'
+  'globalState' | 'secrets' | 'lifecycle' | 'storage'
 >;
 
 function logAt(
@@ -454,6 +454,7 @@ export async function initCliPlatform(
   });
 
   return {
+    storage: services.storage,
     globalState: services.globalState,
     secrets: services.secrets,
     lifecycle: services.lifecycle,

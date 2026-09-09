@@ -23,6 +23,15 @@ import type {
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+/** Current CLI history rows, ordered oldest first. */
+export const InputHistoryRecordSchema = z.object({
+  at: z.number(),
+  value: z.string(),
+});
+export type InputHistoryRecord = z.infer<typeof InputHistoryRecordSchema>;
+export const INPUT_HISTORY_LIMIT = 1000;
+export const INPUT_HISTORY_LINE_LIMIT = 4000;
+
 /** Only an explicit single-run deletion may replace an unprovable owner. */
 export const DeletionModeSchema = z.enum(['single', 'bulk', 'automatic']);
 export type DeletionMode = z.infer<typeof DeletionModeSchema>;
@@ -111,6 +120,14 @@ export class Database extends Context.Service<
     readonly readExecutionChildren: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** Bounded current CLI input rows, ordered oldest first. */
+    readonly readInputHistory: () => Effect.Effect<
+      readonly InputHistoryRecord[],
+      DatabaseReadFailed
+    >;
+    readonly appendInputHistory: (
+      record: InputHistoryRecord,
+    ) => Effect.Effect<void, DatabaseWriteFailed>;
     /** Latest desktop profile record, selected directly by its aggregate index. */
     readonly readDesktopProjects: (
       id: AggregateId,

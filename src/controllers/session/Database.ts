@@ -61,6 +61,8 @@ import {
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
+  InputHistoryRecordSchema,
+  INPUT_HISTORY_LIMIT,
   AggregateStateSchema,
   DeletionModeSchema,
   type DeletionMode,
@@ -76,7 +78,7 @@ import { localDatabasePath } from './localDatabasePath';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 /**
- * The C1 schema. Two tables and nothing else app-owned on disk.
+ * Event history and bounded current application records.
  *
  * `commit` is a SQLite keyword, so the column is quoted at every site; the
  * stage 0 spike measured `CREATE TABLE t (commit INTEGER ...)` failing with a
@@ -97,6 +99,12 @@ const SESSION_DATABASE_FILE = 'texra.db';
  * from its seq.
  */
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS input_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at INTEGER NOT NULL,
+  value TEXT NOT NULL
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS event_sequence (
   aggregate_id TEXT NOT NULL PRIMARY KEY,
   seq          INTEGER NOT NULL,
@@ -436,6 +444,11 @@ export const databaseLayer = (
         );
       const transact = <A>(body: Effect.Effect<A, unknown>) =>
         transaction('write', body, writeFailed);
+      const historyRows = Effect.gen(function* () {
+        return (yield* sql.unsafe<Record<string, unknown>>(
+          'SELECT at, value FROM input_history ORDER BY id',
+        )).map((row) => InputHistoryRecordSchema.parse(row));
+      });
       const createExecution = `INSERT INTO event_sequence
         (aggregate_id, seq, owner_id, parent_id) VALUES (?, 0, ?, ?)`;
       const claim = `UPDATE event_sequence SET owner_id = ?
@@ -887,6 +900,25 @@ export const databaseLayer = (
                 );
               }
               return result;
+            }),
+          ),
+        readInputHistory: () => query(historyRows),
+        appendInputHistory: ({ at, value }) =>
+          transact(
+            Effect.gen(function* () {
+              const latest = (yield* sql.unsafe<Record<string, unknown>>(
+                'SELECT value FROM input_history ORDER BY id DESC LIMIT 1',
+              ))[0];
+              if (latest?.value !== value) {
+                yield* sql.unsafe(
+                  'INSERT INTO input_history (at, value) VALUES (?, ?)',
+                  [at, value],
+                );
+                yield* sql.unsafe(
+                  'DELETE FROM input_history WHERE id NOT IN (SELECT id FROM input_history ORDER BY id DESC LIMIT ?)',
+                  [INPUT_HISTORY_LIMIT],
+                );
+              }
             }),
           ),
         readDesktopProjects: (id) =>
