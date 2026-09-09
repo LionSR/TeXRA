@@ -6,9 +6,11 @@
  * use `createChannelWriter(channel, isAgent)` to reach the same sink without
  * making this module depend on their event types.
  *
- * Output-channel creation is host-injected via {@link setOutputChannelFactory};
- * the VS Code extension provides a factory that returns VS Code
- * `OutputChannel`s, tests/CLI fall back to a console-backed sink.
+ * Output-channel creation is host-injected via {@link setOutputChannelFactory}:
+ * the VS Code extension wires VS Code `OutputChannel`s, the CLI wires
+ * `console` explicitly, and desktop wires its own log-file sink
+ * (`desktopAppLog.appendLogUtilsLine`). Only tests that skip the call fall
+ * back to the bare console-backed sink below.
  *
  * Sink output is secret-redacted by default. A host may opt out only for a
  * trusted operator terminal whose output is neither persisted nor exported.
