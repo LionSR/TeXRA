@@ -1308,6 +1308,7 @@ export function openaiChatModel(
             }
             const receipt = completion.usage;
             const result = TurnResultSchema.safeParse({
+              kind: 'http',
               providerResponseId: completion.id,
               requestedOrigin: origin,
               returnedModel: completion.model,
@@ -1922,6 +1923,7 @@ export function openaiChatModel(
                 });
               }
               const parsedResult = TurnResultSchema.safeParse({
+                kind: 'http',
                 providerResponseId: responseId,
                 requestedOrigin: origin,
                 returnedModel,

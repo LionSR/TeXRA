@@ -297,6 +297,7 @@ const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
       });
     }
     const result = TurnResultSchema.safeParse({
+      kind: 'http',
       providerResponseId: response.id,
       requestedOrigin: origin,
       returnedModel: response.model,

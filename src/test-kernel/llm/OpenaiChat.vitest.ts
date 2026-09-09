@@ -2514,6 +2514,7 @@ describe('native OpenAI Chat protocol', () => {
       {
         kind: 'completed',
         result: {
+          kind: 'http',
           providerResponseId: 'synthetic-response',
           requestedOrigin: {
             protocol: 'openai-chat',

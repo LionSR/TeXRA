@@ -1277,6 +1277,7 @@ const IdentitySchema = z.strictObject({
 
 const HttpTurnResultSchema = z
   .strictObject({
+    kind: z.literal('http'),
     ...IdentitySchema.shape,
     modelFingerprint: z.string().nullable(),
     content: ContentSchema,
@@ -1424,6 +1425,7 @@ const HttpTurnResultSchema = z
   .readonly();
 const EditorTurnResultSchema = z
   .strictObject({
+    kind: z.literal('editor'),
     requestedOrigin: EditorOriginSchema.readonly(),
     // Normal editor EOF reports none of these provider facts.
     providerResponseId: z.null(),
@@ -1438,7 +1440,7 @@ const EditorTurnResultSchema = z
   )
   .readonly();
 /** A completed provider turn, not a completed agent execution. */
-export const TurnResultSchema = z.union([
+export const TurnResultSchema = z.discriminatedUnion('kind', [
   HttpTurnResultSchema,
   EditorTurnResultSchema,
 ]);

@@ -542,6 +542,7 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
       });
     }
     const result = TurnResultSchema.safeParse({
+      kind: 'http',
       providerResponseId: interaction.id,
       requestedOrigin: origin,
       returnedModel: interaction.model ?? null,

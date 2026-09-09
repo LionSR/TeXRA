@@ -464,6 +464,7 @@ export const acquireVscodeLanguageModel = Effect.fn(
                 if (next.done) {
                   flushText();
                   const result = TurnResultSchema.safeParse({
+                    kind: 'editor',
                     requestedOrigin: origin,
                     providerResponseId: null,
                     returnedModel: null,

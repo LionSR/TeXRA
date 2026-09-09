@@ -1233,6 +1233,7 @@ export function openrouterChatModel(
               if (finished === 'content_filter')
                 finishReason = 'content-filter';
               const result = TurnResultSchema.safeParse({
+                kind: 'http',
                 providerResponseId: responseId,
                 requestedOrigin: origin,
                 returnedModel: returnedModel ?? null,

@@ -909,6 +909,7 @@ export function anthropicMessagesModel(
                   : null;
               const outputTokens = usage.output_tokens ?? null;
               const result = TurnResultSchema.safeParse({
+                kind: 'http',
                 providerResponseId: responseId,
                 requestedOrigin: origin,
                 returnedModel,
