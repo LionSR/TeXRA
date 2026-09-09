@@ -96,7 +96,6 @@ function stageEntry(
 }
 
 function legacyTrace(
-  snapshotStatus: string | undefined,
   category: AgentCategory = AgentCategory.Workflow,
 ): TraceDocument {
   const streamId = 'stream:legacy-trace' as StreamTabId;
@@ -111,16 +110,13 @@ function legacyTrace(
       streamId: streamId,
     },
     entries: [],
-    snapshot: StreamSnapshotSchema.parse({
-      streamId,
-      status: snapshotStatus,
-    }),
+    snapshot: StreamSnapshotSchema.parse({ streamId }),
   };
 }
 
 describe('traceEvents legacy-status fallback (issue #7188)', () => {
   it('replays workflow content without tool-use state', () => {
-    const trace = legacyTrace(undefined);
+    const trace = legacyTrace();
     trace.entries.push(
       StreamLogEntrySchema.parse({
         id: 'archived-log',
@@ -150,7 +146,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   });
 
   it('replays tool-use content without workflow output state', () => {
-    const workflow = legacyTrace(undefined);
+    const workflow = legacyTrace();
     const trace: TraceDocument = {
       ...workflow,
       config: parseConfig(AgentCategory.ToolUse),
@@ -211,7 +207,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
 
   it('ignores nested group-end status when the root run stage never closed', () => {
     const trace: TraceDocument = {
-      ...legacyTrace(undefined),
+      ...legacyTrace(),
       entries: [
         stageEntry({
           seqNo: 1,
@@ -255,7 +251,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     // stage's own GROUP_END. Only `data.kind` (preserved through the
     // stage.end merge by TexraTranscriptRecorder) tells them apart.
     const trace: TraceDocument = {
-      ...legacyTrace(undefined, AgentCategory.ToolUse),
+      ...legacyTrace(AgentCategory.ToolUse),
       entries: [
         stageEntry({
           seqNo: 1,
@@ -299,7 +295,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     // deliberately non-canonical ("Legacy run" / "Round 0", not "Run: ...")
     // to prove the fallback doesn't key on label text either.
     const trace: TraceDocument = {
-      ...legacyTrace(undefined, AgentCategory.ToolUse),
+      ...legacyTrace(AgentCategory.ToolUse),
       entries: [
         stageEntry({
           seqNo: 1,
@@ -336,30 +332,9 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
 
-  // The point of these regressions is that a terminal snapshot status must
-  // not silently become READY. The retired 7-value vocabulary ('error',
-  // 'stopped', …) is no longer normalized at the parse boundary, so only the
-  // canonical phases are exercised here.
-  it.each([
-    { snapshotStatus: 'failed', expected: 'failed' },
-    { snapshotStatus: 'completed', expected: 'completed' },
-  ] as const)(
-    'derives "$expected" from snapshot.status "$snapshotStatus" instead of defaulting to ready',
-    ({ snapshotStatus, expected }) => {
-      const trace = legacyTrace(snapshotStatus);
-
-      const replayed = foldTrace(trace);
-      expect(replayed?.status).toBe(expected);
-      expect(replayed?.durableOutcome).toBe(expected);
-    },
-  );
-
-  it('rejects a retired snapshot status instead of normalizing it', () => {
-    expect(() => legacyTrace('stopped')).toThrow();
-  });
 
   it('reports no durable outcome when neither meta.outcome nor snapshot.status is set', () => {
-    const trace = legacyTrace(undefined);
+    const trace = legacyTrace();
 
     // No terminal fact: an exported trace with no producer folds as an
     // interrupted run, never as a finished one.

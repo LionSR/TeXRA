@@ -53,7 +53,6 @@ export const StreamSnapshotSchema = z.object({
   // -- Pointers (resume / lookup) -------------------------------------------
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
-
 });
 
 export type StreamSnapshot = z.infer<typeof StreamSnapshotSchema>;
