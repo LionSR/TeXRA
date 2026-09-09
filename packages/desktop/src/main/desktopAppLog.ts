@@ -17,7 +17,9 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
+import { parseLevelTag } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
+import { LOG_LEVELS } from '@shared/schemas/log';
 import { normalizeFilePath } from '@utils/core';
 
 import { pathSeparatorVariants } from './desktopPathVariants.js';
@@ -122,35 +124,50 @@ function installConsoleMirror(): void {
   }
 }
 
-function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
+/** @returns whether the line reached the file, so a caller with no other
+ *  echo (unlike the console mirror below, which always falls through to the
+ *  real `console[level]` regardless) can fall back on failure. */
+function appendDesktopLogLine(
+  level: ConsoleLevel,
+  ...args: unknown[]
+): boolean {
   const path = resolveActiveLogFilePath();
-  if (path == null) return;
+  if (path == null) return false;
 
   const message = format(...args);
   try {
     appendFileSync(path, `${new Date().toISOString()} [${level}] ${message}\n`);
+    return true;
   } catch {
     // Logging must never become a startup dependency.
+    return false;
   }
 }
 
 /**
- * Direct file sink for `logUtils.setOutputChannelFactory`. `logUtils` already
- * tags every line with its own level and timestamp (`writeLine` in
- * `logUtils.ts`), so this writes the line through verbatim instead of routing
- * it through `console` and letting {@link installConsoleMirror} re-stamp it
- * under whichever `console[level]` a caller happened to invoke — which is
- * always `console.info` for the un-wired factory, mislabeling every ERROR/WARN
- * line and duplicating the level/timestamp prefix.
+ * Sink for `logUtils.setOutputChannelFactory`. Writes through
+ * {@link appendDesktopLogLine} at `logUtils`' real level (recovered via
+ * `parseLevelTag`, since `OutputSink.appendLine` carries none) instead of
+ * routing through `console` and letting {@link installConsoleMirror} re-stamp
+ * it under whichever `console[level]` a caller happened to invoke — which is
+ * always `console.info` for the un-wired factory, mislabeling every
+ * ERROR/WARN line. Matching {@link appendDesktopLogLine}'s
+ * `<ISO timestamp> [<level>] <message>` shape (rather than writing
+ * `logUtils`' own already-tagged text through verbatim) also matters beyond
+ * readability: `parseDesktopLogEntries` (renderer/logsPane.ts) only
+ * recognizes that shape as the start of a new entry, so any other shape
+ * would fold into whichever entry happened to precede it and lose severity
+ * in the Logs tab regardless of what the text says.
+ *
+ * Falls back to `console[level]` when the file write didn't land (log setup
+ * never completed, or this specific append hit a full disk/permission
+ * error), so a file-logging failure doesn't go completely dark the way it
+ * would if this only ever wrote to the file.
  */
-export function appendLogUtilsLine(line: string): void {
-  const path = resolveActiveLogFilePath();
-  if (path == null) return;
-  try {
-    appendFileSync(path, `${line}\n`);
-  } catch {
-    // Logging must never become a startup dependency.
-  }
+export function appendLogUtilsChannelLine(name: string, message: string): void {
+  const level = parseLevelTag(message) ?? LOG_LEVELS.INFO;
+  const line = `[${name}] ${message}`;
+  if (!appendDesktopLogLine(level, line)) console[level](line);
 }
 
 function initializeDesktopLogFile(): string | undefined {

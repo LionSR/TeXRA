@@ -25,7 +25,7 @@ interface DesktopAppLogModule {
     workspacePath?: string | undefined;
     maxBytes?: number | undefined;
   }): { path: string; text: string; truncated: boolean };
-  appendLogUtilsLine(line: string): void;
+  appendLogUtilsChannelLine(name: string, message: string): void;
 }
 
 async function loadDesktopAppLogModule(): Promise<DesktopAppLogModule> {
@@ -136,43 +136,63 @@ describe('desktop app log', () => {
     expect(snapshot.text).toBe('Opened [path]/paper.tex');
   });
 
-  it('writes logUtils lines through verbatim instead of re-stamping them via the console mirror', async () => {
+  it("routes logUtils.createLog(...).error(...) through the wired sink at ERROR severity, in the desktop log parser's own line shape", async () => {
     const root = await makeTempDir('texra-electron-log-', tempDirs);
     configureElectronTestStub({ userDataPath: join(root, 'userData') });
-    const { installDesktopAppLog, appendLogUtilsLine, readDesktopLogSnapshot } =
-      await loadDesktopAppLogModule();
-
-    installDesktopAppLog();
-    appendLogUtilsLine('ERROR [2026-09-09 00:00:00.000] [channel] boom');
-
-    const snapshot = readDesktopLogSnapshot({});
-    const lastLine = snapshot.text.trim().split('\n').at(-1);
-
-    expect(lastLine).toBe('ERROR [2026-09-09 00:00:00.000] [channel] boom');
-  });
-
-  it('routes logUtils.createLog(...).error(...) through the wired sink at ERROR severity, not console.info', async () => {
-    const root = await makeTempDir('texra-electron-log-', tempDirs);
-    configureElectronTestStub({ userDataPath: join(root, 'userData') });
-    const { installDesktopAppLog, appendLogUtilsLine, readDesktopLogSnapshot } =
-      await loadDesktopAppLogModule();
+    const {
+      installDesktopAppLog,
+      appendLogUtilsChannelLine,
+      readDesktopLogSnapshot,
+    } = await loadDesktopAppLogModule();
     const consoleInfoSpy = vi.spyOn(console, 'info');
 
     installDesktopAppLog();
     // Same factory shape platform/index.ts wires in initializeElectronPlatform.
     logger.setOutputChannelFactory((name) => ({
-      appendLine: (message) => appendLogUtilsLine(`[${name}] ${message}`),
+      appendLine: (message) => appendLogUtilsChannelLine(name, message),
     }));
     logger.createLog('channel').error('boom');
 
     const snapshot = readDesktopLogSnapshot({});
-    const lastLine = snapshot.text.trim().split('\n').at(-1);
+    const lastLine = snapshot.text.trim().split('\n').at(-1) ?? '';
 
-    expect(lastLine).toMatch(
-      /^\[TeXRA\] ERROR \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] \[channel\] boom$/,
+    // Same `<ISO timestamp> [<level>] <message>` shape
+    // parseDesktopLogEntries (renderer/logsPane.ts) requires to recognize a
+    // new entry, so the real level survives into the Logs tab instead of
+    // folding into whichever entry happened to precede it.
+    const match =
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[(?<level>debug|error|info|log|warn)\] (?<message>.*)$/u.exec(
+        lastLine,
+      );
+    expect(match?.groups?.level).toBe('error');
+    expect(match?.groups?.message).toMatch(
+      /^\[TeXRA\] ERROR \[.+\] \[channel\] boom$/,
     );
     // The un-wired fallback sink writes through console.info; confirms this
     // path bypasses it (and therefore the level-blind console mirror).
     expect(consoleInfoSpy).not.toHaveBeenCalled();
+  });
+
+  it('falls back to console when the desktop log file is unavailable', async () => {
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
+    const userDataFile = join(root, 'userData-file');
+    await writeFile(userDataFile, '');
+    configureElectronTestStub({ userDataPath: userDataFile });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const { installDesktopAppLog, appendLogUtilsChannelLine } =
+      await loadDesktopAppLogModule();
+
+    installDesktopAppLog();
+    appendLogUtilsChannelLine(
+      'TeXRA',
+      'ERROR [2026-09-09 00:00:00.000] [channel] boom',
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[TeXRA] ERROR [2026-09-09 00:00:00.000] [channel] boom',
+    );
   });
 });

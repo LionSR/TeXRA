@@ -86,6 +86,21 @@ function createOutputChannel(channel: string, isAgent: boolean): OutputSink {
   return outputSinksTrusted ? sink : createRedactingSink(sink);
 }
 
+/**
+ * Recovers the level {@link writeLine} tagged as plain text at the front of a
+ * sink's message — the only place a level survives once emitted, since
+ * {@link OutputSink.appendLine}'s `message: string` carries no level of its
+ * own (a real VS Code `OutputChannel.appendLine` can't accept one either). A
+ * host whose sink needs real severity for something other than display text
+ * (e.g. desktop's file-format-aware log viewer) parses it back with this
+ * rather than re-deriving {@link LEVEL_TAG} itself.
+ */
+export function parseLevelTag(message: string): LogLevel | undefined {
+  return (Object.keys(LEVEL_TAG) as LogLevel[]).find((level) =>
+    message.startsWith(LEVEL_TAG[level]),
+  );
+}
+
 function channelKey(channel: string, isAgent: boolean): string {
   return `${channel}::${isAgent ? 'agent' : 'shared'}`;
 }
