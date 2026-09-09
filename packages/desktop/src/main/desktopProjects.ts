@@ -291,10 +291,11 @@ export function openDesktopProjectRegistry(
         return Effect.gen(function* () {
           const project = projects.get(root);
           if (!project) return;
-          // Persistence may fail while the project is still registered.
-          // Selection changes serialize separately from the long stop below.
+          // Stop while the registry still owns the project. A failed stop or
+          // persistence operation leaves that owner available to the host.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
+              yield* hostPort(() => stopProjectExecutions(project.session));
               yield* Effect.gen(function* () {
                 const remembered = yield* options.records.read;
                 const next =
@@ -305,22 +306,15 @@ export function openDesktopProjectRegistry(
                   openProjects().findLast(
                     (candidate) => candidate.root !== root,
                   )?.root;
-                if (activeRoot === root && next !== undefined)
-                  yield* options.records.activate(next);
+                yield* options.records.forget(
+                  root,
+                  activeRoot === root ? next : undefined,
+                );
                 projects.delete(root);
                 if (activeRoot === root) activeRoot = next;
                 notify();
-              }).pipe(withPerKeyLane(lanes, selection));
-              // Teardown owns the removed project until its noncancellable
-              // stop settles. The per-project lane remains held throughout.
-              yield* hostPort(async () => {
-                await stopProjectExecutions(project.session);
                 project.dispose();
-              }).pipe(
-                Effect.ensuring(
-                  options.records.forget(root).pipe(Effect.orDie),
-                ),
-              );
+              }).pipe(withPerKeyLane(lanes, selection));
             }),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));

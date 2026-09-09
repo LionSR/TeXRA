@@ -104,7 +104,7 @@ export async function initializeElectronPlatform(
   // shows one history.
   const dataRoot = resolveDesktopDataRoot(userDataPath);
   // The process roots are the no-workspace roots. Each open project gets its
-  // own roots (desktopPapers.ts); this pair only backs the window before a
+  // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
   const storage = new WorkspaceStorageProvider(dataRoot, undefined);
   // The one Effect runtime of this process (PRD 7.7) is installed first: the

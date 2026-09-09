@@ -59,8 +59,15 @@ export const openDesktopProjectRecords = (
         update((roots) => (roots.includes(root) ? roots : [...roots, root])),
       activate: (root: string) =>
         update((roots) => [...roots.filter((entry) => entry !== root), root]),
-      forget: (root: string) =>
-        update((roots) => roots.filter((entry) => entry !== root)),
+      forget: (root: string, activeRoot?: string) =>
+        update((roots) => {
+          const remaining = roots.filter((entry) => entry !== root);
+          if (activeRoot === undefined) return remaining;
+          return [
+            ...remaining.filter((entry) => entry !== activeRoot),
+            activeRoot,
+          ];
+        }),
       replace: (roots: readonly string[]) => update(() => roots),
     };
   });

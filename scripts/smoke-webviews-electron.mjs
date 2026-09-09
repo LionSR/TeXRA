@@ -24,7 +24,7 @@ const nonce = 'texra-webview-smoke';
 // subscribe with the fixture's events (listing rows for every stream, the
 // transcript tier for the aggregates the subscribe named), the way
 // `SessionFramer` cuts a frame.
-const SESSION_KEY = '/tmp/texra-smoke/paper';
+const SESSION_KEY = '/tmp/texra-smoke/project';
 const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
 const NOW = 1_783_353_600_000;
 const STREAM = 'research#smoke0000001';
@@ -33,10 +33,10 @@ const CHILD_STREAM = 'reviewer#smoke0000002';
 const CHILD_EXECUTION = 'b1b2c3d4e5f6';
 
 const hostSnapshot = {
-  paper: {
+  project: {
     key: SESSION_KEY,
-    name: 'paper',
-    initials: 'PA',
+    name: 'project',
+    initials: 'PR',
     subtitle: SESSION_KEY,
   },
   agentOptions: {

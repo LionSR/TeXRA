@@ -6,11 +6,16 @@ import { Effect, FileSystem } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
+import * as agentRuntime from '@agent/runtime';
+import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
 import { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords.js';
+import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   nodeProcesses,
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
+import { createFakeHost } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -105,6 +110,75 @@ describe('desktop composition root and launch environment', () => {
           const reopened = yield* openDesktopProjectRecords(profile, owner);
           expect(yield* reopened.read).toEqual(['/first']);
           expect(yield* fs.readFileString(oldState)).toBe(previous);
+        }),
+      ).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
+
+  effectIt.live(
+    'keeps a project registered when saving its closure fails',
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const profile = yield* fs.makeTempDirectoryScoped({
+            prefix: 'texra-close-project-',
+          });
+          const root = join(profile, 'project');
+          yield* fs.makeDirectory(root);
+          const opener = vi
+            .spyOn(agentRuntime, 'openSessionEffect')
+            .mockImplementation((init) =>
+              Effect.sync(() =>
+                createTestSession({
+                  ...init,
+                  transcriptMode: {
+                    kind: 'ephemeral',
+                    reason: 'project close regression',
+                  },
+                }),
+              ),
+            );
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => opener.mockRestore()),
+          );
+          const owner = processOwnerId(
+            yield* Effect.promise(() => nodeProcesses.selfIdentity()),
+          );
+          const records = yield* openDesktopProjectRecords(profile, owner);
+          const config = yield* JsonStore.open(join(profile, 'config.json'));
+          const registry = yield* openDesktopProjectRegistry({
+            dataRoot: profile,
+            processRoots: createFakeHost({
+              storagePath: join(profile, 'no-project'),
+            }).roots,
+            globalConfigStore: config,
+            records,
+            warn: vi.fn(),
+          });
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => registry.dispose()),
+          );
+          const successorRoot = join(profile, 'successor');
+          yield* fs.makeDirectory(successorRoot);
+          const successor = yield* registry.open(successorRoot);
+          const project = yield* registry.open(root);
+          yield* registry.activate(project.root);
+          const remembered = yield* records.read;
+          const disposed = vi.spyOn(project, 'dispose');
+          const failure = new Error('Unable to save project closure');
+          vi.spyOn(records, 'forget').mockReturnValueOnce(Effect.fail(failure));
+          expect(yield* Effect.flip(registry.close(project.root!))).toBe(
+            failure,
+          );
+          expect(registry.list()).toContain(project);
+          expect(registry.active()).toBe(project);
+          expect(disposed).not.toHaveBeenCalled();
+          expect(yield* records.read).toEqual(remembered);
+          yield* registry.close(project.root!);
+          expect(registry.list()).not.toContain(project);
+          expect(disposed).toHaveBeenCalledOnce();
+          expect(registry.active()).toBe(successor);
+          expect(yield* records.read).toEqual([successor.root]);
         }),
       ).pipe(Effect.provide(NodeFileSystem.layer)),
   );

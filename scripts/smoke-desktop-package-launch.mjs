@@ -1,5 +1,5 @@
 // Node.js imports
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -7,7 +7,10 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 // Local imports - packaged smoke environment
-import { buildDesktopSmokeEnvironment } from './desktop-package-smoke-environment.mjs';
+import {
+  buildDesktopSmokeEnvironment,
+  rememberOpenProject,
+} from './desktop-package-smoke-environment.mjs';
 
 // Local imports - smoke process helpers
 import {
@@ -119,15 +122,8 @@ async function createIsolation(root) {
   await Promise.all(
     Object.values(paths).map((path) => mkdir(path, { recursive: true })),
   );
-  // Desktop startup restores remembered papers from the isolated profile.
-  // There is no workspace launch flag.
-  const stateDirectory = join(paths.userData, 'state');
-  await mkdir(stateDirectory, { recursive: true });
-  await writeFile(
-    join(stateDirectory, 'global.json'),
-    JSON.stringify({ 'texra.desktop.openPapers': [paths.workspace] }),
-    'utf8',
-  );
+  // Seed the same private SQLite record read by desktop startup.
+  await rememberOpenProject(paths.userData, paths.workspace);
   return paths;
 }
 
@@ -195,10 +191,17 @@ async function waitForReadiness(application) {
         mainApp instanceof HTMLElement &&
         mainApp.isConnected &&
         (mainApp.shadowRoot?.childElementCount ?? 0) > 0;
+      const project = document.querySelector(
+        '.task-launcher-surface[data-session]',
+      );
+      const projectReady =
+        project instanceof HTMLElement && Boolean(project.dataset.session);
       const theme = document.body.dataset.vscodeThemeKind;
       const themeReady =
         theme === 'dark' || theme === 'light' || theme === 'high-contrast';
-      return shellReady && mainAppReady && themeReady ? { theme } : false;
+      return shellReady && mainAppReady && projectReady && themeReady
+        ? { theme }
+        : false;
     },
     undefined,
     { polling: 100, timeout: 0 },

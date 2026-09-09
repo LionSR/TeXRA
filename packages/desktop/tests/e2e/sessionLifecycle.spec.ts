@@ -3,12 +3,14 @@ import { join } from 'node:path';
 import { Effect, Layer } from 'effect';
 
 import { expect, test } from '@playwright/test';
+import {
+  loadDatabaseFixture,
+  type DatabaseFixture,
+} from '../../../../scripts/desktop-package-smoke-environment.mjs';
 
 import {
   closeTexraApp,
   findWorkspaceStoragePath,
-  loadDatabaseFixture,
-  type DatabaseFixture,
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';

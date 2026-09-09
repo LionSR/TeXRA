@@ -2,10 +2,12 @@ import { existsSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
-import { Effect } from 'effect';
+import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright';
+import {
+  loadDatabaseFixture,
+  rememberOpenProject,
+} from '../../../../scripts/desktop-package-smoke-environment.mjs';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Page } from 'playwright';
 
@@ -48,63 +50,6 @@ export interface LaunchedApp {
   ownsUserData: boolean;
 }
 
-export type DatabaseFixture = Pick<
-  typeof import('@controllers/session/Database'),
-  'databaseLayer'
-> &
-  Pick<typeof import('@controllers/session/WorkspaceRoots'), 'WorkspaceRoots'> &
-  Pick<typeof import('@shared/session/database'), 'Database'> &
-  Pick<typeof import('@shared/session/sessionEvents'), 'ProcessIdentity'> &
-  Pick<typeof import('@shared/schemas'), 'aggregateId'> &
-  Pick<
-    typeof import('@platform/defaults/workspaceStorage'),
-    'resolveWorkspaceStoragePath'
-  > &
-  Pick<
-    typeof import('@desktop/main/desktopProjectRecords'),
-    'openDesktopProjectRecords'
-  > &
-  Pick<
-    typeof import('@platform/defaults/nodeProcesses'),
-    'nodeProcesses' | 'processOwnerId'
-  >;
-
-/** Playwright's ESM loader cannot directly import the root's CommonJS-shaped TS modules. */
-export async function loadDatabaseFixture(
-  userDataPath: string,
-): Promise<DatabaseFixture> {
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-  const bundle = join(userDataPath, 'session-database-fixture.mjs');
-  await build({
-    stdin: {
-      contents: `
-        export { databaseLayer } from '@controllers/session/Database';
-        export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-        export { Database } from '@shared/session/database';
-        export { ProcessIdentity } from '@shared/session/sessionEvents';
-        export { aggregateId } from '@shared/schemas';
-        export { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
-        export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
-        export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
-      `,
-      loader: 'ts',
-      resolveDir: root,
-    },
-    outfile: bundle,
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    loader: { '.node': 'file' },
-    assetNames: '[name]',
-    target: 'node22.16',
-    tsconfig: join(root, 'tsconfig.json'),
-    banner: {
-      js: "import { createRequire as __texraCreateRequire } from 'node:module'; const require = __texraCreateRequire(import.meta.url);",
-    },
-  });
-  return import(pathToFileURL(bundle).href) as Promise<DatabaseFixture>;
-}
-
 /** Resolve project storage through the production path function in the fixture bundle. */
 export async function findWorkspaceStoragePath(input: {
   userDataPath: string;
@@ -114,28 +59,6 @@ export async function findWorkspaceStoragePath(input: {
   return fixture.resolveWorkspaceStoragePath(
     input.userDataPath,
     realpathSync(input.workspacePath),
-  );
-}
-
-/** Seed the profile through the same scoped project-record owner as the application. */
-async function rememberOpenProject(
-  userDataPath: string,
-  workspacePath: string,
-): Promise<void> {
-  const fixture = await loadDatabaseFixture(userDataPath);
-  const owner = fixture.processOwnerId(
-    await fixture.nodeProcesses.selfIdentity(),
-  );
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const records = yield* fixture.openDesktopProjectRecords(
-          userDataPath,
-          owner,
-        );
-        yield* records.activate(workspacePath);
-      }),
-    ),
   );
 }
 
