@@ -15,6 +15,15 @@ Lean 4. It takes on open problems in long autonomous runs, with a team of
 specialist agents. Apache 2.0, and you bring your own model keys or
 subscriptions.
 
+Development on `main` targets **TeXRA 1.0**, with a redesigned interface
+organized around **projects** and a breaking change to stored application
+state. Version 1.0 will start with fresh state; it will not migrate previous
+JSON-based settings, session histories, or execution checkpoints. Existing
+research files are outside this storage change. The implementation follows
+the [1.0 development direction](AGENTS.md#texra-10-direction), using SQLite
+for application state and Effect for asynchronous execution. This describes
+work in progress, not the currently published release.
+
 ## Install
 
 ```sh

@@ -6,6 +6,12 @@ status: proposed
 
 # PRD: Effect 4 as the TeXRA backend runtime
 
+**Amendment (2026-09-09):** The accepted [TeXRA 1.0 direction](../../../../AGENTS.md#texra-10-direction)
+sets the release target to 1.0 and confirms Effect-native implementation.
+The legacy JSON store will not be migrated; older conditional compatibility
+requirements below do not apply to the 1.0 storage transition. Use **project**
+for the application's working unit, reserving **paper** for scholarly documents.
+
 **Status:** Owner ruling of 2026-09-06: the agent runtime is written in pure
 Effect to Effect's best practice, and PocketFlow is not retained. That ruling
 amends R4, 8.4, Phase 2, and alternative 13.C below, in the form

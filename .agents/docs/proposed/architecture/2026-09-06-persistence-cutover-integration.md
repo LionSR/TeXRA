@@ -2,6 +2,13 @@
 
 Status: proposed
 
+**Amendment (2026-09-09):** The accepted [TeXRA 1.0 direction](../../../../AGENTS.md#texra-10-direction)
+supersedes the legacy-state import and preservation-as-current-state gates
+recorded below. TeXRA 1.0 starts with fresh SQLite application state and does
+not require JSON migration. Existing user data must remain untouched. The
+remaining entries describe this audit's historical checkpoint, not a current
+assessment of implementation progress.
+
 This is a reviewable integration checkpoint for #11972, not the completed
 persistence cutover or a release candidate. Production still opens file-backed
 transcripts and composes `SessionEventLog.memoryLayer`; the SQLite foundation

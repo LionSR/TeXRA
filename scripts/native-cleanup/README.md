@@ -1,5 +1,14 @@
 # Confined generated-file cleanup
 
+**TeXRA 1.0 direction (2026-09-09):** This addon is to be retired as part of
+the final storage design, together with its runtime dependency, native
+artifacts, CI jobs, and packaging requirements. Do not expand it or build a
+temporary replacement. The [repository policy](../../AGENTS.md#texra-10-direction)
+requires resolving generated-file ownership and deletion directly in the
+1.0 design. The description below documents the current implementation; the
+addon remains in use until that complete change is made. It is not a legacy
+JSON migration tool.
+
 This private N-API 8 addon removes tombstone-recorded execution directories without following links outside the admitted storage directory. Database access is separate from this addon; it contains no SQLite engine, connection, extension or VFS.
 
 The native operation acquires a storage-directory handle synchronously before returning its Promise, opens the generated directory and execution IDs relative to that handle, and awaits cleanup before releasing its existing deletion claim. POSIX uses directory-relative system calls; Windows uses relative native handle opens with reparse-point refusal. Link leaves are removed without traversing their targets. The operation owns this one handle through worker completion, then releases it; JavaScript never owns a separate handle. Missing directories succeed; other failures retain the tombstone for retry.
