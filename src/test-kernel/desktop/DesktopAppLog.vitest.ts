@@ -209,4 +209,33 @@ describe('desktop app log', () => {
       '[TeXRA] ERROR [2026-09-09 00:00:00.000] [channel] boom',
     );
   });
+
+  it('appends an untagged logUtils payload as raw continuation text, not its own entry', async () => {
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
+    configureElectronTestStub({ userDataPath: join(root, 'userData') });
+    const {
+      installDesktopAppLog,
+      appendLogUtilsChannelLine,
+      readDesktopLogSnapshot,
+    } = await loadDesktopAppLogModule();
+
+    installDesktopAppLog();
+    appendLogUtilsChannelLine(
+      'TeXRA',
+      'ERROR [2026-09-09 00:00:00.000] [channel] boom',
+    );
+    // writeLine's untagged debug-data companion line: a scalar payload that
+    // happens to start with a level word, e.g. from `{ data: 'ERROR from
+    // latexdiff' }` — not a new log header.
+    appendLogUtilsChannelLine('TeXRA', 'ERROR from latexdiff');
+
+    const snapshot = readDesktopLogSnapshot({});
+    const lastLine = snapshot.text.trim().split('\n').at(-1) ?? '';
+
+    expect(lastLine).toBe('[TeXRA] ERROR from latexdiff');
+    // No <ISO timestamp> [<level>] header: parseDesktopLogEntries (renderer/
+    // logsPane.ts) attaches this to the ERROR entry above instead of
+    // starting a new one.
+    expect(lastLine).not.toMatch(/^\d{4}-\d{2}-\d{2}T/u);
+  });
 });

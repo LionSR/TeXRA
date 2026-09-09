@@ -19,7 +19,6 @@ import {
 
 import { parseLevelTag } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
-import { LOG_LEVELS } from '@shared/schemas/log';
 import { normalizeFilePath } from '@utils/core';
 
 import { pathSeparatorVariants } from './desktopPathVariants.js';
@@ -144,29 +143,55 @@ function appendDesktopLogLine(
   }
 }
 
+/** Appends a line with no `<ISO timestamp> [<level>]` header, so
+ *  `parseDesktopLogEntries` treats it as continuation text of whatever entry
+ *  precedes it instead of a new entry. @returns whether it reached the file. */
+function appendRawDesktopLogLine(line: string): boolean {
+  const path = resolveActiveLogFilePath();
+  if (path == null) return false;
+  try {
+    appendFileSync(path, `${line}\n`);
+    return true;
+  } catch {
+    // Logging must never become a startup dependency.
+    return false;
+  }
+}
+
 /**
- * Sink for `logUtils.setOutputChannelFactory`. Writes through
- * {@link appendDesktopLogLine} at `logUtils`' real level (recovered via
- * `parseLevelTag`, since `OutputSink.appendLine` carries none) instead of
- * routing through `console` and letting {@link installConsoleMirror} re-stamp
- * it under whichever `console[level]` a caller happened to invoke — which is
- * always `console.info` for the un-wired factory, mislabeling every
- * ERROR/WARN line. Matching {@link appendDesktopLogLine}'s
- * `<ISO timestamp> [<level>] <message>` shape (rather than writing
- * `logUtils`' own already-tagged text through verbatim) also matters beyond
- * readability: `parseDesktopLogEntries` (renderer/logsPane.ts) only
- * recognizes that shape as the start of a new entry, so any other shape
- * would fold into whichever entry happened to precede it and lose severity
- * in the Logs tab regardless of what the text says.
+ * Sink for `logUtils.setOutputChannelFactory`. A message that carries a
+ * level tag (recovered via `parseLevelTag`, since `OutputSink.appendLine`
+ * itself carries none) is a new `writeLine` header: write it through
+ * {@link appendDesktopLogLine} at that real level instead of routing through
+ * `console` and letting {@link installConsoleMirror} re-stamp it under
+ * whichever `console[level]` a caller happened to invoke — which is always
+ * `console.info` for the un-wired factory, mislabeling every ERROR/WARN line.
+ * Matching {@link appendDesktopLogLine}'s `<ISO timestamp> [<level>]
+ * <message>` shape (rather than writing `logUtils`' own already-tagged text
+ * through verbatim) also matters beyond readability: `parseDesktopLogEntries`
+ * (renderer/logsPane.ts) only recognizes that shape as the start of a new
+ * entry, so any other shape would fold into whichever entry happened to
+ * precede it and lose severity in the Logs tab regardless of what the text
+ * says.
  *
- * Falls back to `console[level]` when the file write didn't land (log setup
- * never completed, or this specific append hit a full disk/permission
- * error), so a file-logging failure doesn't go completely dark the way it
- * would if this only ever wrote to the file.
+ * A message with no level tag is `writeLine`'s untagged debug-data companion
+ * line for the header written just before it (`options.data`, gated on
+ * `texra.logger.debugMode`) — write it through {@link appendRawDesktopLogLine}
+ * instead, so it stays attached to that header as continuation text rather
+ * than becoming its own falsely-`info`-level entry.
+ *
+ * Either way, falls back to `console[level]`/`console.info` when the file
+ * write didn't land (log setup never completed, or this specific append hit
+ * a full disk/permission error), so a file-logging failure doesn't go
+ * completely dark the way it would if this only ever wrote to the file.
  */
 export function appendLogUtilsChannelLine(name: string, message: string): void {
-  const level = parseLevelTag(message) ?? LOG_LEVELS.INFO;
+  const level = parseLevelTag(message);
   const line = `[${name}] ${message}`;
+  if (level == null) {
+    if (!appendRawDesktopLogLine(line)) console.info(line);
+    return;
+  }
   if (!appendDesktopLogLine(level, line)) console[level](line);
 }
 
