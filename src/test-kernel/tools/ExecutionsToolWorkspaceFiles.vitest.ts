@@ -327,32 +327,55 @@ describe('ExecutionsTool', () => {
       }
     }));
 
-  it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', async () => {
-    mocks.readMeta.mockResolvedValue({
-      ...toolUseMeta,
-      parentExecutionId: 'parent123',
-    });
-    mocks.readConfig.mockResolvedValue(config);
-    mocks.readReport.mockResolvedValue(
-      '<subagent-result>full report</subagent-result>',
-    );
+  // A completed run has no live handle, so nothing proves the caller is the
+  // parent stream that already received the report as a follow-up. The wait
+  // summary must therefore keep the report inline rather than eliding it.
+  it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', () =>
+    withTempStorage(async () => {
+      const session = createTestSession();
+      const executionId = 'abc123' as ExecutionId;
+      const childStreamId = `codex#${executionId}` as StreamTabId;
+      const callerStreamId = 'stream:unrelated-report-reader' as StreamTabId;
 
-    const waitResult = await new ExecutionsTool().call({
-      path: '/executions/abc123',
-      action: 'wait',
-    });
-    const reportResult = await new ExecutionsTool().call({
-      path: '/executions/abc123/report',
-    });
+      try {
+        publishTestRunStart(session, childStreamId, executionId);
+        await session.settlePublications();
+        mocks.readMeta.mockResolvedValue({
+          ...toolUseMeta,
+          identity: { kind: 'agent', agent: 'review' },
+          streamId: childStreamId,
+          parentExecutionId: 'parent123',
+        });
+        mocks.readConfig.mockResolvedValue(config);
+        mocks.readReport.mockResolvedValue(
+          '<subagent-result>full report</subagent-result>',
+        );
 
-    expect(waitResult.output).toContain(
-      '<subagent-result>full report</subagent-result>',
-    );
-    expect(waitResult.output).not.toContain('delivered automatically');
-    expect(reportResult.output).toBe(
-      '<subagent-result>full report</subagent-result>',
-    );
-  });
+        const [waitResult, reportResult] = await withRunContext(
+          createRunContext({ streamId: callerStreamId, session }),
+          () =>
+            Promise.all([
+              new ExecutionsTool().call({
+                path: `/executions/${executionId}`,
+                action: 'wait',
+              }),
+              new ExecutionsTool().call({
+                path: `/executions/${executionId}/report`,
+              }),
+            ]),
+        );
+
+        expect(waitResult.output).toContain(
+          '<subagent-result>full report</subagent-result>',
+        );
+        expect(waitResult.output).not.toContain('delivered automatically');
+        expect(reportResult.output).toBe(
+          '<subagent-result>full report</subagent-result>',
+        );
+      } finally {
+        session.dispose();
+      }
+    }));
 
   it.each([
     {
