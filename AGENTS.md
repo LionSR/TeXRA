@@ -69,14 +69,14 @@ storage and execution contracts; the 1.0 breaking changes apply to `main`.
   Divide work into complete changes that remain useful in 1.0, rather than
   intermediate systems scheduled for replacement. Revise an obsolete
   requirement before building machinery to satisfy it.
-- **The native cleanup addon is retired.** `scripts/native-cleanup`, its
-  loader, prebuilt binaries, CI matrix, packaging assertions, and
-  addon-specific tests are gone. Generated-file deletion now resolves and
+- **The native cleanup addon is retired.** Its script directory, loader,
+  prebuilt binaries, CI matrix, packaging assertions, and addon-specific
+  tests are gone. Generated-file deletion now resolves and
   checks in `src/controllers/session/deletionCleanup.ts`: the storage root and
   its runs directory are resolved with `realpath`, a runs directory that does
   not resolve to itself is refused rather than followed, and every target must
   fall inside it. That is weaker than the addon's handle-confined deletion,
-  which also survived a root replaced *during* the removal; #12139 owns the
+  which also survived a root replaced _during_ the removal; #12139 owns the
   final file ownership and deletion contract. Do not reintroduce a compiled extension for
   this. Effect-native means using Effect's execution model, not adding custom
   compiled extensions.
