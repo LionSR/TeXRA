@@ -15,6 +15,7 @@ import {
   type LanguageModelReference,
   type LanguageModelResponsePart,
 } from '@platform/languageModel';
+import { onAbort } from '@utils/core';
 
 function translateLanguageModelError(
   error: unknown,
@@ -182,8 +183,7 @@ function createCancellationBridge(
     cancelled = true;
     source.cancel();
   };
-  if (signal?.aborted) cancel();
-  signal?.addEventListener('abort', cancel, { once: true });
+  const detach = onAbort(signal, cancel);
 
   return {
     token: source.token,
@@ -193,7 +193,7 @@ function createCancellationBridge(
       }
     },
     dispose() {
-      signal?.removeEventListener('abort', cancel);
+      detach();
       cancel();
       source.dispose();
     },

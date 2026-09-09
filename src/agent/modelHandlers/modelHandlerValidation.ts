@@ -1,5 +1,4 @@
 // Local imports - agent
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';
@@ -233,7 +232,6 @@ export class ModelHandlerValidation extends ModelHandler<
   override addContinueMessage(
     _messages: ChatCompletionMessageParam[],
     _workspaceState: AgentWorkspaceState,
-    _agentSetting: AgentSetting,
   ): void {
     // The validation model always produces a complete response.
   }
@@ -263,7 +261,6 @@ export class ModelHandlerValidation extends ModelHandler<
   override shouldContinue(
     _stopReason: ProviderStopReason,
     _newResponse: string,
-    _agentSetting: AgentSetting,
   ): boolean {
     return false;
   }

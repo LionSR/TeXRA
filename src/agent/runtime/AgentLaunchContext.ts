@@ -28,8 +28,10 @@ import {
 } from '@agent/runtime/ModelFactory';
 import { ModelCell } from '@agent/runtime/ModelCell';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
-import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
-import { persistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
+import {
+  ModelHandlerCompatibilityKeySchema,
+  type ModelHandlerCompatibilityKey,
+} from '@agent/runtime/modelHandlerCompatibilityKey';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
@@ -59,7 +61,7 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
-import { linkAbortSignals } from '@utils/core';
+import { isObject, linkAbortSignals } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, runInSession, withRunContext } from './RunContext';
@@ -237,7 +239,7 @@ async function validateModelExists(
 
 const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
   'inferLaunchModelHandlerCompatibilityKey',
-)(function* (executionId: ExecutionId, model: string, session: SessionHandle) {
+)(function* (executionId: ExecutionId, session: SessionHandle) {
   const flowRecord = yield* Effect.tryPromise({
     try: async () =>
       runInSession(session, () =>
@@ -245,7 +247,14 @@ const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
       ),
     catch: ensureError,
   });
-  return persistedFlowModelHandlerCompatibilityKey(flowRecord?.shared);
+  const shared = flowRecord?.shared;
+  if (!isObject(shared)) return undefined;
+  // Records are stamped at write time, so a record without a key is malformed
+  // rather than old.
+  const parsed = ModelHandlerCompatibilityKeySchema.nullish().safeParse(
+    shared.modelHandlerCompatibilityKey,
+  );
+  return parsed.success ? (parsed.data ?? undefined) : undefined;
 });
 
 /**
@@ -414,11 +423,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const session = input.session;
     const modelHandlerCompatibilityKey =
       input.modelHandlerCompatibilityKey ??
-      (yield* inferLaunchModelHandlerCompatibilityKey(
-        executionId,
-        config.model,
-        session,
-      ));
+      (yield* inferLaunchModelHandlerCompatibilityKey(executionId, session));
     yield* Effect.try({
       try: () => input.signal?.throwIfAborted(),
       catch: ensureError,

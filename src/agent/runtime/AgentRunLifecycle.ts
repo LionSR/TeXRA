@@ -68,7 +68,7 @@ export interface RunFlowLifecycleOptions {
    * Workflow-script phase owning this run, stamped on the handle before it is
    * tracked so the parent's very first child roster already groups the row.
    * Deliberately not an `onRun` responsibility: `onRun` fires after `track()`
-   * has already emitted `child.activity`.
+   * has already notified `ExecutionRegistry.onChildActivity` listeners.
    */
   workflowPhase?: string;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
@@ -496,8 +496,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       ctx.logger,
     );
     // Roster display fields must be on the handle BEFORE it is tracked:
-    // `track()` emits `child.activity` synchronously, so anything assigned
-    // later (e.g. from `onRun`) misses the parent's first roster snapshot.
+    // `track()` notifies `ExecutionRegistry.onChildActivity` listeners
+    // synchronously, so anything assigned later (e.g. from `onRun`) misses the
+    // parent's first roster snapshot.
     if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
     const runInterruptHandler = {
       interrupt(): void {

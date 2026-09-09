@@ -220,11 +220,12 @@ function projectCliSessionEvent(
  * above the current ordinal in commit order, never the view, so a
  * `stage.start` no surface subscribed to still becomes its line and two
  * same-type updates never collapse. The child roster is the one line with no
- * durable event behind it: `child.activity` is process-local registry state
+ * durable event behind it: the roster is process-local registry state
  * (contract C3) and reaches this projection through the registry's
- * listener. It is written in publish order all the same: a roster observed
- * at ordinal N follows every event committed at or below N, so it waits for
- * the tail to deliver N and goes out before anything committed after it.
+ * `onChildActivity` listener. It is written in publish order all the same: a
+ * roster observed at ordinal N follows every event committed at or below N, so
+ * it waits for the tail to deliver N and goes out before anything committed
+ * after it.
  *
  * Detaching drains: the tail runs to the ordinal captured at detach, so the
  * last line published before the run settled is on the wire before the

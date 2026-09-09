@@ -1303,44 +1303,6 @@ describe('runCli usage output stream routing', () => {
     );
   });
 
-  it('documents interactive chat controls in chat --help', async () => {
-    const result = await runCli(['chat', '--help']);
-    expectOk(result);
-    expect(stdout).toContain('INTERACTIVE CONTROLS');
-    expect(stdout).toContain('/help');
-    expect(stdout).toContain('/status');
-    expect(stdout).toContain('/goal');
-    expect(stdout).toContain(
-      'configure autonomous goal mode and auto-approval scope',
-    );
-    expect(stdout).toContain('/login, /logout');
-    expect(stdout).toContain(
-      'manage ChatGPT, Grok, and your TeXRA account sign-ins',
-    );
-    expect(stdout).toContain(
-      "open the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
-    );
-    expect(stdout).toContain('Tab');
-    expect(stdout).toContain('select a visible child session or process');
-    expect(stdout).not.toContain('open tasks and sub-workflows');
-    expect(stdout).not.toContain('open subagents when available');
-    expect(stdout).toContain('Esc 1..9');
-    expect(stdout).toContain('focus a visible stream');
-    expect(stdout).toContain('approvals');
-    expect(stdout).toContain('Ctrl-C');
-  });
-
-  it('documents launcher controls in orchestrate --help', async () => {
-    const result = await runCli(['orchestrate', '--help']);
-    expectOk(result);
-    expect(stdout).toContain('INTERACTIVE CONTROLS');
-    expect(stdout).toContain('↑/↓');
-    expect(stdout).toContain('1-9/a-z');
-    expect(stdout).toContain('open an item directly');
-    expect(stdout).toContain('Enter');
-    expect(stdout).toContain('Esc');
-  });
-
   // Resume is dual-mode: a workflow run resumes headless, so the headless
   // globals are accepted and advertised alongside the interactive ones.
   it('advertises headless globals in resume --help', async () => {

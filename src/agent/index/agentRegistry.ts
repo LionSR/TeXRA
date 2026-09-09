@@ -34,7 +34,7 @@ import {
   inlineAgentDefinition,
   inlineAgentEntries,
 } from './inlineAgents';
-import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
+import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry, ResolvedAgent } from './agentEntry';
 
 const log = createLog('agentRegistry');
@@ -276,14 +276,7 @@ export function getAgent(
   return undefined;
 }
 
-/**
- * Update a remote agent's metadata in the cache after its YAML is loaded.
- *
- * `description` is display-only and not persisted. `tools` and
- * `defaultOutputFiles` are persisted so orchestrator agents can see them across
- * reloads; passing an empty/undefined value clears stale entries. Fields absent
- * from `meta` are left untouched.
- */
+/** Refresh the live catalog entry from a remote agent's validated YAML. */
 export function updateAgentMeta(
   identifier: string,
   meta: {
@@ -294,24 +287,13 @@ export function updateAgentMeta(
 ): void {
   const entry = getAgent(identifier);
   if (!entry) return;
-
-  if (meta.description) {
-    entry.description = meta.description;
-  }
-
-  const persisted: { tools?: string[]; defaultOutputFiles?: string[] } = {};
-  if ('tools' in meta) {
-    entry.tools = persisted.tools = meta.tools?.length ? meta.tools : undefined;
-  }
-  if ('defaultOutputFiles' in meta) {
-    const value = meta.defaultOutputFiles?.length
+  if (meta.description) entry.description = meta.description;
+  if ('tools' in meta)
+    entry.tools = meta.tools?.length ? meta.tools : undefined;
+  if ('defaultOutputFiles' in meta)
+    entry.defaultOutputFiles = meta.defaultOutputFiles?.length
       ? meta.defaultOutputFiles
       : undefined;
-    entry.defaultOutputFiles = persisted.defaultOutputFiles = value;
-  }
-  if ('tools' in meta || 'defaultOutputFiles' in meta) {
-    persistRemoteAgentMeta(entry.name, persisted);
-  }
 }
 
 /**
@@ -601,7 +583,7 @@ interface AgentOptionsDataPayload {
   toolUse: AgentOptionData[];
 }
 
-export function entriesToOptionData(
+function entriesToOptionData(
   entries: readonly AgentEntry[],
 ): AgentOptionData[] {
   return entries.map((entry) => ({

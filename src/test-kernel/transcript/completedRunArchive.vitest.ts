@@ -317,8 +317,6 @@ describe('completedRunArchive facade', () => {
       promptForApiKey: async () => undefined,
       showInfo: vi.fn(),
       showWarning: vi.fn(),
-      showError: vi.fn(),
-      logError: vi.fn(),
     });
     await Effect.runPromise(actions.runNew(streamId));
     expect(runExecutionRequest).toHaveBeenCalledWith({ config });

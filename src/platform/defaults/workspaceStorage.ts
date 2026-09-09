@@ -1,11 +1,8 @@
 // Node imports
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { basename, join, posix, relative } from 'node:path';
 
-import {
-  WORKSPACE_SIDECAR_FILE,
-  WORKSPACE_STORAGE_LAYOUT,
-} from '@common/storage/storageLayout';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { truncatedHexId } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
@@ -94,27 +91,6 @@ export function resolveRunStorageRelativePath(
   );
 }
 
-function writeWorkspaceSidecar(
-  storagePath: string,
-  workspacePath: string | undefined,
-): void {
-  const sidecarPath = join(storagePath, WORKSPACE_SIDECAR_FILE);
-  if (existsSync(sidecarPath)) return;
-
-  writeFileSync(
-    sidecarPath,
-    `${JSON.stringify(
-      {
-        path: workspacePath?.trim() || null,
-        createdAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    )}\n`,
-    'utf8',
-  );
-}
-
 export class WorkspaceStorageProvider implements StorageProvider {
   /**
    * The workspace root is pinned once, at construction. A host whose source
@@ -141,7 +117,6 @@ export class WorkspaceStorageProvider implements StorageProvider {
     if (this.initializedStoragePaths.has(storagePath)) return storagePath;
 
     mkdirSync(storagePath, { recursive: true });
-    writeWorkspaceSidecar(storagePath, workspacePath);
     this.initializedStoragePaths.add(storagePath);
     return storagePath;
   }

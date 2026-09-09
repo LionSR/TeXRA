@@ -11,7 +11,6 @@ import {
 
 // Local imports
 import { startCompactionActivity } from '@agent/trace';
-import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type {
   AgentWorkspaceState,
   ThinkingBlock,
@@ -1190,16 +1189,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         return [];
       }
 
-      // classification is 'image' or 'pdf' - for backward compatibility,
-      // always ensure media_type exists
-      let resolvedMediaType = media.media_type;
-      if (!resolvedMediaType) {
-        // Default to image/png since PDFs from TikZ are converted to PNG
-        this.logger.warn(
-          `No media_type found for image ${media.file_name}, defaulting to image/png`,
-        );
-        resolvedMediaType = 'image/png';
-      }
+      const resolvedMediaType = media.media_type;
 
       // Check for native PDF support
       const isPdf =
@@ -1344,7 +1334,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   override shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
-    _agentSetting: AgentSetting,
   ): boolean {
     this.logger.debug(
       `Checking if should continue - stop reason: "${stopReason}"`,

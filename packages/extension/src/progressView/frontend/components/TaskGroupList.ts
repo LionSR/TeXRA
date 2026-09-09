@@ -53,6 +53,7 @@ import { logStyles } from '../styles/logStyles';
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';
 import { getTimeFormatter } from '../formatters/timestampUtils';
+import { dispatchGroupToggle } from '../utils';
 
 // Local imports - sibling helpers
 // Side-effect import: registers <terminal-output>, which the terminal-stream
@@ -386,26 +387,18 @@ export class TaskGroupList extends LitElement {
   }
 
   /**
-   * Handle a group's open/close — wired to both wa-show and wa-hide. Those
-   * events BUBBLE (unlike the native <details> `toggle`), so nested child
-   * groups would otherwise re-trigger their ancestors — guard on
-   * target === currentTarget. Open state comes from the event type; groupId
-   * from the element ID (no per-row closures). Lit binds the host as `this`.
-   * The surface owns the answer: the toggle is dispatched, and the group
-   * body follows the `expanded` map the host hands back.
+   * Handle a group's open/close — wired to both wa-show and wa-hide. The
+   * groupId comes from the element ID, so there are no per-row closures; Lit
+   * binds the host as `this`. `dispatchGroupToggle` owns the bubble guard and
+   * the direction the event type carries.
    */
   private handleGroupToggle(event: Event): void {
-    if (event.target !== event.currentTarget) return;
     const details = event.currentTarget as HTMLElement;
-    const groupId = details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length);
-    if (this.streamId === null) return;
-    this.dispatchEvent(
-      SessionUiEvents.surface({
-        kind: 'group',
-        streamId: this.streamId,
-        key: groupId,
-        expanded: event.type === 'wa-show',
-      }),
+    dispatchGroupToggle(
+      this,
+      event,
+      this.streamId,
+      details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length),
     );
   }
 

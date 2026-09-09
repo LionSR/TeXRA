@@ -23,7 +23,7 @@ const BIBLIOGRAPHY_ERROR_PATTERNS = [
  * `--exclude-textcmd` argument: every citation macro, starred forms included,
  * whose argument latexdiff must leave alone instead of marking up as prose.
  */
-export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS: readonly string[] =
+const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS: readonly string[] =
   Object.freeze(LATEX_CITATION_COMMANDS.map((name) => `${name}\\*?`));
 
 export const LATEXDIFF_CHANGES_ONLY_SUBTYPE = 'ONLYCHANGEDPAGE';

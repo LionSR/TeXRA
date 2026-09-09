@@ -173,8 +173,6 @@ export function createExtensionHostRequests(
     },
     showInfo,
     showWarning,
-    showError,
-    logError: (message, error) => log.error(message, { data: error }),
   });
 
   const { snapshotPort } = runActions;

@@ -13,9 +13,6 @@
  */
 
 export enum WorkspaceStateKey {
-  /** Consolidated progress-view preferences. */
-  PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
-
   // Agent visibility
   /** Roster selection; the `custom` member carries a category-keyed record. */
   AGENT_ROSTER_SELECTION = 'texra.agentRosterSelection',
@@ -102,7 +99,6 @@ export enum GlobalStateKey {
 
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',
-  REMOTE_AGENT_META_CACHE = 'texra.remoteAgentMetaCache',
 
   // Endpoint settings
   ENDPOINT_OPENAI = 'texra.endpoint.openai',
@@ -137,10 +133,9 @@ export enum GlobalStateKey {
   // Tool settings
   DISABLED_TOOLS = 'texra.tools.disabled',
 
-  // Dismissable main-view hints. Written only by the banner's own close
+  // Dismissable main-view hint. Written only by the banner's own close
   // button, read only to decide whether to show that banner again.
   LOGIN_BANNER_DISMISSED = 'texra.ui.loginBannerDismissed',
-  ORCHESTRATOR_BANNER_DISMISSED = 'texra.ui.orchestratorBannerDismissed',
 
   // Experimental
   INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',

@@ -1,30 +1,66 @@
 /** C9 generated-file cleanup, driven only by committed deletion records. */
 import { realpathSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import * as path from 'node:path';
 
 import { Effect, type Context } from 'effect';
 
-import * as nativeCleanup from '@agent/storage/nativeGeneratedCleanup.mjs';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
+import { isPathWithin } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const log = createLog('DeletionCleanup');
 
-/** Confine each deletion to its held storage root and join the native worker. */
+/**
+ * Remove each execution's run directory under the storage root it was
+ * admitted against.
+ *
+ * Both the storage root and its runs directory are resolved with `realpath`,
+ * and the runs directory must resolve to itself: a root that was replaced by
+ * a link to somewhere else is refused rather than followed, so a swapped
+ * storage directory can never redirect deletion outside admitted storage.
+ * Each target is then checked to fall inside the resolved runs directory.
+ *
+ * A refusal throws, which leaves the deletion record closed and pending
+ * instead of collected, so the same tombstone retries once the root is sane.
+ *
+ * This is resolve-then-check, not the handle-confined deletion the retired
+ * native addon performed: a root replaced in the window *between* the resolve
+ * and the removal is no longer detected. TeXRA 1.0's file-ownership design
+ * owns that remaining contract (#12139).
+ */
 const removeExecutionDirectories = (
   storage: string,
   executionIds: readonly ExecutionId[],
 ) =>
   Effect.tryPromise({
-    try: () =>
-      nativeCleanup.removeExecutionDirectories(
+    try: async () => {
+      const runs = path.join(
         realpathSync.native(storage),
         WORKSPACE_STORAGE_LAYOUT.runs,
-        executionIds,
-      ),
+      );
+      // Throws ENOENT when the runs directory is absent, which the caller
+      // below reads as "nothing generated to remove".
+      if (realpathSync.native(runs) !== runs) {
+        throw new Error(
+          `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
+        );
+      }
+      for (const executionId of executionIds) {
+        const target = path.join(runs, executionId);
+        if (!isPathWithin(runs, target)) {
+          log.warn(
+            `Refusing to remove ${target}: outside the admitted storage root`,
+          );
+          continue;
+        }
+        await rm(target, { recursive: true, force: true });
+      }
+    },
     catch: ensureError,
   }).pipe(
     Effect.uninterruptible,

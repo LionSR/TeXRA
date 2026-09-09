@@ -46,7 +46,6 @@ import {
   STREAM_SUBSTATE,
   AgentCategory,
   type ExecutionId,
-  type StreamTabId,
 } from '@shared/schemas';
 import {
   createTestSession,
@@ -193,26 +192,6 @@ describe('AgentLaunchContext', () => {
     expect(
       recording.events.filter((event) => event.event === 'requestShowError'),
     ).toHaveLength(0);
-    session.dispose();
-  });
-
-  it('emits the generic fallback when a queued missing-agent banner replay is not delivered', async () => {
-    const recording = createRecordingHost({ emitDelivery: false });
-    const session = await triggerQueuedMissingAgentFailure(createTestSession());
-    const owner = session.interactions;
-
-    owner.use(recording.interactions);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(
-      recording.events.filter(
-        (event) => event.event === 'showAgentConfigBanner',
-      ),
-    ).toHaveLength(1);
-    expect(
-      recording.events.filter((event) => event.event === 'requestShowError'),
-    ).toHaveLength(1);
     session.dispose();
   });
 

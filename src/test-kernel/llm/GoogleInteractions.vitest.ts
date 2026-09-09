@@ -253,6 +253,15 @@ function exchange(result: TurnResult): TurnRequest {
   };
 }
 
+// The Google SDK clones every request before handing it to `fetch`, and Node
+// links a cloned Request's abort signal to its parent only weakly: once that
+// dependent controller is collected the clone never sees the abort, so the
+// signal reaching `fetch` is not a sound place to observe cancellation. The
+// pre-clone signal the SDK derived from ours stays linked, so record it here
+// and let the abort fixtures watch that one.
+const preCloneSignal = new WeakMap<Request, AbortSignal>();
+const cloneRequest = Request.prototype.clone;
+
 describe('canonical Google Interactions protocol', () => {
   const fetchModel = vi.fn<typeof fetch>();
 
@@ -261,8 +270,14 @@ describe('canonical Google Interactions protocol', () => {
       .mockReset()
       .mockImplementation(async () => response(signedEvents()));
     vi.stubGlobal('fetch', fetchModel);
+    Request.prototype.clone = function (this: Request) {
+      const clone = cloneRequest.call(this);
+      preCloneSignal.set(clone, this.signal);
+      return clone;
+    };
   });
   afterEach(() => {
+    Request.prototype.clone = cloneRequest;
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -578,11 +593,12 @@ describe('canonical Google Interactions protocol', () => {
         const failure = new Error('Late background body failure');
         fetchModel.mockImplementation(async (input) => {
           const request = input as Request;
+          const signal = preCloneSignal.get(request) ?? request.signal;
           return new Response(
             new ReadableStream<Uint8Array>(
               {
                 start(controller) {
-                  request.signal.addEventListener(
+                  signal.addEventListener(
                     'abort',
                     () => {
                       aborted.release();

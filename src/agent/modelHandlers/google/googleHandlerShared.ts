@@ -10,7 +10,6 @@ import {
 } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { isNonEmptyString } from '@utils/core';
 
-import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
 import type { File, GoogleGenAI } from '@google/genai';
 
 /**
@@ -95,8 +94,7 @@ export async function uploadGoogleMediaEntries<T>(
       if (!fileUri) {
         throw new Error(`Upload result for ${fileName} is missing a URI.`);
       }
-      const resolvedMimeType =
-        uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
+      const resolvedMimeType = uploaded.mimeType || entry.media_type;
       const media = buildMedia({ uri: fileUri }, resolvedMimeType);
       appendMedia(entry, media);
     } catch (error) {

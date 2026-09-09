@@ -840,7 +840,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     mediaMessage: MediaEntry[],
   ): ResponseInputContent[] {
     return mediaMessage.flatMap((media): ResponseInputContent[] => {
-      const mediaType = media.media_type ?? '';
+      const mediaType = media.media_type;
       const classification = classifyMediaEntry(media);
 
       if (classification === 'image' && isImageMimeType(mediaType)) {

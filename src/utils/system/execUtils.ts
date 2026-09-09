@@ -17,6 +17,7 @@ import treeKill from 'tree-kill';
 // Internal imports
 import { createLog } from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas';
+import { onAbort as onAbortSignal } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
@@ -322,13 +323,7 @@ export async function executeCommand(
       onAbort: () => void,
       armOnTimeout = false,
     ): void => {
-      if (options.signal) {
-        options.signal.addEventListener('abort', onAbort, { once: true });
-        removeAbortListener = () => {
-          options.signal?.removeEventListener('abort', onAbort);
-        };
-        if (options.signal.aborted) onAbort();
-      }
+      removeAbortListener = onAbortSignal(options.signal, onAbort);
       if (armOnTimeout && options.timeout !== undefined) {
         shellTimeoutId = setTimeout(onAbort, options.timeout);
       }
