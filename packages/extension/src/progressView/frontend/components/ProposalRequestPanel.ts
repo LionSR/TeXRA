@@ -48,12 +48,12 @@ import {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
 import { getBasename } from '@utils/core';
 
 // Local imports - base class
 import { BaseApprovalPanel } from './BaseApprovalPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
-import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '../events';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';

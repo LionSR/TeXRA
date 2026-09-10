@@ -10,11 +10,11 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
+// Local imports - approval decision vocabulary
+import type { FeedbackPermissionKind } from '@shared/session/approvalDecision';
+
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
-
-// Local imports - progress view events
-import type { FeedbackPermissionKind } from '../events';
 
 /**
  * Rejection prompt for panels that ask the agent a question rather than review

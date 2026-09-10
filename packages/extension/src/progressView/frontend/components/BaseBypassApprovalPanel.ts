@@ -4,11 +4,11 @@
 import type { PermissionPayload } from '@shared/schemas';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
+// Local imports - approval decision vocabulary
+import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
+
 // Local imports - base class
 import { BaseApprovalPanel } from './BaseApprovalPanel';
-
-// Local imports - progress view events
-import { APPROVE_SESSION_ACTION } from '../events';
 
 type BypassPermissionKind = 'toolEdit' | 'bash';
 type BypassPermission = Extract<
