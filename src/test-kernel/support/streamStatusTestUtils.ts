@@ -6,7 +6,7 @@ import type { StreamTabId } from '@shared/schemas';
 
 /**
  * The machine's single per-stream entry map. Seeding writes the settled
- * `phase` form directly, which also replaces any reservation on that stream.
+ * `phase` form directly.
  */
 interface StreamStatusMachineInternals {
   readonly streams: Map<

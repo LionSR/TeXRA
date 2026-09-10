@@ -1,7 +1,7 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Cause, Deferred, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import { nanoid } from 'nanoid';
 
 import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
@@ -28,262 +28,91 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
    * calls `openPath`). Used when the renderer overlay is unavailable.
    */
   openPath(filePath: string): Promise<void>;
+  /**
+   * Records the temp directory holding an external-editor patch file. The
+   * directory cannot be removed as soon as `openPath` settles because the OS
+   * editor may still be reading the patch, so removal belongs to the process
+   * that outlives the window (on macOS the app outlives every window), which
+   * removes the recorded directories once during quit.
+   */
+  recordPatchDir(tempDir: string): void;
 }
-
-/**
- * Upper bound on how long `dispose()` waits for in-flight fallback setup
- * before proceeding to remove already-recorded temp directories. A hung
- * read of an arbitrary path must not block app quit indefinitely.
- */
-const DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS = 5_000;
 
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
-): Pick<DiffViewHost, 'openDiff'> & { dispose(): Promise<void> } {
-  // External-editor patch files live under a fresh temp directory per diff.
-  // That directory cannot be removed as soon as `openPath` settles because the
-  // OS editor may still be reading it, so each fallback run records its
-  // directory here and `dispose()` removes them when the window closes.
-  const externalPatchDirs = new Set<string>();
-  // One removal promise per temp directory. Both the fallback error path and
-  // `dispose()` request removals, and sharing the promise avoids two
-  // concurrent recursive `rm` calls on the same path (which can fail with
-  // `EBUSY`/`EPERM` on Windows). The memo is cleared when the removal settles
-  // so a failed removal can be retried instead of caching a rejection.
-  const pendingRemovals = new Map<string, Promise<void>>();
-  // Fallback setup in flight: the read/compute/temp-dir-creation prefix of
-  // `openDiff`, tracked from the start of the call as one `Deferred` gate per
-  // setup. `dispose()` awaits these so the quit lifecycle also waits for the
-  // `disposed` branch below, which can start its removal only after this
-  // setup finishes.
-  const inFlightFallbacks = new Set<Deferred.Deferred<void>>();
-  // Set when dispose() starts. A fallback still in flight uses this to choose
-  // the post-disposal cleanup path; `drainComplete` then decides whether the
-  // record set is still owned by the disposal removal phase.
-  let disposed = false;
-  // Set once drainFallbackSetups() has taken the final `externalPatchDirs`
-  // snapshot. A fallback that reaches the `disposed` branch before this flag
-  // is still owned by the disposal removal phase; after it, cleanup is
-  // best-effort because the snapshot and owner are gone.
-  let drainComplete = false;
-
-  function removeTempDir(tempDir: string): Promise<void> {
-    const pending = pendingRemovals.get(tempDir);
-    if (pending) return pending;
-    const removal = rm(tempDir, { recursive: true, force: true }).finally(
-      () => {
-        pendingRemovals.delete(tempDir);
-      },
-    );
-    pendingRemovals.set(tempDir, removal);
-    return removal;
-  }
-
-  async function cleanupFallbackDir(
-    tempDir: string,
-    warning: string,
-  ): Promise<void> {
-    const removed = await effectRuntime().runPromiseExit(
-      Effect.tryPromise({
-        try: () => removeTempDir(tempDir),
-        catch: (error) => error,
-      }),
-    );
-    if (Exit.isSuccess(removed)) {
-      externalPatchDirs.delete(tempDir);
-      return;
-    }
-    console.warn(`${warning}: ${toErrorMessage(Cause.squash(removed.cause))}`);
-  }
-
-  // Returns an idempotent settle function for a `Deferred` gate held in
-  // `inFlightFallbacks`. The gate only ever succeeds, so a drainer never has
-  // to handle a failure from the bookkeeping slot.
-  function trackFallbackSetup(): () => void {
-    const gate = Deferred.makeUnsafe<void>();
-    inFlightFallbacks.add(gate);
-    let settled = false;
-    return () => {
-      if (settled) return;
-      settled = true;
-      inFlightFallbacks.delete(gate);
-      Deferred.doneUnsafe(gate, Effect.void);
-    };
-  }
-
-  function takeDirSnapshot(): string[] {
-    drainComplete = true;
-    const tempDirs = [...externalPatchDirs];
-    externalPatchDirs.clear();
-    return tempDirs;
-  }
-
-  // Waits for fallback setup to reach a stable empty state, bounded by the
-  // fallback-setup timeout, and then takes the final `externalPatchDirs`
-  // snapshot in the same step. The double-empty recheck closes the race where
-  // an `openDiff` registers between an initial empty observation and the
-  // snapshot; a registration after the snapshot is already past the drain and
-  // self-cleans through the `disposed` branch on its own. The timeout
-  // interrupts the wait itself, never the tracked setups: a hung read is
-  // abandoned to the `disposed` branch, and the timer goes away with the wait
-  // instead of needing an abort of its own.
-  const drainFallbackSetups: Effect.Effect<string[]> = Effect.gen(function* () {
-    let observedEmpty = false;
-    while (true) {
-      if (inFlightFallbacks.size === 0) {
-        if (observedEmpty) return;
-        observedEmpty = true;
-        // A microtask yield so a registration racing the first empty
-        // observation is seen; `Promise.resolve()` cannot reject.
-        yield* Effect.promise(() => Promise.resolve());
-        continue;
-      }
-      observedEmpty = false;
-      yield* Effect.forEach(
-        [...inFlightFallbacks],
-        (gate) => Deferred.await(gate),
-        { discard: true },
-      );
-    }
-  }).pipe(
-    Effect.timeoutOption(DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS),
-    Effect.map(() => takeDirSnapshot()),
-  );
-
+): Pick<DiffViewHost, 'openDiff'> {
   async function openDiff(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
   ): Promise<void> {
-    const settleFallbackSetup = trackFallbackSetup();
-    try {
-      const [originalContent, proposedContent] = await Promise.all([
-        readFile(original.filePath, 'utf8'),
-        readFile(proposed.filePath, 'utf8'),
-      ]);
-      const lineChanges = computeLineChangeSummary(
-        originalContent,
-        proposedContent,
-      );
+    const [originalContent, proposedContent] = await Promise.all([
+      readFile(original.filePath, 'utf8'),
+      readFile(proposed.filePath, 'utf8'),
+    ]);
+    const lineChanges = computeLineChangeSummary(
+      originalContent,
+      proposedContent,
+    );
 
-      // Prefer the in-app Review workbench when wired. A `false` return value
-      // or a thrown error opts into the external-editor fallback (covers the
-      // startup IPC race and a destroyed BrowserWindow).
-      const shownInRenderer = tryShowInRenderer(
-        { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
-        {
-          command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
-          session: workspaceRoots().storage,
-          title,
-          displayPath: title.replace(/^Tool edit:\s*/, ''),
-          originalText: originalContent,
-          proposedText: proposedContent,
-          additions: lineChanges.added,
-          deletions: lineChanges.removed,
-          language: monacoLanguageForPath(proposed.filePath ?? ''),
-        } satisfies DesktopShowDiffMessage,
-      );
-      if (shownInRenderer) return;
+    // Prefer the in-app Review workbench when wired. A `false` return value
+    // or a thrown error opts into the external-editor fallback (covers the
+    // startup IPC race and a destroyed BrowserWindow).
+    const shownInRenderer = tryShowInRenderer(
+      { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
+      {
+        command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
+        session: workspaceRoots().storage,
+        title,
+        displayPath: title.replace(/^Tool edit:\s*/, ''),
+        originalText: originalContent,
+        proposedText: proposedContent,
+        additions: lineChanges.added,
+        deletions: lineChanges.removed,
+        language: monacoLanguageForPath(proposed.filePath ?? ''),
+      } satisfies DesktopShowDiffMessage,
+    );
+    if (shownInRenderer) return;
 
-      // External-editor fallback: write a unified patch file and open it.
-      const diffBody = unifiedDiffText(originalContent, proposedContent);
-      const patch = diffBody
-        ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
-        : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
-      const tempDir = await createTexraTempDir('texra-desktop-diff-');
-      if (disposed) {
-        // The window closed while this fallback was in flight. If the drain
-        // has not yet taken its final record-set snapshot, keep the directory
-        // tracked so the removal phase retries a failed cleanup; once the
-        // snapshot is gone this call is already late and cleanup is
-        // best-effort.
-        if (!drainComplete) {
-          externalPatchDirs.add(tempDir);
-        }
-        await cleanupFallbackDir(
-          tempDir,
-          'Failed to remove the temporary diff directory after the window closed; cleanup will continue through disposal if still tracked, otherwise it is left to OS temp cleanup',
-        );
-        throw new Error(
-          'Desktop window closed before the diff could be opened.',
-        );
-      }
-      externalPatchDirs.add(tempDir);
-      // From here dispose() owns the directory through `externalPatchDirs`,
-      // so the fallback setup no longer needs its own dispose-time wait.
-      settleFallbackSetup();
-      const diffPath = path.join(tempDir, `${nanoid()}.diff`);
+    // External-editor fallback: write a unified patch file and open it.
+    const diffBody = unifiedDiffText(originalContent, proposedContent);
+    const patch = diffBody
+      ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
+      : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
+    const tempDir = await createTexraTempDir('texra-desktop-diff-');
+    options.recordPatchDir(tempDir);
+    const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
-      const opened = await effectRuntime().runPromiseExit(
+    const opened = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: async () => {
+          await writeFile(diffPath, patch, 'utf8');
+          await options.openPath(diffPath);
+        },
+        catch: (error) => error,
+      }),
+    );
+    if (Exit.isFailure(opened)) {
+      // The patch never reached an editor: remove it now instead of leaving it
+      // until quit, and preserve the original failure for the caller. The
+      // directory stays recorded, so a failed removal is retried by the
+      // process-level removal, and the failure is logged instead of swallowed.
+      const removed = await effectRuntime().runPromiseExit(
         Effect.tryPromise({
-          try: async () => {
-            await writeFile(diffPath, patch, 'utf8');
-            await options.openPath(diffPath);
-          },
+          try: () => rm(tempDir, { recursive: true, force: true }),
           catch: (error) => error,
         }),
       );
-      if (Exit.isFailure(opened)) {
-        // The patch never reached an editor: clean it up now instead of
-        // waiting for window close, and preserve the original failure for the
-        // caller. Keep the directory recorded when the removal fails so
-        // dispose() can retry it, and log instead of swallowing the failure.
-        await cleanupFallbackDir(
-          tempDir,
-          'Failed to remove the temporary diff directory; will retry when the window closes',
+      if (Exit.isFailure(removed)) {
+        console.warn(
+          `Failed to remove the temporary diff directory; the process-level removal at quit retries it: ${toErrorMessage(
+            Cause.squash(removed.cause),
+          )}`,
         );
-        throw Cause.squash(opened.cause);
       }
-    } finally {
-      settleFallbackSetup();
+      throw Cause.squash(opened.cause);
     }
   }
 
-  async function dispose(): Promise<void> {
-    disposed = true;
-    // Wait for fallbacks that were setting up when the window closed, bounded
-    // so a hung read cannot block quit forever. A setup that had not yet
-    // created its temp directory now sees `disposed` and removes it itself;
-    // awaiting that cleanup here (up to the bound) keeps the quit lifecycle
-    // from resolving before the post-disposal removal finishes. The returned
-    // snapshot is taken in the same step as the final stable-empty check, so a
-    // late registration cannot slip between them.
-    const tempDirs = await effectRuntime().runPromise(drainFallbackSetups);
-    const firstResults = await Promise.allSettled(
-      tempDirs.map((tempDir) => removeTempDir(tempDir)),
-    );
-    const firstFailures = tempDirs.filter(
-      (_, index) => firstResults[index].status === 'rejected',
-    );
-    if (firstFailures.length === 0) return;
-
-    // A transient `EBUSY`/`EPERM` on the shared error-path removal would
-    // otherwise leave the directory untracked, because `dispose()` cleared
-    // `externalPatchDirs` before the shared attempt settled. Retry each
-    // failure once; the per-path memo was cleared when the first attempt
-    // settled, so the retry issues a fresh `rm`.
-    const retryResults = await Promise.allSettled(
-      firstFailures.map((tempDir) => removeTempDir(tempDir)),
-    );
-    const retryReasons = retryResults
-      .filter(
-        (result): result is PromiseRejectedResult =>
-          result.status === 'rejected',
-      )
-      .map((failure) => failure.reason);
-    if (retryReasons.length > 0) {
-      // `dispose()` runs once per host, so there is no later cleanup pass that
-      // can read a re-recorded directory. Surface the failure loudly and leave
-      // the directories to the OS temp-directory cleanup instead of
-      // pretending another dispose will retry them.
-      throw new AggregateError(
-        retryReasons,
-        `Failed to remove ${retryReasons.length} diff temp ${
-          retryReasons.length === 1 ? 'directory' : 'directories'
-        }; the directories are left for OS temp cleanup.`,
-      );
-    }
-  }
-
-  return { openDiff, dispose };
+  return { openDiff };
 }

@@ -227,7 +227,7 @@ function installImmediatePoller(handler: ModelHandlerOpenAIResponse): void {
       maxDurationMs: 1000,
       isPending: (response) =>
         response.status === 'queued' || response.status === 'in_progress',
-      logger: { ...noopTrace },
+      logger: () => ({ ...noopTrace }),
     });
 }
 

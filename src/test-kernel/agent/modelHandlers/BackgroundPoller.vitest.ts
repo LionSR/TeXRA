@@ -30,16 +30,17 @@ interface PollerOverrides {
   maxDurationMs: number;
   pollIntervalMs?: number;
   isPending?: (response: TestResponse) => boolean;
-  logger?: AgentTrace | (() => AgentTrace);
+  logger?: () => AgentTrace;
 }
 
 function createPoller(
   overrides: PollerOverrides,
 ): BackgroundPoller<TestResponse> {
+  const defaultLogger = trace();
   return new BackgroundPoller<TestResponse>({
     pollIntervalMs: 0,
     isPending: isInProgress,
-    logger: trace(),
+    logger: () => defaultLogger,
     ...overrides,
   });
 }
@@ -78,7 +79,7 @@ describe('BackgroundPoller', () => {
 
   it('uses provider-specific timeout guidance', async () => {
     const logger = trace();
-    const poller = createPoller({ maxDurationMs: -1, logger });
+    const poller = createPoller({ maxDurationMs: -1, logger: () => logger });
 
     await expect(
       poller.poll({
@@ -240,7 +241,7 @@ describe('BackgroundPoller', () => {
     const poller = createPoller({
       maxDurationMs: 10_000,
       pollIntervalMs: 1000,
-      logger,
+      logger: () => logger,
     });
 
     const promise = poller.poll({
@@ -271,7 +272,7 @@ describe('BackgroundPoller', () => {
     const logger = trace();
     let finishedStats: BackgroundPollStats | undefined;
     const usage = { input_tokens: 3, output_tokens: 5 };
-    const poller = createPoller({ maxDurationMs: 1000, logger });
+    const poller = createPoller({ maxDurationMs: 1000, logger: () => logger });
 
     await poller.poll({
       initialResponse: { id: 'resp-3', status: 'in_progress' },

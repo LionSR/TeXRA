@@ -14,12 +14,9 @@ export interface BackgroundPollStats {
   readonly elapsedMs: number;
 }
 
-interface BackgroundPollTimeoutContext<TResponse> extends BackgroundPollStats {
+interface BackgroundPollTimeoutContext extends BackgroundPollStats {
   readonly maxDurationMs: number;
-  readonly response: TResponse;
 }
-
-type BackgroundPollLogger = AgentTrace | (() => AgentTrace);
 
 /**
  * Configuration for a {@link BackgroundPoller} instance.
@@ -33,8 +30,9 @@ interface BackgroundPollerConfig<TResponse> {
   readonly maxDurationMs: number;
   /** Predicate: is the given response still being processed? */
   readonly isPending: (response: TResponse) => boolean;
-  /** Logger for debug/progress output, or a supplier for handlers with mutable loggers. */
-  readonly logger: BackgroundPollLogger;
+  /** Logger supplier for debug/progress output, resolved at each use so
+   *  handlers with mutable loggers log through the current one. */
+  readonly logger: () => AgentTrace;
 }
 
 /**
@@ -80,7 +78,7 @@ interface BackgroundPollOptions<TResponse> {
   readonly providerLabel?: string;
   /** Provider-specific timeout error or text with cancellation guidance. */
   readonly formatTimeoutError?: (
-    context: BackgroundPollTimeoutContext<TResponse>,
+    context: BackgroundPollTimeoutContext,
   ) => Error | string;
   /**
    * Optional callback invoked (awaited) immediately before a deadline timeout
@@ -101,10 +99,6 @@ interface BackgroundPollOptions<TResponse> {
     response: TResponse,
     stats: BackgroundPollStats,
   ) => void;
-}
-
-function resolveLogger(logger: BackgroundPollLogger): AgentTrace {
-  return typeof logger === 'function' ? logger() : logger;
 }
 
 function safeExtraData<TResponse>(
@@ -148,7 +142,7 @@ function safeExtraData<TResponse>(
  *   pollIntervalMs: 15_000,
  *   maxDurationMs: 3 * 60 * 60 * 1000,
  *   isPending: (r) => ['queued', 'in_progress'].includes(r.status),
- *   logger: this.logger,
+ *   logger: () => this.logger,
  * });
  *
  * const completed = await poller.poll({
@@ -193,7 +187,7 @@ export class BackgroundPoller<TResponse> {
     }
 
     const { pollIntervalMs, maxDurationMs, isPending } = this.config;
-    const logger = () => resolveLogger(this.config.logger);
+    const logger = this.config.logger;
     const startTime = deadlineAtMs - maxDurationMs;
     let current = initialResponse;
     let pollCount = 0;
@@ -217,7 +211,6 @@ export class BackgroundPoller<TResponse> {
         options.formatTimeoutError?.({
           ...stats,
           maxDurationMs,
-          response,
         }) ??
         `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms.`;
       // Fire the caller's timeout side effects before the error propagates, so

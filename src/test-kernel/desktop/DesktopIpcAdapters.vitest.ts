@@ -86,7 +86,6 @@ async function createOnboardingHarness({
       selectSetupAgent: async () => {},
       kickoffSetup: async () => {},
       signInWithChatGpt: async () => {},
-      openGettingStarted: async () => {},
       ...options,
       state,
     },
@@ -327,18 +326,6 @@ describe('desktop IPC adapters', () => {
     expect(selectSetupAgent).toHaveBeenCalledTimes(2);
     expect(callOrder).toEqual(['select', 'kickoff', 'select']);
     expectFunnelState(onboarding, 'setup');
-  });
-
-  it('opens the getting-started docs without deriving a funnel state', async () => {
-    const openGettingStarted = vi.fn(async () => {});
-    const { onboarding } = await createOnboardingHarness({
-      openGettingStarted,
-    });
-
-    await onboarding.openGettingStarted();
-    await flushAsync();
-    expect(openGettingStarted).toHaveBeenCalledOnce();
-    expect(onboarding.funnelState()).toBeNull();
   });
 
   it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { Scope } from 'effect';
 import {
@@ -12,7 +12,6 @@ import {
   session,
   shell,
 } from 'electron';
-import PQueue from 'p-queue';
 
 import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 import { z } from 'zod';
@@ -164,10 +163,7 @@ import {
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
-import {
-  DESKTOP_DOCS_URL,
-  postDesktopSettingsView,
-} from '../shared/desktopCommandSurface.js';
+import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
 const moduleDirname = import.meta.dirname;
@@ -183,13 +179,32 @@ const DESKTOP_RECENT_COMMIT_LIMIT = 20;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
 let continueQuitAfterWindowClose: (() => void) | undefined;
-// Serializes the lifecycle promises returned by each window's diff-host
-// disposal. The disposal call itself still starts synchronously in the
-// window-root store's disposal; only the returned completion promise is
-// queued, so a window's `disposed` flag flips before earlier cleanup settles.
-// The lifecycle shutdown drain awaits the queue's idle, so recursive temp-dir
-// removals finish before the process exits instead of racing the quit flow.
-const diffHostDisposeQueue = new PQueue({ concurrency: 1 });
+// Temp directories holding the `.diff` patch files written by the
+// external-editor fallback of every window's diff host. The OS editor may
+// still be reading a patch when its window closes, and on macOS the app
+// outlives its windows, so the process owns these directories and removes them
+// once from the quit lifecycle rather than at window close.
+const externalDiffPatchDirs = new Set<string>();
+
+// Removes every recorded patch directory, reporting each failure instead of
+// swallowing it: a directory that survives is left for OS temp cleanup, and
+// quit must not stall on it.
+const removeExternalDiffPatchDirs = async (): Promise<void> => {
+  const tempDirs = [...externalDiffPatchDirs];
+  externalDiffPatchDirs.clear();
+  const results = await Promise.allSettled(
+    tempDirs.map((tempDir) => rm(tempDir, { recursive: true, force: true })),
+  );
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.warn(
+        `[desktop] Failed to remove the temporary diff directory ${tempDirs[index]}; it is left for OS temp cleanup: ${toErrorMessage(
+          result.reason,
+        )}`,
+      );
+    }
+  });
+};
 
 // Playwright tests need a deterministic Electron profile so app-scoped stores
 // survive across launches. Normal desktop launches keep Electron's default
@@ -671,6 +686,9 @@ function createWindow(options: {
   attachRendererConsoleLog(window.webContents);
   const desktopDiffHost = createDesktopDiffHost({
     openPath: previewHost.openPath,
+    recordPatchDir: (tempDir) => {
+      externalDiffPatchDirs.add(tempDir);
+    },
     // Prefer the in-app overlay (<texra-diff-view> inside a wa-dialog).
     // Returning `false` when the IPC bridge is not yet wired (startup race)
     // or the BrowserWindow has been destroyed falls the host back to the
@@ -685,8 +703,7 @@ function createWindow(options: {
   /**
    * Await a host promise the caller has already started, reporting rather than
    * raising its failure: a dialog that could not be shown must not fail the
-   * execution behind it, and a temp-dir removal that could not finish must not
-   * stall the quit drain that waits on it.
+   * execution behind it.
    */
   const awaitOrReport = (started: Promise<void>): Promise<void> =>
     effectRuntime().runPromise(
@@ -696,23 +713,12 @@ function createWindow(options: {
         ),
       ),
     );
-  // Not fire-and-forget: every quit path reaches the before-quit handler,
-  // whose lifecycle drain awaits the dispose queue's idle before the final
-  // quit. `desktopDiffHost.dispose()` is invoked synchronously here (so
-  // `disposed` flips immediately); the queue only orders when this window's
-  // completion promise resolves, keeping a macOS dock-reopen from discarding
-  // an earlier window's still-running cleanup.
-  windowResources.add(() => {
-    const settled = awaitOrReport(desktopDiffHost.dispose());
-    void diffHostDisposeQueue.add(() => settled);
-  });
   const requestDiffHost = createDesktopDiffHost({
     openPath: requestPreviewHost.openPath,
+    recordPatchDir: (tempDir) => {
+      externalDiffPatchDirs.add(tempDir);
+    },
     postToRenderer: postToRendererIfAlive,
-  });
-  windowResources.add(() => {
-    const settled = awaitOrReport(requestDiffHost.dispose());
-    void diffHostDisposeQueue.add(() => settled);
   });
   const agentExecutionHost: DesktopAgentExecutionHost = {
     openPath: previewHost.openPath,
@@ -1313,11 +1319,6 @@ function createWindow(options: {
         );
       },
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
-      // The desktop shell can't host the VS Code getting-started walkthrough, so
-      // the State 0 walkthrough button opens the desktop docs externally — the
-      // closest desktop analog, reusing the same docs URL the Help menu's
-      // "Desktop Documentation" item opens.
-      openGettingStarted: () => previewHost.openExternal(DESKTOP_DOCS_URL),
       onAsyncError: reportAsyncError,
     },
   );
@@ -1629,10 +1630,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         // process-owned stores. Flush in BEFORE so persistence cannot be
         // delayed by a later ON-phase language-service disposal.
         flushArtifacts: () => projects.flushArtifacts(),
-        // Each window's closed handler starts diff temp-dir removal before the
-        // quit lifecycle drains; awaiting idle keeps the process alive until
-        // the directories are actually gone.
-        afterFlushArtifacts: [() => diffHostDisposeQueue.onIdle()],
+        // The external-editor patch directories recorded by every window's
+        // diff host are removed here, once, while the process is still alive.
+        afterFlushArtifacts: [() => removeExternalDiffPatchDirs()],
         afterExecutionSettlement: [
           () => processResources.dispose(),
           // Last: every project's session has released its graph above.

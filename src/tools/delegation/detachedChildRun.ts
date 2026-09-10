@@ -40,10 +40,10 @@ import type { ChildStream } from './childStream';
  * Register a native agent child and take its owned-execution lease, minting
  * the one stream id the child is addressed by.
  *
- * That id must match the one `buildAgentLaunchContext` reserves for this
- * executionId (AgentLaunchContext.ts's `reservedStreamId`), or the loop
- * acquires the wrong follow-up queue/interrupt slot. The reservation derives
- * from the canonical config's `agent` — never from `agentName`, which callers
+ * That id must match the one `buildAgentLaunchContext` derives for this
+ * executionId (AgentLaunchContext.ts's `getStreamTabId` call), or the loop
+ * acquires the wrong follow-up queue/interrupt slot. That id derives
+ * from the canonical config's `agent`, never from `agentName`, which callers
  * resolve differently (an approved override's display name vs. its registry
  * name) and which reaches only the durable child row. Minting it here is what
  * keeps the two in step: while each launch site derived its own, the

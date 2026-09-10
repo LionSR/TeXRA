@@ -116,12 +116,6 @@ export function workflowRunSettled(
   return phase !== undefined && !isInFlightPhase(phase);
 }
 
-export function canAcquireStreamReservation(
-  phase: StreamPhase | undefined,
-): boolean {
-  return !isInFlightPhase(phase);
-}
-
 export function canTransitionStreamPhase(
   from: StreamPhase | undefined,
   to: StreamPhase,
