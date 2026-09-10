@@ -1,4 +1,4 @@
-import type { RoundStage, StreamStage } from '@shared/schemas';
+import type { RoundStage, RunStage } from '@shared/schemas';
 
 /** The `stage.start` fact fields the normalizers below read. */
 interface StageStartLike {
@@ -32,7 +32,7 @@ export function roundStageFromStageStart(
  */
 export function streamStageFromStageStart(
   event: StageStartLike,
-): StreamStage | undefined {
+): RunStage | undefined {
   if (event.kind === 'phase') {
     return {
       kind: 'phase',

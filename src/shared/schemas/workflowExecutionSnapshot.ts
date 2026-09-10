@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunIdSchema, StreamTabIdSchema } from './identifiers';
 
 export const WORKFLOW_EXECUTION_LIFECYCLE = {
   WAITING: 'waiting',
@@ -63,7 +63,7 @@ const WorkflowExecutionStageSchema = z.strictObject({
 });
 const WorkflowExecutionAttemptSchema = z.strictObject({
   number: z.int().positive(),
-  id: ExecutionIdSchema.optional(),
+  id: RunIdSchema.optional(),
   childStreamId: StreamTabIdSchema.optional(),
   model: z.string().optional(),
   costUsd: z.number().nonnegative().optional(),
@@ -111,7 +111,7 @@ const WorkflowExecutionIssuedCallSchema =
     agent: z.string().optional(),
     /** Declared by the script at issue time, then the host-resolved model. */
     model: z.string().optional(),
-    childExecutionId: ExecutionIdSchema.optional(),
+    childExecutionId: RunIdSchema.optional(),
     childStreamId: StreamTabIdSchema.optional(),
   });
 
@@ -224,7 +224,7 @@ const WorkflowExecutionCallSchema = z
       }
     }
   });
-export type WorkflowExecutionCall = z.infer<typeof WorkflowExecutionCallSchema>;
+export type WorkflowRunCall = z.infer<typeof WorkflowExecutionCallSchema>;
 
 type WorkflowExecutionCounts = Record<WorkflowExecutionCallStatus, number> & {
   readonly total: number;
@@ -238,7 +238,7 @@ type WorkflowExecutionCounts = Record<WorkflowExecutionCallStatus, number> & {
  * every consumer asks for: planned plus stage-blocked.
  */
 export function deriveWorkflowCounts(
-  calls: readonly Pick<WorkflowExecutionCall, 'status'>[],
+  calls: readonly Pick<WorkflowRunCall, 'status'>[],
 ): WorkflowExecutionCounts {
   const byStatus = Object.fromEntries(
     Object.values(WORKFLOW_CALL_STATUS).map((status) => [status, 0]),
@@ -257,8 +257,8 @@ export function deriveWorkflowCounts(
  * disagrees with the stage it points at.
  */
 export function stageTitleFor(
-  snapshot: Pick<WorkflowExecutionSnapshot, 'stages'>,
-  call: Pick<WorkflowExecutionCall, 'stageId'>,
+  snapshot: Pick<WorkflowRunSnapshot, 'stages'>,
+  call: Pick<WorkflowRunCall, 'stageId'>,
 ): string | undefined {
   return snapshot.stages.find((stage) => stage.id === call.stageId)?.title;
 }
@@ -278,7 +278,7 @@ const TERMINAL_LIFECYCLES = new Set<WorkflowExecutionLifecycle>([
   WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED,
 ]);
 
-export const WorkflowExecutionSnapshotSchema = z
+export const WorkflowRunSnapshotSchema = z
   .strictObject({
     lifecycle: WorkflowExecutionLifecycleSchema,
     currentStageId: z.string().min(1).optional(),
@@ -375,6 +375,4 @@ export const WorkflowExecutionSnapshotSchema = z
         });
     }
   });
-export type WorkflowExecutionSnapshot = z.infer<
-  typeof WorkflowExecutionSnapshotSchema
->;
+export type WorkflowRunSnapshot = z.infer<typeof WorkflowRunSnapshotSchema>;

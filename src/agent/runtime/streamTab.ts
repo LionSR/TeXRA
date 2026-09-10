@@ -1,4 +1,4 @@
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas';
 
 /**
@@ -19,7 +19,7 @@ import { getCleanAgentName } from '@shared/schemas';
  */
 export function getStreamTabId(
   name: string,
-  options: { executionId: ExecutionId },
+  options: { executionId: RunId },
 ): StreamTabId {
   return `${getCleanAgentName(name)}#${options.executionId}`;
 }

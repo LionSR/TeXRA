@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { errnoError } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
@@ -16,7 +16,7 @@ import {
 } from '@utils/files/runStorageFs';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
-const executionId = 'abcdef123456' as ExecutionId;
+const executionId = 'abcdef123456' as RunId;
 const storageRoot = path.resolve(path.sep, 'storage');
 const workspaceRoot = path.resolve(path.sep, 'workspace');
 const originalStat = StorageFS.stat;

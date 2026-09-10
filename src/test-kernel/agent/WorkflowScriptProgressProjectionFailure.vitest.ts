@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
 import type { PersistedWorkflowScriptRunOptions } from '@agent/workflowScript';
-import { WorkflowExecutionSnapshotSchema } from '@shared/schemas';
+import { WorkflowRunSnapshotSchema } from '@shared/schemas';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
 const mocks = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ vi.mock('@agent/workflowScript', async (importOriginal) => ({
 function snapshot(status: 'planned' | 'running', markerFree = false) {
   const timestamp = '2026-08-15T20:00:00.000Z';
   const active = status === 'running';
-  return WorkflowExecutionSnapshotSchema.parse({
+  return WorkflowRunSnapshotSchema.parse({
     lifecycle: active ? 'active' : 'waiting',
     stages: [],
     calls: [

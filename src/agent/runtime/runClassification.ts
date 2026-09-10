@@ -26,14 +26,14 @@ import { Effect } from 'effect';
 
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { inspectRunLease } from '@agent/storage/executionLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import {
   deriveResumability,
   type ResumabilityFault,
 } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId, RunOutcome } from '@shared/schemas';
+import type { RunId, RunOutcome } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunClassification');
@@ -63,7 +63,7 @@ type RunFactsClassification = Exclude<
 
 /** The one mapping from durable resumability facts to this vocabulary. */
 const classifyRunFacts = Effect.fn('classifyRunFacts')(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<RunFactsClassification> {
   const facts = yield* deriveResumability(executionId, session);
@@ -79,11 +79,11 @@ const classifyRunFacts = Effect.fn('classifyRunFacts')(function* (
 
 /** Classify one execution. Never throws: an unreadable fact is `unclassified`. */
 export const classifyRun = Effect.fn('classifyRun')(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<RunClassification> {
   const leaseResult = yield* Effect.tryPromise({
-    try: () => runInSession(session, () => inspectExecutionLease(executionId)),
+    try: () => runInSession(session, () => inspectRunLease(executionId)),
     catch: ensureError,
   }).pipe(Effect.result);
   if (leaseResult._tag === 'Failure') {

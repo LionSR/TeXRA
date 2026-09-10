@@ -13,10 +13,7 @@ import { Effect } from 'effect';
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
 
-import {
-  lookupStreamExecutionId,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+import { lookupRunId, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
@@ -196,10 +193,7 @@ const injectContinuation = Effect.fn('injectContinuation')(function* (
   // The answer is addressed to the execution that asked. A manifest written
   // before the field existed names none and is delivered by stream alone.
   if (manifest.parentExecutionId != null) {
-    const current = yield* lookupStreamExecutionId(
-      manifest.parentStreamId,
-      session,
-    );
+    const current = yield* lookupRunId(manifest.parentStreamId, session);
     if (current !== manifest.parentExecutionId) {
       logger.warn(
         `Inquiry continuation for ${threadId}: parent stream ${manifest.parentStreamId} now runs execution ${current ?? 'none'}, not ${manifest.parentExecutionId}; archiving.`,

@@ -23,10 +23,10 @@ import {
   STREAM_PHASE,
   type ActiveChildInfo,
   type ConversationProgress,
-  type ExecutionId,
+  type RunId,
   type InstructionAction,
   type RoundStage,
-  type StreamPhase,
+  type RunPhase,
   type StreamTabId,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
@@ -249,7 +249,7 @@ async function handleConversationProgress(
 async function handleStreamStatus(
   renderer: TestRunProgressRenderer,
   streamId: string,
-  status: StreamPhase,
+  status: RunPhase,
 ): Promise<void> {
   await renderer.set(streamId, { status });
 }
@@ -303,7 +303,7 @@ async function publishRun(
 ): Promise<void> {
   const streamId = (overrides.streamId ?? 'stream-1') as StreamTabId;
   const agent = overrides.agent ?? 'polish';
-  const executionId = 'e00101' as ExecutionId;
+  const executionId = 'e00101' as RunId;
   session.publish([
     {
       type: 'run.start',

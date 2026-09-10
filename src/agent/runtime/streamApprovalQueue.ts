@@ -30,7 +30,7 @@ import type PQueue from 'p-queue';
  * conversation, inherit a bypass its predecessor turned on, without a
  * one-shot copy that misses toggles made after the child/round was created.
  */
-export interface StreamApprovalBypass {
+export interface RunApprovalBypass {
   isBypassed(streamId: StreamTabId): boolean;
   /**
    * Set bypass for a stream. Notifies the active host interaction (unless
@@ -51,7 +51,7 @@ export interface StreamApprovalBypass {
  * explicit values before its children are promoted would silently revoke
  * their inherited bypasses.
  */
-interface StreamApprovalBypassState extends StreamApprovalBypass {
+interface StreamApprovalBypassState extends RunApprovalBypass {
   clearForStream(streamId: StreamTabId): void;
 }
 
@@ -76,7 +76,7 @@ function createStreamApprovalBypass(
     return false;
   }
 
-  const setBypass: StreamApprovalBypass['setBypass'] = (
+  const setBypass: RunApprovalBypass['setBypass'] = (
     streamId,
     enabled,
     options,
@@ -137,7 +137,7 @@ interface QueuedApproval<T> {
 }
 
 interface StreamApprovalController {
-  bypass: StreamApprovalBypass;
+  bypass: RunApprovalBypass;
   /**
    * Serialize one prompt at a time per stream, re-checking the stream's bypass
    * at dispatch rather than at enqueue.
@@ -149,7 +149,7 @@ interface StreamApprovalController {
 }
 
 function createStreamApprovalController(
-  bypass: StreamApprovalBypass,
+  bypass: RunApprovalBypass,
 ): StreamApprovalController {
   const queues = new Map<StreamTabId | undefined, PQueue>();
 
@@ -182,7 +182,7 @@ export interface SessionApprovals {
    * settle through the run coordinators rather than a stream approval queue,
    * so unlike bash / tool-edit there is no controller — only bypass state.
    */
-  readonly proposal: StreamApprovalBypass;
+  readonly proposal: RunApprovalBypass;
   /**
    * Set the complete delegated-task approval mode for one stream: later
    * delegation proposals, file edits, and commands are all approved for it.

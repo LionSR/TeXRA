@@ -8,13 +8,13 @@ import {
   STREAM_PHASE,
   TOOL_USE_STATUS,
   ToolUseLogSchema,
-  type StreamLogEntry,
+  type RunLogEntry,
   type StreamTabId,
   type TaskGroup,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
-import { StreamLog } from '@shared/session/traceEntries';
+import { upsertTaskGroupFromRunLog } from '@shared/streams/taskGroupProjection';
+import { RunLog } from '@shared/session/traceEntries';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -27,14 +27,14 @@ import { isObject } from '@utils/core';
 function attachRecorder(streamId: StreamTabId = 'stream:test' as StreamTabId): {
   trace: TraceEmitter;
   handleStatus: (event: StatusEvent) => void;
-  rows: () => StreamLogEntry[];
-  row: (id: string | undefined) => StreamLogEntry | undefined;
+  rows: () => RunLogEntry[];
+  row: (id: string | undefined) => RunLogEntry | undefined;
 } {
   const trace = new TraceEmitter();
-  const store = new StreamLog();
+  const store = new RunLog();
 
   const recorder = attachTestTranscriptFold(trace, streamId, store);
-  const rows = (): StreamLogEntry[] => store.getRange(0);
+  const rows = (): RunLogEntry[] => store.getRange(0);
   return {
     trace,
     handleStatus: recorder.handleStatus,
@@ -44,7 +44,7 @@ function attachRecorder(streamId: StreamTabId = 'stream:test' as StreamTabId): {
 }
 
 /** A persisted row's `data` payload, or {} when the row carries none. */
-function dataOf(entry: StreamLogEntry | undefined): Record<string, unknown> {
+function dataOf(entry: RunLogEntry | undefined): Record<string, unknown> {
   return isObject(entry?.data) ? entry.data : {};
 }
 
@@ -146,7 +146,7 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
       data: { attemptId: 'attempt-2' },
     });
     const groups: TaskGroup[] = [];
-    expect(upsertTaskGroupFromStreamLog(groups, new Map(), entry)).toBe(true);
+    expect(upsertTaskGroupFromRunLog(groups, new Map(), entry)).toBe(true);
     expect(groups).toMatchObject([
       { id: phase.id, attemptId: 'attempt-2', status: STREAM_PHASE.COMPLETED },
     ]);
@@ -659,7 +659,7 @@ describe('attachTestTranscriptFold active skills', () => {
   it('redacts summaries before truncating the recorded projection', async () => {
     const trace = new TraceEmitter();
     const streamId = 'stream:skill-redaction' as StreamTabId;
-    const store = new StreamLog();
+    const store = new RunLog();
 
     const recorder = attachTestTranscriptFold(trace, streamId, store);
     const descriptionPrefix = `${'Review credentials carefully. '.padEnd(168, 'a')} `;

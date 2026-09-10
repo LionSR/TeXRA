@@ -16,13 +16,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  inspectExecutionLease: mocks.inspectExecutionLease,
+  inspectRunLease: mocks.inspectExecutionLease,
 }));
 
 vi.mock('@agent/storage/ExecutionKVStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/ExecutionKVStore')>()),
-  getExecutionStore: () => ({ exists: mocks.exists }),
-  getExecutionRecords: () => ({ readMeta: mocks.readMeta }),
+  getRunStore: () => ({ exists: mocks.exists }),
+  getRunRecords: () => ({ readMeta: mocks.readMeta }),
 }));
 
 // Local imports

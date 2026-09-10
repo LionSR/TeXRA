@@ -21,7 +21,7 @@ import {
   buildFileLinkWithLines,
   buildEditDiffSection,
   buildMemoryPathDisplay,
-  buildExecutionsPathDisplay,
+  buildRunsPathDisplay,
   buildStatusBadge,
   triStateStatusIcon,
 } from '@progressView/frontend/formatters/htmlBuilders';
@@ -78,7 +78,7 @@ function renderFileSection(section: ToolFileSection): TemplateResult {
     case 'execution':
       return buildToolUseSection(
         section.label,
-        buildExecutionsPathDisplay(section.path),
+        buildRunsPathDisplay(section.path),
       );
     case 'workspace':
       return buildToolUseSection(

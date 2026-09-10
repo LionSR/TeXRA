@@ -16,8 +16,8 @@
 export {
   type ExecutionKVStore,
   type ChildRecord,
-  getExecutionStore,
-  getExecutionRecords,
+  getRunStore,
+  getRunRecords,
   clearStoreCache,
   isReservedKvKeyName,
 } from './ExecutionKVStore';
@@ -27,21 +27,21 @@ export {
   type ResultMeta,
 } from './resultMeta';
 export {
-  listExecutionWorkspaceFiles,
-  resolveExecutionWorkspaceFilePath,
+  listRunWorkspaceFiles,
+  resolveRunWorkspaceFilePath,
 } from './executionWorkspaceFiles';
 export {
   finalizeRun,
-  registerExecution,
-  readExecutionChildren,
-  type FinalizeExecutionInput,
+  registerRun,
+  readRunChildren,
+  type FinalizeRunInput,
 } from './executionLifecycle';
 export {
-  type AgentExecutionListingEntry,
-  type ExecutionListingEntry,
+  type AgentRunListingEntry,
+  type RunListingEntry,
   createLatexExecutionDiscovery,
-  listExecutions,
-  isUserVisibleExecution,
+  listRuns,
+  isUserVisibleRun,
 } from './executionListing';
 export {
   checkpointExists,
@@ -50,8 +50,8 @@ export {
 } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
 export {
-  ExecutionLeaseActiveError,
-  ExecutionLeaseLostError,
+  RunLeaseActiveError,
+  RunLeaseLostError,
   executionHeldMessage,
 } from './executionLease';
 export { resolveChildRunOutput } from './childRunOutput';

@@ -6,11 +6,11 @@
  */
 import { z } from 'zod';
 
-import { StreamLogEntrySchema } from '@shared/schemas';
+import { RunLogEntrySchema } from '@shared/schemas';
 import { TraceDocumentSchema } from '@transcript/traceDocumentSchema';
 
 export const TraceDataSchema = TraceDocumentSchema.extend({
-  entries: z.array(StreamLogEntrySchema),
+  entries: z.array(RunLogEntrySchema),
 });
 
 type TraceData = z.infer<typeof TraceDataSchema>;

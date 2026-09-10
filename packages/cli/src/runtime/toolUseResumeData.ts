@@ -5,14 +5,14 @@ import {
   type AgentConfig,
 } from '@agent/runtime';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
@@ -27,7 +27,7 @@ const logger = createLog('CliToolUseResumeData');
  * `status` contract cannot report two different values for one run.
  */
 export interface CliRunResumabilityFacts {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   /** A checkpoint file exists on disk — one `stat`, never a parse. */
   readonly checkpointPresent: boolean;
   /**
@@ -112,10 +112,10 @@ export const isCliRunResumable = Effect.fn('isCliRunResumable')(function* (
  */
 export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
   session: SessionHandle,
-  id: ExecutionId,
+  id: RunId,
   config: AgentConfig,
 ): Effect.fn.Return<string | undefined> {
-  return yield* getExecutionRecords(session, id)
+  return yield* getRunRecords(session, id)
     .readMeta()
     .pipe(
       Effect.flatMap((meta) =>

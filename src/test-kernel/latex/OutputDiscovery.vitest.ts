@@ -26,7 +26,7 @@ vi.mock('@utils/files/runStorageFs', async (importActual) => ({
 }));
 
 const snapshots = { read: mocks.read };
-const { discoverLatestExecutionOutputs } =
+const { discoverLatestRunOutputs } =
   await import('@latex/latexdiff/outputDiscovery');
 const { scanRunDirForOutputs } =
   await import('@latex/latexdiff/runOutputFiles');
@@ -101,7 +101,7 @@ describe('discoverLatestExecutionOutputs', () => {
         ]);
         mocks.findRunDir.mockResolvedValue(runDir);
 
-        const result = yield* discoverLatestExecutionOutputs(
+        const result = yield* discoverLatestRunOutputs(
           discovery,
           snapshots,
           MATCHING_QUERY,
@@ -133,7 +133,7 @@ describe('discoverLatestExecutionOutputs', () => {
           Effect.succeed({ outputFilesByRound: rounds }),
         );
 
-        const result = yield* discoverLatestExecutionOutputs(
+        const result = yield* discoverLatestRunOutputs(
           discovery,
           snapshots,
           MATCHING_QUERY,
@@ -161,7 +161,7 @@ describe('discoverLatestExecutionOutputs', () => {
         const { discovery } = discoveryWith([matchingExecution('exec-empty')]);
         mocks.findRunDir.mockResolvedValue(emptyDir);
 
-        const result = yield* discoverLatestExecutionOutputs(
+        const result = yield* discoverLatestRunOutputs(
           discovery,
           snapshots,
           MATCHING_QUERY,
@@ -184,7 +184,7 @@ describe('discoverLatestExecutionOutputs', () => {
         };
 
         const failure = yield* Effect.flip(
-          discoverLatestExecutionOutputs(
+          discoverLatestRunOutputs(
             discovery,
             snapshots,
             MATCHING_QUERY,

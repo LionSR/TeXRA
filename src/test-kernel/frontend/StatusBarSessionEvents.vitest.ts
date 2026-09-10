@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
-import { STREAM_PHASE, type ExecutionId } from '@shared/schemas';
+import { STREAM_PHASE, type RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -13,7 +13,7 @@ import {
 
 function subscribeOverTestSession() {
   const session = createTestSession();
-  publishTestRunStart(session, 'stream-a', 'a0b0c0' as ExecutionId);
+  publishTestRunStart(session, 'stream-a', 'a0b0c0' as RunId);
   const tracker = new StatusBarUsageTracker(session.status, session.snapshots);
   const onStatusChanged = vi.fn();
   const onUsageChanged = vi.fn();
@@ -30,7 +30,7 @@ function emitUsage(session: SessionHandle): void {
     type: 'usage',
     payload: {
       streamId: 'stream-a',
-      storageKey: 'a0b0c0' as ExecutionId,
+      storageKey: 'a0b0c0' as RunId,
       usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
     },
   });

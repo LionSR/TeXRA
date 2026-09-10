@@ -7,7 +7,7 @@ import PQueue from 'p-queue';
 
 // Local imports
 import { loadAgents } from '@agent/index';
-import { clearStoreCache, listExecutions } from '@agent/storage';
+import { clearStoreCache, listRuns } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import {
   agentResponseTextConnector,
@@ -596,7 +596,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         // funnel and setup launch preflight.
         hasAnyUsableSetupCredential(),
         effectRuntime()
-          .runPromise(listExecutions(defaultSession()))
+          .runPromise(listRuns(defaultSession()))
           .then((entries) => entries.length > 0),
       ]);
       await backfillFirstRunDone(context.globalState, {

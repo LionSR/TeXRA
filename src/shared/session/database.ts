@@ -11,7 +11,7 @@ import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
   CommitOrdinal,
-  ExecutionId,
+  RunId,
   OwnerId,
   SessionEvent,
   SessionEventDraft,
@@ -180,9 +180,7 @@ export class Database extends Context.Service<
     readonly collectDeletion: (
       id: AggregateId,
       tombstoneCommit: CommitOrdinal,
-      cleanup: (
-        executionIds: readonly ExecutionId[],
-      ) => Effect.Effect<void, Error>,
+      cleanup: (executionIds: readonly RunId[]) => Effect.Effect<void, Error>,
     ) => Effect.Effect<void, Error>;
     /** Clear only this process's claims, in one transaction. */
     readonly releaseClaims: (

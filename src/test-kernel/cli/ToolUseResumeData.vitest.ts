@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/runtime';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@cli/runtime/toolUseResumeData';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
@@ -34,7 +34,7 @@ const config = {
 
 /** A failed workflow row: the one shape whose checkpoint is still read. */
 function listingFacts(
-  executionId: ExecutionId,
+  executionId: RunId,
   overrides: Partial<CliRunResumabilityFacts> = {},
 ): CliRunResumabilityFacts {
   return {
@@ -54,10 +54,10 @@ const TERMINAL_REJECTION = {
 };
 
 async function writeFlowRecord(
-  executionId: ExecutionId,
+  executionId: RunId,
   shared: Record<string, unknown>,
 ): Promise<void> {
-  await getExecutionStore(executionId).write(flowKey(executionId), {
+  await getRunStore(executionId).write(flowKey(executionId), {
     shared,
     cursor: { nextNodeId: 'start' },
   });
@@ -79,7 +79,7 @@ describe('CLI listing resumability', () => {
     ([description, overrides]) =>
       Effect.gen(function* () {
         const executionId =
-          `gate-${description.replaceAll(' ', '-')}` as ExecutionId;
+          `gate-${description.replaceAll(' ', '-')}` as RunId;
         // A continuable record is on disk, so reading it would answer `true`.
         // Only the two free facts can produce the `false` asserted below.
         yield* Effect.promise(() =>
@@ -103,7 +103,7 @@ describe('CLI listing resumability', () => {
     ([description, overrides]) =>
       Effect.gen(function* () {
         const executionId =
-          `free-${description.replaceAll(' ', '-')}` as ExecutionId;
+          `free-${description.replaceAll(' ', '-')}` as RunId;
         // A terminal rejection is on disk, so a parse would answer `false`.
         // Only the short-circuit can produce the `true` asserted below.
         yield* Effect.promise(() =>
@@ -131,7 +131,7 @@ describe('CLI listing resumability', () => {
     ([description, shared]) =>
       Effect.gen(function* () {
         const executionId =
-          `workflow-terminal-${description.replaceAll(' ', '-')}` as ExecutionId;
+          `workflow-terminal-${description.replaceAll(' ', '-')}` as RunId;
         yield* Effect.promise(() => writeFlowRecord(executionId, shared));
 
         expect(yield* isCliRunResumable(listingFacts(executionId))).toBe(false);

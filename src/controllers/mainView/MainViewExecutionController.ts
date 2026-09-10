@@ -1,7 +1,7 @@
 // Local imports
 import {
-  validateExecutionRequest,
-  type ValidatedExecutionRequest,
+  validateRunRequest,
+  type ValidatedRunRequest,
 } from '@agent/core/state/executionRequests';
 import {
   AgentCategory,
@@ -14,13 +14,13 @@ import { filterNotNull } from '@utils/core';
 import { isPastedImage } from '@utils/files/pastedImageName';
 import { getPastedImageFullPath } from '@utils/files/pastedImageUtils';
 
-export type MainViewExecutionPreparationResult =
-  | { valid: true; request: ValidatedExecutionRequest }
+export type MainViewRunPreparationResult =
+  | { valid: true; request: ValidatedRunRequest }
   | { valid: false; message: string; docsCommand?: string };
 
-export function prepareMainViewExecutionRequest(
+export function prepareMainViewRunRequest(
   message: MainViewExecuteMessage,
-): MainViewExecutionPreparationResult {
+): MainViewRunPreparationResult {
   // AgentConfigSchema prefaults agent/model; reject missing UI selections before
   // schema parsing so the user sees the real form problem.
   if (!message.agent || !message.model || !message.agentCategory) {
@@ -37,14 +37,14 @@ export function prepareMainViewExecutionRequest(
   );
 }
 
-export function prepareMainViewTeamExecutionRequest(
+export function prepareMainViewTeamRunRequest(
   message: MainViewExecuteMessage,
   fields: {
     agent: string;
     delegationAgentScope: AgentDelegationScope;
     cli: { multiAgentPresetId: string };
   },
-): MainViewExecutionPreparationResult {
+): MainViewRunPreparationResult {
   if (!message.model) {
     return {
       valid: false,
@@ -70,7 +70,7 @@ function buildMainViewExecutionRequest(
     readonly delegationAgentScope: AgentDelegationScope;
     readonly cli: { readonly multiAgentPresetId: string };
   },
-): MainViewExecutionPreparationResult {
+): MainViewRunPreparationResult {
   const isToolUse = agentCategory === AgentCategory.ToolUse;
   const files = message.files ?? {};
   if (!isToolUse && (files.inputFiles?.length ?? 0) === 0) {
@@ -106,7 +106,7 @@ function buildMainViewExecutionRequest(
       ? { multiAgentPresetId: teamFields.cli.multiAgentPresetId }
       : {}),
   };
-  const validation = validateExecutionRequest({
+  const validation = validateRunRequest({
     config: {
       agent,
       model: message.model,

@@ -10,18 +10,15 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { flowKey, PersistedFlowStateError } from '@agent/node/persistedFlow';
+import { getRunRecords, getRunStore } from '@agent/storage/ExecutionKVStore';
 import {
-  getExecutionRecords,
-  getExecutionStore,
-} from '@agent/storage/ExecutionKVStore';
-import {
-  acquireFreshExecutionLease,
-  releaseOwnedExecutionLease,
+  acquireFreshRunLease,
+  releaseOwnedRunLease,
 } from '@agent/storage/executionLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { aggregateId } from '@shared/schemas';
-import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
+import type { RunId, RunMeta } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -84,7 +81,7 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
   runChat: mocks.runChat,
 }));
 
-const EXECUTION_ID = 'eec001' as ExecutionId;
+const EXECUTION_ID = 'eec001' as RunId;
 const STREAM_ID = 'planner#eec001';
 
 const TOOL_USE_CONFIG = AgentConfigSchema.parse({
@@ -103,17 +100,17 @@ const STAMPED_META = {
   timestamp: '2026-07-31T00:00:00.000Z',
   streamId: STREAM_ID,
   identity: { kind: 'agent', agent: 'planner' },
-} as unknown as ExecutionMeta;
+} as unknown as RunMeta;
 
 /** Reset and seed the real (fake-platform-backed) execution store. */
 async function seedExecution(seed: {
   readonly config?: AgentConfig | null;
-  readonly meta?: ExecutionMeta;
+  readonly meta?: RunMeta;
   readonly checkpoint?: boolean;
 }): Promise<void> {
   const session = createProcessSession();
   mocks.initializeCliTranscriptSession.mockResolvedValue(session);
-  const store = getExecutionStore(EXECUTION_ID);
+  const store = getRunStore(EXECUTION_ID);
   await store.delete(flowKey(EXECUTION_ID));
   await Effect.runPromise(
     session.commit([
@@ -130,7 +127,7 @@ async function seedExecution(seed: {
   );
   if (seed.config)
     await Effect.runPromise(
-      getExecutionRecords(session, EXECUTION_ID).writeRunRecord(seed.config),
+      getRunRecords(session, EXECUTION_ID).writeRunRecord(seed.config),
     );
   if (seed.checkpoint !== false) {
     await store.write(flowKey(EXECUTION_ID), {
@@ -152,9 +149,9 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
-async function run(context: CliContext, id: ExecutionId = EXECUTION_ID) {
-  const { runResumeExecution } = await import('@cli/commands/resumeExecution');
-  return runResumeExecution(context, id);
+async function run(context: CliContext, id: RunId = EXECUTION_ID) {
+  const { runResumeRun } = await import('@cli/commands/resumeExecution');
+  return runResumeRun(context, id);
 }
 
 async function stubWorkflowResume(config: AgentConfig): Promise<void> {
@@ -382,7 +379,7 @@ describe('runResumeExecution', () => {
   });
 
   it('reports a live execution instead of failing silently', async () => {
-    await acquireFreshExecutionLease(EXECUTION_ID);
+    await acquireFreshRunLease(EXECUTION_ID);
     try {
       await expect(run(cliContext())).resolves.toBe(2);
 
@@ -391,13 +388,13 @@ describe('runResumeExecution', () => {
       );
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
-      await releaseOwnedExecutionLease(EXECUTION_ID);
+      await releaseOwnedRunLease(EXECUTION_ID);
     }
   });
 
   it('identifies lease inspection failures separately from session loading', async () => {
     const lease = await import('@agent/storage/executionLease');
-    vi.spyOn(lease, 'inspectExecutionLease').mockRejectedValueOnce(
+    vi.spyOn(lease, 'inspectRunLease').mockRejectedValueOnce(
       new Error('lease disk offline'),
     );
 

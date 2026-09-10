@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -15,7 +15,7 @@ function trackAgent(
   session: SessionHandle,
   executionId: string,
   streamId: StreamTabId,
-): AgentExecutionHandle {
+): RunHandle {
   const handle = testExecutionHandle({
     executionId,
     parentStreamId: streamId,

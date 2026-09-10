@@ -15,17 +15,17 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import {
-  acquireResumedExecutionOwnership,
+  acquireResumedRunOwnership,
   getPersistedUserFollowUpSupport,
   hasPersistedParent,
 } from '@agent/storage/executionLifecycle';
-import { assertOwnedExecutionLease } from '@agent/storage/executionLease';
+import { assertOwnedRunLease } from '@agent/storage/executionLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
+  type RunId,
   type RequestEnsureProgressViewPayload,
   type RunOutcome,
   type StreamTabId,
@@ -46,7 +46,7 @@ import {
   buildAgentLaunchContext,
   prepareAgentDefinition,
   type PreparedAgentDefinition,
-  withExecutionRunContext,
+  withLaunchRunContext,
   type AgentLaunchContext,
 } from './AgentLaunchContext';
 import {
@@ -69,14 +69,14 @@ import {
 } from './SessionResumeRetrieval';
 import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
+import type { RunHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const logger = createLog('executeAgent');
 
 /** A claimed execution no longer has the persisted tool-use state to resume. */
 export class ResumeSessionUnavailableError extends Error {
-  constructor(readonly executionId: ExecutionId) {
+  constructor(readonly executionId: RunId) {
     super('This session can no longer be resumed. Start a new run instead.');
     this.name = 'ResumeSessionUnavailableError';
   }
@@ -124,7 +124,7 @@ type ToolUseLaunchVariant =
  */
 async function launchToolUseRun(
   ctx: AgentLaunchContext,
-  handle: AgentExecutionHandle,
+  handle: RunHandle,
   lifecycle: FlowLifecycleControl,
   shared: SubagentRunOptions & {
     readonly setting: AgentToolUseSetting;
@@ -380,12 +380,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 // WAITING and callers narrow with `isWaitingFlowResult`.
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: ExecutionId,
+  executionId: RunId,
   options: ExecuteAgentOptions & { isSubagent: true; session: SessionHandle },
 ): Effect.Effect<AgentFlowResult | WaitingToolUseFlowResult, Error>;
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: ExecutionId,
+  executionId: RunId,
   options: ExecuteAgentOptions & {
     isSubagent?: false | undefined;
     session: SessionHandle;
@@ -400,15 +400,13 @@ export function executeAgent(
  */
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: ExecutionId,
+  executionId: RunId,
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error> {
   return Effect.gen(function* () {
     yield* Effect.tryPromise({
       try: async () =>
-        runInSession(options.session, () =>
-          assertOwnedExecutionLease(executionId),
-        ),
+        runInSession(options.session, () => assertOwnedRunLease(executionId)),
       catch: ensureError,
     });
     const ctx = yield* buildAgentLaunchContext({
@@ -432,7 +430,7 @@ export function executeAgent(
       },
     });
     return yield* Effect.suspend(() =>
-      withExecutionRunContext(
+      withLaunchRunContext(
         ctx,
         { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
         () => {
@@ -611,7 +609,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const { setting } = ctx;
     const result = yield* Effect.exit(
       Effect.suspend(() =>
-        withExecutionRunContext(
+        withLaunchRunContext(
           ctx,
           { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
           () => {
@@ -690,7 +688,7 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ) {
   const session = options.session;
-  const rollback = yield* acquireResumedExecutionOwnership(
+  const rollback = yield* acquireResumedRunOwnership(
     session,
     resume.executionId,
     resume.streamId,

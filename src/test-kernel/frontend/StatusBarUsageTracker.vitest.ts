@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - stream state
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/StreamStatusService';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { STREAM_PHASE, type TokenUsageStats } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
@@ -13,11 +13,11 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
  * `getRunUsage` read the real store serves.
  */
 function trackerOverStatusPlane(): {
-  status: StreamStatusMachine;
+  status: RunStatusMachine;
   usageByStream: Map<string, Map<string, TokenUsageStats>>;
   tracker: StatusBarUsageTracker;
 } {
-  const status = new StreamStatusMachine(
+  const status = new RunStatusMachine(
     () => {},
     () => {},
   );
@@ -28,7 +28,7 @@ function trackerOverStatusPlane(): {
   return { status, usageByStream, tracker };
 }
 
-function startStream(status: StreamStatusMachine, streamId: string): void {
+function startStream(status: RunStatusMachine, streamId: string): void {
   status.transition(
     streamId,
     STREAM_PHASE.RUNNING,

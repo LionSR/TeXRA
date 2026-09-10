@@ -28,7 +28,7 @@ import {
 } from '@shared/transcript';
 import { WORKFLOW_CALL_STATUS_GLYPH } from '@shared/copy/workflowCall';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {
@@ -281,7 +281,7 @@ function entryLines(
   columns: number,
   colorEnabled: boolean | undefined,
   maxRows: number | undefined,
-  executionLabels: ExecutionLabels | undefined,
+  executionLabels: RunLabels | undefined,
 ): readonly string[] {
   const body = entryBodyLines(row, mode, columns);
   const headline = transcriptRowHeadline(row);
@@ -398,7 +398,7 @@ export function transcriptEntryLayout(
     readonly colorEnabled?: boolean;
     readonly maxRows?: number;
     readonly mode?: TranscriptEntryLayoutMode;
-    readonly executionLabels?: ExecutionLabels;
+    readonly executionLabels?: RunLabels;
     /** The row rendered directly above this one, when the caller knows it.
      *  Yoga does not collapse adjacent margins, so without this a boundary
      *  where both sides declare a separator costs two blank rows instead of
@@ -442,7 +442,7 @@ export function transcriptEntryLayout(
 export function fullTranscriptEntryLayout(
   row: TranscriptRow,
   width: number,
-  executionLabels?: ExecutionLabels,
+  executionLabels?: RunLabels,
 ): TranscriptEntryLayout {
   // Ordinary Ink rows spend this inset as paddingX. Printed text has no Box
   // padding, so add it back before the shared layout subtracts it.

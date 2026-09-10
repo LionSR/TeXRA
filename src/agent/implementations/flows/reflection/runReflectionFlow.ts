@@ -1,4 +1,4 @@
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import type {
@@ -213,7 +213,7 @@ export async function runReflectionFlow(
       );
     });
 
-  const kv = getExecutionStore(executionId);
+  const kv = getRunStore(executionId);
 
   const flowRecord = await readPersistedFlowRecord(kv, executionId);
 

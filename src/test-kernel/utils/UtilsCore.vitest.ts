@@ -17,7 +17,7 @@ import {
   utcMonthStart,
   type FlushableDebounce,
 } from '@utils/core';
-import { deriveExecutionId, truncatedHexId } from '@utils/core/idHash';
+import { deriveRunId, truncatedHexId } from '@utils/core/idHash';
 
 describe('utcMonthStart', () => {
   it('builds midnight UTC on the 1st of the given month', () => {
@@ -348,14 +348,14 @@ describe('truncatedHexId', () => {
 
 describe('deriveExecutionId', () => {
   it('is stable across identity field order', () => {
-    expect(deriveExecutionId({ parent: 'abc', attempt: 2 })).toBe(
-      deriveExecutionId({ attempt: 2, parent: 'abc' }),
+    expect(deriveRunId({ parent: 'abc', attempt: 2 })).toBe(
+      deriveRunId({ attempt: 2, parent: 'abc' }),
     );
   });
 
   it('returns distinct 24-hex ids for distinct identities', () => {
-    const first = deriveExecutionId({ parent: 'abc', attempt: 1 });
-    const second = deriveExecutionId({ parent: 'abc', attempt: 2 });
+    const first = deriveRunId({ parent: 'abc', attempt: 1 });
+    const second = deriveRunId({ parent: 'abc', attempt: 2 });
 
     expect(first).toMatch(/^[a-f0-9]{24}$/);
     expect(second).toMatch(/^[a-f0-9]{24}$/);

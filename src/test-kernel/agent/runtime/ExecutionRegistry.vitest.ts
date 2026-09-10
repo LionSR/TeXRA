@@ -5,29 +5,29 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/executionLifecycle';
 import type {
-  AgentExecutionHandle,
+  RunHandle,
   LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { ExecutionBusy } from '@agent/runtime/executionLanes';
+import { RunRegistry } from '@agent/runtime/executionRegistry';
+import { RunBusy } from '@agent/runtime/executionLanes';
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { statusDraft } from '@agent/runtime/SessionEvents';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   AgentCategory,
   type SessionEventDraft,
@@ -98,7 +98,7 @@ function createHandle(
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,
   overrides: HandleOverrides = {},
-): AgentExecutionHandle {
+): RunHandle {
   const handle = testExecutionHandle({
     executionId,
     parentStreamId,
@@ -116,26 +116,26 @@ function createRegistry(
     approvals?: ReturnType<typeof createSessionApprovals>;
     publishResult?: (event: ResultEvent, streamId: StreamTabId) => void;
     releaseRootExecutionLease?: (
-      executionId: ExecutionId,
+      executionId: RunId,
     ) => Effect.Effect<void, Error>;
   } = {},
 ): {
   events: PublishedEvents;
-  streamStatus: StreamStatusMachine;
-  registry: ExecutionRegistry;
+  streamStatus: RunStatusMachine;
+  registry: RunRegistry;
 } {
   // The session's publish path, in miniature: the machine's status facts
   // reach the registry's `handleStatus` before they land, and every draft
   // the registry or the machine publishes is appended in order.
   const events: PublishedEvents = { published: [] };
-  const streamStatus = new StreamStatusMachine(
+  const streamStatus = new RunStatusMachine(
     (event) => {
       registry.handleStatus(event.streamId);
       events.published.push(statusDraft(event));
     },
     () => {},
   );
-  const registry = new ExecutionRegistry({
+  const registry = new RunRegistry({
     streamStatus,
     publish: (drafts) => events.published.push(...drafts),
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
@@ -165,7 +165,7 @@ function recordSessionEvents(events: PublishedEvents): {
 
 /** Tracks a handle with a live interrupt handler attached. */
 function trackInterruptibleHandle(
-  registry: ExecutionRegistry,
+  registry: RunRegistry,
   ids: {
     executionId: string;
     parentStreamId: StreamTabId;
@@ -173,7 +173,7 @@ function trackInterruptibleHandle(
   },
   interrupt: () => void,
   overrides?: HandleOverrides,
-): AgentExecutionHandle {
+): RunHandle {
   const handle = createHandle(
     ids.executionId,
     ids.parentStreamId,
@@ -202,8 +202,8 @@ function createLiveToolUseFlowContext(
 
 /** Tracks a handle genuinely suspended at WAITING, the state every waiting-kill test starts from. */
 function trackSuspendedWaitingHandle(
-  registry: ExecutionRegistry,
-  streamStatus: StreamStatusMachine,
+  registry: RunRegistry,
+  streamStatus: RunStatusMachine,
   options: {
     executionId: string;
     childStreamId: StreamTabId;
@@ -211,7 +211,7 @@ function trackSuspendedWaitingHandle(
     cleanup?: () => void | Promise<void>;
     overrides?: HandleOverrides;
   },
-): AgentExecutionHandle {
+): RunHandle {
   const handle = createHandle(
     options.executionId,
     options.parentStreamId ?? options.childStreamId,
@@ -235,16 +235,16 @@ function trackSuspendedWaitingHandle(
 
 /** Exercise synchronous stop admission and run its native settlement at the test boundary. */
 function killRegistry(
-  registry: ExecutionRegistry,
-  ...args: Parameters<ExecutionRegistry['kill']>
+  registry: RunRegistry,
+  ...args: Parameters<RunRegistry['kill']>
 ): boolean {
   const stop = registry.kill(...args);
   Effect.runFork(stop.settlement);
   return stop.accepted;
 }
 function stopRegistry(
-  registry: ExecutionRegistry,
-  ...args: Parameters<ExecutionRegistry['stopAgentStream']>
+  registry: RunRegistry,
+  ...args: Parameters<RunRegistry['stopAgentStream']>
 ): void {
   Effect.runFork(registry.stopAgentStream(...args));
 }
@@ -252,7 +252,7 @@ function stopRegistry(
 describe('executionRegistry', () => {
   it('retains and detaches a parent whose child is still activating', () => {
     const { registry } = createRegistry();
-    const executionId = 'queued-child-exec' as ExecutionId;
+    const executionId = 'queued-child-exec' as RunId;
     const parentStreamId = 'queued-parent' as StreamTabId;
     const childStreamId = 'queued-child' as StreamTabId;
     let detached = false;
@@ -534,7 +534,7 @@ describe('executionRegistry', () => {
     const order: string[] = [];
     const publishResult = vi.fn(() => order.push('publish'));
     const { streamStatus, registry } = createRegistry({ publishResult });
-    const executionId = 'exec-waiting-cleanup-order' as ExecutionId;
+    const executionId = 'exec-waiting-cleanup-order' as RunId;
     const childStreamId = 'child-waiting-cleanup-order' as StreamTabId;
     let finishCleanup = (): void => undefined;
     const cleanupGate = new Promise<void>((resolve) => {
@@ -575,7 +575,7 @@ describe('executionRegistry', () => {
     storageMocks.finalizeRun.mockClear();
     const publishResult = vi.fn();
     const { streamStatus, registry } = createRegistry({ publishResult });
-    const executionId = 'exec-waiting-stop-handoff' as ExecutionId;
+    const executionId = 'exec-waiting-stop-handoff' as RunId;
     const parentStreamId = 'parent-waiting-stop-handoff' as StreamTabId;
     const childStreamId = 'child-waiting-stop-handoff' as StreamTabId;
     let finishCleanup = (): void => undefined;
@@ -623,7 +623,7 @@ describe('executionRegistry', () => {
         throw publishFailure;
       },
     });
-    const executionId = 'exec-waiting-publication-failure' as ExecutionId;
+    const executionId = 'exec-waiting-publication-failure' as RunId;
     const childStreamId = 'child-waiting-publication-failure' as StreamTabId;
 
     try {
@@ -647,7 +647,7 @@ describe('executionRegistry', () => {
 
   it('settles and untracks a waiting handle when terminal metadata persistence fails', async () => {
     const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-waiting-kill-metadata-failure' as ExecutionId;
+    const executionId = 'exec-waiting-kill-metadata-failure' as RunId;
     const parentStreamId =
       'parent-waiting-kill-metadata-failure' as StreamTabId;
     const childStreamId = 'child-waiting-kill-metadata-failure' as StreamTabId;
@@ -696,7 +696,7 @@ describe('executionRegistry', () => {
 
   it('persists a waiting stop after transcript cleanup fails', async () => {
     const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-waiting-cleanup-failure' as ExecutionId;
+    const executionId = 'exec-waiting-cleanup-failure' as RunId;
     const childStreamId = 'child-waiting-cleanup-failure' as StreamTabId;
     const cleanupError = new Error('transcript reload failed');
     storageMocks.finalizeRun.mockReturnValueOnce(Effect.succeed({ ok: true }));
@@ -735,7 +735,7 @@ describe('executionRegistry', () => {
 
   it('persists a waiting stop when only flow-record retention fails', async () => {
     const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-waiting-kill-flow-retain-failure' as ExecutionId;
+    const executionId = 'exec-waiting-kill-flow-retain-failure' as RunId;
     const childStreamId =
       'child-waiting-kill-flow-retain-failure' as StreamTabId;
     const cleanupError = new Error('flow retention failed');
@@ -842,7 +842,7 @@ describe('executionRegistry', () => {
     // suspended teardown, publish a second `result`, or persist a second
     // terminal status over the finalizer's outcome.
     const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-waiting-stop-after-claim' as ExecutionId;
+    const executionId = 'exec-waiting-stop-after-claim' as RunId;
     const childStreamId = 'child-waiting-stop-after-claim' as StreamTabId;
     const teardown = vi.fn();
     storageMocks.finalizeRun.mockClear();
@@ -907,11 +907,11 @@ describe('executionRegistry', () => {
     // the earlier genuine WAITING suspension, so a kill landing in that window
     // tears it down off that fact alone — no phase or substate is consulted.
     const { streamStatus, registry } = createRegistry();
-    const executionId = 'eec-abcdef' as ExecutionId;
+    const executionId = 'eec-abcdef' as RunId;
     const parentStreamId = 'parent-resuming-window-kill-test' as StreamTabId;
     const childStreamId = 'child-resuming-window-kill-test' as StreamTabId;
     const cleanup = vi.fn();
-    const store = getExecutionRecords(defaultSession(), executionId);
+    const store = getRunRecords(defaultSession(), executionId);
 
     try {
       publishTestRunStart(defaultSession(), childStreamId, executionId);
@@ -968,7 +968,7 @@ describe('executionRegistry', () => {
   it('owns visible stream stop policy for root and children', () => {
     const { events, streamStatus, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
-    const rootStreamId = 'root-stop-policy-test' as StreamTabId;
+    const rootRunId = 'root-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-stop-policy-test' as StreamTabId;
     const rootInterrupt = vi.fn();
     const childInterrupt = vi.fn();
@@ -976,8 +976,8 @@ describe('executionRegistry', () => {
 
     try {
       registry.reserveChildActivation({
-        executionId: 'exec-queued-child-stop-policy-test' as ExecutionId,
-        parentStreamId: rootStreamId,
+        executionId: 'exec-queued-child-stop-policy-test' as RunId,
+        parentStreamId: rootRunId,
         childStreamId: 'queued-child-stop-policy-test' as StreamTabId,
         interrupt: queuedChildInterrupt,
         detach: vi.fn(),
@@ -987,8 +987,8 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-root-stop-policy-test',
-          parentStreamId: rootStreamId,
-          childStreamId: rootStreamId,
+          parentStreamId: rootRunId,
+          childStreamId: rootRunId,
         },
         rootInterrupt,
         { agentName: 'test-root' },
@@ -997,18 +997,18 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-child-stop-policy-test',
-          parentStreamId: rootStreamId,
+          parentStreamId: rootRunId,
           childStreamId,
         },
         childInterrupt,
       );
 
-      stopRegistry(registry, rootStreamId);
+      stopRegistry(registry, rootRunId);
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).toHaveBeenCalledOnce();
       expect(queuedChildInterrupt).toHaveBeenCalledOnce();
-      expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(streamStatus.get(rootRunId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(eventsOfType(recorded.events, 'status')).toEqual(
         expect.arrayContaining([
@@ -1024,7 +1024,7 @@ describe('executionRegistry', () => {
 
   it('interrupts grandchildren when killing a subagent chain', () => {
     const { streamStatus, registry } = createRegistry();
-    const rootStreamId = 'root-cascade-test' as StreamTabId;
+    const rootRunId = 'root-cascade-test' as StreamTabId;
     const childStreamId = 'child-cascade-test' as StreamTabId;
     const grandchildStreamId = 'grandchild-cascade-test' as StreamTabId;
     const childInterrupt = vi.fn();
@@ -1035,7 +1035,7 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-child-cascade-test',
-          parentStreamId: rootStreamId,
+          parentStreamId: rootRunId,
           childStreamId,
         },
         childInterrupt,
@@ -1065,7 +1065,7 @@ describe('executionRegistry', () => {
   it('detaches descendants when killing with detached subagents', () => {
     const { events, streamStatus, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
-    const rootStreamId = 'root-detach-kill-test' as StreamTabId;
+    const rootRunId = 'root-detach-kill-test' as StreamTabId;
     const childStreamId = 'child-detach-kill-test' as StreamTabId;
     const grandchildStreamId = 'grandchild-detach-kill-test' as StreamTabId;
     const childInterrupt = vi.fn();
@@ -1076,7 +1076,7 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-child-detach-kill-test',
-          parentStreamId: rootStreamId,
+          parentStreamId: rootRunId,
           childStreamId,
         },
         childInterrupt,
@@ -1118,7 +1118,7 @@ describe('executionRegistry', () => {
   it('detaches children when stopping a stream with detached subagents', () => {
     const { events, streamStatus, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
-    const rootStreamId = 'root-detach-stop-policy-test' as StreamTabId;
+    const rootRunId = 'root-detach-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-detach-stop-policy-test' as StreamTabId;
     const grandchildStreamId =
       'grandchild-detach-stop-policy-test' as StreamTabId;
@@ -1131,8 +1131,8 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-root-detach-stop-policy-test',
-          parentStreamId: rootStreamId,
-          childStreamId: rootStreamId,
+          parentStreamId: rootRunId,
+          childStreamId: rootRunId,
         },
         rootInterrupt,
         { agentName: 'test-root' },
@@ -1141,7 +1141,7 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-child-detach-stop-policy-test',
-          parentStreamId: rootStreamId,
+          parentStreamId: rootRunId,
           childStreamId,
         },
         childInterrupt,
@@ -1157,14 +1157,14 @@ describe('executionRegistry', () => {
         { agentName: 'test-grandchild' },
       );
 
-      stopRegistry(registry, rootStreamId, {
+      stopRegistry(registry, rootRunId, {
         detachActiveChildren: true,
       });
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).not.toHaveBeenCalled();
       expect(grandchildInterrupt).not.toHaveBeenCalled();
-      expect(registry.getActiveChildren(rootStreamId)).toHaveLength(0);
+      expect(registry.getActiveChildren(rootRunId)).toHaveLength(0);
       expect(
         registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
       ).toBe(childStreamId);
@@ -1174,7 +1174,7 @@ describe('executionRegistry', () => {
       expect(registry.getActiveChildren(childStreamId)).toEqual([
         expect.objectContaining({ childStreamId: grandchildStreamId }),
       ]);
-      expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(streamStatus.get(rootRunId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBeUndefined();
       expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
       expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
@@ -1189,7 +1189,7 @@ describe('executionRegistry', () => {
 
   it('stops one child while preserving its owner, sibling, and agent descendants', () => {
     const { streamStatus, registry } = createRegistry();
-    const rootStreamId = 'root-focused-stop-test' as StreamTabId;
+    const rootRunId = 'root-focused-stop-test' as StreamTabId;
     const childStreamId = 'child-focused-stop-test' as StreamTabId;
     const siblingStreamId = 'sibling-focused-stop-test' as StreamTabId;
     const descendantStreamId = 'descendant-focused-stop-test' as StreamTabId;
@@ -1203,8 +1203,8 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-root-focused-stop-test',
-          parentStreamId: rootStreamId,
-          childStreamId: rootStreamId,
+          parentStreamId: rootRunId,
+          childStreamId: rootRunId,
         },
         rootInterrupt,
         { agentName: 'test-root' },
@@ -1213,7 +1213,7 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-child-focused-stop-test',
-          parentStreamId: rootStreamId,
+          parentStreamId: rootRunId,
           childStreamId,
         },
         childInterrupt,
@@ -1222,7 +1222,7 @@ describe('executionRegistry', () => {
         registry,
         {
           executionId: 'exec-sibling-focused-stop-test',
-          parentStreamId: rootStreamId,
+          parentStreamId: rootRunId,
           childStreamId: siblingStreamId,
         },
         siblingInterrupt,
@@ -1245,7 +1245,7 @@ describe('executionRegistry', () => {
       expect(rootInterrupt).not.toHaveBeenCalled();
       expect(siblingInterrupt).not.toHaveBeenCalled();
       expect(descendantInterrupt).not.toHaveBeenCalled();
-      expect(registry.getAgentHandleByStream(rootStreamId)).toBe(rootHandle);
+      expect(registry.getAgentHandleByStream(rootRunId)).toBe(rootHandle);
       expect(registry.getAgentHandleByStream(siblingStreamId)).toBe(
         siblingHandle,
       );
@@ -1253,7 +1253,7 @@ describe('executionRegistry', () => {
         registry.getAgentHandleByStream(descendantStreamId)?.parentStreamId,
       ).toBe(descendantStreamId);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
-      expect(streamStatus.get(rootStreamId)).toBeUndefined();
+      expect(streamStatus.get(rootRunId)).toBeUndefined();
       expect(streamStatus.get(siblingStreamId)).toBeUndefined();
       expect(streamStatus.get(descendantStreamId)).toBeUndefined();
     } finally {
@@ -1591,7 +1591,7 @@ describe('executionRegistry', () => {
 
   it('owns tool-use follow-up admission from status, context, and children', () => {
     const { streamStatus, registry } = createRegistry();
-    const activeStreamId = 'stream-follow-up-active-test' as StreamTabId;
+    const activeRunId = 'stream-follow-up-active-test' as StreamTabId;
     const resumingStreamId = 'stream-follow-up-resuming-test' as StreamTabId;
     const waitingStreamId = 'stream-follow-up-waiting-test' as StreamTabId;
     const stoppedStreamId = 'stream-follow-up-stopped-test' as StreamTabId;
@@ -1600,17 +1600,17 @@ describe('executionRegistry', () => {
     try {
       const activeHandle = createHandle(
         'exec-follow-up-active-test',
-        activeStreamId,
-        activeStreamId,
+        activeRunId,
+        activeRunId,
         { agentName: 'test-tool-use' },
       );
       activeHandle.attachToolUseFlow(context);
       registry.track(activeHandle);
-      seedStreamStatusForTest(streamStatus, activeStreamId, {
+      seedStreamStatusForTest(streamStatus, activeRunId, {
         phase: STREAM_PHASE.RUNNING,
       });
 
-      expect(registry.getToolUseFollowUpTarget(activeStreamId)).toEqual({
+      expect(registry.getToolUseFollowUpTarget(activeRunId)).toEqual({
         kind: 'active',
         context,
       });
@@ -1748,9 +1748,9 @@ effectIt.effect(
       );
       try {
         // Admission before the launch callback begins must already see its slot.
-        expect(yield* Effect.flip(removal)).toBeInstanceOf(ExecutionBusy);
+        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
         yield* Effect.promise(() => started.promise);
-        expect(yield* Effect.flip(removal)).toBeInstanceOf(ExecutionBusy);
+        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
         expect(remove).not.toHaveBeenCalled();
       } finally {
         finish.resolve();
@@ -1761,7 +1761,7 @@ effectIt.effect(
       // A parked turn may have no running generation, but its handle retains ownership.
       const parked = createHandle(executionId, 'parent', 'child');
       registry.track(parked);
-      expect(yield* Effect.flip(removal)).toBeInstanceOf(ExecutionBusy);
+      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunBusy);
       registry.untrack(executionId);
 
       const admitted = yield* Deferred.make<void>();

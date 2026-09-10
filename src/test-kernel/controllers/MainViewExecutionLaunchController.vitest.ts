@@ -33,7 +33,7 @@ vi.mock('@controllers/mainView/MainViewExecutionController', () => ({
     mocks.prepareMainViewTeamExecutionRequest,
 }));
 
-const { prepareMainViewExecutionLaunch } =
+const { prepareMainViewRunLaunch } =
   await import('@controllers/mainView/backend/MainViewExecutionLaunchController');
 
 function createHost() {
@@ -51,7 +51,7 @@ function teamMessage(teamId = 'physicist'): MainViewExecuteMessage {
 }
 
 function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
-  return prepareMainViewExecutionLaunch(teamMessage(teamId), host);
+  return prepareMainViewRunLaunch(teamMessage(teamId), host);
 }
 
 describe('main-view execution launch controller', () => {
@@ -69,7 +69,7 @@ describe('main-view execution launch controller', () => {
       });
 
       expect(
-        yield* prepareMainViewExecutionLaunch(message, createHost()),
+        yield* prepareMainViewRunLaunch(message, createHost()),
       ).toEqual(request);
       expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
     }),
@@ -159,7 +159,7 @@ describe('main-view execution launch controller', () => {
         });
         const message = teamMessage();
 
-        expect(yield* prepareMainViewExecutionLaunch(message, host)).toEqual(
+        expect(yield* prepareMainViewRunLaunch(message, host)).toEqual(
           request,
         );
         expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');

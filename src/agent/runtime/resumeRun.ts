@@ -15,16 +15,16 @@ import type {
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
 import {
-  lookupStreamExecutionId,
+  lookupRunId,
   recordRunRefusal,
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
-  ExecutionLeaseActiveError,
-  inspectExecutionLease,
+  RunLeaseActiveError,
+  inspectRunLease,
 } from '@agent/storage/executionLease';
-import { getExecutionRecords } from '@agent/storage/ExecutionKVStore';
+import { getRunRecords } from '@agent/storage/ExecutionKVStore';
 import { checkpointExists } from '@agent/storage/resumability';
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
@@ -34,7 +34,7 @@ import {
   AgentCategory,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
@@ -128,7 +128,7 @@ export interface ResumeRunOptions extends Pick<
    */
   readonly executeWorkflow: (
     config: AgentConfig,
-    executionId: ExecutionId,
+    executionId: RunId,
     modelHandlerCompatibilityKey:
       ModelHandlerCompatibilityKey | null | undefined,
   ) => Promise<void>;
@@ -155,7 +155,7 @@ export const resumeStream = Effect.fn('resumeStream')(function* (
     if (recovery) session.followUps.release(recovery, 'recoverable');
     return REFUSED;
   }
-  const executionId = yield* lookupStreamExecutionId(streamId, session).pipe(
+  const executionId = yield* lookupRunId(streamId, session).pipe(
     Effect.onError(() =>
       Effect.sync(() =>
         releaseUnstartedRecovery(session, recovery, options.recovery == null),
@@ -203,7 +203,7 @@ function namesUnusableCheckpoint(error: unknown): boolean {
 // The existing host cancellation predicate controls the Promise-based launch.
 // Keep its queue owner until that launch and its cleanup have settled.
 export const resumeRun = Effect.fn('resumeRun')(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   options: ResumeRunOptions,
 ) {
   return yield* resumeRunWithRecoveryProvenance(executionId, options, false);
@@ -213,7 +213,7 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
 const resumeRunWithRecoveryProvenance = Effect.fn(
   'resumeRunWithRecoveryProvenance',
 )(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   options: ResumeRunOptions,
   recoveryIsProvisional: boolean,
 ): Effect.fn.Return<ResumeRunResult, Error> {
@@ -226,7 +226,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     if (suppliedRecovery)
       releaseUnstartedRecovery(session, suppliedRecovery, provisional);
   };
-  const store = getExecutionRecords(session, executionId);
+  const store = getRunRecords(session, executionId);
   const [config, meta] = yield* Effect.all([
     store.readConfig(),
     store.readMeta(),
@@ -311,7 +311,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   const lease =
     willLaunch && options.onResumeResolved
       ? yield* Effect.tryPromise({
-          try: () => inspectExecutionLease(executionId),
+          try: () => inspectRunLease(executionId),
           catch: ensureError,
         }).pipe(Effect.onError(() => Effect.sync(releaseQueue)))
       : undefined;
@@ -390,7 +390,7 @@ function refusalFor(
   session: SessionHandle,
   streamId: StreamTabId,
 ): ResumeRunResult | undefined {
-  if (error instanceof ExecutionLeaseActiveError) {
+  if (error instanceof RunLeaseActiveError) {
     session.status.markUnavailable(
       streamId,
       streamHeldMessage(error.owner.pid),

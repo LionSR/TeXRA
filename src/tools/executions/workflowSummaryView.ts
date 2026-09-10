@@ -13,7 +13,7 @@ import {
   deriveWorkflowCounts,
   stageTitleFor,
   TERMINAL_WORKFLOW_CALL_STATUSES,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunSnapshot,
   WORKFLOW_CALL_STATUS,
 } from '@shared/schemas';
 
@@ -27,7 +27,7 @@ function compactWorkflowText(value: string | undefined): string | undefined {
 }
 
 function workflowPhaseView(
-  stage: WorkflowExecutionSnapshot['stages'][number],
+  stage: WorkflowRunSnapshot['stages'][number],
 ): unknown {
   return {
     id: compactWorkflowText(stage.id),
@@ -40,7 +40,7 @@ function workflowPhaseView(
 }
 
 function workflowAttemptView(
-  attempt: WorkflowExecutionSnapshot['calls'][number]['attempts'][number],
+  attempt: WorkflowRunSnapshot['calls'][number]['attempts'][number],
 ): unknown {
   return {
     number: attempt.number,
@@ -79,9 +79,7 @@ function workflowCallFailurePriority(status: string): number {
   return 1;
 }
 
-export function workflowExecutionView(
-  snapshot: WorkflowExecutionSnapshot,
-): unknown {
+export function workflowRunView(snapshot: WorkflowRunSnapshot): unknown {
   const byPriority = snapshot.calls.toSorted(
     (left, right) =>
       Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(left.status)) -
@@ -93,7 +91,7 @@ export function workflowExecutionView(
       right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt),
   );
   const phasePriority = (
-    stage: WorkflowExecutionSnapshot['stages'][number],
+    stage: WorkflowRunSnapshot['stages'][number],
   ): number => {
     if (stage.id === snapshot.currentStageId) return 0;
     if (stage.lifecycle === 'failed' || stage.lifecycle === 'cancelled') {

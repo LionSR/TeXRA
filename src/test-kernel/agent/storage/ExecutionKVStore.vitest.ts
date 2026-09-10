@@ -4,11 +4,11 @@ import { beforeEach, describe, expect } from 'vitest';
 import { z } from 'zod';
 
 import {
-  getExecutionRecords,
-  getExecutionStore,
+  getRunRecords,
+  getRunStore,
   isReservedKvKeyName,
 } from '@agent/storage';
-import { readExecutionChildren } from '@agent/storage/executionLifecycle';
+import { readRunChildren } from '@agent/storage/executionLifecycle';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId,
@@ -45,7 +45,7 @@ beforeEach(async () => {
 
 describe('canonical execution records', () => {
   it('preserves private values while display readers drain past their commits', async () => {
-    const records = getExecutionRecords(session, executionId);
+    const records = getRunRecords(session, executionId);
     const config = AgentConfigFieldsSchema.parse({
       agent: 'worker',
       agentCategory: 'toolUse',
@@ -64,7 +64,7 @@ describe('canonical execution records', () => {
     'hides all private records at deletion while their rows await collection',
     () =>
       Effect.gen(function* () {
-        const records = getExecutionRecords(session, executionId);
+        const records = getRunRecords(session, executionId);
         yield* records.writeRunRecord(
           AgentConfigFieldsSchema.parse({
             agent: 'worker',
@@ -119,7 +119,7 @@ describe('canonical execution records', () => {
   );
 
   it('resets a prior report explicitly without replacing another metadata value', async () => {
-    const records = getExecutionRecords(session, executionId);
+    const records = getRunRecords(session, executionId);
     await run(records.writeReport('old report'));
     await run(records.writeWorkspaceFiles([' a.tex ', 'a.tex', 'b.tex']));
     await run(records.clearReport());
@@ -131,11 +131,11 @@ describe('canonical execution records', () => {
     const malformed = new z.ZodError([]);
     const reader = Object.create(session) as typeof session;
     reader.readExecutionRecords = () => Effect.die(malformed);
-    await getExecutionStore(executionId).write('meta', {
+    await getRunStore(executionId).write('meta', {
       timestamp: 'old file',
     });
     const result = await run(
-      getExecutionRecords(reader, executionId).readMeta().pipe(Effect.result),
+      getRunRecords(reader, executionId).readMeta().pipe(Effect.result),
     );
     expect(result).toMatchObject({ _tag: 'Failure', failure: malformed });
   });
@@ -162,7 +162,7 @@ describe('canonical execution records', () => {
         },
       ] satisfies SessionEventDraft[]),
     );
-    expect(await run(readExecutionChildren(session, executionId))).toEqual([
+    expect(await run(readRunChildren(session, executionId))).toEqual([
       {
         id: childId,
         agent: 'approved child label',

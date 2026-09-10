@@ -43,7 +43,7 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
 
@@ -339,7 +339,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
       const { host } = createRecordingHost();
       const logger = new TraceEmitter();
       const streamId = `stream:tool-use-round-${name}` as StreamTabId;
-      const store = new StreamLog();
+      const store = new RunLog();
 
       const recorder = attachTestTranscriptFold(logger, streamId, store);
       const node = createCycleNode(streamId, host, logger);

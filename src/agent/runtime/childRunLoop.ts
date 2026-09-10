@@ -12,11 +12,7 @@ import { Cause, Effect, Exit, Semaphore, type Fiber } from 'effect';
 //
 // Host-agnostic, VS Code-free.
 
-import {
-  finalizeRun,
-  getExecutionStore,
-  type ResultMeta,
-} from '@agent/storage';
+import { finalizeRun, getRunStore, type ResultMeta } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type {
@@ -24,8 +20,8 @@ import type {
   ChildTurnState,
 } from '@agent/storage/ExecutionKVStore';
 import {
-  assertOwnedExecutionLease,
-  ExecutionLeaseLostError,
+  assertOwnedRunLease,
+  RunLeaseLostError,
 } from '@agent/storage/executionLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
@@ -36,8 +32,8 @@ import {
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import { retainFlowRecordUnlessCompleted } from '@agent/storage/executionLifecycle';
 import type {
-  AgentExecutionHandle,
-  ExecutionInterruptHandler,
+  RunHandle,
+  RunInterruptHandler,
 } from '@agent/runtime/ExecutionHandle';
 import type {
   FollowUpQueue,
@@ -52,7 +48,7 @@ import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type RunOutcome,
   type StreamTabId,
   type SubagentProgressUpdate,
@@ -316,7 +312,7 @@ export interface ChildRunLoopParams<TTurn> {
    */
   readonly childStreamId: StreamTabId;
   readonly parentStreamId: StreamTabId;
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly agentName: string;
   readonly strategy: ChildRunStrategy<TTurn>;
   /**
@@ -374,7 +370,7 @@ export interface ChildRunLoopParams<TTurn> {
  * turn it launches to it, and a native turn's flow subscribes to its own run
  * signal downstream of that binding.
  */
-class ChildRunInterruptible implements ExecutionInterruptHandler {
+class ChildRunInterruptible implements RunInterruptHandler {
   private readonly controller = new AbortController();
   private queue: FollowUpQueue | null = null;
 
@@ -479,7 +475,7 @@ function attemptTurn<TTurn>(
  * with its prior delivery.
  */
 function mintChildTurnRef(
-  executionId: ExecutionId,
+  executionId: RunId,
   attemptId: string,
   turnIndex: number,
 ): ChildTurnRef {
@@ -519,7 +515,7 @@ function emitTurnDiagnostic(
   logger: AgentTrace,
   event: 'turn.accepted' | 'turn.delivered' | 'loop.terminated',
   params: {
-    executionId: ExecutionId;
+    executionId: RunId;
     turnRef?: ChildTurnRef;
     queueOwner?: FollowUpConsumerLease;
     interruptionCause?: ChildLoopTerminationCause;
@@ -543,14 +539,14 @@ function emitTurnDiagnostic(
  */
 function persistTurnStateBestEffort(
   session: SessionHandle,
-  executionId: ExecutionId,
+  executionId: RunId,
   state: ChildTurnState,
   logger: AgentTrace,
 ): Effect.Effect<void> {
   return Effect.tryPromise({
     try: () =>
       runInSession(session, () =>
-        getExecutionStore(executionId).writeTurnState(state),
+        getRunStore(executionId).writeTurnState(state),
       ),
     catch: ensureError,
   }).pipe(
@@ -601,7 +597,7 @@ interface PendingChildDelivery {
  */
 function warnDetachedChildDelivery(
   logger: AgentTrace,
-  executionId: ExecutionId,
+  executionId: RunId,
 ): void {
   logger.warn(
     'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
@@ -622,7 +618,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
 >(params: {
   session: SessionHandle;
   strategy: ChildRunStrategy<TTurn>;
-  executionId: ExecutionId;
+  executionId: RunId;
   logger: AgentTrace;
   turn: TTurn | null;
   turnRef: ChildTurnRef;
@@ -725,7 +721,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
 const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   pending: PendingChildDelivery | undefined,
   session: SessionHandle,
-  executionId: ExecutionId,
+  executionId: RunId,
   logger: AgentTrace,
 ): Effect.fn.Return<void, Error> {
   if (!pending) return;
@@ -764,9 +760,9 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
  * claims before propagating the original cause. Post-handoff work stays outside
  * this owner because the live child then owns its own settlement.
  */
-export function runWithOwnedExecutionLeaseLaunchGuard<A, E, R>(
+export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
   session: SessionHandle,
-  executionId: ExecutionId,
+  executionId: RunId,
   operation: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | Error, R> {
   return operation.pipe(
@@ -835,7 +831,7 @@ export function startChildRunLoop<TTurn>(
     const logger = childStream?.logger ?? createChannelTrace('childRunLoop');
     // The code below is synchronous until the loop task is spawned, so a run
     // that does not own its lease fails before any queue, stage, or loop exists.
-    runInSession(runSession, () => assertOwnedExecutionLease(executionId));
+    runInSession(runSession, () => assertOwnedRunLease(executionId));
     const loop = new ChildRunInterruptible(
       strategy.ownsBackgroundProcess === true,
     );
@@ -866,7 +862,7 @@ export function startChildRunLoop<TTurn>(
 
     let queue!: FollowUpQueue;
     let queueLease: FollowUpConsumerLease | undefined;
-    let attachedHandle: AgentExecutionHandle | undefined;
+    let attachedHandle: RunHandle | undefined;
     let detachLoopInterrupt: (() => void) | undefined;
     const attachLoopInterrupt = (): void => {
       const handle =
@@ -911,7 +907,7 @@ export function startChildRunLoop<TTurn>(
         strategy.onLoopStart?.(runSession);
         // Revalidate at the state transition itself: setup hooks above may run
         // arbitrary synchronous code after the early fail-fast lease check.
-        runInSession(runSession, () => assertOwnedExecutionLease(executionId));
+        runInSession(runSession, () => assertOwnedRunLease(executionId));
         queueLease = runSession.followUps.claimChildRun(
           childStreamId,
           executionId,
@@ -1155,7 +1151,7 @@ export function startChildRunLoop<TTurn>(
         const error = Cause.squash(body.cause);
         sawTurnFailure = true;
         lastTurnErr ??= error;
-        if (error instanceof ExecutionLeaseLostError) loop.interrupt();
+        if (error instanceof RunLeaseLostError) loop.interrupt();
       }
 
       const terminal = yield* Effect.exit(

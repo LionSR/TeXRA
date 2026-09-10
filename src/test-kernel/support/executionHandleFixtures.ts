@@ -2,21 +2,18 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import {
-  AgentExecutionHandle,
-  type ExecutionRun,
-} from '@agent/runtime/ExecutionHandle';
-import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { RunHandle, type RunDescriptor } from '@agent/runtime/ExecutionHandle';
+import { RunRegistry } from '@agent/runtime/executionRegistry';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/StreamStatusService';
 import { AgentCategory } from '@shared/schemas';
-import type { ExecutionId, RunIdentity, StreamTabId } from '@shared/schemas';
+import type { RunId, RunIdentity, StreamTabId } from '@shared/schemas';
 
 /**
  * A live execution handle for tests.
  *
  * The run struct is assembled here and typed as the canonical
- * {@link ExecutionRun}, so a schema change breaks every fixture in one place.
+ * {@link RunDescriptor}, so a schema change breaks every fixture in one place.
  */
 export function testExecutionHandle(input: {
   executionId: string;
@@ -28,26 +25,26 @@ export function testExecutionHandle(input: {
   /** Defaults to a native agent identity for `agent`. */
   identity?: RunIdentity;
   trace?: AgentTrace;
-}): AgentExecutionHandle {
+}): RunHandle {
   const streamId = input.childStreamId ?? input.parentStreamId;
-  const run: ExecutionRun = {
+  const run: RunDescriptor = {
     streamId,
-    executionId: input.executionId as ExecutionId,
+    executionId: input.executionId as RunId,
     identity: input.identity ?? { kind: 'agent', agent: input.agent },
     category: input.category ?? AgentCategory.ToolUse,
   };
-  return new AgentExecutionHandle(run, input.parentStreamId, input.trace);
+  return new RunHandle(run, input.parentStreamId, input.trace);
 }
 
 /** A registry with a status machine whose facts reach its `handleStatus`. */
-export function testExecutionRegistry(): ExecutionRegistry {
+export function testExecutionRegistry(): RunRegistry {
   // The machine's facts reach the registry built below; the closure runs
   // only once a transition is published, after the registry exists.
-  const streamStatus = new StreamStatusMachine(
+  const streamStatus = new RunStatusMachine(
     (event) => registry.handleStatus(event.streamId),
     () => {},
   );
-  const registry = new ExecutionRegistry({
+  const registry = new RunRegistry({
     publish: () => {},
     streamStatus,
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),

@@ -3,7 +3,7 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
 import {
   deriveWorkflowScriptCheckpointId,
@@ -15,7 +15,7 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fingerprintWorkflowAgentDependencies } from '@tools/delegation/inputFields';
@@ -26,7 +26,7 @@ import {
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
-const executionId = '7154strategy' as ExecutionId;
+const executionId = '7154strategy' as RunId;
 const script = `export const meta = {
   name: 'strategy-test',
   description: 'tests the workflow script strategy',
@@ -93,7 +93,7 @@ function strategyParams(
         ),
       ),
     logger: new TraceEmitter(),
-    store: getExecutionStore(executionId),
+    store: getRunStore(executionId),
     checkpointId: checkpointIdFor(overrides.name),
     script,
     scriptPath: '.texra/workflow-scripts/draft-strategy.mjs',
@@ -181,7 +181,7 @@ describe('createWorkflowScriptStrategy', () => {
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         runPersistedWorkflowScript({
-          store: getExecutionStore(executionId),
+          store: getRunStore(executionId),
           checkpointId: checkpointIdFor('strategy-test'),
           script,
           runAgent: async () => finalResult,
@@ -248,7 +248,7 @@ return args`,
 return args`;
       yield* Effect.promise(() =>
         runPersistedWorkflowScript({
-          store: getExecutionStore(executionId),
+          store: getRunStore(executionId),
           checkpointId: checkpointIdFor('retained-arguments'),
           script: argsScript,
           args: { topic: 'geometry' },
@@ -322,7 +322,7 @@ throw new Error('script failed after replay')`;
         yield* Effect.promise(() =>
           expect(
             runPersistedWorkflowScript({
-              store: getExecutionStore(executionId),
+              store: getRunStore(executionId),
               checkpointId: checkpointIdFor('retained-settlement'),
               script: failingScript,
               runAgent: async () => finalResult,
@@ -386,7 +386,7 @@ return await agent('malformed stale')`;
         };
         yield* Effect.promise(() =>
           runPersistedWorkflowScript({
-            store: getExecutionStore(executionId),
+            store: getRunStore(executionId),
             checkpointId: checkpointIdFor(name),
             script: baselineScript,
             runAgent: async ({ prompt }) =>
@@ -514,7 +514,7 @@ async function drainMacrotasks(): Promise<void> {
  * skip/retry against a call that is genuinely in flight.
  */
 function controllableRunAgent(config: {
-  readonly attemptExecutionIds: readonly ExecutionId[];
+  readonly attemptRunIds: readonly RunId[];
   /** 1-based attempt that settles with finalResult; earlier attempts hang.
    *  Omit so every attempt hangs until a control action resolves it. */
   readonly succeedAtAttempt?: number;
@@ -533,9 +533,9 @@ function controllableRunAgent(config: {
       attemptGates.push(createDeferred<void>());
     return attemptGates[attempt - 1]!;
   };
-  const execIdForAttempt = (attempt: number): ExecutionId =>
-    config.attemptExecutionIds[
-      Math.min(attempt - 1, config.attemptExecutionIds.length - 1)
+  const execIdForAttempt = (attempt: number): RunId =>
+    config.attemptRunIds[
+      Math.min(attempt - 1, config.attemptRunIds.length - 1)
     ]!;
   let attemptCount = 0;
   let reportCost: ((cost: number) => void) | undefined;
@@ -581,14 +581,14 @@ function controllableRunAgent(config: {
 describe('createWorkflowScriptStrategy interactive controls', () => {
   // Real execution ids: the production host always persists snapshots, so the
   // engine's snapshot schema validates every id these fakes report.
-  const grandchildExecutionId = 'ccccc0000001' as ExecutionId;
+  const grandchildRunId = 'ccccc0000001' as RunId;
 
   it.live(
     'skips an in-flight grandchild by execution id via the session registry',
     () =>
       Effect.gen(function* () {
         const fake = controllableRunAgent({
-          attemptExecutionIds: [grandchildExecutionId],
+          attemptRunIds: [grandchildRunId],
         });
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
@@ -602,15 +602,15 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         );
         yield* Effect.promise(() => fake.attemptStarted(1));
         // An unknown execution id no-ops (the call stays in flight)...
-        workflowControls.control('ddddd0000009' as ExecutionId, 'skip');
+        workflowControls.control('ddddd0000009' as RunId, 'skip');
         // ...while the right one translates execId → index → engine skip.
-        workflowControls.control(grandchildExecutionId, 'skip');
+        workflowControls.control(grandchildRunId, 'skip');
 
         const turn = yield* Fiber.join(launch);
         expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
         expect(fake.attempts()).toBe(1);
         // The registration is dropped when the run settles.
-        workflowControls.control(grandchildExecutionId, 'skip');
+        workflowControls.control(grandchildRunId, 'skip');
       }),
   );
 
@@ -619,7 +619,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     () =>
       Effect.gen(function* () {
         const fake = controllableRunAgent({
-          attemptExecutionIds: [grandchildExecutionId],
+          attemptRunIds: [grandchildRunId],
           succeedAtAttempt: 2,
           attemptCosts: [0.1, 0.5],
         });
@@ -648,7 +648,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
           strategy.launch(ports, new AbortController().signal),
         );
         yield* Effect.promise(() => fake.attemptStarted(1));
-        workflowControls.control(grandchildExecutionId, 'retry');
+        workflowControls.control(grandchildRunId, 'retry');
 
         const turn = yield* Fiber.join(launch);
         // The second attempt settles with the real result, and the call ran twice.
@@ -667,10 +667,10 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         // After a retry, the re-run registers its child stream under an
         // attempt-specific id (not the logical id) — the id the roster exposes.
         // The control bridge must follow that id, not the stale logical one.
-        const logicalExecutionId = grandchildExecutionId;
-        const attemptExecutionId = 'ccccc0000002' as ExecutionId;
+        const logicalRunId = grandchildRunId;
+        const attemptRunId = 'ccccc0000002' as RunId;
         const fake = controllableRunAgent({
-          attemptExecutionIds: [logicalExecutionId, attemptExecutionId],
+          attemptRunIds: [logicalRunId, attemptRunId],
         });
         const ports = fakePorts();
         let settled = false;
@@ -692,17 +692,17 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         );
         // Attempt 0 runs under the logical id; retry advances to attempt 1.
         yield* Effect.promise(() => fake.attemptStarted(1));
-        workflowControls.control(logicalExecutionId, 'retry');
+        workflowControls.control(logicalRunId, 'retry');
         yield* Effect.promise(() => fake.attemptStarted(2));
 
         // The stale logical id no longer maps to the in-flight attempt: a skip on
         // it must no-op, leaving the run pending.
-        workflowControls.control(logicalExecutionId, 'skip');
+        workflowControls.control(logicalRunId, 'skip');
         yield* Effect.promise(drainMacrotasks);
         expect(settled).toBe(false);
 
         // The attempt-specific id the roster exposes reaches the engine index.
-        workflowControls.control(attemptExecutionId, 'skip');
+        workflowControls.control(attemptRunId, 'skip');
         const turn = yield* Fiber.join(launch);
         expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
         expect(fake.attempts()).toBe(2);
@@ -712,7 +712,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
   it.live('reports skipped-attempt spend before the empty final journal', () =>
     Effect.gen(function* () {
       const fake = controllableRunAgent({
-        attemptExecutionIds: [grandchildExecutionId],
+        attemptRunIds: [grandchildRunId],
       });
       const ports = fakePorts();
       const strategy = createWorkflowScriptStrategy(
@@ -728,7 +728,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
       yield* Effect.promise(() => fake.attemptStarted(1));
       // Model tokens were spent before the user skipped the attempt.
       fake.onCost(0.42);
-      workflowControls.control(grandchildExecutionId, 'skip');
+      workflowControls.control(grandchildRunId, 'skip');
 
       const turn = yield* Fiber.join(launch);
       expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);

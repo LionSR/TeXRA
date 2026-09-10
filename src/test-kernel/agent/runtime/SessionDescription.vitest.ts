@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -11,7 +11,7 @@ import {
 import * as logger from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -39,7 +39,7 @@ function runDescription(
   agentDescription?: string,
 ): Promise<void> {
   return generateSessionDescription(
-    executionId as ExecutionId,
+    executionId as RunId,
     streamId as StreamTabId,
     AgentConfigSchema.parse({
       agent: category === AgentCategory.ToolUse ? 'chat' : 'correct',
@@ -103,7 +103,7 @@ describe('session description helpers', () => {
         publishTestRunStart(
           session,
           'stream-workflow',
-          'a0b0c1' as ExecutionId,
+          'a0b0c1' as RunId,
         );
         yield* Effect.promise(() => session.settlePublications());
         const recorded = recordSessionEvents(session);
@@ -123,7 +123,7 @@ describe('session description helpers', () => {
           '<agent-purpose>Corrects a draft</agent-purpose>',
         );
         expect(
-          (yield* getExecutionRecords(session, 'a0b0c1').readMeta())
+          (yield* getRunRecords(session, 'a0b0c1').readMeta())
             ?.description,
         ).toBe('Correcting derivation signs');
         yield* Effect.promise(() => session.settlePublications());
@@ -171,7 +171,7 @@ describe('session description helpers', () => {
   it.live('keeps generating compact descriptions for tool-use runs', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      publishTestRunStart(session, 'stream-tool', 'a0b0c2' as ExecutionId);
+      publishTestRunStart(session, 'stream-tool', 'a0b0c2' as RunId);
       yield* Effect.promise(() => session.settlePublications());
       const recorded = recordSessionEvents(session);
       mockToolUseAnswer('Fixing proof typos');
@@ -181,7 +181,7 @@ describe('session description helpers', () => {
       );
 
       expect(
-        (yield* getExecutionRecords(session, 'a0b0c2').readMeta())?.description,
+        (yield* getRunRecords(session, 'a0b0c2').readMeta())?.description,
       ).toBe('Fixing proof typos');
       yield* Effect.promise(() => session.settlePublications());
       expect(yield* Effect.promise(() => recorded.read())).toMatchObject([

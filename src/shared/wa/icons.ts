@@ -109,14 +109,14 @@ export const AGENT_DECORATORS = {
 
 type AgentCategory = keyof typeof AGENT_DECORATORS.agentCategories;
 
-export interface StreamDecorator {
+export interface RunDecorator {
   readonly icon: TeXRAIconName;
   readonly label: string;
 }
 
 export function getAgentCategoryDecorator(
   agentCategory: string | undefined,
-): StreamDecorator {
+): RunDecorator {
   const categories = AGENT_DECORATORS.agentCategories;
   return (
     (agentCategory && categories[agentCategory as AgentCategory]) ||

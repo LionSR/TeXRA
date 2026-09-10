@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  getExecutionRecords: vi.fn(() => ({
+  getRunRecords: vi.fn(() => ({
     readConfig: () => Effect.promise(() => mocks.readConfig()),
     readMeta: () => Effect.promise(() => mocks.readMeta()),
   })),
@@ -40,7 +40,7 @@ vi.mock('@transcript', () => ({
 // Imported after vi.mock so the mocked dependency is in place.
 import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
 
-const loadChatExportInput = (id: ExecutionId) =>
+const loadChatExportInput = (id: RunId) =>
   loadChatExportInputEffect(id, {} as SessionHandle);
 
 const config = {
@@ -81,7 +81,7 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
           description: 'Polish pass',
         });
 
-        const result = yield* loadChatExportInput('a1' as ExecutionId);
+        const result = yield* loadChatExportInput('a1' as RunId);
 
         expect(result.exportInput).toEqual({
           timestamp: '2026-05-18T08:00:00.000Z',
@@ -104,7 +104,7 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
 
   it.effect('returns a null exportInput when nothing is stored at all', () =>
     Effect.gen(function* () {
-      const result = yield* loadChatExportInput('missing' as ExecutionId);
+      const result = yield* loadChatExportInput('missing' as RunId);
 
       expect(result).toEqual({
         meta: null,
@@ -127,7 +127,7 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
         // to already reflect "absent" for this case, not just falsy-vs-array.
         mocks.readConversation.mockResolvedValue([]);
 
-        const result = yield* loadChatExportInput('missing' as ExecutionId);
+        const result = yield* loadChatExportInput('missing' as RunId);
 
         expect(result.conversation).toBeNull();
         expect(result.exportInput).toBeNull();
@@ -141,7 +141,7 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
         mocks.readConfig.mockResolvedValue(config);
         mocks.readConversation.mockResolvedValue([]);
 
-        const result = yield* loadChatExportInput('a1' as ExecutionId);
+        const result = yield* loadChatExportInput('a1' as RunId);
 
         expect(result.config).toEqual(config);
         expect(result.conversation).toBeNull();
@@ -157,7 +157,7 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
           { role: 'user', content: 'hi' },
         ]);
 
-        const result = yield* loadChatExportInput('a1' as ExecutionId);
+        const result = yield* loadChatExportInput('a1' as RunId);
 
         expect(result.config).toBeNull();
         expect(result.exportInput).toBeNull();

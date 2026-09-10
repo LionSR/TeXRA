@@ -7,8 +7,8 @@
 
 import { z } from 'zod';
 
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import { StreamPhaseSchema } from './stream';
+import { RunIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunPhaseSchema } from './stream';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
@@ -24,7 +24,7 @@ const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 // StreamSnapshot — the assembled logical view (durable + log-derived + liveness)
 // ============================================================================
 
-export const StreamSnapshotSchema = z.object({
+export const RunSnapshotSchema = z.object({
   /**
    * Missing on legacy assemblies/exports → current version; a PRESENT wrong
    * version fails the parse loudly (`.prefault`, not `.catch` — a swallowed
@@ -52,11 +52,11 @@ export const StreamSnapshotSchema = z.object({
   runUsage: RunUsageMapSchema.prefault({}),
 
   // -- Pointers (resume / lookup) -------------------------------------------
-  executionId: ExecutionIdSchema.optional(),
+  executionId: RunIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
 
   // -- Log-derived (recomputed from the StreamLog on load) ------------------
-  status: StreamPhaseSchema.optional(),
+  status: RunPhaseSchema.optional(),
   conversationProgress: ConversationProgressSchema.prefault({
     toolCallCount: 0,
   }),
@@ -67,4 +67,4 @@ export const StreamSnapshotSchema = z.object({
   subagents: z.array(ActiveChildInfoSchema).prefault([]),
 });
 
-export type StreamSnapshot = z.infer<typeof StreamSnapshotSchema>;
+export type RunSnapshot = z.infer<typeof RunSnapshotSchema>;

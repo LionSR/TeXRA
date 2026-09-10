@@ -1,6 +1,6 @@
 import { Cause, Effect } from 'effect';
 
-import type { FinalizeExecutionInput } from '@agent/storage';
+import type { FinalizeRunInput } from '@agent/storage';
 import {
   logSdkError,
   type AgentTrace,
@@ -25,7 +25,7 @@ import {
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { platform } from '@platform/platform';
 import type {
-  ExecutionId,
+  RunId,
   RetryErrorInfo,
   RunOutcome,
   StreamTabId,
@@ -46,7 +46,7 @@ import {
 } from '@shared/state/onboardingState';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ensureError } from '@utils/errors/errorMessage';
-import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
+import { RunHandle, type AgentRunHandle } from './ExecutionHandle';
 import {
   buildTerminalFlowResult,
   isWaitingFlowResult,
@@ -54,9 +54,9 @@ import {
   type AgentFlowResult,
 } from './AgentFlowResult';
 import type { SessionHandle } from './SessionHandle';
-import type { ExecutionRegistry } from './executionRegistry';
+import type { RunRegistry } from './executionRegistry';
 import type { AgentLaunchContext } from './AgentLaunchContext';
-import type { StreamStatusMachine } from './StreamStatusService';
+import type { RunStatusMachine } from './StreamStatusService';
 
 const logger = createChannelTrace('agentRunLifecycle');
 
@@ -85,10 +85,10 @@ export interface RunFlowLifecycleOptions {
    * Kept injected so this module does not statically reach tool-domain
    * services such as the Lean language adapter.
    */
-  onRunEnd?: (executionId: ExecutionId) => void | Promise<void>;
+  onRunEnd?: (executionId: RunId) => void | Promise<void>;
 }
 
-type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
+type FlowRecordDisposition = FinalizeRunInput['flowRecord'];
 
 /**
  * Flow-record retention: a fixed disposition, or the caller's policy keyed on
@@ -116,11 +116,11 @@ export type RunTerminalPersistence =
 interface FinalizeRunTerminalParams {
   readonly session: SessionHandle;
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
-  readonly handle: AgentExecutionHandle;
+  readonly handle: RunHandle;
   /** Registry tracking the handle; untracked after the delivery hook runs. */
-  readonly executions: Pick<ExecutionRegistry, 'untrack'>;
+  readonly executions: Pick<RunRegistry, 'untrack'>;
   /** Status machine owning this run's stream phase; terminalized last. */
-  readonly streamStatus: StreamStatusMachine;
+  readonly streamStatus: RunStatusMachine;
   /**
    * The exiting run's own report. The stream phase owns the terminal fact, so
    * this stands only while that phase is still non-terminal — see
@@ -476,7 +476,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
   function* (
     ctx: AgentLaunchContext,
     runner: (
-      handle: AgentExecutionHandle,
+      handle: RunHandle,
       lifecycle: FlowLifecycleControl,
     ) => Promise<AgentRuntimeFlowResult>,
     options?: RunFlowLifecycleOptions,
@@ -484,7 +484,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     const { streamId, executionId, session } = ctx.runScope;
     const agentIdentifier = ctx.config.agent;
     const parentStreamId = options?.parentStreamId ?? streamId;
-    const handle = new AgentExecutionHandle(
+    const handle = new RunHandle(
       {
         streamId,
         executionId,

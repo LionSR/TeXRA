@@ -13,7 +13,7 @@ import {
   GettingStartedActionSchema,
   type GettingStartedAction,
   type RunOutcome,
-  type StreamLifecycleStatus,
+  type RunLifecycleStatus,
   type StreamTabId,
   type TaskGroup,
 } from '@shared/schemas';
@@ -34,7 +34,7 @@ import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { taskGroupDisplayStatus } from '@shared/streams/taskGroupProjection';
 import {
   formatRoundStageLabel,
-  formatStreamStatusLabel,
+  formatRunStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -182,8 +182,8 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) hasStreams = false;
 
   /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) streamStatus:
-    StreamLifecycleStatus | undefined = undefined;
+  @property({ attribute: false }) streamStatus: RunLifecycleStatus | undefined =
+    undefined;
 
   /** The fold's final outcome once no producer can close another group. */
   @property({ attribute: false }) durableOutcome: RunOutcome | null = null;
@@ -427,7 +427,7 @@ export class TaskGroupList extends LitElement {
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {
-          label: formatStreamStatusLabel(status),
+          label: formatRunStatusLabel(status),
         })}
       </span>
       <bdi class="group-title">${title}</bdi>

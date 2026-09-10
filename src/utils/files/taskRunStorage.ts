@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 
 import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import { type ExecutionId, type FileLocation } from '@shared/schemas';
+import { type RunId, type FileLocation } from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputRoundDir,
@@ -36,7 +36,7 @@ export class TaskRunFileService {
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
-  constructor(public readonly executionId: ExecutionId) {
+  constructor(public readonly executionId: RunId) {
     this.runDirectory = getRunDir(executionId);
   }
 

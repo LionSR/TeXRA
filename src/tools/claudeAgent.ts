@@ -53,7 +53,7 @@ import {
 import type {
   ClaudeAgentEffort,
   ClaudeAgentPermissionMode,
-  ExecutionId,
+  RunId,
   StreamTabId,
   ToolResult,
   ToolUseLog,
@@ -77,7 +77,7 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
-import { type ChildStream } from './delegation/childStream';
+import { type ChildRun } from './delegation/childStream';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
   agentCliCall,
@@ -407,9 +407,9 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 
 function startClaudeAgentLoop(params: {
   session: SessionHandle;
-  childStream: ChildStream;
+  childStream: ChildRun;
   parentStreamId: StreamTabId;
-  executionId: ExecutionId;
+  executionId: RunId;
   initialPrompt: string;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
@@ -608,7 +608,7 @@ const launchClaudeAgentSession = Effect.fn(
   model: string,
   effort: ClaudeAgentEffort,
   parentStreamId: StreamTabId,
-  parentExecutionId: ExecutionId | undefined,
+  parentExecutionId: RunId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,

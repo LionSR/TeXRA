@@ -59,7 +59,7 @@ import { scrollableModalTextRowsBudget } from '../modals/ScrollableModalText';
 import { type WorkflowPopupView } from '../state/cliState';
 import {
   cumulativeUsageOf,
-  killableExecutionId,
+  killableRunId,
   sessionView,
   streamViewOf,
 } from '../state/sessionView';
@@ -344,7 +344,7 @@ export function WorkflowPopup({
     ? childStreamOf(selectedTask)
     : undefined;
   const selectedChildStream = streamViewOf(sessionState, selectedChildStreamId);
-  const selectedExecutionId = killableExecutionId(selectedChildStream);
+  const selectedExecutionId = killableRunId(selectedChildStream);
   // A workflow-script grandchild `agent()` call is the only skip/retry-able
   // row: a native agent run (an external CLI tool's child is driven by that
   // tool and would no-op) whose parent is the workflow run — one identity

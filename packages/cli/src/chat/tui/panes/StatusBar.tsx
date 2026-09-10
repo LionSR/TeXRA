@@ -14,7 +14,7 @@ import type {
   SubscriptionUsageSnapshot,
   UsageRoute,
 } from '@shared/schemas';
-import { descendantStreams } from '@shared/session/sessionView';
+import { descendantRuns } from '@shared/session/sessionView';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -22,11 +22,11 @@ import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
-  selectedStreamId as selectedStreamIdSignal,
+  selectedRunId as selectedStreamIdSignal,
   rootRunPending as rootRunPendingSignal,
-  rootRunStreamId as rootRunStreamIdSignal,
+  pendingRootRunId as rootRunStreamIdSignal,
   sessionMeta as sessionMetaSignal,
-  rootStreamId as rootStreamIdSignal,
+  rootRunId as rootStreamIdSignal,
 } from '../state/cliState';
 import {
   ancestorPhaseLabel,
@@ -44,7 +44,7 @@ import { useSignal } from '../state/useSignal';
 import {
   approvalQueueStatusKind,
   buildStatusBarDisplay,
-  statusBarStreamTarget,
+  statusBarRunTarget,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
 
@@ -68,9 +68,9 @@ interface StatusBarProps {
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsage = useMemo(() => new SubscriptionUsageService(), []);
   const { write: writeStderr } = useStderr();
-  const activeStreamId = useSignal(selectedStreamIdSignal);
+  const activeRunId = useSignal(selectedStreamIdSignal);
   const view = useSignal(sessionView());
-  const rootStreamId = useSignal(rootStreamIdSignal);
+  const rootRunId = useSignal(rootStreamIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const transientNotice = useSignal(transientNoticeSignal);
   const caps = useSignal(terminalCapabilities);
@@ -80,18 +80,18 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // on the closure's identity, which froze the hint at its boot-time value
   // for the whole run (#8273).
   const rootRunPending = useSignal(rootRunPendingSignal);
-  const rootRunStreamId = useSignal(rootRunStreamIdSignal);
+  const pendingRootRunId = useSignal(rootRunStreamIdSignal);
   const runStopFacts = {
     runPending: rootRunPending,
-    streamId: rootRunStreamId,
-    status: streamPhaseOf(streamViewOf(view, rootRunStreamId)),
+    streamId: pendingRootRunId,
+    status: streamPhaseOf(streamViewOf(view, pendingRootRunId)),
   };
   const ownedStreamIds = useMemo(
-    () => descendantStreams(view, rootStreamId, { includeRoot: true }),
-    [view, rootStreamId],
+    () => descendantRuns(view, rootRunId, { includeRoot: true }),
+    [view, rootRunId],
   );
-  const target = statusBarStreamTarget({
-    activeStreamId,
+  const target = statusBarRunTarget({
+    activeRunId,
     canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
     // The whole pending-run window, not just its launch gap: a restored
     // stream's phase is derived, so a run whose stream has not reported one
@@ -319,7 +319,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       chatInputAvailable: props.chatInputAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable:
-        streamViewOf(view, activeStreamId)?.parentId != null,
+        streamViewOf(view, activeRunId)?.parentId != null,
       streamFocusAvailable: props.streamFocusAvailable,
       shiftEnterNewline: caps.kittyKeyboard,
       transcriptAvailable: props.transcriptAvailable,

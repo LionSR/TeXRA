@@ -95,7 +95,7 @@ function exportedFileMessage(storagePath: string): string {
  * `showError` rather than thrown so a missing transcript is not an
  * unexpected failure.
  */
-export const exportStreamTranscript = Effect.fn('exportStreamTranscript')(
+export const exportRunTranscript = Effect.fn('exportStreamTranscript')(
   function* (
     executionId: string,
     ports: TranscriptExportPorts,

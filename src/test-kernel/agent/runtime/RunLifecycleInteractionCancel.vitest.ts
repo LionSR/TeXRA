@@ -5,13 +5,13 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, vi } from 'vitest';
 
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type Plan,
   type RunOutcome,
   type StreamTabId,
@@ -38,11 +38,11 @@ let caseCounter = 0;
 function lifecycleCase(): {
   session: SessionHandle;
   ctx: AgentLaunchContext;
-  executionId: ExecutionId;
+  executionId: RunId;
   streamId: StreamTabId;
 } {
   const n = caseCounter++;
-  const executionId = `exec:run-cancel-${n}` as ExecutionId;
+  const executionId = `exec:run-cancel-${n}` as RunId;
   const streamId = `stream:run-cancel-${n}` as StreamTabId;
   const session = createTestSession();
   return {
@@ -67,7 +67,7 @@ function requestApproval(
 }
 
 function toolUseRun<Outcome extends RunOutcome | typeof STREAM_PHASE.WAITING>(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   outcome: Outcome,
 ) {
@@ -118,7 +118,7 @@ describe('run lifecycle host-interaction cancel', () => {
     () =>
       Effect.gen(function* () {
         const { session, ctx, executionId, streamId } = lifecycleCase();
-        const started = createDeferred<AgentExecutionHandle>();
+        const started = createDeferred<RunHandle>();
         const aborted = createDeferred();
         const released = createDeferred();
         const stopped = createDeferred();

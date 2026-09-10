@@ -14,35 +14,35 @@ import { Data, Deferred, Duration, Effect } from 'effect';
 // Local imports
 import {
   deriveResumability,
-  getExecutionStore,
-  getExecutionRecords,
-  readExecutionChildren,
-  listExecutionWorkspaceFiles,
+  getRunStore,
+  getRunRecords,
+  readRunChildren,
+  listRunWorkspaceFiles,
   unwrapResultMeta,
   type ChildRecord,
-  listExecutions,
-  resolveExecutionWorkspaceFilePath,
+  listRuns,
+  resolveRunWorkspaceFilePath,
 } from '@agent/storage';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
-  getRunContextExecutionId,
+  getRunContextRunId,
   getRunContextStreamId,
 } from '@agent/runtime/RunContext';
 import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
-  ExecutionIdSchema,
+  RunIdSchema,
   ToolError,
-  type ExecutionId,
+  type RunId,
   type TodoItem,
   type ToolResult,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
@@ -77,8 +77,8 @@ import {
   statusInfoFromLiveness,
   executionDisplayCategory,
   shouldSuppressAutoDeliveredSubagentReport,
-  type ExecutionDisplayCategory,
-  type ExecutionSummaryOptions,
+  type RunDisplayCategory,
+  type RunSummaryOptions,
 } from './executionFormatters';
 import { defineTool } from './core/define';
 import {
@@ -88,7 +88,7 @@ import {
 } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
-import { resolveExecutionLiveness } from './executions/executionLiveness';
+import { resolveRunLiveness } from './executions/executionLiveness';
 import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
 import {
   OUTPUT_MAX_LINES,
@@ -105,7 +105,7 @@ import {
   listenForFollowUp,
   shouldSkipWait,
 } from './executions/waitCoordination';
-import { workflowExecutionView } from './executions/workflowSummaryView';
+import { workflowRunView } from './executions/workflowSummaryView';
 
 const log = createLog('ExecutionsTool');
 
@@ -189,7 +189,7 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
 
 function getRunningTodos(
   session: SessionHandle,
-  handle: AgentExecutionHandle,
+  handle: RunHandle,
 ): readonly TodoItem[] {
   return session.snapshots.getWorkPlan(handle.childStreamId).todos;
 }
@@ -240,7 +240,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   protected execute(input: ExecutionsToolInput): Promise<ToolResult> {
     const context: ExecutionToolContext = {
       session: currentSession(),
-      executionId: getRunContextExecutionId(),
+      executionId: getRunContextRunId(),
       streamId: getRunContextStreamId(),
       inRunScope: AsyncLocalStorage.bind(<A>(operation: () => A): A =>
         operation(),
@@ -378,7 +378,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private resolveExecutionId(
     context: ExecutionToolContext,
     id: string,
-  ): Effect.Effect<ExecutionId, ToolError> {
+  ): Effect.Effect<RunId, ToolError> {
     if (id === 'current') {
       const executionId = context.executionId;
       if (!executionId) {
@@ -390,7 +390,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
       return Effect.succeed(executionId);
     }
-    const result = ExecutionIdSchema.safeParse(id);
+    const result = RunIdSchema.safeParse(id);
     if (!result.success) {
       return Effect.fail(
         new ToolError(
@@ -426,7 +426,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly listExecutions = Effect.fn('ExecutionsTool.listExecutions')(
     function* (context: ExecutionToolContext, offset: number, limit: number) {
-      const entries = yield* listExecutions(context.session);
+      const entries = yield* listRuns(context.session);
 
       if (entries.length === 0) {
         return executed('No execution history found.');
@@ -454,8 +454,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     function* (
       this: ExecutionsTool,
       context: ExecutionToolContext,
-      executionId: ExecutionId,
-      options: ExecutionSummaryOptions = {},
+      executionId: RunId,
+      options: RunSummaryOptions = {},
     ) {
       // Check in-memory handle first (free) — running executions have everything we need
       const session = context.session;
@@ -464,12 +464,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       if (handle) {
         // Running execution: agent/status and task state are session-owned;
         // fetch only the remaining durable details from execution storage.
-        const records = getExecutionRecords(context.session, executionId);
+        const records = getRunRecords(context.session, executionId);
         const todos = getRunningTodos(session, handle);
         const [meta, children, report] = yield* Effect.all(
           [
             records.readMeta(),
-            readExecutionChildren(context.session, executionId),
+            readRunChildren(context.session, executionId),
             records.readReport(),
           ],
           { concurrency: 3 },
@@ -512,12 +512,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
 
       // Completed execution: full KV fetch
-      const records = getExecutionRecords(context.session, executionId);
+      const records = getRunRecords(context.session, executionId);
       const [meta, record, children, todos, report] = yield* Effect.all(
         [
           records.readMeta(),
           records.readRunRecord(),
-          readExecutionChildren(context.session, executionId),
+          readRunChildren(context.session, executionId),
           readCompletedRunTodos(executionId, session).pipe(
             Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
           ),
@@ -590,13 +590,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     this: ExecutionsTool,
     context: ExecutionToolContext,
     lines: string[],
-    executionId: ExecutionId,
-    category: ExecutionDisplayCategory | undefined,
+    executionId: RunId,
+    category: RunDisplayCategory | undefined,
     children: ChildRecord[],
     todos: readonly TodoItem[],
     report: string | null,
     options: {
-      readonly workflow?: WorkflowExecutionSnapshot;
+      readonly workflow?: WorkflowRunSnapshot;
       readonly suppressReport?: boolean;
     } = {},
   ) {
@@ -604,7 +604,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       lines.push(
         '',
         'Workflow:',
-        JSON.stringify(workflowExecutionView(options.workflow), null, 2),
+        JSON.stringify(workflowRunView(options.workflow), null, 2),
       );
     }
     if (children.length > 0) {
@@ -633,7 +633,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       Effect.forEach(
         children,
         (child) =>
-          getExecutionRecords(context.session, child.id)
+          getRunRecords(context.session, child.id)
             .readMeta()
             .pipe(
               Effect.flatMap((meta) =>
@@ -645,7 +645,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly handleKill = Effect.fn('ExecutionsTool.handleKill')(
-    function* (context: ExecutionToolContext, executionId: ExecutionId) {
+    function* (context: ExecutionToolContext, executionId: RunId) {
       const callerStreamId = context.streamId;
 
       if (context.executionId === executionId) {
@@ -712,7 +712,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    */
   private readonly showTodos = Effect.fn('ExecutionsTool.showTodos')(function* (
     context: ExecutionToolContext,
-    executionId: ExecutionId,
+    executionId: RunId,
   ) {
     const session = context.session;
     const handle = session.executions.getHandle(executionId);
@@ -733,12 +733,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   });
 
   private readonly showReport = Effect.fn('ExecutionsTool.showReport')(
-    function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const records = getExecutionRecords(context.session, executionId);
+    function* (context: ExecutionToolContext, executionId: RunId) {
+      const records = getRunRecords(context.session, executionId);
       const [report, note] = yield* Effect.all(
         [
           records.readReport(),
-          turnAttributionNote(getExecutionStore(executionId), context.session),
+          turnAttributionNote(getRunStore(executionId), context.session),
         ],
         { concurrency: 2 },
       );
@@ -756,12 +756,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * later stage without parsing the prose report.
    */
   private readonly showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(
-    function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const records = getExecutionRecords(context.session, executionId);
+    function* (context: ExecutionToolContext, executionId: RunId) {
+      const records = getRunRecords(context.session, executionId);
       const [resultMeta, note] = yield* Effect.all(
         [
           records.readResultMeta(),
-          turnAttributionNote(getExecutionStore(executionId), context.session),
+          turnAttributionNote(getRunStore(executionId), context.session),
         ],
         { concurrency: 2 },
       );
@@ -784,12 +784,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     function* (
       this: ExecutionsTool,
       context: ExecutionToolContext,
-      executionId: ExecutionId,
+      executionId: RunId,
     ) {
-      const children = yield* readExecutionChildren(
-        context.session,
-        executionId,
-      );
+      const children = yield* readRunChildren(context.session, executionId);
       if (children.length === 0) {
         return executed(`No child executions found for ${executionId}.`);
       }
@@ -802,8 +799,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly showConfig = Effect.fn('ExecutionsTool.showConfig')(
-    function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const records = getExecutionRecords(context.session, executionId);
+    function* (context: ExecutionToolContext, executionId: RunId) {
+      const records = getRunRecords(context.session, executionId);
       const record = yield* records.readRunRecord();
 
       if (!record) {
@@ -831,11 +828,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     'ExecutionsTool.showConversation',
   )(function* (
     context: ExecutionToolContext,
-    executionId: ExecutionId,
+    executionId: RunId,
     offset: number,
     limit: number,
   ) {
-    const records = getExecutionRecords(context.session, executionId);
+    const records = getRunRecords(context.session, executionId);
     const conversationResult = yield* readCompletedRunConversation(
       executionId,
       context.session,
@@ -904,13 +901,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly showOutput = Effect.fn('ExecutionsTool.showOutput')(
     function* (
       context: ExecutionToolContext,
-      executionId: ExecutionId,
+      executionId: RunId,
       viewRange?: [number, number],
     ) {
       // The handle names the live child stream; liveness itself is resolved
       // below, from facts that outlive this process.
       const handle = context.session.executions.getHandle(executionId);
-      const meta = yield* getExecutionRecords(
+      const meta = yield* getRunRecords(
         context.session,
         executionId,
       ).readMeta();
@@ -943,10 +940,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // No snapshot: `meta` was read before the transcript, and a command that
       // finished during that read must not be judged against the row as it
       // looked beforehand. One read of one execution can afford a fresh one.
-      const liveness = yield* resolveExecutionLiveness(
-        executionId,
-        context.session,
-      );
+      const liveness = yield* resolveRunLiveness(executionId, context.session);
       const info = statusInfoFromLiveness(liveness);
       // The footer states the same reading as the header: "no handle in this
       // process" alone never justifies calling the command finished, and a
@@ -1025,7 +1019,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
     context: ExecutionToolContext,
-    executionId: ExecutionId,
+    executionId: RunId,
   ) {
     const files = yield* listRunGeneratedFiles(
       executionId,
@@ -1044,7 +1038,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly readFile = Effect.fn('ExecutionsTool.readFile')(function* (
     context: ExecutionToolContext,
-    executionId: ExecutionId,
+    executionId: RunId,
     filePath: string,
     viewRange?: [number, number],
   ) {
@@ -1068,14 +1062,14 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly listWorkspaceFiles = Effect.fn(
     'ExecutionsTool.listWorkspaceFiles',
-  )(function* (context: ExecutionToolContext, executionId: ExecutionId) {
-    const records = getExecutionRecords(context.session, executionId);
+  )(function* (context: ExecutionToolContext, executionId: RunId) {
+    const records = getRunRecords(context.session, executionId);
     const [record, paths] = yield* Effect.all(
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
     const entries = yield* executionsRead(context, () =>
-      listExecutionWorkspaceFiles(record, paths),
+      listRunWorkspaceFiles(record, paths),
     );
 
     if (entries.length === 0) {
@@ -1096,18 +1090,18 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     'ExecutionsTool.readWorkspaceFile',
   )(function* (
     context: ExecutionToolContext,
-    executionId: ExecutionId,
+    executionId: RunId,
     filePath: string,
     viewRange?: [number, number],
   ) {
-    const records = getExecutionRecords(context.session, executionId);
+    const records = getRunRecords(context.session, executionId);
     const [record, paths] = yield* Effect.all(
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
     const recordedPaths = new Set(
       paths.flatMap((candidate) => {
-        const resolvedCandidate = resolveExecutionWorkspaceFilePath(
+        const resolvedCandidate = resolveRunWorkspaceFilePath(
           record,
           candidate,
         );
@@ -1116,12 +1110,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
     // The listing renders recorded paths under a `workspace/` display prefix,
     // so a read in that display form retries against the stripped path.
-    const direct = resolveExecutionWorkspaceFilePath(record, filePath);
+    const direct = resolveRunWorkspaceFilePath(record, filePath);
     let resolved =
       direct && recordedPaths.has(direct.path) ? direct : undefined;
     const displayPrefix = 'workspace/';
     if (!resolved && filePath.startsWith(displayPrefix)) {
-      const stripped = resolveExecutionWorkspaceFilePath(
+      const stripped = resolveRunWorkspaceFilePath(
         record,
         filePath.slice(displayPrefix.length),
       );

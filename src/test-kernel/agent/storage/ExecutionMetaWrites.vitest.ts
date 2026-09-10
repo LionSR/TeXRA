@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
-import { finalizeRun, getExecutionRecords } from '@agent/storage';
+import { finalizeRun, getRunRecords } from '@agent/storage';
 import { aggregateId } from '@shared/schemas';
 import {
   createTestSession,
@@ -41,7 +41,7 @@ describe('execution metadata updates', () => {
           { concurrency: 'unbounded' },
         );
         expect(
-          yield* getExecutionRecords(session, id).readMeta(),
+          yield* getRunRecords(session, id).readMeta(),
         ).toMatchObject({
           description: 'A described session',
           outcome: 'completed',
@@ -61,7 +61,7 @@ describe('execution metadata updates', () => {
         flowRecord: 'preserve',
         keepExistingOutcome: true,
       });
-      expect(yield* getExecutionRecords(session, id).readMeta()).toMatchObject({
+      expect(yield* getRunRecords(session, id).readMeta()).toMatchObject({
         outcome: 'completed',
       });
     }),

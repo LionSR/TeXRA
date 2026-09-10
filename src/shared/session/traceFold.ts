@@ -19,14 +19,14 @@ import {
   type WorkflowPlanMarker,
   type WorkflowCallProgress,
   type TranscriptEvent,
-  type StreamPhase,
+  type RunPhase,
 } from '@shared/schemas';
 import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import type {
-  StreamLog,
-  StreamLogAppendInput,
-  StreamLogUpdatePatch,
+  RunLog,
+  RunLogAppendInput,
+  RunLogUpdatePatch,
 } from '@shared/session/traceEntries';
 import { isObject } from '@utils/core';
 import { redactLogData } from './traceRedaction';
@@ -59,7 +59,7 @@ type StageMetadata = Pick<
 
 /** Build the transcript projection for one subscribed aggregate. */
 export function createTranscriptFold(
-  writer: Pick<StreamLog, 'append' | 'appendSettled' | 'update' | 'settle'>,
+  writer: Pick<RunLog, 'append' | 'appendSettled' | 'update' | 'settle'>,
 ) {
   /** Stream rows opened by `stream.start` that nothing has settled yet. */
   const streams = new Set<string>();
@@ -195,7 +195,7 @@ export function createTranscriptFold(
             ...result,
             status: event.status,
           } as ToolUseLog,
-        } satisfies StreamLogUpdatePatch;
+        } satisfies RunLogUpdatePatch;
         if (event.status === TOOL_USE_STATUS.IN_PROGRESS) {
           writer.update(event.logId, patch);
           activeToolEntries.set(event.logId, patch.data);
@@ -270,7 +270,7 @@ export function createTranscriptFold(
             timestamp: stamp.at,
             ...entry,
             verbose: stamp.debug,
-          } satisfies StreamLogAppendInput;
+          } satisfies RunLogAppendInput;
           if (terminal) writer.appendSettled(taskEntry);
           else writer.append(taskEntry);
         }
@@ -423,7 +423,7 @@ export function createTranscriptFold(
       }
     }
   };
-  const status = (phase: StreamPhase): void => {
+  const status = (phase: RunPhase): void => {
     if (phase === STREAM_PHASE.RUNNING) {
       transcriptBoundaryClosed = false;
       return;

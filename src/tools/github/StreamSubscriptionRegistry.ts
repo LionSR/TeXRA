@@ -45,7 +45,7 @@ interface PollingSourceLike<K extends string, Input> {
   onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
 }
 
-export interface StreamSubscriptionRegistryOptions<K extends string, Input> {
+export interface RunSubscriptionRegistryOptions<K extends string, Input> {
   /** Display name for log messages. */
   name: string;
   /** Logger override. */
@@ -69,7 +69,7 @@ interface BoundSubscription {
   owner: SessionHandle;
 }
 
-export class StreamSubscriptionRegistry<K extends string, Input> {
+export class RunSubscriptionRegistry<K extends string, Input> {
   private readonly logger: Pick<AgentTrace, 'info' | 'warn'>;
   private readonly perStream = new Map<
     StreamTabId,
@@ -77,9 +77,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   >();
   private readonly releaseHooks = new Map<SessionHandle, () => void>();
 
-  constructor(
-    private readonly opts: StreamSubscriptionRegistryOptions<K, Input>,
-  ) {
+  constructor(private readonly opts: RunSubscriptionRegistryOptions<K, Input>) {
     this.logger = opts.logger ?? createLog(opts.name);
     // Source-key changes are internal bookkeeping. The registry emits the UI
     // signal only after its binding map has reached the corresponding state.

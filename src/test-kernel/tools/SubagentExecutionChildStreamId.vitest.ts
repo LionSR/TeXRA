@@ -29,9 +29,9 @@ vi.mock('@agent/runtime/AgentLaunchContext', () => ({
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
-  runWithOwnedExecutionLeaseLaunchGuard: (
+  runWithOwnedRunLeaseLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedExecutionLeaseLaunchGuard
+      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
     >
   ) => args[2],
 }));
@@ -54,7 +54,7 @@ vi.mock('@logger/logUtils', async (importOriginal) => {
 });
 
 vi.mock('@agent/storage', () => ({
-  registerExecution: mocks.registerExecution,
+  registerRun: mocks.registerExecution,
 }));
 
 // `executeSubagent` registers through `registerExecution`; route the spy through it.
@@ -63,12 +63,12 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
   return {
     ...actual,
-    registerExecution: mocks.registerExecution,
+    registerRun: mocks.registerExecution,
   };
 });
 
 vi.mock('@agent/storage/executionLease', () => ({
-  assertOwnedExecutionLease: vi.fn(),
+  assertOwnedRunLease: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/RunContext', () => {
@@ -77,7 +77,7 @@ vi.mock('@agent/runtime/RunContext', () => {
   return {
     tryUseRunContext: mocks.tryUseRunContext,
     runInSession: (_session: unknown, operation: () => unknown) => operation(),
-    getRunContextExecutionId: (context: any) =>
+    getRunContextRunId: (context: any) =>
       readRunContextField(context, 'executionId'),
     getRunContextSession: (context: any) =>
       readRunContextField(context, 'session'),

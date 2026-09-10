@@ -3,11 +3,11 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import type {
-  ExecutionId,
+  RunId,
   OutputFileInfo,
   ReadonlyRoundIndexed,
 } from '@shared/schemas';
-import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import type { RunSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { toNewestFirstByTimestamp } from '@utils/core';
 import {
   scanRunDirForOutputs,
@@ -21,11 +21,11 @@ import type { LatexExecutionDiscoveryPort } from './executionDiscovery';
  * its persisted `OutputFileInfo[]` from the stream-tab store. Returns null
  * when no matching execution exists.
  */
-export const discoverLatestExecutionOutputs = Effect.fn(
+export const discoverLatestRunOutputs = Effect.fn(
   'discoverLatestExecutionOutputs',
 )(function* (
   discovery: LatexExecutionDiscoveryPort,
-  snapshots: Pick<StreamSnapshotStore, 'read'>,
+  snapshots: Pick<RunSnapshotStore, 'read'>,
   query: {
     agent: string;
     model: string;
@@ -35,7 +35,7 @@ export const discoverLatestExecutionOutputs = Effect.fn(
   filesystem: RunOutputFilesystem,
 ): Effect.fn.Return<
   {
-    executionId: ExecutionId;
+    executionId: RunId;
     rounds: ReadonlyRoundIndexed<OutputFileInfo>;
   } | null,
   Error

@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 
 import { beforeEach, describe, expect } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -21,14 +21,14 @@ import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { StreamLogStore } from '@transcript';
+import { RunLogStore } from '@transcript';
 import { StorageFS } from '@utils/files/storageFS';
 
 const TEMPLATE =
@@ -83,7 +83,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 function persistTranscriptEntry(
-  executionId: ExecutionId,
+  executionId: RunId,
   agent: string,
 ): Effect.Effect<StreamTabId> {
   return Effect.gen(function* () {
@@ -129,7 +129,7 @@ describe('ChatExportController.exportAsHtml', () => {
     () =>
       Effect.gen(function* () {
         const templatePath = yield* Effect.promise(() => writeTemplate());
-        const executionId = 'eec001' as ExecutionId;
+        const executionId = 'eec001' as RunId;
         const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
         publishTestRunStart(
           session,
@@ -137,7 +137,7 @@ describe('ChatExportController.exportAsHtml', () => {
           executionId,
         );
         yield* Effect.promise(() => session.settlePublications());
-        yield* getExecutionRecords(session, executionId).writeRunRecord(
+        yield* getRunRecords(session, executionId).writeRunRecord(
           executionConfig,
         );
         const streamId = yield* persistTranscriptEntry(executionId, 'review');
@@ -167,14 +167,14 @@ describe('ChatExportController.exportAsHtml', () => {
 
   it.live('throws when the standalone template bundle is missing', () =>
     Effect.gen(function* () {
-      const executionId = 'eec002' as ExecutionId;
+      const executionId = 'eec002' as RunId;
       publishTestRunStart(
         session,
         getStreamTabId(config().agent, { executionId }),
         executionId,
       );
       yield* Effect.promise(() => session.settlePublications());
-      yield* getExecutionRecords(session, executionId).writeRunRecord(config());
+      yield* getRunRecords(session, executionId).writeRunRecord(config());
       const streamId = yield* persistTranscriptEntry(
         executionId,
         'orchestrator',
@@ -210,14 +210,14 @@ describe('ChatExportController.buildExportInput', () => {
 
   it.live('returns ok when config and transcript are stored', () =>
     Effect.gen(function* () {
-      const executionId = 'eec001' as ExecutionId;
+      const executionId = 'eec001' as RunId;
       publishTestRunStart(
         session,
         getStreamTabId(config().agent, { executionId }),
         executionId,
       );
       yield* Effect.promise(() => session.settlePublications());
-      yield* getExecutionRecords(session, executionId).writeRunRecord(config());
+      yield* getRunRecords(session, executionId).writeRunRecord(config());
       const streamId = yield* persistTranscriptEntry(
         executionId,
         'orchestrator',
@@ -233,14 +233,14 @@ describe('ChatExportController.buildExportInput', () => {
     'reports conversation_missing when a config is stored but no transcript exists',
     () =>
       Effect.gen(function* () {
-        const executionId = 'eec003' as ExecutionId;
+        const executionId = 'eec003' as RunId;
         publishTestRunStart(
           session,
           getStreamTabId(config().agent, { executionId }),
           executionId,
         );
         yield* Effect.promise(() => session.settlePublications());
-        yield* getExecutionRecords(session, executionId).writeRunRecord(
+        yield* getRunRecords(session, executionId).writeRunRecord(
           config(),
         );
 

@@ -17,7 +17,7 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import { exportStreamTranscript } from '@controllers/progressView/exportTranscript';
+import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import {
   ProgressWorkflowRunActionsController,
@@ -42,7 +42,7 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   cloneRoundIndexed,
-  type ExecutionId,
+  type RunId,
   type FileOpResult,
   type StreamTabId,
 } from '@shared/schemas';
@@ -75,14 +75,14 @@ import {
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
-import type { DesktopAgentExecution } from './desktopAgentExecution.js';
-import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+import type { DesktopAgentRun } from './desktopAgentExecution.js';
+import type { DesktopAgentRunHost } from './desktopAgentExecutionHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 interface DesktopHostRequestsOptions {
   session: SessionHandle;
-  host: DesktopAgentExecutionHost;
-  execution: DesktopAgentExecution;
+  host: DesktopAgentRunHost;
+  execution: DesktopAgentRun;
   files: DesktopFileSelection;
   snapshot: HostSnapshotSource;
   draftRequests: HostDraftRequests;
@@ -366,8 +366,8 @@ export function createDesktopHostRequests(
       Effect.tryPromise({
         try: () =>
           operation === 'pack'
-            ? runPackRunDir(executionId as ExecutionId, agent, model, inputFile)
-            : runCleanRunDir(executionId as ExecutionId),
+            ? runPackRunDir(executionId as RunId, agent, model, inputFile)
+            : runCleanRunDir(executionId as RunId),
         catch: (error) => error,
       }),
     );
@@ -424,7 +424,7 @@ export function createDesktopHostRequests(
   async function exportTranscript(streamId: StreamTabId): Promise<void> {
     const { executionId } = stream(streamId);
     await effectRuntime().runPromise(
-      exportStreamTranscript(executionId, {
+      exportRunTranscript(executionId, {
         pickFormat: () => host.pickTranscriptExportFormat(),
         openPath: (filePath) => host.openPath(filePath),
         showInfo: (message) => host.showInfoMessage(message),

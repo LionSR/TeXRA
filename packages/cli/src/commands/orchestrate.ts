@@ -79,7 +79,7 @@ import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import { runResumeExecution } from './resumeExecution';
+import { runResumeRun } from './resumeExecution';
 import { type CliContext } from '../runtime/cliContext';
 
 const log = createLog('orchestrate');
@@ -344,7 +344,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         return result.exitCode;
       }
       case 'resume':
-        return runResumeExecution(context, action.id);
+        return runResumeRun(context, action.id);
       case 'configure-settings': {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({

@@ -12,9 +12,9 @@ import {
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
-import { StreamLogStore } from '@transcript/StreamLogStore';
+import { RunLogStore } from '@transcript/StreamLogStore';
 
 const STREAM = 'chat#ab12cd';
 const start: SessionEventDraft = {
@@ -70,8 +70,8 @@ describe('StreamLogStore event reads', () => {
       Effect.gen(function* () {
         const database = yield* Database;
         const rows = yield* database.appendAll(history);
-        const store = yield* StreamLogStore.open(database);
-        const live = new StreamLog();
+        const store = yield* RunLogStore.open(database);
+        const live = new RunLog();
         const fold = createTranscriptFold(live);
         for (const row of rows) {
           if (isTranscriptEvent(row))
@@ -95,7 +95,7 @@ describe('StreamLogStore event reads', () => {
       Effect.gen(function* () {
         const database = yield* Database;
         yield* database.appendAll(history);
-        const store = yield* StreamLogStore.open(database);
+        const store = yield* RunLogStore.open(database);
         yield* database.appendAll([
           { type: 'stream.removed', aggregateId: start.aggregateId },
         ]);
@@ -114,7 +114,7 @@ describe('StreamLogStore event reads', () => {
         yield* database.appendAll(history);
         const entered = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
-        const store = yield* StreamLogStore.open({
+        const store = yield* RunLogStore.open({
           readListing: database.readListing,
           readAggregate: (id, seq) =>
             Effect.gen(function* () {
@@ -147,7 +147,7 @@ describe('StreamLogStore event reads', () => {
         const prefix = yield* database.appendAll(history);
         const entered = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
-        const store = yield* StreamLogStore.open({
+        const store = yield* RunLogStore.open({
           readListing: database.readListing,
           readAggregate: (id, seq) =>
             Effect.gen(function* () {
@@ -199,7 +199,7 @@ describe('StreamLogStore event reads', () => {
         const entered = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
         const other = aggregateId('stream', 'chat#other');
-        const store = yield* StreamLogStore.open({
+        const store = yield* RunLogStore.open({
           readListing: database.readListing,
           readAggregate: (id, seq) =>
             Effect.gen(function* () {
@@ -244,7 +244,7 @@ describe('StreamLogStore event reads', () => {
     () =>
       Effect.gen(function* () {
         const database = yield* Database;
-        const store = yield* StreamLogStore.open(database);
+        const store = yield* RunLogStore.open(database);
         const rows = yield* database.appendAll(history);
         yield* Effect.forEach(rows, (row) => store.acceptCommitted(row));
         expect(store.has(STREAM)).toBe(true);
@@ -262,7 +262,7 @@ describe('StreamLogStore event reads', () => {
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.appendAll(history);
-      const store = yield* StreamLogStore.open(database);
+      const store = yield* RunLogStore.open(database);
       const first = yield* store.ensureLoaded(STREAM, {
         retainForPresentation: true,
       });

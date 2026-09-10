@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentConfigSchema,
@@ -14,7 +14,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
@@ -75,14 +75,14 @@ describe('trace-viewer TraceDataSchema', () => {
 
   it.live('accepts a real trace document produced by assembleTrace', () =>
     Effect.gen(function* () {
-      const executionId = 'abc12345' as ExecutionId;
+      const executionId = 'abc12345' as RunId;
       const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
       const streamId = getStreamTabId('review', { executionId });
       const session = createTestSession();
       publishTestRunStart(session, streamId, executionId);
       yield* Effect.promise(() => session.settlePublications());
-      yield* getExecutionRecords(session, executionId).writeRunRecord(
+      yield* getRunRecords(session, executionId).writeRunRecord(
         executionConfig,
       );
       session.publish([

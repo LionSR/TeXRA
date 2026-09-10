@@ -1,4 +1,4 @@
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -6,23 +6,21 @@ import {
 } from '../definition/AgentConfig';
 import type { z } from 'zod';
 
-export interface ExecutionRequest {
+export interface RunRequest {
   config: AgentConfigInput;
-  executionId?: ExecutionId;
+  executionId?: RunId;
 }
 
-export interface ValidatedExecutionRequest {
+export interface ValidatedRunRequest {
   config: AgentConfig;
-  executionId?: ExecutionId;
+  executionId?: RunId;
 }
 
-export type ExecutionValidationResult =
-  | { valid: true; request: ValidatedExecutionRequest }
+export type RunValidationResult =
+  | { valid: true; request: ValidatedRunRequest }
   | { valid: false; message: string; issue?: z.ZodIssue };
 
-export function validateExecutionRequest(
-  request: ExecutionRequest,
-): ExecutionValidationResult {
+export function validateRunRequest(request: RunRequest): RunValidationResult {
   const parseResult = AgentConfigSchema.safeParse(request.config);
   if (!parseResult.success) {
     const issue = parseResult.error.issues[0];

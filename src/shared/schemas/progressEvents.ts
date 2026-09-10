@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 
 import type { AgentCategory } from './agent';
-import type { ExecutionId, StreamTabId } from './identifiers';
+import type { RunId, StreamTabId } from './identifiers';
 import type { FileLocation } from './output';
 import type { RoundKeyedOutputSidecarValueSchemas } from './streamState';
 import type { ExtendedTokenUsageStats } from './usage';
@@ -33,9 +33,9 @@ export interface UpdateCompileFailuresPayload {
 
 /** Usage is execution-scoped; a resume accumulates onto the same key. The
  *  field name is frozen by the public NDJSON vocabulary. */
-export interface UpdateStreamUsagePayload {
+export interface UpdateRunUsagePayload {
   streamId: StreamTabId;
-  storageKey: ExecutionId;
+  storageKey: RunId;
   usage: ExtendedTokenUsageStats;
 }
 

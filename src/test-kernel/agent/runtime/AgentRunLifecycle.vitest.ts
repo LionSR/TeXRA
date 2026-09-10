@@ -5,15 +5,15 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { noopTrace, TraceEmitter } from '@agent/trace';
-import type { FinalizeExecutionResult } from '@agent/storage/executionLifecycle';
+import type { FinalizeRunResult } from '@agent/storage/executionLifecycle';
 import {
-  acquireResumedExecutionLease,
-  inspectExecutionLease,
-  releaseOwnedExecutionLease,
+  acquireResumedRunLease,
+  inspectRunLease,
+  releaseOwnedRunLease,
 } from '@agent/storage/executionLease';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
-  AgentExecutionHandle,
+  RunHandle,
   type AgentRunHandle,
 } from '@agent/runtime/ExecutionHandle';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -36,7 +36,7 @@ import {
   agentKey,
   AgentCategory,
 } from '@shared/schemas';
-import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
+import type { RunId, RunOutcome, StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -63,7 +63,7 @@ const storageMocks = vi.hoisted(() => ({
       input: {
         outcome: RunOutcome;
       },
-    ): Effect.Effect<FinalizeExecutionResult> =>
+    ): Effect.Effect<FinalizeRunResult> =>
       Effect.succeed({
         ok: true,
         outcome: input.outcome,
@@ -120,13 +120,13 @@ function lifecycleFixture(
   agent = 'test-agent',
   category: AgentCategory = AgentCategory.ToolUse,
 ): {
-  executionId: ExecutionId;
+  executionId: RunId;
   streamId: StreamTabId;
-  streamStatus: StreamStatusMachine;
+  streamStatus: RunStatusMachine;
   ctx: AgentLaunchContext;
 } {
   const executionId =
-    `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as ExecutionId;
+    `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   const streamId = `stream-${slug}` as StreamTabId;
   return {
     executionId,
@@ -137,7 +137,7 @@ function lifecycleFixture(
 }
 
 function toolUseResult(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   outcome: RunOutcome,
 ): ToolUseFlowResult {
@@ -145,7 +145,7 @@ function toolUseResult(
 }
 
 function workflowResult(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   outcome: RunOutcome,
 ): WorkflowFlowResult {
@@ -160,7 +160,7 @@ function workflowResult(
 }
 
 function waitingResult(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
 ): WaitingToolUseFlowResult {
   return {
@@ -179,10 +179,10 @@ function waitingResult(
  * which is the point: the handle's own suspension is what makes a stop tear
  * the run down, so no phase seeding is needed to reach that path.
  */
-function takeWaitingHandle(executionId: ExecutionId): AgentExecutionHandle {
+function takeWaitingHandle(executionId: RunId): RunHandle {
   const handle = defaultSession().executions.getHandle(executionId);
-  expect(handle).toBeInstanceOf(AgentExecutionHandle);
-  if (!(handle instanceof AgentExecutionHandle)) {
+  expect(handle).toBeInstanceOf(RunHandle);
+  if (!(handle instanceof RunHandle)) {
     throw new Error('Expected a suspended agent execution handle.');
   }
   return handle;
@@ -272,7 +272,7 @@ describe('runFlowWithLifecycle', () => {
         const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
           'lifecycle-lean-server-stop',
         );
-        const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+        const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
 
         try {
           const result = yield* runFlowWithLifecycle(
@@ -297,7 +297,7 @@ describe('runFlowWithLifecycle', () => {
         const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
           'lifecycle-lean-server-stop-waiting',
         );
-        const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+        const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
 
         try {
           const result = yield* runFlowWithLifecycle(
@@ -607,7 +607,7 @@ describe('runFlowWithLifecycle', () => {
           'lifecycle-subagent-waiting',
         );
         const onError = vi.fn();
-        yield* Effect.promise(() => acquireResumedExecutionLease(executionId));
+        yield* Effect.promise(() => acquireResumedRunLease(executionId));
 
         try {
           const result = yield* runFlowWithLifecycle(
@@ -630,12 +630,12 @@ describe('runFlowWithLifecycle', () => {
             defaultSession().executions.getHandle(executionId),
           ).toBeDefined();
           expect(
-            yield* Effect.promise(() => inspectExecutionLease(executionId)),
+            yield* Effect.promise(() => inspectRunLease(executionId)),
           ).toMatchObject({
             status: 'owned',
           });
         } finally {
-          yield* Effect.promise(() => releaseOwnedExecutionLease(executionId));
+          yield* Effect.promise(() => releaseOwnedRunLease(executionId));
           defaultSession().executions.untrack(executionId);
           clearStreamStatusForTest(streamStatus, streamId);
         }
@@ -1020,7 +1020,7 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-waiting-transcript-failure-run-end',
     );
-    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
+    const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
     seedOpenRunGroup(ctx, streamId);
     await ctx.runScope.session.settlePublications();
     vi.spyOn(ctx.runScope.session, 'settlePublications').mockRejectedValueOnce(
@@ -1377,7 +1377,7 @@ describe('runFlowWithLifecycle', () => {
 function finalizeFixture(slug: string): {
   executionId: string;
   streamId: StreamTabId;
-  streamStatus: StreamStatusMachine;
+  streamStatus: RunStatusMachine;
   handle: ReturnType<typeof testExecutionHandle>;
   untrack: Mock<(executionId: string) => void>;
 } {
@@ -1386,7 +1386,7 @@ function finalizeFixture(slug: string): {
   return {
     executionId,
     streamId,
-    streamStatus: new StreamStatusMachine(
+    streamStatus: new RunStatusMachine(
       () => {},
       () => {},
     ),

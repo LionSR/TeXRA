@@ -1,6 +1,6 @@
 // Local imports
 import { logSdkError } from '@agent/trace';
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import type { Action } from '@agent/node';
 import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import {
@@ -232,7 +232,7 @@ export async function runToolUseFlow(
     ? buildOverlayToolRegistry(baseRegistry, overlayTools)
     : baseRegistry;
 
-  const kv = getExecutionStore(executionId);
+  const kv = getRunStore(executionId);
 
   const services: ToolUseServices = {
     ...input,

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { byString, normalizeFilePath } from '@utils/core';
 
 import { AgentConfigFieldsSchema } from './agentConfig';
-import { ExecutionIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 import { CompileFailureSummarySchema, OutputFileSummarySchema } from './output';
 import { RetryErrorInfoSchema } from './errors';
@@ -18,7 +18,7 @@ export const NonAgentRunRecordSchema = z.strictObject({
 });
 
 /** Inputs have already passed launch validation; persisted records are canonical. */
-export const ExecutionRunRecordSchema = z.union([
+export const RunLaunchRecordSchema = z.union([
   NonAgentRunRecordSchema,
   AgentConfigFieldsSchema,
 ]);
@@ -75,7 +75,7 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
   z.strictObject({
     producer: z.literal('subagent'),
     agentName: z.string(),
-    parentExecutionId: ExecutionIdSchema.optional(),
+    parentExecutionId: RunIdSchema.optional(),
     wallTimeMs: z.number().nonnegative(),
     result: AgentFinalResultSchema,
     turnToken: z.string().optional(),
@@ -84,7 +84,7 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
 
 /** Canonical workspace paths at the record boundary. */
-export const ExecutionWorkspaceFilesSchema = z
+export const RunWorkspaceFilesSchema = z
   .array(z.string())
   .transform((paths) =>
     [

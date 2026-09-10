@@ -44,7 +44,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
-  activeStreamId,
+  activeRunId,
   closeForegroundReader,
   closeInfoPane,
   foregroundReader,
@@ -53,7 +53,7 @@ import {
   resetCliState,
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
-import type { StreamArtifactReader } from '@cli/chat/tui/commands/handlers/sessionCommands';
+import type { RunArtifactReader } from '@cli/chat/tui/commands/handlers/sessionCommands';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -67,9 +67,9 @@ import {
   AgentCategory,
   STREAM_PHASE,
   type ActiveChildInfo,
-  type ExecutionId,
+  type RunId,
   type Plan,
-  type StreamPhase,
+  type RunPhase,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -184,7 +184,7 @@ function createContext(
     },
     canSelectModel: () => true,
     resetSession: vi.fn(),
-    resumeExecution: (_id: ExecutionId) => Promise.resolve(),
+    resumeExecution: (_id: RunId) => Promise.resolve(),
     ...overrides,
   };
 }
@@ -243,8 +243,8 @@ function workPlanSnapshots(
     readonly plan: Plan | null;
     readonly todos: readonly TodoItem[];
   },
-  preload: StreamArtifactReader['preload'] = () => Effect.void,
-): StreamArtifactReader {
+  preload: RunArtifactReader['preload'] = () => Effect.void,
+): RunArtifactReader {
   return {
     preload: vi.fn(preload),
     getWorkPlan: (streamId) => {
@@ -334,7 +334,7 @@ describe('handleTuiSlashCommand', () => {
 
     const streamId = 'plan-reader' as StreamTabId;
     ensureStream(streamId);
-    activeStreamId.set(streamId);
+    activeRunId.set(streamId);
     await handleTuiSlashCommand('/plan', context);
     expect(transientNotice.get()?.text).toBe(
       'The focused session has no work plan.',
@@ -354,7 +354,7 @@ describe('handleTuiSlashCommand', () => {
     expect(snapshots.preload).toHaveBeenCalledTimes(2);
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
 
-    activeStreamId.set('another-stream');
+    activeRunId.set('another-stream');
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
     expect(localEntries()).toEqual([]);
     closeForegroundReader();
@@ -378,7 +378,7 @@ describe('handleTuiSlashCommand', () => {
       ),
     });
     ensureStream(streamId);
-    activeStreamId.set(streamId);
+    activeRunId.set(streamId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
     expect(foregroundReader.get()).toMatchObject({
@@ -416,9 +416,9 @@ describe('handleTuiSlashCommand', () => {
     ensureStream(streamA);
     ensureStream(streamB);
 
-    activeStreamId.set(streamA);
+    activeRunId.set(streamA);
     const requestA = handleTuiSlashCommand('/plan', createContext());
-    activeStreamId.set(streamB);
+    activeRunId.set(streamB);
     const requestB = handleTuiSlashCommand('/plan', createContext());
     expect(foregroundReader.get()).toMatchObject({
       kind: 'workPlan',
@@ -458,10 +458,10 @@ describe('handleTuiSlashCommand', () => {
       ),
     });
     ensureStream(streamId);
-    activeStreamId.set(streamId);
+    activeRunId.set(streamId);
 
     const first = handleTuiSlashCommand('/plan', createContext());
-    activeStreamId.set(undefined);
+    activeRunId.set(undefined);
     await handleTuiSlashCommand('/plan', createContext());
     expect(foregroundReader.get()).toBeUndefined();
     expect(transientNotice.get()?.text).toBe('No focused session.');
@@ -487,7 +487,7 @@ describe('handleTuiSlashCommand', () => {
       ),
     });
     ensureStream(streamId);
-    activeStreamId.set(streamId);
+    activeRunId.set(streamId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
     expect(foregroundReader.get()).toMatchObject({ loading: true, streamId });
@@ -514,7 +514,7 @@ describe('handleTuiSlashCommand', () => {
       ),
     });
     ensureStream(streamId);
-    activeStreamId.set(streamId);
+    activeRunId.set(streamId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
     expect(foregroundReader.get()).toMatchObject({ loading: true, streamId });
@@ -902,7 +902,7 @@ describe('handleTuiSlashCommand', () => {
     // is deliberately NOT raised — the teardown owns that policy.
     expect(session.stopRequested).toBe(true);
     expect(requestInputExit).toHaveBeenCalledOnce();
-    expect(activeStreamId.get()).toBeUndefined();
+    expect(activeRunId.get()).toBeUndefined();
   });
 
   it('uses the provided process cwd when formatting /status resume hints', async () => {
@@ -910,8 +910,8 @@ describe('handleTuiSlashCommand', () => {
     const session = createSession();
     const streamId = 'stream-1' as StreamTabId;
     session.streamId = streamId;
-    session.executionId = 'exec-1' as ExecutionId;
-    activeStreamId.set(streamId);
+    session.executionId = 'exec-1' as RunId;
+    activeRunId.set(streamId);
     ensureStream(streamId, { status: STREAM_PHASE.WAITING });
 
     const handled = await handleTuiSlashCommand(
@@ -928,12 +928,12 @@ describe('handleTuiSlashCommand', () => {
   it('reports active children while preserving an idle focused root status', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
+    const rootRunId = 'stream-root' as StreamTabId;
     const childStreamId = 'stream-child' as StreamTabId;
-    activeStreamId.set(rootStreamId);
-    ensureStream(rootStreamId, { status: STREAM_PHASE.WAITING });
+    activeRunId.set(rootRunId);
+    ensureStream(rootRunId, { status: STREAM_PHASE.WAITING });
     ensureStream(childStreamId, { status: STREAM_PHASE.RUNNING });
-    seedChildRoster(rootStreamId, [
+    seedChildRoster(rootRunId, [
       {
         executionId: 'child-exec',
         identity: { kind: 'agent', agent: 'critic' },
@@ -946,7 +946,7 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('status: Idle');
     expect(statusText).toContain('active background tasks: 1');
   });
@@ -954,7 +954,7 @@ describe('handleTuiSlashCommand', () => {
   it('counts only running children among mixed direct-children phases', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
+    const rootRunId = 'stream-root' as StreamTabId;
     const parentStreamId = 'stream-parent' as StreamTabId;
     const rootSiblingIds = [
       'stream-root-sibling-1',
@@ -962,7 +962,7 @@ describe('handleTuiSlashCommand', () => {
     ] as StreamTabId[];
     const runningChildId = 'stream-child-running' as StreamTabId;
     const waitingChildId = 'stream-child-waiting' as StreamTabId;
-    activeStreamId.set(parentStreamId);
+    activeRunId.set(parentStreamId);
     for (const streamId of rootSiblingIds) {
       ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
     }
@@ -972,7 +972,7 @@ describe('handleTuiSlashCommand', () => {
     const rosterRow = (
       childStreamId: StreamTabId,
       index: number,
-      status: StreamPhase,
+      status: RunPhase,
     ) => ({
       executionId: `child-exec-${index}`,
       identity: { kind: 'agent' as const, agent: `critic-${index}` },
@@ -981,7 +981,7 @@ describe('handleTuiSlashCommand', () => {
       startedAt: index + 1,
       childStreamId,
     });
-    seedChildRoster(rootStreamId, [
+    seedChildRoster(rootRunId, [
       rosterRow(parentStreamId, 0, STREAM_PHASE.WAITING),
       ...rootSiblingIds.map((streamId, index) =>
         rosterRow(streamId, index + 1, STREAM_PHASE.RUNNING),
@@ -994,7 +994,7 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('active background tasks: 1');
     expect(statusText).not.toContain('active background tasks: 2');
   });
@@ -1002,20 +1002,20 @@ describe('handleTuiSlashCommand', () => {
   it('does not count retained idle children as active background tasks', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
+    const rootRunId = 'stream-root' as StreamTabId;
     const childStreamIds = [
       'stream-child-1',
       'stream-child-2',
     ] as StreamTabId[];
-    activeStreamId.set(rootStreamId);
-    ensureStream(rootStreamId, { status: STREAM_PHASE.WAITING });
+    activeRunId.set(rootRunId);
+    ensureStream(rootRunId, { status: STREAM_PHASE.WAITING });
     for (const [index, childStreamId] of childStreamIds.entries()) {
       ensureStream(childStreamId, {
         status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
       });
     }
     seedChildRoster(
-      rootStreamId,
+      rootRunId,
       childStreamIds.map((childStreamId, index) => ({
         executionId: `child-exec-${index}`,
         identity: { kind: 'agent' as const, agent: `critic-${index}` },
@@ -1028,23 +1028,21 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    expect(lastEntryText(rootStreamId)).not.toContain(
-      'active background tasks:',
-    );
+    expect(lastEntryText(rootRunId)).not.toContain('active background tasks:');
   });
 
   it('reports the owning workflow count while a background task is focused', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
+    const rootRunId = 'stream-root' as StreamTabId;
     const focusedChildId = 'stream-focused-child' as StreamTabId;
     const siblingChildId = 'stream-sibling-child' as StreamTabId;
-    activeStreamId.set(focusedChildId);
+    activeRunId.set(focusedChildId);
     for (const streamId of [focusedChildId, siblingChildId]) {
       ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
     }
     seedChildRoster(
-      rootStreamId,
+      rootRunId,
       [focusedChildId, siblingChildId].map((childStreamId, index) => ({
         executionId: `child-exec-${index}`,
         identity: { kind: 'agent' as const, agent: `critic-${index}` },
@@ -1057,7 +1055,7 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('status: Running');
     expect(statusText).toContain('active background tasks: 2');
   });
@@ -1065,16 +1063,16 @@ describe('handleTuiSlashCommand', () => {
   it('filters idle siblings from the owning workflow count', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
+    const rootRunId = 'stream-root' as StreamTabId;
     const focusedChildId = 'stream-focused-child' as StreamTabId;
     const runningSiblingId = 'stream-running-sibling' as StreamTabId;
     const idleSiblingId = 'stream-idle-sibling' as StreamTabId;
-    activeStreamId.set(focusedChildId);
+    activeRunId.set(focusedChildId);
     ensureStream(focusedChildId, { status: STREAM_PHASE.WAITING });
     ensureStream(runningSiblingId, { status: STREAM_PHASE.RUNNING });
     ensureStream(idleSiblingId, { status: STREAM_PHASE.WAITING });
     seedChildRoster(
-      rootStreamId,
+      rootRunId,
       [focusedChildId, runningSiblingId, idleSiblingId].map(
         (childStreamId, index) => ({
           executionId: `child-exec-${index}`,
@@ -1092,7 +1090,7 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('active background tasks: 1');
     expect(statusText).not.toContain('active background tasks: 3');
   });
@@ -1100,14 +1098,14 @@ describe('handleTuiSlashCommand', () => {
   it('counts delegated work owned by a focused intermediate parent', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
+    const rootRunId = 'stream-root' as StreamTabId;
     const parentStreamId = 'stream-parent' as StreamTabId;
     const rootSiblingIds = [
       'stream-root-sibling-1',
       'stream-root-sibling-2',
     ] as StreamTabId[];
     const grandchildId = 'stream-grandchild' as StreamTabId;
-    activeStreamId.set(parentStreamId);
+    activeRunId.set(parentStreamId);
     for (const streamId of [parentStreamId, ...rootSiblingIds, grandchildId]) {
       ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
     }
@@ -1120,14 +1118,14 @@ describe('handleTuiSlashCommand', () => {
       childStreamId,
     });
     seedChildRoster(
-      rootStreamId,
+      rootRunId,
       [parentStreamId, ...rootSiblingIds].map(rosterRow),
     );
     seedChildRoster(parentStreamId, [rosterRow(grandchildId, 3)]);
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('active background tasks: 1');
     expect(statusText).not.toContain('active background tasks: 3');
   });
@@ -1137,7 +1135,7 @@ describe('handleTuiSlashCommand', () => {
     const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
     const session = createSession();
     const streamId = 'stream-access' as StreamTabId;
-    activeStreamId.set(streamId);
+    activeRunId.set(streamId);
     patchSessionMeta({ model: 'gpt55' });
     // The access route comes off the fold's cumulative usage for the stream.
     ensureStream(streamId, {

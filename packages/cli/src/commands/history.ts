@@ -4,16 +4,12 @@ import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export';
 import { openSessionEffect } from '@agent/runtime';
-import { listExecutions } from '@agent/storage';
+import { listRuns } from '@agent/storage';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { effectRuntime } from '@platform/processRuntime';
-import { type ExecutionId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
-import {
-  assembleTrace,
-  injectStandaloneTrace,
-  StreamLogStore,
-} from '@transcript';
+import { assembleTrace, injectStandaloneTrace, RunLogStore } from '@transcript';
 import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -80,7 +76,7 @@ async function runHistoryList(
 
 async function runHistoryShow(
   context: CliContext,
-  id: ExecutionId,
+  id: RunId,
   options: { full?: boolean },
 ): Promise<number> {
   await initLocalCliPlatform(context);
@@ -120,7 +116,7 @@ async function runHistoryShow(
  */
 export async function runHistoryExport(
   context: CliContext,
-  id: ExecutionId,
+  id: RunId,
   format: 'html' | 'md',
   options: { assetsDir?: string },
 ): Promise<number> {
@@ -212,7 +208,7 @@ export async function runHistoryExport(
 
 async function runHistoryDelete(
   context: CliContext,
-  options: { id?: ExecutionId; all: boolean; yes: boolean },
+  options: { id?: RunId; all: boolean; yes: boolean },
 ): Promise<number> {
   await initLocalCliPlatform(context);
 
@@ -224,8 +220,7 @@ async function runHistoryDelete(
     // process-bookkeeping entries and agent-spawned child runs — don't add the
     // visibility filter here.
     const session = await initializeCliTranscriptSession();
-    const count = (await effectRuntime().runPromise(listExecutions(session)))
-      .length;
+    const count = (await effectRuntime().runPromise(listRuns(session))).length;
     writeTextStderr(
       `Refusing to delete ${formatResultCount(count, 'stored execution')}. Re-run with --yes to confirm.`,
     );

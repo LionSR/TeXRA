@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { logUserMessage, type AgentTrace } from '@agent/trace';
-import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { MESSAGE_TYPES, type RunLogEntry } from '@shared/schemas';
+import { RunLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
 // #7508: the userMessage row's attachment-kind/count payload — logUserMessage
@@ -11,10 +11,10 @@ import { createTestRunTrace } from '@test/support/sessionTestUtils';
 describe('logUserMessage', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
-  let store: StreamLog;
+  let store: RunLog;
 
   beforeEach(() => {
-    store = new StreamLog();
+    store = new RunLog();
     const runTrace = createTestRunTrace('TestUserMessageLogger', store);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
@@ -24,7 +24,7 @@ describe('logUserMessage', () => {
     disposeTrace();
   });
 
-  function capturedEntries(): StreamLogEntry[] {
+  function capturedEntries(): RunLogEntry[] {
     return store.getRange(0, store.head);
   }
 

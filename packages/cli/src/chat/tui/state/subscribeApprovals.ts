@@ -88,7 +88,7 @@ import {
   setCliSubscriptionPreference,
 } from './subscriptionPreference';
 import {
-  approvalPayloadStreamId,
+  approvalPayloadRunId,
   currentApproval,
   reserveHostRequest,
   settleHostRequestsWhere,
@@ -232,7 +232,7 @@ export function createTuiHostInteractions(
       settleHostRequestsWhere(
         (payload) =>
           matchesCancelSelector(
-            { kind: payload.kind, streamId: approvalPayloadStreamId(payload) },
+            { kind: payload.kind, streamId: approvalPayloadRunId(payload) },
             selector,
           ),
         {

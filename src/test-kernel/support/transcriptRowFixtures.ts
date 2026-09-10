@@ -20,8 +20,8 @@ import {
   TOOL_USE_STATUS,
   type FileListEntry,
   type NormalizedToolUse,
-  type StreamLogEntry,
-  type StreamPhase,
+  type RunLogEntry,
+  type RunPhase,
   type TaskGroup,
 } from '@shared/schemas';
 import {
@@ -34,7 +34,7 @@ import {
   type PhaseRow,
 } from '@shared/transcript';
 import { toolRowModel } from '@shared/transcript/toolRowModel';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { upsertTaskGroupFromRunLog } from '@shared/streams/taskGroupProjection';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
 
@@ -148,12 +148,12 @@ export function compactionRowFixture(
 
 /** Test-local full replay through the production reducer (the resync path). */
 export function projectTaskGroupsFromStreamLog(
-  entries: Iterable<StreamLogEntry>,
+  entries: Iterable<RunLogEntry>,
 ): TaskGroup[] {
   const taskGroups: TaskGroup[] = [];
   const taskGroupIndex = new Map<string, number>();
   for (const entry of entries) {
-    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
+    upsertTaskGroupFromRunLog(taskGroups, taskGroupIndex, entry);
   }
   return taskGroups;
 }
@@ -164,7 +164,7 @@ export function projectTaskGroupsFromStreamLog(
 export function splitTranscriptEntries(
   entries: readonly TranscriptRow[],
   finalizedFrontier: number,
-  status: StreamPhase | undefined,
+  status: RunPhase | undefined,
 ): {
   readonly finalized: readonly TranscriptRow[];
   readonly pending: readonly TranscriptRow[];

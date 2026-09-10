@@ -21,10 +21,10 @@ import {
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import {
   STREAM_TRANSITION_CAUSE,
-  type StreamTransitionCause,
+  type RunTransitionCause,
 } from '@shared/streams/streamStatus';
 import {
   createTestSession,
@@ -32,10 +32,10 @@ import {
 } from '@test/support/sessionTestUtils';
 
 const streamId = 'stream:cli-session-projection' as StreamTabId;
-const executionId = 'c11a01' as ExecutionId;
+const executionId = 'c11a01' as RunId;
 const childStreamId = 'stream:cli-child' as StreamTabId;
-const childExecutionId = 'c11c01' as ExecutionId;
-const storageKey = 'a00101' as ExecutionId;
+const childExecutionId = 'c11c01' as RunId;
+const storageKey = 'a00101' as RunId;
 
 type WorkflowConfig = Omit<AgentConfig, 'agentCategory'> & {
   agentCategory: typeof AgentCategory.Workflow;
@@ -64,7 +64,7 @@ function workflowConfig(
 
 type RunStatusProjectionPayload =
   CliNdjsonProgressEventPayloads['updateStreamStatus'] & {
-    cause: StreamTransitionCause;
+    cause: RunTransitionCause;
   };
 
 /** A published fact: a run-scoped trace event on `streamId`, or a draft. */
@@ -498,28 +498,28 @@ describe('attachCliSessionProgressProjection', () => {
     // encoding, `childStreamId` only on subagent rows, and NO `identity`.
     const items: ActiveChildInfo[] = [
       {
-        executionId: 'a101' as ExecutionId,
+        executionId: 'a101' as RunId,
         childStreamId: 'stream:native' as StreamTabId,
         agentName: 'review',
         identity: { kind: 'agent', agent: 'review' },
         status: STREAM_PHASE.RUNNING,
       },
       {
-        executionId: 'a102' as ExecutionId,
+        executionId: 'a102' as RunId,
         childStreamId: 'stream:tool' as StreamTabId,
         agentName: 'polish',
         identity: { kind: 'agent', agent: 'polish', tool: 'delegate' },
         status: STREAM_PHASE.RUNNING,
       },
       {
-        executionId: 'a103' as ExecutionId,
+        executionId: 'a103' as RunId,
         childStreamId: 'stream:workflow' as StreamTabId,
         agentName: 'plan',
         identity: { kind: 'multiAgentWorkflow', workflowName: 'delegate' },
         status: STREAM_PHASE.RUNNING,
       },
       {
-        executionId: 'a104' as ExecutionId,
+        executionId: 'a104' as RunId,
         childStreamId: 'stream:process' as StreamTabId,
         agentName: 'bash',
         identity: { kind: 'process', tool: 'bash' },

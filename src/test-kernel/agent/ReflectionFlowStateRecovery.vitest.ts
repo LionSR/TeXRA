@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import { noopTrace } from '@agent/trace';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import {
@@ -27,7 +27,7 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -62,7 +62,7 @@ function createModelCell(): RunReflectionFlowInput['modelCell'] {
 }
 
 async function runPersistedReflectionFlow(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   logger: RunReflectionFlowInput['logger'] = noopTrace,
   options: { rounds?: number; aborted?: boolean } = {},
@@ -108,13 +108,13 @@ function recoveryCase(
   name: string,
   options: { rounds?: number; aborted?: boolean } = {},
 ) {
-  const executionId = `reflection-flow-${name}` as ExecutionId;
+  const executionId = `reflection-flow-${name}` as RunId;
   const streamId = `workflow@gpt54#reflection-flow-${name}` as StreamTabId;
   return {
     key: flowKey(executionId),
     run: () =>
       runPersistedReflectionFlow(executionId, streamId, noopTrace, options),
-    store: getExecutionStore(executionId),
+    store: getRunStore(executionId),
   };
 }
 
@@ -169,7 +169,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
 
     await expect(
       runPersistedReflectionFlow(
-        'reflection-flow-preparation-failure' as ExecutionId,
+        'reflection-flow-preparation-failure' as RunId,
         'workflow@gpt54#reflection-flow-preparation-failure' as StreamTabId,
         logger,
       ),

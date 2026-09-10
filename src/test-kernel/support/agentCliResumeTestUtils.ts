@@ -2,14 +2,14 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { StreamTabId } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import type { ChildStream } from '@tools/delegation/childStream';
+import type { ChildRun } from '@tools/delegation/childStream';
 
 export function createFakeAgentCliChildStream(
   childStreamId: StreamTabId,
-): ChildStream {
-  const logger = createTestRunTrace(childStreamId, new StreamLog()).trace;
+): ChildRun {
+  const logger = createTestRunTrace(childStreamId, new RunLog()).trace;
   return {
     childStreamId,
     logger,

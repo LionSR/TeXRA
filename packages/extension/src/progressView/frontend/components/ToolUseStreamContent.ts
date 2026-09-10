@@ -14,7 +14,7 @@ import './SessionComposer';
 const RUN_ENDED_MESSAGE = 'This run has ended.';
 
 @customElement('tool-use-stream-content')
-export class ToolUseStreamContent extends BaseStreamContent {
+export class ToolUseRunContent extends BaseStreamContent {
   static override styles = [
     conversationContentStyles,
     css`
@@ -87,6 +87,6 @@ export class ToolUseStreamContent extends BaseStreamContent {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'tool-use-stream-content': ToolUseStreamContent;
+    'tool-use-stream-content': ToolUseRunContent;
   }
 }

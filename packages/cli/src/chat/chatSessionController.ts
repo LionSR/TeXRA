@@ -7,7 +7,7 @@ import { Cause, Effect, Option, Stream, SubscriptionRef } from 'effect';
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import { ExecutionLeaseActiveError, getExecutionRecords } from '@agent/storage';
+import { RunLeaseActiveError, getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
@@ -50,7 +50,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -58,8 +58,8 @@ import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
-import { StreamSnapshotStore } from '@transcript';
-import { generateExecutionId, throwAggregated } from '@utils/core';
+import { RunSnapshotStore } from '@transcript';
+import { generateRunId, throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -67,9 +67,9 @@ import {
   type SlashCommandContext,
 } from './tui/commands/handlers/slashContext';
 import {
-  activeStreamId as activeStreamIdSignal,
-  focusStream,
-  rootStreamId,
+  activeRunId as activeStreamIdSignal,
+  focusRun,
+  rootRunId,
   patchSessionMeta,
   requestDraftRestore,
   sessionMeta as sessionMetaSignal,
@@ -92,7 +92,7 @@ import {
   appendLocalUserTranscript,
   clearLocalTranscript,
   describeRequestError,
-  moveLocalTranscriptToStream,
+  moveLocalTranscriptToRun,
 } from './tui/state/transcript';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
@@ -168,7 +168,7 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: ExecutionId): Promise<void>;
+  resume(id: RunId): Promise<void>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
@@ -230,7 +230,7 @@ export interface ChatSessionControllerInit {
   readonly followUpQueue: PQueue;
 
   /** Per-stream sidecar persistence store. */
-  readonly snapshotStore: StreamSnapshotStore;
+  readonly snapshotStore: RunSnapshotStore;
   readonly initialAgent: string;
   readonly initialModel: string;
   readonly initialModelSource: RunModelDecisionReason;
@@ -471,7 +471,7 @@ export function createChatSessionController(
     if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
-    if (error instanceof ExecutionLeaseActiveError) {
+    if (error instanceof RunLeaseActiveError) {
       session.runExitCode = CliExitCode.Usage;
     } else {
       session.runExitCode = CliExitCode.AgentError;
@@ -534,7 +534,7 @@ export function createChatSessionController(
     sessionContext: CliContext,
   ): {
     readonly approvalsUnavailable: boolean;
-    readonly ownExecution: (executionId: ExecutionId) => void;
+    readonly ownExecution: (executionId: RunId) => void;
     readonly finalize: () => void;
   } => {
     const presentationHost = createCliRuntimeHost(sessionContext);
@@ -589,7 +589,7 @@ export function createChatSessionController(
     adoptRunConfig(config);
     const { approvalsUnavailable, ownExecution, finalize } =
       setupRunHost(sessionContext);
-    const executionId = generateExecutionId();
+    const executionId = generateRunId();
     ownExecution(executionId);
     session.executionId = executionId;
 
@@ -624,7 +624,7 @@ export function createChatSessionController(
                     // new round's stream to the previous one so bypass resolution
                     // (see `registerStreamParent`) falls through to whatever the
                     // prior round had, unless this round sets its own explicit value.
-                    const previousRootStreamId = rootStreamId.get();
+                    const previousRootStreamId = rootRunId.get();
                     if (
                       previousRootStreamId &&
                       previousRootStreamId !== resolvedStreamId
@@ -635,9 +635,9 @@ export function createChatSessionController(
                       );
                     }
                     session.streamId = resolvedStreamId;
-                    rootStreamId.set(resolvedStreamId);
-                    moveLocalTranscriptToStream(resolvedStreamId);
-                    focusStream(resolvedStreamId);
+                    rootRunId.set(resolvedStreamId);
+                    moveLocalTranscriptToRun(resolvedStreamId);
+                    focusRun(resolvedStreamId);
                     if (session.stopRequested) interruptActiveRun();
                   },
                 },
@@ -659,7 +659,7 @@ export function createChatSessionController(
   // resume
   // -----------------------------------------------------------------------
 
-  const resume = async (id: ExecutionId): Promise<void> => {
+  const resume = async (id: RunId): Promise<void> => {
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below, see tryClaimRootRunSlot. This fuses the
     // availability check and the claim into one atomic step so a concurrent
@@ -685,7 +685,7 @@ export function createChatSessionController(
       // The durable record names the stream (FK stamped at registration) and
       // the config the TUI adopts before the run. Workflow runs resume
       // headless through `texra resume`, not inside a chat.
-      const store = getExecutionRecords(runtimeSession, id);
+      const store = getRunRecords(runtimeSession, id);
       const [config, meta] = yield* Effect.all([
         store.readConfig(),
         store.readMeta(),
@@ -737,7 +737,7 @@ export function createChatSessionController(
         followUpQueue.clear();
         session.streamId = streamId;
         session.executionId = id;
-        rootStreamId.set(streamId);
+        rootRunId.set(streamId);
         // The session held no stream until the line above: `markRunPending`,
         // inside the synchronous slot claim at the top of `resume`, dropped
         // the pre-resume one, so a Ctrl-C in the window before adoption could
@@ -759,7 +759,7 @@ export function createChatSessionController(
         // store, which is what an open `/plan` reader re-reads to clear its
         // failure-time mask. The transcript itself is the fold's: the TUI
         // subscribes the stream's aggregate and renders `transcript.rows`.
-        focusStream(streamId);
+        focusRun(streamId);
       };
 
       // The seeded batch stays this call's until the stream queue takes it
@@ -889,7 +889,7 @@ export function createChatSessionController(
         const executionId = runMetadata.executionId;
         if (!executionId) return false;
 
-        const config = yield* getExecutionRecords(
+        const config = yield* getRunRecords(
           runtimeSession,
           executionId,
         ).readConfig();
@@ -907,13 +907,13 @@ export function createChatSessionController(
         session.streamId = streamId;
         session.executionId = executionId;
         if (!parentStreamId) {
-          rootStreamId.set(streamId);
+          rootRunId.set(streamId);
         }
         // A follow-up wake may target a stream the user /clear-ed;
         // resuming it un-retires it (the empty patch drops the retired mark),
         // matching the explicit resume path, or focusStream would refuse
         // and the resumed run would stay invisible.
-        focusStream(streamId);
+        focusRun(streamId);
         session.runExitCode = CliExitCode.Success;
 
         yield* hostPort(() => setCliHelperModel(config.model));

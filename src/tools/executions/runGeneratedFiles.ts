@@ -24,7 +24,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { byStringProp } from '@utils/core';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since the input is a storage-relative path produced by the
@@ -59,7 +59,7 @@ export interface RunGeneratedFile {
  */
 export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
   function* (
-    executionId: ExecutionId,
+    executionId: RunId,
     session: SessionHandle,
   ): Effect.fn.Return<RunGeneratedFile[], unknown> {
     const runDir = yield* hostPort(() =>

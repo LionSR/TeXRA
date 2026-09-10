@@ -99,7 +99,7 @@ export interface CliAmbientState {
  * answer "is color OK on *stderr*" — the gate `doctor` and the progress
  * renderer each need for their own destination.
  */
-export function resolveStreamColor(
+export function resolveRunColor(
   streamIsTty: boolean,
   options: {
     forceDisable?: boolean;
@@ -129,8 +129,8 @@ export function readCliAmbientState(): CliAmbientState {
   const stdinIsTty = process.stdin.isTTY === true;
   const stdoutIsTty = process.stdout.isTTY === true;
   const dumbTerm = process.env.TERM === 'dumb';
-  const stdoutColorEnabled = resolveStreamColor(stdoutIsTty);
-  const stderrColorEnabled = resolveStreamColor(stderrIsTty);
+  const stdoutColorEnabled = resolveRunColor(stdoutIsTty);
+  const stderrColorEnabled = resolveRunColor(stderrIsTty);
   cachedAmbient = {
     isCi: Boolean(process.env.CI),
     stdinIsTty,

@@ -11,20 +11,20 @@ const mocks = vi.hoisted(() => ({
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
-  acquireResumedExecutionLease: vi.fn(),
+  acquireResumedRunLease: vi.fn(),
   validateOwnedExecutionLease: vi.fn(),
   runWithExecutionLeaseWriteFence: vi.fn(
-    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
+    async (_executionId: RunId, operation: () => Promise<unknown>) =>
       operation(),
   ),
-  releaseOwnedExecutionLease: vi.fn(),
+  releaseOwnedRunLease: vi.fn(),
   releaseExecutionClaims: vi.fn(),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
+  acquireResumedRunLease: mocks.acquireResumedRunLease,
   assertOwnedExecutionLease: vi.fn(),
-  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
+  releaseOwnedRunLease: mocks.releaseOwnedRunLease,
   validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
   runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
 }));
@@ -97,7 +97,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -126,7 +126,7 @@ interface ModelSwitchingFlowInput {
 const LANE_SESSION = {
   executions: {
     launchExecution: (
-      _executionId: ExecutionId,
+      _executionId: RunId,
       operation: Effect.Effect<unknown, unknown>,
     ) => operation,
   },
@@ -148,7 +148,7 @@ function resumeToolUseFromResumeData(
 
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
 function buildResumeContext(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
 ): AgentLaunchContext {
   const abortController = new AbortController();
@@ -179,7 +179,7 @@ function noopFlowHandle(): unknown {
 describe('resumeToolUseFromResumeData cancellation handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.acquireResumedRunLease.mockResolvedValue('existing');
     mocks.retrieveSessionResumeData.mockImplementation(
       async (streamId, executionId, agentConfig) =>
         createToolUseResumeData({ executionId, streamId, agentConfig }),
@@ -187,7 +187,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
       USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     );
-    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
     mocks.releaseExecutionClaims.mockReturnValue(Effect.void);
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
@@ -204,7 +204,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     'preserves persisted native follow-up support across resumed waiting turns',
     () =>
       Effect.gen(function* () {
-        const executionId = 'e9911-native-resume' as ExecutionId;
+        const executionId = 'e9911-native-resume' as RunId;
         const streamId = 'stream-9911-native-resume' as StreamTabId;
         const snapshot = createToolUseResumeData({ executionId, streamId });
         mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
@@ -242,7 +242,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       Effect.gen(function* () {
         const storageError = new Error('execution metadata unavailable');
         const snapshot = createToolUseResumeData({
-          executionId: 'e8048' as ExecutionId,
+          executionId: 'e8048' as RunId,
           streamId: 'stream-8048' as StreamTabId,
         });
         mocks.hasPersistedParent.mockRejectedValueOnce(storageError);
@@ -252,7 +252,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         );
 
         expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-        expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
+        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(
           snapshot.executionId,
         );
         expect(mocks.releaseExecutionClaims).toHaveBeenCalledWith(
@@ -310,7 +310,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     'interrupts at flow attachment before substantive work starts',
     () =>
       Effect.gen(function* () {
-        const executionId = 'e8049' as ExecutionId;
+        const executionId = 'e8049' as RunId;
         const streamId = 'stream-8049' as StreamTabId;
         const context = buildResumeContext(executionId, streamId);
         const order: string[] = [];
@@ -388,7 +388,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         });
 
         expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
+        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(
           executionId,
         );
         expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
@@ -407,7 +407,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     'mirrors a mid-run model switch onto the persisted config only',
     () =>
       Effect.gen(function* () {
-        const executionId = 'e9421-model' as ExecutionId;
+        const executionId = 'e9421-model' as RunId;
         const streamId = 'stream-9421-model' as StreamTabId;
         const ctx = buildResumeContext(executionId, streamId);
         mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
@@ -435,7 +435,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     'carries a failed resumed flow result, error included, to the lifecycle',
     () =>
       Effect.gen(function* () {
-        const executionId = 'e9421-error' as ExecutionId;
+        const executionId = 'e9421-error' as RunId;
         const streamId = 'stream-9421-error' as StreamTabId;
         const flowError = {
           message: 'provider failed mid-resume',

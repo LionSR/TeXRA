@@ -312,7 +312,7 @@ class StreamTab extends LitElement {
 // =============================================================================
 
 @customElement('stream-tabs')
-export class StreamTabs extends LitElement {
+export class RunTabs extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,

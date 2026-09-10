@@ -2,16 +2,16 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Exit } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { getExecutionRecords, getExecutionStore } from '@agent/storage';
+import { getRunRecords, getRunStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runInSession } from '@agent/runtime/RunContext';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   finalizeRun,
-  acquireResumedExecutionOwnership,
-  registerExecution,
+  acquireResumedRunOwnership,
+  registerRun,
 } from '@agent/storage/executionLifecycle';
-import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { inspectRunLease } from '@agent/storage/executionLease';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -33,7 +33,7 @@ let session: ReturnType<typeof createTestSession>;
 const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>
   Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
 const register = (workingDirectory?: string) =>
-  registerExecution(
+  registerRun(
     session,
     executionId,
     {
@@ -59,12 +59,12 @@ describe('execution registration and finalization', () => {
       Effect.gen(function* () {
         yield* register(workingDirectory);
         expect(
-          yield* getExecutionRecords(session, executionId).readConfig(),
+          yield* getRunRecords(session, executionId).readConfig(),
         ).toMatchObject({
           workingDirectory: workingDirectory ?? '/workspace/root',
         });
         expect(
-          yield* getExecutionRecords(session, executionId).readMeta(),
+          yield* getRunRecords(session, executionId).readMeta(),
         ).toMatchObject({
           streamId: options.streamId,
           identity: options.identity,
@@ -72,7 +72,7 @@ describe('execution registration and finalization', () => {
         });
         expect(
           yield* Effect.promise(() =>
-            getExecutionStore(executionId).listKeys(),
+            getRunStore(executionId).listKeys(),
           ),
         ).toEqual([]);
       }),
@@ -88,10 +88,10 @@ describe('execution registration and finalization', () => {
         );
         expect(failureOf(yield* Effect.exit(register()))).toBe(failure);
         expect(
-          yield* inSession(() => inspectExecutionLease(executionId)),
+          yield* inSession(() => inspectRunLease(executionId)),
         ).toEqual({ status: 'free' });
         expect(
-          yield* getExecutionRecords(session, executionId).readMeta(),
+          yield* getRunRecords(session, executionId).readMeta(),
         ).toBeNull();
       }),
   );
@@ -109,7 +109,7 @@ describe('execution registration and finalization', () => {
         expect(
           failureOf(
             yield* Effect.exit(
-              acquireResumedExecutionOwnership(
+              acquireResumedRunOwnership(
                 session,
                 executionId,
                 options.streamId,
@@ -118,7 +118,7 @@ describe('execution registration and finalization', () => {
           ),
         ).toBe(failure);
         const lease = yield* inSession(() =>
-          inspectExecutionLease(executionId),
+          inspectRunLease(executionId),
         );
         expect(lease.status).toBe(alreadyOwned ? 'owned' : 'free');
       }),
@@ -138,14 +138,14 @@ describe('execution registration and finalization', () => {
         expect(
           failureOf(
             yield* Effect.exit(
-              getExecutionRecords(session, executionId).writeReport('unowned'),
+              getRunRecords(session, executionId).writeReport('unowned'),
             ),
           ),
         ).toBeInstanceOf(Error);
         yield* session.acquireExecutionClaims(executionId, options.streamId);
-        yield* getExecutionRecords(session, executionId).writeReport('owned');
+        yield* getRunRecords(session, executionId).writeReport('owned');
         expect(
-          yield* getExecutionRecords(session, executionId).readReport(),
+          yield* getRunRecords(session, executionId).readReport(),
         ).toBe('owned');
       }),
   );
@@ -158,15 +158,15 @@ describe('execution registration and finalization', () => {
         expect(
           failureOf(
             yield* Effect.exit(
-              registerExecution(session, 'bcd234', baseConfig, 'chat', options),
+              registerRun(session, 'bcd234', baseConfig, 'chat', options),
             ),
           ),
         ).toBeInstanceOf(Error);
-        yield* getExecutionRecords(session, executionId).writeReport(
+        yield* getRunRecords(session, executionId).writeReport(
           'still owned',
         );
         expect(
-          yield* getExecutionRecords(session, executionId).readReport(),
+          yield* getRunRecords(session, executionId).readReport(),
         ).toBe('still owned');
       }),
   );
@@ -180,17 +180,17 @@ describe('execution registration and finalization', () => {
         );
         expect(failureOf(yield* Effect.exit(register()))).toBeInstanceOf(Error);
         expect(
-          yield* getExecutionRecords(session, executionId).readMeta(),
+          yield* getRunRecords(session, executionId).readMeta(),
         ).not.toBeNull();
         expect(
           failureOf(
             yield* Effect.exit(
-              getExecutionRecords(session, executionId).writeReport('unowned'),
+              getRunRecords(session, executionId).writeReport('unowned'),
             ),
           ),
         ).toBeInstanceOf(Error);
         expect(
-          yield* inSession(() => inspectExecutionLease(executionId)),
+          yield* inSession(() => inspectRunLease(executionId)),
         ).toEqual({ status: 'free' });
       }),
   );
@@ -200,7 +200,7 @@ describe('execution registration and finalization', () => {
     (flowRecord) =>
       Effect.gen(function* () {
         yield* register();
-        const store = getExecutionStore(executionId);
+        const store = getRunStore(executionId);
         yield* inSession(() =>
           store.write(flowKey(executionId), { checkpoint: 'existing format' }),
         );
@@ -232,7 +232,7 @@ describe('execution registration and finalization', () => {
           vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
             Effect.die(statusFailure),
           );
-        const deletion = vi.spyOn(getExecutionStore(executionId), 'delete');
+        const deletion = vi.spyOn(getRunStore(executionId), 'delete');
         if (deletionFails) deletion.mockRejectedValueOnce(deletionFailure);
         const result = yield* finalizeRun(session, {
           executionId,

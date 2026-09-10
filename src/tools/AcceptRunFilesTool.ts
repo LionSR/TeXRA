@@ -15,19 +15,19 @@ import { z } from 'zod';
 import { Effect } from 'effect';
 
 // Local imports
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { appSignals } from '@eventBus/AppSignals';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { effectRuntime } from '@platform/processRuntime';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import {
-  ExecutionIdSchema,
+  RunIdSchema,
   ToolError,
   type EditRecord,
   type ToolResult,
 } from '@shared/schemas';
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import type { RunId, FileLocation } from '@shared/schemas';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import {
@@ -90,7 +90,7 @@ const FileMapping = z.strictObject({
 
 const AcceptRunFilesInputSchema = z.strictObject({
   /** Execution ID (matches `id` attribute in subagent-result XML). */
-  execution_id: ExecutionIdSchema.describe(
+  execution_id: RunIdSchema.describe(
     'Execution ID (matches id attribute in subagent-result delivery)',
   ),
   /** Files to accept from run storage into the workspace. */
@@ -144,10 +144,8 @@ Parameters map directly to subagent-result delivery attributes:
         });
         if (
           directory === undefined &&
-          (yield* getExecutionRecords(
-            session,
-            input.execution_id,
-          ).readMeta()) === null
+          (yield* getRunRecords(session, input.execution_id).readMeta()) ===
+            null
         )
           return yield* Effect.fail(
             new ToolError(
@@ -387,7 +385,7 @@ Parameters map directly to subagent-result delivery attributes:
    * files are written directly to the workspace.
    */
   private async resolveSourceFile(
-    executionId: ExecutionId,
+    executionId: RunId,
     runPath: string,
   ): Promise<FileLocation> {
     const entry = await inspectRunStorageEntry(executionId, runPath);

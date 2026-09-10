@@ -14,7 +14,7 @@ import { Cause, Effect } from 'effect';
 import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
-import { listExecutions } from '@agent/storage';
+import { listRuns } from '@agent/storage';
 import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
@@ -166,7 +166,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
           try: () => initializeCliTranscriptSession(),
           catch: ensureError,
         }).pipe(
-          Effect.flatMap((session) => listExecutions(session)),
+          Effect.flatMap((session) => listRuns(session)),
           Effect.map((entries) => entries.length > 0),
           Effect.catch((error) =>
             Effect.sync(() => {

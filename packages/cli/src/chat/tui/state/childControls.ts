@@ -4,20 +4,16 @@
  * how a stream is presented. Surface decisions over fold facts; nothing
  * here derives topology.
  */
-import {
-  STREAM_PHASE,
-  type StreamPhase,
-  type StreamTabId,
-} from '@shared/schemas';
+import { STREAM_PHASE, type RunPhase, type StreamTabId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { childElapsedMs } from '@shared/streams/childElapsed';
 import { formatCompactDuration } from '@utils/core';
-import { focusStream, openWorkflowPopup } from './cliState';
+import { focusRun, openWorkflowPopup } from './cliState';
 import { currentView, streamViewOf } from './sessionView';
 
 export function childElapsed(
   child: {
-    readonly status: StreamPhase | undefined;
+    readonly status: RunPhase | undefined;
     readonly startedAt: number | undefined;
   },
   nowMs = Date.now(),
@@ -39,20 +35,20 @@ function hasChildren(view: SessionView, streamId: StreamTabId): boolean {
  */
 export function resolveChildListTarget(
   view: SessionView,
-  activeStreamId: StreamTabId | undefined,
+  activeRunId: StreamTabId | undefined,
 ): StreamTabId | undefined {
-  if (activeStreamId === undefined || hasChildren(view, activeStreamId)) {
-    return activeStreamId;
+  if (activeRunId === undefined || hasChildren(view, activeRunId)) {
+    return activeRunId;
   }
-  const ancestors = streamViewOf(view, activeStreamId)?.ancestors ?? [];
+  const ancestors = streamViewOf(view, activeRunId)?.ancestors ?? [];
   // Root first in the view; the nearest ancestor with children wins.
   for (const ancestor of ancestors.toReversed()) {
     if (hasChildren(view, ancestor.id)) return ancestor.id;
   }
-  return activeStreamId;
+  return activeRunId;
 }
 
-export function isWorkflowScriptStream(
+export function isWorkflowScriptRun(
   view: SessionView,
   streamId: StreamTabId,
 ): boolean {
@@ -63,16 +59,14 @@ export function isWorkflowScriptStream(
  * A workflow-script run is presented through its popup over its parent;
  * every other stream becomes the active conversation.
  */
-export function presentStream(
-  streamId: StreamTabId,
-): 'stream' | 'workflowPopup' {
+export function presentRun(streamId: StreamTabId): 'stream' | 'workflowPopup' {
   const view = currentView();
-  if (isWorkflowScriptStream(view, streamId)) {
+  if (isWorkflowScriptRun(view, streamId)) {
     const parentId = streamViewOf(view, streamId)?.parentId;
-    if (parentId) focusStream(parentId);
+    if (parentId) focusRun(parentId);
     openWorkflowPopup(streamId);
     return 'workflowPopup';
   }
-  focusStream(streamId);
+  focusRun(streamId);
   return 'stream';
 }

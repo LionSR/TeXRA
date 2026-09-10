@@ -3,15 +3,15 @@ import { z } from 'zod';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
-import { getExecutionStore, getExecutionRecords } from '@agent/storage';
+import { getRunStore, getRunRecords } from '@agent/storage';
 import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
   readWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
 import { runInSession, withRunContext } from '@agent/runtime/RunContext';
-import { registerExecution } from '@agent/storage/executionLifecycle';
-import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
+import { registerRun } from '@agent/storage/executionLifecycle';
+import { RunLeaseActiveError } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -40,8 +40,8 @@ import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { deriveExecutionId } from '@utils/core/idHash';
-import { childStreamDescription, createChildStream } from './childStream';
+import { deriveRunId } from '@utils/core/idHash';
+import { childRunDescription, createChildRun } from './childStream';
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
@@ -278,7 +278,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           script = input.script as string;
           const submissionId =
             callContext.toolCallId ??
-            deriveExecutionId({
+            deriveRunId({
               parentExecutionId: runScope.executionId,
               script,
             });
@@ -327,7 +327,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           parentExecutionId: runScope.executionId,
         });
         const store = runInSession(runScope.session, () =>
-          getExecutionStore(runScope.executionId),
+          getRunStore(runScope.executionId),
         );
         const files = yield* runPhase(async () => {
           const priorCheckpoint =
@@ -356,7 +356,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         // run id, so registration, stream, and grandchildren re-root at one stable
         // anchor and resume still replays completed calls (#8712). The journal
         // itself stays on the orchestrator store, where the checkpoint lives.
-        const runExecutionId = deriveExecutionId({ checkpointId });
+        const runExecutionId = deriveRunId({ checkpointId });
         const runStreamId = getStreamTabId(STREAM_PREFIX, {
           executionId: runExecutionId,
         });
@@ -441,7 +441,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         if (declined) return withScriptReference(declined, scriptPath);
 
         // Preserve the committed workflow snapshot when reopening this named execution.
-        const runStore = getExecutionRecords(runScope.session, runExecutionId);
+        const runStore = getRunRecords(runScope.session, runExecutionId);
         const priorMeta = yield* runStore
           .readMeta()
           .pipe(
@@ -460,7 +460,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           const launched = yield* Effect.uninterruptibleMask((restore) =>
             Effect.gen(function* () {
               const registration = yield* Effect.exit(
-                registerExecution(
+                registerRun(
                   runScope.session,
                   runExecutionId,
                   {
@@ -482,7 +482,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                     },
                     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                     parentExecutionId: runScope.executionId,
-                    description: childStreamDescription(meta.description),
+                    description: childRunDescription(meta.description),
                   },
                 ),
               );
@@ -492,7 +492,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                 // id: the fresh-lease acquisition fails closed rather than starting a
                 // second competing run over the same journal. Point the model at the
                 // live run instead of erroring.
-                if (error instanceof ExecutionLeaseActiveError) {
+                if (error instanceof RunLeaseActiveError) {
                   return withScriptReference(
                     executed(
                       [
@@ -535,7 +535,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                     // meta.name deliberately reuses one deterministic stream across
                     // launches. Reserve its writer while rehydrating so transcript
                     // eviction cannot race a resumed run.
-                    return yield* createChildStream(
+                    return yield* createChildRun(
                       runScope.session,
                       runExecutionId,
                       runScope.streamId,

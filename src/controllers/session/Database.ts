@@ -43,7 +43,7 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
   AggregateIdSchema,
-  ExecutionIdSchema,
+  RunIdSchema,
   OwnerIdSchema,
   SessionEventDraftSchema,
   SessionEventSchema,
@@ -53,7 +53,7 @@ import {
   listingTypeOf,
   referencedAggregates,
   type AggregateId,
-  type ExecutionId,
+  type RunId,
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -647,7 +647,7 @@ export const databaseLayer = (
             // Capture the declared parent in this same transaction. A
             // reused logical id must not redirect the child to a new run.
             let parentStartCommit: number | undefined;
-            let parentExecutionId: ExecutionId | undefined;
+            let parentExecutionId: RunId | undefined;
             if (draft.type === 'run.start' && draft.parentStreamId != null) {
               const parent = (yield* readState([
                 qualifyAggregateId('stream', draft.parentStreamId),
@@ -678,7 +678,7 @@ export const databaseLayer = (
                     executionIds: (yield* sql.unsafe<Record<string, unknown>>(
                       deletionExecutions,
                       [draft.aggregateId],
-                    )).map((row) => ExecutionIdSchema.parse(row.executionId)),
+                    )).map((row) => RunIdSchema.parse(row.executionId)),
                   }
                 : {
                     ...draft,

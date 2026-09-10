@@ -55,7 +55,7 @@ import { setCopilotRoutePreference } from '@model/copilotRouting';
 import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { revealProgressStream } from '@progressView/progressNavigation';
+import { revealProgressRun } from '@progressView/progressNavigation';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -369,7 +369,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetInlineCriticismEnabled(message.enabled),
       getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
       revealGoalStream: async (message) => {
-        await revealProgressStream(message.streamId);
+        await revealProgressRun(message.streamId);
       },
     };
   }

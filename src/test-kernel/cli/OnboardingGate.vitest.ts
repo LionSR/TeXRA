@@ -17,7 +17,7 @@ vi.mock('@model/setupCredentialAccess', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  listExecutions: () => Effect.tryPromise(() => mocks.listExecutions()),
+  listRuns: () => Effect.tryPromise(() => mocks.listExecutions()),
 }));
 
 vi.mock('@cli/runtime/transcriptSession', () => ({

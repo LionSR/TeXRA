@@ -11,9 +11,9 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
 import {
-  getExecutionStore,
-  getExecutionRecords,
-  registerExecution,
+  getRunStore,
+  getRunRecords,
+  registerRun,
 } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
@@ -25,8 +25,8 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecResult,
-  type ExecutionId,
-  type WorkflowExecutionSnapshot,
+  type RunId,
+  type WorkflowRunSnapshot,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -38,13 +38,13 @@ import { withToolEnvironment } from '@test/support/toolEnvironment';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
 
-function writeWorkflowExecutionSnapshot(
+function writeWorkflowRunSnapshot(
   session: ReturnType<typeof defaultSession>,
-  executionId: ExecutionId,
-  workflow: WorkflowExecutionSnapshot,
+  executionId: RunId,
+  workflow: WorkflowRunSnapshot,
 ) {
   return session.commit([
     {
@@ -158,10 +158,10 @@ async function readOutput(
 async function registerProcessExecution(
   instruction: string,
 ): Promise<{ executionId: string; streamId: StreamTabId }> {
-  const executionId = generateExecutionId();
+  const executionId = generateRunId();
   const streamId = `bash@tool#${executionId}` as StreamTabId;
   await Effect.runPromise(
-    registerExecution(
+    registerRun(
       defaultSession(),
       executionId,
       AgentConfigSchema.parse({
@@ -184,9 +184,9 @@ async function registerWorkflowExecution(
   name: string,
   model?: string,
 ): Promise<string> {
-  const executionId = generateExecutionId();
+  const executionId = generateRunId();
   await Effect.runPromise(
-    registerExecution(
+    registerRun(
       defaultSession(),
       executionId,
       {
@@ -451,8 +451,8 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     'points a non-process execution at /conversation instead of dumping its transcript',
     () =>
       Effect.gen(function* () {
-        const executionId = generateExecutionId();
-        yield* registerExecution(
+        const executionId = generateRunId();
+        yield* registerRun(
           defaultSession(),
           executionId,
           AgentConfigSchema.parse({
@@ -494,7 +494,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           { length: 513 },
           (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
         );
-        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+        yield* writeWorkflowRunSnapshot(defaultSession(), executionId, {
           lifecycle: 'active',
           currentStageId: longStageId,
           stages: [
@@ -578,7 +578,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         assert.ok(!output.includes('file-tail'));
         assert.ok(output.length < 20_000);
         assert.ok(
-          (yield* getExecutionRecords(defaultSession(), executionId).readMeta())
+          (yield* getRunRecords(defaultSession(), executionId).readMeta())
             ?.workflow,
         );
       }),
@@ -592,7 +592,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           registerWorkflowExecution('cancelled-summary'),
         );
         const timestamp = new Date().toISOString();
-        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+        yield* writeWorkflowRunSnapshot(defaultSession(), executionId, {
           lifecycle: 'cancelled',
           stages: [],
           calls: [
@@ -658,7 +658,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           };
         });
         const failedAt = new Date(base).toISOString();
-        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+        yield* writeWorkflowRunSnapshot(defaultSession(), executionId, {
           lifecycle: 'active',
           currentStageId: 'stage-2',
           stages: [
@@ -740,7 +740,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             completedAt: timestamp,
           },
         }));
-        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+        yield* writeWorkflowRunSnapshot(defaultSession(), executionId, {
           lifecycle: 'active',
           currentStageId: 'stage-2',
           stages: [
@@ -848,7 +848,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('errors on an unknown execution id', async () => {
-    const result = await readOutput(generateExecutionId());
+    const result = await readOutput(generateRunId());
 
     assert.equal(result.status, 'error');
     assert.ok((result.error ?? '').includes('Execution not found'));

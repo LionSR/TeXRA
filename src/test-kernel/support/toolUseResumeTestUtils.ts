@@ -3,7 +3,7 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { PreparedShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 
 export function createToolUseResumeShared(
   overrides: Partial<PreparedShared> = {},
@@ -28,7 +28,7 @@ export function createToolUseResumeData(
   const shared = createToolUseResumeShared(overrides.shared);
   return {
     type: 'toolUse',
-    executionId: 'test-execution' as ExecutionId,
+    executionId: 'test-execution' as RunId,
     streamId: 'test-stream' as StreamTabId,
     agentConfig: AgentConfigSchema.parse({
       agent: 'test-agent',

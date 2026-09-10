@@ -45,19 +45,11 @@ import { flowKey } from '@agent/node/persistedFlow';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { ExecutionStatusInfo } from '@agent/runtime/ExecutionHandle';
-import {
-  getExecutionStore,
-  getExecutionRecords,
-} from '@agent/storage/ExecutionKVStore';
-import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { getRunStore, getRunRecords } from '@agent/storage/ExecutionKVStore';
+import { inspectRunLease } from '@agent/storage/executionLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { createLog } from '@logger/logUtils';
-import type {
-  ExecutionId,
-  ExecutionMeta,
-  RunOutcome,
-  StreamPhase,
-} from '@shared/schemas';
+import type { RunId, RunMeta, RunOutcome, RunPhase } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('ExecutionLiveness');
@@ -68,7 +60,7 @@ const log = createLog('ExecutionLiveness');
  * word it in its own voice. `settled` carries the recorded outcome, so every
  * surface renders the same durable value.
  */
-export type ExecutionLiveness =
+export type RunLiveness =
   | { readonly kind: 'live'; readonly info: LiveExecutionStatusInfo }
   | { readonly kind: 'unsettled'; readonly reason: string }
   | { readonly kind: 'interrupted' }
@@ -79,7 +71,7 @@ export type ExecutionLiveness =
  * with the stream's phase, never the `unknown` the persisted arms fall back to
  * — so a reader may ask whether it is still in flight.
  */
-type LiveExecutionStatusInfo = ExecutionStatusInfo & { status: StreamPhase };
+type LiveExecutionStatusInfo = ExecutionStatusInfo & { status: RunPhase };
 
 /**
  * The execution's metadata row as a caller that just read it holds it: `null`
@@ -90,7 +82,7 @@ type LiveExecutionStatusInfo = ExecutionStatusInfo & { status: StreamPhase };
  * Only a row read for this same request may be passed: an older snapshot would
  * let two surfaces disagree about how one run ended.
  */
-export type KnownExecutionMeta = Pick<ExecutionMeta, 'outcome'> | null;
+export type KnownRunMeta = Pick<RunMeta, 'outcome'> | null;
 
 /** `executionHeldMessage`'s copy, as a clause a sentence can continue with. */
 function heldElsewhereReason(owner: LeaseOwnerRecord): string {
@@ -104,24 +96,24 @@ function heldElsewhereReason(owner: LeaseOwnerRecord): string {
  */
 const OWNED_HERE_REASON = "held by this process's lease with no live run";
 
-export const resolveExecutionLiveness = Effect.fn('resolveExecutionLiveness')(
+export const resolveRunLiveness = Effect.fn('resolveExecutionLiveness')(
   function* (
-    executionId: ExecutionId,
+    executionId: RunId,
     session: SessionHandle,
-    knownMeta?: KnownExecutionMeta,
-  ): Effect.fn.Return<ExecutionLiveness> {
+    knownMeta?: KnownRunMeta,
+  ): Effect.fn.Return<RunLiveness> {
     const { executions } = session;
     const handle = executions.getHandle(executionId);
     if (handle) return { kind: 'live', info: executions.getStatus(handle) };
 
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     return yield* Effect.gen(function* (): Effect.fn.Return<
-      ExecutionLiveness,
+      RunLiveness,
       unknown
     > {
       const meta =
         knownMeta === undefined
-          ? yield* getExecutionRecords(session, executionId).readMeta()
+          ? yield* getRunRecords(session, executionId).readMeta()
           : knownMeta;
       // A recorded outcome is the run's own fact, not the lease's: a finished
       // child untracks its handle and writes the outcome long before its loop
@@ -131,8 +123,7 @@ export const resolveExecutionLiveness = Effect.fn('resolveExecutionLiveness')(
         return { kind: 'settled', outcome: meta.outcome };
       }
       const lease = yield* Effect.tryPromise({
-        try: () =>
-          runInSession(session, () => inspectExecutionLease(executionId)),
+        try: () => runInSession(session, () => inspectRunLease(executionId)),
         catch: (error) => error,
       });
       if (lease.status === 'held') {
@@ -155,7 +146,7 @@ export const resolveExecutionLiveness = Effect.fn('resolveExecutionLiveness')(
         : { kind: 'settled' };
     }).pipe(
       Effect.catch((error) =>
-        Effect.sync((): ExecutionLiveness => {
+        Effect.sync((): RunLiveness => {
           const cause = toErrorMessage(error);
           log.warn(
             `Cannot read the durable facts for execution ${executionId}: ${cause}`,

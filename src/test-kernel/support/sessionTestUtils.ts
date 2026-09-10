@@ -9,16 +9,12 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  aggregateId,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { aggregateId, type RunId, type StreamTabId } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
 import { createTranscriptFold } from '@shared/session/traceFold';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { createRunTrace } from '@transcript';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 
 type TestSessionInit = SessionHandleInit;
 
@@ -75,8 +71,8 @@ export function createProcessSession(
 export function publishTestRunStart(
   session: SessionHandle,
   streamId: StreamTabId,
-  executionId: ExecutionId = generateExecutionId(),
-): ExecutionId {
+  executionId: RunId = generateRunId(),
+): RunId {
   session.publish([
     {
       type: 'run.start',
@@ -95,7 +91,7 @@ export function publishTestRunStart(
 export function attachTestTranscriptFold(
   trace: AgentTrace,
   streamId: StreamTabId,
-  log: StreamLog,
+  log: RunLog,
 ) {
   const fold = createTranscriptFold(log);
   let seq = 0;
@@ -129,7 +125,7 @@ export function attachTestTranscriptFold(
 /** Standalone trace projection for tests that exercise formatting without a session. */
 export function createTestRunTrace(
   streamId: StreamTabId,
-  log: StreamLog = new StreamLog(),
+  log: RunLog = new RunLog(),
 ) {
   const run = createRunTrace();
   const projection = attachTestTranscriptFold(run.trace, streamId, log);

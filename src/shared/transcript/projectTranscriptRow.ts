@@ -15,7 +15,7 @@ import {
   type ErrorLogData,
   type ExtendedTokenUsageStats,
   type FileListEntry,
-  type StreamLogEntry,
+  type RunLogEntry,
 } from '@shared/schemas';
 import { normalizeToolUseForRender } from '@shared/toolUse';
 import {
@@ -72,7 +72,7 @@ export interface TranscriptRowContext {
 // Envelope
 // ---------------------------------------------------------------------------
 
-function rowBase(entry: StreamLogEntry): TranscriptRowBase {
+function rowBase(entry: RunLogEntry): TranscriptRowBase {
   return {
     id: entry.id,
     seqNo: entry.seqNo,
@@ -87,12 +87,12 @@ function rowBase(entry: StreamLogEntry): TranscriptRowBase {
   };
 }
 
-function entryText(entry: StreamLogEntry): TranscriptText {
+function entryText(entry: RunLogEntry): TranscriptText {
   return transcriptText(entry.text ?? '');
 }
 
 /** A plain log row, or no row when the entry has no visible text. */
-function projectLogRow(entry: StreamLogEntry): LogRow | undefined {
+function projectLogRow(entry: RunLogEntry): LogRow | undefined {
   const text = entryText(entry);
   if (!text.oneLine.trim()) return undefined;
   return { ...rowBase(entry), kind: 'log', text };
@@ -160,7 +160,7 @@ function errorDetails(
 }
 
 function projectErrorRow(
-  entry: StreamLogEntry & { messageType: typeof MESSAGE_TYPES.ERROR },
+  entry: RunLogEntry & { messageType: typeof MESSAGE_TYPES.ERROR },
 ): ErrorRow {
   const data = entry.data;
   const summary = entry.text ?? '';
@@ -286,7 +286,7 @@ const WEB_FETCH_ERROR_LABEL: Readonly<Record<string, string>> = {
  * not by entry type, so the header keeps its identity after the phase closes.
  */
 function phaseGroupData(
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
 ): { index?: number; total?: number } | undefined {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
@@ -307,7 +307,7 @@ function phaseGroupData(
 // ---------------------------------------------------------------------------
 
 export function projectTranscriptRow(
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
   ctx: TranscriptRowContext = {},
 ): TranscriptRow | undefined {
   const phase = phaseGroupData(entry);

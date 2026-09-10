@@ -27,7 +27,7 @@ vi.mock('@transcript', async (importActual) => ({
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
 import { noopTrace } from '@agent/trace';
-import { registerExecution } from '@agent/storage/executionLifecycle';
+import { registerRun } from '@agent/storage/executionLifecycle';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -35,7 +35,7 @@ import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext as buildAgentLaunchContextEffect,
-  withExecutionRunContext,
+  withLaunchRunContext,
   type AgentLaunchContext,
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
@@ -45,7 +45,7 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   AgentCategory,
-  type ExecutionId,
+  type RunId,
 } from '@shared/schemas';
 import {
   createTestSession,
@@ -69,7 +69,7 @@ const buildAgentLaunchContext = (
     ),
   );
 
-const EXECUTION_ID = 'a00101' as ExecutionId;
+const EXECUTION_ID = 'a00101' as RunId;
 
 /** Launches an unresolvable agent, asserting the shared missing-agent failure. */
 async function launchWithMissingAgent(
@@ -359,7 +359,7 @@ describe('AgentLaunchContext', () => {
       },
     } as unknown as AgentLaunchContext;
 
-    await withExecutionRunContext(ctx, { onApprovalPolicyDenial }, async () => {
+    await withLaunchRunContext(ctx, { onApprovalPolicyDenial }, async () => {
       const context = tryUseRunContext()!;
       expect(context.model).toBe('deepseekT');
       expect(context.kind).toBe('launch');
@@ -400,7 +400,7 @@ describe('AgentLaunchContext', () => {
       config: { agent: runScope.agentName, model: 'deepseekT' },
     } as unknown as AgentLaunchContext;
 
-    await withExecutionRunContext(ctx, {}, async () => {
+    await withLaunchRunContext(ctx, {}, async () => {
       const context = tryUseRunContext()!;
       if (context.kind !== 'launch') {
         throw new Error('expected launch context');
@@ -442,7 +442,7 @@ describe('AgentLaunchContext', () => {
     });
     try {
       await Effect.runPromise(
-        registerExecution(session, EXECUTION_ID, config, 'chat', {
+        registerRun(session, EXECUTION_ID, config, 'chat', {
           streamId: `chat#${EXECUTION_ID}`,
           identity: { kind: 'agent', agent: 'chat' },
         }),

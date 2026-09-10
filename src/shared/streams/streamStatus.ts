@@ -5,8 +5,8 @@ import {
   STREAM_PHASE,
   type ExecutionStatus,
   type RunOutcome,
-  type StreamPhase,
-  type StreamLifecycleStatus,
+  type RunPhase,
+  type RunLifecycleStatus,
 } from '@shared/schemas';
 
 // ============================================================================
@@ -66,14 +66,14 @@ export const STREAM_TRANSITION_CAUSE = {
   USER_STOP: 'user-stop',
 } as const;
 
-export type StreamTransitionCause =
+export type RunTransitionCause =
   (typeof STREAM_TRANSITION_CAUSE)[keyof typeof STREAM_TRANSITION_CAUSE];
 
 /** Whether a `StreamPhase` is one of the three terminal outcome phases
  *  (COMPLETED | CANCELLED | FAILED). This is the single enumeration of that
  *  set — hosts must consume it rather than hand-rolling their own. */
 export function isTerminalOutcomePhase(
-  phase: StreamLifecycleStatus | undefined,
+  phase: RunLifecycleStatus | undefined,
 ): phase is RunOutcome {
   return (
     phase === STREAM_PHASE.COMPLETED ||
@@ -84,19 +84,17 @@ export function isTerminalOutcomePhase(
 
 /** Whether transcript content is settled for the current turn. */
 export function isTranscriptSettlementPhase(
-  phase: StreamLifecycleStatus | undefined,
+  phase: RunLifecycleStatus | undefined,
 ): boolean {
   return phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 
-export function isActivePhase(
-  phase: StreamLifecycleStatus | undefined,
-): boolean {
+export function isActivePhase(phase: RunLifecycleStatus | undefined): boolean {
   return phase === STREAM_PHASE.RUNNING;
 }
 
 export function isInFlightPhase(
-  phase: StreamLifecycleStatus | undefined,
+  phase: RunLifecycleStatus | undefined,
 ): boolean {
   return phase === STREAM_PHASE.RUNNING || phase === STREAM_PHASE.WAITING;
 }
@@ -111,15 +109,15 @@ export function isInFlightPhase(
  * stricter `isTerminalOutcomePhase`.
  */
 export function workflowRunSettled(
-  phase: StreamLifecycleStatus | undefined,
+  phase: RunLifecycleStatus | undefined,
 ): boolean {
   return phase !== undefined && !isInFlightPhase(phase);
 }
 
-export function canTransitionStreamPhase(
-  from: StreamPhase | undefined,
-  to: StreamPhase,
-  cause: StreamTransitionCause,
+export function canTransitionRunPhase(
+  from: RunPhase | undefined,
+  to: RunPhase,
+  cause: RunTransitionCause,
 ): boolean {
   if (cause === STREAM_TRANSITION_CAUSE.USER_STOP) {
     return (

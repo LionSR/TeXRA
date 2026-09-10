@@ -16,7 +16,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 
 describe('child run delivery', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -39,7 +39,7 @@ describe('child run delivery', () => {
       mocks.commit.mockReturnValue(Effect.succeed([]));
       yield* persistChildRunDelivery(
         { commit: mocks.commit } as unknown as SessionHandle,
-        'exec-1' as ExecutionId,
+        'exec-1' as RunId,
         'payload',
         resultMeta,
       );
@@ -63,7 +63,7 @@ describe('child run delivery', () => {
       const exit = yield* Effect.exit(
         persistChildRunDelivery(
           { commit: mocks.commit } as unknown as SessionHandle,
-          'exec-1' as ExecutionId,
+          'exec-1' as RunId,
           'payload',
           undefined,
         ),

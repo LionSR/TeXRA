@@ -21,12 +21,12 @@
 
 import { Effect } from 'effect';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
 import { redactDisplayValue } from '@logger/redaction';
-import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
+import type { RunId, RunMeta } from '@shared/schemas';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
@@ -40,7 +40,7 @@ import {
  * missing" using `meta`/`config`/`conversation` themselves.
  */
 export interface ChatExportLoadResult {
-  readonly meta: ExecutionMeta | null;
+  readonly meta: RunMeta | null;
   readonly config: AgentConfig | null;
   /** Normalized: `null` when absent *or* empty — an empty array never counts
    *  as "a conversation is present" (see module doc). */
@@ -70,14 +70,14 @@ function hasConversationMessages(
 }
 
 export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
-  id: ExecutionId,
+  id: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ChatExportLoadResult, Error> {
   const [config, conversationResult, meta] = yield* Effect.all(
     [
-      getExecutionRecords(session, id).readConfig(),
+      getRunRecords(session, id).readConfig(),
       readCompletedRunConversation(id, session),
-      getExecutionRecords(session, id).readMeta(),
+      getRunRecords(session, id).readMeta(),
     ],
     { concurrency: 3 },
   );

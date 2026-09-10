@@ -12,7 +12,7 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import { fileLocationDisplayPath, type ExecutionId } from '@shared/schemas';
+import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentResults';
 import {
@@ -90,7 +90,7 @@ describe('shared text-diff caller fixtures', () => {
       '/workspace/original.tex': 'one\ntwo\nthree\n',
       '/workspace/out/section/paper.tex': 'one\nTWO\nthree\nfour\n',
     });
-    const executionId = 'abcdef' as ExecutionId;
+    const executionId = 'abcdef' as RunId;
 
     const result = await computeAndWriteWorkflowDiffs(executionId, [
       {

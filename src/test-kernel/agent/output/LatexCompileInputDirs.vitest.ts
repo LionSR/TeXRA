@@ -15,7 +15,7 @@ import {
   createOutputState,
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import type { RunId, FileLocation } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import {
@@ -59,7 +59,7 @@ vi.mock(
   }),
 );
 
-function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
+function createDiffCompiler(executionId: RunId, logger: AgentTrace) {
   const manager = new LatexDiffManager(
     false,
     () => ({}),
@@ -75,7 +75,7 @@ function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
       diffDirectory: {
         absolutePath: string;
         relativePath: string;
-        executionId: ExecutionId;
+        executionId: RunId;
       },
       round: number,
       sourceLocation: FileLocation,
@@ -86,7 +86,7 @@ function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
 
 /** Compiles a successful main-diff.tex for `round` and returns the result. */
 async function compileDiff(
-  executionId: ExecutionId,
+  executionId: RunId,
   referenceLocation: FileLocation,
   round: number,
   sourceLocation: FileLocation,

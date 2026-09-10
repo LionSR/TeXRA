@@ -8,7 +8,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory, cloneRoundIndexed } from '@shared/schemas';
 import { unique } from '@utils/core';
-import type { StreamOutputsSource } from './streamOutputs';
+import type { RunOutputsSource } from './streamOutputs';
 
 const log = createLog('ProgressWorkflowRunActions');
 
@@ -33,7 +33,7 @@ export interface WorkflowFileOperationRequest {
   executionId?: string;
 }
 
-interface ProgressWorkflowRunActionsState extends StreamOutputsSource {
+interface ProgressWorkflowRunActionsState extends RunOutputsSource {
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
 }
 

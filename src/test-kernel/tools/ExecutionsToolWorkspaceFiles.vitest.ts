@@ -19,7 +19,7 @@ import {
   DEFAULT_TOOL_CONFIG,
   aggregateId,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
+import type { RunId, StreamTabId, TodoItem } from '@shared/schemas';
 import {
   createFakeKv,
   createFakeExecutionRecords,
@@ -59,10 +59,10 @@ vi.mock('@agent/storage/ExecutionKVStore', async () => {
   >('@agent/storage/ExecutionKVStore');
   return {
     ...actual,
-    getExecutionStore: vi.fn((id: ExecutionId) =>
+    getRunStore: vi.fn((id: RunId) =>
       createFakeKv(id, { readTurnState: mocks.readTurnState }),
     ),
-    getExecutionRecords: vi.fn(() =>
+    getRunRecords: vi.fn(() =>
       createFakeExecutionRecords({
         readConfig: () =>
           Effect.tryPromise({
@@ -104,12 +104,12 @@ vi.mock('@agent/storage', async () => {
     await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
   return {
     ...actual,
-    listExecutions: () =>
+    listRuns: () =>
       Effect.tryPromise({
         try: () => mocks.listExecutions(),
         catch: ensureError,
       }),
-    readExecutionChildren: () =>
+    readRunChildren: () =>
       Effect.tryPromise({
         try: () => mocks.readChildren(),
         catch: ensureError,
@@ -333,7 +333,7 @@ describe('ExecutionsTool', () => {
   it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', () =>
     withTempStorage(async () => {
       const session = createTestSession();
-      const executionId = 'abc123' as ExecutionId;
+      const executionId = 'abc123' as RunId;
       const childStreamId = `codex#${executionId}` as StreamTabId;
       const callerStreamId = 'stream:unrelated-report-reader' as StreamTabId;
 
@@ -451,7 +451,7 @@ describe('ExecutionsTool', () => {
     'reads completed todos from committed stream events via the $label',
     async ({ toolPath }) => {
       await withTempStorage(async () => {
-        const executionId = 'abc123' as ExecutionId;
+        const executionId = 'abc123' as RunId;
         const session = createTestSession();
         const streamId = `codex#${executionId}` as StreamTabId;
         publishTestRunStart(session, streamId, executionId);
@@ -528,7 +528,7 @@ describe('ExecutionsTool', () => {
   // child- and flow_ prefixed ones — stays out of the model-facing view.
   it('filters internal KV metadata files out of /executions/{id}/files', async () => {
     await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
+      const executionId = 'abc123' as RunId;
       const runDir = resolveRunStoragePath(executionId);
       await StorageFS.ensureDir(runDir);
       const kvFiles = [
@@ -574,7 +574,7 @@ describe('ExecutionsTool', () => {
   // reserved key name but carries no `.json` extension stays visible.
   it('keeps extensionless generated files named like reserved KV keys', async () => {
     await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
+      const executionId = 'abc123' as RunId;
       const runDir = resolveRunStoragePath(executionId);
       await StorageFS.ensureDir(runDir);
       const bareNames = ['meta', 'config', 'report', 'child-def456'];

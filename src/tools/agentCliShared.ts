@@ -3,15 +3,15 @@
 
 import { Cause, Data, Deferred, Effect, Exit, Fiber } from 'effect';
 
-import { registerExecution } from '@agent/storage';
+import { registerRun } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   startChildRunLoop,
-  runWithOwnedExecutionLeaseLaunchGuard,
+  runWithOwnedRunLeaseLaunchGuard,
   type ChildRunPorts,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
@@ -23,7 +23,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
-  getRunContextExecutionId,
+  getRunContextRunId,
   runInSession,
   getRunContextStreamId,
   getRunContextWorkingDirectory,
@@ -32,26 +32,26 @@ import {
 import {
   RUN_OUTCOME,
   ToolError,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type TokenUsageStats,
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { requireRunStream } from '@tools/contextHelpers';
+import { requireRun } from '@tools/contextHelpers';
 import {
   type requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
 import {
-  childStreamDescription,
-  createChildStream,
-  type ChildStream,
+  childRunDescription,
+  createChildRun,
+  type ChildRun,
 } from './delegation/childStream';
 import type {
   AgentCliSessionEntry,
@@ -107,9 +107,9 @@ export const reraiseAgentCliCallFailure = <A, R>(
  * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
  * Shared by the codex and claudeAgent session strategies.
  */
-export function publishAgentCliStreamUsage(
+export function publishAgentCliRunUsage(
   childStreamId: StreamTabId,
-  executionId: ExecutionId,
+  executionId: RunId,
   usage: TokenUsageStats,
   logger: AgentTrace,
 ): void {
@@ -133,7 +133,7 @@ interface AgentCliResumeLabels {
 function requireCallerOwnership(
   id: string,
   callerStreamId: StreamTabId | undefined,
-  handle: AgentExecutionHandle | undefined,
+  handle: RunHandle | undefined,
   labels: AgentCliResumeLabels,
 ): Effect.Effect<void, ToolError> {
   if (!callerStreamId || !handle || handle.isOwnedBy(callerStreamId)) {
@@ -246,7 +246,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
 interface AgentCliLaunchParams {
   session: SessionHandle;
   parentStreamId: StreamTabId;
-  parentExecutionId: ExecutionId | undefined;
+  parentExecutionId: RunId | undefined;
   agentName: string;
   streamPrefix: string;
   description: string;
@@ -255,8 +255,8 @@ interface AgentCliLaunchParams {
   /** Session-keyed registry accessor; the launched loop's drain forks here. */
   store: AgentCliSessionStoreAccessor;
   startLoop: (ctx: {
-    childStream: ChildStream;
-    executionId: ExecutionId;
+    childStream: ChildRun;
+    executionId: RunId;
     /** Settled by the loop wrapper when the loop's completion settles. */
     loopSettled: Deferred.Deferred<void>;
   }) => Effect.Effect<void, Error>;
@@ -283,7 +283,7 @@ export const launchAgentCliSession = Effect.fn(
 ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const executionId = generateExecutionId();
+      const executionId = generateRunId();
       const childStreamId = getStreamTabId(params.streamPrefix, {
         executionId,
       });
@@ -298,7 +298,7 @@ export const launchAgentCliSession = Effect.fn(
 
       const registry = params.store(params.session);
       const loopSettled = Deferred.makeUnsafe<void>();
-      yield* registerExecution(
+      yield* registerRun(
         params.session,
         executionId,
         params.config,
@@ -310,7 +310,7 @@ export const launchAgentCliSession = Effect.fn(
           parentExecutionId: params.parentExecutionId,
           parentStreamId: params.parentStreamId,
           background: true,
-          description: childStreamDescription(params.description),
+          description: childRunDescription(params.description),
         },
       ).pipe(
         Effect.mapError(
@@ -325,7 +325,7 @@ export const launchAgentCliSession = Effect.fn(
       // (bash background, the two detached child paths, and this one): a failed
       // launch must not leave a record that refuses a relaunch for the rest of the
       // process's life.
-      const childStream = yield* runWithOwnedExecutionLeaseLaunchGuard(
+      const childStream = yield* runWithOwnedRunLeaseLaunchGuard(
         params.session,
         executionId,
         Effect.gen(function* () {
@@ -338,7 +338,7 @@ export const launchAgentCliSession = Effect.fn(
             { startImmediately: true },
           );
 
-          const stream = yield* createChildStream(
+          const stream = yield* createChildRun(
             params.session,
             executionId,
             params.parentStreamId,
@@ -444,7 +444,7 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
  * `launch` callback by {@link dispatchAgentCliTool}. */
 interface AgentCliLaunchContext {
   parentStreamId: StreamTabId;
-  parentExecutionId: ExecutionId | undefined;
+  parentExecutionId: RunId | undefined;
   parentWorkingDirectory: string | undefined;
   /** Release the disk-based fallback claim if the launch fails before promoting
    * it. Undefined for a fresh (non-resumed) launch. */
@@ -521,10 +521,10 @@ export function dispatchAgentCliTool(params: {
             // it still reaches the tool runner as the same instance and the
             // claim-release in resumeOrLaunchAgentCliSession still fires
             // (onError observes every cause).
-            const { streamId } = requireRunStream(agentName, runContext);
+            const { streamId } = requireRun(agentName, runContext);
             return launch({
               parentStreamId: streamId,
-              parentExecutionId: getRunContextExecutionId(runContext),
+              parentExecutionId: getRunContextRunId(runContext),
               parentWorkingDirectory: getRunContextWorkingDirectory(runContext),
               releaseFallbackClaim,
             });
@@ -547,9 +547,9 @@ interface AgentCliTurnUsage {
 
 interface AgentCliLoopParams<TTurn> {
   session: SessionHandle;
-  childStream: ChildStream;
+  childStream: ChildRun;
   parentStreamId: StreamTabId;
-  executionId: ExecutionId;
+  executionId: RunId;
   /** Passed through to `startChildRunLoop` (registry lookups, log labels). */
   agentName: string;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
@@ -685,7 +685,7 @@ export function startAgentCliLoop<TTurn>(
       publishUsage: (turn) => {
         const usage = buildUsageStats(turn);
         if (usage) {
-          publishAgentCliStreamUsage(childStreamId, executionId, usage, logger);
+          publishAgentCliRunUsage(childStreamId, executionId, usage, logger);
         }
       },
       formatDelivery: (turn, wallTimeMs) =>

@@ -6,7 +6,7 @@ import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
-  activeStreamId as activeStreamIdSignal,
+  activeRunId as activeStreamIdSignal,
   beginWorkPlanReaderRequest,
   cancelPendingWorkPlanReaderRequest,
   cancelWorkPlanReaderRequest,
@@ -32,7 +32,7 @@ import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { effectRuntime } from '@platform/processRuntime';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
-import type { StreamSnapshotStore } from '@transcript';
+import type { RunSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
@@ -40,8 +40,8 @@ import { listSlashCommands } from '../slashRegistry';
 import { type SlashCommandContext } from './slashContext';
 
 /** What the work-plan reader loads and reads from the snapshot store. */
-export type StreamArtifactReader = Pick<
-  StreamSnapshotStore,
+export type RunArtifactReader = Pick<
+  RunSnapshotStore,
   'preload' | 'getWorkPlan'
 >;
 
@@ -60,7 +60,7 @@ export function showCliGoalModeHelp(): void {
 }
 
 export async function showCliWorkPlan(
-  snapshots: StreamArtifactReader = defaultSession().snapshots,
+  snapshots: RunArtifactReader = defaultSession().snapshots,
 ): Promise<void> {
   const streamId = activeStreamIdSignal.get();
   if (!streamId) {
@@ -107,8 +107,8 @@ export async function showCliSessionStatus(
 ): Promise<void> {
   const meta = sessionMeta.get();
   const view = currentView();
-  const activeStreamId = activeStreamIdSignal.get();
-  const stream = streamViewOf(view, activeStreamId);
+  const activeRunId = activeStreamIdSignal.get();
+  const stream = streamViewOf(view, activeRunId);
   // The children a status line counts: the active stream's, else its
   // parent's (a focused leaf reports its siblings' activity).
   const countedParent =
@@ -128,22 +128,22 @@ export async function showCliSessionStatus(
         prospectiveRoute,
       }),
       approvalBypasses:
-        activeStreamId === undefined
+        activeRunId === undefined
           ? undefined
-          : view.policy.get(activeStreamId)?.bypasses,
+          : view.policy.get(activeRunId)?.bypasses,
       statusLabel: stream?.statusLabel,
       activeChildSessions,
-      goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
-      activeSkills: activeSkillNamesFor(activeStreamId),
+      goal: activeRunId ? GoalStore.getForStream(activeRunId) : undefined,
+      activeSkills: activeSkillNamesFor(activeRunId),
       sessionId: stream ? context.session.executionId : undefined,
       commandName: context.cliContext.commandName,
       cwd: context.cliContext.cwd,
       processCwd: context.processCwd,
       approvalPolicy: context.getApprovalPolicy(),
       queuedFollowUpMessages:
-        activeStreamId === undefined
+        activeRunId === undefined
           ? []
-          : (view.queuedFollowUps.get(activeStreamId) ?? []),
+          : (view.queuedFollowUps.get(activeRunId) ?? []),
     }),
   );
 }

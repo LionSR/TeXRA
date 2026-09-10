@@ -30,8 +30,8 @@ import {
   type PollHookRejected,
 } from '@tools/github/PollingSourceBase';
 import {
-  StreamSubscriptionRegistry,
-  type StreamSubscriptionRegistryOptions,
+  RunSubscriptionRegistry,
+  type RunSubscriptionRegistryOptions,
 } from '@tools/github/StreamSubscriptionRegistry';
 
 // Local file imports
@@ -39,9 +39,9 @@ import { createRecordingHost } from '../progressTestUtils';
 
 function createTestRegistry(
   source: RegistryTestSource,
-  overrides: Partial<StreamSubscriptionRegistryOptions<string, string>> = {},
-): StreamSubscriptionRegistry<string, string> {
-  return new StreamSubscriptionRegistry<string, string>({
+  overrides: Partial<RunSubscriptionRegistryOptions<string, string>> = {},
+): RunSubscriptionRegistry<string, string> {
+  return new RunSubscriptionRegistry<string, string>({
     name: 'test subscriptions',
     source,
     keyOf: (input) => input,

@@ -27,7 +27,7 @@ import {
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
   type AggregateId,
-  type ExecutionId,
+  type RunId,
   type RunIdentity,
   type RunOutcome,
   type StreamTabId,
@@ -37,15 +37,15 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  getExecutionStore,
-  getExecutionRecords,
+  getRunStore,
+  getRunRecords,
   executionMetaFromEvents,
   type ChildRecord,
 } from './ExecutionKVStore';
 import {
-  acquireFreshExecutionLease,
-  acquireResumedExecutionLease,
-  releaseOwnedExecutionLease,
+  acquireFreshRunLease,
+  acquireResumedRunLease,
+  releaseOwnedRunLease,
 } from './executionLease';
 
 function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
@@ -60,18 +60,18 @@ function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
 
 /** Parentage is projected from the declared creation edge. */
 export const hasPersistedParent = (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.Effect<boolean, Error> =>
-  getExecutionRecords(session, executionId)
+  getRunRecords(session, executionId)
     .readMeta()
     .pipe(Effect.map((meta) => meta?.parentExecutionId !== undefined));
 
 export const getPersistedUserFollowUpSupport = (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.Effect<UserFollowUpSupport, Error> =>
-  getExecutionRecords(session, executionId)
+  getRunRecords(session, executionId)
     .readMeta()
     .pipe(
       Effect.map(
@@ -80,7 +80,7 @@ export const getPersistedUserFollowUpSupport = (
       ),
     );
 
-export interface RegisterExecutionOptions {
+export interface RegisterRunOptions {
   readonly parentStreamId?: StreamTabId;
   readonly checkpointId?: string;
   readonly background?: boolean;
@@ -90,7 +90,7 @@ export interface RegisterExecutionOptions {
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
   readonly userFollowUpSupport?: UserFollowUpSupport;
-  readonly parentExecutionId?: ExecutionId;
+  readonly parentExecutionId?: RunId;
   /**
    * Display description persisted on `ExecutionMeta.description` — the one
    * description authority (#9590 A4). Child-stream launchers pass the
@@ -105,22 +105,21 @@ export interface RegisterExecutionOptions {
  * Register a new execution: persist config, metadata, and parent linkage.
  * Awaits all writes before returning.
  */
-export const registerExecution = Effect.fn('registerExecution')(function* (
+export const registerRun = Effect.fn('registerExecution')(function* (
   session: SessionHandle,
-  executionId: ExecutionId,
+  executionId: RunId,
   record: RunRecord,
   agentName: string,
-  options: RegisterExecutionOptions,
+  options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
   const lease = yield* Effect.tryPromise({
-    try: () =>
-      runInSession(session, () => acquireFreshExecutionLease(executionId)),
+    try: () => runInSession(session, () => acquireFreshRunLease(executionId)),
     catch: ensureError,
   });
   let releaseClaims: Effect.Effect<void, Error> = Effect.void;
   const registration = yield* Effect.exit(
     Effect.gen(function* () {
-      const records = getExecutionRecords(session, executionId);
+      const records = getRunRecords(session, executionId);
       const prior = yield* records.readMeta();
       if (prior !== null)
         releaseClaims = yield* session.acquireExecutionClaims(
@@ -130,10 +129,7 @@ export const registerExecution = Effect.fn('registerExecution')(function* (
       const parent =
         options.parentExecutionId === undefined
           ? null
-          : yield* getExecutionRecords(
-              session,
-              options.parentExecutionId,
-            ).readMeta();
+          : yield* getRunRecords(session, options.parentExecutionId).readMeta();
       if (options.parentExecutionId !== undefined && parent === null)
         return yield* Effect.fail(
           new Error(
@@ -234,9 +230,7 @@ export const registerExecution = Effect.fn('registerExecution')(function* (
         ? Effect.void
         : Effect.tryPromise({
             try: () =>
-              runInSession(session, () =>
-                releaseOwnedExecutionLease(executionId),
-              ),
+              runInSession(session, () => releaseOwnedRunLease(executionId)),
             catch: ensureError,
           }),
     );
@@ -258,16 +252,15 @@ export const registerExecution = Effect.fn('registerExecution')(function* (
 });
 
 /** Admit a resumed turn and return rollback for only this admission's resources. */
-export const acquireResumedExecutionOwnership = Effect.fn(
+export const acquireResumedRunOwnership = Effect.fn(
   'acquireResumedExecutionOwnership',
 )(function* (
   session: SessionHandle,
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
 ): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
   const lease = yield* Effect.tryPromise({
-    try: () =>
-      runInSession(session, () => acquireResumedExecutionLease(executionId)),
+    try: () => runInSession(session, () => acquireResumedRunLease(executionId)),
     catch: ensureError,
   });
   const releaseLease =
@@ -275,9 +268,7 @@ export const acquireResumedExecutionOwnership = Effect.fn(
       ? Effect.void
       : Effect.tryPromise({
           try: () =>
-            runInSession(session, () =>
-              releaseOwnedExecutionLease(executionId),
-            ),
+            runInSession(session, () => releaseOwnedRunLease(executionId)),
           catch: ensureError,
         });
   const claims = yield* Effect.exit(
@@ -335,8 +326,8 @@ export function retainFlowRecordUnlessCompleted(
   return resolved === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve';
 }
 
-export interface FinalizeExecutionInput {
-  readonly executionId: ExecutionId;
+export interface FinalizeRunInput {
+  readonly executionId: RunId;
   readonly outcome: RunOutcome;
   readonly flowRecord: 'preserve' | 'delete';
   /**
@@ -355,7 +346,7 @@ export interface FinalizeExecutionInput {
   readonly report?: (error: Error) => void;
 }
 
-export type FinalizeExecutionResult =
+export type FinalizeRunResult =
   | {
       readonly ok: true;
       /**
@@ -380,8 +371,8 @@ export type FinalizeExecutionResult =
  */
 export const finalizeRun = Effect.fn('finalizeRun')(function* (
   session: SessionHandle,
-  input: FinalizeExecutionInput,
-): Effect.fn.Return<FinalizeExecutionResult> {
+  input: FinalizeRunInput,
+): Effect.fn.Return<FinalizeRunResult> {
   const { executionId, outcome, flowRecord, keepExistingOutcome } = input;
   const status = yield* Effect.exit(
     session.updateRecordFacts(executionId, (rows) => {
@@ -414,7 +405,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
       ? Effect.tryPromise({
           try: () =>
             runInSession(session, () =>
-              getExecutionStore(executionId).delete(flowKey(executionId)),
+              getRunStore(executionId).delete(flowKey(executionId)),
             ),
           catch: ensureError,
         })
@@ -459,60 +450,58 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
  * `readMeta()`. Absence is a plain `null`: no execution metadata at all and
  * metadata predating stamped streams are the same answer to every caller.
  */
-export const resolveStreamForExecution = Effect.fn('resolveStreamForExecution')(
-  function* (executionId: ExecutionId, session: SessionHandle) {
-    const meta = yield* getExecutionRecords(session, executionId).readMeta();
+export const resolveStreamTabIdForRun = Effect.fn('resolveStreamTabIdForRun')(
+  function* (executionId: RunId, session: SessionHandle) {
+    const meta = yield* getRunRecords(session, executionId).readMeta();
     return meta ? { streamId: meta.streamId, meta } : null;
   },
 );
 
 /** Read the canonical run configuration from the owning database. */
-export const readExecutionRunRecord = (
-  executionId: ExecutionId,
+export const readRunLaunchRecord = (
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.Effect<RunRecord | null, Error> =>
-  getExecutionRecords(session, executionId).readRunRecord();
+  getRunRecords(session, executionId).readRunRecord();
 
 /** Child labels and parentage come from the same immutable launch fact. */
-export const readExecutionChildren = Effect.fn('readExecutionChildren')(
-  function* (
-    session: SessionHandle,
-    executionId: ExecutionId,
-  ): Effect.fn.Return<ChildRecord[], Error> {
-    const rows = yield* session.readExecutionChildren(executionId);
-    const parent = rows.find(
-      (row) => row.type === 'run.start' && row.executionId === executionId,
-    );
-    if (parent?.type !== 'run.start') return [];
-    const closed = new Set(
-      rows
-        .filter((row) => row.type === 'stream.removed')
-        .map((row) => row.aggregateId),
-    );
-    if (closed.has(parent.aggregateId)) return [];
-    const labels = new Map<AggregateId, string>();
-    for (const row of rows) {
-      if (row.type === 'execution.launchLabel')
-        labels.set(row.aggregateId, row.label);
-    }
-    return rows.flatMap((row) => {
-      if (
-        row.type !== 'run.start' ||
-        row.parentStartCommit !== parent.commit ||
-        row.parentStreamId !== aggregateTarget(parent.aggregateId).id ||
-        closed.has(row.aggregateId)
-      )
-        return [];
-      const label = labels.get(aggregateId('execution', row.executionId));
-      if (label === undefined)
-        throw new Error(`Child launch label missing for ${row.executionId}`);
-      return [
-        {
-          id: row.executionId,
-          agent: label,
-          timestamp: new Date(row.at).toISOString(),
-        },
-      ];
-    });
-  },
-);
+export const readRunChildren = Effect.fn('readExecutionChildren')(function* (
+  session: SessionHandle,
+  executionId: RunId,
+): Effect.fn.Return<ChildRecord[], Error> {
+  const rows = yield* session.readExecutionChildren(executionId);
+  const parent = rows.find(
+    (row) => row.type === 'run.start' && row.executionId === executionId,
+  );
+  if (parent?.type !== 'run.start') return [];
+  const closed = new Set(
+    rows
+      .filter((row) => row.type === 'stream.removed')
+      .map((row) => row.aggregateId),
+  );
+  if (closed.has(parent.aggregateId)) return [];
+  const labels = new Map<AggregateId, string>();
+  for (const row of rows) {
+    if (row.type === 'execution.launchLabel')
+      labels.set(row.aggregateId, row.label);
+  }
+  return rows.flatMap((row) => {
+    if (
+      row.type !== 'run.start' ||
+      row.parentStartCommit !== parent.commit ||
+      row.parentStreamId !== aggregateTarget(parent.aggregateId).id ||
+      closed.has(row.aggregateId)
+    )
+      return [];
+    const label = labels.get(aggregateId('execution', row.executionId));
+    if (label === undefined)
+      throw new Error(`Child launch label missing for ${row.executionId}`);
+    return [
+      {
+        id: row.executionId,
+        agent: label,
+        timestamp: new Date(row.at).toISOString(),
+      },
+    ];
+  });
+});

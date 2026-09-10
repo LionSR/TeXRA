@@ -1,6 +1,6 @@
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import { readPersistedFlowRecord } from '@agent/node/persistedFlow';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
 /** Whether persisted state records an unresolved compile rejection. */
@@ -26,8 +26,8 @@ export function isTerminalPersistedCompileRejection(shared: unknown): boolean {
 
 /** Read an execution's persisted workflow state and apply the terminal predicate. */
 export async function hasTerminalPersistedCompileRejection(
-  id: ExecutionId,
+  id: RunId,
 ): Promise<boolean> {
-  const flowRecord = await readPersistedFlowRecord(getExecutionStore(id), id);
+  const flowRecord = await readPersistedFlowRecord(getRunStore(id), id);
   return isTerminalPersistedCompileRejection(flowRecord?.shared);
 }

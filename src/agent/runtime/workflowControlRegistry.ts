@@ -15,7 +15,7 @@
  */
 
 import type { WorkflowScriptControl } from '@agent/workflowScript';
-import type { ExecutionId, WorkflowControlAction } from '@shared/schemas';
+import type { RunId, WorkflowControlAction } from '@shared/schemas';
 
 /** Session-owned set of the control handles of live workflow runs. */
 export class WorkflowControlRegistry {
@@ -39,7 +39,7 @@ export class WorkflowControlRegistry {
    * Skip or retry the in-flight grandchild `agent()` call with this execution
    * id. True when a live run owned it and acted; false when none did.
    */
-  control(grandchildId: ExecutionId, action: WorkflowControlAction): boolean {
+  control(grandchildId: RunId, action: WorkflowControlAction): boolean {
     let claimed = false;
     for (const control of this.runs) {
       if (control(grandchildId, action)) claimed = true;

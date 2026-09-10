@@ -5,10 +5,10 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  approvalPayloadStreamId,
+  approvalPayloadRunId,
   attentionRequests,
   currentApproval,
-  promoteApprovalsForStream,
+  promoteApprovalsForRun,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
@@ -93,7 +93,7 @@ describe('CLI approval surface', () => {
     seedView(view);
     expect(currentApproval.get()?.payload).toEqual(a);
 
-    promoteApprovalsForStream('stream-b' as StreamTabId);
+    promoteApprovalsForRun('stream-b' as StreamTabId);
     expect(currentApproval.get()?.payload).toEqual(b1);
     expect(attentionRequests(view).map((r) => r.requestId)).toEqual([
       'bash-b-1',
@@ -108,7 +108,7 @@ describe('CLI approval surface', () => {
     const view = viewOfApprovals(a, child);
     seedView(view);
 
-    promoteApprovalsForStream('workflow' as StreamTabId, {
+    promoteApprovalsForRun('workflow' as StreamTabId, {
       includeStreamIds: new Set(['workflow-child' as StreamTabId]),
     });
     expect(currentApproval.get()?.payload).toEqual(child);
@@ -134,10 +134,8 @@ describe('CLI approval surface', () => {
   });
 
   it('extracts stream ids from every approval payload used by the TUI', () => {
-    expect(approvalPayloadStreamId(bashPayload('stream-a'))).toBe('stream-a');
-    expect(approvalPayloadStreamId(questionPayload('stream-b'))).toBe(
-      'stream-b',
-    );
-    expect(approvalPayloadStreamId(bashPayload(''))).toBeUndefined();
+    expect(approvalPayloadRunId(bashPayload('stream-a'))).toBe('stream-a');
+    expect(approvalPayloadRunId(questionPayload('stream-b'))).toBe('stream-b');
+    expect(approvalPayloadRunId(bashPayload(''))).toBeUndefined();
   });
 });

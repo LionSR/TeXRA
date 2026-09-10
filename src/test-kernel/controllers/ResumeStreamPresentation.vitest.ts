@@ -2,7 +2,7 @@ import { describe, expect, vi } from 'vitest';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
+import { resumeRunWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import type { StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
@@ -23,7 +23,7 @@ describe('resumeStreamWithRefusalNotice', () => {
       );
 
       expect(
-        yield* resumeStreamWithRefusalNotice(STREAM, {
+        yield* resumeRunWithRefusalNotice(STREAM, {
           session,
           executeWorkflow: vi.fn(),
         }),

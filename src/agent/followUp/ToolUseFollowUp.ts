@@ -197,12 +197,13 @@ function admitFollowUp(
 }
 
 /** Read the authored execution identity from the stream's committed prefix. */
-export const lookupStreamExecutionId = Effect.fn('lookupStreamExecutionId')(
-  function* (streamId: StreamTabId, session: SessionHandle) {
-    yield* session.snapshots.preload([streamId]);
-    return session.snapshots.getRunMetadata(streamId).executionId;
-  },
-);
+export const lookupRunId = Effect.fn('lookupRunId')(function* (
+  streamId: StreamTabId,
+  session: SessionHandle,
+) {
+  yield* session.snapshots.preload([streamId]);
+  return session.snapshots.getRunMetadata(streamId).executionId;
+});
 
 /**
  * The one mapping from a run classification to what the user's stream shows
@@ -272,7 +273,7 @@ const classifyRefusal = Effect.fn('classifyRefusal')(function* (
   streamId: StreamTabId,
   session: SessionHandle,
 ): Effect.fn.Return<FollowUpFailureReason, Error> {
-  const executionId = yield* lookupStreamExecutionId(streamId, session).pipe(
+  const executionId = yield* lookupRunId(streamId, session).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
         logger.warn(

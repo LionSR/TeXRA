@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 import { Effect } from 'effect';
-import type { ExecutionListingEntry } from '@agent/storage';
+import type { RunListingEntry } from '@agent/storage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 
 // Local imports
@@ -65,7 +65,7 @@ describe('tool status formatting', () => {
 
   it.effect('renders bash execution history as a process without a model', () =>
     Effect.gen(function* () {
-      const entry: ExecutionListingEntry = {
+      const entry: RunListingEntry = {
         kind: 'run',
         identity: { kind: 'process', tool: 'bash' },
         id: '16c0f3f748e4',

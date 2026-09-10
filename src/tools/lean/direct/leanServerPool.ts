@@ -33,7 +33,7 @@ import {
 } from 'effect';
 
 import { warn } from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runLakeCommand } from './lakeCommands';
@@ -86,7 +86,7 @@ interface RootEntry {
   /** Set once the root's server has been leased; absent while it starts. */
   readonly server?: LeanServer['Service'];
   /** Runs that used this shared server and have not reached run end yet. */
-  readonly owners: ReadonlySet<ExecutionId>;
+  readonly owners: ReadonlySet<RunId>;
   readonly leases: number;
   /** Final owner ended while a request was still leased. */
   readonly stopWhenIdle: boolean;
@@ -103,16 +103,16 @@ export class LeanServerPool extends Context.Service<
   {
     readonly fetchDiagnosticsForFile: (
       file: string,
-      runId: ExecutionId | undefined,
+      runId: RunId | undefined,
     ) => Effect.Effect<FetchDiagnosticsResult>;
     readonly executeFileCommand: (
       command: LeanFileCommand,
       filePath: string,
-      runId: ExecutionId | undefined,
+      runId: RunId | undefined,
     ) => Effect.Effect<boolean>;
     readonly executeProjectCommand: (
       command: LeanProjectCommand,
-      runId: ExecutionId | undefined,
+      runId: RunId | undefined,
     ) => Effect.Effect<
       void,
       LeanProjectCommandError | LeanStartError | LeanAdapterStopped
@@ -122,10 +122,10 @@ export class LeanServerPool extends Context.Service<
       line: number,
       column: number,
       method: string,
-      runId: ExecutionId | undefined,
+      runId: RunId | undefined,
     ) => Effect.Effect<LspResult<T>>;
     /** See {@link LeanLanguageServices.stopSessionsForRun}. */
-    readonly stopSessionsForRun: (runId: ExecutionId) => Effect.Effect<void>;
+    readonly stopSessionsForRun: (runId: RunId) => Effect.Effect<void>;
   }
 >()('@texra/lean/LeanServerPool') {
   static readonly layer = (
@@ -262,7 +262,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
    */
   const lease = Effect.fn('LeanServerPool.lease')(function* (
     root: string,
-    runId: ExecutionId | undefined,
+    runId: RunId | undefined,
   ) {
     yield* Effect.uninterruptible(
       Effect.gen(function* () {
@@ -300,7 +300,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   const withServer = <A, E>(
     filePath: string,
-    runId: ExecutionId | undefined,
+    runId: RunId | undefined,
     use: (server: LeanServer['Service']) => Effect.Effect<A, E>,
   ) =>
     Effect.scoped(
@@ -324,7 +324,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
    * time-to-live.
    */
   const stopSessionsForRun = Effect.fn('LeanServerPool.stopSessionsForRun')(
-    function* (runId: ExecutionId) {
+    function* (runId: RunId) {
       const live = yield* liveEntries;
       const roots: string[] = [];
       for (const root of live.keys()) {
@@ -361,7 +361,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   const restart = Effect.fn('LeanServerPool.restart')(function* (
     root: string,
     entry: RootEntry,
-    runId: ExecutionId | undefined,
+    runId: RunId | undefined,
   ) {
     yield* stop(root, entry);
     if (entry.server) yield* Deferred.await(entry.server.closed);
@@ -370,7 +370,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   const runLake = Effect.fn('LeanServerPool.runLake')(function* (
     roots: ReadonlyArray<string>,
-    runId: ExecutionId | undefined,
+    runId: RunId | undefined,
     args: readonly string[],
   ) {
     if (roots.length === 0) {
@@ -413,7 +413,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   const executeProjectCommand = Effect.fn(
     'LeanServerPool.executeProjectCommand',
-  )(function* (command: LeanProjectCommand, runId: ExecutionId | undefined) {
+  )(function* (command: LeanProjectCommand, runId: RunId | undefined) {
     // Project commands aren't tied to a file: they apply to every live root.
     const live = yield* liveEntries;
     switch (command) {
@@ -465,7 +465,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 
   const fetchDiagnosticsForFile = Effect.fn(
     'LeanServerPool.fetchDiagnosticsForFile',
-  )(function* (file: string, runId: ExecutionId | undefined) {
+  )(function* (file: string, runId: RunId | undefined) {
     return yield* withServer(file, runId, (server) =>
       server.diagnostics(file).pipe(
         Effect.map((diagnostics): FetchDiagnosticsResult => ({
@@ -522,7 +522,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     function* (
       command: LeanFileCommand,
       filePath: string,
-      runId: ExecutionId | undefined,
+      runId: RunId | undefined,
     ) {
       // Both file commands have the same effect from our point of view: drop
       // the cached open state and re-open with fresh contents.
@@ -552,7 +552,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       line: number,
       column: number,
       method: string,
-      runId: ExecutionId | undefined,
+      runId: RunId | undefined,
     ) {
       return yield* withServer(filePath, runId, (server) =>
         server.requestSettled<T | null>(filePath, line, column, method),

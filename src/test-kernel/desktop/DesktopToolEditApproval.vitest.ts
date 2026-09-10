@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Effect, Fiber, Stream } from 'effect';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
+import type { DesktopAgentRunHost } from '@desktop/main/desktopAgentExecutionHost';
 import type { DiffSource } from '@hosts/uiHosts';
 
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -152,7 +152,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 
   const [
     { requestToolEditApproval },
-    { releaseStreamResources },
+    { releaseRunResources },
     controllerModule,
     desktopModule,
   ] = await Promise.all([
@@ -164,7 +164,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   return {
     activeApproval,
     requestToolEditApproval,
-    releaseStreamResources,
+    releaseRunResources,
     controllerModule,
     desktopModule,
   };
@@ -173,7 +173,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 /** A controller with real staged previews and an isolated session. */
 async function createApprovalFixture(
   options: {
-    ui?: DesktopAgentExecutionHost;
+    ui?: DesktopAgentRunHost;
     workspacePath?: string;
   } = {},
 ) {
@@ -661,7 +661,7 @@ describe('desktop tool edit approval', () => {
     'cleans pending entries and temp files when stream cleanup rejects a request',
     async () => {
       const {
-        releaseStreamResources,
+        releaseRunResources,
         controller,
         waitForPreviews,
         session,
@@ -685,7 +685,7 @@ describe('desktop tool edit approval', () => {
       await waitForPreviews();
 
       // Pending interactions are session-owned: sweep the owning session.
-      releaseStreamResources('stream-cleanup', session);
+      releaseRunResources('stream-cleanup', session);
 
       await expect(resultPromise).resolves.toMatchObject({
         action: 'reject',

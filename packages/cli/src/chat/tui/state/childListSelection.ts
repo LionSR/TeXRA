@@ -18,7 +18,7 @@ type ChildListSelectionAction =
     }
   | {
       readonly kind: 'reconcile';
-      readonly activeStreamId: StreamTabId | undefined;
+      readonly activeRunId: StreamTabId | undefined;
       readonly values: readonly StreamTabId[];
     };
 
@@ -30,11 +30,11 @@ export const INITIAL_CHILD_LIST_SELECTION: ChildListSelectionState = {
 function resolveChildSelectionValue(
   values: readonly StreamTabId[],
   selectedValue: StreamTabId | undefined,
-  activeStreamId: StreamTabId | undefined,
+  activeRunId: StreamTabId | undefined,
 ): StreamTabId | undefined {
   if (selectedValue && values.includes(selectedValue)) return selectedValue;
-  if (activeStreamId)
-    return values.includes(activeStreamId) ? activeStreamId : undefined;
+  if (activeRunId)
+    return values.includes(activeRunId) ? activeRunId : undefined;
   return values[0];
 }
 
@@ -75,7 +75,7 @@ export function reduceChildListSelection(
       const selectedValue = resolveChildSelectionValue(
         action.values,
         state.selectedValue,
-        action.activeStreamId,
+        action.activeRunId,
       );
       return selectedValue === state.selectedValue
         ? state

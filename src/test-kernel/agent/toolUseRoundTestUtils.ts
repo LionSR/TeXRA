@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 // Local imports
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
 // Local file imports
@@ -26,7 +26,7 @@ export function baseRoundServices(
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
     },
-    logger: createTestRunTrace(traceLabel, new StreamLog()).trace,
+    logger: createTestRunTrace(traceLabel, new RunLog()).trace,
     onRoundFinalized: () => {},
     prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
     run: AgentRunStateSnapshotSchema.parse({}),

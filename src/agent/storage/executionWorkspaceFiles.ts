@@ -16,7 +16,7 @@ interface ExecutionWorkspaceFile {
   readonly isDirectory: boolean;
 }
 
-export function resolveExecutionWorkspaceFilePath(
+export function resolveRunWorkspaceFilePath(
   config: Pick<AgentConfig, 'workingDirectory'> | null,
   filePath: string,
 ): { readonly absolutePath: string; readonly path: string } | undefined {
@@ -39,13 +39,13 @@ export function resolveExecutionWorkspaceFilePath(
   };
 }
 
-export async function listExecutionWorkspaceFiles(
+export async function listRunWorkspaceFiles(
   config: Pick<AgentConfig, 'workingDirectory'> | null,
   filePaths: readonly string[],
 ): Promise<ExecutionWorkspaceFile[]> {
   const files = new Map<string, ExecutionWorkspaceFile>();
   for (const filePath of filePaths) {
-    const resolved = resolveExecutionWorkspaceFilePath(config, filePath);
+    const resolved = resolveRunWorkspaceFilePath(config, filePath);
     if (!resolved || files.has(resolved.path)) continue;
 
     let stat: FileStat;

@@ -197,18 +197,18 @@ export interface StaticScrollbackTarget {
 }
 
 export function staticScrollbackTarget({
-  activeStreamId,
-  rootStreamId,
+  activeRunId,
+  rootRunId,
   scopedTranscript = false,
 }: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly rootStreamId: StreamTabId | undefined;
+  readonly activeRunId: StreamTabId | undefined;
+  readonly rootRunId: StreamTabId | undefined;
   readonly scopedTranscript?: boolean;
 }): StaticScrollbackTarget {
   if (scopedTranscript) {
     return {
-      ownerKey: activeStreamId ? `stream:${activeStreamId}` : 'scoped:none',
-      streamId: activeStreamId,
+      ownerKey: activeRunId ? `stream:${activeRunId}` : 'scoped:none',
+      streamId: activeRunId,
     };
   }
   // Before a root run resolves, local helper output and harness-built root
@@ -217,7 +217,7 @@ export function staticScrollbackTarget({
   // <Static> cache does not remount and reprint pre-run root entries.
   return {
     ownerKey: 'root',
-    streamId: rootStreamId ?? activeStreamId,
+    streamId: rootRunId ?? activeRunId,
   };
 }
 

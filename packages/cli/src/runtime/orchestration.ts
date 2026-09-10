@@ -3,7 +3,7 @@ import {
   canLaunchTeam,
   teamTexraHostedMissingNames,
 } from '@common/teams/TeamPlan';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { agentKeyOf, agentName } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
@@ -46,7 +46,7 @@ export type CliOrchestrationAction =
        *  delegation). Chosen in the launcher's model step. */
       readonly model?: string;
     }
-  | { readonly kind: 'resume'; readonly id: ExecutionId }
+  | { readonly kind: 'resume'; readonly id: RunId }
   | { readonly kind: 'browse-resumes' }
   | { readonly kind: 'browse-agents' }
   | { readonly kind: 'browse-teams' }

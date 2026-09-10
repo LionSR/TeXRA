@@ -133,7 +133,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionAutoApproval } from '@tools/goal';
 import { proposalApprovals } from '@tools/approval';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import {
   bashApprovalRequest,
   toolEditApprovalRequest,
@@ -159,7 +159,7 @@ function port(): SessionHostInteractions {
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('stream', streamId),
-        executionId: generateExecutionId(),
+        executionId: generateRunId(),
         identity: { kind: 'agent', agent: 'agent' },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         category: AgentCategory.ToolUse,

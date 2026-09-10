@@ -42,7 +42,7 @@ import {
 } from '@agent/followUp/ToolFileInteractionContext';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
-  ExecutionId,
+  RunId,
   StreamTabId,
   TodoItem,
   ToolResult,
@@ -69,7 +69,7 @@ import {
   importCodexClass,
   findCodexBinaryPath,
 } from './codexImport';
-import { type ChildStream } from './delegation/childStream';
+import { type ChildRun } from './delegation/childStream';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
   agentCliCall,
@@ -356,9 +356,9 @@ export async function runStreamedTurn(
 function startCodexLoop(params: {
   session: SessionHandle;
   thread: Thread;
-  childStream: ChildStream;
+  childStream: ChildRun;
   parentStreamId: StreamTabId;
-  executionId: ExecutionId;
+  executionId: RunId;
   initialPrompt: string;
   /**
    * The disk-based fallback thread id claimed synchronously in execute(). The
@@ -545,7 +545,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
   parentStreamId: StreamTabId,
-  parentExecutionId: ExecutionId | undefined,
+  parentExecutionId: RunId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,

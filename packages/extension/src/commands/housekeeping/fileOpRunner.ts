@@ -1,7 +1,7 @@
 // Local imports
 import {
   mergeRunDirAndWorkspaceResult,
-  type ExecutionId,
+  type RunId,
   type FileOpResult,
 } from '@shared/schemas';
 
@@ -23,7 +23,7 @@ interface FileOpActions {
     inputFiles: string[],
   ) => Promise<FileOpResult>;
   readonly runRunDir: (
-    executionId: ExecutionId,
+    executionId: RunId,
     agent: string,
     model: string,
     inputFile: string,

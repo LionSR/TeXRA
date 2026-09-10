@@ -7,8 +7,8 @@ import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { getExecutionRecords, registerExecution } from '@agent/storage';
-import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { getRunRecords, registerRun } from '@agent/storage';
+import { inspectRunLease } from '@agent/storage/executionLease';
 import { runInSession } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -17,7 +17,7 @@ import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -34,10 +34,7 @@ import {
   reraiseAgentCliCallFailure,
 } from '@tools/agentCliShared';
 import { codexThreadsFor } from '@tools/agentCliSessionStores';
-import {
-  createChildStream,
-  type ChildStream,
-} from '@tools/delegation/childStream';
+import { createChildRun, type ChildRun } from '@tools/delegation/childStream';
 
 // Local file imports
 import {
@@ -47,22 +44,22 @@ import {
   recordSessionEvents,
 } from '../progressTestUtils';
 
-const executionId = 'c11111' as ExecutionId;
+const executionId = 'c11111' as RunId;
 const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'bash#c11111' as StreamTabId;
-const loopExecutionId = 'c11113' as ExecutionId;
+const loopExecutionId = 'c11113' as RunId;
 const loopChildStreamId = 'codex#c11113' as StreamTabId;
-const stoppedExecutionId = 'c11114' as ExecutionId;
+const stoppedExecutionId = 'c11114' as RunId;
 const stoppedChildStreamId = 'codex#c11114' as StreamTabId;
-const cancelledExecutionId = 'c11115' as ExecutionId;
+const cancelledExecutionId = 'c11115' as RunId;
 const cancelledChildStreamId = 'codex#c11115' as StreamTabId;
-const failedExecutionId = 'c11116' as ExecutionId;
+const failedExecutionId = 'c11116' as RunId;
 const failedChildStreamId = 'codex#c11116' as StreamTabId;
-const noProjectionAutoCloseExecutionId = 'c11118' as ExecutionId;
+const noProjectionAutoCloseExecutionId = 'c11118' as RunId;
 const noProjectionAutoCloseChildStreamId = 'bash#c11118' as StreamTabId;
-const workflowRelaunchExecutionId = 'c11119' as ExecutionId;
+const workflowRelaunchExecutionId = 'c11119' as RunId;
 const workflowRelaunchChildStreamId = 'workflow-script#c11119' as StreamTabId;
-const setupRetryExecutionId = 'c11120' as ExecutionId;
+const setupRetryExecutionId = 'c11120' as RunId;
 const setupRetryChildStreamId = 'workflow-script#c11120' as StreamTabId;
 const config = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
@@ -71,9 +68,9 @@ const config = AgentConfigSchema.parse({
 });
 
 const createRegisteredChildStream = Effect.fn('createRegisteredChildStream')(
-  function* (...args: Parameters<typeof createChildStream>) {
+  function* (...args: Parameters<typeof createChildRun>) {
     const [session, executionId, parentStreamId, options] = args;
-    yield* registerExecution(
+    yield* registerRun(
       session,
       executionId,
       options.config,
@@ -87,14 +84,14 @@ const createRegisteredChildStream = Effect.fn('createRegisteredChildStream')(
         description: options.description,
       },
     );
-    const child = yield* createChildStream(...args).pipe(
+    const child = yield* createChildRun(...args).pipe(
       Effect.onError(() =>
         session.releaseExecutionLease(executionId).pipe(Effect.orDie),
       ),
     );
     return {
       ...child,
-      finalize: (input: Parameters<ChildStream['finalize']>[0]) =>
+      finalize: (input: Parameters<ChildRun['finalize']>[0]) =>
         child
           .finalize(input)
           .pipe(
@@ -106,7 +103,7 @@ const createRegisteredChildStream = Effect.fn('createRegisteredChildStream')(
   },
 );
 
-function startBashChild(executionId: ExecutionId) {
+function startBashChild(executionId: RunId) {
   return Effect.runPromise(
     createRegisteredChildStream(defaultSession(), executionId, parentStreamId, {
       streamPrefix: 'bash',
@@ -118,7 +115,7 @@ function startBashChild(executionId: ExecutionId) {
   );
 }
 
-function startCodexChild(executionId: ExecutionId, description: string) {
+function startCodexChild(executionId: RunId, description: string) {
   return Effect.runPromise(
     createRegisteredChildStream(defaultSession(), executionId, parentStreamId, {
       streamPrefix: 'codex',
@@ -492,7 +489,7 @@ describe('child stream progress events', () => {
     () =>
       Effect.gen(function* () {
         const session = defaultSession();
-        const committed = yield* Deferred.make<ExecutionId>();
+        const committed = yield* Deferred.make<RunId>();
         const releasePublication = yield* Deferred.make<void>();
         const commit = session.commitRegistration.bind(session);
         const publication = vi
@@ -538,18 +535,18 @@ describe('child stream progress events', () => {
             Exit.isFailure(stopped) && Cause.hasInterrupts(stopped.cause),
           ).toBe(true);
           expect(startLoop).not.toHaveBeenCalled();
-          expect(
-            (yield* getExecutionRecords(session, id).readMeta())?.outcome,
-          ).toBe(RUN_OUTCOME.CANCELLED);
+          expect((yield* getRunRecords(session, id).readMeta())?.outcome).toBe(
+            RUN_OUTCOME.CANCELLED,
+          );
           expect(
             yield* Effect.promise(() =>
-              runInSession(session, () => inspectExecutionLease(id)),
+              runInSession(session, () => inspectRunLease(id)),
             ),
           ).toEqual({ status: 'free' });
           expect(
             Exit.isFailure(
               yield* Effect.exit(
-                getExecutionRecords(session, id).writeReport('unowned'),
+                getRunRecords(session, id).writeReport('unowned'),
               ),
             ),
           ).toBe(true);
@@ -566,8 +563,8 @@ describe('child stream progress events', () => {
         const setupError = new Error('child loop setup failed');
         const session = defaultSession();
         const recorded = recordSessionEvents(session);
-        let childStream: ChildStream | undefined;
-        let childExecutionId: ExecutionId | undefined;
+        let childStream: ChildRun | undefined;
+        let childExecutionId: RunId | undefined;
         let handle: ReturnType<
           typeof session.executions.getAgentHandleByStream
         >;

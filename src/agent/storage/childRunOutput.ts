@@ -2,14 +2,14 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import type { ExecutionId, RunStorageFileLocation } from '@shared/schemas';
+import type { RunId, RunStorageFileLocation } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   inspectRunStorageEntry,
   runStorageLocationFromAnyAbsolutePath,
 } from '@utils/files/runStorageFs';
 
-import { getExecutionRecords } from './ExecutionKVStore';
+import { getRunRecords } from './ExecutionKVStore';
 
 /**
  * Resolve a declared output of a completed direct child run. The absolute path
@@ -18,7 +18,7 @@ import { getExecutionRecords } from './ExecutionKVStore';
  */
 export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
   function* (
-    parentExecutionId: ExecutionId,
+    parentExecutionId: RunId,
     absolutePath: string,
     session: SessionHandle,
   ): Effect.fn.Return<RunStorageFileLocation | undefined, Error> {
@@ -29,7 +29,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       );
     }
 
-    const store = getExecutionRecords(session, reference.executionId);
+    const store = getRunRecords(session, reference.executionId);
     const [meta, resultMeta] = yield* Effect.all([
       store.readMeta(),
       store.readResultMeta(),

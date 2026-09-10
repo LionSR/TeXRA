@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import {
   WorkflowRunAbortError,
@@ -9,14 +9,14 @@ import {
 } from '@agent/workflowScript';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
-const executionId = '7154progress' as ExecutionId;
+const executionId = '7154progress' as RunId;
 const meta = `export const meta = {
   name: 'progress-test',
   description: 'tests workflow progress projection',
@@ -70,7 +70,7 @@ function runScript(
   options: Partial<ScriptRunOptions> = {},
 ): ReturnType<typeof runPersistedWorkflowScriptWithProgress> {
   return runPersistedWorkflowScriptWithProgress(trace, {
-    store: getExecutionStore(executionId),
+    store: getRunStore(executionId),
     checkpointId,
     script,
     runAgent: async () => 'done',
@@ -500,7 +500,7 @@ return await agent('Read', { phase: 'Review' })`;
     const { trace, events } = recordingTrace();
     const runner = vi.fn(() => Promise.reject(new Error('must not run')));
     await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
+      store: getRunStore(executionId),
       checkpointId: 'cached',
       runAgent: runner,
     });
@@ -518,7 +518,7 @@ return await agent('Read', { phase: 'Review' })`;
     const script = `${meta}
 phase('Review')
 return await agent('Read', { id: 'read' })`;
-    const store = () => getExecutionStore(executionId);
+    const store = () => getRunStore(executionId);
     const first = await runScript(
       recordingTrace().trace,
       'twice-resumed',
@@ -807,7 +807,7 @@ return await agent('Late skip')`,
         runAgent: async (invocation: WorkflowAgentInvocation) => {
           invocation.report?.({
             model: 'kimiK2',
-            childExecutionId: 'da7e5c1b' as ExecutionId,
+            childExecutionId: 'da7e5c1b' as RunId,
             costUsd: 0.04,
           });
           markStarted?.();
@@ -827,7 +827,7 @@ return await agent('Late skip')`,
     );
 
     await started;
-    control('da7e5c1b' as ExecutionId, 'skip');
+    control('da7e5c1b' as RunId, 'skip');
     await run;
 
     expect(

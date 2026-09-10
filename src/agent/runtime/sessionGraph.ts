@@ -25,7 +25,7 @@ import {
 } from '@platform/workspaceRoots';
 import type {
   CommitOrdinal,
-  ExecutionId,
+  RunId,
   LocalRuntimeState,
   SessionCloseReport,
   SessionEvent,
@@ -49,17 +49,15 @@ export interface SessionGraph {
   readonly publishRegistration: SessionEventsShape['publish'];
   /** Private execution metadata reads never enter display transport. */
   readonly acquireExecutionClaims: (
-    executionId: ExecutionId,
+    executionId: RunId,
     streamId: StreamTabId,
   ) => Effect.Effect<Effect.Effect<void>>;
-  readonly releaseExecutionClaims: (
-    executionId: ExecutionId,
-  ) => Effect.Effect<void>;
+  readonly releaseExecutionClaims: (executionId: RunId) => Effect.Effect<void>;
   readonly executionRecords: (
-    id: ExecutionId,
+    id: RunId,
   ) => Effect.Effect<readonly SessionEvent[]>;
   readonly executionChildren: (
-    id: ExecutionId,
+    id: RunId,
   ) => Effect.Effect<readonly SessionEvent[]>;
   readonly recordListing: () => Effect.Effect<readonly SessionEvent[]>;
   /** Transient text shares the existing session-input source, never the event table. */

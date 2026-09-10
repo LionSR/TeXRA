@@ -7,23 +7,19 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
 import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
-import { getExecutionStore, getExecutionRecords } from '@agent/storage';
-import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
+import { getRunStore, getRunRecords } from '@agent/storage';
+import { RunLeaseActiveError } from '@agent/storage/executionLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { RUN_OUTCOME, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
-import type {
-  ExecutionId,
-  StreamTabId,
-  WorkflowScriptFiles,
-} from '@shared/schemas';
+import type { RunId, StreamTabId, WorkflowScriptFiles } from '@shared/schemas';
 import {
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
-import { deriveExecutionId } from '@utils/core/idHash';
+import { deriveRunId } from '@utils/core/idHash';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
 
@@ -31,7 +27,7 @@ setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
 const mocks = vi.hoisted(() => ({
   registerExecution: vi.fn(),
-  recordStores: new Map<string, ReturnType<typeof getExecutionRecords>>(),
+  recordStores: new Map<string, ReturnType<typeof getRunRecords>>(),
   startChildRunLoop: vi.fn(),
   createChildStream: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
@@ -53,8 +49,8 @@ vi.mock('@agent/storage', async (importOriginal) => {
     await import('@test/support/FakeExecutionKVStore');
   return {
     ...actual,
-    registerExecution: mocks.registerExecution,
-    getExecutionRecords: (_session: unknown, id: string) => {
+    registerRun: mocks.registerExecution,
+    getRunRecords: (_session: unknown, id: string) => {
       const existing = mocks.recordStores.get(id);
       if (existing) return existing;
       let report: string | null = null;
@@ -81,7 +77,7 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
   return {
     ...actual,
-    registerExecution: mocks.registerExecution,
+    registerRun: mocks.registerExecution,
   };
 });
 
@@ -104,7 +100,7 @@ vi.mock('@tools/delegation/workflowScriptStrategy', async (importOriginal) => {
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  assertOwnedExecutionLease: vi.fn(),
+  assertOwnedRunLease: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/childRunLoop', async (importOriginal) => ({
@@ -113,8 +109,8 @@ vi.mock('@agent/runtime/childRunLoop', async (importOriginal) => ({
 }));
 
 vi.mock('@tools/delegation/childStream', () => ({
-  createChildStream: mocks.createChildStream,
-  childStreamDescription: (raw: string) => raw,
+  createChildRun: mocks.createChildStream,
+  childRunDescription: (raw: string) => raw,
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -138,7 +134,7 @@ vi.mock('@tools/delegation/delegationAvailability', async (importOriginal) => ({
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
-const executionId = '7154scripttool' as ExecutionId;
+const executionId = '7154scripttool' as RunId;
 const streamId = 'stream:workflow-script-tool' as StreamTabId;
 const script = `export const meta = {
   name: 'tool-test',
@@ -171,8 +167,8 @@ function checkpointIdFor(name: string): string {
 }
 
 /** The deterministic run executionId derived from that checkpoint identity. */
-function runExecutionIdFor(name: string): ExecutionId {
-  return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
+function runExecutionIdFor(name: string): RunId {
+  return deriveRunId({ checkpointId: checkpointIdFor(name) });
 }
 
 /** The exact durable run record a launch of `name` must preserve. */
@@ -209,7 +205,7 @@ function mockPersistedReport(
   report: string,
   outcome: (typeof RUN_OUTCOME)[keyof typeof RUN_OUTCOME],
 ): void {
-  const store = getExecutionRecords(currentSession(), runExecutionIdFor(name));
+  const store = getRunRecords(currentSession(), runExecutionIdFor(name));
   vi.spyOn(store, 'readReport').mockReturnValue(Effect.succeed(report));
   vi.spyOn(store, 'readMeta').mockReturnValue(
     Effect.succeed({ outcome } as never),
@@ -287,7 +283,7 @@ beforeEach(async () => {
     };
   });
   mocks.createChildStream.mockImplementation(
-    (_session: unknown, runId: ExecutionId) =>
+    (_session: unknown, runId: RunId) =>
       Effect.sync(() => {
         const logger = new TraceEmitter();
         vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
@@ -745,7 +741,7 @@ return null`;
       "name: 'interrupted-resume'",
     );
     const runExecutionId = runExecutionIdFor('interrupted-resume');
-    const store = getExecutionRecords(currentSession(), runExecutionId);
+    const store = getRunRecords(currentSession(), runExecutionId);
     await Effect.runPromise(
       store.writeReport('stale success from the prior attempt'),
     );
@@ -884,7 +880,7 @@ return null`;
       mediaFiles: ['figure.pdf'],
     } as const satisfies WorkflowScriptFiles;
     await writeWorkflowScriptCheckpoint(
-      getExecutionStore(executionId),
+      getRunStore(executionId),
       checkpointIdFor('resume'),
       {
         script: resumeScript,
@@ -926,7 +922,7 @@ return null`;
 
   it('hydrates the committed workflow snapshot when reopening a named execution', async () => {
     const runId = runExecutionIdFor('tool-test');
-    const store = getExecutionRecords(currentSession(), runId);
+    const store = getRunRecords(currentSession(), runId);
     const priorWorkflow = {
       lifecycle: 'active' as const,
       stages: [],
@@ -989,7 +985,7 @@ return null`;
     const runExecutionId = runExecutionIdFor('tool-test');
     mocks.registerExecution.mockReturnValueOnce(
       Effect.fail(
-        new ExecutionLeaseActiveError(runExecutionId, {
+        new RunLeaseActiveError(runExecutionId, {
           pid: 1,
           processStart: '1',
           hostname: 'test-host',

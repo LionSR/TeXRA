@@ -2,9 +2,9 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
-import { registerExecution } from '@agent/storage/executionLifecycle';
-import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
+import { getRunRecords } from '@agent/storage';
+import { registerRun } from '@agent/storage/executionLifecycle';
+import { releaseOwnedRunLease } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -16,7 +16,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
+  type RunId,
   type RunOutcome,
   type StreamTabId,
   AgentCategory,
@@ -33,8 +33,8 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   assembleTrace,
-  StreamLogStore,
-  StreamSnapshotStore,
+  RunLogStore,
+  RunSnapshotStore,
 } from '@transcript';
 
 const tempDirs = useTempDirs();
@@ -66,7 +66,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 
 /** Persist a run record plus a meta row for an execution. */
 function writeExecution(
-  executionId: ExecutionId,
+  executionId: RunId,
   meta: { outcome?: RunOutcome; streamId?: StreamTabId } = {},
   executionConfig: AgentConfig = config(),
 ) {
@@ -75,7 +75,7 @@ function writeExecution(
       meta.streamId ?? getStreamTabId(executionConfig.agent, { executionId });
     publishTestRunStart(session, streamId, executionId);
     yield* Effect.promise(() => session.settlePublications());
-    yield* getExecutionRecords(session, executionId).writeRunRecord(
+    yield* getRunRecords(session, executionId).writeRunRecord(
       executionConfig,
     );
     if (meta.outcome)
@@ -116,13 +116,13 @@ describe('assembleTrace', () => {
     'resolves a registered execution from its metadata without any sidecar scan (#9590 A1)',
     () =>
       Effect.gen(function* () {
-        const executionId = 'abc900abc900' as ExecutionId;
+        const executionId = 'abc900abc900' as RunId;
         const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
         // Registered under a stream the config would NOT derive: proves the
         // read comes from execution metadata, not from agent/model
         // reconstruction.
         const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
-        yield* registerExecution(
+        yield* registerRun(
           session,
           executionId,
           executionConfig,
@@ -132,11 +132,11 @@ describe('assembleTrace', () => {
             identity: { kind: 'agent', agent: 'review' },
           },
         );
-        yield* Effect.promise(() => releaseOwnedExecutionLease(executionId));
+        yield* Effect.promise(() => releaseOwnedRunLease(executionId));
         yield* appendLogEntry(registeredId, 'registered row');
 
         const scan = vi.spyOn(
-          StreamSnapshotStore.prototype,
+          RunSnapshotStore.prototype,
           'listPersistedStreams',
         );
 
@@ -151,7 +151,7 @@ describe('assembleTrace', () => {
     'assembles a full trace document from the streamId stamped on execution metadata',
     () =>
       Effect.gen(function* () {
-        const executionId = 'aa11bb22cc33' as ExecutionId;
+        const executionId = 'aa11bb22cc33' as RunId;
         const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
         const streamId = getStreamTabId('review', { executionId });
 
@@ -197,7 +197,7 @@ describe('assembleTrace', () => {
   it.effect('returns config_missing when no config was ever written', () =>
     Effect.gen(function* () {
       const result = yield* assembleTrace(
-        'exec-no-config' as ExecutionId,
+        'exec-no-config' as RunId,
         session,
       );
       expect(result).toEqual({ status: 'config_missing' });
@@ -206,7 +206,7 @@ describe('assembleTrace', () => {
 
   it.effect('exports a registered stream with an empty transcript', () =>
     Effect.gen(function* () {
-      const executionId = 'eec000001' as ExecutionId;
+      const executionId = 'eec000001' as RunId;
       const streamId = getStreamTabId('orchestrator', { executionId });
       yield* writeExecution(executionId, { streamId });
 
@@ -225,7 +225,7 @@ describe('assembleTrace', () => {
         // getStreamTabId's format but carry a tool-specific prefix, disjoint
         // from any agent name — the stamped meta.streamId is the only mapping
         // that reaches them.
-        const executionId = 'eec000002' as ExecutionId;
+        const executionId = 'eec000002' as RunId;
         const executionConfig = config({
           agent: 'orchestrator',
           model: 'deepseekT',

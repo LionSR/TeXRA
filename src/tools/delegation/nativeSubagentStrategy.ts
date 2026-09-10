@@ -28,7 +28,7 @@
 
 import { Cause, Effect, Exit } from 'effect';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import {
   isWaitingFlowResult,
   type AgentFlowResult,
@@ -53,7 +53,7 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
@@ -151,8 +151,8 @@ export interface ChildRunLaunchOptions {
 
 interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
   readonly definition: PreparedAgentDefinition;
-  readonly executionId: ExecutionId;
-  readonly parentExecutionId?: ExecutionId;
+  readonly executionId: RunId;
+  readonly parentExecutionId?: RunId;
   readonly startedAt: number;
   readonly workingDirectory?: string;
   /** Omit for ordinary interactive delegation; durable calls end after one cycle. */
@@ -173,7 +173,7 @@ interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
  */
 function toDeliveryResult(
   turn: AgentRuntimeFlowResult,
-  executionId: ExecutionId,
+  executionId: RunId,
 ): AgentFlowResult {
   if (!isWaitingFlowResult(turn)) return turn;
   return {
@@ -355,7 +355,7 @@ export function createNativeSubagentStrategy(
               ),
             );
           }
-          const config = yield* getExecutionRecords(
+          const config = yield* getRunRecords(
             params.session,
             params.executionId,
           ).readConfig();

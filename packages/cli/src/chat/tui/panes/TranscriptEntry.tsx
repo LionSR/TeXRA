@@ -8,7 +8,7 @@ import { Box, Text } from 'ink';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { fillRows } from '@cli/runtime/terminalText';
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 // Local imports - CLI TUI rendering
 import { Markdown } from '../render/Markdown';
@@ -113,7 +113,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   readonly width?: number;
   readonly colorEnabled?: boolean;
   readonly fillWidth?: boolean;
-  readonly subagentExecutionLabels?: ExecutionLabels;
+  readonly subagentExecutionLabels?: RunLabels;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
     return (
@@ -183,7 +183,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
   readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
   readonly maxRows: number;
-  readonly subagentExecutionLabels?: ExecutionLabels;
+  readonly subagentExecutionLabels?: RunLabels;
   readonly width?: number;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {

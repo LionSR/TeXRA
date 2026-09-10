@@ -85,7 +85,7 @@ import {
   AgentConfigFieldsSchema,
   LocalRuntimeStateSchema,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
@@ -97,7 +97,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { StreamLogStore } from '@transcript/StreamLogStore';
+import { RunLogStore } from '@transcript/StreamLogStore';
 
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
@@ -111,7 +111,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 const SELF = '["test-host",4242,"self-start"]';
 const OTHER = '["test-host",4343,"other-start"]';
 const STREAM = 'stream:framing' as StreamTabId;
-const EXECUTION = 'ab12cd' as ExecutionId;
+const EXECUTION = 'ab12cd' as RunId;
 const OLDER = 'stream:older' as StreamTabId;
 const NEWER = 'stream:newer' as StreamTabId;
 
@@ -287,7 +287,7 @@ describe('session events and view', () => {
           {
             ...runStart,
             aggregateId: newParent,
-            executionId: 'aabbccdd1122' as ExecutionId,
+            executionId: 'aabbccdd1122' as RunId,
           },
           opened,
         ]);
@@ -721,7 +721,7 @@ describe('Sessions owner', () => {
         const detachResult = session.onResult(onResult);
         const foreign = 'stream:foreign' as StreamTabId;
         const aggregateId = qualifyAggregateId('stream', foreign);
-        const foreignExecution = 'cd34ef' as ExecutionId;
+        const foreignExecution = 'cd34ef' as RunId;
         try {
           yield* session.receiveCommittedEvent({
             type: 'run.start',
@@ -799,7 +799,7 @@ describe('Sessions owner', () => {
         let releaseChild = (): void => {};
         const interrupt = vi.fn(() => releaseChild());
         releaseChild = session.executions.reserveChildActivation({
-          executionId: 'exec:child' as ExecutionId,
+          executionId: 'exec:child' as RunId,
           parentStreamId: 'stream:exec:settled' as StreamTabId,
           childStreamId: 'stream:exec:child' as StreamTabId,
           interrupt,

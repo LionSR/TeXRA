@@ -13,9 +13,9 @@ import type { StreamTabId } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { RequestError } from '@shared/session/requestErrors';
 import {
-  activeStreamId,
-  focusStream,
-  rootStreamId,
+  activeRunId,
+  focusRun,
+  rootRunId,
   registerCliStateResetHook,
 } from './cliState';
 import { currentView, streamViewOf } from './sessionView';
@@ -91,16 +91,16 @@ function appendLocalTranscriptEntry(
   const normalized = text.trim();
   if (!normalized) return;
   const view = currentView();
-  const active = activeStreamId.get();
+  const active = activeRunId.get();
   const streamId =
     explicitStreamId ??
-    resolveLocalTranscriptStreamId({
-      activeStreamId: active,
+    resolveLocalTranscriptRunId({
+      activeRunId: active,
       fallbackStreamId: CLI_LOCAL_STREAM_ID,
       parentOf: (id) => streamViewOf(view, id)?.parentId ?? undefined,
-      rootStreamId: rootStreamId.get(),
+      rootRunId: rootRunId.get(),
     });
-  focusStream(streamId, { onlyIfUnset: true });
+  focusRun(streamId, { onlyIfUnset: true });
   const afterSeq = rowSeq(streamViewOf(view, streamId)?.transcript.rows.at(-1));
   notices.set([
     ...notices.get(),
@@ -116,24 +116,24 @@ function appendLocalTranscriptEntry(
   ]);
 }
 
-export function resolveLocalTranscriptStreamId({
-  activeStreamId,
+export function resolveLocalTranscriptRunId({
+  activeRunId,
   fallbackStreamId,
   parentOf,
-  rootStreamId,
+  rootRunId,
 }: {
-  readonly activeStreamId: StreamTabId | undefined;
+  readonly activeRunId: StreamTabId | undefined;
   readonly fallbackStreamId: StreamTabId;
   readonly parentOf: (streamId: StreamTabId) => StreamTabId | undefined;
-  readonly rootStreamId: StreamTabId | undefined;
+  readonly rootRunId: StreamTabId | undefined;
 }): StreamTabId {
-  if (rootStreamId) return rootStreamId;
-  if (activeStreamId === undefined) return fallbackStreamId;
-  return parentOf(activeStreamId) ?? activeStreamId;
+  if (rootRunId) return rootRunId;
+  if (activeRunId === undefined) return fallbackStreamId;
+  return parentOf(activeRunId) ?? activeRunId;
 }
 
 /** The pre-run notices become the root's opening rows once it has a stream. */
-export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
+export function moveLocalTranscriptToRun(streamId: StreamTabId): void {
   if (streamId === CLI_LOCAL_STREAM_ID) return;
   const current = notices.get();
   if (!current.some((notice) => notice.streamId === CLI_LOCAL_STREAM_ID)) {
@@ -146,7 +146,7 @@ export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
         : notice,
     ),
   );
-  if (activeStreamId.get() === CLI_LOCAL_STREAM_ID) focusStream(streamId);
+  if (activeRunId.get() === CLI_LOCAL_STREAM_ID) focusRun(streamId);
 }
 
 export function clearLocalTranscript(): void {
@@ -155,8 +155,8 @@ export function clearLocalTranscript(): void {
     (notice) => notice.streamId !== CLI_LOCAL_STREAM_ID,
   );
   if (kept.length !== current.length) notices.set(kept);
-  if (activeStreamId.get() === CLI_LOCAL_STREAM_ID) {
-    activeStreamId.set(undefined);
+  if (activeRunId.get() === CLI_LOCAL_STREAM_ID) {
+    activeRunId.set(undefined);
   }
 }
 

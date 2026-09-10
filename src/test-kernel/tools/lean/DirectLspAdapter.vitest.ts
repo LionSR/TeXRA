@@ -57,7 +57,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   createDirectLspLeanAdapter,
   type DirectLspLeanAdapterOptions,
@@ -150,7 +150,7 @@ process.stdin.on('data', (chunk) => {
 });
 `;
 
-const NO_RUN: ExecutionId | undefined = undefined;
+const NO_RUN: RunId | undefined = undefined;
 const IDLE_HOUR = Duration.hours(1);
 
 let tempRoot: string;
@@ -852,8 +852,8 @@ describe('createDirectLspLeanAdapter', () => {
   );
 });
 
-function run(executionId: string): ExecutionId {
-  return executionId as ExecutionId;
+function run(executionId: string): RunId {
+  return executionId as RunId;
 }
 
 function makeLakeProject(

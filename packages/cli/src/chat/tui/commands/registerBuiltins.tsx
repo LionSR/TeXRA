@@ -10,7 +10,7 @@ import {
 } from '@cli/runtime/loginOptions';
 import type { ApiProvider } from '@model/apiProviders';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { type ExecutionId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
@@ -75,7 +75,7 @@ import {
   showCliSessionStatus,
   showCliSlashCommandHelp,
   showCliWorkPlan,
-  type StreamArtifactReader,
+  type RunArtifactReader,
 } from './handlers/sessionCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
@@ -274,9 +274,9 @@ export function registerBuiltinSlashCommands(options?: {
   onLoginSelect?: FormActionHandler<LoginFormValue>;
   onLogoutSelect?: FormActionHandler<CliLogoutTarget>;
   onMemorySelect?: SelectHandler<string>;
-  onResumeSelect?: SelectHandler<ExecutionId>;
+  onResumeSelect?: SelectHandler<RunId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
-  workPlanSnapshots?: StreamArtifactReader;
+  workPlanSnapshots?: RunArtifactReader;
   getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
@@ -492,7 +492,7 @@ export function registerBuiltinSlashCommands(options?: {
   );
   const ResumeListFormAdapter = makeSelectFormAdapter(
     ResumeListForm,
-    (id: ExecutionId) => options?.onResumeSelect?.(id),
+    (id: RunId) => options?.onResumeSelect?.(id),
   );
   const SkillsListFormAdapter = makeSelectFormAdapter(
     SkillsListForm,

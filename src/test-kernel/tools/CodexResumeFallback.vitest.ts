@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { codexThreadsFor } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
@@ -42,7 +42,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 
 vi.mock('@agent/runtime/RunContext', () => ({
   runInSession: (_session: unknown, run: () => unknown) => run(),
-  getRunContextExecutionId: (ctx: any) => ctx?.executionId,
+  getRunContextRunId: (ctx: any) => ctx?.executionId,
   getRunContextStreamId: (ctx: any) => ctx?.streamId,
   getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
   getRunContextInteractions: (ctx: any) => ctx?.interactions,
@@ -66,23 +66,23 @@ const testSession = {
 const CodexThreads = codexThreadsFor(testSession);
 
 vi.mock('@agent/storage', () => ({
-  registerExecution: mocks.registerExecution,
-  getExecutionStore: mocks.getExecutionStore,
+  registerRun: mocks.registerExecution,
+  getRunStore: mocks.getExecutionStore,
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  assertOwnedExecutionLease: vi.fn(),
+  assertOwnedRunLease: vi.fn(),
 }));
 
 vi.mock('@tools/delegation/childStream', () => ({
-  createChildStream: mocks.createChildStream,
-  childStreamDescription: (raw: string) => raw,
+  createChildRun: mocks.createChildStream,
+  childRunDescription: (raw: string) => raw,
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
-  runWithOwnedExecutionLeaseLaunchGuard: (
+  runWithOwnedRunLeaseLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedExecutionLeaseLaunchGuard
+      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
     >
   ) => args[2],
   startChildRunLoop: mocks.startChildRunLoop,
@@ -112,7 +112,7 @@ import { createFakeAgentCliChildStream } from '../support/agentCliResumeTestUtil
 
 const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:codex-child' as StreamTabId;
-const executionId = 'parent-exec' as ExecutionId;
+const executionId = 'parent-exec' as RunId;
 
 function completedChildRunLoop() {
   return Effect.forkDetach(Effect.void);

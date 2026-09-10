@@ -33,7 +33,7 @@ import {
   type ToolSectionFile,
   type TranscriptText,
 } from '@shared/transcript';
-import { type ExecutionLabels } from '@shared/tools/executionsDisplay';
+import { type RunLabels } from '@shared/tools/executionsDisplay';
 import {
   isMcpToolName,
   normalizeToolName,
@@ -83,7 +83,7 @@ interface DisplayLineOptions {
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
   /** Retained subagent identities used by executions wait/view headers. */
-  readonly executionLabels?: ExecutionLabels;
+  readonly executionLabels?: RunLabels;
   /** Include complete output even when the ordinary tool card omits it. */
   readonly showFullOutput?: boolean;
 }

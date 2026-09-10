@@ -46,14 +46,10 @@ import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type {
-  AgentDelegationScope,
-  ExecutionId,
-  StreamPhase,
-} from '@shared/schemas';
+import type { AgentDelegationScope, RunId, RunPhase } from '@shared/schemas';
 import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { descendantStreams } from '@shared/session/sessionView';
+import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { platformSettingsStores } from '@utils/config/platformSettings';
@@ -79,10 +75,10 @@ import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
-  activeStreamId as activeStreamIdSignal,
+  activeRunId as activeStreamIdSignal,
   resetCliState,
   patchSessionMeta,
-  rootStreamId as rootStreamIdSignal,
+  rootRunId as rootStreamIdSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
 import {
@@ -132,7 +128,7 @@ interface RunChatInit {
   readonly delegationAgentScope?: AgentDelegationScope;
   /** Startup resume from `texra resume <id>`, with the run's persisted config. */
   readonly initialResume?: {
-    readonly id: ExecutionId;
+    readonly id: RunId;
     readonly config: AgentConfig;
   };
 }
@@ -353,7 +349,7 @@ export async function runChat(
   const session = new TuiSession();
 
   const followUpQueue = new PQueue({ concurrency: 1 });
-  const rootStreamStatus = (): StreamPhase | undefined =>
+  const rootStreamStatus = (): RunPhase | undefined =>
     streamPhaseOf(streamViewOf(currentView(), session.streamId));
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
@@ -437,7 +433,7 @@ export async function runChat(
     // Release this conversation's resident transcripts when their remaining
     // readers and writers leave. Clearing the terminal does not delete history.
     const store = runtimeSession.transcripts;
-    for (const streamId of descendantStreams(
+    for (const streamId of descendantRuns(
       currentView(),
       rootStreamIdSignal.get(),
       { includeRoot: true },
@@ -513,10 +509,7 @@ export async function runChat(
         effectRuntime().runFork(stop.settlement);
       }}
       onWorkflowControl={(executionId, action) => {
-        runtimeSession.workflowControls.control(
-          executionId as ExecutionId,
-          action,
-        );
+        runtimeSession.workflowControls.control(executionId as RunId, action);
       }}
       history={inputHistory}
     />,

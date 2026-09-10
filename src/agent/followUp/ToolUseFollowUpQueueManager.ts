@@ -1,6 +1,6 @@
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { throwAggregated } from '@utils/core';
 import {
   createBoundedIdSet,
@@ -129,7 +129,7 @@ export class ToolUseFollowUpQueue {
    */
   claimChildRun(
     streamId: StreamTabId,
-    executionId: ExecutionId,
+    executionId: RunId,
   ): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
     if (!streamId.endsWith(`#${executionId}`)) {

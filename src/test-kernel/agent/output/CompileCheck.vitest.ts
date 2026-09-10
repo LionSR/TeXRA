@@ -14,7 +14,7 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import type { RunId, FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
@@ -52,7 +52,7 @@ vi.mock('@latex/latexToolchain', () => ({
 }));
 
 /** Seeds a single round-0 `main.tex` output -- the common single-file case. */
-function seedMainTexOutput(executionId: ExecutionId) {
+function seedMainTexOutput(executionId: RunId) {
   const outputState = createOutputState();
   ensureRoundData(outputState, 0).outputs = [
     outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
@@ -64,7 +64,7 @@ const COMPILABLE_TEX =
   '\\documentclass{article}\\begin{document}Hi\\end{document}';
 
 /** Seeds a compilable round-0 `main.tex` on the fake FS. */
-async function seedCompilableMainTex(executionId: ExecutionId): Promise<void> {
+async function seedCompilableMainTex(executionId: RunId): Promise<void> {
   await initLatexPlatform({
     [path.join(runDir(executionId), 'r0', 'main.tex')]: COMPILABLE_TEX,
   });

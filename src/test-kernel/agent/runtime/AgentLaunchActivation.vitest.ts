@@ -38,8 +38,8 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
 }));
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  assertOwnedExecutionLease: vi.fn(),
+  acquireResumedRunLease: mocks.acquireResumedExecutionLease,
+  assertOwnedRunLease: vi.fn(),
 }));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
@@ -47,7 +47,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 
 import { TraceEmitter } from '@agent/trace';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { registerExecution } from '@agent/storage/executionLifecycle';
+import { registerRun } from '@agent/storage/executionLifecycle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -58,7 +58,7 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -101,7 +101,7 @@ async function captureStartedLaunch(
   ) => Effect.Effect<unknown, Error>,
   options: {
     readonly isSubagent?: boolean;
-    readonly resumed?: { executionId: ExecutionId; streamId: StreamTabId };
+    readonly resumed?: { executionId: RunId; streamId: StreamTabId };
   } = {},
 ): Promise<StartedLaunch> {
   const session = createTestSession();
@@ -140,7 +140,7 @@ async function captureStartedLaunch(
   try {
     if (!options.resumed)
       await Effect.runPromise(
-        registerExecution(session, 'f1e501', config, 'chat', {
+        registerRun(session, 'f1e501', config, 'chat', {
           streamId: getStreamTabId(config.agent, { executionId: 'f1e501' }),
           identity: { kind: 'agent', agent: 'chat' },
           background: options.isSubagent ?? false,
@@ -235,12 +235,12 @@ describe('native agent launch activation', () => {
           prepareAgentDefinition({ config, session }).pipe(
             Effect.flatMap((definition) =>
               isSubagent
-                ? executeAgent(definition, 'f1e501' as ExecutionId, {
+                ? executeAgent(definition, 'f1e501' as RunId, {
                     session,
                     isSubagent: true,
                     modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
                   })
-                : executeAgent(definition, 'f1e501' as ExecutionId, {
+                : executeAgent(definition, 'f1e501' as RunId, {
                     session,
                     modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
                   }),
@@ -261,7 +261,7 @@ describe('native agent launch activation', () => {
   ])(
     'starts a resumed $label launch at the commit point and fails it on the same path',
     async ({ isSubagent }) => {
-      const executionId = 'ae5010' as ExecutionId;
+      const executionId = 'ae5010' as RunId;
       const streamId = 'resumed-stream' as StreamTabId;
       mocks.hasPersistedParent.mockReturnValueOnce(Effect.succeed(isSubagent));
       const resume = createToolUseResumeData({

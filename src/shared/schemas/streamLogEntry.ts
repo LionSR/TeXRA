@@ -155,14 +155,13 @@ const GroupStreamLogEntrySchema = z.strictObject({
  * message payload. Persistence and trace import parse this contract once so
  * downstream projections receive typed data directly.
  */
-export const StreamLogEntrySchema = z.union([
+export const RunLogEntrySchema = z.union([
   GroupStreamLogEntrySchema,
   StreamLogMessageEntrySchema,
   MessageTypeAbsentLogEntrySchema,
 ]);
 
-export type StreamLogEntry = z.infer<typeof StreamLogEntrySchema>;
+export type RunLogEntry = z.infer<typeof RunLogEntrySchema>;
 
-export type StreamLogEntryOf<
-  T extends NonNullable<StreamLogEntry['messageType']>,
-> = Extract<StreamLogEntry, { messageType: T }>;
+export type RunLogEntryOf<T extends NonNullable<RunLogEntry['messageType']>> =
+  Extract<RunLogEntry, { messageType: T }>;

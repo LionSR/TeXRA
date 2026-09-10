@@ -4,20 +4,20 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAMING_TEXT_MESSAGE_TYPES,
   isTerminalWorkflowCallProgress,
-  type StreamLogEntry,
+  type RunLogEntry,
   type WorkflowCallLiveProgress,
 } from '@shared/schemas';
 import { clamp, isObject } from '@utils/core';
 
-export type StreamLogAppendInput = Omit<
-  StreamLogEntry,
+export type RunLogAppendInput = Omit<
+  RunLogEntry,
   'seqNo' | 'settlementSeqNo'
 >;
-export type StreamLogUpdatePatch = Partial<
-  Omit<StreamLogEntry, 'id' | 'seqNo' | 'settlementSeqNo'>
+export type RunLogUpdatePatch = Partial<
+  Omit<RunLogEntry, 'id' | 'seqNo' | 'settlementSeqNo'>
 >;
 
-export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
+export function isRunningGroupEntry(entry: RunLogEntry): boolean {
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START) return false;
   const data = isObject(entry.data) ? entry.data : {};
   const status = typeof data.status === 'string' ? data.status : 'running';
@@ -32,7 +32,7 @@ export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
  * (`hasRunningStreamingText`) and, by the same predicate, to identify
  * orphaned entries at load time in `StreamLogStore`'s recovery sweep.
  */
-export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
+export function isRunningStreamingTextEntry(entry: RunLogEntry): boolean {
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) return false;
   if (!STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType ?? '')) return false;
   const data = isObject(entry.data) ? entry.data : {};
@@ -46,7 +46,7 @@ export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
  * row need not re-derive the payload a second time.
  */
 export function nonterminalWorkflowCall(
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
 ): WorkflowCallLiveProgress | undefined {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
@@ -61,8 +61,8 @@ export function nonterminalWorkflowCall(
   return call;
 }
 
-export class StreamLog {
-  private entries: StreamLogEntry[] = [];
+export class RunLog {
+  private entries: RunLogEntry[] = [];
   private readonly indexById = new Map<string, number>();
   private pendingAppendedIds: string[] = [];
   private readonly pendingDirtiedIds = new Set<string>();
@@ -71,7 +71,7 @@ export class StreamLog {
   private runningStreamingTextCount = 0;
   private nonterminalWorkflowCallCount = 0;
 
-  constructor(entries: readonly StreamLogEntry[] = []) {
+  constructor(entries: readonly RunLogEntry[] = []) {
     this.entries = [...entries];
     // The settlement head is never below the entry count; one pass over the
     // entries raises it to the highest order already allocated on disk while
@@ -89,7 +89,7 @@ export class StreamLog {
   }
 
   /** Fold an entry into (`1`) or out of (`-1`) the running-state counters. */
-  private countEntry(entry: StreamLogEntry, delta: 1 | -1): void {
+  private countEntry(entry: RunLogEntry, delta: 1 | -1): void {
     if (isRunningGroupEntry(entry)) {
       this.runningGroupCount += delta;
     }
@@ -120,7 +120,7 @@ export class StreamLog {
    * since then, in seqNo order, excluding ones in `appended`, which already
    * carry the latest value.
    */
-  drainEmission(): { appended: StreamLogEntry[]; dirtied: StreamLogEntry[] } {
+  drainEmission(): { appended: RunLogEntry[]; dirtied: RunLogEntry[] } {
     if (
       this.pendingAppendedIds.length === 0 &&
       this.pendingDirtiedIds.size === 0
@@ -138,8 +138,8 @@ export class StreamLog {
   }
 
   /** Current entry objects for `ids`; entries are never removed, so every id resolves. */
-  private resolveEntries(ids: readonly string[]): StreamLogEntry[] {
-    const resolved: StreamLogEntry[] = [];
+  private resolveEntries(ids: readonly string[]): RunLogEntry[] {
+    const resolved: RunLogEntry[] = [];
     for (const id of ids) {
       const index = this.indexById.get(id);
       if (index !== undefined) resolved.push(this.entries[index]);
@@ -169,7 +169,7 @@ export class StreamLog {
   }
 
   /** Fold a canonical recorded entry without allocating new entry coordinates. */
-  record(entry: StreamLogEntry): void {
+  record(entry: RunLogEntry): void {
     const index = this.indexById.get(entry.id);
     if (index === undefined) {
       this.indexById.set(entry.id, this.entries.length);
@@ -188,23 +188,23 @@ export class StreamLog {
     );
   }
 
-  append(entry: StreamLogAppendInput): StreamLogEntry {
+  append(entry: RunLogAppendInput): RunLogEntry {
     return this.appendWithSettlement(entry, false);
   }
 
-  appendSettled(entry: StreamLogAppendInput): StreamLogEntry {
+  appendSettled(entry: RunLogAppendInput): RunLogEntry {
     return this.appendWithSettlement(entry, true);
   }
 
   private appendWithSettlement(
-    entry: StreamLogAppendInput,
+    entry: RunLogAppendInput,
     settled: boolean,
-  ): StreamLogEntry {
+  ): RunLogEntry {
     const fullEntry = {
       ...entry,
       seqNo: this.entries.length + 1,
       ...(settled ? { settlementSeqNo: this.settlementSeqCounter + 1 } : {}),
-    } as StreamLogEntry;
+    } as RunLogEntry;
     if (settled) this.settlementSeqCounter += 1;
     this.indexById.set(fullEntry.id, this.entries.length);
     this.entries.push(fullEntry);
@@ -213,19 +213,19 @@ export class StreamLog {
     return fullEntry;
   }
 
-  update(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined {
+  update(id: string, patch: RunLogUpdatePatch): RunLogEntry | undefined {
     return this.updateWithSettlement(id, patch, false);
   }
 
-  settle(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined {
+  settle(id: string, patch: RunLogUpdatePatch): RunLogEntry | undefined {
     return this.updateWithSettlement(id, patch, true);
   }
 
   private updateWithSettlement(
     id: string,
-    patch: StreamLogUpdatePatch,
+    patch: RunLogUpdatePatch,
     settle: boolean,
-  ): StreamLogEntry | undefined {
+  ): RunLogEntry | undefined {
     const index = this.indexById.get(id);
     if (index === undefined) return undefined;
 
@@ -237,7 +237,7 @@ export class StreamLog {
     if (
       settlementSeqNo === current.settlementSeqNo &&
       Object.entries(patch).every(([key, value]) =>
-        Object.is(current[key as keyof StreamLogUpdatePatch], value),
+        Object.is(current[key as keyof RunLogUpdatePatch], value),
       )
     ) {
       return undefined;
@@ -252,7 +252,7 @@ export class StreamLog {
       id: current.id,
       seqNo: current.seqNo,
       ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
-    } as StreamLogEntry;
+    } as RunLogEntry;
     if (settlementSeqNo !== current.settlementSeqNo) {
       this.settlementSeqCounter += 1;
     }
@@ -268,7 +268,7 @@ export class StreamLog {
   getRange(
     fromSeq: number,
     toSeq: number = this.entries.length,
-  ): StreamLogEntry[] {
+  ): RunLogEntry[] {
     const safeFrom = Math.max(0, fromSeq);
     const safeTo = clamp(toSeq, safeFrom, this.entries.length);
     if (safeFrom >= safeTo) return [];
@@ -276,12 +276,12 @@ export class StreamLog {
   }
 
   /** The current (immutable, post-mutation) entry object for `id`, if any. */
-  getById(id: string): StreamLogEntry | undefined {
+  getById(id: string): RunLogEntry | undefined {
     const index = this.indexById.get(id);
     return index === undefined ? undefined : this.entries[index];
   }
 
-  toJSON(): StreamLogEntry[] {
+  toJSON(): RunLogEntry[] {
     return [...this.entries];
   }
 }

@@ -1,8 +1,4 @@
-import type {
-  AgentDelegationScope,
-  ExecutionId,
-  StreamTabId,
-} from '@shared/schemas';
+import type { AgentDelegationScope, RunId, StreamTabId } from '@shared/schemas';
 
 import type { SessionHandle } from './SessionHandle';
 
@@ -15,7 +11,7 @@ import type { SessionHandle } from './SessionHandle';
  */
 export interface RunScope {
   readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
   readonly agentName: string;
   readonly workingDirectory?: string;

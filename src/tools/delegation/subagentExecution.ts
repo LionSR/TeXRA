@@ -17,7 +17,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import {
-  getRunContextExecutionId,
+  getRunContextRunId,
   getRunContextSession,
   runInSession,
   type RunContext,
@@ -34,12 +34,12 @@ import {
 import type { ToolResult } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
-  registerChildExecution,
+  registerChildRun,
   startDetachedChildRunLoop,
 } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
@@ -118,7 +118,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       },
     );
   }
-  const parentExecutionId = getRunContextExecutionId(parentContext);
+  const parentExecutionId = getRunContextRunId(parentContext);
   // Captured now (while the launching tool call's ALS frame is live) so the
   // child-run loop can still roll the child's cost into the parent run after
   // this tool call has returned. Subagents count toward parent usage totals
@@ -192,7 +192,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     }
   }
 
-  const executionId = generateExecutionId();
+  const executionId = generateRunId();
   const startedAt = Date.now();
   const definition = yield* prepareAgentDefinition({
     config: AgentConfigSchema.parse(childConfigPayload),
@@ -209,7 +209,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const { childStreamId } = yield* registerChildExecution(parentSession, {
+      const { childStreamId } = yield* registerChildRun(parentSession, {
         executionId,
         config,
         agentName,

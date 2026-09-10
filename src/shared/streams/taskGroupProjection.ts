@@ -8,7 +8,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type RunOutcome,
-  type StreamLogEntry,
+  type RunLogEntry,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
@@ -58,7 +58,7 @@ export function taskGroupDisplayStatus(
 }
 
 type TaskGroupLifecycleEntry = Extract<
-  StreamLogEntry,
+  RunLogEntry,
   {
     type:
       | typeof STREAM_LOG_ENTRY_TYPES.GROUP_START
@@ -73,7 +73,7 @@ type TaskGroupLifecycleEntry = Extract<
  * reads the same answer the reducer does.
  */
 export function isTaskGroupLifecycleEntry(
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
 ): entry is TaskGroupLifecycleEntry {
   return (
     entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
@@ -89,10 +89,10 @@ export function isTaskGroupLifecycleEntry(
  * replacement, and a from-scratch replay over a complete log through this
  * same reducer yields the identical result (the resync path).
  */
-export function upsertTaskGroupFromStreamLog(
+export function upsertTaskGroupFromRunLog(
   taskGroups: TaskGroup[],
   taskGroupIndex: Map<string, number>,
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
 ): boolean {
   if (!isTaskGroupLifecycleEntry(entry)) return false;
 

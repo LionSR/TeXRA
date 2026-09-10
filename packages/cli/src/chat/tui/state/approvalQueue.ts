@@ -145,7 +145,7 @@ const INTERRUPT: ApprovalDecision = {
 };
 
 /** Whether `payload` presents; a hook keys its host entry by the same id. */
-export function approvalPayloadStreamId(
+export function approvalPayloadRunId(
   payload: Pick<ApprovalPayload, 'data'>,
 ): StreamTabId | undefined {
   return payload.data.streamId || undefined;
@@ -279,7 +279,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
  * promote requests owned by the streams it presents, such as a workflow
  * popup's direct children.
  */
-export function promoteApprovalsForStream(
+export function promoteApprovalsForRun(
   streamId: StreamTabId,
   options: { readonly includeStreamIds?: ReadonlySet<StreamTabId> } = {},
 ): void {

@@ -2,9 +2,9 @@ import { Box } from 'ink';
 
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 
-import { selectedStreamId as selectedStreamIdSignal } from '../state/cliState';
+import { selectedRunId as selectedStreamIdSignal } from '../state/cliState';
 import { sessionView, streamPhaseOf, streamViewOf } from '../state/sessionView';
 import {
   mergeLocalNotices,
@@ -37,7 +37,7 @@ interface ConversationPaneProps {
   readonly availableWidth?: number;
   readonly maxRows?: number;
   readonly colorEnabled?: boolean;
-  readonly subagentExecutionLabels?: ExecutionLabels;
+  readonly subagentExecutionLabels?: RunLabels;
 }
 
 function renderConversationPaneEntry({
@@ -50,7 +50,7 @@ function renderConversationPaneEntry({
   readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
   readonly rowLimit?: number;
-  readonly subagentExecutionLabels?: ExecutionLabels;
+  readonly subagentExecutionLabels?: RunLabels;
   readonly width?: number;
 }): React.JSX.Element | null {
   const content = ((): React.JSX.Element | null => {
@@ -117,11 +117,11 @@ function renderConversationPaneEntry({
 export function ConversationPane(
   props: ConversationPaneProps = {},
 ): React.JSX.Element {
-  const activeStreamId = useSignal(selectedStreamIdSignal);
+  const activeRunId = useSignal(selectedStreamIdSignal);
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
-  const stream = streamViewOf(view, activeStreamId);
-  const streamNotices = noticesFor(allNotices, activeStreamId);
+  const stream = streamViewOf(view, activeRunId);
+  const streamNotices = noticesFor(allNotices, activeRunId);
   const entries = mergeLocalNotices(
     stream?.transcript.rows ?? [],
     streamNotices,

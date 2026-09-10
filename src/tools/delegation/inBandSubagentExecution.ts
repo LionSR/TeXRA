@@ -16,11 +16,7 @@
 import { Cause, Effect, Exit, Fiber, Semaphore } from 'effect';
 
 // Local imports
-import {
-  getExecutionStore,
-  getExecutionRecords,
-  type ResultMeta,
-} from '@agent/storage';
+import { getRunStore, getRunRecords, type ResultMeta } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript';
 import {
   prepareAgentDefinition,
@@ -38,16 +34,16 @@ import {
   RUN_OUTCOME,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
-  registerChildExecution,
+  registerChildRun,
   startDetachedChildRunLoop,
   type DetachedChildRunInput,
 } from './detachedChildRun';
@@ -84,8 +80,8 @@ interface InBandSubagentExecutionBaseOptions extends ChildRunLaunchOptions {
 interface StableInBandSubagentExecutionOptions {
   readonly session: SessionHandle;
   /** Cryptographic identity of the prompt/options call, stable across restart. */
-  readonly executionId: ExecutionId;
-  readonly parentExecutionId: ExecutionId;
+  readonly executionId: RunId;
+  readonly parentExecutionId: RunId;
   readonly signal?: AbortSignal;
   /** Resolve mutable launch prerequisites only when no result can be recovered. */
   readonly prepare: () => Effect.Effect<
@@ -100,7 +96,7 @@ interface StableInBandSubagentExecutionOptions {
    * in-flight child (skip/retry) must key on it, not the pre-derived logical
    * id. Recovered attempts never run live, so this does not fire for them.
    */
-  readonly onActiveExecutionId?: (executionId: ExecutionId) => void;
+  readonly onActiveExecutionId?: (executionId: RunId) => void;
 }
 
 /**
@@ -108,11 +104,11 @@ interface StableInBandSubagentExecutionOptions {
  * persisted parent execution, so parentage is optional here.
  */
 interface InBandSubagentDeliveryOptions extends InBandSubagentExecutionBaseOptions {
-  readonly parentExecutionId?: ExecutionId;
+  readonly parentExecutionId?: RunId;
 }
 
 interface InBandSubagentExecutionResult {
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly result: AgentFinalResult;
 }
 
@@ -129,7 +125,7 @@ type SettledInBandTurn = Parameters<
 // Parent execution ownership is process-local. Serialize duplicate dispatches
 // within that owner while durable manifests handle later restart recovery.
 const stableExecutions = new Map<
-  ExecutionId,
+  RunId,
   {
     readonly semaphore: Semaphore.Semaphore;
     users: number;
@@ -171,17 +167,15 @@ const executeInBand = Effect.fn('executeInBand')(
     options: InBandSubagentDeliveryOptions,
     definition: PreparedAgentDefinition,
     mode: PersistenceMode,
-    executionId: ExecutionId,
+    executionId: RunId,
     stableAttempt?: StableSubagentAttempt,
   ): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
-    const store = runInSession(options.session, () =>
-      getExecutionStore(executionId),
-    );
+    const store = runInSession(options.session, () => getRunStore(executionId));
 
-    const { childStreamId } = yield* registerChildExecution(options.session, {
+    const { childStreamId } = yield* registerChildRun(options.session, {
       executionId,
       config,
       agentName: options.agentName,
@@ -330,7 +324,7 @@ const executeInBand = Effect.fn('executeInBand')(
         // the thrown error names the I/O cause instead of blaming persistence.
         let readFailure: unknown;
         const persistedExit = yield* Effect.exit(
-          getExecutionRecords(options.session, executionId).readResultMeta(),
+          getRunRecords(options.session, executionId).readResultMeta(),
         );
         if (Exit.isSuccess(persistedExit)) {
           persisted = persistedExit.value;
@@ -493,6 +487,6 @@ export const executeSubagentForDeliveryInBand = Effect.fn(
     options,
     definition,
     'best-effort-delivery',
-    generateExecutionId(),
+    generateRunId(),
   );
 });

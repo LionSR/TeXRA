@@ -8,7 +8,7 @@ import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { RunHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { classifyAgentError } from '@common/errors';
@@ -18,7 +18,7 @@ import {
   STREAM_PHASE,
 } from '@shared/schemas';
 import type {
-  ExecutionId,
+  RunId,
   RunIdentity,
   RunOutcome,
   StreamTabId,
@@ -58,7 +58,7 @@ interface FinalizeChildStreamOptions {
   autoClose?: boolean;
 }
 
-export interface ChildStream {
+export interface ChildRun {
   childStreamId: StreamTabId;
   logger: AgentTrace;
   /** The child loop is idle and waiting for the next follow-up instruction. */
@@ -83,17 +83,17 @@ export interface ChildStream {
  * A4) and the display-only `updateStreamDescription` event below, so the
  * persisted and live values can never drift.
  */
-export function childStreamDescription(raw: string): string {
+export function childRunDescription(raw: string): string {
   return truncateWithEllipsis(raw, 80);
 }
 
 /** Create a child stream tab and execution handle for a background child task. */
-export const createChildStream = Effect.fn('createChildStream')(function* (
+export const createChildRun = Effect.fn('createChildStream')(function* (
   session: SessionHandle,
-  executionId: ExecutionId,
+  executionId: RunId,
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
-): Effect.fn.Return<ChildStream, Error> {
+): Effect.fn.Return<ChildRun, Error> {
   const childStreamId = getStreamTabId(options.streamPrefix, { executionId });
 
   yield* Effect.tryPromise({
@@ -105,7 +105,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
     executionId,
   );
   const runTrace = createRunTrace(residency);
-  const handle = new AgentExecutionHandle(
+  const handle = new RunHandle(
     {
       streamId: childStreamId,
       executionId,
@@ -148,7 +148,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
       });
       // Display-only fan-out: the durable copy is `ExecutionMeta.description`,
       // written by `registerExecution` before this stream exists (#9590 Stage 6).
-      const description = childStreamDescription(options.description);
+      const description = childRunDescription(options.description);
       session.publish([
         {
           type: 'updateStreamDescription',
@@ -189,7 +189,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
             disposeTrace,
             options: finalizeOptions,
           }),
-      } satisfies ChildStream;
+      } satisfies ChildRun;
     }),
   );
   if (Exit.isFailure(setup)) {
@@ -243,7 +243,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
 }, Effect.uninterruptible);
 
 interface FinalizeChildStreamArgs {
-  handle: AgentExecutionHandle;
+  handle: RunHandle;
   session: SessionHandle;
   logger: AgentTrace;
   disposeTrace: () => void;

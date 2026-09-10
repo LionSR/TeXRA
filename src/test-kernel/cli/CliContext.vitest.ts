@@ -15,7 +15,7 @@ import {
   readCliVersion,
   resolveCliCwd,
   resolveCliCommandName,
-  resolveStreamColor,
+  resolveRunColor,
   type BuildCliContextInit,
   type CliAmbientState,
   type CliContext,
@@ -473,7 +473,7 @@ describe('CLI per-stream color resolution', () => {
       expected: false,
     },
   ])('$label', ({ isTty, options, expected }) => {
-    expect(resolveStreamColor(isTty, options)).toBe(expected);
+    expect(resolveRunColor(isTty, options)).toBe(expected);
   });
 });
 

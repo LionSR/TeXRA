@@ -19,13 +19,13 @@ import {
   STREAM_PHASE,
   sumUsageStats,
   USER_FOLLOW_UP_SUPPORT,
-  type StreamPhase,
+  type RunPhase,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { toSignal, type StreamSignal } from '@shared/signals';
 import {
-  descendantStreams,
+  descendantRuns,
   type SessionView,
   type StreamView,
 } from '@shared/session/sessionView';
@@ -82,7 +82,7 @@ export function streamViewOf(
 }
 
 /** The execution to stop when a child is still running or waiting. */
-export function killableExecutionId(
+export function killableRunId(
   stream: StreamView | undefined,
 ): string | undefined {
   return stream &&
@@ -111,7 +111,7 @@ export function streamLabelOf(stream: StreamView): string {
 /** The stream's phase: undefined before the first `status` folds. */
 export function streamPhaseOf(
   stream: StreamView | undefined,
-): StreamPhase | undefined {
+): RunPhase | undefined {
   return stream === undefined || stream.status === STREAM_LIFECYCLE_READY
     ? undefined
     : stream.status;
@@ -133,11 +133,11 @@ export function runningChildCount(
 }
 
 /** Whether the root or any stream under it is in the RUNNING phase. */
-export function anyStreamRunning(
+export function anyRunRunning(
   view: SessionView,
-  rootStreamId: StreamTabId | undefined,
+  rootRunId: StreamTabId | undefined,
 ): boolean {
-  return descendantStreams(view, rootStreamId, { includeRoot: true }).some(
+  return descendantRuns(view, rootRunId, { includeRoot: true }).some(
     (id) => view.streams.get(id)?.status === STREAM_PHASE.RUNNING,
   );
 }

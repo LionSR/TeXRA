@@ -6,19 +6,19 @@ import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
   STREAM_PHASE,
-  StreamPhaseSchema,
+  RunPhaseSchema,
   type RunOutcome,
-  type StreamPhase,
+  type RunPhase,
 } from '@shared/schemas';
 import {
-  canTransitionStreamPhase,
+  canTransitionRunPhase,
   deriveRunOutcome,
   isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
   runOutcomeToExecutionStatus,
   STREAM_TRANSITION_CAUSE,
-  type StreamTransitionCause,
+  type RunTransitionCause,
 } from '@shared/streams/streamStatus';
 
 describe('run outcome algebra', () => {
@@ -64,15 +64,13 @@ describe('run outcome algebra', () => {
 });
 
 describe('stream phase transition table', () => {
-  const phases = StreamPhaseSchema.options;
-  const causes = Object.values(
-    STREAM_TRANSITION_CAUSE,
-  ) as StreamTransitionCause[];
+  const phases = RunPhaseSchema.options;
+  const causes = Object.values(STREAM_TRANSITION_CAUSE) as RunTransitionCause[];
 
-  type CauseRow = Record<StreamTransitionCause, readonly StreamPhase[]>;
+  type CauseRow = Record<RunTransitionCause, readonly RunPhase[]>;
 
   const NO_TRANSITIONS = Object.fromEntries(
-    causes.map((cause): [StreamTransitionCause, readonly StreamPhase[]] => [
+    causes.map((cause): [RunTransitionCause, readonly RunPhase[]] => [
       cause,
       [],
     ]),
@@ -82,7 +80,7 @@ describe('stream phase transition table', () => {
     [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
   };
 
-  const allowed: Record<StreamPhase, CauseRow> = {
+  const allowed: Record<RunPhase, CauseRow> = {
     [STREAM_PHASE.RUNNING]: {
       [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [
         STREAM_PHASE.COMPLETED,
@@ -107,7 +105,7 @@ describe('stream phase transition table', () => {
     for (const from of phases) {
       for (const cause of causes) {
         for (const to of phases) {
-          expect(canTransitionStreamPhase(from, to, cause)).toBe(
+          expect(canTransitionRunPhase(from, to, cause)).toBe(
             allowed[from][cause].includes(to),
           );
         }
@@ -125,7 +123,7 @@ describe('stream phase transition table', () => {
 
     for (const cause of causes) {
       for (const to of phases) {
-        expect(canTransitionStreamPhase(undefined, to, cause)).toBe(
+        expect(canTransitionRunPhase(undefined, to, cause)).toBe(
           fromIdle[cause].includes(to),
         );
       }
@@ -140,7 +138,7 @@ describe('stream phase transition table', () => {
 // exhaustively over the phase vocabulary rather than by example.
 describe('stream phase membership predicates', () => {
   const membership: Record<
-    StreamPhase,
+    RunPhase,
     { active: boolean; inFlight: boolean; terminalOutcome: boolean }
   > = {
     [STREAM_PHASE.RUNNING]: {
@@ -174,7 +172,7 @@ describe('stream phase membership predicates', () => {
   };
 
   it('classifies every phase, and treats absence as no-run-yet', () => {
-    for (const phase of StreamPhaseSchema.options) {
+    for (const phase of RunPhaseSchema.options) {
       expect(isActivePhase(phase)).toBe(membership[phase].active);
       expect(isInFlightPhase(phase)).toBe(membership[phase].inFlight);
       expect(isTerminalOutcomePhase(phase)).toBe(
@@ -188,7 +186,7 @@ describe('stream phase membership predicates', () => {
   });
 
   it('makes every terminal outcome phase a RunOutcome', () => {
-    const terminalPhases = StreamPhaseSchema.options.filter(
+    const terminalPhases = RunPhaseSchema.options.filter(
       isTerminalOutcomePhase,
     );
     expect(new Set<string>(terminalPhases)).toEqual(

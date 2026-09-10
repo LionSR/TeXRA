@@ -80,7 +80,7 @@ import {
   type LocalRuntimeState,
   type RoundIndexed,
   type DisplaySessionEvent,
-  type StreamLogEntry,
+  type RunLogEntry,
   type StreamTabId,
   type TaskGroup,
   type TextChunk,
@@ -126,7 +126,7 @@ import {
 } from '@shared/streams/streamStatusDisplay';
 import {
   isTaskGroupLifecycleEntry,
-  upsertTaskGroupFromStreamLog,
+  upsertTaskGroupFromRunLog,
 } from '@shared/streams/taskGroupProjection';
 import {
   workflowMarkerOf,
@@ -135,7 +135,7 @@ import {
 } from '@shared/streams/workflowRunModel';
 import { isObject } from '@utils/core';
 import { createTranscriptFold } from './traceFold';
-import { StreamLog } from './traceEntries';
+import { RunLog } from './traceEntries';
 
 import type { SessionView, StreamView, TranscriptView } from './sessionView';
 
@@ -393,12 +393,12 @@ function clearInflight(view: SessionView, stream: StreamView): void {
 interface StreamingCursor {
   /** The last durable entry for the row: a first chunk projects it when the
    *  entry's own text was blank and gave no row. */
-  readonly entry: StreamLogEntry;
+  readonly entry: RunLogEntry;
   text: TranscriptText;
 }
 
 interface TranscriptIndexes {
-  readonly source: StreamLog;
+  readonly source: RunLog;
   readonly trace: ReturnType<typeof createTranscriptFold>;
   /** Row position by row id. */
   readonly rowIndex: Map<string, number>;
@@ -444,7 +444,7 @@ function emptyTranscript(): TranscriptView {
     settledRows: 0,
     run: null,
   };
-  const source = new StreamLog();
+  const source = new RunLog();
   INDEXES.set(transcript, {
     source,
     trace: createTranscriptFold(source),
@@ -822,7 +822,7 @@ function childProgressChanged(prev: StreamView, next: StreamView): boolean {
 
 /** Whether a transcript entry is one the run model reads: a group boundary
  *  (phases), a workflow card, or a plan marker. */
-function entryAffectsRunModel(entry: StreamLogEntry): boolean {
+function entryAffectsRunModel(entry: RunLogEntry): boolean {
   return (
     entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
     entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK ||
@@ -973,7 +973,7 @@ function reconcileCompactionRows(
   }
 }
 
-function isStreamingEntry(entry: StreamLogEntry): boolean {
+function isStreamingEntry(entry: RunLogEntry): boolean {
   return (
     entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
     STREAMING_TEXT_MESSAGE_TYPES.has(entry.messageType ?? '') &&
@@ -1011,7 +1011,7 @@ function lifecycleToTaskGroups(stream: StreamView): boolean {
 
 function projectRow(
   transcript: TranscriptView,
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
   projectLifecycleToTaskGroups: boolean,
 ): void {
   const row = projectTranscriptRow(entry, {
@@ -1031,14 +1031,14 @@ function projectRow(
 function applyEntry(
   view: SessionView,
   stream: StreamView,
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
 ): TranscriptView {
   const next = replaceTranscript(stream.transcript, {});
   const indexes = indexesOf(next);
   // Task groups are copied by the entry that lands one, never by an
   // ordinary model or log entry, which the projection would not write.
   if (isTaskGroupLifecycleEntry(entry)) {
-    upsertTaskGroupFromStreamLog(
+    upsertTaskGroupFromRunLog(
       writableTranscriptArray(next, 'taskGroups'),
       indexes.taskGroupIndex,
       entry,

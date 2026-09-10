@@ -4,8 +4,8 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
-  type StreamLogEntry,
+  RunLogEntrySchema,
+  type RunLogEntry,
 } from '@shared/schemas';
 import {
   compactionActivityRow,
@@ -27,8 +27,8 @@ function renderRow(row: TranscriptRow | undefined): Element {
 }
 
 /** A streaming thinking entry, overridable per test. */
-function logEntry(overrides: Partial<StreamLogEntry>): StreamLogEntry {
-  return StreamLogEntrySchema.parse({
+function logEntry(overrides: Partial<RunLogEntry>): RunLogEntry {
+  return RunLogEntrySchema.parse({
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     seqNo: 1,
     id: 'msg-1',
@@ -42,7 +42,7 @@ function logEntry(overrides: Partial<StreamLogEntry>): StreamLogEntry {
 }
 
 /** The projected row for a streaming thinking entry. */
-function thinkingRow(overrides: Partial<StreamLogEntry>): TranscriptRow {
+function thinkingRow(overrides: Partial<RunLogEntry>): TranscriptRow {
   return projectTranscriptRow(logEntry(overrides))!;
 }
 

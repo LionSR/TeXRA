@@ -31,8 +31,8 @@ import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { createLog } from '@logger/logUtils';
 import type {
-  ExecutionId,
-  WorkflowExecutionSnapshot,
+  RunId,
+  WorkflowRunSnapshot,
   WorkflowScriptDeliverySummary,
   WorkflowScriptFiles,
 } from '@shared/schemas';
@@ -115,7 +115,7 @@ export interface WorkflowScriptStrategyParams {
     WorkflowScriptRunOptions['fingerprintAgentDependencies']
   >;
   /** The detached run's execution id — echoed on the delivery envelope. */
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   /** The run's child-stream trace — where phase/log progress projects. */
   readonly logger: AgentTrace;
   /** Orchestrator store that owns the durable journal (checkpoint anchor). */
@@ -136,9 +136,9 @@ export interface WorkflowScriptStrategyParams {
    */
   readonly workflowControls: WorkflowControlRegistry;
   /** Snapshot read from the detached run metadata that receives subsequent writes. */
-  readonly initialSnapshot?: WorkflowExecutionSnapshot;
+  readonly initialSnapshot?: WorkflowRunSnapshot;
   /** Persist the canonical snapshot on the detached run metadata. */
-  readonly onSnapshot?: (snapshot: WorkflowExecutionSnapshot) => Promise<void>;
+  readonly onSnapshot?: (snapshot: WorkflowRunSnapshot) => Promise<void>;
   /** Persist-only when a headless caller awaits and returns the report itself. */
   readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
@@ -263,7 +263,7 @@ export function createWorkflowScriptStrategy(
         // hold superseded or malformed untouched recovery history, and baseline
         // history is irrelevant to this invocation's cost and delivered files.
         const settleAttempt = (
-          snapshot: WorkflowExecutionSnapshot | undefined,
+          snapshot: WorkflowRunSnapshot | undefined,
         ): void => {
           const journal = attemptJournal();
           const costUsd = attemptCost.total(journal);
@@ -281,7 +281,7 @@ export function createWorkflowScriptStrategy(
         // last one *persisted* is the run's own final account of what ran; the
         // only source the failure path has for phase and task tallies, and by
         // construction never newer than the durable execution record.
-        let lastSnapshot: WorkflowExecutionSnapshot | undefined;
+        let lastSnapshot: WorkflowRunSnapshot | undefined;
         const result = yield* Effect.exit(
           Effect.tryPromise({
             try: () =>

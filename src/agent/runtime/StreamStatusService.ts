@@ -1,29 +1,29 @@
 import type { StatusEvent } from '@agent/trace';
 import {
   STREAM_PHASE,
-  type StreamPhase,
-  type StreamSubstate,
+  type RunPhase,
+  type RunSubstate,
   type StreamTabId,
 } from '@shared/schemas';
 import {
-  canTransitionStreamPhase,
+  canTransitionRunPhase,
   isActivePhase,
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
-  type StreamTransitionCause,
+  type RunTransitionCause,
 } from '@shared/streams/streamStatus';
 
 interface StreamStatusEmitOptions {
-  substate?: StreamSubstate;
+  substate?: RunSubstate;
 }
 
-type WaitingTransitionCause = Extract<StreamTransitionCause, 'wait'>;
+type WaitingTransitionCause = Extract<RunTransitionCause, 'wait'>;
 
-type TerminalTransitionCause = Extract<StreamTransitionCause, 'lifecycle'>;
+type TerminalTransitionCause = Extract<RunTransitionCause, 'lifecycle'>;
 
-export interface StreamPhaseState {
-  readonly phase: StreamPhase;
-  readonly substate?: StreamSubstate;
+export interface RunPhaseState {
+  readonly phase: RunPhase;
+  readonly substate?: RunSubstate;
   /**
    * Epoch ms when the stream entered its current active phase. Held across
    * substate changes, cleared when the phase stops being active, and stamped
@@ -43,7 +43,7 @@ export interface StreamPhaseState {
  * merging two collections.
  */
 type StreamEntry =
-  | { readonly kind: 'phase'; readonly state: StreamPhaseState }
+  | { readonly kind: 'phase'; readonly state: RunPhaseState }
   | {
       /**
        * Classification could not settle on a phase (held by another process,
@@ -55,10 +55,10 @@ type StreamEntry =
        */
       readonly kind: 'hold';
       readonly detail: string;
-      readonly state?: StreamPhaseState;
+      readonly state?: RunPhaseState;
     };
 
-export class StreamStatusMachine {
+export class RunStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
 
   /**
@@ -81,7 +81,7 @@ export class StreamStatusMachine {
     ) => void,
   ) {}
 
-  get(stream: StreamTabId): StreamPhase | undefined {
+  get(stream: StreamTabId): RunPhase | undefined {
     return this.getStreamState(stream)?.phase;
   }
 
@@ -91,25 +91,25 @@ export class StreamStatusMachine {
    * reacting to that fact reads the phase the fact announced without mirroring
    * it, and `getAllStreamStates()` stays for the whole-map cases.
    */
-  getStreamState(stream: StreamTabId): StreamPhaseState | undefined {
+  getStreamState(stream: StreamTabId): RunPhaseState | undefined {
     return this.streams.get(stream)?.state;
   }
 
-  getSubstate(stream: StreamTabId): StreamSubstate | undefined {
+  getSubstate(stream: StreamTabId): RunSubstate | undefined {
     return this.getStreamState(stream)?.substate;
   }
 
   transition(
     stream: StreamTabId,
-    to: StreamPhase,
-    cause: StreamTransitionCause,
+    to: RunPhase,
+    cause: RunTransitionCause,
     options: StreamStatusEmitOptions = {},
   ): boolean {
     const entry = this.streams.get(stream);
     const overwritesHold = entry?.kind === 'hold';
     const previousState = entry?.state;
     const from = previousState?.phase;
-    if (!canTransitionStreamPhase(from, to, cause)) return false;
+    if (!canTransitionRunPhase(from, to, cause)) return false;
 
     // The table decides whether a transition is permitted, but not whether a
     // permitted transition changes state. A steady RUNNING resume with no
@@ -181,7 +181,7 @@ export class StreamStatusMachine {
    */
   transitionToTerminal(
     stream: StreamTabId,
-    to: StreamPhase,
+    to: RunPhase,
     cause: TerminalTransitionCause,
     options: StreamStatusEmitOptions = {},
   ): boolean {
@@ -268,8 +268,8 @@ export class StreamStatusMachine {
   }
 
   /** Combined per-stream phase + substate for every known stream. */
-  getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
-    const values = new Map<StreamTabId, StreamPhaseState>();
+  getAllStreamStates(): Map<StreamTabId, RunPhaseState> {
+    const values = new Map<StreamTabId, RunPhaseState>();
     for (const [stream, entry] of this.streams) {
       if (entry.state) values.set(stream, entry.state);
     }
@@ -291,10 +291,10 @@ export class StreamStatusMachine {
 
   private publishTransition(
     stream: StreamTabId,
-    phase: StreamPhase,
+    phase: RunPhase,
     options: StreamStatusEmitOptions & {
-      cause: StreamTransitionCause;
-      previousPhase?: StreamPhase;
+      cause: RunTransitionCause;
+      previousPhase?: RunPhase;
       runStartedAt?: number;
     },
   ): void {

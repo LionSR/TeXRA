@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 import {
-  getRunContextExecutionId,
+  getRunContextRunId,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
@@ -36,7 +36,7 @@ import {
   aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,
-  type ExecutionId,
+  type RunId,
   type ExternalInquiryPermission,
   type InquiryThreadSummary,
   type StreamTabId,
@@ -239,7 +239,7 @@ export class ExternalInquiryTool extends defineTool({
     // Capture the run owner before the shared Effect scheduler can yield.
     const context = tryUseRunContext();
     const streamId = getRunContextStreamId(context);
-    const executionId = getRunContextExecutionId(context);
+    const executionId = getRunContextRunId(context);
     const signal = getCurrentToolCallContext()?.signal;
     let operation: Effect.Effect<ToolResult, Error, InquiryRecords>;
 
@@ -266,7 +266,7 @@ export class ExternalInquiryTool extends defineTool({
   private executeAsk(
     input: Extract<InquiryInput, { command: 'ask' }>,
     streamId: StreamTabId | undefined,
-    executionId: ExecutionId | undefined,
+    executionId: RunId | undefined,
     session: SessionHandle,
   ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {

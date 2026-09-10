@@ -25,7 +25,7 @@ vi.mock('@latex/latexdiff/runOutputFiles', () => ({
 }));
 
 vi.mock('@latex/latexdiff/outputDiscovery', () => ({
-  discoverLatestExecutionOutputs: mocks.discoverLatestExecutionOutputs,
+  discoverLatestRunOutputs: mocks.discoverLatestExecutionOutputs,
 }));
 
 vi.mock('@latex/latexdiff/diffOperations', () => ({

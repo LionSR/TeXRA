@@ -6,7 +6,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
-import type { ExecutionListingEntry } from '@agent/storage';
+import type { RunListingEntry } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   __resetUserConfigWarningDedupeForTests,
@@ -17,7 +17,7 @@ import {
   loadWorkspaceCliConfig,
 } from '@cli/runtime/cliConfig';
 import * as logSinks from '@cli/runtime/logSinks';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -47,7 +47,7 @@ function enoentError(): NodeJS.ErrnoException {
 }
 
 const mocks = vi.hoisted(() => ({
-  listExecutions: vi.fn(async (): Promise<ExecutionListingEntry[]> => []),
+  listExecutions: vi.fn(async (): Promise<RunListingEntry[]> => []),
 }));
 const resolveChatDefaults = (
   options: Parameters<typeof nativeResolveChatDefaults>[0],
@@ -55,7 +55,7 @@ const resolveChatDefaults = (
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  listExecutions: () =>
+  listRuns: () =>
     Effect.tryPromise({
       try: () => mocks.listExecutions(),
       catch: ensureError,
@@ -83,7 +83,7 @@ function historyEntry(
 ) {
   return {
     kind: 'run',
-    id: 'abc123' as ExecutionId,
+    id: 'abc123' as RunId,
     timestamp,
     identity: { kind: 'agent', agent },
     checkpointPresent: false,
@@ -93,7 +93,7 @@ function historyEntry(
       agentCategory: AgentCategory.ToolUse,
       ...overrides,
     }),
-  } satisfies ExecutionListingEntry;
+  } satisfies RunListingEntry;
 }
 
 vi.mock('@utils/files/storageFS', () => ({

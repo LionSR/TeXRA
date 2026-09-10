@@ -35,7 +35,7 @@ import {
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
+import { prepareMainViewRunLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   SessionBridge,
@@ -79,7 +79,7 @@ import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopHostRequests } from './desktopHostRequests.js';
-import { createDesktopAgentExecution } from './desktopAgentExecution.js';
+import { createDesktopAgentRun } from './desktopAgentExecution.js';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopLogIpc } from './desktopLogIpc.js';
 import {
@@ -164,7 +164,7 @@ import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
-import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+import type { DesktopAgentRunHost } from './desktopAgentExecutionHost.js';
 
 const moduleDirname = import.meta.dirname;
 const desktopMainDir = findDesktopMainDir(moduleDirname);
@@ -720,7 +720,7 @@ function createWindow(options: {
     },
     postToRenderer: postToRendererIfAlive,
   });
-  const agentExecutionHost: DesktopAgentExecutionHost = {
+  const agentExecutionHost: DesktopAgentRunHost = {
     openPath: previewHost.openPath,
     openBuildDisplay: previewHost.openBuildDisplay,
     openDiff: desktopDiffHost.openDiff,
@@ -787,7 +787,7 @@ function createWindow(options: {
     /** This window's port on the project's bridge. */
     readonly port: AttachedPort;
     readonly snapshot: ReturnType<typeof createHostSnapshotSource>;
-    readonly execution: ReturnType<typeof createDesktopAgentExecution>;
+    readonly execution: ReturnType<typeof createDesktopAgentRun>;
     readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
     readonly browserViews: ReturnType<typeof createDesktopBrowserViews>;
     dispose(): void;
@@ -817,7 +817,7 @@ function createWindow(options: {
     });
     const funnel = onboardingIpcRef.current?.funnelState();
     if (funnel) snapshot.setOnboarding(funnel);
-    const execution = createDesktopAgentExecution({
+    const execution = createDesktopAgentRun({
       host: agentExecutionHost,
       toolEditPreview: {
         openPath: requestPreviewHost.openPath,
@@ -1275,7 +1275,7 @@ function createWindow(options: {
               await runInSession(binding.project.session, async () =>
                 binding.execution.runValidated(
                   await effectRuntime().runPromise(
-                    prepareMainViewExecutionLaunch(message, agentExecutionHost),
+                    prepareMainViewRunLaunch(message, agentExecutionHost),
                   ),
                 ),
               );

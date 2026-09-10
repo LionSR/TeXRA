@@ -27,7 +27,7 @@ import type { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/StreamStatusService';
 import type {
   ModelCredentialRoute,
   ModelCredentialSelection,
@@ -45,9 +45,9 @@ import {
   STREAM_PHASE,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
@@ -173,7 +173,7 @@ class ExposedRetryNode extends ModelInvocationNode<BaseCycleFields> {
 interface RetryNodeKit {
   node: ExposedRetryNode;
   session: SessionHandle;
-  streamStatus: StreamStatusMachine;
+  streamStatus: RunStatusMachine;
   requestRetry: Mock<
     (
       request: HostRetryRequest,
@@ -214,7 +214,7 @@ async function withRetryRunContext<T>(
   const context = createRunContext({
     runScope: createRunScope({
       streamId,
-      executionId: `${streamId}-execution` as ExecutionId,
+      executionId: `${streamId}-execution` as RunId,
       agentName: 'retry-test',
       session,
       signal: new AbortController().signal,
@@ -448,7 +448,7 @@ describe('ModelInvocationNode retry', () => {
     });
     const streamId = 'retry-diagnostics' as StreamTabId;
     const logger = new TraceEmitter();
-    const transcript = new StreamLog();
+    const transcript = new RunLog();
 
     const recorder = attachTestTranscriptFold(logger, streamId, transcript);
     const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));

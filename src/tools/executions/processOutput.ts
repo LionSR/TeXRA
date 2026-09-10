@@ -8,7 +8,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type StreamLogEntry,
+  type RunLogEntry,
 } from '@shared/schemas';
 import {
   type BackgroundBashOutputSource,
@@ -48,7 +48,7 @@ interface ProcessOutputProjection {
  * dropped: this endpoint projects command output, not run bookkeeping.
  */
 export function projectProcessOutput(
-  entries: readonly StreamLogEntry[],
+  entries: readonly RunLogEntry[],
 ): ProcessOutputProjection {
   const lines: string[] = [];
   let chars = 0;

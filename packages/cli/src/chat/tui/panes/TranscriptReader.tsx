@@ -18,7 +18,7 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import {
@@ -39,7 +39,7 @@ export function TranscriptReader({
   title,
 }: {
   readonly availableRows: number;
-  readonly executionLabels?: ExecutionLabels;
+  readonly executionLabels?: RunLabels;
   readonly onClose: () => void;
   readonly streamId: StreamTabId;
   readonly title: string;

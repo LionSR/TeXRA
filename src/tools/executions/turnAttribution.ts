@@ -10,13 +10,10 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 // Local imports
 
-import {
-  resolveExecutionLiveness,
-  type ExecutionLiveness,
-} from './executionLiveness';
+import { resolveRunLiveness, type RunLiveness } from './executionLiveness';
 
 /** How the accepted turn's fate reads, given what owns the run. */
-function turnFate(token: string, liveness: ExecutionLiveness): string {
+function turnFate(token: string, liveness: RunLiveness): string {
   switch (liveness.kind) {
     case 'live':
       // A handle this process still tracks past its stream's terminal phase
@@ -64,10 +61,7 @@ export const turnAttributionNote = Effect.fn('turnAttributionNote')(function* (
   if (!active || active.token === completed) {
     return null;
   }
-  const liveness = yield* resolveExecutionLiveness(
-    store.getExecutionId(),
-    session,
-  );
+  const liveness = yield* resolveRunLiveness(store.getExecutionId(), session);
   const fate = turnFate(active.token, liveness);
   const showing = completed
     ? `showing the latest completed turn (${completed}).`

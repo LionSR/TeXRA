@@ -4,7 +4,7 @@ import { Effect, Result } from 'effect';
 import {
   buildCliWorkflowResultMeta,
   deriveResumability,
-  getExecutionRecords,
+  getRunRecords,
   type ResumabilityDecision,
 } from '@agent/storage';
 import {
@@ -12,7 +12,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/runtime';
 import { effectRuntime } from '@platform/processRuntime';
-import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 
@@ -203,7 +203,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     options: {
       readonly categoryMismatchMessage: string;
       readonly recoveryInputIsDurable?: boolean;
-      readonly executionId?: ExecutionId;
+      readonly executionId?: RunId;
       readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
     },
   ): Effect.fn.Return<number, Error> {
@@ -232,7 +232,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       return lastError == null && !isTerminalPersistedCompileRejection(shared);
     };
     const writeResumeHint = (
-      executionId: ExecutionId,
+      executionId: RunId,
       waitForWrite = false,
     ): Promise<void> | undefined => {
       if (!recoveryInputIsDurable || resumeHintWritten) return;
@@ -246,7 +246,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       );
       return writeInterruptedResumeHint(hint, waitForWrite);
     };
-    const maybeAdvertiseRecovery = (executionId: ExecutionId) =>
+    const maybeAdvertiseRecovery = (executionId: RunId) =>
       Effect.gen(function* () {
         if (!execution.ok || !execution.outcomePersisted) return;
         const resumability = yield* deriveResumability(executionId, session);
@@ -285,10 +285,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           } else {
             workflowResult = outputResult.success;
           }
-          yield* getExecutionRecords(
-            session,
-            result.executionId,
-          ).writeResultMeta(
+          yield* getRunRecords(session, result.executionId).writeResultMeta(
             buildCliWorkflowResultMeta(result, {
               outcome,
               copiedOutput: workflowResult?.copiedOutput,

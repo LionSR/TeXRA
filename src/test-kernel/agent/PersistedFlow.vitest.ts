@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
@@ -12,7 +12,7 @@ import {
   type FlowRecord,
 } from '@agent/node/persistedFlow';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -42,11 +42,11 @@ class SuspendNode extends BaseNode<{ count: number }> {
   }
 }
 
-type ExecutionStore = ReturnType<typeof getExecutionStore>;
+type ExecutionStore = ReturnType<typeof getRunStore>;
 
 function expectStoredRecord(
   store: ExecutionStore,
-  executionId: ExecutionId,
+  executionId: RunId,
   expected: Record<string, unknown>,
 ): Promise<void> {
   return expect(
@@ -59,13 +59,13 @@ describe('PersistedFlow', () => {
   // flow record's KV filename (e.g. `isKVFile`) now import FLOW_KEY_PREFIX
   // instead of hard-coding 'flow_', so pin that flowKey() is still built from it.
   it('builds the flow key from the exported FLOW_KEY_PREFIX', () => {
-    const executionId = 'abc125' as ExecutionId;
+    const executionId = 'abc125' as RunId;
     expect(flowKey(executionId)).toBe(`${FLOW_KEY_PREFIX}${executionId}`);
   });
 
   it('writes the current schema version into new flow records', async () => {
-    const executionId = 'abc126' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const executionId = 'abc126' as RunId;
+    const store = getRunStore(executionId);
     const flow = new PersistedFlow(new CompleteNode(), store, executionId);
 
     await flow.run({ count: 0 });
@@ -77,8 +77,8 @@ describe('PersistedFlow', () => {
   });
 
   it('replays from the persisted cursor, not from the start node', async () => {
-    const executionId = 'abc127' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const executionId = 'abc127' as RunId;
+    const store = getRunStore(executionId);
     const first = new ContinueOnceNode();
     const second = new CompleteNode();
     first.on('again', second);
@@ -99,8 +99,8 @@ describe('PersistedFlow', () => {
   });
 
   it('rejects a legacy no-cursor record loudly', async () => {
-    const executionId = 'abc128' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const executionId = 'abc128' as RunId;
+    const store = getRunStore(executionId);
     const first = new ContinueOnceNode();
     const second = new CompleteNode();
     first.on('again', second);
@@ -118,8 +118,8 @@ describe('PersistedFlow', () => {
   });
 
   it('persists WAITING without advancing the replay cursor', async () => {
-    const executionId = 'abc129' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const executionId = 'abc129' as RunId;
+    const store = getRunStore(executionId);
     const flow = new PersistedFlow(new SuspendNode(), store, executionId);
 
     await expect(flow.run({ count: 0 })).resolves.toBe(FlowTransition.WAITING);
@@ -145,8 +145,8 @@ describe('PersistedFlow', () => {
   });
 
   it('persists flow records as compact JSON', async () => {
-    const executionId = 'abc130' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const executionId = 'abc130' as RunId;
+    const store = getRunStore(executionId);
 
     await new PersistedFlow(new CompleteNode(), store, executionId).run({
       count: 0,
@@ -160,8 +160,8 @@ describe('PersistedFlow', () => {
   });
 
   it('parses shared through the schema only at the deserialization boundary', async () => {
-    const executionId = 'abc131' as ExecutionId;
-    const store = getExecutionStore(executionId);
+    const executionId = 'abc131' as RunId;
+    const store = getRunStore(executionId);
     interface Shared {
       count: number;
       continue: boolean;

@@ -15,7 +15,7 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { claudeAgentSessionsFor } from '@tools/agentCliSessionStores';
 
@@ -48,7 +48,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 
 vi.mock('@agent/runtime/RunContext', () => ({
   runInSession: (_session: unknown, run: () => unknown) => run(),
-  getRunContextExecutionId: (ctx: any) => ctx?.executionId,
+  getRunContextRunId: (ctx: any) => ctx?.executionId,
   getRunContextStreamId: (ctx: any) => ctx?.streamId,
   getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
   getRunContextInteractions: (ctx: any) => ctx?.interactions,
@@ -74,23 +74,23 @@ const testSession = {
 const ClaudeAgentSessions = claudeAgentSessionsFor(testSession);
 
 vi.mock('@agent/storage', () => ({
-  registerExecution: mocks.registerExecution,
-  getExecutionStore: mocks.getExecutionStore,
+  registerRun: mocks.registerExecution,
+  getRunStore: mocks.getExecutionStore,
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  assertOwnedExecutionLease: vi.fn(),
+  assertOwnedRunLease: vi.fn(),
 }));
 
 vi.mock('@tools/delegation/childStream', () => ({
-  createChildStream: mocks.createChildStream,
-  childStreamDescription: (raw: string) => raw,
+  createChildRun: mocks.createChildStream,
+  childRunDescription: (raw: string) => raw,
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
-  runWithOwnedExecutionLeaseLaunchGuard: (
+  runWithOwnedRunLeaseLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedExecutionLeaseLaunchGuard
+      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
     >
   ) => args[2],
   startChildRunLoop: mocks.startChildRunLoop,
@@ -119,7 +119,7 @@ import { createFakeAgentCliChildStream } from '../support/agentCliResumeTestUtil
 
 const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:claude-child' as StreamTabId;
-const executionId = 'parent-exec' as ExecutionId;
+const executionId = 'parent-exec' as RunId;
 
 function completedChildRunLoop() {
   return Effect.forkDetach(Effect.void);
@@ -659,7 +659,7 @@ describe('claude_agent tool launch and resume fallback', () => {
   });
 
   it('rejects a fork from a live session owned by another stream', async () => {
-    const sourceExecutionId = 'source-execution' as ExecutionId;
+    const sourceExecutionId = 'source-execution' as RunId;
     const sourceOwner = 'stream:other-owner' as StreamTabId;
     const handle = testExecutionHandle({
       executionId: sourceExecutionId,

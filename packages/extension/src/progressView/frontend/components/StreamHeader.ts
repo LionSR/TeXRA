@@ -8,7 +8,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import type {
   ConversationProgress,
   GoalState,
-  StreamStage,
+  RunStage,
   StreamTabId,
 } from '@shared/schemas';
 import {
@@ -23,7 +23,7 @@ import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import {
   progressHeaderStatus,
-  type StreamStatusDisplayKey,
+  type RunStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
@@ -85,7 +85,7 @@ const NOT_YET_RUN_BUTTONS = new Set<string>([
 ]);
 
 const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
-  StreamStatusDisplayKey,
+  RunStatusDisplayKey,
   Set<string>
 > = {
   [STREAM_SUBSTATE.STARTING]: new Set([
@@ -122,7 +122,7 @@ const TONE_INDICATOR_CLASS: Record<StreamView['tone'], string> = {
 /** Which toolbar buttons a stream's state licenses. */
 function enabledToolbarButtons(
   stream: StreamView,
-  displayKey: StreamStatusDisplayKey | undefined,
+  displayKey: RunStatusDisplayKey | undefined,
 ): ReadonlySet<string> | undefined {
   if (stream.readOnly) return READ_ONLY_BUTTONS;
   if (stream.group === 'interrupted') return new Set(TERMINAL_STATE_BUTTONS);
@@ -130,7 +130,7 @@ function enabledToolbarButtons(
 }
 
 @customElement('stream-header')
-export class StreamHeader extends LitElement {
+export class RunHeader extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -658,7 +658,7 @@ export class StreamHeader extends LitElement {
 
   private renderProgressBadge(
     progress: ConversationProgress | undefined,
-    stage: StreamStage | null,
+    stage: RunStage | null,
   ): TemplateResult | typeof nothing {
     const stageValue = stage ?? undefined;
     if (!stageValue && !progress?.toolCallCount) {
@@ -722,6 +722,6 @@ export class StreamHeader extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'stream-header': StreamHeader;
+    'stream-header': RunHeader;
   }
 }

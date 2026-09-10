@@ -8,9 +8,9 @@ import {
   describeFollowUpFailure,
   resumeRun,
 } from '@agent/runtime';
-import { executionHeldMessage, getExecutionRecords } from '@agent/storage';
+import { executionHeldMessage, getRunRecords } from '@agent/storage';
 import { effectRuntime } from '@platform/processRuntime';
-import { AgentCategory, type ExecutionId } from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { executeCliWorkflowConfig } from './workflow';
@@ -33,7 +33,7 @@ import {
 } from '../runtime/terminalRequirements';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-function loadFailureMessage(id: ExecutionId, error: unknown): string {
+function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${toErrorMessage(error)}`;
 }
 
@@ -60,16 +60,16 @@ async function workflowRecoveryInputsAreDurable(
  * required), whose `/resume` calls it; a workflow run resumes headless under
  * its persisted execution id.
  */
-export async function runResumeExecution(
+export async function runResumeRun(
   context: CliContext,
-  id: ExecutionId,
+  id: RunId,
 ): Promise<number> {
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
   const session = await initializeCliTranscriptSession();
   return effectRuntime().runPromise(
     Effect.gen(function* () {
-      const store = getExecutionRecords(session, id);
+      const store = getRunRecords(session, id);
       const metadata = yield* Effect.result(
         Effect.all([store.readConfig(), store.readMeta()]),
       );

@@ -17,8 +17,8 @@ import {
   type ContextStateData,
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageProvider,
-  type StreamPhase,
-  type StreamStage,
+  type RunPhase,
+  type RunStage,
   type ApprovalPolicySnapshot,
   type StreamTabId,
   type TokenUsageStats,
@@ -121,7 +121,7 @@ interface StatusBarSegment {
 }
 
 export interface StatusBarDisplayInput {
-  readonly status: StreamPhase | undefined;
+  readonly status: RunPhase | undefined;
   /** The fold's label for `status` (G4, one table); undefined with no stream. */
   readonly statusLabel: string | undefined;
   /** Liveness of the running turn — omitted entirely in tests/headless runs,
@@ -138,7 +138,7 @@ export interface StatusBarDisplayInput {
   /** Model-handler-authoritative context occupancy for the displayed stream
    *  (`StreamView.context`). */
   readonly contextState: ContextStateData | undefined;
-  readonly stage: StreamStage | undefined;
+  readonly stage: RunStage | undefined;
   /** Retained and active direct subagents owned by the displayed stream. */
   readonly subagents: number;
   /** Visible child sessions still in flight (see RUNNING_SESSION copy). */
@@ -327,7 +327,7 @@ function locationSegment(
 // One status-bar slot carries whichever stage this stream has (mirrors the
 // SubagentList row's `stageLabel`).
 function stageSegment(
-  stage: StreamStage | undefined,
+  stage: RunStage | undefined,
 ): StatusBarSegment | undefined {
   if (stage === undefined) return undefined;
   const text = formatStageLabel(stage);
@@ -866,21 +866,21 @@ interface StatusBarStreamTarget {
  * Which stream the status bar describes: the active stream when the view
  * holds it, else its nearest live ancestor; and what Ctrl-C does there.
  */
-export function statusBarStreamTarget({
-  activeStreamId,
+export function statusBarRunTarget({
+  activeRunId,
   canStopActiveRun,
   canStopPendingRun = false,
   ownedStreamIds,
   view,
 }: {
-  readonly activeStreamId: StreamTabId | undefined;
+  readonly activeRunId: StreamTabId | undefined;
   readonly canStopActiveRun: boolean;
   readonly canStopPendingRun?: boolean;
   /** The streams this TUI runs: the root run and its descendants. */
   readonly ownedStreamIds: readonly StreamTabId[];
   readonly view: SessionView;
 }): StatusBarStreamTarget {
-  const active = streamViewOf(view, activeStreamId);
+  const active = streamViewOf(view, activeRunId);
   const isLive = (streamId: StreamTabId): boolean =>
     isActivePhase(streamPhaseOf(streamViewOf(view, streamId)));
   // Root first in the view; the nearest live ancestor wins.

@@ -5,10 +5,10 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type StreamLogEntry,
+  type RunLogEntry,
 } from '@shared/schemas';
 
-function workflowCallEntry(model: string): StreamLogEntry {
+function workflowCallEntry(model: string): RunLogEntry {
   return {
     seqNo: 1,
     id: 'workflow-call-1',

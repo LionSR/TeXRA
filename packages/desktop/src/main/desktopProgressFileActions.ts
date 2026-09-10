@@ -4,8 +4,8 @@ import path from 'node:path';
 import { getHelperModelName, type SessionHandle } from '@agent/runtime';
 import { createLatexExecutionDiscovery } from '@agent/storage';
 import {
-  validateExecutionRequest,
-  type ValidatedExecutionRequest,
+  validateRunRequest,
+  type ValidatedRunRequest,
 } from '@agent/core/state/executionRequests';
 import { appSignals } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
@@ -30,12 +30,12 @@ import {
   createExternalLocation,
   pathToLocation,
 } from '@utils/files/fileLocation';
-import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+import type { DesktopAgentRunHost } from './desktopAgentExecutionHost.js';
 
 const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';
 
 type DesktopProgressFileActionUi = Pick<
-  DesktopAgentExecutionHost,
+  DesktopAgentRunHost,
   | 'openPath'
   | 'openBuildDisplay'
   | 'openDiff'
@@ -52,7 +52,7 @@ type DesktopProgressFileActionUi = Pick<
  */
 interface DesktopProgressFileActionHost {
   readonly session: SessionHandle;
-  startExecution(request: ValidatedExecutionRequest): void;
+  startExecution(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
 
@@ -85,7 +85,7 @@ export class DesktopProgressFileActions {
   }
 
   async runMergeFile(baseFile: string, editedFile: string): Promise<void> {
-    const validation = validateExecutionRequest({
+    const validation = validateRunRequest({
       config: {
         agent: 'merge',
         model: getHelperModelName(),

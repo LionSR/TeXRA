@@ -25,17 +25,17 @@ import {
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
-  activeStreamId,
+  activeRunId,
   closeForegroundReader,
-  focusStream,
-  expandedStreams,
+  focusRun,
+  expandedRuns,
   foregroundReader,
   infoPane,
   openInfoPane,
   openWorkflowPopup,
   resetCliState,
   rootRunPending,
-  rootStreamId,
+  rootRunId,
   updateWorkflowPopupView,
   workflowPopupView,
 } from '@cli/chat/tui/state/cliState';
@@ -251,10 +251,10 @@ function seedParentEdge(
   });
 }
 function seedRootStream(): void {
-  rootStreamId.set(ROOT);
+  rootRunId.set(ROOT);
   rootRunPending.set(true);
   setRunning(ROOT);
-  focusStream(ROOT);
+  focusRun(ROOT);
 }
 
 function seedChildHierarchy(): void {
@@ -275,7 +275,7 @@ function finishNestedHierarchyAndFocusRoot(): void {
   for (const streamId of [GRANDCHILD, CHILD]) {
     seedStream(streamId, { status: STREAM_PHASE.COMPLETED });
   }
-  focusStream(ROOT);
+  focusRun(ROOT);
 }
 
 function appProps(
@@ -352,7 +352,7 @@ afterEach(() => {
 describe('App foreground Escape ownership', () => {
   it('lets a foreground information pane own Escape before child back', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
+    focusRun(CHILD);
     openInfoPane('Reference', 'Foreground content');
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
@@ -361,7 +361,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => infoPane.get() === undefined);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -421,7 +421,7 @@ describe('App foreground Escape ownership', () => {
     const emit = vi.spyOn(defaultSession(), 'publish');
 
     try {
-      expandedStreams.set(new Map([[ROOT, true]]));
+      expandedRuns.set(new Map([[ROOT, true]]));
       stdin.write('\t');
       await waitFor(() => stdout.output.includes('workflow Running'));
       stdin.write(ARROW_KEYS.Down);
@@ -438,7 +438,7 @@ describe('App foreground Escape ownership', () => {
       clearSeededApprovals();
       await waitFor(() => currentApproval.get() === undefined);
       await waitFor(() => stdout.output.includes('Inspect · Running'));
-      expect(activeStreamId.get()).toBe(ROOT);
+      expect(activeRunId.get()).toBe(ROOT);
       // View state the user set inside the popup survives the round trips
       // below; only opening a different workflow would start fresh.
       updateWorkflowPopupView({ expanded: new Set(['queued']) });
@@ -471,22 +471,22 @@ describe('App foreground Escape ownership', () => {
         },
       });
       await waitFor(() => stdout.output.includes('Verify the child result.'));
-      expect(activeStreamId.get()).toBe(ROOT);
+      expect(activeRunId.get()).toBe(ROOT);
       expect(emit).not.toHaveBeenCalled();
       clearSeededApprovals();
       await waitFor(() => currentApproval.get() === undefined);
       expect(foregroundReader.get()?.kind).toBe('workflow');
       closeForegroundReader();
-      expect(activeStreamId.get()).toBe(ROOT);
+      expect(activeRunId.get()).toBe(ROOT);
       openWorkflowPopup(WORKFLOW);
 
       // Enter on the task focuses that agent; Esc returns to main with the
       // popup back where it was.
       stdin.write('\r');
-      await waitFor(() => activeStreamId.get() === CHILD);
+      await waitFor(() => activeRunId.get() === CHILD);
       expect(foregroundReader.get()).toBeUndefined();
       stdin.write(ESC);
-      await waitFor(() => activeStreamId.get() === ROOT, {
+      await waitFor(() => activeRunId.get() === ROOT, {
         timeoutMs: 1_000,
       });
       await waitFor(() => foregroundReader.get()?.kind === 'workflow');
@@ -500,14 +500,14 @@ describe('App foreground Escape ownership', () => {
 
   it('walks nested children back one immediate parent per bare Escape', async () => {
     seedChildHierarchy();
-    focusStream(GRANDCHILD);
+    focusRun(GRANDCHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
       stdin.write(ESC);
-      await waitFor(() => activeStreamId.get() === CHILD);
+      await waitFor(() => activeRunId.get() === CHILD);
       stdin.write(ESC);
-      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => activeRunId.get() === ROOT);
 
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
@@ -517,7 +517,7 @@ describe('App foreground Escape ownership', () => {
 
   it('does not apply delayed child back after a foreground pane opens', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
+    focusRun(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
@@ -527,7 +527,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => infoPane.get()?.title === 'Late reference');
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late reference');
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
@@ -537,17 +537,17 @@ describe('App foreground Escape ownership', () => {
 
   it('discards delayed child back after lifecycle focus advances', async () => {
     seedChildHierarchy();
-    focusStream(GRANDCHILD);
+    focusRun(GRANDCHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       finishNestedHierarchyAndFocusRoot();
-      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => activeRunId.get() === ROOT);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeStreamId.get()).toBe(ROOT);
+      expect(activeRunId.get()).toBe(ROOT);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -556,14 +556,14 @@ describe('App foreground Escape ownership', () => {
 
   it('treats a second bare Escape as fresh after lifecycle focus advances', async () => {
     seedChildHierarchy();
-    focusStream(GRANDCHILD);
+    focusRun(GRANDCHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       finishNestedHierarchyAndFocusRoot();
-      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => activeRunId.get() === ROOT);
       stdin.write(ESC);
       await waitFor(() => onInterruptStream.mock.calls.length === 1);
 
@@ -575,7 +575,7 @@ describe('App foreground Escape ownership', () => {
 
   it('discards delayed child back when the child is promoted', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
+    focusRun(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
@@ -584,7 +584,7 @@ describe('App foreground Escape ownership', () => {
       seedParentEdge(CHILD, null);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -593,7 +593,7 @@ describe('App foreground Escape ownership', () => {
 
   it('treats a second Escape as fresh after topology invalidates the pending action', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
+    focusRun(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
@@ -603,7 +603,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await waitFor(() => onInterruptStream.mock.calls.length === 1);
 
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
       expect(onInterruptStream).toHaveBeenCalledWith(CHILD);
     } finally {
       instance.unmount();
@@ -612,7 +612,7 @@ describe('App foreground Escape ownership', () => {
 
   it('does not apply failed-chord child back after a foreground pane opens', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
+    focusRun(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
@@ -625,7 +625,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write('x');
       await sleep(50);
 
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late failed-chord reference');
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
@@ -649,7 +649,7 @@ describe('App foreground Escape ownership', () => {
   ])('$name', async ({ childStatus }) => {
     seedChildHierarchy();
     seedStream(CHILD, { status: childStatus });
-    focusStream(CHILD);
+    focusRun(CHILD);
     const onSubmit = vi.fn();
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt({
       onSubmit,
@@ -659,7 +659,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write('q');
-      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => activeRunId.get() === ROOT);
       stdin.write('\r');
       await waitFor(() => onSubmit.mock.calls.length === 1);
 
@@ -675,7 +675,7 @@ describe('App foreground Escape ownership', () => {
     async (_name, arrowInput) => {
       seedChildHierarchy();
       seedStream(CHILD, { status: STREAM_PHASE.COMPLETED });
-      focusStream(CHILD);
+      focusRun(CHILD);
       const onSubmit = vi.fn();
       const { instance, stdin, onInterruptStream } = await renderWithInterrupt({
         onSubmit,
@@ -685,7 +685,7 @@ describe('App foreground Escape ownership', () => {
         stdin.write(ESC);
         await sleep(WITHIN_CHORD_WINDOW_MS);
         stdin.write(arrowInput);
-        await waitFor(() => activeStreamId.get() === ROOT);
+        await waitFor(() => activeRunId.get() === ROOT);
         stdin.write('\r');
         await sleep(30);
 
@@ -699,18 +699,18 @@ describe('App foreground Escape ownership', () => {
 
   it('discards failed-chord child back after lifecycle focus advances', async () => {
     seedChildHierarchy();
-    focusStream(GRANDCHILD);
+    focusRun(GRANDCHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       finishNestedHierarchyAndFocusRoot();
-      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => activeRunId.get() === ROOT);
       stdin.write('x');
       await sleep(50);
 
-      expect(activeStreamId.get()).toBe(ROOT);
+      expect(activeRunId.get()).toBe(ROOT);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -719,7 +719,7 @@ describe('App foreground Escape ownership', () => {
 
   it('discards failed-chord child back when the child is promoted', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
+    focusRun(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
@@ -729,7 +729,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write('x');
       await sleep(50);
 
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -738,7 +738,7 @@ describe('App foreground Escape ownership', () => {
 
   it('does not resolve Esc-digit focus after a foreground pane opens', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
+    focusRun(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
@@ -749,7 +749,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write('1');
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late chord reference');
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
@@ -759,15 +759,15 @@ describe('App foreground Escape ownership', () => {
 
   it('preserves two quick bare-Escape actions through the chord window', async () => {
     seedChildHierarchy();
-    focusStream(GRANDCHILD);
+    focusRun(GRANDCHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write(ESC);
-      await waitFor(() => activeStreamId.get() === CHILD);
-      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => activeRunId.get() === CHILD);
+      await waitFor(() => activeRunId.get() === ROOT);
 
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
@@ -777,7 +777,7 @@ describe('App foreground Escape ownership', () => {
 
   it('interrupts the root only once for two quick bare Escapes', async () => {
     seedChildHierarchy();
-    focusStream(ROOT);
+    focusRun(ROOT);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
@@ -787,7 +787,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => onInterruptStream.mock.calls.length >= 1);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeStreamId.get()).toBe(ROOT);
+      expect(activeRunId.get()).toBe(ROOT);
       expect(onInterruptStream).toHaveBeenCalledOnce();
       expect(onInterruptStream).toHaveBeenCalledWith(ROOT);
     } finally {
@@ -797,8 +797,8 @@ describe('App foreground Escape ownership', () => {
 
   it('keeps an Esc-digit focus target after the bare-Escape window expires', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
-    expandedStreams.set(
+    focusRun(CHILD);
+    expandedRuns.set(
       new Map([
         [ROOT, true],
         [CHILD, true],
@@ -810,10 +810,10 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write('3');
-      await waitFor(() => activeStreamId.get() === GRANDCHILD);
+      await waitFor(() => activeRunId.get() === GRANDCHILD);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeStreamId.get()).toBe(GRANDCHILD);
+      expect(activeRunId.get()).toBe(GRANDCHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -822,7 +822,7 @@ describe('App foreground Escape ownership', () => {
 
   it('collapses an incapable child composer while preserving navigation and the root draft', async () => {
     seedChildHierarchy();
-    focusStream(ROOT);
+    focusRun(ROOT);
     const onSubmit = vi.fn();
     const onInterruptStream = vi.fn();
     const { instance, stdin, stdout } = await renderDebugApp(
@@ -843,8 +843,8 @@ describe('App foreground Escape ownership', () => {
         // authoritative for the composer capability.
         agentCategory: AgentCategory.ToolUse,
       });
-      focusStream(CHILD);
-      await waitFor(() => activeStreamId.get() === CHILD);
+      focusRun(CHILD);
+      await waitFor(() => activeRunId.get() === CHILD);
       await waitFor(
         () => !currentFrame(stdout).includes('preserved root draft'),
       );
@@ -871,7 +871,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await waitFor(() => foregroundReader.get() === undefined);
       stdin.write(ESC);
-      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() => activeRunId.get() === ROOT);
       await waitFor(() =>
         currentFrame(stdout).includes('preserved root draft'),
       );
@@ -917,7 +917,7 @@ describe('App foreground Escape ownership', () => {
     async (status) => {
       seedChildHierarchy();
       seedStream(CHILD, { status });
-      focusStream(CHILD);
+      focusRun(CHILD);
       const onSubmit = vi.fn();
       const { instance, stdin } = await renderWithInterrupt({ onSubmit });
 
@@ -988,7 +988,7 @@ describe('App foreground Escape ownership', () => {
         userFollowUpSupport: fixture.userFollowUpSupport,
         agentCategory: fixture.agentCategory,
       });
-      focusStream(CHILD);
+      focusRun(CHILD);
       const onSubmit = vi.fn();
       const { instance, stdin, stdout } = await renderWithInterrupt({
         onSubmit,
@@ -1007,7 +1007,7 @@ describe('App foreground Escape ownership', () => {
 
   it('treats list Escape as cancel and Tab as the explicit ownership transfer', async () => {
     seedChildHierarchy();
-    focusStream(CHILD);
+    focusRun(CHILD);
     const { instance, stdin, stdout, onInterruptStream } =
       await renderWithInterrupt();
 
@@ -1020,7 +1020,7 @@ describe('App foreground Escape ownership', () => {
         stdout.output.slice(beforeListCancel).includes('Esc parent'),
       );
 
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
 
       const beforeListFocus = stdout.output.length;
@@ -1040,7 +1040,7 @@ describe('App foreground Escape ownership', () => {
 
   it('does not transfer idle input arrows to an available child list', async () => {
     seedChildHierarchy();
-    focusStream(ROOT);
+    focusRun(ROOT);
     const { instance, stdin, stdout } = await renderWithInterrupt();
 
     try {
@@ -1050,7 +1050,7 @@ describe('App foreground Escape ownership', () => {
       await sleep(30);
 
       expect(stdout.output).not.toContain('Session list');
-      expect(activeStreamId.get()).toBe(ROOT);
+      expect(activeRunId.get()).toBe(ROOT);
     } finally {
       instance.unmount();
     }
@@ -1059,7 +1059,7 @@ describe('App foreground Escape ownership', () => {
   it('interrupts a promoted top-level stream because it has no back relation', async () => {
     seedChildHierarchy();
     seedParentEdge(CHILD, null);
-    focusStream(CHILD);
+    focusRun(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
@@ -1067,7 +1067,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => onInterruptStream.mock.calls.length === 1);
 
       expect(onInterruptStream).toHaveBeenCalledWith(CHILD);
-      expect(activeStreamId.get()).toBe(CHILD);
+      expect(activeRunId.get()).toBe(CHILD);
     } finally {
       instance.unmount();
     }

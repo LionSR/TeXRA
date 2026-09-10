@@ -17,7 +17,7 @@ import {
   type RunIdentity,
   type DisplaySessionEvent,
   type DisplaySessionEventDraft,
-  type StreamPhase,
+  type RunPhase,
 } from '@shared/schemas';
 import {
   emptyHostSnapshot,
@@ -66,7 +66,7 @@ function findRootStageId(
  * `StreamPhase`. A trace with no terminal fact folds as interrupted: an
  * exported file has no producer that could still be running it.
  */
-function traceOutcome(trace: TraceDocument): StreamPhase | null {
+function traceOutcome(trace: TraceDocument): RunPhase | null {
   if (trace.meta.outcome) return trace.meta.outcome;
   const rootStageId = findRootStageId(trace.entries);
   for (const entry of trace.entries.toReversed()) {

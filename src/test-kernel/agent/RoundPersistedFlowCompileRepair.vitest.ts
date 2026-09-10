@@ -19,7 +19,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
@@ -478,7 +478,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
       const kv = createFakeKv();
       const logger = new TraceEmitter();
       const streamId = `stream:reflection-round-${name}` as StreamTabId;
-      const store = new StreamLog();
+      const store = new RunLog();
       const control: OutcomeControl = {
         terminalOutcome,
         abortController: new AbortController(),

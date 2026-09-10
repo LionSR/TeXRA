@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { StreamHeader } from '@progressView/frontend/components/StreamHeader';
+import type { RunHeader } from '@progressView/frontend/components/StreamHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
@@ -21,7 +21,7 @@ useLitComponentTestDom(
 );
 
 interface Mounted {
-  readonly element: StreamHeader;
+  readonly element: RunHeader;
   readonly surfaceActions: SurfaceAction[];
   readonly requests: (RuntimeRequest | HostRequest)[];
 }
@@ -36,7 +36,7 @@ async function mountHeader(
   view: SessionView,
   stream: StreamView,
 ): Promise<Mounted> {
-  const element = await mountComponent<StreamHeader>('stream-header', {
+  const element = await mountComponent<RunHeader>('stream-header', {
     view,
     stream,
   });
@@ -55,7 +55,7 @@ async function mountHeader(
 }
 
 /** Themed-tooltip contract: anchor carries an id, no native title, sibling wa-tooltip[for=id]. */
-function expectAnchoredTooltip(element: StreamHeader, anchorId: string): void {
+function expectAnchoredTooltip(element: RunHeader, anchorId: string): void {
   const anchor = element.shadowRoot?.querySelector(`#${anchorId}`);
   expect(anchor).toBeTruthy();
   expect(anchor?.hasAttribute('title')).toBe(false);

@@ -15,7 +15,7 @@ import {
   STREAM_PHASE,
   runIdentityDisplayName,
   type FoldInput,
-  type StreamLogEntry,
+  type RunLogEntry,
   type StreamTabId,
   type TaskGroup,
 } from '@shared/schemas';
@@ -27,7 +27,7 @@ import {
   type StreamView,
 } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { upsertTaskGroupFromRunLog } from '@shared/streams/taskGroupProjection';
 import {
   workflowRunModel,
   type ChildRunProgress,
@@ -58,17 +58,17 @@ function stream(view: SessionView, id: StreamTabId): StreamView {
 }
 
 /** Full replay through the production reducer (the resync path). */
-function taskGroupsOf(entries: readonly StreamLogEntry[]): TaskGroup[] {
+function taskGroupsOf(entries: readonly RunLogEntry[]): TaskGroup[] {
   const taskGroups: TaskGroup[] = [];
   const index = new Map<string, number>();
   for (const entry of entries) {
-    upsertTaskGroupFromStreamLog(taskGroups, index, entry);
+    upsertTaskGroupFromRunLog(taskGroups, index, entry);
   }
   return taskGroups;
 }
 
 /** Sequential projection keyed by id, the way a host upserts rows. */
-function rowsOf(entries: readonly StreamLogEntry[]): TranscriptRow[] {
+function rowsOf(entries: readonly RunLogEntry[]): TranscriptRow[] {
   const byId = new Map<string, TranscriptRow>();
   for (const entry of entries) {
     const row = projectTranscriptRow(entry, {

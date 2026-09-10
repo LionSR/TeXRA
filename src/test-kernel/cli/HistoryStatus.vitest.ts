@@ -2,8 +2,8 @@ import '@test/support/sessionGraphTestSetup';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 
-import { registerExecution, getExecutionStore } from '@agent/storage';
-import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
+import { registerRun, getRunStore } from '@agent/storage';
+import { releaseOwnedRunLease } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -29,7 +29,7 @@ import {
   HISTORY_RUN_STATUS,
   resolveHistoryRunStatus,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -59,19 +59,19 @@ beforeEach(() => {
 
 /** Registers an execution, releases its lease, and writes a flow record. */
 async function seedFlowRecord(
-  id: ExecutionId,
+  id: RunId,
   config: AgentConfig,
   agent: string,
   shared: unknown,
 ): Promise<void> {
   await Effect.runPromise(
-    registerExecution(currentSession(), id, config, agent, {
+    registerRun(currentSession(), id, config, agent, {
       streamId: `${agent}@deepseekT#${id}` as StreamTabId,
       identity: { kind: 'agent', agent },
     }),
   );
-  await releaseOwnedExecutionLease(id);
-  await getExecutionStore(id).write(flowKey(id), {
+  await releaseOwnedRunLease(id);
+  await getRunStore(id).write(flowKey(id), {
     shared,
     cursor: { nextNodeId: 'start' },
   });
@@ -131,7 +131,7 @@ describe('CLI history status formatting', () => {
 
   it('prints resumable details instead of inventing completed status', () => {
     const text = formatCliHistoryDetailsText({
-      id: 'abc123' as ExecutionId,
+      id: 'abc123' as RunId,
       status: HISTORY_RUN_STATUS.RESUMABLE,
       meta: {
         schemaVersion: EXECUTION_META_SCHEMA_VERSION,
@@ -173,7 +173,7 @@ describe('CLI history status formatting', () => {
   ])(
     'still advertises a checkpoint with %s, and never calls it completed',
     async (description, config, agent, shared) => {
-      const id = 'bad-f10' as ExecutionId;
+      const id = 'bad-f10' as RunId;
       await seedFlowRecord(id, config, agent, shared);
 
       const details = await readCliHistoryDetails(id);
@@ -188,7 +188,7 @@ describe('CLI history status formatting', () => {
   );
 
   it('marks workflow flow records as CLI-resumable', async () => {
-    const id = 'c0ffee-f10' as ExecutionId;
+    const id = 'c0ffee-f10' as RunId;
     await seedFlowRecord(
       id,
       WORKFLOW_CONFIG,
@@ -219,7 +219,7 @@ describe('CLI history status formatting', () => {
   // A checkpoint alone is not enough: without a config there is no category
   // to resume under and nothing for a host to adopt, so the row says so.
   it('does not offer a run whose config is missing as resumable', async () => {
-    const id = 'baad-c0f' as ExecutionId;
+    const id = 'baad-c0f' as RunId;
     await Effect.runPromise(
       currentSession().commit([
         {
@@ -233,7 +233,7 @@ describe('CLI history status formatting', () => {
         },
       ]),
     );
-    await getExecutionStore(id).write(flowKey(id), {
+    await getRunStore(id).write(flowKey(id), {
       shared: {},
       cursor: { nextNodeId: 'start' },
     });

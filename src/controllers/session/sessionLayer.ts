@@ -37,7 +37,7 @@ import { FetchHttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { runInSession } from '@agent/runtime/RunContext';
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import type { RunRegistry } from '@agent/runtime/executionRegistry';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -70,15 +70,15 @@ import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
 
 import { Database } from '@shared/session/database';
-import { StreamLogStore } from '@transcript/StreamLogStore';
-import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { RunLogStore } from '@transcript/StreamLogStore';
+import { RunSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
-import { sweepLeftoverStreams } from './sweepLeftoverStreams';
-import { applyCommittedStreamRemoval } from './applyCommittedStreamRemoval';
+import { sweepLeftoverRuns } from './sweepLeftoverStreams';
+import { applyCommittedRunRemoval } from './applyCommittedStreamRemoval';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -377,7 +377,7 @@ const sessionHandleLayer = (
       );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing().pipe(Effect.orDie);
-      const transcripts = yield* StreamLogStore.open(
+      const transcripts = yield* RunLogStore.open(
         eventLog,
         initialListing,
         key.open.transcriptMode,
@@ -388,7 +388,7 @@ const sessionHandleLayer = (
             new SessionHandle({
               ...key.open,
               transcripts,
-              snapshots: new StreamSnapshotStore(eventLog),
+              snapshots: new RunSnapshotStore(eventLog),
               graph,
             }),
         ),
@@ -421,7 +421,7 @@ const sessionHandleLayer = (
           session.receiveCommittedEvent(event).pipe(
             Effect.andThen(() =>
               event.type === 'stream.removed'
-                ? applyCommittedStreamRemoval(
+                ? applyCommittedRunRemoval(
                     session,
                     aggregateTarget(event.aggregateId).id,
                   )
@@ -444,7 +444,7 @@ const sessionHandleLayer = (
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
       );
-      yield* sweepLeftoverStreams(session, initialListing).pipe(
+      yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
             log.warn('Background-shell cleanup failed.', {
@@ -600,7 +600,7 @@ const heldSession = (root: string) =>
  * close budget for a notification that can no longer come. The loop reads
  * registry state only, so it needs no session scope of its own.
  */
-const untilSettled = (executions: ExecutionRegistry): Effect.Effect<void> =>
+const untilSettled = (executions: RunRegistry): Effect.Effect<void> =>
   Effect.gen(function* () {
     for (;;) {
       const active = executions.getActiveIds();

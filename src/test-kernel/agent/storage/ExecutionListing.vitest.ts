@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import {
   clearStoreCache,
   createLatexExecutionDiscovery,
-  getExecutionStore,
-  getExecutionRecords,
-  isUserVisibleExecution,
-  listExecutions,
+  getRunStore,
+  getRunRecords,
+  isUserVisibleRun,
+  listRuns,
 } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -18,8 +18,8 @@ import {
 import * as logger from '@logger/logUtils';
 import {
   aggregateId,
-  type ExecutionId,
-  type ExecutionMeta,
+  type RunId,
+  type RunMeta,
   type StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -42,13 +42,13 @@ function config(
 
 let session: SessionHandle;
 const writeMetadata = (
-  id: ExecutionId,
-  meta: Omit<ExecutionMeta, 'schemaVersion' | 'streamId'> & {
+  id: RunId,
+  meta: Omit<RunMeta, 'schemaVersion' | 'streamId'> & {
     streamId?: StreamTabId;
   },
 ) =>
   Effect.gen(function* () {
-    const existing = yield* getExecutionRecords(session, id).readMeta();
+    const existing = yield* getRunRecords(session, id).readMeta();
     const streamId = (meta.streamId ??
       existing?.streamId ??
       `stream-${id}`) as StreamTabId;
@@ -58,7 +58,7 @@ const writeMetadata = (
         .mockReturnValue(Date.parse(meta.timestamp));
       yield* Effect.gen(function* () {
         const parentStreamId = meta.parentExecutionId
-          ? (yield* getExecutionRecords(
+          ? (yield* getRunRecords(
               session,
               meta.parentExecutionId,
             ).readMeta())?.streamId
@@ -96,10 +96,10 @@ const writeMetadata = (
       ]);
   });
 const writeExecution = (
-  id: ExecutionId,
+  id: RunId,
   timestamp: string,
   agentConfig?: AgentConfig,
-  parentExecutionId?: ExecutionId,
+  parentExecutionId?: RunId,
 ) =>
   Effect.gen(function* () {
     yield* writeMetadata(id, {
@@ -108,7 +108,7 @@ const writeExecution = (
       identity: { kind: 'agent', agent: agentConfig?.agent ?? 'assistant' },
     });
     if (agentConfig)
-      yield* getExecutionRecords(session, id).writeRunRecord(agentConfig);
+      yield* getRunRecords(session, id).writeRunRecord(agentConfig);
   });
 
 describe('execution listing normalization', () => {
@@ -126,16 +126,16 @@ describe('execution listing normalization', () => {
     'sees executions written by another host after an earlier listing',
     () =>
       Effect.gen(function* () {
-        expect(yield* listExecutions(session)).toEqual([]);
+        expect(yield* listRuns(session)).toEqual([]);
 
-        const id = 'eee555' as ExecutionId;
+        const id = 'eee555' as RunId;
         yield* writeExecution(
           id,
           '2026-07-15T11:00:00.000Z',
           config('assistant'),
         );
 
-        expect(yield* listExecutions(session)).toEqual([
+        expect(yield* listRuns(session)).toEqual([
           expect.objectContaining({
             id,
             kind: 'run',
@@ -153,17 +153,17 @@ describe('execution listing normalization', () => {
     'keeps a row whose checkpoint probe fails, without a checkpoint',
     () =>
       Effect.gen(function* () {
-        const id = 'eee556' as ExecutionId;
+        const id = 'eee556' as RunId;
         yield* writeExecution(
           id,
           '2026-07-15T11:00:00.000Z',
           config('assistant'),
         );
-        vi.spyOn(getExecutionStore(id), 'exists').mockRejectedValue(
+        vi.spyOn(getRunStore(id), 'exists').mockRejectedValue(
           new Error('stat failed'),
         );
 
-        expect(yield* listExecutions(session)).toEqual([
+        expect(yield* listRuns(session)).toEqual([
           expect.objectContaining({
             id,
             kind: 'run',
@@ -177,13 +177,13 @@ describe('execution listing normalization', () => {
     'sees metadata replaced by another host after an earlier listing',
     () =>
       Effect.gen(function* () {
-        const id = 'fff666' as ExecutionId;
+        const id = 'fff666' as RunId;
         yield* writeExecution(
           id,
           '2026-07-15T12:00:00.000Z',
           config('assistant'),
         );
-        expect(yield* listExecutions(session)).toEqual([
+        expect(yield* listRuns(session)).toEqual([
           expect.not.objectContaining({ description: expect.any(String) }),
         ]);
 
@@ -194,7 +194,7 @@ describe('execution listing normalization', () => {
           outcome: 'completed',
         });
 
-        expect(yield* listExecutions(session)).toEqual([
+        expect(yield* listRuns(session)).toEqual([
           expect.objectContaining({
             id,
             description: 'Updated by another host',
@@ -208,11 +208,11 @@ describe('execution listing normalization', () => {
     'uses the config as the canonical source for visible agent fields',
     () =>
       Effect.gen(function* () {
-        const id = 'aaa111' as ExecutionId;
+        const id = 'aaa111' as RunId;
         const agentConfig = config('assistant');
         yield* writeExecution(id, '2026-07-15T10:00:00.000Z', agentConfig);
 
-        const entries = yield* listExecutions(session);
+        const entries = yield* listRuns(session);
 
         expect(entries).toEqual([
           {
@@ -225,7 +225,7 @@ describe('execution listing normalization', () => {
             streamId: `stream-${id}`,
           },
         ]);
-        expect(entries.filter(isUserVisibleExecution)).toHaveLength(1);
+        expect(entries.filter(isUserVisibleRun)).toHaveLength(1);
         expect(entries[0]).not.toHaveProperty('agent');
         expect(entries[0]).not.toHaveProperty('model');
         expect(entries[0]).not.toHaveProperty('category');
@@ -234,10 +234,10 @@ describe('execution listing normalization', () => {
 
   it.live('classifies process and incomplete storage rows explicitly', () =>
     Effect.gen(function* () {
-      const processId = 'bbb222' as ExecutionId;
-      const customBashAgentId = 'ccc333' as ExecutionId;
-      const incompleteId = 'ddd444' as ExecutionId;
-      const processStore = getExecutionRecords(session, processId);
+      const processId = 'bbb222' as RunId;
+      const customBashAgentId = 'ccc333' as RunId;
+      const incompleteId = 'ddd444' as RunId;
+      const processStore = getRunRecords(session, processId);
       yield* writeMetadata(processId, {
         timestamp: '2026-07-15T09:00:00.000Z',
         identity: { kind: 'process', tool: 'assistant' },
@@ -250,7 +250,7 @@ describe('execution listing normalization', () => {
       );
       yield* writeExecution(incompleteId, '2026-07-15T07:00:00.000Z');
 
-      const entries = yield* listExecutions(session);
+      const entries = yield* listRuns(session);
 
       expect(entries.map(({ kind }) => kind)).toEqual([
         'run',
@@ -274,7 +274,7 @@ describe('execution listing normalization', () => {
         timestamp: '2026-07-15T07:00:00.000Z',
         checkpointPresent: false,
       });
-      expect(entries.filter(isUserVisibleExecution)).toEqual([entries[1]]);
+      expect(entries.filter(isUserVisibleRun)).toEqual([entries[1]]);
     }),
   );
 
@@ -282,15 +282,15 @@ describe('execution listing normalization', () => {
     'lists an honest non-agent record as kind run without fabricated fields',
     () =>
       Effect.gen(function* () {
-        const id = 'abe001' as ExecutionId;
-        const store = getExecutionRecords(session, id);
+        const id = 'abe001' as RunId;
+        const store = getRunRecords(session, id);
         yield* writeMetadata(id, {
           timestamp: '2026-07-15T04:00:00.000Z',
           identity: { kind: 'process', tool: 'bash' },
         });
         yield* store.writeRunRecord({ name: 'bash', instruction: 'ls -la' });
 
-        const entries = yield* listExecutions(session);
+        const entries = yield* listRuns(session);
         const entry = entries.find((candidate) => candidate.id === id);
         expect(entry).toMatchObject({
           kind: 'run',
@@ -303,14 +303,14 @@ describe('execution listing normalization', () => {
         expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
           'model',
         );
-        expect(entries.filter(isUserVisibleExecution)).toHaveLength(0);
+        expect(entries.filter(isUserVisibleRun)).toHaveLength(0);
       }),
   );
 
   it.live('keeps agent-spawned child runs out of history listings', () =>
     Effect.gen(function* () {
-      const rootId = 'eee111' as ExecutionId;
-      const childId = 'fff222' as ExecutionId;
+      const rootId = 'eee111' as RunId;
+      const childId = 'fff222' as RunId;
       yield* writeExecution(
         rootId,
         '2026-07-15T10:00:00.000Z',
@@ -323,13 +323,13 @@ describe('execution listing normalization', () => {
         rootId,
       );
 
-      const entries = yield* listExecutions(session);
+      const entries = yield* listRuns(session);
 
       // The raw listing still carries the child so tool-facing callers can walk
       // the lineage; only the history-listing filter drops it.
       expect(entries.map(({ id }) => id)).toEqual([childId, rootId]);
       expect(
-        entries.filter(isUserVisibleExecution).map(({ id }) => id),
+        entries.filter(isUserVisibleRun).map(({ id }) => id),
       ).toEqual([rootId]);
     }),
   );
@@ -338,10 +338,10 @@ describe('execution listing normalization', () => {
     'projects agent runs and stream ids for latexdiff execution discovery',
     () =>
       Effect.gen(function* () {
-        const rootId = 'ab1001' as ExecutionId;
-        const childId = 'ab1002' as ExecutionId;
-        const processId = 'ab1003' as ExecutionId;
-        const rootStore = getExecutionRecords(session, rootId);
+        const rootId = 'ab1001' as RunId;
+        const childId = 'ab1002' as RunId;
+        const processId = 'ab1003' as RunId;
+        const rootStore = getRunRecords(session, rootId);
         yield* writeMetadata(rootId, {
           timestamp: '2026-07-15T10:00:00.000Z',
           identity: { kind: 'agent', agent: 'assistant' },
@@ -354,7 +354,7 @@ describe('execution listing normalization', () => {
           config('delegated', ['child.tex']),
           rootId,
         );
-        const processStore = getExecutionRecords(session, processId);
+        const processStore = getRunRecords(session, processId);
         yield* writeMetadata(processId, {
           timestamp: '2026-07-15T08:00:00.000Z',
           identity: { kind: 'process', tool: 'bash' },

@@ -7,11 +7,11 @@ import {
   type AgentTrace,
   type AgentEvent,
 } from '@agent/trace';
-import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { MESSAGE_TYPES, type RunLogEntry } from '@shared/schemas';
+import { RunLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
-function streamEntries(store: StreamLog): StreamLogEntry[] {
+function streamEntries(store: RunLog): RunLogEntry[] {
   return store.getRange(0);
 }
 
@@ -22,8 +22,8 @@ function openDeferredThinking(
 }
 
 /** Run against a fresh, test-local store. */
-function withStore(run: (store: StreamLog, logger: AgentTrace) => void): void {
-  const store = new StreamLog();
+function withStore(run: (store: RunLog, logger: AgentTrace) => void): void {
+  const store = new RunLog();
   const handle = createTestRunTrace('stream', store);
   try {
     run(store, handle.trace);
@@ -156,7 +156,7 @@ describe('AgentTrace stream output', () => {
 
 describe('tool-use card input redaction', () => {
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
-    const store = new StreamLog();
+    const store = new RunLog();
     const logger = createTestRunTrace('stream', store).trace;
     const outer = logger.openStage('outer');
     const ref = await outer.within(async () =>
@@ -181,7 +181,7 @@ describe('tool-use card input redaction', () => {
 
 describe('per-trace stage scope (cross-trace isolation)', () => {
   it('a run stage opened on its own trace does not inherit an active stage from another trace', async () => {
-    const store = new StreamLog();
+    const store = new RunLog();
 
     // Orchestrator trace with an active "Task:" stage — mirrors a subagent
     // launched from inside a delegation tool's stage scope.

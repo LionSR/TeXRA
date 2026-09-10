@@ -2,7 +2,7 @@
 import { onTestFinished } from 'vitest';
 
 // Local imports
-import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
+import type { DesktopAgentRunHost } from '@desktop/main/desktopAgentExecutionHost';
 
 export function disposeAfterTest<T extends { dispose(): void }>(value: T): T {
   onTestFinished(() => value.dispose());
@@ -10,8 +10,8 @@ export function disposeAfterTest<T extends { dispose(): void }>(value: T): T {
 }
 
 export function createStubDesktopAgentExecutionHost(
-  overrides: Partial<DesktopAgentExecutionHost> = {},
-): DesktopAgentExecutionHost {
+  overrides: Partial<DesktopAgentRunHost> = {},
+): DesktopAgentRunHost {
   return {
     openPath: async () => undefined,
     openBuildDisplay: async () => undefined,

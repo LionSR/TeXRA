@@ -7,7 +7,7 @@ import {
   clearStoreCache,
   deriveResumability,
   finalizeRun,
-  getExecutionStore,
+  getRunStore,
 } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -19,7 +19,7 @@ import {
   aggregateId,
   type StreamTabId,
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type RunOutcome,
 } from '@shared/schemas';
 import {
@@ -43,9 +43,9 @@ describe('deriveResumability', () => {
     session = createProcessSession();
   });
 
-  function writeFlow(executionId: ExecutionId) {
+  function writeFlow(executionId: RunId) {
     return Effect.promise(() =>
-      getExecutionStore(executionId).write(
+      getRunStore(executionId).write(
         flowKey(executionId),
         BASE_FLOW_RECORD,
       ),
@@ -53,7 +53,7 @@ describe('deriveResumability', () => {
   }
 
   function writeMeta(
-    executionId: ExecutionId,
+    executionId: RunId,
     { outcome }: { outcome?: RunOutcome },
   ) {
     return Effect.gen(function* () {
@@ -77,7 +77,7 @@ describe('deriveResumability', () => {
     'keeps a failed execution resumable while its checkpoint exists',
     () =>
       Effect.gen(function* () {
-        const executionId = 'ac0000' as ExecutionId;
+        const executionId = 'ac0000' as RunId;
         yield* writeMeta(executionId, { outcome: RUN_OUTCOME.FAILED });
         yield* writeFlow(executionId);
 
@@ -93,10 +93,10 @@ describe('deriveResumability', () => {
     'stays resumable when terminal metadata persists but flow deletion fails',
     () =>
       Effect.gen(function* () {
-        const executionId = 'ac0001' as ExecutionId;
+        const executionId = 'ac0001' as RunId;
         yield* writeMeta(executionId, {});
         yield* writeFlow(executionId);
-        const store = getExecutionStore(executionId);
+        const store = getRunStore(executionId);
         vi.spyOn(store, 'delete').mockRejectedValueOnce(
           new Error('flow delete failed'),
         );
@@ -121,10 +121,10 @@ describe('deriveResumability', () => {
 
   it.effect('does not treat a spent cursor as a checkpoint', () =>
     Effect.gen(function* () {
-      const executionId = 'ac0002' as ExecutionId;
+      const executionId = 'ac0002' as RunId;
       yield* writeMeta(executionId, { outcome: RUN_OUTCOME.COMPLETED });
       yield* Effect.promise(() =>
-        getExecutionStore(executionId).write(flowKey(executionId), {
+        getRunStore(executionId).write(flowKey(executionId), {
           ...BASE_FLOW_RECORD,
           cursor: { ...BASE_FLOW_RECORD.cursor, nextNodeId: null },
         }),
@@ -141,7 +141,7 @@ describe('deriveResumability', () => {
     'keeps a preserved checkpoint when terminal metadata fails for a failed execution',
     () =>
       Effect.gen(function* () {
-        const executionId = 'ac0003' as ExecutionId;
+        const executionId = 'ac0003' as RunId;
         yield* writeMeta(executionId, {});
         yield* writeFlow(executionId);
         vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
@@ -169,7 +169,7 @@ describe('deriveResumability', () => {
     'marks cancelled executions with a valid flow record as resumable',
     () =>
       Effect.gen(function* () {
-        const executionId = 'ac0004' as ExecutionId;
+        const executionId = 'ac0004' as RunId;
         yield* writeMeta(executionId, { outcome: RUN_OUTCOME.CANCELLED });
         yield* writeFlow(executionId);
 
@@ -185,7 +185,7 @@ describe('deriveResumability', () => {
     'does not mark cancelled executions resumable without a flow record',
     () =>
       Effect.gen(function* () {
-        const executionId = 'ac0005' as ExecutionId;
+        const executionId = 'ac0005' as RunId;
         yield* writeMeta(executionId, { outcome: RUN_OUTCOME.CANCELLED });
 
         expect(yield* deriveResumability(executionId, session)).toMatchObject({
@@ -199,7 +199,7 @@ describe('deriveResumability', () => {
     'marks missing-terminal executions with a valid flow record as resumable',
     () =>
       Effect.gen(function* () {
-        const executionId = 'ac0006' as ExecutionId;
+        const executionId = 'ac0006' as RunId;
         yield* writeFlow(executionId);
 
         expect(yield* deriveResumability(executionId, session)).toMatchObject({
@@ -213,13 +213,13 @@ describe('deriveResumability', () => {
     'accepts an unstamped legacy envelope and preserves extra fields',
     () =>
       Effect.gen(function* () {
-        const executionId = 'ac0007' as ExecutionId;
+        const executionId = 'ac0007' as RunId;
         const legacyRecord = {
           ...BASE_FLOW_RECORD,
           legacyOwner: { host: 'extension' },
         };
         yield* Effect.promise(() =>
-          getExecutionStore(executionId).write(
+          getRunStore(executionId).write(
             flowKey(executionId),
             legacyRecord,
           ),
@@ -236,7 +236,7 @@ describe('deriveResumability', () => {
 
   it.effect('reports missing flow records as not resumable', () =>
     Effect.gen(function* () {
-      const executionId = 'ac0008' as ExecutionId;
+      const executionId = 'ac0008' as RunId;
 
       expect(yield* deriveResumability(executionId, session)).toEqual({
         kind: 'none',
@@ -263,9 +263,9 @@ describe('deriveResumability', () => {
     },
   ])('$name', ({ record }) =>
     Effect.gen(function* () {
-      const executionId = 'ac0009' as ExecutionId;
+      const executionId = 'ac0009' as RunId;
       yield* Effect.promise(() =>
-        getExecutionStore(executionId).write(flowKey(executionId), record),
+        getRunStore(executionId).write(flowKey(executionId), record),
       );
 
       expect(yield* deriveResumability(executionId, session)).toEqual({
@@ -282,7 +282,7 @@ describe('deriveResumability', () => {
     'reports invalid metadata as not resumable even with a valid flow record',
     () =>
       Effect.gen(function* () {
-        const executionId = 'ac000a' as ExecutionId;
+        const executionId = 'ac000a' as RunId;
         vi.spyOn(session, 'readExecutionRecords').mockReturnValue(
           Effect.die(
             new z.ZodError([
@@ -305,8 +305,8 @@ describe('deriveResumability', () => {
 
   it.effect('reports unreadable flow records as not resumable', () =>
     Effect.gen(function* () {
-      const executionId = 'ac000b' as ExecutionId;
-      const store = getExecutionStore(executionId);
+      const executionId = 'ac000b' as RunId;
+      const store = getRunStore(executionId);
       yield* writeFlow(executionId);
       const originalRead = store.read.bind(store);
       vi.spyOn(store, 'read').mockImplementation(async (key) => {

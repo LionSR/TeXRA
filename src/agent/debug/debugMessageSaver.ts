@@ -1,6 +1,6 @@
 import type { AgentTrace } from '@agent/trace';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
@@ -10,7 +10,7 @@ import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 interface DebugContext {
   logger: AgentTrace;
   modelName?: string;
-  executionId?: ExecutionId;
+  executionId?: RunId;
   /** Remote agents skip saving to avoid leaking prompts. */
   isRemote?: boolean;
 }

@@ -38,7 +38,7 @@ import {
 } from '@shared/schemas';
 import {
   formatRoundStageLabel,
-  formatStreamStatusLabel,
+  formatRunStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { taskGroupDisplayStatus } from '@shared/streams/taskGroupProjection';
 import { filterNotNullish, formatCompactDuration } from '@utils/core';
@@ -108,7 +108,7 @@ function taskGroupLine(
     // WORKFLOW_TASK_STATUS_LABEL words a workflow *call* ('Finished',
     // 'Saved result'), which is a different thing that happens to share four
     // key names with this one.
-    text: `${appearance.marker} ${safeTerminalText(label)} ${formatStreamStatusLabel(status)}${duration}`,
+    text: `${appearance.marker} ${safeTerminalText(label)} ${formatRunStatusLabel(status)}${duration}`,
     tone: appearance.tone,
     role: 'lifecycle',
   };

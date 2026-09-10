@@ -15,7 +15,7 @@ import {
   aggregateTarget,
   type AggregateId,
   type SessionEvent,
-  type ExecutionId,
+  type RunId,
   type RunIdentity,
   type RunOutcome,
   type StreamTabId,
@@ -24,7 +24,7 @@ import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  getExecutionRecords,
+  getRunRecords,
   executionMetaFromEvents,
   executionRunRecordFromEvents,
 } from './ExecutionKVStore';
@@ -37,9 +37,9 @@ const EXECUTION_STORAGE_CONCURRENCY = 32;
 // ============================================================================
 
 interface ExecutionListingBase {
-  id: ExecutionId;
+  id: RunId;
   timestamp: string;
-  parentExecutionId?: ExecutionId;
+  parentExecutionId?: RunId;
   /** Canonical terminal outcome; absent for a run still in flight. */
   outcome?: RunOutcome;
   /** AI-generated summary of what the session aimed to accomplish. */
@@ -61,15 +61,15 @@ interface ExecutionListingBase {
 }
 
 /** A native or tool-backed agent run: its record is always an AgentConfig. */
-export type AgentExecutionListingEntry = ExecutionListingBase & {
+export type AgentRunListingEntry = ExecutionListingBase & {
   kind: 'run';
   /** What the run is — the durable authority, stamped at registration. */
   identity: Extract<RunIdentity, { kind: 'agent' }>;
   record: AgentConfig;
 };
 
-export type ExecutionListingEntry =
-  | AgentExecutionListingEntry
+export type RunListingEntry =
+  | AgentRunListingEntry
   | (ExecutionListingBase & {
       kind: 'run';
       identity: Exclude<RunIdentity, { kind: 'agent' }>;
@@ -85,8 +85,8 @@ export type ExecutionListingEntry =
 /** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
  *  entry union for TypeScript, so this is the one spelled-out guard. */
 function isAgentRunEntry(
-  entry: ExecutionListingEntry,
-): entry is AgentExecutionListingEntry {
+  entry: RunListingEntry,
+): entry is AgentRunListingEntry {
   return entry.kind === 'run' && entry.identity.kind === 'agent';
 }
 
@@ -104,18 +104,18 @@ function isAgentRunEntry(
  * because tool-facing callers like `ExecutionsTool` need the raw listing to
  * manage background processes and child runs.
  */
-export function isUserVisibleExecution(
-  entry: ExecutionListingEntry,
-): entry is AgentExecutionListingEntry {
+export function isUserVisibleRun(
+  entry: RunListingEntry,
+): entry is AgentRunListingEntry {
   return isAgentRunEntry(entry) && entry.parentExecutionId === undefined;
 }
 
 /** Group one committed listing prefix without scanning other runs during each fold. */
 function groupExecutionRows(
   rows: readonly SessionEvent[],
-): Map<ExecutionId, SessionEvent[]> {
-  const executions = new Map<ExecutionId, SessionEvent[]>();
-  const streamExecutions = new Map<AggregateId, ExecutionId>();
+): Map<RunId, SessionEvent[]> {
+  const executions = new Map<RunId, SessionEvent[]>();
+  const streamExecutions = new Map<AggregateId, RunId>();
   for (const row of rows) {
     // Creation precedes its stream and execution rows in the committed prefix.
     if (row.type === 'run.start') {
@@ -133,17 +133,14 @@ function groupExecutionRows(
 }
 
 /** Read current execution identities and metadata from one committed listing. */
-export const listExecutions = Effect.fn('listExecutions')(function* (
+export const listRuns = Effect.fn('listExecutions')(function* (
   session: SessionHandle,
-): Effect.fn.Return<ExecutionListingEntry[], Error> {
+): Effect.fn.Return<RunListingEntry[], Error> {
   const executions = groupExecutionRows(yield* session.readRecordListing());
   const results = yield* Effect.forEach(
     executions,
     ([id, rows]) =>
-      Effect.gen(function* (): Effect.fn.Return<
-        ExecutionListingEntry | null,
-        Error
-      > {
+      Effect.gen(function* (): Effect.fn.Return<RunListingEntry | null, Error> {
         const [meta, record] = yield* Effect.try({
           try: () =>
             [
@@ -202,7 +199,7 @@ export function createLatexExecutionDiscovery(
 ): LatexExecutionDiscoveryPort {
   return {
     listAgentRuns: () =>
-      listExecutions(session).pipe(
+      listRuns(session).pipe(
         Effect.map((executions) =>
           executions.filter(isAgentRunEntry).map((entry) => ({
             id: entry.id,
@@ -214,7 +211,7 @@ export function createLatexExecutionDiscovery(
         ),
       ),
     readStreamId: (executionId) =>
-      getExecutionRecords(session, executionId)
+      getRunRecords(session, executionId)
         .readMeta()
         .pipe(Effect.map((meta) => meta?.streamId)),
   };

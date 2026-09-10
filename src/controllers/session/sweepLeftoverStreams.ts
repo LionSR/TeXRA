@@ -23,35 +23,34 @@ function runningStreams(session: SessionHandle): Set<StreamTabId> {
 }
 
 /** Remove the nonresumable background-shell cohort captured before session open. */
-export const sweepLeftoverStreams = Effect.fn('sweepLeftoverStreams')(
-  function* (session: SessionHandle, rows: readonly SessionEvent[]) {
-    const removed = new Set(
-      rows
-        .filter((row) => row.type === 'stream.removed')
-        .map((row) => row.aggregateId),
+export const sweepLeftoverRuns = Effect.fn('sweepLeftoverStreams')(function* (
+  session: SessionHandle,
+  rows: readonly SessionEvent[],
+) {
+  const removed = new Set(
+    rows
+      .filter((row) => row.type === 'stream.removed')
+      .map((row) => row.aggregateId),
+  );
+  const running = runningStreams(session);
+  for (const row of rows) {
+    if (
+      row.type !== 'run.start' ||
+      row.identity?.kind !== 'process' ||
+      removed.has(row.aggregateId)
+    )
+      continue;
+    const stream = aggregateTarget(row.aggregateId).id;
+    if (running.has(stream)) continue;
+    yield* session.requests.removeStream(stream, 'automatic', row.commit).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          log.warn(
+            'A background shell was retained because automatic deletion was refused.',
+            { data: { stream, error } },
+          );
+        }),
+      ),
     );
-    const running = runningStreams(session);
-    for (const row of rows) {
-      if (
-        row.type !== 'run.start' ||
-        row.identity?.kind !== 'process' ||
-        removed.has(row.aggregateId)
-      )
-        continue;
-      const stream = aggregateTarget(row.aggregateId).id;
-      if (running.has(stream)) continue;
-      yield* session.requests
-        .removeStream(stream, 'automatic', row.commit)
-        .pipe(
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              log.warn(
-                'A background shell was retained because automatic deletion was refused.',
-                { data: { stream, error } },
-              );
-            }),
-          ),
-        );
-    }
-  },
-);
+  }
+});
