@@ -72,14 +72,10 @@ export interface DesktopAgentExecution {
     request: ValidatedExecutionRequest,
     options?: DesktopRunExecutionOptions,
   ): Promise<void>;
-  /** A tool-edit prompt's verbs over its staged preview: the approval
-   *  applies the proposed file as the user left it. */
-  toolEditAction(
-    requestId: string,
-    action:
-      'approve' | 'reject' | 'openDiff' | 'previewProposed' | 'showLatexdiff',
-    feedback?: string,
-  ): void;
+  /** The tool-edit approvals this window owns. A prompt's verbs act over its
+   *  staged preview: the approval applies the proposed file as the user left
+   *  it. The host arm calls `handleAction` directly, as the extension does. */
+  readonly toolEditApprovals: ToolEditApprovalController;
   dispose(): void;
 }
 
@@ -205,13 +201,7 @@ export function createDesktopAgentExecution(
       await runValidated(validated.request, runOptions);
     },
     runValidated,
-    toolEditAction(requestId, action, feedback) {
-      toolEditApprovals.handleAction({
-        requestId,
-        action,
-        ...(feedback === undefined ? {} : { feedback }),
-      });
-    },
+    toolEditApprovals,
     dispose() {
       if (disposed) return;
       disposed = true;

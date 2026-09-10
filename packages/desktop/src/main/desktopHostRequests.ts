@@ -709,11 +709,11 @@ export function createDesktopHostRequests(
       case 'extractFigures':
         throw notOnDesktop('Figure extraction');
       case 'toolEdit':
-        execution.toolEditAction(
-          request.requestId,
-          request.action,
-          request.feedback ?? undefined,
-        );
+        execution.toolEditApprovals.handleAction({
+          requestId: request.requestId,
+          action: request.action,
+          ...(request.feedback == null ? {} : { feedback: request.feedback }),
+        });
         return done;
       case 'fileAction': {
         const config = await effectRuntime().runPromise(
