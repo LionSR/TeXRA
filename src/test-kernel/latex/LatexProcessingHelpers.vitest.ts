@@ -2,7 +2,8 @@ import { lstat, mkdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
@@ -107,52 +108,55 @@ describe('DiffFileProcessor line formatting', () => {
 });
 
 describe('LatexMediaManager PDF compilation', () => {
-  it('filters nullish compile results before adding media files', async () => {
-    const workspaceDir = await makeTempDir('texra-latex-media-', tempDirs);
-    await installPlatform(
-      { workspacePath: workspaceDir },
-      { fs: nodeFilesystem },
-    );
+  it.effect('filters nullish compile results before adding media files', () =>
+    Effect.gen(function* () {
+      const { inputPaths, compiledPdfPath } = yield* Effect.promise(
+        async () => {
+          const dir = await makeTempDir('texra-latex-media-', tempDirs);
+          await installPlatform({ workspacePath: dir }, { fs: nodeFilesystem });
+          const paths = [
+            path.join(dir, 'compiled.tex'),
+            path.join(dir, 'missing-result.tex'),
+          ];
+          await Promise.all(
+            paths.map(async (filePath) => {
+              await mkdir(path.dirname(filePath), { recursive: true });
+              await writeFile(filePath, '\\documentclass{article}\n');
+            }),
+          );
+          return {
+            inputPaths: paths,
+            compiledPdfPath: path.join(dir, 'build', 'compiled.pdf'),
+          };
+        },
+      );
 
-    const inputPaths = [
-      path.join(workspaceDir, 'compiled.tex'),
-      path.join(workspaceDir, 'missing-result.tex'),
-    ];
-    await Promise.all(
-      inputPaths.map(async (filePath) => {
-        await mkdir(path.dirname(filePath), { recursive: true });
-        await writeFile(filePath, '\\documentclass{article}\n');
-      }),
-    );
+      mocks.compileLatex2Pdf.mockImplementation(
+        async (file: FileLocation, options: { outputDirectory?: string }) => {
+          if (path.basename(file.absolutePath) === 'missing-result.tex') {
+            return { ok: false, logTail: 'simulated compile failure' };
+          }
+          const outputDirectory = options.outputDirectory!;
+          await mkdir(outputDirectory, { recursive: true });
+          await writeFile(compiledPdfPath, 'compiled pdf');
+          return { ok: true, pdfPath: compiledPdfPath };
+        },
+      );
 
-    const compiledPdfPath = path.join(workspaceDir, 'build', 'compiled.pdf');
-    mocks.compileLatex2Pdf.mockImplementation(
-      async (file: FileLocation, options: { outputDirectory?: string }) => {
-        if (path.basename(file.absolutePath) === 'missing-result.tex') {
-          return { ok: false, logTail: 'simulated compile failure' };
-        }
-        const outputDirectory = options.outputDirectory!;
-        await mkdir(outputDirectory, { recursive: true });
-        await writeFile(compiledPdfPath, 'compiled pdf');
-        return { ok: true, pdfPath: compiledPdfPath };
-      },
-    );
-
-    const workspaceState = AgentWorkspaceState.create();
-    const manager = new LatexMediaManager(logger);
-    await Effect.runPromise(
-      manager.processInputFiles(
+      const workspaceState = AgentWorkspaceState.create();
+      const manager = new LatexMediaManager(logger);
+      yield* manager.processInputFiles(
         inputPaths.map(createExternalLocation),
         workspaceState,
         compilePdfConfig,
-      ),
-    );
+      );
 
-    expect(mocks.compileLatex2Pdf).toHaveBeenCalledTimes(2);
-    expect(workspaceState.media.files.map((file) => file.absolutePath)).toEqual(
-      [compiledPdfPath],
-    );
-  });
+      expect(mocks.compileLatex2Pdf).toHaveBeenCalledTimes(2);
+      expect(
+        workspaceState.media.files.map((file) => file.absolutePath),
+      ).toEqual([compiledPdfPath]);
+    }),
+  );
 });
 
 type LatexMediaManagerFigureInternals = {
@@ -211,53 +215,61 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     ).toBe(await realpath(figurePath));
   }
 
-  it('extractFiguresFromFiles reuses its resolved baseDir instead of re-resolving it in mirrorFigureDependencies', async () => {
-    const executionId = 'extract-basedir-dedup';
-    const { texPath, figurePath } = await writeFixture();
+  it.effect(
+    'extractFiguresFromFiles reuses its resolved baseDir instead of re-resolving it in mirrorFigureDependencies',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'extract-basedir-dedup';
+        const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
-    const workspaceState = AgentWorkspaceState.create();
-    const manager = new LatexMediaManager(
-      logger,
-      new TaskRunFileService(executionId),
-    ) as unknown as LatexMediaManagerFigureInternals;
-    await Effect.runPromise(
-      manager.extractFiguresFromFiles(
-        [createWorkspaceLocation(texPath, 'main.tex')],
-        workspaceState,
-      ),
-    );
+        const workspaceState = AgentWorkspaceState.create();
+        const manager = new LatexMediaManager(
+          logger,
+          new TaskRunFileService(executionId),
+        ) as unknown as LatexMediaManagerFigureInternals;
+        yield* manager.extractFiguresFromFiles(
+          [createWorkspaceLocation(texPath, 'main.tex')],
+          workspaceState,
+        );
 
-    // Before the fix this was 3: once inside extractFigurePathsFromLatex,
-    // once in extractFiguresFromFiles, and once more (redundantly) in
-    // mirrorFigureDependencies. The mirror call now reuses the baseDir
-    // extractFiguresFromFiles already resolved.
-    expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
+        // Before the fix this was 3: once inside extractFigurePathsFromLatex,
+        // once in extractFiguresFromFiles, and once more (redundantly) in
+        // mirrorFigureDependencies. The mirror call now reuses the baseDir
+        // extractFiguresFromFiles already resolved.
+        expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
 
-    expect(workspaceState.media.files.map((f) => f.absolutePath)).toEqual([
-      figurePath,
-    ]);
-    await expectFigureMirrored(executionId, figurePath);
-  });
+        expect(workspaceState.media.files.map((f) => f.absolutePath)).toEqual([
+          figurePath,
+        ]);
+        yield* Effect.promise(() =>
+          expectFigureMirrored(executionId, figurePath),
+        );
+      }),
+  );
 
-  it('mirrorFiguresForFiles (no precomputed baseDir) still resolves and mirrors the correct path', async () => {
-    const executionId = 'mirror-basedir-fallback';
-    const { texPath, figurePath } = await writeFixture();
+  it.effect(
+    'mirrorFiguresForFiles (no precomputed baseDir) still resolves and mirrors the correct path',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'mirror-basedir-fallback';
+        const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
-    const manager = new LatexMediaManager(
-      logger,
-      new TaskRunFileService(executionId),
-    ) as unknown as LatexMediaManagerFigureInternals;
-    await Effect.runPromise(
-      manager.mirrorFiguresForFiles([
-        createWorkspaceLocation(texPath, 'main.tex'),
-      ]),
-    );
+        const manager = new LatexMediaManager(
+          logger,
+          new TaskRunFileService(executionId),
+        ) as unknown as LatexMediaManagerFigureInternals;
+        yield* manager.mirrorFiguresForFiles([
+          createWorkspaceLocation(texPath, 'main.tex'),
+        ]);
 
-    // Unchanged by the fix: mirrorFiguresForFiles has no precomputed baseDir,
-    // so mirrorFigureDependencies still resolves it itself (once inside
-    // extractFigurePathsFromLatex, once as the fallback resolution).
-    expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
+        // Unchanged by the fix: mirrorFiguresForFiles has no precomputed
+        // baseDir, so mirrorFigureDependencies still resolves it itself (once
+        // inside extractFigurePathsFromLatex, once as the fallback).
+        expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
 
-    await expectFigureMirrored(executionId, figurePath);
-  });
+        yield* Effect.promise(() =>
+          expectFigureMirrored(executionId, figurePath),
+        );
+      }),
+  );
 });
