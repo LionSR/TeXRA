@@ -11,12 +11,16 @@
  * infrastructure `fetchAnnotations` claims against it and `PRPollingSource`
  * exposes a test-only reset that targets the same instance.
  *
- * This is a small hand-rolled token bucket rather than a library (e.g.
- * `p-throttle`) because callers need a synchronous, non-blocking
- * claim-or-defer check (`tryClaim`) with an injectable clock for
- * deterministic tests (`resetForTests`) — `p-throttle` only offers an async
- * queue-and-wait contract, which doesn't fit either requirement.
+ * Token state lives in a `Ref` and `tryClaim` reads its time from Effect's
+ * `Clock` by default, rather than a bespoke injectable-clock parameter — the
+ * same clock every other retry/backoff path in this codebase uses. This is
+ * still a small purpose-built token bucket rather than a library (e.g.
+ * `p-throttle`) because callers need a non-blocking claim-or-defer check
+ * (`tryClaim`), and `p-throttle` only offers an async queue-and-wait
+ * contract.
  */
+
+import { Clock, Effect, Ref } from 'effect';
 
 import { clamp } from '@utils/core';
 
@@ -35,49 +39,82 @@ export class AnnotationFetchBudgetExhaustedError extends Error {
   }
 }
 
+interface TokenBucketState {
+  readonly tokens: number;
+  readonly lastRefillMs: number;
+}
+
 export class AnnotationFetchBudget {
-  private tokens: number;
-  private lastRefillMs: number;
+  private readonly state: Ref.Ref<TokenBucketState>;
 
   constructor(
     private readonly maxRequestsPerWindow: number,
     private readonly windowMs: number,
   ) {
-    this.tokens = maxRequestsPerWindow;
-    this.lastRefillMs = Date.now();
+    // `SharedAnnotationFetchBudget` below is constructed eagerly at module
+    // load, before any Effect runtime exists to run a `Ref.make` program —
+    // `makeUnsafe` is `Ref`'s documented synchronous constructor for exactly
+    // that case, not an `Effect.run*` boundary call.
+    this.state = Ref.makeUnsafe<TokenBucketState>({
+      tokens: maxRequestsPerWindow,
+      lastRefillMs: Date.now(),
+    });
   }
 
   /**
    * Refill continuously (tokens/ms) rather than resetting the full
    * allowance at fixed window boundaries — a fixed-window reset lets a
    * caller burst up to 2x the budget across a boundary (all of one window's
-   * allowance immediately followed by all of the next).
+   * allowance immediately followed by all of the next). A backward clock
+   * jump leaves `tokens` unchanged rather than draining it, but still
+   * advances `lastRefillMs` so a later forward jump refills from that point.
    */
-  private refill(nowMs: number): void {
-    const elapsedMs = nowMs - this.lastRefillMs;
-    if (elapsedMs > 0) {
-      const refillRate = this.maxRequestsPerWindow / this.windowMs;
-      this.tokens = Math.min(
+  private readonly refill = (
+    current: TokenBucketState,
+    nowMs: number,
+  ): TokenBucketState => {
+    const elapsedMs = nowMs - current.lastRefillMs;
+    if (elapsedMs <= 0) return { ...current, lastRefillMs: nowMs };
+    const refillRate = this.maxRequestsPerWindow / this.windowMs;
+    return {
+      tokens: Math.min(
         this.maxRequestsPerWindow,
-        this.tokens + elapsedMs * refillRate,
-      );
-    }
-    this.lastRefillMs = nowMs;
-  }
+        current.tokens + elapsedMs * refillRate,
+      ),
+      lastRefillMs: nowMs,
+    };
+  };
 
-  tryClaim(nowMs = Date.now()): boolean {
-    this.refill(nowMs);
-    if (this.tokens < 1) return false;
-    this.tokens -= 1;
-    return true;
+  /** Claim one token against `nowMs`, defaulting to Effect's `Clock`. */
+  tryClaim(nowMs?: number): Effect.Effect<boolean> {
+    const { state, refill } = this;
+    return Effect.gen(function* () {
+      const now = nowMs ?? (yield* Clock.currentTimeMillis);
+      return yield* Ref.modify(state, (current) => {
+        const refilled = refill(current, now);
+        return refilled.tokens < 1
+          ? ([false, refilled] as const)
+          : ([true, { ...refilled, tokens: refilled.tokens - 1 }] as const);
+      });
+    });
   }
 
   resetForTests(
-    remainingRequests = this.maxRequestsPerWindow,
-    nowMs = Date.now(),
-  ): void {
-    this.lastRefillMs = nowMs;
-    this.tokens = clamp(remainingRequests, 0, this.maxRequestsPerWindow);
+    remainingRequests?: number,
+    nowMs?: number,
+  ): Effect.Effect<void> {
+    const { state, maxRequestsPerWindow } = this;
+    return Effect.gen(function* () {
+      const now = nowMs ?? (yield* Clock.currentTimeMillis);
+      yield* Ref.set(state, {
+        tokens: clamp(
+          remainingRequests ?? maxRequestsPerWindow,
+          0,
+          maxRequestsPerWindow,
+        ),
+        lastRefillMs: now,
+      });
+    });
   }
 }
 

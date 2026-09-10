@@ -347,11 +347,11 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(
     checkRunId: number,
     logger: AgentTrace,
     budget: AnnotationFetchBudget,
-    now = Date.now(),
+    now?: number,
   ): Effect.fn.Return<GhCheckAnnotation[], unknown> {
     const annotations: GhCheckAnnotation[] = [];
     for (let page = 1; page <= MAX_ANNOTATION_PAGES_PER_RUN; page += 1) {
-      if (!budget.tryClaim(now)) {
+      if (!(yield* budget.tryClaim(now))) {
         return yield* Effect.fail(new AnnotationFetchBudgetExhaustedError());
       }
       const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}&page=${page}`;

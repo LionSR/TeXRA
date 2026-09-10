@@ -90,7 +90,7 @@ function createDrainSource(): PRPollingSource {
 
 describe('PRPollingSource annotation drain', () => {
   beforeEach(() => {
-    PRPollingSource.resetAnnotationFetchBudgetForTests();
+    Effect.runSync(PRPollingSource.resetAnnotationFetchBudgetForTests());
     mocks.fetchAnnotations.mockReset();
   });
 

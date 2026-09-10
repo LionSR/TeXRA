@@ -213,8 +213,8 @@ export class PRPollingSource extends PollingSourceBase<
   static resetAnnotationFetchBudgetForTests(
     remainingFetches?: number,
     nowMs?: number,
-  ): void {
-    SharedAnnotationFetchBudget.resetForTests(remainingFetches, nowMs);
+  ): Effect.Effect<void> {
+    return SharedAnnotationFetchBudget.resetForTests(remainingFetches, nowMs);
   }
 
   subscribe(
