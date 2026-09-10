@@ -1,13 +1,11 @@
 import type { StatusEvent } from '@agent/trace';
 import {
   STREAM_PHASE,
-  STREAM_SUBSTATE,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
 } from '@shared/schemas';
 import {
-  canAcquireStreamReservation,
   canTransitionStreamPhase,
   isActivePhase,
   isInFlightPhase,
@@ -39,19 +37,13 @@ export interface StreamPhaseState {
 }
 
 /**
- * One entry per stream, in one of its three forms. Neither a reservation nor a
- * hold is a second structure overlaying the phase: each is the entry itself
- * (a reservation carrying the state a rollback must restore, a hold carrying
- * its detail and any phase already known), so every reader sees the same state
- * without merging two collections.
+ * One entry per stream, in one of its two forms. A hold is not a second
+ * structure overlaying the phase: it is the entry itself, carrying its detail
+ * and any phase already known, so every reader sees the same state without
+ * merging two collections.
  */
 type StreamEntry =
   | { readonly kind: 'phase'; readonly state: StreamPhaseState }
-  | {
-      readonly kind: 'reserved';
-      readonly runStartedAt: number;
-      readonly rollbackTo?: StreamPhaseState;
-    }
   | {
       /**
        * Classification could not settle on a phase (held by another process,
@@ -66,29 +58,13 @@ type StreamEntry =
       readonly state?: StreamPhaseState;
     };
 
-function effectiveState(entry: StreamEntry): StreamPhaseState | undefined {
-  switch (entry.kind) {
-    case 'phase':
-      return entry.state;
-    case 'reserved':
-      return {
-        phase: STREAM_PHASE.RUNNING,
-        substate: STREAM_SUBSTATE.STARTING,
-        runStartedAt: entry.runStartedAt,
-      };
-    case 'hold':
-      return entry.state;
-  }
-}
-
 export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
 
   /**
    * @param publishStatus Where this machine publishes canonical `status`
-   *   facts after launch. Creation batches the initial status with run.start;
-   *   a local reservation publishes nothing. Every consumer, including the
-   *   transcript recorder (via its `handleStatus`
+   *   facts after launch. Creation batches the initial status with run.start.
+   *   Every consumer, including the transcript recorder (via its `handleStatus`
    *   port), reads it. The session constructs the machine with its own
    *   publisher, so a transition reaches every consumer no matter which
    *   caller triggered it. Required and never rebound: a machine publishing
@@ -110,46 +86,17 @@ export class StreamStatusMachine {
   }
 
   /**
-   * This stream's combined phase + substate + run-window start, including an
-   * in-flight reservation. Reservations describe local launch admission;
-   * creation publishes their initial status. For later transitions the entry
-   * is written before the matching `status` fact is published, so a
-   * consumer reacting to that fact reads the phase the fact announced without
-   * mirroring it, and `getAllStreamStates()` stays for the whole-map cases.
+   * This stream's combined phase + substate + run-window start. The entry is
+   * written before the matching `status` fact is published, so a consumer
+   * reacting to that fact reads the phase the fact announced without mirroring
+   * it, and `getAllStreamStates()` stays for the whole-map cases.
    */
   getStreamState(stream: StreamTabId): StreamPhaseState | undefined {
-    const entry = this.streams.get(stream);
-    return entry ? effectiveState(entry) : undefined;
+    return this.streams.get(stream)?.state;
   }
 
   getSubstate(stream: StreamTabId): StreamSubstate | undefined {
     return this.getStreamState(stream)?.substate;
-  }
-
-  /** Reserve local launch admission. Creation owns the first durable status. */
-  tryAcquire(stream: StreamTabId): boolean {
-    const entry = this.streams.get(stream);
-    if (entry?.kind === 'reserved') return false;
-    const previousState = entry ? effectiveState(entry) : undefined;
-    if (!canAcquireStreamReservation(previousState?.phase)) return false;
-    this.streams.set(stream, {
-      kind: 'reserved',
-      runStartedAt: Date.now(),
-      ...(previousState ? { rollbackTo: previousState } : {}),
-    });
-    if (entry?.kind === 'hold') this.publishHoldChanged(stream);
-    return true;
-  }
-
-  /** A rejected launch restores its local reservation without creating a run. */
-  releaseIfReserved(stream: StreamTabId): void {
-    const entry = this.streams.get(stream);
-    if (entry?.kind !== 'reserved') return;
-    if (entry.rollbackTo) {
-      this.streams.set(stream, { kind: 'phase', state: entry.rollbackTo });
-    } else {
-      this.streams.delete(stream);
-    }
   }
 
   transition(
@@ -159,18 +106,10 @@ export class StreamStatusMachine {
     options: StreamStatusEmitOptions = {},
   ): boolean {
     const entry = this.streams.get(stream);
-    const fromReservation = entry?.kind === 'reserved';
     const overwritesHold = entry?.kind === 'hold';
-    let previousState: StreamPhaseState | undefined;
-    if (fromReservation) previousState = entry.rollbackTo;
-    else if (entry) previousState = effectiveState(entry);
+    const previousState = entry?.state;
     const from = previousState?.phase;
-    let tableFrom = from;
-    if (fromReservation) {
-      tableFrom =
-        to === STREAM_PHASE.RUNNING ? undefined : STREAM_PHASE.RUNNING;
-    }
-    if (!canTransitionStreamPhase(tableFrom, to, cause)) return false;
+    if (!canTransitionStreamPhase(from, to, cause)) return false;
 
     // The table decides whether a transition is permitted, but not whether a
     // permitted transition changes state. A steady RUNNING resume with no
@@ -180,7 +119,6 @@ export class StreamStatusMachine {
     // still a hold, so it has to convert through the write-and-publish path
     // below or the stream stays read-only while this reports success.
     if (
-      !fromReservation &&
       !overwritesHold &&
       from === to &&
       previousState?.substate === options.substate
@@ -191,11 +129,8 @@ export class StreamStatusMachine {
     // substate change and active→active transition after it; anything that is
     // not an active phase closes it. Stamped here because this is the only
     // writer of the phase it derives from.
-    const previousRunStartedAt = fromReservation
-      ? entry.runStartedAt
-      : previousState?.runStartedAt;
     const runStartedAt = isActivePhase(to)
-      ? (previousRunStartedAt ?? Date.now())
+      ? (previousState?.runStartedAt ?? Date.now())
       : undefined;
     this.streams.set(stream, {
       kind: 'phase',
@@ -205,11 +140,10 @@ export class StreamStatusMachine {
         ...(runStartedAt !== undefined ? { runStartedAt } : {}),
       },
     });
-    const previousPhase = fromReservation ? STREAM_PHASE.RUNNING : from;
     this.publishTransition(stream, to, {
       ...options,
       cause,
-      ...(previousPhase ? { previousPhase } : {}),
+      ...(from ? { previousPhase: from } : {}),
       ...(runStartedAt !== undefined ? { runStartedAt } : {}),
     });
     // A phase that replaces a hold also drops that hold's detail, and the
@@ -272,49 +206,24 @@ export class StreamStatusMachine {
   }
 
   /**
-   * Record why this stream cannot be settled. Returns
-   * `false` without writing when a live reservation owns the stream: a hold
-   * describes a run some earlier process left behind, which a reservation has
-   * by definition superseded, and overwriting one strands the tab — a hold is
-   * not `reserved`, so `releaseIfReserved` becomes a no-op and a failed
-   * launch's rollback never runs, while the RUNNING the hold inherits from
-   * `effectiveState` blocks every later `tryAcquire`. Holds lived in a side
-   * map before they became an entry arm and could not do this.
-   * {@link markUnavailableOrLog} is how every caller that has a logger asks,
-   * so the skipped hold is not silent.
+   * Record why this stream cannot be settled. A hold already carrying this
+   * detail is left as it is, so a repeated report neither rewrites the entry
+   * nor republishes the same hold.
    *
    * A written hold publishes, exactly like a transition does: it is a fact a
    * user action can produce while hosts are attached, so nothing may wait for
    * an unrelated metadata sync to repaint the tab.
    */
-  markUnavailable(stream: StreamTabId, detail: string): boolean {
+  markUnavailable(stream: StreamTabId, detail: string): void {
     const entry = this.streams.get(stream);
-    if (entry?.kind === 'reserved') return false;
-    const state = entry ? effectiveState(entry) : undefined;
-    if (entry?.kind === 'hold' && entry.detail === detail) return true;
+    if (entry?.kind === 'hold' && entry.detail === detail) return;
+    const state = entry?.state;
     this.streams.set(stream, {
       kind: 'hold',
       detail,
       ...(state ? { state } : {}),
     });
     this.publishHoldChanged(stream);
-    return true;
-  }
-
-  /**
-   * `markUnavailable`, plus the one thing every caller does when it refuses:
-   * say in the log that the live reservation was kept instead, so a skipped
-   * hold is never silent and the sentence is not copied at three call sites.
-   */
-  markUnavailableOrLog(
-    stream: StreamTabId,
-    detail: string,
-    logger: { debug(message: string): void } | undefined,
-  ): void {
-    if (this.markUnavailable(stream, detail)) return;
-    logger?.debug(
-      `Kept the live reservation on stream ${stream} instead of marking it unavailable: ${detail}`,
-    );
   }
 
   /**
@@ -358,12 +267,11 @@ export class StreamStatusMachine {
     this.streams.clear();
   }
 
-  /** Combined per-stream phase + substate, including in-flight reservations. */
+  /** Combined per-stream phase + substate for every known stream. */
   getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
     const values = new Map<StreamTabId, StreamPhaseState>();
     for (const [stream, entry] of this.streams) {
-      const state = effectiveState(entry);
-      if (state) values.set(stream, state);
+      if (entry.state) values.set(stream, entry.state);
     }
     return values;
   }

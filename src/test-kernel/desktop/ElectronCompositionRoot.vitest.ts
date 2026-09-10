@@ -220,24 +220,10 @@ describe('desktop composition root and launch environment', () => {
       'flushArtifacts:',
       'projects.flushArtifacts()',
       'afterFlushArtifacts:',
-      'diffHostDisposeQueue.onIdle()',
+      'removeExternalDiffPatchDirs()',
       'afterExecutionSettlement:',
       'processResources.dispose()',
     ]);
-  });
-
-  it('starts each window diff-host disposal before queueing its completion', async () => {
-    const source = await readDesktopMainIndex();
-
-    expect(source).toContain(
-      'const diffHostDisposeQueue = new PQueue({ concurrency: 1 });',
-    );
-    expect(source).not.toContain('createDesktopDiffHostDisposeQueue');
-    expectOrderedAfter(
-      source,
-      'const settled = awaitOrReport(desktopDiffHost.dispose())',
-      ['diffHostDisposeQueue.add(() => settled)'],
-    );
   });
 
   it('keeps platform initialization in the Electron composition root', async () => {

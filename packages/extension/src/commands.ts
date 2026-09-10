@@ -6,7 +6,6 @@ import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
-import { registerFileSelectionCommands } from '@commands/files/fileSelectionCommands';
 import { registerOpenFileCommands } from '@commands/files/openFileCommands';
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 import { registerMergeCommands } from '@commands/agent/mergeCommands';
@@ -24,7 +23,6 @@ export function registerCommands(
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
 ): void {
-  registerFileSelectionCommands(context);
   registerLatexdiffCommands(context);
   registerGitCommands(context);
   registerAgentReviewCommands(context);

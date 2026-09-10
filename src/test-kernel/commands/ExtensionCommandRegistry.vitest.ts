@@ -36,11 +36,7 @@ function makeActions(): ExtensionCommandActions {
     cleanBuild: asyncNoop(),
     cleanOutput: asyncNoop(),
     pack: asyncNoop(),
-    packSingle: asyncNoop(),
-    packMultiple: asyncNoop(),
     clean: asyncNoop(),
-    cleanSingle: asyncNoop(),
-    cleanMultiple: asyncNoop(),
     compare: asyncNoop(),
     acceptEdited: vi.fn().mockResolvedValue(true),
     indentTeX: asyncNoop(),
@@ -229,66 +225,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       });
     });
 
-    it('forwards positional single-file pack/clean arguments', async () => {
-      const actions = makeActions();
-
-      await expect(
-        dispatch(actions, 'texra.packSingle', 'main.tex', 'editor', 'gpt-5'),
-      ).resolves.toBe(true);
-      await expect(
-        dispatch(actions, 'texra.cleanSingle', 'main.tex', 'editor', 'gpt-5'),
-      ).resolves.toBe(true);
-      expect(actions.packSingle).toHaveBeenCalledExactlyOnceWith(
-        'main.tex',
-        'editor',
-        'gpt-5',
-      );
-      expect(actions.cleanSingle).toHaveBeenCalledExactlyOnceWith(
-        'main.tex',
-        'editor',
-        'gpt-5',
-      );
-    });
-
-    it('defaults omitted multi-file lists before dispatch', async () => {
-      const actions = makeActions();
-
-      await expect(
-        dispatch(actions, 'texra.packMultiple', 'main.tex', 'editor', 'gpt-5'),
-      ).resolves.toBe(true);
-      await expect(
-        dispatch(actions, 'texra.cleanMultiple', 'main.tex', 'editor', 'gpt-5'),
-      ).resolves.toBe(true);
-      expect(actions.packMultiple).toHaveBeenCalledExactlyOnceWith(
-        'main.tex',
-        'editor',
-        'gpt-5',
-        [],
-      );
-      expect(actions.cleanMultiple).toHaveBeenCalledExactlyOnceWith(
-        'main.tex',
-        'editor',
-        'gpt-5',
-        [],
-      );
-    });
-
-    it('accepts packMultiple with only a nonempty inputFiles list', async () => {
-      const actions = makeActions();
-
-      await expect(
-        dispatch(actions, 'texra.packMultiple', '', 'editor', 'gpt-5', [
-          'chapter.tex',
-        ]),
-      ).resolves.toBe(true);
-      expect(actions.packMultiple).toHaveBeenCalledExactlyOnceWith(
-        '',
-        'editor',
-        'gpt-5',
-        ['chapter.tex'],
-      );
-    });
-
     it('forwards compare and accept arguments without collapsing them', async () => {
       const actions = makeActions();
 
@@ -326,15 +262,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
         EDITED_FILE,
         undefined,
       );
-    });
-
-    it('rejects malformed positional arguments before calling actions', async () => {
-      const actions = makeActions();
-
-      await expect(
-        dispatch(actions, 'texra.packSingle', '', 'editor', 'gpt-5'),
-      ).resolves.toBe(false);
-      expect(actions.packSingle).not.toHaveBeenCalled();
     });
   });
 

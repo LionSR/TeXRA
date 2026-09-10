@@ -9,7 +9,7 @@ function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
   return formatCliSessionStatus({
     agent: 'chat',
     model: 'harness-model',
-    modelAccess: 'personal',
+    modelAccess: 'api-key',
     approvalPolicy: 'ask',
     statusLabel: 'Running',
     activeSkills: [],
@@ -170,7 +170,7 @@ describe('CLI session status formatter', () => {
 
   it('surfaces an active goal in status details', () => {
     const status = sessionStatus({
-      modelAccess: 'personal',
+      modelAccess: 'api-key',
       statusLabel: 'Stopped',
       goal: {
         status: 'active',
@@ -190,7 +190,7 @@ describe('CLI session status formatter', () => {
   it('reports ChatGPT as the selected model access', () => {
     const status = sessionStatus({
       model: 'gpt56-',
-      modelAccess: 'chatgpt',
+      modelAccess: 'chatgpt-subscription',
     });
 
     expect(status).toContain('model: GPT-5.6 Terra');
@@ -205,7 +205,7 @@ describe('CLI session status formatter', () => {
   it('reports personal-API-key model access without a subscription line', () => {
     const status = sessionStatus({
       model: 'gpt55',
-      modelAccess: 'personal',
+      modelAccess: 'api-key',
     });
 
     expect(status).toContain('model access: Your own API keys');
@@ -226,7 +226,7 @@ describe('CLI session status formatter', () => {
       sessionStatus({
         agent: 'research',
         model: 'deepseekT',
-        modelAccess: 'personal',
+        modelAccess: 'api-key',
         statusLabel: 'Idle',
       }),
     ).toContain('status: Idle');

@@ -595,7 +595,7 @@ if (SHOW_ORCHESTRATION) {
       statusLines={
         SHOW_ORCHESTRATION_STATUS_LINES
           ? [
-              `api: ${formatCliModelAccessRouteInline('personal')}`,
+              `api: ${formatCliModelAccessRouteInline('api-key')}`,
               formatCliAuthStatusLine({ authenticated: false }),
             ]
           : undefined

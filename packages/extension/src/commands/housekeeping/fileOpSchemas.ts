@@ -18,13 +18,6 @@ const FileOpParamsSchema = z.object({
   model: RequiredString,
 });
 
-/** Positional arguments shared by the single-file pack and clean commands. */
-export const FileOpCommandArgsSchema = z.tuple([
-  FileOpParamsSchema.shape.inputFile,
-  FileOpParamsSchema.shape.agent,
-  FileOpParamsSchema.shape.model,
-]);
-
 /**
  * Config-level fields shared by the pack and clean config schemas. Spread into
  * a base schema's `.extend(...)` so each command can still override an
@@ -46,19 +39,3 @@ export type PackConfig = z.infer<typeof PackConfigSchema>;
 export const CleanConfigSchema = FileOpParamsSchema.extend(fileOpConfigFields);
 
 export type CleanConfig = z.infer<typeof CleanConfigSchema>;
-
-/**
- * Positional arguments shared by the multi-file pack and clean commands. Both
- * carry the identical webview payload, so one schema owns the rule: a primary
- * input file, a non-empty batch, or both.
- */
-export const MultiFileOpCommandArgsSchema = z
-  .tuple([
-    z.string().prefault(''),
-    FileOpParamsSchema.shape.agent,
-    FileOpParamsSchema.shape.model,
-    z.array(z.string()).prefault([]),
-  ])
-  .refine(([inputFile, , , inputFiles]) => inputFile || inputFiles.length > 0, {
-    error: 'inputFile or inputFiles required',
-  });

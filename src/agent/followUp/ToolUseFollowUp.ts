@@ -237,20 +237,18 @@ export function recordRunRefusal(
 ): FollowUpFailureReason {
   switch (classification.kind) {
     case 'held_elsewhere':
-      session.status.markUnavailableOrLog(
+      session.status.markUnavailable(
         streamId,
         streamHeldMessage(classification.owner.pid),
-        logger,
       );
       return 'owned_elsewhere';
     case 'owned_here':
       // A lease this process holds for a stream with no live flow context is
       // a registry/lease disagreement, not a free run: it stays read-only
       // with a diagnostic naming that disagreement.
-      session.status.markUnavailableOrLog(
+      session.status.markUnavailable(
         streamId,
         streamUnreadableMessage('lease owned by this process with no live run'),
-        logger,
       );
       return 'not_resumable';
     case 'finished':

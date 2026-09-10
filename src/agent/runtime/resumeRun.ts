@@ -318,10 +318,9 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   session.status.clearHold(streamId, { discardRetainedPhase: true });
   if (lease?.status === 'held') {
     releaseQueue();
-    session.status.markUnavailableOrLog(
+    session.status.markUnavailable(
       streamId,
       streamHeldMessage(lease.owner.pid),
-      log,
     );
     return { failed: 'owned_elsewhere' };
   }
@@ -392,10 +391,9 @@ function refusalFor(
   streamId: StreamTabId,
 ): ResumeRunResult | undefined {
   if (error instanceof ExecutionLeaseActiveError) {
-    session.status.markUnavailableOrLog(
+    session.status.markUnavailable(
       streamId,
       streamHeldMessage(error.owner.pid),
-      log,
     );
     return { failed: 'owned_elsewhere' };
   }

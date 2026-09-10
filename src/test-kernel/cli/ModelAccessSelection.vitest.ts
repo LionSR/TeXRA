@@ -14,7 +14,6 @@ import {
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import { effectRuntime } from '@platform/processRuntime';
-import type { UsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
@@ -202,48 +201,41 @@ describe('CLI model access routes', () => {
         usageRoute: 'api-key',
         prospectiveRoute: 'chatgpt-subscription',
       }),
-    ).toBe('personal');
-    // A completed request's route cannot change — ordinary `api-key` usage
-    // stays personal even while the Kimi Code route is currently active.
+    ).toBe('api-key');
+    // A completed request's route cannot change: observed `api-key` usage
+    // still resolves to `api-key` while the Kimi Code route is active.
     expect(
       resolveCliModelAccessRoute({
         usageRoute: 'api-key',
         prospectiveRoute: 'kimi-code-subscription',
       }),
-    ).toBe('personal');
-  });
-
-  it.each<[UsageRoute | undefined, AccessRoute]>([
-    ['chatgpt-subscription', 'chatgpt'],
-    ['xai-subscription', 'grok'],
-    ['kimi-code-subscription', 'kimi-code'],
-    ['glm-coding-plan-subscription', 'glm-code'],
-    ['api-key', 'personal'],
-    [undefined, 'personal'],
-  ])('labels %s the same observed or prospective', (route, expected) => {
-    expect(resolveCliModelAccessRoute({ usageRoute: route })).toBe(expected);
-    expect(resolveCliModelAccessRoute({ prospectiveRoute: route })).toBe(
-      expected,
-    );
+    ).toBe('api-key');
+    // With nothing observed yet, the prospective route is what shows.
+    expect(
+      resolveCliModelAccessRoute({
+        prospectiveRoute: 'kimi-code-subscription',
+      }),
+    ).toBe('kimi-code-subscription');
   });
 
   it('formats the shared access routes for detailed and compact surfaces', () => {
     const detailed: Array<[AccessRoute, string]> = [
-      ['chatgpt', 'ChatGPT subscription'],
-      ['kimi-code', 'Kimi Code subscription'],
-      ['personal', 'Your own API keys'],
+      ['chatgpt-subscription', 'ChatGPT subscription'],
+      ['kimi-code-subscription', 'Kimi Code subscription'],
+      ['api-key', 'Your own API keys'],
+      [undefined, 'Your own API keys'],
     ];
     const inline: Array<[AccessRoute, string]> = [
-      ['chatgpt', 'ChatGPT subscription'],
-      ['kimi-code', 'Kimi Code subscription'],
-      ['personal', 'your own API keys'],
+      ['chatgpt-subscription', 'ChatGPT subscription'],
+      ['kimi-code-subscription', 'Kimi Code subscription'],
+      ['api-key', 'your own API keys'],
     ];
     // Every arm is display text; the enum value never reaches the status bar.
     const short: Array<[AccessRoute, string]> = [
-      ['chatgpt', 'subscription'],
-      ['grok', 'subscription'],
-      ['kimi-code', 'subscription'],
-      ['personal', 'API keys'],
+      ['chatgpt-subscription', 'subscription'],
+      ['xai-subscription', 'subscription'],
+      ['kimi-code-subscription', 'subscription'],
+      ['api-key', 'API keys'],
     ];
 
     for (const [route, text] of detailed) {

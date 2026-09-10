@@ -79,7 +79,6 @@
       "packages/cli/src/chat/tui/runChatTui.tsx": 1,
       "packages/cli/src/chat/tui/sessionExitController.ts": 1,
       "packages/cli/src/chat/tui/state/subscribeApprovals.ts": 1,
-      "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/extension.ts": 1,
       "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts": 1,
       "src/agent/runtime/streamApprovalQueue.ts": 1,

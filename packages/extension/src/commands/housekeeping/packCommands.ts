@@ -54,24 +54,3 @@ export function handlePack(config: PackConfig): Promise<void> {
     showResult: showPackResult,
   });
 }
-
-export async function handlePackSingle(
-  inputFile: string,
-  agent: string,
-  model: string,
-): Promise<void> {
-  const result = await runPackSingle(model, inputFile, agent);
-  showPackResult(result, inputFile);
-  // No missing-outputs clear: these invocations have no stream context, and
-  // configuration-based fan-out to look-alike tabs was removed (#9590 A3).
-}
-
-export async function handlePackMultiple(
-  inputFile: string,
-  agent: string,
-  model: string,
-  inputFiles: string[] = [],
-): Promise<void> {
-  const result = await runPackMultiple(model, inputFile, agent, inputFiles);
-  showPackResult(result, inputFile);
-}

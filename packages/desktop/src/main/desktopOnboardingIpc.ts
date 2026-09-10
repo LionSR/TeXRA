@@ -37,12 +37,6 @@ interface DesktopOnboardingIpcOptions {
   kickoffSetup: () => Promise<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt: () => Promise<void>;
-  /**
-   * Open the getting-started walkthrough from the State 0 welcome card. The
-   * desktop shell can't host the VS Code walkthrough, so the host wires this to
-   * the closest analog: opening the desktop getting-started docs externally.
-   */
-  openGettingStarted: () => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -65,7 +59,6 @@ export interface DesktopOnboardingIpc extends DesktopMessageHandler {
   /** The setup card's Run Setup: selects the setup agent and launches. */
   runSetup(): Promise<void>;
   signInWithChatGpt(): Promise<void>;
-  openGettingStarted(): Promise<void>;
 }
 
 export function createDesktopOnboardingIpc(
@@ -215,6 +208,5 @@ export function createDesktopOnboardingIpc(
     skipSetup,
     runSetup,
     signInWithChatGpt,
-    openGettingStarted: options.openGettingStarted,
   };
 }

@@ -96,50 +96,6 @@ describe('StreamStatusMachine', () => {
     }
   });
 
-  it('keeps reservations outside the transition table', () => {
-    const machine = new StreamStatusMachine(
-      () => {},
-      () => {},
-    );
-    const streamId = 'stream-status-reservation-test' as StreamTabId;
-
-    expect(machine.tryAcquire(streamId)).toBe(true);
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-    expect(machine.getSubstate(streamId)).toBe(STREAM_SUBSTATE.STARTING);
-    expect(machine.getAllStreamStates().get(streamId)).toEqual({
-      phase: STREAM_PHASE.RUNNING,
-      substate: STREAM_SUBSTATE.STARTING,
-      runStartedAt: expect.any(Number),
-    });
-    expect(machine.tryAcquire(streamId)).toBe(false);
-
-    machine.releaseIfReserved(streamId);
-    expect(machine.get(streamId)).toBeUndefined();
-
-    expect(machine.tryAcquire(streamId)).toBe(true);
-    expect(machine.transition(streamId, STREAM_PHASE.WAITING, 'wait')).toBe(
-      true,
-    );
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.WAITING);
-    expect(machine.tryAcquire(streamId)).toBe(false);
-  });
-
-  it('refuses to overwrite a live reservation with a hold', () => {
-    const { machine, streamId } = setupMachine(
-      'stream-status-reservation-vs-hold',
-    );
-
-    expect(machine.tryAcquire(streamId)).toBe(true);
-    expect(machine.markUnavailable(streamId, 'lease lock unavailable')).toBe(
-      false,
-    );
-    expect(machine.holdState(streamId)).toBeUndefined();
-
-    // The rollback the reservation owns still runs.
-    machine.releaseIfReserved(streamId);
-    expect(machine.get(streamId)).toBeUndefined();
-  });
-
   it('closes the active window in WAITING and restamps after the resume gap', () => {
     vi.useFakeTimers({ now: 1_000 });
     const { machine, streamId } = setupMachine(
@@ -297,56 +253,6 @@ describe('StreamStatusMachine', () => {
     expect(machine.get(streamId)).toBe(STREAM_PHASE.RUNNING);
     expect(machine.getSubstate(streamId)).toBeUndefined();
     expect(statusEvents()).toEqual([]);
-  });
-
-  it('rolls back reservation state identically with and without a subscriber', () => {
-    const hidden = new StreamStatusMachine(
-      () => {},
-      () => {},
-    );
-    const published = { events: [] as StatusEvent[] };
-    const observed = new StreamStatusMachine(
-      (event) => published.events.push(event),
-      () => {},
-    );
-    const streamId =
-      'stream-status-observer-independent-rollback' as StreamTabId;
-
-    expect(hidden.tryAcquire(streamId)).toBe(true);
-    expect(observed.tryAcquire(streamId)).toBe(true);
-
-    hidden.releaseIfReserved(streamId);
-    observed.releaseIfReserved(streamId);
-
-    expect(hidden.get(streamId)).toBeUndefined();
-    expect(observed.get(streamId)).toBe(hidden.get(streamId));
-    expect(published.events).toEqual([]);
-  });
-
-  it('overlays reservations on stale terminal phases and restores them on rollback', () => {
-    const { machine, statusEvents, streamId } = setupMachine(
-      'stream-status-reservation-overlay',
-    );
-
-    seedStreamStatusForTest(machine, streamId, {
-      phase: STREAM_PHASE.COMPLETED,
-    });
-
-    expect(machine.tryAcquire(streamId)).toBe(true);
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-    expect(
-      machine.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle'),
-    ).toBe(true);
-
-    seedStreamStatusForTest(machine, streamId, {
-      phase: STREAM_PHASE.COMPLETED,
-    });
-    const beforeReservation = statusEvents();
-    expect(machine.tryAcquire(streamId)).toBe(true);
-    machine.releaseIfReserved(streamId);
-
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-    expect(statusEvents()).toEqual(beforeReservation);
   });
 
   // One rail: the session fact is published by the machine itself, so a

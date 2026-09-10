@@ -11,7 +11,6 @@ import {
   type StreamPhase,
 } from '@shared/schemas';
 import {
-  canAcquireStreamReservation,
   canTransitionStreamPhase,
   deriveRunOutcome,
   isActivePhase,
@@ -131,15 +130,6 @@ describe('stream phase transition table', () => {
         );
       }
     }
-  });
-
-  it('pins reservation invariants separately from transitions', () => {
-    expect(canAcquireStreamReservation(undefined)).toBe(true);
-    expect(canAcquireStreamReservation(STREAM_PHASE.RUNNING)).toBe(false);
-    expect(canAcquireStreamReservation(STREAM_PHASE.WAITING)).toBe(false);
-    expect(canAcquireStreamReservation(STREAM_PHASE.COMPLETED)).toBe(true);
-    expect(canAcquireStreamReservation(STREAM_PHASE.CANCELLED)).toBe(true);
-    expect(canAcquireStreamReservation(STREAM_PHASE.FAILED)).toBe(true);
   });
 });
 

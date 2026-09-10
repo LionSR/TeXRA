@@ -35,29 +35,6 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-export async function handleCleanSingle(
-  inputFile: string,
-  agent: string,
-  model: string,
-): Promise<void> {
-  const result = await runCleanSingle(model, inputFile, agent);
-  showCleanResult(result, inputFile);
-}
-
-export async function handleCleanMultiple(
-  inputFile: string,
-  agent: string,
-  model: string,
-  inputFiles: string[] = [],
-): Promise<void> {
-  // `runCleanMultiple` with an empty batch already reduces to the single-file
-  // path, and it logs the batch itself, so no fallback or extra log here.
-  const result = await runCleanMultiple(model, inputFile, agent, inputFiles);
-  showCleanResult(result, inputFile);
-  // No missing-outputs clear: these invocations have no stream context, and
-  // configuration-based fan-out to look-alike tabs was removed (#9590 A3).
-}
-
 export async function handleClean(config: CleanConfig): Promise<void> {
   log.debug(`Clean command called with config: ${JSON.stringify(config)}`);
   await runFileOp(config, {

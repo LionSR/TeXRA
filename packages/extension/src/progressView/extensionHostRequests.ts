@@ -18,6 +18,13 @@ import {
 } from '@agent/core/state/executionRequests';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import {
+  getCurrentFile,
+  selectContextFiles,
+  selectInputFiles,
+  selectMediaFiles,
+  selectOutputFiles,
+} from '@commands/files/fileSelectionCommands';
 import { setActiveSidebarView } from '@common/webview';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
@@ -45,10 +52,6 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import {
-  FILE_SELECTION_COMMAND_IDS,
-  MULTIPLE_FILE_COMMANDS,
-} from '@frontend/files/fileSelectionRegistry';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
@@ -58,6 +61,7 @@ import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
   isMultipleDocumentFileType,
+  type MultipleDocumentFileType,
   type StreamTabId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -88,6 +92,17 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
 const log = createLog(CHANNEL);
+
+/** The native picker of each multi-file launcher list. */
+const MULTIPLE_FILE_PICKERS: Record<
+  MultipleDocumentFileType,
+  () => Promise<string[] | null>
+> = {
+  input: selectInputFiles,
+  context: selectContextFiles,
+  media: selectMediaFiles,
+  output: selectOutputFiles,
+};
 
 export interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
@@ -467,9 +482,7 @@ export function createExtensionHostRequests(
   async function useCurrentFile(
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ): Promise<HostOutcome> {
-    const currentOpenFile = await runCommand<string>(
-      FILE_SELECTION_COMMAND_IDS.getCurrentFile,
-    );
+    const currentOpenFile = await getCurrentFile();
     if (!currentOpenFile) {
       throw new Rejected({
         reason:
@@ -512,19 +525,17 @@ export function createExtensionHostRequests(
     request: Extract<HostRequest, { kind: 'pickFiles' }>,
   ): Promise<HostOutcome> {
     const { fileType } = request;
-    const commands = isMultipleDocumentFileType(fileType)
-      ? MULTIPLE_FILE_COMMANDS.get(fileType)
+    const pick = isMultipleDocumentFileType(fileType)
+      ? MULTIPLE_FILE_PICKERS[fileType]
       : undefined;
-    if (!commands) {
+    if (!pick) {
       throw new Rejected({
         reason: `A picker for ${fileType} files is not available; choose one from the list.`,
       });
     }
-    let selected: string[] | undefined;
+    let selected: string[] | null;
     try {
-      selected = await vscode.commands.executeCommand<string[]>(
-        commands.selectCommand,
-      );
+      selected = await pick();
     } catch (error) {
       await showLoggedErrorMessage(
         CHANNEL,

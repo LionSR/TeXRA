@@ -17,15 +17,6 @@ import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
   'Sign in or out, set subscription preferences, and how the rest is paid for.';
 
-export type CliModelAccessRoute =
-  | 'chatgpt'
-  | 'grok'
-  | 'kimi-code'
-  | 'glm-code'
-  // LEGACY: renders historical usage recorded on the retired relay route
-  // (removed 2026-08; see .agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md).
-  | 'personal';
-
 type CliSubscriptionPreferenceState = 'off' | 'on';
 type CliSubscriptionProvider =
   'chatgpt' | 'grok' | CodingPlanSubscription['cliProvider'];
@@ -118,10 +109,11 @@ export function parseCliModelAccessSelection(
 }
 
 /**
- * Label a route for the CLI. Both inputs speak `UsageRoute`, so this is a
- * total map with one precedence rule and no per-provider knowledge of its own:
- * a completed request's route cannot change, so it always wins over the
- * prospective route `activeSubscriptionUsageRoute` reports for the next one.
+ * Pick the route the CLI reports for a model. Both inputs speak `UsageRoute`,
+ * so this owns one precedence rule and no per-provider knowledge: a completed
+ * request's route cannot change, so it always wins over the prospective route
+ * `activeSubscriptionUsageRoute` reports for the next one. No route at all
+ * means nothing has been paid for yet, which every label renders as own keys.
  */
 export function resolveCliModelAccessRoute({
   usageRoute,
@@ -131,55 +123,45 @@ export function resolveCliModelAccessRoute({
   readonly usageRoute?: UsageRoute;
   /** Route that would serve the next request (`activeSubscriptionUsageRoute`). */
   readonly prospectiveRoute?: UsageRoute;
-}): CliModelAccessRoute {
-  const route = usageRoute ?? prospectiveRoute;
-  switch (route) {
-    case undefined:
-      return 'personal';
-    case 'chatgpt-subscription':
-      return 'chatgpt';
-    case 'xai-subscription':
-      return 'grok';
-    case 'kimi-code-subscription':
-      return 'kimi-code';
-    case 'glm-coding-plan-subscription':
-      return 'glm-code';
-    case 'api-key':
-      return 'personal';
-    default:
-      return route satisfies never;
-  }
+}): UsageRoute | undefined {
+  return usageRoute ?? prospectiveRoute;
 }
 
 /** Status-bar form of the access route. Width-critical, so every arm is a
  *  short display phrase; the enum value itself never reaches the screen. */
-export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
+export function shortCliModelAccessRoute(
+  route: UsageRoute | undefined,
+): string {
   switch (route) {
-    case 'chatgpt':
-    case 'grok':
-    case 'kimi-code':
-    case 'glm-code':
+    case 'chatgpt-subscription':
+    case 'xai-subscription':
+    case 'kimi-code-subscription':
+    case 'glm-coding-plan-subscription':
       // The bar names how the call is paid for, not which provider; the /api
       // form and /status name the subscription itself.
       return 'subscription';
-    case 'personal':
+    case undefined:
+    case 'api-key':
       return OWN_API_KEYS.compactLabel;
     default:
       return route satisfies never;
   }
 }
 
-export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
+export function formatCliModelAccessRoute(
+  route: UsageRoute | undefined,
+): string {
   switch (route) {
-    case 'chatgpt':
+    case 'chatgpt-subscription':
       return CHATGPT_AUTH.subscriptionLabel;
-    case 'grok':
+    case 'xai-subscription':
       return GROK_AUTH.subscriptionLabel;
-    case 'kimi-code':
+    case 'kimi-code-subscription':
       return 'Kimi Code subscription';
-    case 'glm-code':
+    case 'glm-coding-plan-subscription':
       return 'GLM Coding Plan';
-    case 'personal':
+    case undefined:
+    case 'api-key':
       return OWN_API_KEYS.label;
     default:
       return route satisfies never;
@@ -188,16 +170,13 @@ export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
 
 /** Sentence-fragment form derived from the canonical access label. */
 export function formatCliModelAccessRouteInline(
-  route: CliModelAccessRoute,
+  route: UsageRoute | undefined,
 ): string {
   const label = formatCliModelAccessRoute(route);
   // Proper-noun labels keep their casing; plain labels lowercase like prose.
-  return route === 'chatgpt' ||
-    route === 'grok' ||
-    route === 'kimi-code' ||
-    route === 'glm-code'
-    ? label
-    : label.charAt(0).toLowerCase() + label.slice(1);
+  return route === undefined || route === 'api-key'
+    ? label.charAt(0).toLowerCase() + label.slice(1)
+    : label;
 }
 
 function formatCliSubscriptionPreference(
@@ -338,7 +317,7 @@ function formatCliModelAccessSummary(status: CliModelAccessStatus): string {
     const label = plan.displayName.split(' ')[0];
     return `${label} ${cliCodingPlanStatus(status, plan).preferred ? 'On' : 'Off'}`;
   });
-  return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('personal')}`;
+  return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('api-key')}`;
 }
 
 /** Launcher-row summary: TeXRA account ahead of the access summary. */
