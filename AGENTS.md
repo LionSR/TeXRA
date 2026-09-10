@@ -119,8 +119,59 @@ When updating CHANGELOG.md:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.
    - Lint TypeScript sources with `npm run lint`.
-   - Run the Vitest suite with `npm test`.
+   - Run the affected Vitest suites with `npm run test:changed`, and the
+     `pure` tier with `npm run test:pure` before pushing (see "Scoping the
+     test run" below). Run the full suite with `npm test` before opening a
+     pull request.
 4. Commit only when `npm run lint` completes without errors.
+
+### Test tiers
+
+`vitest.config.mjs` runs suites in two projects, and a suite's cost is decided
+by what it reaches, not by how many tests it has:
+
+- **`pure`** — suites that reach no host: no setup file, no fake platform, no
+  DOM, one module registry shared between files. Roughly 8x cheaper per suite
+  than `kernel`, and deterministic, because nothing in it installs or replaces
+  anything.
+- **`kernel`** — everything that needs a host: the fake platform installed per
+  file, each file in its own module registry. The DOM suites (`progressView`,
+  `settings`, `frontend`, `desktop`, `webview`) live here too; a Lit element
+  class is bound to the window that first loaded it.
+
+Membership is computed from the suite's source, not declared. A suite under a
+`pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
+repository module, imports `@platform/*` or a support module that installs a
+host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What a
+source scan cannot see — a module under test that reads `platform()` or the
+workspace roots itself, a pair of suites sharing terminal state — is found by
+running the suite alone with no host and kept by name in
+`config/ratchets/pure-tier-kernel-suites.json`, shrink-only. So the practical
+rule for a new suite: test the module directly, provide dependencies as values
+or layers, and do not mock repository modules. A `vi.mock` is what moves your
+suite to the slow tier; removing it moves it back. The tier is not a target to
+opt into — write the suite the durable way and it lands there.
+
+### Scoping the test run
+
+`npm test` runs every suite under `src/test-kernel/`. It is the gate CI enforces
+and the one to run before opening a pull request, but it takes minutes, which is
+too slow to sit in front of each local commit — and a check that slow is a check
+that gets skipped. The loop is stock Vitest, no scripts:
+
+- `npm run test:watch` while editing — Vitest keeps the process warm and
+  reruns the suites whose module graph reaches what you saved.
+- `npm run test:changed` before a commit — `vitest --changed`: git's
+  uncommitted files, then the same module-graph selection. Pass a ref to
+  widen it (`npm run test:changed -- origin/main` before pushing a branch).
+- `npm run test:pure` before a push — the whole `pure` tier in ~30s. It
+  includes the architecture ratchets, which read the repository from disk and
+  so are never selected by a module graph; this is how they get run locally.
+
+Selection is only as good as the module graph: a changed YAML resource or
+image selects nothing, and a change to the harness itself (`vitest.config.mjs`,
+`src/test-kernel/support/`) is not covered by the mapping it invalidates. Those
+are what `npm test` is for.
 
 ### Build system: esbuild + Vite
 

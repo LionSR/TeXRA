@@ -14,11 +14,21 @@ covers what you can't learn by reading the tree.
 corepack pnpm install
 npm run compile:fast      # build (esbuild + Vite); watch:fast, package:fast
 npm run typecheck         # builds do NOT type check — see below
-npm test                  # Vitest
+npm test                  # Vitest — the full gate, minutes long
+npm run test:changed      # vitest --changed: suites reachable from uncommitted edits
+npm run test:pure         # the shared-registry tier (~30s), architecture ratchets included
+npm run test:watch        # the dev loop: reruns what a save reaches
 npm run lint
 npm run format
 npm run check:dead-code-ratchet
 ```
+
+**The full suite is not the commit-loop gate.** It is minutes of wall time, so
+in front of every local commit it gets skipped. The loop is stock Vitest:
+`test:watch` while editing, `test:changed` before a commit, `test:pure` before
+a push — 30s, and it covers the architecture ratchets, which no module graph
+ties to the code they scan. `npm test` before opening a PR. Tiers and why a
+suite lands in one: AGENTS.md "Test tiers".
 
 **Builds don't type check.** esbuild and Vite only strip TypeScript types; they
 treat it as "JavaScript with annotations to remove." Run `npm run typecheck`, or
@@ -50,7 +60,10 @@ Things the tree won't tell you:
   `@adapter-until` marker, since the owner ruled there are no temporary
   adapters, and admits a new `Effect.run*` file only under
   `packages/{extension,desktop,cli,agent}/src/` or `src/tools/**/*Tool.ts`,
-  R1's three boundary kinds). The invariant to hold is "never widen a
+  R1's three boundary kinds), and `pure-tier-kernel-suites` (suites a source
+  scan classes as host-free but which read the host through the module under
+  test, so they run in the isolated `kernel` Vitest project — see AGENTS.md
+  "Test tiers"). The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
