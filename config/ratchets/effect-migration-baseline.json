@@ -4,10 +4,10 @@
     "platform()": {
       "packages/cli/src/chat/tui/state/subscribeApprovals.ts": 2,
       "packages/cli/src/runtime/apiStatus.ts": 1,
+      "packages/cli/src/runtime/executeCli.ts": 1,
       "packages/cli/src/runtime/githubToken.ts": 3,
       "packages/cli/src/runtime/modelAccessSelection.ts": 3,
       "packages/cli/src/runtime/providerApiKey.ts": 2,
-      "packages/cli/src/runtime/runExecution.ts": 1,
       "packages/cli/src/runtime/supabaseAuth.ts": 1,
       "packages/desktop/src/main/desktopWorkspaceIpc.ts": 6,
       "packages/extension/src/commands/setup/setupAssistantCommand.ts": 4,
@@ -64,7 +64,7 @@
     "new AbortController()": {
       "packages/cli/src/chat/tui/commands/handlers/slashContext.ts": 1,
       "packages/cli/src/chat/tui/state/approvalQueue.ts": 1,
-      "packages/cli/src/runtime/runExecution.ts": 1,
+      "packages/cli/src/runtime/executeCli.ts": 1,
       "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts": 1,
       "src/agent/runtime/AgentLaunchContext.ts": 1,
       "src/agent/runtime/childRunLoop.ts": 1,
@@ -81,8 +81,8 @@
       "packages/cli/src/chat/tui/state/subscribeApprovals.ts": 1,
       "packages/extension/src/extension.ts": 1,
       "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts": 1,
-      "src/agent/runtime/streamApprovalQueue.ts": 1,
-      "src/agent/storage/executionLease.ts": 1,
+      "src/agent/runtime/runApprovalQueue.ts": 1,
+      "src/agent/storage/runLease.ts": 1,
       "src/agent/workflowScript/persistence.ts": 1,
       "src/agent/workflowScript/runWorkflowScript.ts": 1,
       "src/utils/core/perKeyQueue.ts": 1
@@ -102,7 +102,7 @@
       "packages/cli/src/chat/chatSessionController.ts": 1,
       "src/agent/followUp/FollowUpQueue.ts": 1,
       "src/agent/runtime/ModelRetryGate.ts": 1,
-      "src/agent/storage/executionLease.ts": 1
+      "src/agent/storage/runLease.ts": 1
     },
     "import:async-mutex": {
       "src/utils/core/keyedMutex.ts": 1
@@ -152,10 +152,10 @@
       "src/agent/runtime/SessionResumeRetrieval.ts": 1,
       "src/agent/runtime/persistedCompileRejection.ts": 1,
       "src/agent/runtime/resumeRun.ts": 1,
-      "src/agent/storage/executionLifecycle.ts": 1,
       "src/agent/storage/resumability.ts": 1,
-      "src/tools/executions/executionKvFiles.ts": 1,
-      "src/tools/executions/executionLiveness.ts": 1
+      "src/agent/storage/runLifecycle.ts": 1,
+      "src/tools/executions/runKvFiles.ts": 1,
+      "src/tools/executions/runLiveness.ts": 1
     },
     "dep:@agent/modelHandlers": {
       "src/agent/implementations/flows/tooluse/toolUseRound/ToolUseProcessNode.ts": 1,
