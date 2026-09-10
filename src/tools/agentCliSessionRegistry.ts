@@ -1,25 +1,25 @@
 import { Data, Deferred, Effect, Option, Queue } from 'effect';
 
-import { getExecutionStore } from '@agent/storage';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { getRunStore } from '@agent/storage';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunRegistry } from '@agent/runtime/executionRegistry';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 
 const logger = createLog('AgentCliSessionRegistry');
 
 interface AgentCliSessionRegistryDependencies {
   persistSessionId(
-    executionId: ExecutionId,
+    executionId: RunId,
     key: string,
     sessionId: string,
   ): Promise<void>;
-  reportPersistenceFailure(executionId: ExecutionId, error: unknown): void;
+  reportPersistenceFailure(executionId: RunId, error: unknown): void;
 }
 
 const DEFAULT_DEPENDENCIES: AgentCliSessionRegistryDependencies = {
   persistSessionId: (executionId, key, sessionId) =>
-    getExecutionStore(executionId).write(key, sessionId),
+    getRunStore(executionId).write(key, sessionId),
   reportPersistenceFailure: (executionId, error) => {
     logger.debug(`Failed to persist CLI session mapping for ${executionId}`, {
       data: error,
@@ -43,7 +43,7 @@ const persistSessionMapping = Effect.fn(
   'AgentCliSessionRegistry.persistSessionMapping',
 )(function* (
   dependencies: AgentCliSessionRegistryDependencies,
-  executionId: ExecutionId,
+  executionId: RunId,
   key: string,
   sessionId: string,
 ) {
@@ -61,21 +61,21 @@ const persistSessionMapping = Effect.fn(
 
 /** One queued session-mapping persistence write. */
 interface SessionMappingWrite {
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly sessionId: string;
 }
 
 /**
  * What the registry tracks about one live agent-CLI session: the child run's
  * identity and its follow-up address. Live handles are resolved on demand
- * through the session's own {@link ExecutionRegistry}, injected once at
+ * through the session's own {@link RunRegistry}, injected once at
  * construction — entries carry no registry pointer of their own, so an entry
  * can never point across sessions. Provider specifics (codex thread, claude
  * model/permission mode/…) stay with the provider's own loop closure.
  */
 export interface AgentCliSessionEntry {
   childStreamId: StreamTabId;
-  executionId: ExecutionId;
+  executionId: RunId;
 }
 
 type AgentCliSessionState =
@@ -96,7 +96,7 @@ function settleReservation(
 
 export class AgentCliSessionRegistry {
   private readonly sessions = new Map<string, AgentCliSessionState>();
-  private readonly inFlight = new Map<ExecutionId, AgentCliSessionEntry>();
+  private readonly inFlight = new Map<RunId, AgentCliSessionEntry>();
   /**
    * The write queue a live drain takes from. Created by the first
    * {@link persistenceDrain}; absent before any drain starts, in which case
@@ -107,7 +107,7 @@ export class AgentCliSessionRegistry {
 
   constructor(
     private readonly persistedSessionKey: string,
-    private readonly executions: ExecutionRegistry,
+    private readonly executions: RunRegistry,
     private readonly dependencies: AgentCliSessionRegistryDependencies = DEFAULT_DEPENDENCIES,
   ) {}
 
@@ -214,9 +214,7 @@ export class AgentCliSessionRegistry {
    * checks read the live handle rather than a stored pointer, so a detached
    * or re-parented child answers with its current state.
    */
-  getHandle(
-    entry: AgentCliSessionEntry | undefined,
-  ): AgentExecutionHandle | undefined {
+  getHandle(entry: AgentCliSessionEntry | undefined): RunHandle | undefined {
     return entry && this.executions.getHandle(entry.executionId);
   }
 
@@ -239,7 +237,7 @@ export class AgentCliSessionRegistry {
   }
 
   /** Release every alias and in-flight handle owned by one child execution. */
-  releaseByExecutionId(executionId: ExecutionId): void {
+  releaseByExecutionId(executionId: RunId): void {
     this.inFlight.delete(executionId);
     for (const [sessionId, state] of this.sessions) {
       if (state.kind === 'active' && state.entry.executionId === executionId) {
@@ -254,7 +252,7 @@ export class AgentCliSessionRegistry {
    * to one session's own agent-CLI children.
    */
   interruptAll(): void {
-    const interrupted = new Set<ExecutionId>();
+    const interrupted = new Set<RunId>();
     const interrupt = (entry: AgentCliSessionEntry): void => {
       if (interrupted.has(entry.executionId)) return;
       const handle = this.executions.getAgentHandleByStream(

@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { platform } from '@platform/platform';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
 
-const EXECUTION_ID = 'generated-history-test' as ExecutionId;
+const EXECUTION_ID = 'generated-history-test' as RunId;
 const STORAGE_PATH = path.join(path.sep, 'storage');
 const RUN_PATH = path.join(STORAGE_PATH, 'executions', EXECUTION_ID);
 

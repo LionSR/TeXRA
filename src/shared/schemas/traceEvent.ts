@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { ActiveSkillsSnapshotSchema } from './activeSkills';
 import { ContextStateDataSchema } from './contextManagement';
-import { ExecutionIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { LogLevelSchema } from './log';
 import { RunOutcomeSchema } from './stream';
 import { AgentCategorySchema } from './agent';
@@ -95,7 +95,7 @@ export const TranscriptEventSchemas = {
     skills: ActiveSkillsSnapshotSchema.shape.skills.readonly(),
   }),
   usage: trace('usage', {
-    storageKey: ExecutionIdSchema,
+    storageKey: RunIdSchema,
     usage: ExtendedTokenUsageStatsSchema,
     recordTranscript: z.boolean().optional(),
   }),

@@ -12,7 +12,7 @@ import {
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { RunSnapshotStore } from '@transcript/StreamSnapshotStore';
 
 const STREAM = 'chat#ab12cd';
 const EXECUTION = 'ab12cd';
@@ -44,7 +44,7 @@ describe('StreamSnapshotStore event fold', () => {
     () =>
       Effect.gen(function* () {
         const database = yield* Database;
-        const store = new StreamSnapshotStore(database);
+        const store = new RunSnapshotStore(database);
         const location = {
           kind: 'workspace' as const,
           absolutePath: '/paper/main.tex',
@@ -142,7 +142,7 @@ describe('StreamSnapshotStore event fold', () => {
     () =>
       Effect.gen(function* () {
         const database = yield* Database;
-        const store = new StreamSnapshotStore(database);
+        const store = new RunSnapshotStore(database);
         const events = yield* database.appendAll([
           start,
           usage,
@@ -177,7 +177,7 @@ describe('StreamSnapshotStore event fold', () => {
         yield* database.appendAll([start]);
         const reading = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
-        const store = new StreamSnapshotStore({
+        const store = new RunSnapshotStore({
           readListing: database.readListing,
           readAggregate: (id, seq) =>
             Effect.gen(function* () {
@@ -207,7 +207,7 @@ describe('StreamSnapshotStore event fold', () => {
       Effect.gen(function* () {
         const database = yield* Database;
         yield* database.appendAll([start]);
-        const store = new StreamSnapshotStore(database);
+        const store = new RunSnapshotStore(database);
         const apply = store.attachSessionEvents();
         for (const event of yield* database.appendAll([usage]))
           yield* apply(event);

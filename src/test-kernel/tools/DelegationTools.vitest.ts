@@ -36,7 +36,7 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 }));
 
 // Local imports
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import { FileType, type FileStat } from '@platform/interfaces';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
@@ -161,7 +161,7 @@ describe('DelegateAgentTool resume ownership', () => {
   const parentStreamId = 'parent-stream' as StreamTabId;
   const childStreamId = 'child-stream' as StreamTabId;
 
-  function makeHandle(): AgentExecutionHandle {
+  function makeHandle(): RunHandle {
     return testExecutionHandle({
       executionId,
       parentStreamId,

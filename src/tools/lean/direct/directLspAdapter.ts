@@ -22,13 +22,13 @@
 import { Cause, Context, Duration, Effect, Exit, Layer, Scope } from 'effect';
 
 import {
-  getRunContextExecutionId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import { LeanAdapterStopped, LeanServerPool } from './leanServerPool';
 import {
@@ -212,6 +212,6 @@ const foldStopped = <A, E>(
   );
 
 /** The agent run the current tool call executes for, when it runs inside one. */
-function currentRunId(): ExecutionId | undefined {
-  return getRunContextExecutionId(tryUseRunContext());
+function currentRunId(): RunId | undefined {
+  return getRunContextRunId(tryUseRunContext());
 }

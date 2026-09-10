@@ -57,7 +57,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
+  type RunId,
   type SessionCloseReport,
   type StreamTabId,
   type TranscriptSubscription,
@@ -65,12 +65,12 @@ import {
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
-  descendantStreams,
+  descendantRuns,
   type SessionView as RuntimeSessionView,
   type StreamView as RuntimeStreamView,
   type TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -118,7 +118,7 @@ export interface StartInput {
 export interface Run {
   /** The run's execution id, minted here and handed to the launcher, so it
    *  identifies the run before its first model call. */
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly streamId: StreamTabId;
   /**
    * The run's own outcome first: on failure the fold's fate never replaces
@@ -323,7 +323,7 @@ function start(
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
     const config = yield* admitInput(input);
-    const executionId = generateExecutionId();
+    const executionId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     const admitted = yield* Deferred.make<StreamTabId, RunFailure>();
     let handle: RuntimeAgentRunHandle | undefined;
@@ -452,7 +452,7 @@ function start(
             view.pipe(
               Stream.tap((level) =>
                 interest(
-                  descendantStreams(level, streamId, { includeRoot: true }),
+                  descendantRuns(level, streamId, { includeRoot: true }),
                 ),
               ),
             ),

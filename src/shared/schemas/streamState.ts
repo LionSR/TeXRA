@@ -4,7 +4,7 @@ import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
-import { StreamPhaseSchema } from './stream';
+import { RunPhaseSchema } from './stream';
 
 // Active Child Info — one flat row shape. Every child owns a stream tab
 // (`childStreamId` always present) and carries its parsed `identity`
@@ -22,7 +22,7 @@ export const ActiveChildInfoSchema = z.object({
    * Current execution phase. Takes `StreamPhase` only: no artifact carries a
    * roster (see the note above), so there is nothing to normalize here.
    */
-  status: StreamPhaseSchema.optional(),
+  status: RunPhaseSchema.optional(),
   /**
    * Epoch milliseconds when the current child handle generation was created.
    * Kept on the wire for live and retained roster rows; live active-phase
@@ -88,12 +88,12 @@ export type PhaseStage = z.infer<typeof PhaseStageSchema>;
  * independently-optional ones every reader has to fall back between. The arms
  * extend the payload schemas above, so projecting to either is a `kind` strip.
  */
-export const StreamStageSchema = z.discriminatedUnion('kind', [
+export const RunStageSchema = z.discriminatedUnion('kind', [
   RoundStageSchema.extend({ kind: z.literal('round') }),
   PhaseStageSchema.extend({ kind: z.literal('phase') }),
 ]);
 
-export type StreamStage = z.infer<typeof StreamStageSchema>;
+export type RunStage = z.infer<typeof RunStageSchema>;
 
 // Conversation Progress (tool-call counters updated during execution)
 

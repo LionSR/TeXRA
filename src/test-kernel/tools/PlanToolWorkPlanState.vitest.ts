@@ -18,7 +18,7 @@ import { withToolEnvironment } from '@test/support/toolEnvironment';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore } from '@tools/goal';
-import { proposalApprovals, releaseStreamResources } from '@tools/approval';
+import { proposalApprovals, releaseRunResources } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 
 // Local file imports
@@ -147,7 +147,7 @@ describe('PlanTool — update (plan approval)', () => {
         summary: 'Plan approved: proceed with implementation',
       });
     } finally {
-      releaseStreamResources(streamId, session);
+      releaseRunResources(streamId, session);
     }
   });
 
@@ -244,7 +244,7 @@ describe('PlanTool — update (plan approval)', () => {
       ]);
     } finally {
       await GoalStore.forget(streamId);
-      releaseStreamResources(streamId, session);
+      releaseRunResources(streamId, session);
     }
   });
 
@@ -289,7 +289,7 @@ describe('PlanTool — update (plan approval)', () => {
       ]);
     } finally {
       await GoalStore.forget(streamId);
-      releaseStreamResources(streamId, session);
+      releaseRunResources(streamId, session);
     }
   });
 
@@ -326,7 +326,7 @@ describe('PlanTool — update (plan approval)', () => {
       );
     } finally {
       await GoalStore.forget(streamId);
-      releaseStreamResources(streamId, session);
+      releaseRunResources(streamId, session);
     }
   });
 

@@ -26,12 +26,12 @@ import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { GoalStateSchema } from './goal';
 import {
-  ExecutionRunRecordSchema,
-  ExecutionWorkspaceFilesSchema,
+  RunLaunchRecordSchema,
+  RunWorkspaceFilesSchema,
   ResultMetaSchema,
 } from './executionRecords';
-import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { WorkflowRunSnapshotSchema } from './workflowExecutionSnapshot';
+import { RunIdSchema, StreamTabIdSchema } from './identifiers';
 import {
   InquiryThreadRecordSchema,
   InquiryThreadUpdatedEventSchema,
@@ -40,12 +40,12 @@ import { PlanSchema } from './plan';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RunIdentitySchema } from './runIdentity';
 import {
-  StreamPhaseSchema,
-  StreamSubstateSchema,
+  RunPhaseSchema,
+  RunSubstateSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
 } from './stream';
-import { StreamLogEntrySchema } from './streamLogEntry';
+import { RunLogEntrySchema } from './streamLogEntry';
 import {
   ApprovalBypassesSchema,
   ConversationProgressSchema,
@@ -215,7 +215,7 @@ function durable<T extends string, S extends z.ZodRawShape>(
  * (decision 9): a relaunch finds its journal by it, never by the run's ids.
  */
 const RunStartEventSchema = durable('run.start', {
-  executionId: ExecutionIdSchema,
+  executionId: RunIdSchema,
   identity: RunIdentitySchema,
   userFollowUpSupport: UserFollowUpSupportSchema,
   /** The `StreamView` discriminant: `toolUse` for an agent in tool-use mode
@@ -228,7 +228,7 @@ const RunStartEventSchema = durable('run.start', {
   /** The declared parent's creation commit, assigned by the database. */
   parentStartCommit: z.int().positive().optional(),
   /** Parent identity captured with its creation coordinate, surviving collection. */
-  parentExecutionId: ExecutionIdSchema.optional(),
+  parentExecutionId: RunIdSchema.optional(),
   /**
    * Launched in the background whoever is watching (a delegated child); the
    * launch fact half of the old `suppressViewSwitch`, which the frozen NDJSON
@@ -244,7 +244,7 @@ const RunStartEventSchema = durable('run.start', {
 
 /** C9 cleanup targets, derived from owned execution edges by the database. */
 const StreamRemovedEventSchema = durable('stream.removed', {
-  executionIds: z.array(ExecutionIdSchema),
+  executionIds: z.array(RunIdSchema),
 });
 
 const RunStartDraftSchema = RunStartEventSchema.omit({
@@ -277,7 +277,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     background: z.boolean(),
   }),
   durable('run.config', {
-    executionId: ExecutionIdSchema,
+    executionId: RunIdSchema,
     /** The canonical configuration, validated before it becomes durable. */
     config: AgentConfigFieldsSchema,
   }),
@@ -289,12 +289,12 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     ResultEventSchema.unwrap().omit({ type: true, streamId: true }).shape,
   ),
   durable('status', {
-    phase: StreamPhaseSchema,
-    previousPhase: StreamPhaseSchema.nullish(),
+    phase: RunPhaseSchema,
+    previousPhase: RunPhaseSchema.nullish(),
     /** `STREAM_TRANSITION_CAUSE` (`@shared/streams/streamStatus`); diagnostic,
      *  not a fold input. */
     cause: z.string(),
-    substate: StreamSubstateSchema.nullish(),
+    substate: RunSubstateSchema.nullish(),
     runStartedAt: z.int().positive().nullish(),
   }),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
@@ -338,7 +338,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * (decision 5). Subject to the residency rule: folded for subscribed
    * aggregates only (PRD 5.2).
    */
-  durable('transcript.entry', { entry: StreamLogEntrySchema }),
+  durable('transcript.entry', { entry: RunLogEntrySchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
     schema.extend({
       /** Stamped at publication (`SessionHandle.publish`), so a draft does
@@ -353,23 +353,19 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   ),
 ]);
 const ExecutionEventDraftSchema = z.discriminatedUnion('type', [
-  durable(
-    'execution.config',
-    { record: ExecutionRunRecordSchema },
-    'execution',
-  ),
+  durable('execution.config', { record: RunLaunchRecordSchema }, 'execution'),
   durable('execution.launchLabel', { label: z.string() }, 'execution'),
   durable('execution.description', { description: z.string() }, 'execution'),
   durable('execution.report', { report: z.string().nullable() }, 'execution'),
   durable('execution.result', { result: ResultMetaSchema }, 'execution'),
   durable(
     'execution.workspaceFiles',
-    { paths: ExecutionWorkspaceFilesSchema },
+    { paths: RunWorkspaceFilesSchema },
     'execution',
   ),
   durable(
     'execution.workflow',
-    { workflow: WorkflowExecutionSnapshotSchema },
+    { workflow: WorkflowRunSnapshotSchema },
     'execution',
   ),
 ]);

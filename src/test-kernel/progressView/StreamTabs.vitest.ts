@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
+import type { RunTabs } from '@progressView/frontend/components/StreamTabs';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import {
@@ -35,7 +35,7 @@ function settleChildRender(): Promise<unknown> {
 }
 
 interface Mounted {
-  readonly element: StreamTabs;
+  readonly element: RunTabs;
   readonly surfaceActions: SurfaceAction[];
   readonly requests: (RuntimeRequest | HostRequest)[];
 }
@@ -43,9 +43,9 @@ interface Mounted {
 async function mountTabs(
   view: SessionView,
   surface: Surface,
-  props: Partial<StreamTabs> = {},
+  props: Partial<RunTabs> = {},
 ): Promise<Mounted> {
-  const element = await mountComponent<StreamTabs>('stream-tabs', {
+  const element = await mountComponent<RunTabs>('stream-tabs', {
     view,
     surface,
     ...props,
@@ -62,7 +62,7 @@ async function mountTabs(
   return { element, surfaceActions, requests };
 }
 
-function rowOf(element: StreamTabs, streamId: string): HTMLElement {
+function rowOf(element: RunTabs, streamId: string): HTMLElement {
   const rows = [...(element.shadowRoot?.querySelectorAll('stream-tab') ?? [])];
   const row = rows.find(
     (candidate) =>

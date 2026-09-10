@@ -8,7 +8,7 @@ export function executionsAction(input: Record<string, unknown>): string {
   return action || EXECUTIONS_DEFAULT_ACTION;
 }
 
-export type ExecutionLabels = ReadonlyMap<string, string>;
+export type RunLabels = ReadonlyMap<string, string>;
 
 interface ExecutionPathTarget {
   id: string;
@@ -39,7 +39,7 @@ function executionTargetFromPath(
  */
 export function executionsSubagentSummary(
   input: unknown,
-  labels: ExecutionLabels,
+  labels: RunLabels,
 ): string | undefined {
   if (!isObject(input)) return undefined;
 

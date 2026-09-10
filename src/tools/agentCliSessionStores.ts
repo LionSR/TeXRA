@@ -1,6 +1,6 @@
 import {
   forEachLiveSession,
-  settleLiveSessionExecutions,
+  settleLiveSessionRuns,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
@@ -117,7 +117,7 @@ export function registerRuntimeShutdownHandlers(
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, hooks.flushArtifacts);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterFlushArtifacts);
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-    hooks.runSettlement(settleLiveSessionExecutions(signal)),
+    hooks.runSettlement(settleLiveSessionRuns(signal)),
   );
   registerHandlers(
     lifecycle,

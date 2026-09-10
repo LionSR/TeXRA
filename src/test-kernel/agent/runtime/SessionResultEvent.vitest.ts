@@ -7,12 +7,12 @@ import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -39,7 +39,7 @@ function setupResultCase(session?: ReturnType<typeof createTestSession>): {
   logger: TraceEmitter;
   results: ResultEvent[];
   ctx: AgentLaunchContext;
-  streamStatus: StreamStatusMachine;
+  streamStatus: RunStatusMachine;
 } {
   const logger = new TraceEmitter();
   const results: ResultEvent[] = [];
@@ -49,7 +49,7 @@ function setupResultCase(session?: ReturnType<typeof createTestSession>): {
 
   const n = counter++;
   const ctx = createTestLaunchContext({
-    executionId: `e${n.toString(16).padStart(5, '0')}` as ExecutionId,
+    executionId: `e${n.toString(16).padStart(5, '0')}` as RunId,
     streamId: `stream:result-${n}` as StreamTabId,
     logger,
     session,

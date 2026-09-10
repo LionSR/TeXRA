@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   LOG_LEVELS,
   STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
+  RunLogEntrySchema,
 } from '@shared/schemas';
 import {
   projectTranscriptRow,
@@ -72,7 +72,7 @@ function toolUseRow(
   data: unknown,
   executionLabels?: Map<string, string>,
 ): ToolRow {
-  const entry = StreamLogEntrySchema.parse({
+  const entry = RunLogEntrySchema.parse({
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     seqNo: 1,
     id,
@@ -491,7 +491,7 @@ const SUMMARY_CONTROL_CASES = [
     buildTemplate: () =>
       formatBannerContentTemplate(
         projectTranscriptRow(
-          StreamLogEntrySchema.parse({
+          RunLogEntrySchema.parse({
             type: STREAM_LOG_ENTRY_TYPES.LOG,
             seqNo: 1,
             id: 'thinking-1',
@@ -511,7 +511,7 @@ const SUMMARY_CONTROL_CASES = [
     buildTemplate: () =>
       formatErrorTemplate(
         projectTranscriptRow(
-          StreamLogEntrySchema.parse({
+          RunLogEntrySchema.parse({
             type: STREAM_LOG_ENTRY_TYPES.LOG,
             seqNo: 1,
             id: 'error-1',

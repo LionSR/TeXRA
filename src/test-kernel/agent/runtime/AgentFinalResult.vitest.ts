@@ -9,7 +9,7 @@ import type {
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type {
-  ExecutionId,
+  RunId,
   RunOutcome,
   StreamTabId,
   OutputFileSummary,
@@ -25,7 +25,7 @@ const OUTPUT: OutputFileSummary = {
   removed: 2,
 };
 
-const EXECUTION_ID = 'abcdefabcdef' as ExecutionId;
+const EXECUTION_ID = 'abcdefabcdef' as RunId;
 
 function workflowFlowResult(
   overrides: Partial<WorkflowFlowResult> = {},

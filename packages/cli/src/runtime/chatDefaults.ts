@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import {
-  isUserVisibleExecution,
-  listExecutions,
-  type ExecutionListingEntry,
+  isUserVisibleRun,
+  listRuns,
+  type RunListingEntry,
 } from '@agent/storage';
 import { isFileNotFoundError } from '@common/errors';
 import {
@@ -151,11 +151,11 @@ const loadHistoryDefaults = Effect.fn(function* (
   session: SessionHandle,
 ): Effect.fn.Return<PartialDefaults> {
   // An unreadable history listing means no history defaults.
-  const entries: ExecutionListingEntry[] = yield* listExecutions(session).pipe(
+  const entries: RunListingEntry[] = yield* listRuns(session).pipe(
     Effect.catch(() => Effect.succeed([])),
   );
   const candidates = toNewestFirstByTimestamp(
-    entries.filter(isUserVisibleExecution).filter(
+    entries.filter(isUserVisibleRun).filter(
       (entry) =>
         entry.record.agentCategory === AgentCategory.ToolUse &&
         // A multi-agent team run's root is an orchestrator agent, not a

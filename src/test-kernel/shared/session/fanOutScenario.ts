@@ -18,7 +18,7 @@ import {
   type LocalRuntimeState,
   type RunIdentity,
   type DisplaySessionEvent,
-  type StreamLogEntry,
+  type RunLogEntry,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
@@ -77,7 +77,7 @@ export const ROOT_POLICY: ApprovalPolicySnapshot = {
 };
 
 /** `Omit` over each member of a union, so a fixture keeps its arm. */
-type EntryFixture = StreamLogEntry extends infer E
+type EntryFixture = RunLogEntry extends infer E
   ? E extends unknown
     ? Omit<E, 'seqNo' | 'timestamp' | 'level'>
     : never
@@ -151,14 +151,10 @@ export class Log {
     };
   }
 
-  entry(
-    streamId: StreamTabId,
-    at: number,
-    entry: EntryFixture,
-  ): StreamLogEntry {
+  entry(streamId: StreamTabId, at: number, entry: EntryFixture): RunLogEntry {
     const seqNo = (this.entrySeq.get(streamId) ?? 0) + 1;
     this.entrySeq.set(streamId, seqNo);
-    const full: StreamLogEntry = {
+    const full: RunLogEntry = {
       ...entry,
       seqNo,
       timestamp: at,
@@ -214,7 +210,7 @@ export function foldAll(
  */
 export function buildScenario({ proposal = false } = {}) {
   const log = new Log();
-  const rootEntries: StreamLogEntry[] = [];
+  const rootEntries: RunLogEntry[] = [];
 
   log.emit(ROOT, T.root, {
     type: 'run.start',

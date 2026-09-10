@@ -27,12 +27,11 @@ vi.mock('@controllers/mainView/teamCatalogPorts', () => ({
   createTeamCatalogPorts: mocks.createTeamCatalogPorts,
 }));
 vi.mock('@controllers/mainView/MainViewExecutionController', () => ({
-  prepareMainViewExecutionRequest: mocks.prepareMainViewExecutionRequest,
-  prepareMainViewTeamExecutionRequest:
-    mocks.prepareMainViewTeamExecutionRequest,
+  prepareMainViewRunRequest: mocks.prepareMainViewExecutionRequest,
+  prepareMainViewTeamRunRequest: mocks.prepareMainViewTeamExecutionRequest,
 }));
 
-const { prepareMainViewExecutionLaunch } =
+const { prepareMainViewRunLaunch } =
   await import('@controllers/mainView/backend/MainViewExecutionLaunchController');
 
 function createHost() {
@@ -50,9 +49,7 @@ function teamMessage(teamId = 'physicist'): MainViewExecuteMessage {
 }
 
 function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
-  return Effect.runPromise(
-    prepareMainViewExecutionLaunch(teamMessage(teamId), host),
-  );
+  return Effect.runPromise(prepareMainViewRunLaunch(teamMessage(teamId), host));
 }
 
 describe('main-view execution launch controller', () => {
@@ -69,7 +66,7 @@ describe('main-view execution launch controller', () => {
     });
 
     await expect(
-      Effect.runPromise(prepareMainViewExecutionLaunch(message, createHost())),
+      Effect.runPromise(prepareMainViewRunLaunch(message, createHost())),
     ).resolves.toEqual(request);
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
   });
@@ -149,7 +146,7 @@ describe('main-view execution launch controller', () => {
     const message = teamMessage();
 
     await expect(
-      Effect.runPromise(prepareMainViewExecutionLaunch(message, host)),
+      Effect.runPromise(prepareMainViewRunLaunch(message, host)),
     ).resolves.toEqual(request);
     expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
     expect(mocks.prepareMainViewTeamExecutionRequest).toHaveBeenCalledWith(

@@ -26,19 +26,19 @@ vi.mock('@agent/runtime/ModelFactory', async (importActual) => ({
 import { registerInlineAgents } from '@agent/index';
 import {
   clearStoreCache,
-  getExecutionStore,
-  getExecutionRecords,
-  registerExecution,
+  getRunStore,
+  getRunRecords,
+  registerRun,
 } from '@agent/storage';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
-  assertOwnedExecutionLease,
-  ownsExecutionLease,
-  releaseOwnedExecutionLease,
+  assertOwnedRunLease,
+  ownsRunLease,
+  releaseOwnedRunLease,
 } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { RunHandle } from '@agent/runtime/ExecutionHandle';
 import { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -57,7 +57,7 @@ import type { Platform } from '@platform/platform';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -73,8 +73,8 @@ import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentExecution';
 import { readCompletedRunConversation } from '@transcript';
 
-const PARENT_EXECUTION_ID = 'a9531a9531a9' as ExecutionId;
-const OUTER_EXECUTION_ID = '0a95310a9531' as ExecutionId;
+const PARENT_EXECUTION_ID = 'a9531a9531a9' as RunId;
+const OUTER_EXECUTION_ID = '0a95310a9531' as RunId;
 const OUTER_STREAM_ID = 'outer_9531@gpt54#0a95310a9531' as StreamTabId;
 const PARENT_STREAM_ID = 'parent_9531#a9531a9531a9' as StreamTabId;
 const PARENT_AGENT = 'parent_9531';
@@ -85,7 +85,7 @@ const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse';
 
 const tempDirs = useTempDirs();
 let session: SessionHandle;
-let childId: ExecutionId | undefined;
+let childId: RunId | undefined;
 let resumedStreams: StreamTabId[];
 let completedResumes: StreamTabId[];
 
@@ -156,9 +156,7 @@ async function resumePersistedStream(
   recovery?: RecoveryContinuation,
 ): Promise<boolean> {
   resumedStreams.push(streamId);
-  const executionId = streamId.slice(
-    streamId.lastIndexOf('#') + 1,
-  ) as ExecutionId;
+  const executionId = streamId.slice(streamId.lastIndexOf('#') + 1) as RunId;
   const resumed = await effectRuntime().runPromise(
     resumeRun(executionId, {
       session,
@@ -193,19 +191,17 @@ function inlineAgent(name: string) {
 }
 
 async function waitForPersistedResult(
-  executionId: ExecutionId,
+  executionId: RunId,
   expectedText: string,
 ): Promise<void> {
   await vi.waitFor(
     async () => {
       const report = await Effect.runPromise(
-        getExecutionRecords(session, executionId).readReport(),
+        getRunRecords(session, executionId).readReport(),
       );
       expect(report).toContain(expectedText);
       await expect(
-        Effect.runPromise(
-          getExecutionRecords(session, executionId).readResultMeta(),
-        ),
+        Effect.runPromise(getRunRecords(session, executionId).readResultMeta()),
       ).resolves.toMatchObject({
         result: { response: expectedText },
       });
@@ -214,17 +210,17 @@ async function waitForPersistedResult(
   );
 }
 
-function childExecutionId(resultOutput: string | undefined): ExecutionId {
+function childExecutionId(resultOutput: string | undefined): RunId {
   const match = resultOutput?.match(/Execution ID: (\S+)/);
   if (!match?.[1])
     throw new Error('Delegation result omitted its execution ID.');
-  return match[1] as ExecutionId;
+  return match[1] as RunId;
 }
 
 function interruptActiveExecutions(session: SessionHandle): void {
   for (const executionId of session.executions.getActiveIds()) {
     const handle = session.executions.getHandle(executionId);
-    if (handle instanceof AgentExecutionHandle) handle.interrupt();
+    if (handle instanceof RunHandle) handle.interrupt();
   }
 }
 
@@ -241,8 +237,8 @@ type ParentOwnerRunner = <T>(operation: () => T) => T;
  * point while its final delivery wakes the parent, so the lease, not the
  * lane, is the durable boundary these assertions read against.
  */
-function waitForLeaseRelease(executionId: ExecutionId): Promise<void> {
-  return vi.waitFor(() => expect(ownsExecutionLease(executionId)).toBe(false));
+function waitForLeaseRelease(executionId: RunId): Promise<void> {
+  return vi.waitFor(() => expect(ownsRunLease(executionId)).toBe(false));
 }
 
 /**
@@ -252,7 +248,7 @@ function waitForLeaseRelease(executionId: ExecutionId): Promise<void> {
 async function queueSecondAssertionFollowUp(
   parentContext: ReturnType<typeof createRunContext>,
   runAsParentOwner: ParentOwnerRunner,
-  executionId: ExecutionId,
+  executionId: RunId,
   instruction = 'Now prove the second assertion.',
 ) {
   const resumed = await runAsParentOwner(() =>
@@ -281,7 +277,7 @@ async function launchWaitingChild(options: {
   readonly childTurns: Array<ScriptedTurn | 'hang'>;
   readonly childGate?: Promise<unknown>;
 }): Promise<{
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly parentContext: ReturnType<typeof createRunContext>;
   readonly runAsParentOwner: ParentOwnerRunner;
   readonly observedFollowUps: ObservedFollowUp[];
@@ -308,17 +304,11 @@ async function launchWaitingChild(options: {
     workingDirectory: process.cwd(),
   });
   await Effect.runPromise(
-    registerExecution(
-      session,
-      PARENT_EXECUTION_ID,
-      parentConfig,
-      PARENT_AGENT,
-      {
-        streamId: PARENT_STREAM_ID,
-        identity: { kind: 'agent', agent: PARENT_AGENT },
-        parentExecutionId: OUTER_EXECUTION_ID,
-      },
-    ),
+    registerRun(session, PARENT_EXECUTION_ID, parentConfig, PARENT_AGENT, {
+      streamId: PARENT_STREAM_ID,
+      identity: { kind: 'agent', agent: PARENT_AGENT },
+      parentExecutionId: OUTER_EXECUTION_ID,
+    }),
   );
   await expect(
     Effect.runPromise(
@@ -344,7 +334,7 @@ async function launchWaitingChild(options: {
     session,
   });
   const runAsParentOwner: ParentOwnerRunner = (operation) => {
-    assertOwnedExecutionLease(PARENT_EXECUTION_ID);
+    assertOwnedRunLease(PARENT_EXECUTION_ID);
     return operation();
   };
   const launch = await runAsParentOwner(() =>
@@ -400,7 +390,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   afterEach(async () => {
     interruptActiveExecutions(session);
     if (childId) await waitForLeaseRelease(childId);
-    await releaseOwnedExecutionLease(PARENT_EXECUTION_ID);
+    await releaseOwnedRunLease(PARENT_EXECUTION_ID);
     teardownDefaultSession();
     clearInlineAgents();
     clearStoreCache();
@@ -512,13 +502,13 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       async () => {
         await expect(
           Effect.runPromise(
-            getExecutionRecords(session, executionId).readResultMeta(),
+            getRunRecords(session, executionId).readResultMeta(),
           ),
         ).resolves.toMatchObject({
           result: { response: '' },
         });
         const report = await Effect.runPromise(
-          getExecutionRecords(session, executionId).readReport(),
+          getRunRecords(session, executionId).readReport(),
         );
         expect(report).not.toContain('Result A.');
         expect(report).not.toContain('<response>');
@@ -630,15 +620,13 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await waitForCompletedResumes(1);
 
     // The loop minted a stable logical identity for turn 1's delivery.
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const turnState = await store.readTurnState();
     expect(turnState?.activeTurn).toBeUndefined();
     const completed = turnState?.lastCompletedTurn;
     expect(completed?.token).toBeTruthy();
     await expect(
-      Effect.runPromise(
-        getExecutionRecords(session, executionId).readResultMeta(),
-      ),
+      Effect.runPromise(getRunRecords(session, executionId).readResultMeta()),
     ).resolves.toMatchObject({
       turnToken: completed!.token,
     });
@@ -646,7 +634,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // Replay the identical logical delivery 100 times through the real
     // admission path: no additional parent message, no additional wake.
     const report = await Effect.runPromise(
-      getExecutionRecords(session, executionId).readReport(),
+      getRunRecords(session, executionId).readReport(),
     );
     for (let replay = 0; replay < 100; replay++) {
       await Effect.runPromise(
@@ -717,7 +705,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await waitForPersistedResult(executionId, 'Result A.');
     await waitForCompletedResumes(1);
 
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const completed1 = (await store.readTurnState())?.lastCompletedTurn;
     expect(completed1?.token).toBeTruthy();
 
@@ -740,9 +728,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       { timeout: 10_000 },
     );
     await expect(
-      Effect.runPromise(
-        getExecutionRecords(session, executionId).readResultMeta(),
-      ),
+      Effect.runPromise(getRunRecords(session, executionId).readResultMeta()),
     ).resolves.toMatchObject({
       turnToken: completed1!.token,
       result: { response: 'Result A.' },
@@ -764,9 +750,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     expect(finalState?.lastCompletedTurn?.token).toBe(completed1!.token);
     expect(finalState?.activeTurn?.token).toBeTruthy();
     await expect(
-      Effect.runPromise(
-        getExecutionRecords(session, executionId).readResultMeta(),
-      ),
+      Effect.runPromise(getRunRecords(session, executionId).readResultMeta()),
     ).resolves.toMatchObject({
       turnToken: completed1!.token,
       result: { response: 'Result A.', outcome: RUN_OUTCOME.CANCELLED },

@@ -16,7 +16,7 @@ import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -59,10 +59,10 @@ vi.mock('@tools/delegation/subagentResults', async (importOriginal) => {
 
 vi.mock('@agent/storage', () => ({
   finalizeRun: mocks.finalizeRun,
-  getExecutionRecords: vi.fn(() => ({
+  getRunRecords: vi.fn(() => ({
     readConfig: mocks.readConfig,
   })),
-  getExecutionStore: vi.fn(() => ({
+  getRunStore: vi.fn(() => ({
     writeTurnState: mocks.writeTurnState,
   })),
 }));
@@ -73,8 +73,8 @@ vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  assertOwnedExecutionLease: vi.fn(),
-  validateOwnedExecutionLease: vi.fn(async () => {}),
+  assertOwnedRunLease: vi.fn(),
+  validateOwnedRunLease: vi.fn(async () => {}),
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -115,7 +115,7 @@ function fakePorts() {
 /** A tool-use turn result on the shared child stream, for launch/resume mocks. */
 function toolUseTurnResult(
   outcome: string,
-  executionId: ExecutionId,
+  executionId: RunId,
   extras: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
@@ -140,7 +140,7 @@ function mockLaunchPublishing(
   mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
     options.onRun?.(handle);
     afterRun?.();
-    return toolUseTurnResult(outcome, 'exec-1' as ExecutionId);
+    return toolUseTurnResult(outcome, 'exec-1' as RunId);
   });
 }
 
@@ -157,7 +157,7 @@ function baseParams(
         agentCategory,
       }),
     } as PreparedAgentDefinition,
-    executionId: 'exec-1' as ExecutionId,
+    executionId: 'exec-1' as RunId,
     agentName: 'review',
     parentStreamId: 'orchestrator-stream' as StreamTabId,
     session: parentSession,
@@ -585,7 +585,7 @@ describe('NativeSubagentStrategy', () => {
   it('stamps parent lineage onto both success and failure manifests', async () => {
     const params = {
       ...baseParams(),
-      parentExecutionId: 'parent-exec' as ExecutionId,
+      parentExecutionId: 'parent-exec' as RunId,
     };
     const strategy = createNativeSubagentStrategy(params);
 
@@ -638,7 +638,7 @@ describe('NativeSubagentStrategy', () => {
     const session = defaultSession();
     const childStreamId = 'native-follow-up-loop-child#fa110001' as StreamTabId;
     const parentStreamId = 'native-follow-up-loop-parent' as StreamTabId;
-    const executionId = 'fa110001' as ExecutionId;
+    const executionId = 'fa110001' as RunId;
     publishTestRunStart(session, childStreamId, executionId);
     await session.settlePublications();
     const interactions = { emit: vi.fn() } as never;
@@ -843,7 +843,7 @@ describe('NativeSubagentStrategy', () => {
     const childStreamId =
       'native-workflow-loop-child#native-workflow-loop-exec' as StreamTabId;
     const parentStreamId = 'native-workflow-loop-parent' as StreamTabId;
-    const executionId = 'native-workflow-loop-exec' as ExecutionId;
+    const executionId = 'native-workflow-loop-exec' as RunId;
     const interactions = { emit: vi.fn() } as never;
     const params = {
       ...baseParams(session, 'workflow'),

@@ -7,7 +7,7 @@
  * readiness gate: a restored session is usable the moment it is constructed,
  * and what a stream with no live flow context in this process is gets decided
  * by the fold's `readOnly` and `group` rules over the session's view, never
- * by a boot pass. It composes {@link ExecutionRegistry},
+ * by a boot pass. It composes {@link RunRegistry},
  * {@link SessionHostInteractions}, and the other session-scoped owners.
  *
  * A session is one per workspace storage root, built and held by the
@@ -50,9 +50,9 @@ import type {
 } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
-  ownsExecutionLease,
-  releaseOwnedExecutionLease,
-  validateOwnedExecutionLease,
+  ownsRunLease,
+  releaseOwnedRunLease,
+  validateOwnedRunLease,
 } from '@agent/storage/executionLease';
 import { finalizeRun } from '@agent/storage/executionLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -74,11 +74,11 @@ import {
   STREAM_PHASE,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
-  type ExecutionId,
+  type RunId,
   type SessionEvent,
   type SessionEventDraft,
   type StreamTabId,
-  type StreamPhase,
+  type RunPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
@@ -89,11 +89,8 @@ import {
   nonterminalWorkflowCall,
 } from '@shared/session/traceEntries';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-import type {
-  StreamLogStore,
-  StreamLogStoreMode,
-} from '@transcript/StreamLogStore';
-import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import type { RunLogStore, RunLogStoreMode } from '@transcript/StreamLogStore';
+import { RunSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { throwAggregated } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -101,8 +98,8 @@ import {
   runInSession,
   tryUseRunContext,
 } from './RunContext';
-import { ExecutionRegistry } from './executionRegistry';
-import { StreamStatusMachine } from './StreamStatusService';
+import { RunRegistry } from './executionRegistry';
+import { RunStatusMachine } from './StreamStatusService';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -139,7 +136,7 @@ export type SessionHandleInit = Partial<
   Pick<SessionHandle, 'responseTextProcessing' | 'roots'>
 > & {
   readonly interactions?: HostInteractions;
-  readonly transcriptMode?: StreamLogStoreMode;
+  readonly transcriptMode?: RunLogStoreMode;
 };
 
 export class SessionHandle {
@@ -165,7 +162,7 @@ export class SessionHandle {
    * subagent lineage. Hears every canonical `status` fact from
    * {@link publishStatus}, in publish order.
    */
-  readonly executions: ExecutionRegistry;
+  readonly executions: RunRegistry;
   /**
    * The session's event plane (PRD 7.1, contract C7): what a renderer reads
    * with `events.all(session.now())`. The reads only: publishing goes
@@ -197,9 +194,9 @@ export class SessionHandle {
    */
   readonly subscriptions: SessionGraph['subscriptions'];
   /** Session-scoped status plane. */
-  readonly status: StreamStatusMachine;
+  readonly status: RunStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
-  readonly transcripts: StreamLogStore;
+  readonly transcripts: RunLogStore;
   /**
    * The workspace this session works on: the four per-workspace host roots.
    * Runs and `runInSession` scopes resolve `StorageFS`/`WorkspaceFS` and the
@@ -210,7 +207,7 @@ export class SessionHandle {
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
   /** Session-owned per-stream sidecar store for runs launched in this session. */
-  readonly snapshots: StreamSnapshotStore;
+  readonly snapshots: RunSnapshotStore;
   /** The store's projection of the durable facts, called inside `publish`. */
   private readonly applySnapshotEvent: (
     event: SessionEvent,
@@ -250,7 +247,7 @@ export class SessionHandle {
     init: SessionHandleInit &
       Pick<SessionHandle, 'transcripts'> & {
         readonly roots: WorkspaceRoots;
-        readonly snapshots: StreamSnapshotStore;
+        readonly snapshots: RunSnapshotStore;
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
   ) {
@@ -267,7 +264,7 @@ export class SessionHandle {
     this.requests = graph.requests;
     this.inputs = graph.inputs;
     this.subscriptions = graph.subscriptions;
-    const status = new StreamStatusMachine(
+    const status = new RunStatusMachine(
       (event) => this.publishStatus(event),
       (streamId, detail) => this.setUnreadable(streamId, detail),
     );
@@ -279,7 +276,7 @@ export class SessionHandle {
     const approvals = createSessionApprovals(interactions, (streamId) =>
       this.publishApprovalPolicy(streamId),
     );
-    this.executions = new ExecutionRegistry({
+    this.executions = new RunRegistry({
       streamStatus: status,
       publish: (events) => this.publish(events),
       approvals,
@@ -391,7 +388,7 @@ export class SessionHandle {
    * This is the one exit choreography every run driver calls.
    */
   releaseExecutionLease(
-    executionId: ExecutionId,
+    executionId: RunId,
     afterArtifactsDrained: Effect.Effect<void, Error> = Effect.void,
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
@@ -400,7 +397,7 @@ export class SessionHandle {
           yield* Effect.tryPromise({
             try: () =>
               runInSession(this, async () => {
-                await validateOwnedExecutionLease(executionId);
+                await validateOwnedRunLease(executionId);
                 await this.flushArtifacts();
               }),
             catch: ensureError,
@@ -422,7 +419,7 @@ export class SessionHandle {
       const fileRelease = yield* Effect.exit(
         Effect.tryPromise({
           try: () =>
-            runInSession(this, () => releaseOwnedExecutionLease(executionId)),
+            runInSession(this, () => releaseOwnedRunLease(executionId)),
           catch: ensureError,
         }),
       );
@@ -441,7 +438,7 @@ export class SessionHandle {
 
   /** Admit both existing execution claims before resume reads or mutations. */
   acquireExecutionClaims(
-    executionId: ExecutionId,
+    executionId: RunId,
     streamId: StreamTabId,
   ): Effect.Effect<Effect.Effect<void, Error>, Error> {
     return this.graph.acquireExecutionClaims(executionId, streamId).pipe(
@@ -596,7 +593,7 @@ export class SessionHandle {
   /** Final text facts committed immediately before a status closes its entries. */
   statusClosureFacts(
     streamId: StreamTabId,
-    phase: StreamPhase,
+    phase: RunPhase,
   ): SessionEventDraft[] {
     const closure: SessionEventDraft[] = [];
     if (phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase)) {
@@ -642,7 +639,7 @@ export class SessionHandle {
 
   /** Read and append under the same local publisher permit. C5 excludes foreign writers. */
   updateRecordFacts<A>(
-    executionId: ExecutionId,
+    executionId: RunId,
     update: (rows: readonly SessionEvent[]) => {
       readonly events: readonly SessionEventDraft[];
       readonly value: A;
@@ -660,13 +657,13 @@ export class SessionHandle {
 
   /** Internal typed metadata accessors read the database, never the display fold. */
   readExecutionRecords(
-    executionId: ExecutionId,
+    executionId: RunId,
   ): Effect.Effect<readonly SessionEvent[]> {
     return this.graph.executionRecords(executionId);
   }
 
   readExecutionChildren(
-    executionId: ExecutionId,
+    executionId: RunId,
   ): Effect.Effect<readonly SessionEvent[]> {
     return this.graph.executionChildren(executionId);
   }
@@ -845,110 +842,112 @@ export function forEachLiveSession(
  * The caller's phase deadline bounds the drain. An expired deadline is logged
  * for each skipped execution and checked again after its outcome write.
  */
-export const settleLiveSessionExecutions = Effect.fn(
-  'settleLiveSessionExecutions',
-)(function* (signal: AbortSignal) {
-  const pending: { session: SessionHandle; executionId: ExecutionId }[] = [];
-  forEachLiveSession((session) => {
-    for (const executionId of session.executions.getActiveIds()) {
-      pending.push({ session, executionId });
-    }
-  });
-  for (const { session, executionId } of pending) {
-    if (signal.aborted) {
-      logger.warn(
-        `Host exit deadline passed before execution ${executionId} could settle`,
-      );
-      continue;
-    }
-    const settlement = Effect.gen(function* () {
-      if (!runInSession(session, () => ownsExecutionLease(executionId))) return;
-      const streamId = session.executions.getHandle(executionId)?.childStreamId;
-      // Read the committed transcript once after queued publications settle.
-      // Host exit needs no presentation residency or mutable writer handle.
-      const transcript = yield* Effect.exit(
-        Effect.gen(function* () {
-          yield* Effect.tryPromise({
-            try: () => session.settlePublications(),
-            catch: ensureError,
-          });
-          return streamId === undefined
-            ? []
-            : yield* session.transcripts.readEntries(streamId);
-        }),
-      );
-      yield* session.releaseExecutionLease(
-        executionId,
-        Effect.gen(function* () {
-          const finalization = yield* finalizeRun(session, {
-            executionId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            flowRecord: 'preserve',
-            keepExistingOutcome: true,
-          });
-          if (!finalization.ok) {
-            throw new Error(
-              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
-              { cause: finalization.error },
-            );
-          }
-          if (signal.aborted) {
-            logger.warn(
-              `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open`,
-            );
-            return;
-          }
-          if (streamId === undefined) {
-            logger.warn(
-              `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
-            );
-            return;
-          }
-          // A failed read must still pass through the owner's release
-          // choreography after recording the terminal outcome.
-          if (Exit.isFailure(transcript)) throw Cause.squash(transcript.cause);
-          // These are ordinary canonical facts. The lease owner settles their
-          // publication before unlinking the claim, so replay sees the same
-          // closure as the resident transcript.
-          for (const entry of transcript.value) {
-            if (isRunningGroupEntry(entry)) {
-              session.publishRunEvent(streamId, {
-                type: 'stage.end',
-                id: entry.id,
-                status: finalization.outcome,
-              });
-            } else if (isRunningStreamingTextEntry(entry)) {
-              session.publishRunEvent(streamId, {
-                type: 'stream.end',
-                id: entry.id,
-              });
-            } else {
-              const call = nonterminalWorkflowCall(entry);
-              if (call)
-                session.publishRunEvent(streamId, {
-                  type: 'workflow.call',
-                  logId: entry.id,
-                  stageId: entry.groupId,
-                  call: interruptedWorkflowCall(call),
-                });
-            }
-          }
-        }),
-      );
+export const settleLiveSessionRuns = Effect.fn('settleLiveSessionExecutions')(
+  function* (signal: AbortSignal) {
+    const pending: { session: SessionHandle; executionId: RunId }[] = [];
+    forEachLiveSession((session) => {
+      for (const executionId of session.executions.getActiveIds()) {
+        pending.push({ session, executionId });
+      }
     });
-    yield* settlement.pipe(
-      Effect.scoped,
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          logger.warn(
-            `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
-            { data: Cause.squash(cause) },
-          );
-        }),
-      ),
-    );
-  }
-});
+    for (const { session, executionId } of pending) {
+      if (signal.aborted) {
+        logger.warn(
+          `Host exit deadline passed before execution ${executionId} could settle`,
+        );
+        continue;
+      }
+      const settlement = Effect.gen(function* () {
+        if (!runInSession(session, () => ownsRunLease(executionId))) return;
+        const streamId =
+          session.executions.getHandle(executionId)?.childStreamId;
+        // Read the committed transcript once after queued publications settle.
+        // Host exit needs no presentation residency or mutable writer handle.
+        const transcript = yield* Effect.exit(
+          Effect.gen(function* () {
+            yield* Effect.tryPromise({
+              try: () => session.settlePublications(),
+              catch: ensureError,
+            });
+            return streamId === undefined
+              ? []
+              : yield* session.transcripts.readEntries(streamId);
+          }),
+        );
+        yield* session.releaseExecutionLease(
+          executionId,
+          Effect.gen(function* () {
+            const finalization = yield* finalizeRun(session, {
+              executionId,
+              outcome: RUN_OUTCOME.CANCELLED,
+              flowRecord: 'preserve',
+              keepExistingOutcome: true,
+            });
+            if (!finalization.ok) {
+              throw new Error(
+                `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+                { cause: finalization.error },
+              );
+            }
+            if (signal.aborted) {
+              logger.warn(
+                `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open`,
+              );
+              return;
+            }
+            if (streamId === undefined) {
+              logger.warn(
+                `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
+              );
+              return;
+            }
+            // A failed read must still pass through the owner's release
+            // choreography after recording the terminal outcome.
+            if (Exit.isFailure(transcript))
+              throw Cause.squash(transcript.cause);
+            // These are ordinary canonical facts. The lease owner settles their
+            // publication before unlinking the claim, so replay sees the same
+            // closure as the resident transcript.
+            for (const entry of transcript.value) {
+              if (isRunningGroupEntry(entry)) {
+                session.publishRunEvent(streamId, {
+                  type: 'stage.end',
+                  id: entry.id,
+                  status: finalization.outcome,
+                });
+              } else if (isRunningStreamingTextEntry(entry)) {
+                session.publishRunEvent(streamId, {
+                  type: 'stream.end',
+                  id: entry.id,
+                });
+              } else {
+                const call = nonterminalWorkflowCall(entry);
+                if (call)
+                  session.publishRunEvent(streamId, {
+                    type: 'workflow.call',
+                    logId: entry.id,
+                    stageId: entry.groupId,
+                    call: interruptedWorkflowCall(call),
+                  });
+              }
+            }
+          }),
+        );
+      });
+      yield* settlement.pipe(
+        Effect.scoped,
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            logger.warn(
+              `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
+              { data: Cause.squash(cause) },
+            );
+          }),
+        ),
+      );
+    }
+  },
+);
 
 let defaultSessionFallbackWarned = false;
 

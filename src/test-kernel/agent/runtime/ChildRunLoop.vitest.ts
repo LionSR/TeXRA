@@ -19,9 +19,9 @@ const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
   releaseExecutionLeaseAfterArtifacts: vi.fn(
-    async (_session: unknown, _executionId: ExecutionId) => {},
+    async (_session: unknown, _executionId: RunId) => {},
   ),
-  assertOwnedExecutionLease: vi.fn((_executionId: ExecutionId) => undefined),
+  assertOwnedExecutionLease: vi.fn((_executionId: RunId) => undefined),
 }));
 
 // Turn-state persistence runs against the real (memfs-backed) execution store:
@@ -40,14 +40,14 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  assertOwnedExecutionLease: mocks.assertOwnedExecutionLease,
+  assertOwnedRunLease: mocks.assertOwnedExecutionLease,
 }));
 
 vi.mock('@agent/followUp/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
-import { getExecutionRecords, getExecutionStore } from '@agent/storage';
+import { getRunRecords, getRunStore } from '@agent/storage';
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -61,15 +61,15 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  type ExecutionId,
-  type StreamPhase,
+  type RunId,
+  type RunPhase,
   type StreamTabId,
   AgentCategory,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
@@ -87,9 +87,9 @@ import {
   claudeAgentSessionsFor,
   codexThreadsFor,
 } from '@tools/agentCliSessionStores';
-import { createChildStream } from '@tools/delegation/childStream';
+import { createChildRun } from '@tools/delegation/childStream';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 let session: SessionHandle;
@@ -110,20 +110,20 @@ function uniqueStreamId(label: string): StreamTabId {
 /** The stream/execution ids a fixture uses, both derived from its label. */
 function loopIds(label: string): {
   childStreamId: StreamTabId;
-  executionId: ExecutionId;
+  executionId: RunId;
 } {
-  const executionId = generateExecutionId();
+  const executionId = generateRunId();
   const childStreamId = `${label}#${executionId}` as StreamTabId;
   publishTestRunStart(session, childStreamId, executionId);
   return { childStreamId, executionId };
 }
 
 function trackChildHandle(
-  executionId: ExecutionId,
+  executionId: RunId,
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,
-  status: StreamPhase = STREAM_PHASE.RUNNING,
-): AgentExecutionHandle {
+  status: RunPhase = STREAM_PHASE.RUNNING,
+): RunHandle {
   const handle = testExecutionHandle({
     executionId,
     parentStreamId,
@@ -239,7 +239,7 @@ function createTerminalStrategy(
 
 /** Start the loop with the fixture defaults; extras override any param. */
 function startLoop(
-  ids: { childStreamId: StreamTabId; executionId: ExecutionId },
+  ids: { childStreamId: StreamTabId; executionId: RunId },
   strategy: ChildRunStrategy<FakeTurn>,
   extras: Partial<ChildRunLoopParams<FakeTurn>> = {},
 ): Promise<void> {
@@ -383,7 +383,7 @@ describe('childRunLoop E2E fixtures', () => {
       name: 'CodexThreads',
       track: (
         childStreamId: StreamTabId,
-        executionId: ExecutionId,
+        executionId: RunId,
         runSession: SessionHandle,
       ) =>
         codexThreadsFor(runSession).trackInFlight({
@@ -391,14 +391,14 @@ describe('childRunLoop E2E fixtures', () => {
           executionId,
         }),
       interruptAll: () => codexThreadsFor(session).interruptAll(),
-      release: (executionId: ExecutionId) =>
+      release: (executionId: RunId) =>
         codexThreadsFor(session).releaseByExecutionId(executionId),
     },
     {
       name: 'ClaudeAgentSessions',
       track: (
         childStreamId: StreamTabId,
-        executionId: ExecutionId,
+        executionId: RunId,
         runSession: SessionHandle,
       ) =>
         claudeAgentSessionsFor(runSession).trackInFlight({
@@ -406,7 +406,7 @@ describe('childRunLoop E2E fixtures', () => {
           executionId,
         }),
       interruptAll: () => claudeAgentSessionsFor(session).interruptAll(),
-      release: (executionId: ExecutionId) =>
+      release: (executionId: RunId) =>
         claudeAgentSessionsFor(session).releaseByExecutionId(executionId),
     },
   ])(
@@ -478,7 +478,7 @@ describe('childRunLoop E2E fixtures', () => {
     const { strategy, rejectTurn } = createFakeStrategy();
     const writeBarrier = pDefer<void>();
     const writeStarted = pDefer<void>();
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const writeTurnState = vi
       .spyOn(store, 'writeTurnState')
       .mockImplementationOnce(async () => {
@@ -517,7 +517,7 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('keeps follow-up ownership distinct across child-stream and native child lifecycles', async () => {
-    const executionId = generateExecutionId();
+    const executionId = generateRunId();
     const turn = pDefer<FakeTurn>();
     const launchStarted = pDefer<void>();
     const formatStarted = pDefer<void>();
@@ -541,7 +541,7 @@ describe('childRunLoop E2E fixtures', () => {
       executionId,
     );
     const childStream = await Effect.runPromise(
-      createChildStream(session, executionId, PARENT_STREAM_ID, {
+      createChildRun(session, executionId, PARENT_STREAM_ID, {
         streamPrefix: 'codex',
         run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         userFollowUpSupport: 'terminalBacked',
@@ -599,7 +599,7 @@ describe('childRunLoop E2E fixtures', () => {
       ]);
 
       const releaseNativeChild = session.executions.reserveChildActivation({
-        executionId: 'exec-follow-up-native-child-test' as ExecutionId,
+        executionId: 'exec-follow-up-native-child-test' as RunId,
         parentStreamId: PARENT_STREAM_ID,
         childStreamId: 'stream-follow-up-native-child-test' as StreamTabId,
         interrupt: vi.fn(),
@@ -662,9 +662,7 @@ describe('childRunLoop E2E fixtures', () => {
     await completion;
 
     expect(
-      await Effect.runPromise(
-        getExecutionRecords(session, executionId).readReport(),
-      ),
+      await Effect.runPromise(getRunRecords(session, executionId).readReport()),
     ).toBe('delivered:saved');
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
@@ -859,9 +857,7 @@ describe('childRunLoop E2E fixtures', () => {
 
     await waitForLoopEnd(childStreamId);
     expect(
-      await Effect.runPromise(
-        getExecutionRecords(session, executionId).readReport(),
-      ),
+      await Effect.runPromise(getRunRecords(session, executionId).readReport()),
     ).toBe('delivered:late');
     expect(releaseSessionOwnership).toHaveBeenCalledOnce();
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
@@ -1119,14 +1115,14 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
-    const executionId = 'fa11ed01' as ExecutionId;
+    const executionId = 'fa11ed01' as RunId;
     publishTestRunStart(
       session,
       getStreamTabId('codex', { executionId }),
       executionId,
     );
     const childStream = await Effect.runPromise(
-      createChildStream(session, executionId, PARENT_STREAM_ID, {
+      createChildRun(session, executionId, PARENT_STREAM_ID, {
         streamPrefix: 'codex',
         run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         userFollowUpSupport: 'terminalBacked',

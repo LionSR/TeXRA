@@ -11,19 +11,19 @@ import {
 import {
   currentSession,
   defaultSession,
-  settleLiveSessionExecutions,
+  settleLiveSessionRuns,
 } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import {
-  acquireFreshExecutionLease,
-  ownsExecutionLease,
+  acquireFreshRunLease,
+  ownsRunLease,
 } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   RUN_OUTCOME,
   aggregateId,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -138,14 +138,14 @@ describe('session isolation', () => {
       }),
     });
     const live = [
-      [sessionA, 'a0da01' as ExecutionId],
-      [sessionB, 'b0db01' as ExecutionId],
+      [sessionA, 'a0da01' as RunId],
+      [sessionB, 'b0db01' as RunId],
     ] as const;
     const closures = live.map(([session, executionId]) =>
       vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {
-        expect(
-          runInSession(session, () => ownsExecutionLease(executionId)),
-        ).toBe(true);
+        expect(runInSession(session, () => ownsRunLease(executionId))).toBe(
+          true,
+        );
       }),
     );
     try {
@@ -161,7 +161,7 @@ describe('session isolation', () => {
           },
         ]);
         await runInSession(session, async () => {
-          await acquireFreshExecutionLease(executionId);
+          await acquireFreshRunLease(executionId);
           session.executions.track(
             testExecutionHandle({
               executionId,
@@ -173,9 +173,9 @@ describe('session isolation', () => {
       }
       // A quit handler runs in no session scope; the process roots answer
       // there, and neither paper's lease is keyed under them.
-      expect(ownsExecutionLease('a0da01' as ExecutionId)).toBe(false);
+      expect(ownsRunLease('a0da01' as RunId)).toBe(false);
       await Effect.runPromise(
-        settleLiveSessionExecutions(new AbortController().signal),
+        settleLiveSessionRuns(new AbortController().signal),
       );
       for (const [index, [, executionId]] of live.entries()) {
         expect(closures[index]).toHaveBeenCalledWith(`stream:${executionId}`, {
@@ -187,9 +187,9 @@ describe('session isolation', () => {
       expect(storageMocks.settledUnder.get('a0da01')).toBe('/storage/a');
       expect(storageMocks.settledUnder.get('b0db01')).toBe('/storage/b');
       for (const [session, executionId] of live) {
-        expect(
-          runInSession(session, () => ownsExecutionLease(executionId)),
-        ).toBe(false);
+        expect(runInSession(session, () => ownsRunLease(executionId))).toBe(
+          false,
+        );
       }
     } finally {
       sessionA.dispose();
@@ -199,7 +199,7 @@ describe('session isolation', () => {
 
   it('a handle interrupt target lands in the run session only', async () => {
     const sessionB = createTestSession();
-    const executionId = 'exec:iso-interrupt' as ExecutionId;
+    const executionId = 'exec:iso-interrupt' as RunId;
     const streamId = 'stream:iso-interrupt' as StreamTabId;
     const interrupt = vi.fn();
     try {
@@ -227,7 +227,7 @@ describe('session isolation', () => {
     await installPlatform({
       globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
     });
-    const executionId = 'e15001' as ExecutionId;
+    const executionId = 'e15001' as RunId;
     const streamId = 'stream:iso-track' as StreamTabId;
     const sessionB = createTestSession();
     const ctx = createTestLaunchContext({

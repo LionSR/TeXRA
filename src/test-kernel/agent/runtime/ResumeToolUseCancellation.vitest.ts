@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   validateOwnedExecutionLease: vi.fn(),
   runWithExecutionLeaseWriteFence: vi.fn(
-    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
+    async (_executionId: RunId, operation: () => Promise<unknown>) =>
       operation(),
   ),
   releaseOwnedExecutionLease: vi.fn(),
@@ -21,11 +21,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  assertOwnedExecutionLease: vi.fn(),
-  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
-  validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
-  runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
+  acquireResumedRunLease: mocks.acquireResumedExecutionLease,
+  assertOwnedRunLease: vi.fn(),
+  releaseOwnedRunLease: mocks.releaseOwnedExecutionLease,
+  validateOwnedRunLease: mocks.validateOwnedExecutionLease,
+  runWithRunLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', async () => {
@@ -38,7 +38,7 @@ vi.mock('@agent/runtime/AgentLaunchContext', async () => {
         try: () => mocks.buildAgentLaunchContext(...args),
         catch: ensureError,
       }),
-    withExecutionRunContext: (
+    withLaunchRunContext: (
       _context: unknown,
       _options: unknown,
       run: () => Effect.Effect<unknown, unknown>,
@@ -96,7 +96,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -125,7 +125,7 @@ interface ModelSwitchingFlowInput {
 const LANE_SESSION = {
   executions: {
     launchExecution: (
-      _executionId: ExecutionId,
+      _executionId: RunId,
       operation: Effect.Effect<unknown, unknown>,
     ) => operation,
   },
@@ -149,7 +149,7 @@ function resumeToolUseFromResumeData(
 
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
 function buildResumeContext(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
 ): AgentLaunchContext {
   const abortController = new AbortController();
@@ -202,7 +202,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('preserves persisted native follow-up support across resumed waiting turns', async () => {
-    const executionId = 'e9911-native-resume' as ExecutionId;
+    const executionId = 'e9911-native-resume' as RunId;
     const streamId = 'stream-9911-native-resume' as StreamTabId;
     const snapshot = createToolUseResumeData({ executionId, streamId });
     mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
@@ -236,7 +236,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   it('resolves execution lineage before activating the resume stream', async () => {
     const storageError = new Error('execution metadata unavailable');
     const snapshot = createToolUseResumeData({
-      executionId: 'e8048' as ExecutionId,
+      executionId: 'e8048' as RunId,
       streamId: 'stream-8048' as StreamTabId,
     });
     mocks.hasPersistedParent.mockRejectedValueOnce(storageError);
@@ -292,7 +292,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('interrupts at flow attachment before substantive work starts', async () => {
-    const executionId = 'e8049' as ExecutionId;
+    const executionId = 'e8049' as RunId;
     const streamId = 'stream-8049' as StreamTabId;
     const context = buildResumeContext(executionId, streamId);
     const order: string[] = [];
@@ -383,7 +383,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('mirrors a mid-run model switch onto the persisted config only', async () => {
-    const executionId = 'e9421-model' as ExecutionId;
+    const executionId = 'e9421-model' as RunId;
     const streamId = 'stream-9421-model' as StreamTabId;
     const ctx = buildResumeContext(executionId, streamId);
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
@@ -407,7 +407,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   it('carries a failed resumed flow result, error included, to the lifecycle', async () => {
-    const executionId = 'e9421-error' as ExecutionId;
+    const executionId = 'e9421-error' as RunId;
     const streamId = 'stream-9421-error' as StreamTabId;
     const flowError = {
       message: 'provider failed mid-resume',

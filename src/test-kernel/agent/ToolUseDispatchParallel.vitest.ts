@@ -15,7 +15,7 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { installPlatform } from '@test/support/setupPlatform';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
@@ -84,7 +84,7 @@ interface HarnessOptions {
 function dispatchHarness(opts: HarnessOptions) {
   const runTrace = createTestRunTrace(
     'DispatchParallelTest' as StreamTabId,
-    new StreamLog(),
+    new RunLog(),
   );
   const services = {
     config: AgentConfigSchema.parse({

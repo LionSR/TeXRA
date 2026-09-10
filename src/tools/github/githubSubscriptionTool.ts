@@ -27,7 +27,7 @@ import {
 import { hostPort } from '@common/hostPort';
 import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { requireRunStream } from '@tools/contextHelpers';
+import { requireRun } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -225,7 +225,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   input: SubscribeInput,
 ) {
   yield* requireToken();
-  const { streamId } = requireRunStream('github_subscription');
+  const { streamId } = requireRun('github_subscription');
   const target = requirePath(input);
   const minAnnotationLevel =
     input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
@@ -332,7 +332,7 @@ const resolveIssueIsPR = (
   );
 
 function execUnsubscribe(input: UnsubscribeInput): ToolResult {
-  const { streamId } = requireRunStream('github_subscription');
+  const { streamId } = requireRun('github_subscription');
   const target = requirePath(input);
   const slug = slugOf(target);
   let removed: boolean;
@@ -364,7 +364,7 @@ function execUnsubscribe(input: UnsubscribeInput): ToolResult {
 }
 
 function execList(): ToolResult {
-  const { streamId } = requireRunStream('github_subscription');
+  const { streamId } = requireRun('github_subscription');
   const keysBoundToStream = (
     bindings: ReadonlyArray<{ key: string; streamIds: readonly string[] }>,
   ): string[] =>

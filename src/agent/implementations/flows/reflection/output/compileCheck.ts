@@ -8,7 +8,7 @@ import {
   isGenericOutputStem,
   type CompileFailure,
   type CompileResult,
-  type ExecutionId,
+  type RunId,
   type FileLocation,
   type OutputFileInfo,
   type RunStorageFileLocation,
@@ -225,7 +225,7 @@ interface CompileTarget {
   displayName: string;
   currentRound: number;
   outputFile: OutputFileInfo;
-  executionId: ExecutionId;
+  executionId: RunId;
 }
 
 // Short hex digest length appended to safeName below — enough to make

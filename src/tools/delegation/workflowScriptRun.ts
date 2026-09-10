@@ -20,8 +20,8 @@ import {
   type RunOutcome,
   type WorkflowCallProgress,
   type WorkflowCallTerminalProgress,
-  type WorkflowExecutionCall,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunCall,
+  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import {
   formatWorkflowCallLine,
@@ -56,7 +56,7 @@ type WorkflowScriptRunWithProgressOptions = Omit<
  * queued) instead of one undifferentiated "planned".
  */
 function projectWorkflowCallStatus(
-  call: Pick<WorkflowExecutionCall, 'status' | 'issued'>,
+  call: Pick<WorkflowRunCall, 'status' | 'issued'>,
 ): WorkflowCallProgress['status'] {
   switch (call.status) {
     case WORKFLOW_CALL_STATUS.PLANNED:
@@ -182,7 +182,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   // The engine terminalizes and flushes its snapshot before returning or
   // rethrowing, so the last one published is its final account of every call —
   // what the settle sweep below reads instead of re-deciding outcomes here.
-  let lastSnapshot: WorkflowExecutionSnapshot | undefined;
+  let lastSnapshot: WorkflowRunSnapshot | undefined;
   let currentPhase: string | undefined;
   let closed = false;
   // Calls that were already terminal when a retry's hydrated state first
@@ -260,7 +260,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   /** Progress-only terminal metadata, read off the snapshot's own record. */
   const terminalMetadata = (
     call: Extract<
-      WorkflowExecutionCall,
+      WorkflowRunCall,
       { readonly status: 'completed' | 'failed' | 'cancelled' | 'skipped' }
     >,
   ) => {
@@ -278,8 +278,8 @@ export async function runPersistedWorkflowScriptWithProgress(
   };
 
   const cardFor = (
-    call: WorkflowExecutionCall,
-    snapshot: WorkflowExecutionSnapshot,
+    call: WorkflowRunCall,
+    snapshot: WorkflowRunSnapshot,
   ): WorkflowCallProgress => {
     const status = projectWorkflowCallStatus(call);
     const phase = stageTitleFor(snapshot, call);
@@ -378,7 +378,7 @@ export async function runPersistedWorkflowScriptWithProgress(
    * everything is read here, nothing retained. A projection fault must never
    * abort the run, so the fold guards itself and reports on the run trace.
    */
-  const fold = (snapshot: WorkflowExecutionSnapshot): void => {
+  const fold = (snapshot: WorkflowRunSnapshot): void => {
     if (closed) return;
     // A call carried into the construction emission is hydrated history, not
     // this attempt's activity. Reusable calls are terminal here; failed or

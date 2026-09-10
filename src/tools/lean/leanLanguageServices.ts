@@ -11,7 +11,7 @@
  * LSP requests).
  */
 
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { Effect } from 'effect';
 
 import type {
@@ -85,7 +85,7 @@ export interface LeanLanguageServices {
    * `onRunEnd` hook of the agent run lifecycle (`executeAgent.ts`) — running
    * an Effect there today would put a below-boundary run in a lane-D file.
    */
-  stopSessionsForRun?(runId: ExecutionId): Promise<void>;
+  stopSessionsForRun?(runId: RunId): Promise<void>;
 }
 
 let services: LeanLanguageServices | undefined;
@@ -117,8 +117,6 @@ export function getLeanLanguageServices(): LeanLanguageServices {
  * host owns server lifetime itself (the VS Code bridge) — only the direct
  * CLI/desktop adapter implements {@link LeanLanguageServices.stopSessionsForRun}.
  */
-export async function stopLeanServersForEndedRun(
-  runId: ExecutionId,
-): Promise<void> {
+export async function stopLeanServersForEndedRun(runId: RunId): Promise<void> {
   await services?.stopSessionsForRun?.(runId);
 }

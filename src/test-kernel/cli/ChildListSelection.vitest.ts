@@ -14,11 +14,11 @@ const analysis = 'analysis' as StreamTabId;
 function reconcileSelection(
   state: ChildListSelectionState,
   values: readonly StreamTabId[],
-  activeStreamId: StreamTabId | undefined,
+  activeRunId: StreamTabId | undefined,
 ): ChildListSelectionState {
   return reduceChildListSelection(state, {
     kind: 'reconcile',
-    activeStreamId,
+    activeRunId,
     values,
   });
 }

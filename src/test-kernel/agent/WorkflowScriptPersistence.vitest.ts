@@ -10,8 +10,8 @@ import {
 } from '@agent/workflowScript';
 import {
   clearStoreCache,
-  getExecutionStore,
-  getExecutionRecords,
+  getRunStore,
+  getRunRecords,
   type ExecutionKVStore,
 } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -20,11 +20,11 @@ import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import {
   aggregateId,
-  WorkflowExecutionSnapshotSchema,
+  WorkflowRunSnapshotSchema,
   deriveWorkflowCounts,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import {
   createProcessSession,
@@ -33,7 +33,7 @@ import {
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
-const executionId = 'aaaaaa111111' as ExecutionId;
+const executionId = 'aaaaaa111111' as RunId;
 const EMPTY_FILES = { inputFiles: [], contextFiles: [], mediaFiles: [] };
 const script = `export const meta = {
   name: 'durable-flow',
@@ -56,8 +56,8 @@ beforeEach(async () => {
   await session.settlePublications();
 });
 function writeWorkflowExecutionSnapshot(
-  id: ExecutionId,
-  snapshot: WorkflowExecutionSnapshot,
+  id: RunId,
+  snapshot: WorkflowRunSnapshot,
 ): Promise<void> {
   return Effect.runPromise(
     session
@@ -89,7 +89,7 @@ function interceptFirstEntryWrite(
 
 describe('workflow-script persistence', () => {
   it('replays a completed journal after restart without new agent calls', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const firstRunner = vi.fn(
       async ({ prompt }: { prompt: string }) => `result:${prompt}`,
     );
@@ -106,7 +106,7 @@ describe('workflow-script persistence', () => {
     clearStoreCache();
     const restartedRunner = vi.fn(() => Promise.reject(new Error('live run')));
     const restarted = await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
+      store: getRunStore(executionId),
       checkpointId: 'call-1',
       runAgent: restartedRunner,
     });
@@ -114,7 +114,7 @@ describe('workflow-script persistence', () => {
     expect(restarted.result).toEqual(['result:first', 'result:second']);
     expect(deriveWorkflowCounts(restarted.snapshot.calls).cached).toBe(2);
     await expect(
-      readWorkflowScriptCheckpoint(getExecutionStore(executionId), 'call-1'),
+      readWorkflowScriptCheckpoint(getRunStore(executionId), 'call-1'),
     ).resolves.toMatchObject({
       journal: [{ result: 'result:first' }, { result: 'result:second' }],
     });
@@ -127,7 +127,7 @@ describe('workflow-script persistence', () => {
   ] as const)(
     'reads a marker-free historical %s call',
     async (_name, lifecycle, status, terminal) => {
-      const store = getExecutionStore(executionId);
+      const store = getRunStore(executionId);
       const timestamp = '2026-08-30T00:00:00.000Z';
       const timestamps = {
         createdAt: timestamp,
@@ -136,7 +136,7 @@ describe('workflow-script persistence', () => {
       };
       await writeWorkflowExecutionSnapshot(
         executionId,
-        WorkflowExecutionSnapshotSchema.parse(
+        WorkflowRunSnapshotSchema.parse(
           {
             timestamp,
             workflow: {
@@ -160,7 +160,7 @@ describe('workflow-script persistence', () => {
       );
 
       await expect(
-        Effect.runPromise(getExecutionRecords(session, executionId).readMeta()),
+        Effect.runPromise(getRunRecords(session, executionId).readMeta()),
       ).resolves.toMatchObject({
         workflow: { calls: [{ status }] },
       });
@@ -184,7 +184,7 @@ describe('workflow-script persistence', () => {
   ] as const)(
     'rejects writing a workflow snapshot with %s',
     async (_name, callPatch) => {
-      const store = getExecutionStore(executionId);
+      const store = getRunStore(executionId);
       const timestamp = '2026-08-30T00:00:00.000Z';
       const live = 'status' in callPatch && callPatch.status === 'running';
       const workflow = {
@@ -212,7 +212,7 @@ describe('workflow-script persistence', () => {
           updatedAt: timestamp,
           ...(!live && { completedAt: timestamp }),
         },
-      } as unknown as WorkflowExecutionSnapshot;
+      } as unknown as WorkflowRunSnapshot;
 
       await expect(
         Promise.resolve().then(() =>
@@ -220,13 +220,13 @@ describe('workflow-script persistence', () => {
         ),
       ).rejects.toThrow();
       await expect(
-        Effect.runPromise(getExecutionRecords(session, executionId).readMeta()),
+        Effect.runPromise(getRunRecords(session, executionId).readMeta()),
       ).resolves.toMatchObject({ workflow: undefined });
     },
   );
 
   it('parses and relaunches a prior cancelled snapshot with an error', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const cancelledScript = `export const meta = {
   name: 'cancelled-compatibility',
   description: 'relaunches a prior cancelled checkpoint',
@@ -246,7 +246,7 @@ return await agent('resume cancelled call', { id: 'cancelled-call' })`;
     priorSnapshot.calls[0]!.status = 'cancelled';
     await writeWorkflowExecutionSnapshot(
       executionId,
-      WorkflowExecutionSnapshotSchema.parse(
+      WorkflowRunSnapshotSchema.parse(
         {
           timestamp: '2026-08-30T00:00:00.000Z',
           workflow: priorSnapshot,
@@ -255,7 +255,7 @@ return await agent('resume cancelled call', { id: 'cancelled-call' })`;
     );
 
     const persisted = await Effect.runPromise(
-      getExecutionRecords(session, executionId).readMeta(),
+      getRunRecords(session, executionId).readMeta(),
     );
     expect(persisted?.workflow?.calls[0]).toMatchObject({
       status: 'cancelled',
@@ -280,7 +280,7 @@ return await agent('resume cancelled call', { id: 'cancelled-call' })`;
   });
 
   it('persists and hydrates runtime-valid unbounded snapshot fields', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const longId = `call-${'i'.repeat(2_500)}`;
     const longPhase = `Phase ${'p'.repeat(3_000)}`;
     const longError = `failure-${'e'.repeat(4_000)}`;
@@ -288,7 +288,7 @@ return await agent('resume cancelled call', { id: 'cancelled-call' })`;
       { length: 513 },
       (_, index) => `/workspace/${'f'.repeat(600)}-${index}.tex`,
     );
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const snapshots: WorkflowRunSnapshot[] = [];
     const adversarialScript = `export const meta = {
   name: 'unbounded-snapshot',
   description: 'persists runtime-valid snapshot fields',
@@ -324,7 +324,7 @@ return await agent('fail after snapshotting', {
       512,
     );
     expect(() =>
-      WorkflowExecutionSnapshotSchema.parse(result.snapshot),
+      WorkflowRunSnapshotSchema.parse(result.snapshot),
     ).not.toThrow();
     expect(snapshots.at(-1)).toEqual(result.snapshot);
 
@@ -345,12 +345,12 @@ return await agent('fail after snapshotting', {
     expect(hydrated.snapshot.stages[0]?.title).toBe(longPhase);
     expect(hydrated.snapshot.calls[0]?.files.input).toHaveLength(513);
     expect(() =>
-      WorkflowExecutionSnapshotSchema.parse(hydrated.snapshot),
+      WorkflowRunSnapshotSchema.parse(hydrated.snapshot),
     ).not.toThrow();
   });
 
   it('closes every prior open attempt before a resumed attempt starts', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const resumeScript = `export const meta = {
   name: 'resume-open-attempt',
   description: 'resume an interrupted attempt',
@@ -373,14 +373,14 @@ return [first, second]`;
 
     await writeWorkflowExecutionSnapshot(
       executionId,
-      WorkflowExecutionSnapshotSchema.parse(
+      WorkflowRunSnapshotSchema.parse(
         {
           timestamp: new Date(0).toISOString(),
           workflow: interrupted,
         }.workflow,
       ),
     );
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const snapshots: WorkflowRunSnapshot[] = [];
     const resumed = await runPersistedWorkflowScript({
       store,
       checkpointId: 'resume-open-attempt',
@@ -391,7 +391,7 @@ return [first, second]`;
         snapshots.push(snapshot);
         await writeWorkflowExecutionSnapshot(
           executionId,
-          WorkflowExecutionSnapshotSchema.parse(
+          WorkflowRunSnapshotSchema.parse(
             {
               timestamp: new Date(0).toISOString(),
               workflow: snapshot,
@@ -416,11 +416,11 @@ return [first, second]`;
           call.attempts.every((attempt) => attempt.completedAt !== undefined),
       ),
     ).toBe(true);
-    const persistedSnapshot = WorkflowExecutionSnapshotSchema.parse(
+    const persistedSnapshot = WorkflowRunSnapshotSchema.parse(
       JSON.parse(JSON.stringify(resumed.snapshot)),
     );
     await expect(
-      Effect.runPromise(getExecutionRecords(session, executionId).readMeta()),
+      Effect.runPromise(getRunRecords(session, executionId).readMeta()),
     ).resolves.toMatchObject({
       workflow: persistedSnapshot,
     });
@@ -451,7 +451,7 @@ return await agent('run planned call', {
       media: [],
     });
 
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const snapshots: WorkflowRunSnapshot[] = [];
     const resumed = await runWorkflowScript({
       script: resumeScript,
       initialSnapshot: completed.snapshot,
@@ -497,9 +497,9 @@ return await agent('run planned call', { id: 'planned-call' })`;
         // wins over the result this signal-ignoring runner still returns.
         runAgent: async (invocation) => {
           invocation.report?.({
-            childExecutionId: 'skipskipskip' as ExecutionId,
+            childExecutionId: 'skipskipskip' as RunId,
           });
-          control('skipskipskip' as ExecutionId, 'skip');
+          control('skipskipskip' as RunId, 'skip');
           return 'must be skipped';
         },
         onControl: (value) => {
@@ -523,7 +523,7 @@ return await agent('run planned call', { id: 'planned-call' })`;
 
       vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
       const runner = vi.fn(async () => 'resumed result');
-      const snapshots: WorkflowExecutionSnapshot[] = [];
+      const snapshots: WorkflowRunSnapshot[] = [];
       const resumed = await runWorkflowScript({
         script: resumeScript,
         initialSnapshot: skipped.snapshot,
@@ -584,7 +584,7 @@ return await agent('run dynamic call', { id: 'dynamic-call' })`;
       expect(prior.status).toBe('failed');
 
       vi.setSystemTime(new Date('2026-02-02T00:00:00.000Z'));
-      const snapshots: WorkflowExecutionSnapshot[] = [];
+      const snapshots: WorkflowRunSnapshot[] = [];
       const resumed = await runWorkflowScript({
         script: resumeScript,
         initialSnapshot: failed.snapshot,
@@ -635,7 +635,7 @@ return await agent('cache me', { id: 'cached-call' })`;
     });
     expect(completed.snapshot.calls[0]?.agent).toBe('resolved-writer');
 
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const snapshots: WorkflowRunSnapshot[] = [];
     const cached = await runWorkflowScript({
       script: originalScript,
       initialSnapshot: completed.snapshot,
@@ -684,7 +684,7 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       expect(prior.status).toBe('cached');
 
       vi.setSystemTime(new Date('2026-03-02T00:00:00.000Z'));
-      const snapshots: WorkflowExecutionSnapshot[] = [];
+      const snapshots: WorkflowRunSnapshot[] = [];
       const finishRunner = createDeferred();
       const runnerStarted = createDeferred();
       const runner = vi.fn(async (invocation) => {
@@ -777,7 +777,7 @@ return await agent('retry metadata')`,
       runAgent: async (invocation) => {
         attempt += 1;
         invocation.report?.({
-          childExecutionId: `attempt-${attempt}` as ExecutionId,
+          childExecutionId: `attempt-${attempt}` as RunId,
         });
         if (attempt === 1) {
           invocation.report?.({ model: 'abandoned-model' });
@@ -798,7 +798,7 @@ return await agent('retry metadata')`,
     });
 
     await vi.waitFor(() => expect(attempt).toBe(1));
-    control('attempt-1' as ExecutionId, 'retry');
+    control('attempt-1' as RunId, 'retry');
     await vi.waitFor(() => expect(attempt).toBe(2));
     const result = await run;
     const call = result.snapshot.calls[0];
@@ -827,7 +827,7 @@ return await agent('retry metadata')`,
     const child = createDeferred<unknown>();
     const runnerStarted = createDeferred();
     const cleanupStarted = createDeferred();
-    const snapshots: WorkflowExecutionSnapshot[] = [];
+    const snapshots: WorkflowRunSnapshot[] = [];
     const run = runWorkflowScript({
       script: `export const meta = {
   name: 'abandoned-invalid-result',
@@ -903,7 +903,7 @@ return 'guest success'`,
   it('does not seal while an admitted journal persistence is still pending', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      const snapshots: WorkflowExecutionSnapshot[] = [];
+      const snapshots: WorkflowRunSnapshot[] = [];
       const child = createDeferred<string>();
       const childStarted = createDeferred();
       const journalWriteStarted = createDeferred();
@@ -964,8 +964,8 @@ return 'guest success'`,
   it('seals snapshots and checkpoints after a late child exceeds drain grace', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      const store = getExecutionStore(executionId);
-      const snapshots: WorkflowExecutionSnapshot[] = [];
+      const store = getRunStore(executionId);
+      const snapshots: WorkflowRunSnapshot[] = [];
       const child = createDeferred<string>();
       const started = createDeferred();
       const run = runPersistedWorkflowScript({
@@ -996,7 +996,7 @@ return 'guest success'`,
         expect.any(String),
       );
       expect(() =>
-        WorkflowExecutionSnapshotSchema.parse(result.snapshot),
+        WorkflowRunSnapshotSchema.parse(result.snapshot),
       ).not.toThrow();
       await expect(
         readWorkflowScriptCheckpoint(store, 'late-sealed-child'),
@@ -1019,7 +1019,7 @@ return 'guest success'`,
   });
 
   it('keeps checkpoints isolated by tool call id', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await runPersistedWorkflowScript({
       store,
       checkpointId: 'call-a',
@@ -1046,7 +1046,7 @@ return 'guest success'`,
   });
 
   it('treats absence as fresh but rejects malformed present state', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await expect(
       readWorkflowScriptCheckpoint(store, 'missing'),
     ).resolves.toBeNull();
@@ -1072,7 +1072,7 @@ return 'guest success'`,
   });
 
   it('accepts script drift: unchanged calls replay, changed calls re-run', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await runPersistedWorkflowScript({
       store,
       checkpointId: 'stable-call',
@@ -1085,7 +1085,7 @@ return 'guest success'`,
       async ({ prompt }: { prompt: string }) => `v2:${prompt}`,
     );
     const evolved = await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
+      store: getRunStore(executionId),
       checkpointId: 'stable-call',
       script: script.replace(`agent('second')`, `agent('changed')`),
       runAgent: retryRunner,
@@ -1097,7 +1097,7 @@ return 'guest success'`,
     expect(retryRunner).toHaveBeenCalledTimes(1);
     expect(evolved.result).toEqual(['v1:first', 'v2:changed']);
     const checkpoint = await readWorkflowScriptCheckpoint(
-      getExecutionStore(executionId),
+      getRunStore(executionId),
       'stable-call',
     );
     expect(checkpoint?.script).toContain(`agent('changed')`);
@@ -1110,7 +1110,7 @@ return 'guest success'`,
   });
 
   it('keeps a failed revision union for resume, then compacts on success', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await runPersistedWorkflowScript({
       store,
       checkpointId: 'revision-failure',
@@ -1163,7 +1163,7 @@ return 'guest success'`,
   });
 
   it('bounds prompt and dependency revisions to the successful invocation', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const promptScript = (revision: number) =>
       `${script.replace(`agent('second')`, `agent('revision-${revision}')`)}`;
     for (let revision = 0; revision < 4; revision += 1) {
@@ -1198,7 +1198,7 @@ return await agent('edit', { inputFiles: ['paper.tex'] })`;
   });
 
   it('replays a call that moved because a sibling was inserted before it', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await runPersistedWorkflowScript({
       store,
       checkpointId: 'moved-call',
@@ -1211,7 +1211,7 @@ return await agent('edit', { inputFiles: ['paper.tex'] })`;
       async ({ prompt }: { prompt: string }) => `v2:${prompt}`,
     );
     const evolved = await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
+      store: getRunStore(executionId),
       checkpointId: 'moved-call',
       script: script.replace(
         `const second = await agent('second')`,
@@ -1226,7 +1226,7 @@ return await agent('edit', { inputFiles: ['paper.tex'] })`;
     expect(evolved.result).toEqual(['v1:first', 'v1:second']);
     expect(retryRunner.mock.calls[0]?.[0]?.prompt).toBe('inserted');
     const checkpoint = await readWorkflowScriptCheckpoint(
-      getExecutionStore(executionId),
+      getRunStore(executionId),
       'moved-call',
     );
     expect(checkpoint?.journal.map((entry) => entry.index)).toEqual([0, 1, 2]);
@@ -1245,21 +1245,21 @@ return [a, b, c]`;
       A: {
         agent: 'agent-a',
         model: 'model-a',
-        childExecutionId: 'aaaaaaaaaaaa' as ExecutionId,
+        childExecutionId: 'aaaaaaaaaaaa' as RunId,
         childStreamId: 'agent-a#aaaaaaaaaaaa',
         costUsd: 10,
       },
       B: {
         agent: 'agent-b',
         model: 'model-b',
-        childExecutionId: 'bbbbbbbbbbbb' as ExecutionId,
+        childExecutionId: 'bbbbbbbbbbbb' as RunId,
         childStreamId: 'agent-b#bbbbbbbbbbbb',
         costUsd: 20,
       },
       C: {
         agent: 'agent-c',
         model: 'model-c',
-        childExecutionId: 'cccccccccccc' as ExecutionId,
+        childExecutionId: 'cccccccccccc' as RunId,
         childStreamId: 'agent-c#cccccccccccc',
         costUsd: 30,
       },
@@ -1278,7 +1278,7 @@ return [a, b, c]`;
       invocation.report?.({
         agent: 'agent-n',
         model: 'model-n',
-        childExecutionId: 'nnnnnnnnnnnn' as ExecutionId,
+        childExecutionId: 'nnnnnnnnnnnn' as RunId,
         childStreamId: 'agent-n#nnnnnnnnnnnn',
         costUsd: 1,
       });
@@ -1447,7 +1447,7 @@ return await agent('proven result')`;
           invocation.report?.({
             agent: 'proven-agent',
             model: 'proven-model',
-            childExecutionId: 'pppppppppppp' as ExecutionId,
+            childExecutionId: 'pppppppppppp' as RunId,
             childStreamId: 'proven#pppppppppppp',
             costUsd: 7,
           });
@@ -1461,7 +1461,7 @@ return await agent('proven result')`;
       lagging.calls[0]!.timestamps.completedAt = undefined;
       lagging.calls[0]!.attempts[0]!.completedAt = undefined;
 
-      const snapshots: WorkflowExecutionSnapshot[] = [];
+      const snapshots: WorkflowRunSnapshot[] = [];
       const replayed = await runWorkflowScript({
         script: laggingScript,
         initialSnapshot: lagging,
@@ -1512,7 +1512,7 @@ return await agent('same position')`;
           invocation.report?.({
             agent: 'stale-agent',
             model: 'stale-model',
-            childExecutionId: 'ssssssssssss' as ExecutionId,
+            childExecutionId: 'ssssssssssss' as RunId,
             childStreamId: 'stale#ssssssssssss',
             costUsd: 9,
           });
@@ -1529,7 +1529,7 @@ return await agent('same position')`;
           invocation.report?.({
             agent: 'fresh-agent',
             model: 'fresh-model',
-            childExecutionId: 'ffffffffffff' as ExecutionId,
+            childExecutionId: 'ffffffffffff' as RunId,
             childStreamId: 'fresh#ffffffffffff',
             costUsd: 1,
           });
@@ -1561,7 +1561,7 @@ return await agent('same position')`;
   );
 
   it('round-trips an undefined agent result explicitly', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const undefinedScript = `export const meta = {
   name: 'undefined-result',
   description: 'persists an undefined result',
@@ -1587,7 +1587,7 @@ return await agent('none')`;
   });
 
   it('preserves opaque checkpoint ids without normalizing them', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await writeWorkflowScriptCheckpoint(store, ' call-with-space ', {
       script,
       args: undefined,
@@ -1604,7 +1604,7 @@ return await agent('none')`;
   });
 
   it('maps maximum-length checkpoint ids to filesystem-safe keys', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const checkpointId = 'x'.repeat(256);
     const key = workflowScriptCheckpointKvKey(checkpointId);
 
@@ -1629,7 +1629,7 @@ return await agent('none')`;
   });
 
   it('persists arguments and restores them when a restart omits them', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const argsScript = `export const meta = {
   name: 'args-restart',
   description: 'restores persisted arguments',
@@ -1657,7 +1657,7 @@ return await agent(args.topic)`;
   });
 
   it('persists launch files and restores them when a restart omits them', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const inputScript = `export const meta = {
   name: 'inputs-restart',
   description: 'restores persisted launch files',
@@ -1698,7 +1698,7 @@ return files`;
   });
 
   it('adopts new arguments on resume and keeps the journal', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const argsScript = `export const meta = {
   name: 'args-evolve',
   description: 'adopts evolved arguments',
@@ -1716,7 +1716,7 @@ return [first, args.topic]`;
     clearStoreCache();
     const retryRunner = vi.fn(() => Promise.reject(new Error('live run')));
     const evolved = await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
+      store: getRunStore(executionId),
       checkpointId: 'stable-args',
       script: argsScript,
       args: { topic: 'analysis' },
@@ -1729,7 +1729,7 @@ return [first, args.topic]`;
   });
 
   it('validates arguments before creating a checkpoint or launching an agent', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const runner = vi.fn(async () => 'must not run');
 
     await expect(
@@ -1750,7 +1750,7 @@ return [first, args.topic]`;
   });
 
   it('serializes overlapping runs for the same checkpoint', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const runner = vi.fn(async ({ prompt }) => {
       await delay(10);
       return `result:${prompt}`;
@@ -1776,7 +1776,7 @@ return [first, args.topic]`;
   });
 
   it('retains completed entries when the script later throws', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const failingScript = `export const meta = {
   name: 'partial-run',
   description: 'fails after a completed call',
@@ -1802,7 +1802,7 @@ throw new Error('script stopped')`;
   });
 
   it('serializes parallel checkpoint writes before a later script failure', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     interceptFirstEntryWrite(store, () => delay(25));
     const parallelScript = `export const meta = {
   name: 'parallel-checkpoint',
@@ -1829,7 +1829,7 @@ throw new Error('stop after fan-out')`;
   });
 
   it('aborts when a completed result cannot be checkpointed', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     interceptFirstEntryWrite(store, () =>
       Promise.reject(new Error('storage unavailable')),
     );
@@ -1850,7 +1850,7 @@ throw new Error('stop after fan-out')`;
   });
 
   it('does not launch an agent when the initial checkpoint write fails', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     vi.spyOn(store, 'write').mockRejectedValue(new Error('disk full'));
     const runner = vi.fn(async () => 'should not run');
 
@@ -1866,7 +1866,7 @@ throw new Error('stop after fan-out')`;
   });
 
   it('does not let script code suppress a checkpoint failure', async () => {
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     interceptFirstEntryWrite(store, () =>
       Promise.reject(new Error('checkpoint rejected')),
     );

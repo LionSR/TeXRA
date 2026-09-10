@@ -31,7 +31,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { InquiryThreadUpdatedEvent, StreamTabId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import {
-  descendantStreams,
+  descendantRuns,
   type SessionView,
   type StreamView,
 } from '@shared/session/sessionView';
@@ -260,7 +260,7 @@ export class BackgroundTasksPanel extends LitElement {
     const view = this.view;
     if (!view) return [];
     return streams.flatMap((child) =>
-      descendantStreams(view, child.id, { includeRoot: true })
+      descendantRuns(view, child.id, { includeRoot: true })
         .map((id) => view.streams.get(id))
         .filter((stream): stream is StreamView => stream !== undefined),
     );

@@ -1,6 +1,6 @@
 /** Completed-run display reads, keyed by the registered execution-to-stream link. */
 import { Effect } from 'effect';
-import { resolveStreamForExecution } from '@agent/storage/executionLifecycle';
+import { resolveStreamTabIdForRun } from '@agent/storage/executionLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
@@ -9,9 +9,9 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   ToolResultSchema,
-  type ExecutionId,
-  type StreamLogEntry,
-  type StreamLogEntryOf,
+  type RunId,
+  type RunLogEntry,
+  type RunLogEntryOf,
   type StreamTabId,
   type TodoItem,
   type ToolUseLog,
@@ -21,10 +21,10 @@ import { assertNever, isObject } from '@utils/core';
 /** Read completed tasks from the session's committed stream fold. */
 export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
   function* (
-    executionId: ExecutionId,
+    executionId: RunId,
     session: SessionHandle,
   ): Effect.fn.Return<readonly TodoItem[], Error> {
-    const resolution = yield* resolveStreamForExecution(executionId, session);
+    const resolution = yield* resolveStreamTabIdForRun(executionId, session);
     if (!resolution) return [];
     const snapshot = yield* session.snapshots.read(resolution.streamId);
     return snapshot.todos;
@@ -88,7 +88,7 @@ function toolResultText(tool: ToolUseLog): string | undefined {
  * `content` shape every other conversation consumer already expects.
  */
 function userMessageEntryToMessages(
-  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.USER_MESSAGE>,
+  entry: RunLogEntryOf<typeof MESSAGE_TYPES.USER_MESSAGE>,
 ): unknown[] {
   if (!entry.text) return [];
   const attachments = entry.data?.attachments ?? [];
@@ -107,7 +107,7 @@ function userMessageEntryToMessages(
   ];
 }
 
-function modelResponseEntryToMessages(entry: StreamLogEntry): unknown[] {
+function modelResponseEntryToMessages(entry: RunLogEntry): unknown[] {
   if (!entry.text?.trim()) return [];
   return [
     {
@@ -117,7 +117,7 @@ function modelResponseEntryToMessages(entry: StreamLogEntry): unknown[] {
   ];
 }
 
-function thinkingEntryToMessages(entry: StreamLogEntry): unknown[] {
+function thinkingEntryToMessages(entry: RunLogEntry): unknown[] {
   if (!entry.text?.trim()) return [];
   return [
     {
@@ -128,7 +128,7 @@ function thinkingEntryToMessages(entry: StreamLogEntry): unknown[] {
 }
 
 function toolUseEntryToMessages(
-  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.TOOL_USE>,
+  entry: RunLogEntryOf<typeof MESSAGE_TYPES.TOOL_USE>,
 ): unknown[] {
   const tool = entry.data;
   const messages: unknown[] = [
@@ -155,7 +155,7 @@ function toolUseEntryToMessages(
 
 /** Anthropic-shaped `server_tool_use` + `web_search_tool_result` blocks. */
 function webSearchEntryToMessages(
-  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.WEB_SEARCH>,
+  entry: RunLogEntryOf<typeof MESSAGE_TYPES.WEB_SEARCH>,
 ): unknown[] {
   const data = entry.data;
   const blocks: unknown[] = [];
@@ -180,7 +180,7 @@ function webSearchEntryToMessages(
 }
 
 function webFetchEntryToMessages(
-  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.WEB_FETCH>,
+  entry: RunLogEntryOf<typeof MESSAGE_TYPES.WEB_FETCH>,
 ): unknown[] {
   const data = entry.data;
   if (!data.url) return [];
@@ -219,7 +219,7 @@ function webFetchEntryToMessages(
  * here; adding a new `MessageType` without deciding fails to compile
  * (`assertNever`), instead of silently dropping conversation content.
  */
-function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
+function conversationMessagesForEntry(entry: RunLogEntry): unknown[] {
   const { messageType } = entry;
   if (messageType === undefined) return [];
   switch (messageType) {
@@ -273,7 +273,7 @@ function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
  * recognizes, so downstream rendering code needs no new shape.
  */
 function streamLogEntriesToConversation(
-  entries: readonly StreamLogEntry[],
+  entries: readonly RunLogEntry[],
 ): unknown[] {
   return entries.flatMap((entry) =>
     entry.type === STREAM_LOG_ENTRY_TYPES.LOG
@@ -286,10 +286,10 @@ function streamLogEntriesToConversation(
 export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
-  const resolution = yield* resolveStreamForExecution(executionId, session);
+  const resolution = yield* resolveStreamTabIdForRun(executionId, session);
   if (!resolution) return { conversation: null, source: 'none' };
   const { streamId } = resolution;
   const conversation = streamLogEntriesToConversation(

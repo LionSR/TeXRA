@@ -8,9 +8,9 @@
  */
 import { Effect, SubscriptionRef } from 'effect';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { resolveAgentKey } from '@agent/index/agentRegistry';
-import type { ExecutionRequest } from '@agent/core/state/executionRequests';
+import type { RunRequest } from '@agent/core/state/executionRequests';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -55,7 +55,7 @@ export interface HostRunActionPorts {
   readonly session: SessionHandle;
   /** Launch or resume a run; the host's own launcher reaches `runAgent`. */
   runExecutionRequest(
-    request: ExecutionRequest,
+    request: RunRequest,
     options?: {
       preferHelperModel?: boolean;
       copilotRouteOverride?: 'direct';
@@ -123,8 +123,7 @@ export function createHostRunActions(
     yield* snapshots.preload([streamId]);
     const { executionId } = getRunMetadata(streamId);
     return executionId
-      ? ((yield* getExecutionRecords(session, executionId).readConfig()) ??
-          undefined)
+      ? ((yield* getRunRecords(session, executionId).readConfig()) ?? undefined)
       : undefined;
   });
 
@@ -151,7 +150,7 @@ export function createHostRunActions(
       );
     }
     const config = metadata.executionId
-      ? yield* getExecutionRecords(session, metadata.executionId).readConfig()
+      ? yield* getRunRecords(session, metadata.executionId).readConfig()
       : null;
     if (!config) {
       return yield* Effect.fail(

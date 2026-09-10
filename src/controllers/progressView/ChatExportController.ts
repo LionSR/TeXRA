@@ -31,7 +31,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   assembleTrace,
   injectStandaloneTrace,
@@ -100,7 +100,7 @@ export class ChatExportController {
     historyId: string,
   ): Effect.fn.Return<ExportInputResult, Error> {
     const { config, exportInput } = yield* loadChatExportInput(
-      historyId as ExecutionId,
+      historyId as RunId,
       this.deps.session,
     );
 
@@ -173,7 +173,7 @@ export class ChatExportController {
       standaloneTemplatePath: string,
     ): Effect.fn.Return<HtmlExportOutcome, Error> {
       const traceResult = yield* assembleTrace(
-        historyId as ExecutionId,
+        historyId as RunId,
         this.deps.session,
       );
       if (traceResult.status !== 'ok') {

@@ -17,7 +17,7 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import {
   getRunContextStreamId,
   tryUseRunContext,
@@ -42,7 +42,7 @@ import {
   type ToolUseAgentProposal,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
-import { requireRunStream } from '@tools/contextHelpers';
+import { requireRun } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -76,7 +76,7 @@ const log = createLog('delegation');
  */
 const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
   function* (
-    handle: AgentExecutionHandle,
+    handle: RunHandle,
     session: SessionHandle,
     executionId: string,
     err: unknown,
@@ -128,7 +128,7 @@ Optional auto-attach from the input LaTeX:
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
     const agent = requireVisibleAgent('workflow', input.agent);
     const agentName = agent.name;
-    const { streamId, context } = requireRunStream('delegate_workflow');
+    const { streamId, context } = requireRun('delegate_workflow');
 
     const model = await effectRuntime().runPromise(
       selectAvailableDelegationModel({
@@ -267,7 +267,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
     const agent = requireVisibleAgent('toolUse', input.agent!);
     const agentName = agent.name;
 
-    const { streamId, context } = requireRunStream('delegate_agent');
+    const { streamId, context } = requireRun('delegate_agent');
 
     const model = await effectRuntime().runPromise(
       selectAvailableDelegationModel({

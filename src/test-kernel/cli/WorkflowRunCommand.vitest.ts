@@ -22,7 +22,7 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/runExecution';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import { durableFinalizationResult } from '@test/support/agentStorageFixtures';
 import { withTempDir } from '@test/support/tempDirPlatform';
@@ -45,7 +45,7 @@ vi.mock('@agent/storage', async (importOriginal) => {
     await import('@test/support/FakeExecutionKVStore');
   return {
     ...(await importOriginal<typeof import('@agent/storage')>()),
-    getExecutionRecords: vi.fn(() =>
+    getRunRecords: vi.fn(() =>
       createFakeExecutionRecords({
         writeResultMeta: (meta) =>
           Effect.tryPromise({
@@ -625,27 +625,23 @@ describe('CLI workflow run command', () => {
             Effect.sync(() => createTestSession()),
             (owned) => Effect.sync(() => owned.dispose()),
           );
-          const executionId = 'abc123abc123' as ExecutionId;
+          const executionId = 'abc123abc123' as RunId;
           const { runInSession } = yield* Effect.promise(
             () => import('@agent/runtime/RunContext'),
           );
-          const { acquireFreshExecutionLease } = yield* Effect.promise(
+          const { acquireFreshRunLease } = yield* Effect.promise(
             () => import('@agent/storage/executionLease'),
           );
           yield* Effect.promise(() =>
-            runInSession(session, () =>
-              acquireFreshExecutionLease(executionId),
-            ),
+            runInSession(session, () => acquireFreshRunLease(executionId)),
           );
           const execution = workflowExecution(executionId);
           if (!execution.ok) throw new Error('Expected workflow result.');
           vi.mocked(initializeCliTranscriptSession).mockResolvedValueOnce(
             session,
           );
-          const records = storage.getExecutionRecords(session, executionId);
-          vi.mocked(mockedStorage.getExecutionRecords).mockReturnValueOnce(
-            records,
-          );
+          const records = storage.getRunRecords(session, executionId);
+          vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
           yield* session.commit([
             {
               type: 'run.start',

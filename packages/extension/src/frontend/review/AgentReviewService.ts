@@ -37,7 +37,7 @@ import {
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
+import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -318,7 +318,7 @@ class AgentReviewServiceImpl {
             session: run.session,
             onRun: (handle) =>
               effectRuntime().runPromise(this.reviewRuns.bind(run, handle)),
-            onStreamResolved: presentLaunchedProgressStream,
+            onStreamResolved: presentLaunchedProgressRun,
           },
         ),
       );

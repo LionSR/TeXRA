@@ -17,7 +17,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 
 import { AgentCategory } from '@shared/schemas';
 import { testModelCell } from '../modelCellTestUtils';
@@ -41,7 +41,7 @@ export const testModelInfo = {
 };
 
 interface TestLaunchContextInit {
-  executionId: ExecutionId;
+  executionId: RunId;
   streamId: StreamTabId;
   /** Session owning the run; defaults to the ambient default session. */
   session?: SessionHandle;

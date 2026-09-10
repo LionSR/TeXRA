@@ -6,7 +6,7 @@ import {
   LineCountSchema,
   type DiffStats,
 } from './lineChanges';
-import { ExecutionIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { RoundNumberSchema } from './roundIndexed';
 
 const WorkspaceFileLocationSchema = z.strictObject({
@@ -19,7 +19,7 @@ const RunStorageFileLocationSchema = z.strictObject({
   kind: z.literal('runStorage'),
   absolutePath: z.string(),
   relativePath: z.string(),
-  executionId: ExecutionIdSchema,
+  executionId: RunIdSchema,
 });
 
 const ExternalFileLocationSchema = z.strictObject({

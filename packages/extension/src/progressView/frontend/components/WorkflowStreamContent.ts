@@ -33,7 +33,7 @@ type WorkflowStreamView = Extract<
 >;
 
 @customElement('workflow-stream-content')
-export class WorkflowStreamContent extends LitElement {
+export class WorkflowRunContent extends LitElement {
   static override styles = conversationContentStyles;
 
   @property({ attribute: false }) stream!: WorkflowStreamView;
@@ -110,6 +110,6 @@ export class WorkflowStreamContent extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'workflow-stream-content': WorkflowStreamContent;
+    'workflow-stream-content': WorkflowRunContent;
   }
 }

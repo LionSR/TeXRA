@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildStatusBarDisplay,
-  statusBarStreamTarget,
+  statusBarRunTarget,
   subscriptionUsageProviderForStatus,
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
@@ -1033,9 +1033,9 @@ describe('CLI StatusBar display model', () => {
 
     const cases: ReadonlyArray<{
       readonly name: string;
-      readonly input: Parameters<typeof statusBarStreamTarget>[0];
+      readonly input: Parameters<typeof statusBarRunTarget>[0];
       readonly ctrlCAction: ReturnType<
-        typeof statusBarStreamTarget
+        typeof statusBarRunTarget
       >['ctrlCAction'];
       readonly displayStreamId: string | undefined;
       readonly isChildStream: boolean;
@@ -1043,7 +1043,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused waiting child with nothing pending or live to stop',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as StreamTabId,
           canStopActiveRun: true,
           ...waitingChildOnly,
         },
@@ -1054,7 +1054,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused root that is not in the view and has no live ancestor',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as StreamTabId,
           canStopActiveRun: true,
           ...waitingChildOnly,
         },
@@ -1065,7 +1065,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused live root without stop capability',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as StreamTabId,
           canStopActiveRun: false,
           ...liveRootTree,
         },
@@ -1076,7 +1076,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused live root with stop capability',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as StreamTabId,
           canStopActiveRun: true,
           ...liveRootTree,
         },
@@ -1087,7 +1087,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused stopped child without stop capability',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as StreamTabId,
           canStopActiveRun: false,
           ...liveRootTree,
         },
@@ -1098,7 +1098,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused stopped child with stop capability',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as StreamTabId,
           canStopActiveRun: true,
           ...liveRootTree,
         },
@@ -1109,7 +1109,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused waiting child while the root is still live',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as StreamTabId,
           canStopActiveRun: false,
           ...liveRootWaitingChild,
         },
@@ -1120,7 +1120,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused stopped grandchild without stop capability',
         input: {
-          activeStreamId: 'grandchild' as StreamTabId,
+          activeRunId: 'grandchild' as StreamTabId,
           canStopActiveRun: false,
           ...liveRootTree,
         },
@@ -1131,7 +1131,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused stopped grandchild with stop capability',
         input: {
-          activeStreamId: 'grandchild' as StreamTabId,
+          activeRunId: 'grandchild' as StreamTabId,
           canStopActiveRun: true,
           ...liveRootTree,
         },
@@ -1142,7 +1142,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'no focused stream and no pending run to stop',
         input: {
-          activeStreamId: undefined,
+          activeRunId: undefined,
           canStopActiveRun: true,
           canStopPendingRun: false,
           ...empty,
@@ -1154,7 +1154,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'no focused stream but a pending run that has no stream yet',
         input: {
-          activeStreamId: undefined,
+          activeRunId: undefined,
           canStopActiveRun: true,
           canStopPendingRun: true,
           ...empty,
@@ -1169,7 +1169,7 @@ describe('CLI StatusBar display model', () => {
         // offer to stop a run that is not there.
         name: 'focused root whose stream has no phase and no pending run',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as StreamTabId,
           canStopActiveRun: true,
           ...pendingRoot,
         },
@@ -1183,7 +1183,7 @@ describe('CLI StatusBar display model', () => {
         // does not; never an absent phase read as live.
         name: 'focused phaseless root while a pending run is stoppable',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as StreamTabId,
           canStopActiveRun: true,
           canStopPendingRun: true,
           ...pendingRoot,
@@ -1195,7 +1195,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused waiting root while a pending run is stoppable',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as StreamTabId,
           canStopActiveRun: true,
           canStopPendingRun: true,
           ...waitingRoot,
@@ -1207,7 +1207,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'focused waiting root without stop capability',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as StreamTabId,
           canStopActiveRun: false,
           ...waitingRoot,
         },
@@ -1220,7 +1220,7 @@ describe('CLI StatusBar display model', () => {
         // after the visible stream tree has already become terminal.
         name: 'stale stop capability over a fully terminal root',
         input: {
-          activeStreamId: 'root' as StreamTabId,
+          activeRunId: 'root' as StreamTabId,
           canStopActiveRun: true,
           ...stoppedTree,
         },
@@ -1231,7 +1231,7 @@ describe('CLI StatusBar display model', () => {
       {
         name: 'stale stop capability over a fully terminal child',
         input: {
-          activeStreamId: 'child' as StreamTabId,
+          activeRunId: 'child' as StreamTabId,
           canStopActiveRun: true,
           ...stoppedTree,
         },
@@ -1241,7 +1241,7 @@ describe('CLI StatusBar display model', () => {
       },
     ];
     it.each(cases)('$name', ({ input, ...expected }) => {
-      const target = statusBarStreamTarget(input);
+      const target = statusBarRunTarget(input);
       expect(target.ctrlCAction).toBe(expected.ctrlCAction);
       expect(target.displayStreamId).toBe(expected.displayStreamId);
       expect(target.isChildStream).toBe(expected.isChildStream);

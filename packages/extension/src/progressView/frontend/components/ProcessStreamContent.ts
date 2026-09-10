@@ -9,7 +9,7 @@ import { conversationContentStyles } from './ConversationContent.styles';
 import './StreamHeader';
 
 @customElement('process-stream-content')
-export class ProcessStreamContent extends BaseStreamContent {
+export class ProcessRunContent extends BaseStreamContent {
   static override styles = [
     conversationContentStyles,
     css`
@@ -106,6 +106,6 @@ export class ProcessStreamContent extends BaseStreamContent {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'process-stream-content': ProcessStreamContent;
+    'process-stream-content': ProcessRunContent;
   }
 }

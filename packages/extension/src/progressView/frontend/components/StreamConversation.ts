@@ -15,7 +15,7 @@ import './WorkflowStreamContent';
 import './ProcessStreamContent';
 
 @customElement('stream-conversation')
-export class StreamConversation extends LitElement {
+export class RunConversation extends LitElement {
   static override styles = css`
     :host {
       /* The transcript spans the panel instead of a fixed reading column:
@@ -88,6 +88,6 @@ export class StreamConversation extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'stream-conversation': StreamConversation;
+    'stream-conversation': RunConversation;
   }
 }

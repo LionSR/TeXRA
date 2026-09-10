@@ -22,20 +22,20 @@ vi.mock('@agent/storage', () => ({
       try: () => mocks.finalizeRun(...args),
       catch: ensureError,
     }),
-  registerExecution: (...args: unknown[]) =>
+  registerRun: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.registerExecution(...args),
       catch: ensureError,
     }),
-  getExecutionRecords: () => ({
+  getRunRecords: () => ({
     readMeta: () => Effect.sync(() => mocks.readMeta()),
   }),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
-  validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
+  acquireResumedRunLease: mocks.acquireResumedExecutionLease,
+  releaseOwnedRunLease: mocks.releaseOwnedExecutionLease,
+  validateOwnedRunLease: mocks.validateOwnedExecutionLease,
 }));
 
 vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
@@ -64,7 +64,7 @@ vi.mock('@agent/runtime/executeAgent', async () => {
 });
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -75,21 +75,21 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-const EXECUTION_ID = 'run-agent-owner' as ExecutionId;
+const EXECUTION_ID = 'run-agent-owner' as RunId;
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   agentCategory: 'toolUse',
   model: 'test-model',
 });
 const flushArtifacts = vi.fn();
-let trackedHandle: AgentExecutionHandle | undefined;
-const trackExecution = vi.fn((handle: AgentExecutionHandle) => {
+let trackedHandle: RunHandle | undefined;
+const trackExecution = vi.fn((handle: RunHandle) => {
   trackedHandle = handle;
 });
-const untrackExecution = vi.fn((executionId: ExecutionId) => {
+const untrackExecution = vi.fn((executionId: RunId) => {
   if (trackedHandle?.executionId === executionId) trackedHandle = undefined;
 });
 // The real exit choreography over the fake's flushArtifacts and the mocked
@@ -104,7 +104,7 @@ const SESSION = {
     untrack: untrackExecution,
     // No competing generation exists in this fixture; the lane is a passthrough.
     launchExecution: vi.fn(
-      (_executionId: ExecutionId, operation: Effect.Effect<unknown, unknown>) =>
+      (_executionId: RunId, operation: Effect.Effect<unknown, unknown>) =>
         operation,
     ),
   },
@@ -157,7 +157,7 @@ describe('runAgent execution ownership', () => {
     const signal = new AbortController().signal;
     const removeEventListener = vi.spyOn(signal, 'removeEventListener');
     const trackError = new Error('execution tracking failed');
-    let partiallyTrackedHandle: AgentExecutionHandle | undefined;
+    let partiallyTrackedHandle: RunHandle | undefined;
     trackExecution.mockImplementationOnce((handle) => {
       trackedHandle = handle;
       partiallyTrackedHandle = handle;

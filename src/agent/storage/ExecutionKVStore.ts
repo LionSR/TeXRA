@@ -21,20 +21,20 @@ import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
-  ExecutionMetaSchema,
+  RunMetaSchema,
   RUN_OUTCOME,
   aggregateId,
   aggregateTarget,
   EXECUTION_META_SCHEMA_VERSION,
   type SessionEvent,
   type SessionEventDraft,
-  type ExecutionId,
-  type ExecutionMeta,
+  type RunId,
+  type RunMeta,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ResultMetaSchema, type ResultMeta } from './resultMeta';
-import { runWithExecutionLeaseWriteFence } from './executionLease';
+import { runWithRunLeaseWriteFence } from './executionLease';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
@@ -55,7 +55,7 @@ const log = createLog('ExecutionKVStore');
 
 /** A child launch projected from its canonical creation fact. */
 export interface ChildRecord {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   readonly agent: string;
   readonly timestamp: string;
 }
@@ -106,7 +106,7 @@ export interface ExecutionKVStore {
   exists(key: string): Promise<boolean>;
   listKeys(prefix?: string): Promise<string[]>;
   clear(): Promise<void>;
-  getExecutionId(): ExecutionId;
+  getExecutionId(): RunId;
 
   readTurnState(): Promise<ChildTurnState | null>;
   writeTurnState(state: ChildTurnState): Promise<void>;
@@ -122,31 +122,27 @@ export interface ExecutionKVStore {
  * Stores data in executions/{executionId}/{key}.json
  */
 class StorageFSKVStore extends KVStore implements ExecutionKVStore {
-  constructor(private readonly executionId: ExecutionId) {
+  constructor(private readonly executionId: RunId) {
     // Compact JSON: flow records rewrite full shared state on every node
     // transition, so pretty-printing this machine-owned store is pure churn.
     super(resolveRunStoragePath(executionId), { compactJson: true });
   }
 
   override async write<T = unknown>(key: string, value: T): Promise<void> {
-    await runWithExecutionLeaseWriteFence(this.executionId, () =>
+    await runWithRunLeaseWriteFence(this.executionId, () =>
       super.write(key, value),
     );
   }
 
   override async delete(key: string): Promise<void> {
-    await runWithExecutionLeaseWriteFence(this.executionId, () =>
-      super.delete(key),
-    );
+    await runWithRunLeaseWriteFence(this.executionId, () => super.delete(key));
   }
 
   async clear(): Promise<void> {
-    return runWithExecutionLeaseWriteFence(this.executionId, () =>
-      this.deleteDir(),
-    );
+    return runWithRunLeaseWriteFence(this.executionId, () => this.deleteDir());
   }
 
-  getExecutionId(): ExecutionId {
+  getExecutionId(): RunId {
     return this.executionId;
   }
 
@@ -179,8 +175,8 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 /** Fold the named metadata records for one execution from one database prefix. */
 export function executionMetaFromEvents(
   rows: readonly SessionEvent[],
-  executionId: ExecutionId,
-): ExecutionMeta | null {
+  executionId: RunId,
+): RunMeta | null {
   const id = aggregateId('execution', executionId);
   const start = rows.find(
     (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
@@ -203,7 +199,7 @@ export function executionMetaFromEvents(
   const workflow = rows.findLast(
     (row) => row.aggregateId === id && row.type === 'execution.workflow',
   );
-  return ExecutionMetaSchema.parse({
+  return RunMetaSchema.parse({
     schemaVersion: EXECUTION_META_SCHEMA_VERSION,
     timestamp: new Date(start.at).toISOString(),
     streamId: aggregateTarget(start.aggregateId).id,
@@ -229,7 +225,7 @@ export function executionMetaFromEvents(
 /** Read the current configuration from the same committed prefix as metadata. */
 export function executionRunRecordFromEvents(
   rows: readonly SessionEvent[],
-  executionId: ExecutionId,
+  executionId: RunId,
 ): RunRecord | null {
   if (!executionMetaFromEvents(rows, executionId)) return null;
   const id = aggregateId('execution', executionId);
@@ -242,10 +238,7 @@ export function executionRunRecordFromEvents(
 }
 
 /** Native access to named execution metadata, with no file-backed read arm. */
-export function getExecutionRecords(
-  session: SessionHandle,
-  executionId: ExecutionId,
-) {
+export function getRunRecords(session: SessionHandle, executionId: RunId) {
   const id = aggregateId('execution', executionId);
   const read = <A>(
     select: (rows: readonly SessionEvent[]) => A,
@@ -274,7 +267,7 @@ export function getExecutionRecords(
   const recordOf = (rows: readonly SessionEvent[]) =>
     executionRunRecordFromEvents(rows, executionId);
   return {
-    readMeta: (): Effect.Effect<ExecutionMeta | null, Error> => read(metaOf),
+    readMeta: (): Effect.Effect<RunMeta | null, Error> => read(metaOf),
     readRunRecord: (): Effect.Effect<RunRecord | null, Error> => read(recordOf),
     readConfig: (): Effect.Effect<AgentConfig | null, Error> =>
       read((rows) => {
@@ -353,9 +346,9 @@ export function getExecutionRecords(
 // so eviction is lossless — re-creation just makes a new thin wrapper. The
 // cache exists for instance identity (callers spy on the returned store),
 // not to avoid work.
-const storeCache = new LRUCache<ExecutionId, StorageFSKVStore>({ max: 50 });
+const storeCache = new LRUCache<RunId, StorageFSKVStore>({ max: 50 });
 
-export function getExecutionStore(executionId: ExecutionId): ExecutionKVStore {
+export function getRunStore(executionId: RunId): ExecutionKVStore {
   const cached = storeCache.get(executionId);
   if (cached) return cached;
   const created = new StorageFSKVStore(executionId);

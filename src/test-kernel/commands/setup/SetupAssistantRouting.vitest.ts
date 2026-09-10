@@ -83,7 +83,7 @@ vi.mock('@utils/config/providerConfig', () => ({
 // The launch's stream selection is the progress view's own; this suite
 // checks routing, so the provider graph stays out of it.
 vi.mock('@progressView/progressNavigation', () => ({
-  presentLaunchedProgressStream: vi.fn(),
+  presentLaunchedProgressRun: vi.fn(),
 }));
 
 vi.mock('@frontend/secretManager', () => ({

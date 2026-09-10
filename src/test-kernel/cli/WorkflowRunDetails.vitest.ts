@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConversationPane } from '@cli/chat/tui/panes/ConversationPane';
 import { selectWorkflowRunDetailLines } from '@cli/chat/tui/panes/WorkflowRunDetails';
-import { activeStreamId, resetCliState } from '@cli/chat/tui/state/cliState';
+import { activeRunId, resetCliState } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
   type CompileFailure,
@@ -269,7 +269,7 @@ describe('selectWorkflowRunDetailLines', () => {
         }),
       ]),
     );
-    activeStreamId.set(STREAM_ID);
+    activeRunId.set(STREAM_ID);
     const { ink, React } = await loadInk();
     const output = ink.renderToString(
       React.createElement(ConversationPane, {

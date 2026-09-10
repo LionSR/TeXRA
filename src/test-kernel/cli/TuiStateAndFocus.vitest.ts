@@ -3,23 +3,23 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  activeStreamId,
+  activeRunId,
   beginWorkPlanReaderRequest,
   closeInfoPane,
   finishWorkPlanReaderRequest,
-  focusStream,
+  focusRun,
   foregroundReader,
   infoPane,
   openInfoPane,
   rootRunPending,
-  rootRunStreamId,
-  rootStreamId,
+  pendingRootRunId,
+  rootRunId,
   resetCliState,
   setTransientNotice,
   transientNotice,
-  expandedStreams,
+  expandedRuns,
   sessionListRows,
-  sessionListStreamIds,
+  sessionListRunIds,
 } from '@cli/chat/tui/state/cliState';
 import {
   allocateConversationPanelRows,
@@ -47,11 +47,11 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   TODO_STATUS,
   type ActiveChildInfo,
-  type ExecutionId,
+  type RunId,
   type ExtendedTokenUsageStats,
   type Plan,
   type RunIdentity,
-  type StreamPhase,
+  type RunPhase,
   type StreamTabId,
   type TodoItem,
   type UserFollowUpSupport,
@@ -108,26 +108,16 @@ describe('focus over the session view', () => {
   it('keeps keyboard order identical to the grouped, expanded tree', () => {
     resetCliState();
     seedView(familyView({ [child2]: { forceExpanded: true } }));
-    expect(sessionListStreamIds.get()).toEqual([root]);
-    expandedStreams.set(new Map([[root, true]]));
-    expect(sessionListStreamIds.get()).toEqual([
-      root,
-      child2,
-      grandchild,
-      child1,
-    ]);
-    expandedStreams.set(
+    expect(sessionListRunIds.get()).toEqual([root]);
+    expandedRuns.set(new Map([[root, true]]));
+    expect(sessionListRunIds.get()).toEqual([root, child2, grandchild, child1]);
+    expandedRuns.set(
       new Map([
         [root, true],
         [child2, false],
       ]),
     );
-    expect(sessionListStreamIds.get()).toEqual([
-      root,
-      child2,
-      grandchild,
-      child1,
-    ]);
+    expect(sessionListRunIds.get()).toEqual([root, child2, grandchild, child1]);
     expect(
       sessionListRows
         .get()
@@ -135,7 +125,7 @@ describe('focus over the session view', () => {
         .map((row) => row.label),
     ).toEqual(['Running']);
     resetCliState();
-    expect(sessionListStreamIds.get()).toEqual([root]);
+    expect(sessionListRunIds.get()).toEqual([root]);
   });
 
   it('resolves the child list to the nearest ancestor with children', () => {
@@ -696,24 +686,24 @@ describe('CLI TUI row allocation', () => {
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
     expect(rootRunPending.get()).toBe(true);
-    expect(rootRunStreamId.get()).toBeUndefined();
+    expect(pendingRootRunId.get()).toBeUndefined();
   });
 
   it('publishes the run-control stream id from the session itself', () => {
     const session = new TuiSession();
     session.markRunPending(new Promise<void>(() => {}));
-    expect(rootRunStreamId.get()).toBeUndefined();
+    expect(pendingRootRunId.get()).toBeUndefined();
 
     // No publish call accompanies this write: the session owns the mirror,
     // so a caller cannot leave the Ctrl-C hint reading a stale claim (#8273).
     session.streamId = root;
 
-    expect(rootRunStreamId.get()).toBe(root);
+    expect(pendingRootRunId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(true);
 
     session.markRunCompleted();
 
-    expect(rootRunStreamId.get()).toBe(root);
+    expect(pendingRootRunId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(false);
   });
 
@@ -730,7 +720,7 @@ describe('CLI TUI row allocation', () => {
 
     expect(chatTuiCanStartRootRun(session)).toBe(true);
     expect(rootRunPending.get()).toBe(false);
-    expect(rootRunStreamId.get()).toBeUndefined();
+    expect(pendingRootRunId.get()).toBeUndefined();
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {

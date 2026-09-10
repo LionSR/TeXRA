@@ -13,11 +13,11 @@ import type {
 import type { HostRequest } from '@shared/session/hostRequest';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { StreamOutputsSource } from './streamOutputs';
+import type { RunOutputsSource } from './streamOutputs';
 
 const log = createLog('ProgressWorkflowFileActions');
 
-type ProgressWorkflowFileActionsState = StreamOutputsSource;
+type ProgressWorkflowFileActionsState = RunOutputsSource;
 
 interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): Promise<void>;

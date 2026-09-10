@@ -20,7 +20,7 @@
 import { Data, Deferred, Effect } from 'effect';
 
 /** A local generation or its retained handle still owns the execution. */
-export class ExecutionBusy extends Data.TaggedError('ExecutionBusy')<{
+export class RunBusy extends Data.TaggedError('ExecutionBusy')<{
   readonly executionId: string;
 }> {}
 
@@ -57,7 +57,7 @@ interface ExecutionLane {
  * The per-execution lanes of one session's registry. A lane is created on
  * first use and forgotten once it drains, so idle executions hold no lane.
  */
-export class ExecutionLanes {
+export class RunLanes {
   private readonly lanes = new Map<string, ExecutionLane>();
 
   /** Acquire an idle execution slot, refusing competing local ownership. */
@@ -137,10 +137,10 @@ export class ExecutionLanes {
           Effect.sync(() => this.claim(executionId, refuseWhenOwned)),
           (claim) =>
             Effect.sync(() => {
-              if (!(claim instanceof ExecutionBusy)) claim.release();
+              if (!(claim instanceof RunBusy)) claim.release();
             }),
         );
-        if (admitted instanceof ExecutionBusy) {
+        if (admitted instanceof RunBusy) {
           return yield* Effect.fail(admitted);
         }
         yield* admitted.entry;
@@ -166,7 +166,7 @@ export class ExecutionLanes {
     executionId: string,
     refuseWhenOwned: (() => boolean) | undefined,
   ):
-    | ExecutionBusy
+    | RunBusy
     | {
         readonly entry: Effect.Effect<void, Error>;
         readonly release: () => void;
@@ -178,7 +178,7 @@ export class ExecutionLanes {
         (occupied !== undefined &&
           (occupied.live.size > 0 || occupied.fibers > 0)))
     ) {
-      return new ExecutionBusy({ executionId });
+      return new RunBusy({ executionId });
     }
     const mine = Deferred.makeUnsafe<void>();
     const refusal = Deferred.makeUnsafe<never, Error>();

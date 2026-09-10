@@ -2,11 +2,11 @@ import { z } from 'zod';
 
 import {
   WorkflowCallIdentitySchema,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type WorkflowCallIdentity,
   type WorkflowControlAction,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunSnapshot,
   type WorkflowScriptFiles,
 } from '@shared/schemas';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
@@ -278,7 +278,7 @@ export interface WorkflowAttemptFacts {
   /** The resolved agent the host selected. */
   readonly agent?: string;
   /** The physical child execution selected for this attempt. */
-  readonly childExecutionId?: ExecutionId;
+  readonly childExecutionId?: RunId;
   /**
    * The live child stream, once the host has resolved its agent, model, and
    * execution identity. Progress renderers use it as the task card's
@@ -325,7 +325,7 @@ type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
 /**
  * The facts the canonical execution snapshot cannot carry. Everything else a
  * progress projection needs — plan, phases, per-call status, stream identity,
- * model, cost, timing, errors — lives on {@link WorkflowExecutionSnapshot}
+ * model, cost, timing, errors — lives on {@link WorkflowRunSnapshot}
  * and arrives through {@link WorkflowScriptRunOptions.onTransition}; the
  * event stream no longer restates it (that dual-stamping is exactly the sync
  * tax A7 retired). `log` remains an event because a script's `log()` line is
@@ -353,7 +353,7 @@ export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
  * journal, checkpoint, or per-call resume identity.
  */
 export type WorkflowScriptControl = (
-  childExecutionId: ExecutionId,
+  childExecutionId: RunId,
   action: WorkflowControlAction,
 ) => boolean;
 
@@ -381,7 +381,7 @@ export interface WorkflowScriptRunOptions {
   /** Journal from a prior run; matching keys replay regardless of call position. */
   journal?: WorkflowJournalEntry[];
   /** Recovery snapshot from the prior attempt, re-published after reconciliation. */
-  initialSnapshot?: WorkflowExecutionSnapshot;
+  initialSnapshot?: WorkflowRunSnapshot;
   /**
    * Durable checkpoint hook for a successfully validated live call. The
    * engine awaits it before the result becomes visible to the script, so a
@@ -402,7 +402,7 @@ export interface WorkflowScriptRunOptions {
    * snapshot after a transition, with writes coalesced under backpressure —
    * intermediate states may be skipped, the latest always lands.
    */
-  onSnapshot?: (snapshot: WorkflowExecutionSnapshot) => void | Promise<void>;
+  onSnapshot?: (snapshot: WorkflowRunSnapshot) => void | Promise<void>;
   /**
    * Synchronous per-transition observer for live projections: fires on every
    * state transition, never coalesced, with the LIVE snapshot reference —
@@ -410,7 +410,7 @@ export interface WorkflowScriptRunOptions {
    * propagates into the engine and aborts the run, so consumers guard their
    * own folds.
    */
-  onTransition?: (snapshot: WorkflowExecutionSnapshot) => void;
+  onTransition?: (snapshot: WorkflowRunSnapshot) => void;
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**
    * Handed the per-call control handle once, synchronously, before the script
@@ -429,5 +429,5 @@ export interface WorkflowScriptRunResult {
   /** Completed calls in index order, for resume. Failed calls are omitted. */
   journal: WorkflowJournalEntry[];
   /** Final canonical execution snapshot. */
-  snapshot: WorkflowExecutionSnapshot;
+  snapshot: WorkflowRunSnapshot;
 }

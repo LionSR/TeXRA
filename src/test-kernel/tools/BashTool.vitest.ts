@@ -16,7 +16,7 @@ import {
 
 // Local imports
 import type { AgentEvent } from '@agent/trace';
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import type {
   AgentPrompt,
@@ -48,7 +48,7 @@ import {
   type ToolResult,
   AgentCategory,
 } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -270,7 +270,7 @@ function traceWithEvents(streamId: StreamTabId): {
   events: AgentEvent[];
   dispose: () => void;
 } {
-  const runTrace = createTestRunTrace(streamId, new StreamLog());
+  const runTrace = createTestRunTrace(streamId, new RunLog());
   const events: AgentEvent[] = [];
   const unsubscribe = runTrace.trace.subscribe((event) => events.push(event));
   return {
@@ -372,7 +372,7 @@ describe('BashTool', () => {
 
     const options = roundServices({
       toolName: 'bash',
-      logger: createTestRunTrace('BashToolTest', new StreamLog()).trace,
+      logger: createTestRunTrace('BashToolTest', new RunLog()).trace,
       streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
     });
@@ -825,7 +825,7 @@ describe('BashTool', () => {
         ? Effect.die(new Error('result metadata disk full'))
         : commit(events),
     );
-    const records = getExecutionRecords(session, executionId);
+    const records = getRunRecords(session, executionId);
 
     resolveCommand(DONE_EXEC_RESULT);
 
@@ -904,7 +904,7 @@ describe('BashTool', () => {
     });
 
     await stopSettlement;
-    const records = getExecutionRecords(defaultSession(), executionId);
+    const records = getRunRecords(defaultSession(), executionId);
     await vi.waitFor(async () => {
       assert.equal(
         (await Effect.runPromise(records.readMeta()))?.outcome,

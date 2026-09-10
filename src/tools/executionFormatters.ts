@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import type { ChildRecord, ExecutionListingEntry } from '@agent/storage';
+import type { ChildRecord, RunListingEntry } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 /**
  * The one display model for the /executions surface: the listing lines, the
@@ -19,13 +19,13 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type {
-  AgentExecutionHandle,
+  RunHandle,
   ExecutionStatusInfo,
 } from '@agent/runtime/ExecutionHandle';
 import type {
   AgentCategory,
-  ExecutionId,
-  ExecutionMeta,
+  RunId,
+  RunMeta,
   RunIdentity,
   TodoItem,
 } from '@shared/schemas';
@@ -39,9 +39,9 @@ import { formatTimestamp } from '@utils/text/stringUtils';
 
 // Local imports - liveness
 import {
-  resolveExecutionLiveness,
-  type ExecutionLiveness,
-  type KnownExecutionMeta,
+  resolveRunLiveness,
+  type RunLiveness,
+  type KnownRunMeta,
 } from './executions/executionLiveness';
 
 /**
@@ -50,13 +50,13 @@ import {
  * (`process` / `multiAgentWorkflow`). Identity-less legacy rows fall back to the
  * config's category.
  */
-export type ExecutionDisplayCategory =
+export type RunDisplayCategory =
   AgentCategory | Exclude<RunIdentity['kind'], 'agent'>;
 
 export function executionDisplayCategory(
   identity: RunIdentity | undefined,
   record: RunRecord | null | undefined,
-): ExecutionDisplayCategory | undefined {
+): RunDisplayCategory | undefined {
   const agentCategory =
     record && isAgentRunRecord(record) ? record.agentCategory : undefined;
   if (!identity) return agentCategory;
@@ -82,7 +82,7 @@ function executionDisplayModel(
     : null;
 }
 
-function listingDisplay(entry: ExecutionListingEntry): {
+function listingDisplay(entry: RunListingEntry): {
   agent: string;
   model: string | null;
   category: string | undefined;
@@ -101,7 +101,7 @@ function listingDisplay(entry: ExecutionListingEntry): {
 
 /** Return paths available for a given agent category. */
 function getAvailablePaths(
-  category?: ExecutionDisplayCategory,
+  category?: RunDisplayCategory,
   hasChildren?: boolean,
 ): string[] {
   const common = ['config', 'report', 'result'];
@@ -154,12 +154,12 @@ export function formatStatusInfo(info: ExecutionStatusInfo): string {
  */
 export const getExecutionStatusInfo = Effect.fn('getExecutionStatusInfo')(
   function* (
-    executionId: ExecutionId,
+    executionId: RunId,
     session: SessionHandle,
-    knownMeta?: KnownExecutionMeta,
+    knownMeta?: KnownRunMeta,
   ) {
     return statusInfoFromLiveness(
-      yield* resolveExecutionLiveness(executionId, session, knownMeta),
+      yield* resolveRunLiveness(executionId, session, knownMeta),
     );
   },
 );
@@ -169,7 +169,7 @@ export const getExecutionStatusInfo = Effect.fn('getExecutionStatusInfo')(
  * the arm itself (to word a footer, say) as well as the status line.
  */
 export function statusInfoFromLiveness(
-  liveness: ExecutionLiveness,
+  liveness: RunLiveness,
 ): ExecutionStatusInfo {
   switch (liveness.kind) {
     case 'live':
@@ -192,7 +192,7 @@ export function statusInfoFromLiveness(
 
 /** Format a listing entry as a single summary line. */
 export const formatListingLine = Effect.fn('formatListingLine')(function* (
-  entry: ExecutionListingEntry,
+  entry: RunListingEntry,
   session: SessionHandle,
 ) {
   const ts = formatTimestamp(entry.timestamp);
@@ -218,7 +218,7 @@ export function formatTodoSection(todos: readonly TodoItem[]): string[] {
 
 /** Format a todo header with counts. */
 export function formatTodoHeader(
-  executionId: ExecutionId,
+  executionId: RunId,
   todos: readonly TodoItem[],
 ): string {
   const { completed, inProgress, pending } = countByStatus(todos);
@@ -230,7 +230,7 @@ export function formatTodoHeader(
 // ============================================================================
 
 /** Options controlling how showSummary renders a result report. */
-export interface ExecutionSummaryOptions {
+export interface RunSummaryOptions {
   readonly suppressAutoDeliveredSubagentReport?: boolean;
 }
 
@@ -244,8 +244,8 @@ export interface ExecutionSummaryOptions {
  * like delegated agents do, and must stay suppressed too.
  */
 export function shouldSuppressAutoDeliveredSubagentReport(
-  options: ExecutionSummaryOptions,
-  handle: AgentExecutionHandle,
+  options: RunSummaryOptions,
+  handle: RunHandle,
 ): boolean {
   if (!options.suppressAutoDeliveredSubagentReport) return false;
   return (
@@ -257,7 +257,7 @@ export function shouldSuppressAutoDeliveredSubagentReport(
 /** Format a single child execution as a summary line. */
 export const formatChildLine = Effect.fn('formatChildLine')(function* (
   child: ChildRecord,
-  childMeta: ExecutionMeta | null,
+  childMeta: RunMeta | null,
   session: SessionHandle,
 ) {
   const info = yield* getExecutionStatusInfo(child.id, session, childMeta);
@@ -268,11 +268,11 @@ export const formatChildLine = Effect.fn('formatChildLine')(function* (
 
 /** Build the summary lines for a still-running execution (in-memory handle). */
 export function buildRunningSummaryLines(
-  executionId: ExecutionId,
-  handle: AgentExecutionHandle,
-  category: ExecutionDisplayCategory | undefined,
+  executionId: RunId,
+  handle: RunHandle,
+  category: RunDisplayCategory | undefined,
   info: ExecutionStatusInfo,
-  meta: ExecutionMeta | null,
+  meta: RunMeta | null,
 ): string[] {
   const lines = [
     `Execution: ${executionId}`,
@@ -291,12 +291,12 @@ export function buildRunningSummaryLines(
 
 /** Build the summary lines for a completed execution (full KV fetch). */
 export function buildCompletedSummaryLines(
-  executionId: ExecutionId,
+  executionId: RunId,
   record: RunRecord | null,
   identity: RunIdentity | undefined,
-  category: ExecutionDisplayCategory | undefined,
+  category: RunDisplayCategory | undefined,
   info: ExecutionStatusInfo,
-  meta: ExecutionMeta | null,
+  meta: RunMeta | null,
 ): string[] {
   const name =
     record && (isAgentRunRecord(record) ? record.agent : record.name);
@@ -327,8 +327,8 @@ export function buildCompletedSummaryLines(
  * needs whether there were any children, not the records themselves.
  */
 export function buildSummaryTailLines(
-  executionId: ExecutionId,
-  category: ExecutionDisplayCategory | undefined,
+  executionId: RunId,
+  category: RunDisplayCategory | undefined,
   hasChildren: boolean,
   todos: readonly TodoItem[],
   report: string | null,

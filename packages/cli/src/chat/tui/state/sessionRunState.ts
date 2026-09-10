@@ -1,12 +1,8 @@
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import {
-  STREAM_PHASE,
-  type StreamPhase,
-  type StreamTabId,
-} from '@shared/schemas';
+import { STREAM_PHASE, type RunPhase, type StreamTabId } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
-import { rootRunPending, rootRunStreamId } from './cliState';
+import { rootRunPending, pendingRootRunId } from './cliState';
 
 /**
  * Root-run state of one chat TUI session.
@@ -100,7 +96,7 @@ export class TuiSession {
    */
   private publish(): void {
     rootRunPending.set(chatTuiRunPending(this));
-    rootRunStreamId.set(this._streamId);
+    pendingRootRunId.set(this._streamId);
   }
 }
 
@@ -131,7 +127,7 @@ export function chatTuiCanInterruptActiveRun(
 interface ChatTuiRunStopFacts {
   readonly runPending: boolean;
   readonly streamId: StreamTabId | undefined;
-  readonly status: StreamPhase | undefined;
+  readonly status: RunPhase | undefined;
 }
 
 export function chatTuiCanStopActiveRun(facts: ChatTuiRunStopFacts): boolean {
@@ -164,7 +160,7 @@ export function chatTuiCanStartRootRun(
 export function chatTuiCanSelectModel(input: {
   readonly canStartRootRun: boolean;
   readonly streamId: StreamTabId | undefined;
-  readonly status: StreamPhase | undefined;
+  readonly status: RunPhase | undefined;
   readonly hasActiveToolUseFlow: boolean;
 }): boolean {
   return (

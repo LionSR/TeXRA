@@ -7,14 +7,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { RunRegistry } from '@agent/runtime/executionRegistry';
 import type { StreamTabId } from '@shared/schemas';
 import {
   testExecutionHandle,
   testExecutionRegistry,
 } from '@test/support/executionHandleFixtures';
 
-const liveRegistries: ExecutionRegistry[] = [];
+const liveRegistries: RunRegistry[] = [];
 
 afterEach(() => {
   for (const registry of liveRegistries.splice(0)) {
@@ -22,14 +22,14 @@ afterEach(() => {
   }
 });
 
-function createRegistry(): ExecutionRegistry {
+function createRegistry(): RunRegistry {
   const registry = testExecutionRegistry();
   liveRegistries.push(registry);
   return registry;
 }
 
 function trackRun(
-  registry: ExecutionRegistry,
+  registry: RunRegistry,
   executionId: string,
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,

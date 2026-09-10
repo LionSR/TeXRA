@@ -7,10 +7,10 @@ import type {
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import {
-  WorkflowExecutionSnapshotSchema,
+  WorkflowRunSnapshotSchema,
   deriveWorkflowCounts,
-  type ExecutionId,
-  type WorkflowExecutionSnapshot,
+  type RunId,
+  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 
 const META = `export const meta = {
@@ -24,15 +24,15 @@ const META = `export const meta = {
 }
 `;
 
-function finalSnapshot(snapshots: readonly WorkflowExecutionSnapshot[]) {
+function finalSnapshot(snapshots: readonly WorkflowRunSnapshot[]) {
   return snapshots.at(-1)!;
 }
 
 function recordingSnapshots(): {
-  snapshots: WorkflowExecutionSnapshot[];
-  onSnapshot: (snapshot: WorkflowExecutionSnapshot) => void;
+  snapshots: WorkflowRunSnapshot[];
+  onSnapshot: (snapshot: WorkflowRunSnapshot) => void;
 } {
-  const snapshots: WorkflowExecutionSnapshot[] = [];
+  const snapshots: WorkflowRunSnapshot[] = [];
   return {
     snapshots,
     onSnapshot: (snapshot) => {
@@ -71,12 +71,12 @@ return 'done'`,
     ]);
     expect(result.snapshot.currentStageId).toBeUndefined();
     expect(() =>
-      WorkflowExecutionSnapshotSchema.parse(result.snapshot),
+      WorkflowRunSnapshotSchema.parse(result.snapshot),
     ).not.toThrow();
     const openTerminalAttempt = structuredClone(result.snapshot);
     openTerminalAttempt.calls[0]!.attempts[0]!.completedAt = undefined;
     expect(
-      WorkflowExecutionSnapshotSchema.safeParse(openTerminalAttempt).success,
+      WorkflowRunSnapshotSchema.safeParse(openTerminalAttempt).success,
     ).toBe(false);
 
     const { snapshots: failedSnapshots, onSnapshot: failedOnSnapshot } =
@@ -111,11 +111,11 @@ return await agent('work', { id: 'work-call' })`,
     });
 
     const expectEmptyFieldRejected = (
-      mutate: (snapshot: WorkflowExecutionSnapshot) => void,
+      mutate: (snapshot: WorkflowRunSnapshot) => void,
     ): void => {
       const candidate = structuredClone(result.snapshot);
       mutate(candidate);
-      expect(WorkflowExecutionSnapshotSchema.safeParse(candidate).success).toBe(
+      expect(WorkflowRunSnapshotSchema.safeParse(candidate).success).toBe(
         false,
       );
     };
@@ -131,7 +131,7 @@ return await agent('work', { id: 'work-call' })`,
       candidate.calls[0]!.id = '';
     });
     expectEmptyFieldRejected((candidate) => {
-      candidate.calls[0]!.attempts[0]!.id = '' as ExecutionId;
+      candidate.calls[0]!.attempts[0]!.id = '' as RunId;
     });
 
     // A meta.json persisted by an older build with a retired key fails
@@ -140,9 +140,7 @@ return await agent('work', { id: 'work-call' })`,
       calls: Array<Record<string, unknown>>;
     };
     legacy.calls[0]!.stageTitle = 'Work';
-    expect(WorkflowExecutionSnapshotSchema.safeParse(legacy).success).toBe(
-      false,
-    );
+    expect(WorkflowRunSnapshotSchema.safeParse(legacy).success).toBe(false);
 
     const active = structuredClone(
       snapshots.find(
@@ -154,9 +152,7 @@ return await agent('work', { id: 'work-call' })`,
     active.stages[0]!.id = '';
     active.calls[0]!.stageId = '';
     active.currentStageId = '';
-    expect(WorkflowExecutionSnapshotSchema.safeParse(active).success).toBe(
-      false,
-    );
+    expect(WorkflowRunSnapshotSchema.safeParse(active).success).toBe(false);
   });
 
   it('records queued work before admission and starts attempts only inside the queue slot', async () => {
@@ -232,7 +228,7 @@ return await agent('retry secret', { label: 'Retry task' })`,
       },
     });
     await vi.waitFor(() => expect(attempts).toBe(1));
-    control('aaaaaaaaaaaa' as ExecutionId, 'retry');
+    control('aaaaaaaaaaaa' as RunId, 'retry');
     await vi.waitFor(() => expect(attempts).toBe(2));
     releases.at(-1)?.();
     const retried = await retryRun;
@@ -259,7 +255,7 @@ return await agent('skip secret', { label: 'Skip task' })`,
       runAgent: async (invocation) => {
         skipStarted = true;
         invocation.report?.({
-          childExecutionId: 'cccccccccccc' as ExecutionId,
+          childExecutionId: 'cccccccccccc' as RunId,
         });
         return new Promise((_resolve, reject) =>
           invocation.signal.addEventListener('abort', () =>
@@ -272,7 +268,7 @@ return await agent('skip secret', { label: 'Skip task' })`,
       },
     });
     await vi.waitFor(() => expect(skipStarted).toBe(true));
-    skipControl('cccccccccccc' as ExecutionId, 'skip');
+    skipControl('cccccccccccc' as RunId, 'skip');
     const skipped = await skipRun;
     expect(skipped.result).toBe(WORKFLOW_SKIPPED_RESULT);
     expect(skipped.snapshot.calls[0]?.status).toBe('skipped');

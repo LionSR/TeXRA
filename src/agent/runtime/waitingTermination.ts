@@ -10,20 +10,16 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
-import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
+import { RunLeaseLostError } from '@agent/storage/executionLease';
 import {
-  type FinalizeExecutionInput,
-  type FinalizeExecutionResult,
+  type FinalizeRunInput,
+  type FinalizeRunResult,
   retainFlowRecordUnlessCompleted,
 } from '@agent/storage/executionLifecycle';
-import {
-  RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type StreamTabId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { AgentExecutionHandle } from './ExecutionHandle';
-import type { ExecutionLanes } from './executionLanes';
+import type { RunHandle } from './ExecutionHandle';
+import type { RunLanes } from './executionLanes';
 
 const logger = createChannelTrace('executionRegistry');
 
@@ -35,15 +31,15 @@ const logger = createChannelTrace('executionRegistry');
 export interface WaitingTerminationContext {
   readonly publishResult: (event: ResultEvent, streamId: StreamTabId) => void;
   readonly releaseRootExecutionLease: (
-    executionId: ExecutionId,
+    executionId: RunId,
   ) => Effect.Effect<void, Error>;
   readonly finalizeExecution: (
-    input: FinalizeExecutionInput,
-  ) => Effect.Effect<FinalizeExecutionResult, Error>;
-  readonly lanes: ExecutionLanes;
-  readonly getHandle: (executionId: string) => AgentExecutionHandle | undefined;
-  readonly untrackIfCurrent: (handle: AgentExecutionHandle) => boolean;
-  readonly untrackHandle: (handle: AgentExecutionHandle) => void;
+    input: FinalizeRunInput,
+  ) => Effect.Effect<FinalizeRunResult, Error>;
+  readonly lanes: RunLanes;
+  readonly getHandle: (executionId: string) => RunHandle | undefined;
+  readonly untrackIfCurrent: (handle: RunHandle) => boolean;
+  readonly untrackHandle: (handle: RunHandle) => void;
   readonly cancelStreamStatus: (streamId: StreamTabId) => void;
 }
 
@@ -87,9 +83,7 @@ export class WaitingTermination {
    * stop of a suspended native subagent still surfaces a terminal event even
    * though the turn's own trace is already gone.
    */
-  terminateWaitingHandle(
-    handle: AgentExecutionHandle,
-  ): Effect.Effect<void> | undefined {
+  terminateWaitingHandle(handle: RunHandle): Effect.Effect<void> | undefined {
     const teardown = handle.beginSuspendedTermination();
     if (!teardown) return undefined;
     const cancelledResult: ResultEvent = {
@@ -142,7 +136,7 @@ export class WaitingTermination {
             if (
               untracked &&
               !handle.isChildExecution &&
-              !(error instanceof ExecutionLeaseLostError)
+              !(error instanceof RunLeaseLostError)
             ) {
               const released = yield* Effect.exit(
                 this.context.releaseRootExecutionLease(handle.executionId),
@@ -167,7 +161,7 @@ export class WaitingTermination {
     'finishWaitingTermination',
   )(function* (
     this: WaitingTermination,
-    handle: AgentExecutionHandle,
+    handle: RunHandle,
     teardown: Effect.Effect<void, Error>,
     cancelledResult: ResultEvent,
   ) {

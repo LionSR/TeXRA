@@ -8,7 +8,7 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
+import { resumeRunWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
@@ -89,7 +89,7 @@ export class DesktopProcessResumeOwner {
           const exists =
             yield* session.transcripts.hasAuthoritativeStream(streamId);
           if (!exists) return false;
-          return yield* resumeStreamWithRefusalNotice(streamId, {
+          return yield* resumeRunWithRefusalNotice(streamId, {
             session,
             recovery,
             runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  StreamSnapshotSchema,
-  type ExecutionId,
+  RunSnapshotSchema,
+  type RunId,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -13,7 +13,7 @@ const STREAM_ID = 'orchestrator@deepseekT#exec-1' as StreamTabId;
 
 function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
   return {
-    executionId: 'exec-1' as ExecutionId,
+    executionId: 'exec-1' as RunId,
     streamId: STREAM_ID,
     config: AgentConfigSchema.parse({
       agent: 'orchestrator',
@@ -29,7 +29,7 @@ function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
       streamId: STREAM_ID,
     },
     entries: [],
-    snapshot: StreamSnapshotSchema.parse({
+    snapshot: RunSnapshotSchema.parse({
       streamId: STREAM_ID,
       status: 'running',
     }),
@@ -58,7 +58,7 @@ describe('injectStandaloneTrace', () => {
   });
 
   it('embeds the trace as valid, round-trippable JSON', () => {
-    const t = trace({ executionId: 'exec-roundtrip' as ExecutionId });
+    const t = trace({ executionId: 'exec-roundtrip' as RunId });
     const html = injectStandaloneTrace(TEMPLATE, t);
 
     expect(embeddedTrace(html).executionId).toBe('exec-roundtrip');

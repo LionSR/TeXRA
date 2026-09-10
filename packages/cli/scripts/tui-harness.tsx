@@ -57,12 +57,12 @@ import {
   TODO_STATUS,
   TOOL_USE_STATUS,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
+  type RunId,
   type InquiryThreadId,
   type NormalizedToolUse,
   type PlanApprovalPermission,
   type RetryPermission,
-  type StreamPhase,
+  type RunPhase,
   type StreamTabId,
   type UserQuestionPermission,
   HISTORY_RUN_STATUS,
@@ -73,10 +73,7 @@ import { AgentConfigFieldsSchema } from '@shared/schemas/agentConfig';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import {
-  StreamLog,
-  type StreamLogAppendInput,
-} from '@shared/session/traceEntries';
+import { RunLog, type RunLogAppendInput } from '@shared/session/traceEntries';
 import {
   buildScenario,
   foldAll,
@@ -90,7 +87,7 @@ import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace } from '@transcript';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -112,10 +109,10 @@ import {
   openRegisteredCliSlashForm,
 } from '../src/chat/tui/commands/slashForms';
 import {
-  activeStreamId as activeStreamIdSignal,
+  activeRunId as activeStreamIdSignal,
   rootRunPending,
-  rootRunStreamId,
-  rootStreamId,
+  pendingRootRunId,
+  rootRunId,
   resetCliState,
   sessionMeta,
   setCliSessionModelOverride,
@@ -141,7 +138,7 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
-  resolveLocalTranscriptStreamId,
+  resolveLocalTranscriptRunId,
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
@@ -458,7 +455,7 @@ const HARNESS_ORCHESTRATION_HISTORY: readonly CliHistoryEntry[] =
   SHOW_ORCHESTRATION_HISTORY
     ? [
         {
-          id: 'cccccccccccc' as ExecutionId,
+          id: 'cccccccccccc' as RunId,
           timestamp: '2026-06-06T00:02:00Z',
           agent: 'orchestrator',
           model: HARNESS_MODEL,
@@ -662,7 +659,7 @@ HARNESS_DISPOSERS.push(
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
 const harnessStreams = new Set<StreamTabId>();
-const harnessLogs = new Map<StreamTabId, StreamLog>();
+const harnessLogs = new Map<StreamTabId, RunLog>();
 
 /** Mint a stream: its `run.start` existence fact (PRD 6, item 2), then the
  *  `run.config` launch fact a real run publishes next, which names the model
@@ -684,8 +681,7 @@ function seedStream(
 ): void {
   if (harnessStreams.has(streamId)) return;
   harnessStreams.add(streamId);
-  const executionId = (options.executionId ??
-    generateExecutionId()) as ExecutionId;
+  const executionId = (options.executionId ?? generateRunId()) as RunId;
   const identity = options.identity ?? {
     kind: 'agent' as const,
     agent: streamId.split('#')[0] ?? streamId,
@@ -720,7 +716,7 @@ function seedStream(
 /** Place a stream in a phase: the status fact every renderer folds. */
 function seedPhase(
   streamId: StreamTabId,
-  phase: StreamPhase,
+  phase: RunPhase,
   runStartedAt?: number,
 ): void {
   seedStream(streamId);
@@ -752,12 +748,12 @@ function removeStream(streamId: StreamTabId): void {
 /** Publish complete fixture rows on the event plane. */
 function seedRows(
   streamId: StreamTabId,
-  entries: readonly StreamLogAppendInput[],
+  entries: readonly RunLogAppendInput[],
 ): void {
   seedStream(streamId);
   let log = harnessLogs.get(streamId);
   if (!log) {
-    log = new StreamLog();
+    log = new RunLog();
     harnessLogs.set(streamId, log);
   }
   publish(
@@ -790,7 +786,7 @@ function harnessTextRow(
   kind: 'assistant' | 'error' | 'user',
   text: string,
   seqNo: number,
-): StreamLogAppendInput {
+): RunLogAppendInput {
   const messageType = {
     user: MESSAGE_TYPES.USER_MESSAGE,
     error: MESSAGE_TYPES.ERROR,
@@ -806,8 +802,8 @@ function harnessTextRow(
   };
 }
 
-function makeEntries(count: number): StreamLogAppendInput[] {
-  const entries: StreamLogAppendInput[] = [];
+function makeEntries(count: number): RunLogAppendInput[] {
+  const entries: RunLogAppendInput[] = [];
   for (let i = 1; i <= count; i += 1) {
     const kind = i % 3 === 0 ? 'assistant' : 'user';
     const text =
@@ -842,7 +838,7 @@ function harnessToolEntry(
   id: string,
   toolUse: NormalizedToolUse,
   seqNo = 2,
-): StreamLogAppendInput {
+): RunLogAppendInput {
   return {
     id,
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -860,7 +856,7 @@ function harnessToolEntry(
   };
 }
 
-function makeLongToolOutputEntries(): StreamLogAppendInput[] {
+function makeLongToolOutputEntries(): RunLogAppendInput[] {
   return [
     harnessTextRow(
       'long-tool-user',
@@ -872,7 +868,7 @@ function makeLongToolOutputEntries(): StreamLogAppendInput[] {
   ];
 }
 
-function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
+function makeAssistantToolPreambleEntries(): RunLogAppendInput[] {
   return [
     harnessTextRow('preamble-user', 'user', 'what is this repo about', 1),
     harnessTextRow(
@@ -900,7 +896,7 @@ function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
 }
 
 function seedLiveToolOnlyTranscript(): void {
-  const entries: StreamLogAppendInput[] = [];
+  const entries: RunLogAppendInput[] = [];
   const timestamp = Date.now();
   entries.push({
     id: 'live-tool-user',
@@ -947,7 +943,7 @@ function seedLiveToolOnlyTranscript(): void {
   seedRows(STREAM_ID, entries);
 }
 
-function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
+function makeRejectedBashToolEntries(): RunLogAppendInput[] {
   const command = "printf 'approval-reject-live\\n'";
   const message = `User rejected command: ${command}`;
   return [
@@ -972,7 +968,7 @@ function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
 }
 
 function seedSubagentFollowupTranscript(): void {
-  const entries: StreamLogAppendInput[] = [];
+  const entries: RunLogAppendInput[] = [];
   const timestamp = Date.now();
   const followups = [
     '<subagent-progress id="child-a" agent="strategy" type="overview" tool-calls="3" files-changed="none" />',
@@ -1001,10 +997,7 @@ function seedSubagentFollowupTranscript(): void {
   seedRows(STREAM_ID, entries);
 }
 
-function makeChildEntries(
-  agent: string,
-  action: string,
-): StreamLogAppendInput[] {
+function makeChildEntries(agent: string, action: string): RunLogAppendInput[] {
   const assistantText =
     SHOW_LONG_CHILD_OUTPUT && agent === 'strategy'
       ? Array.from({ length: 18 }, (_, index) =>
@@ -1256,13 +1249,13 @@ const HARNESS_RUN_ACTIVE =
   QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS);
 const HARNESS_RUN_IDLE = SHOW_TODOS && SHOW_IDLE_TODOS;
 
-function harnessInitialStreamStatus(): StreamPhase | undefined {
+function harnessInitialStreamStatus(): RunPhase | undefined {
   if (HARNESS_RUN_ACTIVE) return STREAM_PHASE.RUNNING;
   if (HARNESS_RUN_IDLE) return STREAM_PHASE.WAITING;
   return undefined;
 }
 
-function harnessInitialEntries(): StreamLogAppendInput[] {
+function harnessInitialEntries(): RunLogAppendInput[] {
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
   if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();
@@ -1282,7 +1275,7 @@ sessionMeta.set({
 // The harness root: minted before any fixture, like a real run's start.
 seedStream(STREAM_ID);
 activeStreamIdSignal.set(STREAM_ID);
-rootStreamId.set(STREAM_ID);
+rootRunId.set(STREAM_ID);
 seedRows(STREAM_ID, harnessInitialEntries());
 if (QUEUED_FOLLOW_UPS.length > 0) {
   publish({
@@ -1310,7 +1303,7 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 }
 
 async function seedRunningWorkflow(): Promise<void> {
-  const executionId = 'aaaa0002f10e' as ExecutionId;
+  const executionId = 'aaaa0002f10e' as RunId;
   const childStreamId = 'workflow-script#aaaa0002f10e' as StreamTabId;
   const firstAgentStreamId = RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID;
   const secondAgentStreamId =
@@ -1473,7 +1466,7 @@ if (SHOW_CHILDREN) {
       publish({
         type: 'usage',
         aggregateId: qualifyAggregateId('stream', streamId),
-        storageKey: child.executionId as ExecutionId,
+        storageKey: child.executionId as RunId,
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }
@@ -1608,8 +1601,8 @@ if (SHOW_BASH_APPROVAL) {
     let pollCount = 0;
     const timer = setInterval(() => {
       pollCount += 1;
-      const activeStreamId = activeStreamIdSignal.get();
-      if (activeStreamId === undefined || activeStreamId === STREAM_ID) {
+      const activeRunId = activeStreamIdSignal.get();
+      if (activeRunId === undefined || activeRunId === STREAM_ID) {
         if (pollCount >= 200) clearInterval(timer);
         return;
       }
@@ -1733,11 +1726,11 @@ function appendHarnessTranscript(
   const view = currentView();
   const streamId =
     explicitStreamId ??
-    resolveLocalTranscriptStreamId({
-      activeStreamId: activeStreamIdSignal.get(),
+    resolveLocalTranscriptRunId({
+      activeRunId: activeStreamIdSignal.get(),
       fallbackStreamId: STREAM_ID,
       parentOf: (id) => streamViewOf(view, id)?.parentId ?? undefined,
-      rootStreamId: rootStreamId.get(),
+      rootRunId: rootRunId.get(),
     });
   switch (role) {
     case 'assistant':
@@ -1973,7 +1966,7 @@ registerBuiltinSlashCommands({
 // pending root-run claim on the harness stream, so the status bar derives
 // the Ctrl-C stop hint from these signals exactly as `texra chat` does.
 rootRunPending.set(canInterrupt);
-rootRunStreamId.set(canInterrupt ? STREAM_ID : undefined);
+pendingRootRunId.set(canInterrupt ? STREAM_ID : undefined);
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);
@@ -2062,7 +2055,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   ]);
   const ref = await effectRuntime().runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(bindSessionView(ref));
-  rootStreamId.set(PROCESS);
+  rootRunId.set(PROCESS);
   activeStreamIdSignal.set(PROCESS);
 }
 

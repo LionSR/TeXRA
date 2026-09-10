@@ -16,7 +16,7 @@ import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   type RunOutcome,
-  type UpdateStreamUsagePayload,
+  type UpdateRunUsagePayload,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 import { createListenerSet } from '@utils/core/listenerSet';
@@ -142,10 +142,7 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Structured emitters ───────────────────────────────────────────
 
-  usage(
-    payload: UpdateStreamUsagePayload,
-    options: UsageEmitOptions = {},
-  ): void {
+  usage(payload: UpdateRunUsagePayload, options: UsageEmitOptions = {}): void {
     this.emit({
       type: 'usage',
       payload,

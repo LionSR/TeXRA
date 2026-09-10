@@ -4,11 +4,7 @@ import * as path from 'node:path';
 // Local imports
 import type { runCompileCheck } from '@agent/implementations/flows/reflection/output/compileCheck';
 import type { OutputState } from '@agent/implementations/flows/reflection/output/outputState';
-import type {
-  ExecutionId,
-  FileLocation,
-  OutputFileInfo,
-} from '@shared/schemas';
+import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -18,12 +14,12 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 export const storagePath = '/storage';
 export const workspacePath = '/workspace';
 
-export function runDir(executionId: ExecutionId): string {
+export function runDir(executionId: RunId): string {
   return path.join(storagePath, 'executions', executionId);
 }
 
 export function runStorageFile(
-  executionId: ExecutionId,
+  executionId: RunId,
   relativePath: string,
 ): FileLocation {
   return createRunStorageLocation(
@@ -34,7 +30,7 @@ export function runStorageFile(
 }
 
 export function outputFile(
-  executionId: ExecutionId,
+  executionId: RunId,
   relativePath: string,
   source: string,
   round: number,
@@ -49,7 +45,7 @@ export function outputFile(
 }
 
 export function compileContext(
-  executionId: ExecutionId,
+  executionId: RunId,
   outputState: OutputState,
 ): Parameters<typeof runCompileCheck>[0] {
   return {

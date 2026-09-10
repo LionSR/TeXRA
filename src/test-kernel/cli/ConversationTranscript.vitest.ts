@@ -46,7 +46,7 @@ import {
   TOOL_USE_STATUS,
   type NormalizedToolUse,
   type RunOutcome,
-  type StreamPhase,
+  type RunPhase,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
@@ -1155,8 +1155,8 @@ describe('CLI conversation transcript', () => {
 
   it('keeps background children out of the root scrollback owner', () => {
     const scrollbackTarget = staticScrollbackTarget({
-      activeStreamId: CHILD_STREAM,
-      rootStreamId: ROOT_STREAM,
+      activeRunId: CHILD_STREAM,
+      rootRunId: ROOT_STREAM,
       scopedTranscript: false,
     });
     const items = buildStaticTranscriptItems({
@@ -1177,8 +1177,8 @@ describe('CLI conversation transcript', () => {
 
   it('uses the focused child as the static scrollback owner in scoped view', () => {
     const scrollbackTarget = staticScrollbackTarget({
-      activeStreamId: CHILD_STREAM,
-      rootStreamId: ROOT_STREAM,
+      activeRunId: CHILD_STREAM,
+      rootRunId: ROOT_STREAM,
       scopedTranscript: true,
     });
     const items = buildStaticTranscriptItems({
@@ -1200,20 +1200,20 @@ describe('CLI conversation transcript', () => {
   it('keeps the root static owner stable while the root stream resolves', () => {
     expect(
       staticScrollbackTarget({
-        activeStreamId: STREAM_ID,
-        rootStreamId: undefined,
+        activeRunId: STREAM_ID,
+        rootRunId: undefined,
       }),
     ).toEqual({ ownerKey: 'root', streamId: STREAM_ID });
     expect(
       staticScrollbackTarget({
-        activeStreamId: CLI_LOCAL_STREAM_ID,
-        rootStreamId: undefined,
+        activeRunId: CLI_LOCAL_STREAM_ID,
+        rootRunId: undefined,
       }),
     ).toEqual({ ownerKey: 'root', streamId: CLI_LOCAL_STREAM_ID });
     expect(
       staticScrollbackTarget({
-        activeStreamId: STREAM_ID,
-        rootStreamId: 'resolved-root' as StreamTabId,
+        activeRunId: STREAM_ID,
+        rootRunId: 'resolved-root' as StreamTabId,
       }),
     ).toEqual({ ownerKey: 'root', streamId: 'resolved-root' });
   });
@@ -1387,7 +1387,7 @@ function settledPrefix(entries: readonly TranscriptRow[] | undefined): number {
  *  fold's prefix reaches. */
 function sourceOf(
   entries: readonly TranscriptRow[] | undefined,
-  status?: StreamPhase,
+  status?: RunPhase,
 ): StaticScrollbackSource {
   return {
     entries,

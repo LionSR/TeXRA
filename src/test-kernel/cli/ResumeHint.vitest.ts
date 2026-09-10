@@ -52,7 +52,7 @@ describe('collectResumeTargets', () => {
     expect(
       collectResumeTargets({
         view: viewWith([root()]),
-        rootStreamId: ROOT,
+        rootRunId: ROOT,
         rootExecutionId: 'root',
       }),
     ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
@@ -72,7 +72,7 @@ describe('collectResumeTargets', () => {
     expect(
       collectResumeTargets({
         view,
-        rootStreamId: ROOT,
+        rootRunId: ROOT,
         rootExecutionId: 'root',
       }),
     ).toEqual(TWO_RESUME_TARGETS);
@@ -91,7 +91,7 @@ describe('collectResumeTargets', () => {
     expect(
       collectResumeTargets({
         view,
-        rootStreamId: ROOT,
+        rootRunId: ROOT,
         rootExecutionId: 'root',
       }),
     ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
@@ -101,7 +101,7 @@ describe('collectResumeTargets', () => {
     expect(
       collectResumeTargets({
         view: viewWith([]),
-        rootStreamId: undefined,
+        rootRunId: undefined,
         rootExecutionId: undefined,
       }),
     ).toEqual([]);

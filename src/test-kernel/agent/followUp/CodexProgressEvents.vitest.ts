@@ -9,14 +9,14 @@ import {
   CODEX_TURN_TOOL,
 } from '@shared/schemas';
 import type {
-  ExecutionId,
+  RunId,
   StreamTabId,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
+import { publishAgentCliRunUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 
 // Local file imports
@@ -28,7 +28,7 @@ import type {
 } from '@openai/codex-sdk';
 
 const streamId = 'stream:codex-child' as StreamTabId;
-const executionId = 'exec:codex-child' as ExecutionId;
+const executionId = 'exec:codex-child' as RunId;
 
 const todos: TodoItem[] = [
   {
@@ -51,10 +51,10 @@ async function* streamEvents(
 }
 
 async function createLogger(): Promise<{
-  store: StreamLog;
+  store: RunLog;
   logger: AgentTrace;
 }> {
-  const store = new StreamLog();
+  const store = new RunLog();
 
   return { store, logger: createTestRunTrace(streamId, store).trace };
 }
@@ -78,7 +78,7 @@ function threadOf(events: ThreadEvent[]): Thread {
   } as unknown as Thread;
 }
 
-function toolLogs(store: StreamLog): Record<string, unknown>[] {
+function toolLogs(store: RunLog): Record<string, unknown>[] {
   const entries = store.getRange(0, store.head);
   return entries
     .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
@@ -91,7 +91,7 @@ describe('codex progress events', () => {
     const recorded = recordTraceEvents(trace);
 
     publishCodexTodos(streamId, todos, trace);
-    publishAgentCliStreamUsage(streamId, executionId, usage, trace);
+    publishAgentCliRunUsage(streamId, executionId, usage, trace);
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
@@ -251,6 +251,6 @@ describe('codex progress events', () => {
   });
 });
 
-function findTurnEntry(store: StreamLog): Record<string, unknown> | undefined {
+function findTurnEntry(store: RunLog): Record<string, unknown> | undefined {
   return toolLogs(store).find((data) => data.toolName === CODEX_TURN_TOOL);
 }

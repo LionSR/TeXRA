@@ -8,7 +8,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { ExecutionIdSchema } from '@shared/schemas';
+import { RunIdSchema } from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
@@ -75,7 +75,7 @@ const WaitActionSchema = z.strictObject({
 
   /** Execution IDs to wait on (with /executions only; ignored on /executions/{id}). */
   ids: z
-    .array(ExecutionIdSchema)
+    .array(RunIdSchema)
     .min(1)
     .max(50)
     .nullish()

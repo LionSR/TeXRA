@@ -25,8 +25,8 @@ const BASELINE_FILE = 'config/ratchets/store-public-surface-baseline.json';
 const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 
 const STORES = {
-  StreamLogStore: 'src/transcript/StreamLogStore.ts',
-  StreamSnapshotStore: 'src/transcript/StreamSnapshotStore.ts',
+  RunLogStore: 'src/transcript/StreamLogStore.ts',
+  RunSnapshotStore: 'src/transcript/StreamSnapshotStore.ts',
 } as const;
 
 type StoreName = keyof typeof STORES;

@@ -16,25 +16,25 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 // Third-party imports
 
 // Local imports
-import { registerExecution } from '@agent/storage/executionLifecycle';
+import { registerRun } from '@agent/storage/executionLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   startChildRunLoop,
-  runWithOwnedExecutionLeaseLaunchGuard,
+  runWithOwnedRunLeaseLaunchGuard,
   type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
-import type { ChildStream } from './childStream';
+import type { ChildRun } from './childStream';
 
 /**
  * Register a native agent child and take its owned-execution lease, minting
@@ -49,30 +49,28 @@ import type { ChildStream } from './childStream';
  * keeps the two in step: while each launch site derived its own, the
  * invariant could only be stated as a comment asking the copies to agree.
  */
-export const registerChildExecution = Effect.fn('registerChildExecution')(
-  function* (
-    session: SessionHandle,
-    input: {
-      readonly executionId: ExecutionId;
-      /** Canonical config, already parsed by the launch site. */
-      readonly config: AgentConfig;
-      readonly agentName: string;
-      readonly userFollowUpSupport: UserFollowUpSupport;
-      readonly parentExecutionId?: ExecutionId;
-    },
-  ): Effect.fn.Return<{ readonly childStreamId: StreamTabId }, Error> {
-    const { executionId, config } = input;
-    const childStreamId = getStreamTabId(config.agent, { executionId });
-    yield* registerExecution(session, executionId, config, input.agentName, {
-      streamId: childStreamId,
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport: input.userFollowUpSupport,
-      parentExecutionId: input.parentExecutionId,
-      background: true,
-    });
-    return { childStreamId };
+export const registerChildRun = Effect.fn('registerChildExecution')(function* (
+  session: SessionHandle,
+  input: {
+    readonly executionId: RunId;
+    /** Canonical config, already parsed by the launch site. */
+    readonly config: AgentConfig;
+    readonly agentName: string;
+    readonly userFollowUpSupport: UserFollowUpSupport;
+    readonly parentExecutionId?: RunId;
   },
-);
+): Effect.fn.Return<{ readonly childStreamId: StreamTabId }, Error> {
+  const { executionId, config } = input;
+  const childStreamId = getStreamTabId(config.agent, { executionId });
+  yield* registerRun(session, executionId, config, input.agentName, {
+    streamId: childStreamId,
+    identity: { kind: 'agent', agent: config.agent },
+    userFollowUpSupport: input.userFollowUpSupport,
+    parentExecutionId: input.parentExecutionId,
+    background: true,
+  });
+  return { childStreamId };
+});
 
 /** The strategy wiring a launch site supplies inside the guard. */
 interface DetachedChildRunLaunch<TTurn> {
@@ -100,10 +98,10 @@ export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
   (
     | {
         /** Create the stream inside the lease guard, before any stream-dependent setup. */
-        readonly createChildStream: () => Effect.Effect<ChildStream, Error>;
+        readonly createChildStream: () => Effect.Effect<ChildRun, Error>;
         /** Build attempt-scoped setup around the stream retained by the launch guard. */
         readonly buildLaunch: (
-          childStream: ChildStream,
+          childStream: ChildRun,
         ) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error>;
       }
     | {
@@ -135,11 +133,11 @@ export function startDetachedChildRunLoop<TTurn>(
   },
   Error
 > {
-  return runWithOwnedExecutionLeaseLaunchGuard(
+  return runWithOwnedRunLeaseLaunchGuard(
     input.session,
     input.executionId,
     Effect.gen(function* () {
-      let childStream: ChildStream | undefined;
+      let childStream: ChildRun | undefined;
       let autoCloseOnLaunchFailure = false;
       const setup = yield* Effect.exit(
         Effect.gen(function* () {

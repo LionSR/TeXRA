@@ -36,14 +36,14 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   resetCliState,
   clearTransientNotice,
-  rootStreamId as rootStreamIdSignal,
+  rootRunId as rootStreamIdSignal,
   setTransientNotice,
 } from './state/cliState';
 import { currentView } from './state/sessionView';
 
 interface ResumeHintSnapshot {
   readonly view: SessionView;
-  readonly rootStreamId: StreamTabId | undefined;
+  readonly rootRunId: StreamTabId | undefined;
 }
 import {
   collectResumeTargets,
@@ -154,14 +154,14 @@ export function createSessionExitController(
   // arrive as a snapshot taken while the session adapter was still bound.
   const printResumeHintOnExit = (snapshot: ResumeHintSnapshot): void => {
     if (!session.executionId) return;
-    const { view, rootStreamId } = snapshot;
+    const { view, rootRunId } = snapshot;
     const hint = formatResumeHint(
       collectResumeTargets({
         view,
-        rootStreamId,
+        rootRunId,
         rootExecutionId: session.executionId,
       }),
-      collectResumeUsage(view, rootStreamId),
+      collectResumeUsage(view, rootRunId),
       ctx.commandName,
       {
         cwd: ctx.cwd,
@@ -307,7 +307,7 @@ export function createSessionExitController(
     // below unbinds it, but the resume hint prints later.
     const resumeHint: ResumeHintSnapshot = {
       view: currentView(),
-      rootStreamId: rootStreamIdSignal.get(),
+      rootRunId: rootStreamIdSignal.get(),
     };
     if (cause.kind === 'signal') {
       ctx.suspendTerminalTitle();

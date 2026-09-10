@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 import {
   fileLocationDisplayPath,
-  type ExecutionId,
+  type RunId,
   type ExternalFileLocation,
   type FileLocation,
   type RunStorageFileLocation,
@@ -25,7 +25,7 @@ export function createWorkspaceLocation(
 export function createRunStorageLocation(
   absolutePath: string,
   relativePath: string,
-  executionId: ExecutionId,
+  executionId: RunId,
 ): RunStorageFileLocation {
   return {
     kind: 'runStorage',

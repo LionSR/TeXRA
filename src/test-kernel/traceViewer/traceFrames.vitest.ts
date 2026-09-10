@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentConfigSchema,
@@ -14,9 +14,9 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  StreamSnapshotSchema,
-  StreamLogEntrySchema,
-  type ExecutionId,
+  RunSnapshotSchema,
+  RunLogEntrySchema,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
@@ -87,7 +87,7 @@ function stageEntry(
     Partial<Pick<TraceEntry, 'groupId'>>,
 ): TraceEntry {
   const { groupId, ...rest } = entry;
-  return StreamLogEntrySchema.parse({
+  return RunLogEntrySchema.parse({
     ...rest,
     level: LOG_LEVELS.INFO,
     messageType: MESSAGE_TYPES.DEFAULT,
@@ -101,7 +101,7 @@ function legacyTrace(
 ): TraceDocument {
   const streamId = 'stream:legacy-trace' as StreamTabId;
   return {
-    executionId: 'abc123' as ExecutionId,
+    executionId: 'abc123' as RunId,
     streamId,
     config: parseConfig(category),
     meta: {
@@ -111,7 +111,7 @@ function legacyTrace(
       streamId: streamId,
     },
     entries: [],
-    snapshot: StreamSnapshotSchema.parse({
+    snapshot: RunSnapshotSchema.parse({
       streamId,
       status: snapshotStatus,
     }),
@@ -122,7 +122,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   it('replays workflow content without tool-use state', () => {
     const trace = legacyTrace(undefined);
     trace.entries.push(
-      StreamLogEntrySchema.parse({
+      RunLogEntrySchema.parse({
         id: 'archived-log',
         seqNo: 1,
         timestamp: 1,
@@ -154,7 +154,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     const trace: TraceDocument = {
       ...workflow,
       config: parseConfig(AgentCategory.ToolUse),
-      snapshot: StreamSnapshotSchema.parse({
+      snapshot: RunSnapshotSchema.parse({
         streamId: workflow.streamId,
         todos: [
           {
@@ -176,14 +176,14 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   });
 
   it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
-    const executionId = 'abc124' as ExecutionId;
+    const executionId = 'abc124' as RunId;
     const config = parseConfig(AgentCategory.Workflow);
     const streamId = getStreamTabId(config.agent, { executionId });
     const session = createTestSession();
     publishTestRunStart(session, streamId, executionId);
     await session.settlePublications();
     await Effect.runPromise(
-      getExecutionRecords(session, executionId).writeRunRecord(config),
+      getRunRecords(session, executionId).writeRunRecord(config),
     );
     session.publish([
       {
@@ -370,7 +370,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   it('projects a process export instruction into the fold command', () => {
     const streamId = 'bash@stream:process-trace' as StreamTabId;
     const trace: TraceDocument = {
-      executionId: 'abc125' as ExecutionId,
+      executionId: 'abc125' as RunId,
       streamId,
       config: { name: 'bash', instruction: 'ls -la' },
       meta: {
@@ -380,7 +380,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
         streamId,
       },
       entries: [],
-      snapshot: StreamSnapshotSchema.parse({ streamId }),
+      snapshot: RunSnapshotSchema.parse({ streamId }),
     };
 
     expect(foldTrace(trace)?.command).toBe('ls -la');

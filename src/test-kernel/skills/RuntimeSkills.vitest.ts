@@ -12,7 +12,7 @@ import {
   MESSAGE_TYPES,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import {
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog,
@@ -228,7 +228,7 @@ describe('runtime skills', () => {
     expect(result.catalog).not.toContain('skill-200');
 
     const trace = new TraceEmitter();
-    const store = new StreamLog();
+    const store = new RunLog();
     const streamId = 'stream:bounded-skills';
 
     attachTestTranscriptFold(trace, streamId, store);

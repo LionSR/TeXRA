@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
@@ -32,8 +32,8 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 const getExecutionStoreMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/ExecutionKVStore')>()),
-  getExecutionStore: getExecutionStoreMock,
-  getExecutionRecords: () => {
+  getRunStore: getExecutionStoreMock,
+  getRunRecords: () => {
     const store = getExecutionStoreMock();
     return {
       readConfig: () =>
@@ -59,10 +59,10 @@ vi.mock('@agent/runtime/runClassification', async (importActual) => ({
 const inspectExecutionLeaseMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/executionLease', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionLease')>()),
-  inspectExecutionLease: inspectExecutionLeaseMock,
+  inspectRunLease: inspectExecutionLeaseMock,
 }));
 
-const EXECUTION = 'aabbcc' as ExecutionId;
+const EXECUTION = 'aabbcc' as RunId;
 const STREAM = 'stream:resume-ownership' as StreamTabId;
 const completed = {
   category: 'toolUse' as const,

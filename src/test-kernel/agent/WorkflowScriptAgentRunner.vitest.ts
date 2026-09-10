@@ -10,7 +10,7 @@ import type { WorkflowAgentInvocation } from '@agent/workflowScript';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
@@ -85,7 +85,7 @@ vi.mock('@tools/delegation/delegationAvailability', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  getExecutionRecords: vi.fn(() => ({ readMeta: mocks.readExecutionMeta })),
+  getRunRecords: vi.fn(() => ({ readMeta: mocks.readExecutionMeta })),
   resolveChildRunOutput: mocks.resolveChildRunOutput,
 }));
 
@@ -113,11 +113,11 @@ vi.mock('@utils/files/absoluteFS', () => ({
   AbsoluteFS: { readBytes: mocks.absoluteReadBytes },
 }));
 
-const parentExecutionId = 'aaaaaa111111' as ExecutionId;
+const parentExecutionId = 'aaaaaa111111' as RunId;
 const parentStreamId = 'stream:workflow-script' as StreamTabId;
 // The detached workflow-run's own identity — grandchild agent() calls re-root
 // here, not on the orchestrator (#8712).
-const runExecutionId = 'run0run0run0' as ExecutionId;
+const runExecutionId = 'run0run0run0' as RunId;
 const runStreamId = 'workflow-script#run0run0run0' as StreamTabId;
 const run = { executionId: runExecutionId, streamId: runStreamId };
 const defaultAgent = {
@@ -904,7 +904,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     // attempt-specific execution id — the id its child stream / roster expose.
     // The runner must report THAT id, not the logical id it hands stable
     // execution, so a host's skip/retry finds the row.
-    const attemptExecutionId = 'cccccc333333' as ExecutionId;
+    const attemptExecutionId = 'cccccc333333' as RunId;
     let logicalExecutionId: string | undefined;
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
       logicalExecutionId = options.executionId;

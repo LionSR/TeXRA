@@ -5,7 +5,7 @@ import {
   defaultSession,
   trackTerminalResultPresentation,
 } from '@agent/runtime';
-import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
+import { resumeRunWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
@@ -37,7 +37,7 @@ export async function tryResumeFromResumeData(
   };
   try {
     return await effectRuntime().runPromise(
-      resumeStreamWithRefusalNotice(
+      resumeRunWithRefusalNotice(
         streamId,
         {
           session,

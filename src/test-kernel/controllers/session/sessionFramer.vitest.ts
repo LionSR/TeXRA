@@ -34,7 +34,7 @@ import {
   AgentCategory,
   FoldEventSchema,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
@@ -57,7 +57,7 @@ function textTail(
 const SELF = '["test-host",4242,"self-start"]';
 const KEY = '/workspace/framing';
 const STREAM = 'stream:framing' as StreamTabId;
-const EXECUTION = 'ab12cd' as ExecutionId;
+const EXECUTION = 'ab12cd' as RunId;
 const PORT = 'sidebar';
 
 const runStart: SessionEventDraft = {

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { ExecutionIdSchema } from '@shared/schemas';
+import { RunIdSchema } from '@shared/schemas';
 
 /** Non-empty string for the required file-operation identity fields. */
 const RequiredString = z.string().min(1);
@@ -25,7 +25,7 @@ const FileOpParamsSchema = z.object({
  */
 const fileOpConfigFields = {
   outputFiles: z.array(z.string()).prefault([]),
-  executionId: ExecutionIdSchema.optional(),
+  executionId: RunIdSchema.optional(),
 };
 
 export const PackConfigSchema = FileOpParamsSchema.extend({

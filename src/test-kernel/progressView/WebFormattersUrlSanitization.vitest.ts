@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   LOG_LEVELS,
   STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
+  RunLogEntrySchema,
 } from '@shared/schemas';
 import {
   projectTranscriptRow,
@@ -33,7 +33,7 @@ beforeAll(async () => {
 });
 
 function webSearchRow(url: string): WebSearchRow {
-  const entry = StreamLogEntrySchema.parse({
+  const entry = RunLogEntrySchema.parse({
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     seqNo: 1,
     id: 'web-search-1',
@@ -52,7 +52,7 @@ function webSearchRow(url: string): WebSearchRow {
 }
 
 function webFetchRow(url: string): WebFetchRow {
-  const entry = StreamLogEntrySchema.parse({
+  const entry = RunLogEntrySchema.parse({
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     seqNo: 1,
     id: 'web-fetch-1',

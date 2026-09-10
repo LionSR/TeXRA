@@ -8,7 +8,7 @@ import { platform } from '@platform/platform';
 import {
   fileLocationDisplayPath,
   type DiffResult,
-  type ExecutionId,
+  type RunId,
   type FileLocation,
   MESSAGE_TYPES,
   type OutputFileInfo,
@@ -34,7 +34,7 @@ import type { RoundFileEntry, RoundFileMapping } from './types';
 interface DiffOutputDirectory {
   absolutePath: string;
   relativePath: string;
-  executionId: ExecutionId;
+  executionId: RunId;
 }
 
 type SingleDiffOutcome = {

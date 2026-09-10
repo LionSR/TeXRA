@@ -4,13 +4,13 @@ import {
   LOG_LEVELS,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
+  RunLogEntrySchema,
   STREAM_PHASE,
-  type StreamLogEntry,
+  type RunLogEntry,
 } from '@shared/schemas';
 import {
   taskGroupDisplayStatus,
-  upsertTaskGroupFromStreamLog,
+  upsertTaskGroupFromRunLog,
 } from '@shared/streams/taskGroupProjection';
 import { projectTaskGroupsFromStreamLog } from '@test/support/transcriptRowFixtures';
 
@@ -26,8 +26,8 @@ function entry(
     | typeof STREAM_LOG_ENTRY_TYPES.GROUP_START
     | typeof STREAM_LOG_ENTRY_TYPES.GROUP_END,
   overrides: GroupEntryOverrides = {},
-): StreamLogEntry {
-  return StreamLogEntrySchema.parse({
+): RunLogEntry {
+  return RunLogEntrySchema.parse({
     seqNo: type === STREAM_LOG_ENTRY_TYPES.GROUP_START ? 1 : 2,
     id,
     type,
@@ -97,7 +97,7 @@ describe('task-group StreamLog projection', () => {
     const staleIndex = new Map([['run-1', 4]]);
 
     expect(
-      upsertTaskGroupFromStreamLog(
+      upsertTaskGroupFromRunLog(
         taskGroups,
         staleIndex,
         entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_END, {

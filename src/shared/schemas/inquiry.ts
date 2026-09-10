@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunIdSchema, StreamTabIdSchema } from './identifiers';
 
 // ============================================================================
 // Identifiers + session links (canonical home)
@@ -146,7 +146,7 @@ const InquiryThreadRecordShape = {
    * addressed to it: a stream re-run under a new execution never receives
    * an answer meant for the old one.
    */
-  parentExecutionId: ExecutionIdSchema.nullable(),
+  parentExecutionId: RunIdSchema.nullable(),
   status: InquiryThreadStatusSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),

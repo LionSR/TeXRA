@@ -91,4 +91,4 @@ const StreamLogTextDeltaSchema = z.strictObject({
   id: z.string().min(1),
   appendText: z.string().min(1),
 });
-export type StreamLogTextDelta = z.infer<typeof StreamLogTextDeltaSchema>;
+export type RunLogTextDelta = z.infer<typeof StreamLogTextDeltaSchema>;

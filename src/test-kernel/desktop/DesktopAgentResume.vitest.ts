@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
 import type { ResultEvent } from '@agent/trace';
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   ToolUseAgentConfigSchema,
@@ -22,7 +22,7 @@ import {
   AgentCategory,
   aggregateId,
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -45,7 +45,7 @@ const resumeToolUseFromResumeData = vi.spyOn(
 
 let testSession: SessionHandle;
 const stream = 'headless-resume' as StreamTabId;
-const executionId = 'abc123' as ExecutionId;
+const executionId = 'abc123' as RunId;
 const config = ToolUseAgentConfigSchema.parse({
   agent: 'proofreader',
   model: 'deepseekproT',
@@ -62,7 +62,7 @@ async function persistRunRecord(
   category: 'toolUse' | 'workflow',
 ): Promise<void> {
   await Effect.runPromise(
-    getExecutionRecords(testSession, executionId).writeRunRecord(
+    getRunRecords(testSession, executionId).writeRunRecord(
       category === 'toolUse' ? config : workflowConfig,
     ),
   );

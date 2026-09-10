@@ -10,7 +10,7 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import type { ResolvedAgent } from '@agent/index/agentEntry';
 import {
   createToolPolicy,
@@ -46,7 +46,7 @@ import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   aggregateId as qualifyAggregateId,
   type AgentSource,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
@@ -93,7 +93,7 @@ export interface AgentLaunchContext extends AgentCore {
 
 interface AgentLaunchInput {
   definition: PreparedAgentDefinition;
-  executionId: ExecutionId;
+  executionId: RunId;
   streamTabIdOverride?: StreamTabId;
   /**
    * Fires once the stream's `run.start` is published, before the run itself
@@ -135,7 +135,7 @@ const failIfAborted = (signal: AbortSignal | undefined) =>
     catch: ensureError,
   });
 
-export function withExecutionRunContext<T>(
+export function withLaunchRunContext<T>(
   ctx: AgentLaunchContext,
   options: { onApprovalPolicyDenial?: () => void } = {},
   fn: () => T,
@@ -232,11 +232,11 @@ async function validateModelExists(
 
 const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
   'inferLaunchModelHandlerCompatibilityKey',
-)(function* (executionId: ExecutionId, session: SessionHandle) {
+)(function* (executionId: RunId, session: SessionHandle) {
   const flowRecord = yield* Effect.tryPromise({
     try: async () =>
       runInSession(session, () =>
-        getExecutionStore(executionId).read<FlowRecord>(flowKey(executionId)),
+        getRunStore(executionId).read<FlowRecord>(flowKey(executionId)),
       ),
     catch: ensureError,
   });
@@ -378,7 +378,7 @@ export type PreparedAgentDefinition = Effect.Success<
 const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   function* (
     input: AgentLaunchInput & { session: SessionHandle },
-    executionId: ExecutionId,
+    executionId: RunId,
     streamId: StreamTabId,
     resources: Array<() => void | Promise<void>>,
   ): Effect.fn.Return<AgentLaunchContext, Error> {

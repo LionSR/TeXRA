@@ -26,7 +26,7 @@ import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
   ActiveChildInfo,
-  ExecutionId,
+  RunId,
   ProgressPermissionKind,
   DisplaySessionEvent,
   StreamTabId,
@@ -505,7 +505,7 @@ export function testRunScope(
     options.interactions ?? sessionWithInteractions(undefined).interactions;
   return createRunScope({
     streamId: streamId as StreamTabId,
-    executionId: 'deadbeef' as ExecutionId,
+    executionId: 'deadbeef' as RunId,
     agentName: 'test-agent',
     session: options.session ?? sessionWithInteractions(interactions),
     signal: options.signal ?? new AbortController().signal,

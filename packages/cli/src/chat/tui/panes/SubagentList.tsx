@@ -14,7 +14,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { childElapsed } from '../state/childControls';
 import {
   cumulativeUsageOf,
-  killableExecutionId,
+  killableRunId,
   streamPhaseOf,
 } from '../state/sessionView';
 import {
@@ -24,7 +24,7 @@ import {
   CHILD_TONE_COLOR,
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
-import { expandedStreams, type SessionListRow } from '../state/cliState';
+import { expandedRuns, type SessionListRow } from '../state/cliState';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
@@ -179,7 +179,7 @@ function SessionRow({
 }
 
 export interface SubagentListProps {
-  readonly activeStreamId?: StreamTabId;
+  readonly activeRunId?: StreamTabId;
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
   readonly onCancel?: () => void;
@@ -228,9 +228,7 @@ export function SubagentList(
       const { stream, expanded } = selectedRow;
       if (key.leftArrow || key.rightArrow || input === ' ') {
         const next = key.rightArrow || (!key.leftArrow && !expanded);
-        expandedStreams.set(
-          new Map(expandedStreams.get()).set(stream.id, next),
-        );
+        expandedRuns.set(new Map(expandedRuns.get()).set(stream.id, next));
       } else if (
         input.toLowerCase() === 'r' &&
         stream.group === 'interrupted' &&
@@ -238,7 +236,7 @@ export function SubagentList(
       ) {
         props.onFocusStream?.(stream.id);
       } else if (input.toLowerCase() === 'k') {
-        const executionId = killableExecutionId(stream);
+        const executionId = killableRunId(stream);
         if (executionId) props.onKillExecution?.(executionId);
       }
     },
@@ -257,8 +255,7 @@ export function SubagentList(
     >
       <Select
         activeValue={rows.find(
-          (row) =>
-            row.kind === 'stream' && row.stream.id === props.activeStreamId,
+          (row) => row.kind === 'stream' && row.stream.id === props.activeRunId,
         )}
         highlightedValue={selectedRow ?? null}
         hotkeys={false}

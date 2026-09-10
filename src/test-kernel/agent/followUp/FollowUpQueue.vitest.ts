@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 
 const stream = (value: string) => value as StreamTabId;
 
@@ -162,7 +162,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('starts a new child generation for an authorized retry', () => {
     const queues = new ToolUseFollowUpQueue();
-    const executionId = 'retry-execution' as ExecutionId;
+    const executionId = 'retry-execution' as RunId;
     const id = stream(`stream#${executionId}`);
     const first = queues.claimChildRun(id, executionId)!;
     queues.release(first, 'terminal');
@@ -182,13 +182,13 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('refuses a child claim for an unrelated execution', () => {
     const queues = new ToolUseFollowUpQueue();
-    const executionId = 'owned-execution' as ExecutionId;
+    const executionId = 'owned-execution' as RunId;
     const id = stream(`stream#${executionId}`);
     const first = queues.claimChildRun(id, executionId)!;
     queues.release(first, 'terminal');
 
     expect(() =>
-      queues.claimChildRun(id, 'unrelated-execution' as ExecutionId),
+      queues.claimChildRun(id, 'unrelated-execution' as RunId),
     ).toThrow('does not belong to execution');
   });
 
@@ -206,7 +206,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('refuses to rebuild entries after dispose', () => {
     const queues = new ToolUseFollowUpQueue();
-    const executionId = 'disposed-execution' as ExecutionId;
+    const executionId = 'disposed-execution' as RunId;
     const childId = stream(`stream#${executionId}`);
     const liveId = stream('stream:disposed-live');
     queues.claimLive(liveId, 'flow');

@@ -12,7 +12,7 @@ import type { RunMetadata } from '@transcript/StreamSnapshotStore';
  * session-state slice, so the port is declared once and each controller adds
  * its own extra accessor on top. Hosts hydrate the stream before dispatch.
  */
-export interface StreamOutputsSource {
+export interface RunOutputsSource {
   getRunMetadata(stream: StreamTabId): RunMetadata;
   getOutputFiles(stream: StreamTabId): ReadonlyRoundIndexed<OutputFileInfo>;
 }

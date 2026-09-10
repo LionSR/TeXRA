@@ -43,7 +43,7 @@ import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import type { Goal, Plan, ToolResult } from '@shared/schemas';
 import { goalElapsedMs, isGoalInFlight, ToolError } from '@shared/schemas';
-import { requireStreamId } from '@tools/contextHelpers';
+import { requireRunId } from '@tools/contextHelpers';
 import {
   GoalStore,
   isGoalEnabled,
@@ -473,13 +473,13 @@ function planCommand(
     case 'pause':
       return executePause(
         ports,
-        requireStreamId('plan(pause)', ports.contexts?.runContext),
+        requireRunId('plan(pause)', ports.contexts?.runContext),
         requireNonEmptyString(input.reason, 'reason'),
       );
     case 'complete':
       return executeComplete(
         ports,
-        requireStreamId('plan(complete)', ports.contexts?.runContext),
+        requireRunId('plan(complete)', ports.contexts?.runContext),
         requireNonEmptyString(input.reason, 'reason'),
       );
   }

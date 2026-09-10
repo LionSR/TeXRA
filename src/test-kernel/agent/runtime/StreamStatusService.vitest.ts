@@ -1,29 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { StatusEvent } from '@agent/trace';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type StreamPhase,
+  type RunPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import {
-  canTransitionStreamPhase,
+  canTransitionRunPhase,
   STREAM_TRANSITION_CAUSE,
-  type StreamTransitionCause,
+  type RunTransitionCause,
 } from '@shared/streams/streamStatus';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
 /** Fresh registry + recording host, keyed to a per-test stream id. */
 function setupMachine(streamId: string): {
-  machine: StreamStatusMachine;
+  machine: RunStatusMachine;
   statusEvents: () => StatusEvent[];
   streamId: StreamTabId;
 } {
   const published: StatusEvent[] = [];
   return {
-    machine: new StreamStatusMachine(
+    machine: new RunStatusMachine(
       (event) => published.push(event),
       () => {},
     ),
@@ -34,11 +34,11 @@ function setupMachine(streamId: string): {
 
 describe('StreamStatusMachine', () => {
   it('keeps stream status state per instance', () => {
-    const first = new StreamStatusMachine(
+    const first = new RunStatusMachine(
       () => {},
       () => {},
     );
-    const second = new StreamStatusMachine(
+    const second = new RunStatusMachine(
       () => {},
       () => {},
     );
@@ -53,11 +53,11 @@ describe('StreamStatusMachine', () => {
   it('publishes only through its owning session hub', () => {
     const firstPublished = { events: [] as StatusEvent[] };
     const secondPublished = { events: [] as StatusEvent[] };
-    const first = new StreamStatusMachine(
+    const first = new RunStatusMachine(
       (event) => firstPublished.events.push(event),
       () => {},
     );
-    const second = new StreamStatusMachine(
+    const second = new RunStatusMachine(
       (event) => secondPublished.events.push(event),
       () => {},
     );
@@ -70,14 +70,14 @@ describe('StreamStatusMachine', () => {
   });
 
   it('exercises the live machine against the exhaustive transition table', () => {
-    const phases = Object.values(STREAM_PHASE) as StreamPhase[];
+    const phases = Object.values(STREAM_PHASE) as RunPhase[];
     const causes = Object.values(
       STREAM_TRANSITION_CAUSE,
-    ) as StreamTransitionCause[];
+    ) as RunTransitionCause[];
     for (const from of [undefined, ...phases]) {
       for (const to of phases) {
         for (const cause of causes) {
-          const machine = new StreamStatusMachine(
+          const machine = new RunStatusMachine(
             () => {},
             () => {},
           );
@@ -88,7 +88,7 @@ describe('StreamStatusMachine', () => {
           const accepted = machine.transition(streamId, to, cause);
 
           expect(accepted, `${from ?? 'undefined'} -> ${to} by ${cause}`).toBe(
-            canTransitionStreamPhase(from, to, cause),
+            canTransitionRunPhase(from, to, cause),
           );
           expect(machine.get(streamId)).toBe(accepted ? to : from);
         }

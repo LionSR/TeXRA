@@ -18,7 +18,7 @@
 import { customAlphabet, nanoid } from 'nanoid';
 import { basename as pathBasename, extname as pathExtname } from 'pathe';
 
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 export {
   isNonEmptyString,
@@ -531,8 +531,8 @@ export function tryParseUrl(input: string): URL | undefined {
 export const hexId12 = customAlphabet('0123456789abcdef', 12);
 
 /** Generate a compact 12-char hex execution ID (48 bits of entropy). */
-export function generateExecutionId(): ExecutionId {
-  return hexId12() as ExecutionId;
+export function generateRunId(): RunId {
+  return hexId12() as RunId;
 }
 
 /**

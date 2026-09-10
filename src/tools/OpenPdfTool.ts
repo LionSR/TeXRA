@@ -8,7 +8,7 @@ import { z } from 'zod';
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import {
-  getRunContextExecutionId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
@@ -113,7 +113,7 @@ export class OpenPdfTool extends defineTool({
   protected execute(input: OpenPdfInput): Promise<ToolResult> {
     // The session and the run it belongs to are the calling turn's, so they
     // are read here and handed to the program rather than from a fiber.
-    const executionId = getRunContextExecutionId(tryUseRunContext());
+    const executionId = getRunContextRunId(tryUseRunContext());
     const trimmedPath = input.path.trim();
     const ports: OpenPdfPorts = {
       openPdf: currentSession().interactions.openPdf,

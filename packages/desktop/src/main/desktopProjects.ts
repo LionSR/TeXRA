@@ -34,7 +34,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { StreamLogStore } from '@transcript';
+import { RunLogStore } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readPlatformSetting } from '@utils/config/platformSettings';

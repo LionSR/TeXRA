@@ -14,7 +14,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import type { FileSystemProvider } from '@platform/interfaces';
 import {
-  type ExecutionId,
+  type RunId,
   type FileLocation,
   type OutputFileInfo,
   type RoundIndexed,
@@ -102,7 +102,7 @@ const collectTexFiles = Effect.fn('latexdiff.collectTexFiles')(function* (
  */
 export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
   function* (
-    executionId: ExecutionId,
+    executionId: RunId,
     inputFile: string,
     extraBaseFiles: string[] | undefined,
     channel: string,

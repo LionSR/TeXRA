@@ -88,7 +88,7 @@ function defaultSessionMeta(): SessionMeta {
 
 /** The Surface's selection as written by `focusStream`; renders read
  *  `selectedStreamId`, which resolves it against the view. */
-export const activeStreamId = signal<StreamTabId | undefined>(undefined);
+export const activeRunId = signal<StreamTabId | undefined>(undefined);
 
 /**
  * The stream the transcript and status bar show: the Surface's selection
@@ -99,13 +99,14 @@ export const activeStreamId = signal<StreamTabId | undefined>(undefined);
  * clears a stale selection, and a signal rather than a per-render derivation
  * so every component reads one answer.
  */
-export const selectedStreamId: Signal.Computed<StreamTabId | undefined> =
-  computed(() => {
-    const selected = activeStreamId.get();
+export const selectedRunId: Signal.Computed<StreamTabId | undefined> = computed(
+  () => {
+    const selected = activeRunId.get();
     const view = sessionView().get();
     if (selected === undefined || view.streams.has(selected)) return selected;
     return view.streams.size === 0 ? selected : view.order.at(0);
-  });
+  },
+);
 
 /**
  * Move transcript/status focus onto a stream. Sole focus writer: a stream
@@ -115,16 +116,16 @@ export const selectedStreamId: Signal.Computed<StreamTabId | undefined> =
  * that adopt focus only while nothing holds it (the first log sync, the first
  * local transcript row).
  */
-export function focusStream(
+export function focusRun(
   streamId: StreamTabId,
   options: { readonly onlyIfUnset?: boolean } = {},
 ): void {
-  if (options.onlyIfUnset && activeStreamId.get() !== undefined) return;
-  activeStreamId.set(streamId);
+  if (options.onlyIfUnset && activeRunId.get() !== undefined) return;
+  activeRunId.set(streamId);
 }
 
 /** Expansion is a Surface choice; the fold's forceExpanded takes precedence. */
-export const expandedStreams = signal<ReadonlyMap<StreamTabId, boolean>>(
+export const expandedRuns = signal<ReadonlyMap<StreamTabId, boolean>>(
   new Map(),
 );
 
@@ -143,7 +144,7 @@ export type SessionListRow =
 /** The visible tree, including section headings, shared by the list and its shortcuts. */
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
-  const expanded = expandedStreams.get();
+  const expanded = expandedRuns.get();
   const rows: SessionListRow[] = [];
   const groups: Record<StreamView['group'], StreamView[]> = {
     running: [],
@@ -176,14 +177,14 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
 });
 
 /** Stream shortcuts follow the visible tree and skip section headings. */
-export const sessionListStreamIds = computed(() =>
+export const sessionListRunIds = computed(() =>
   sessionListRows
     .get()
     .flatMap((row) => (row.kind === 'stream' ? [row.stream.id] : [])),
 );
 
 /** The top-level stream the current session rooted at. */
-export const rootStreamId = signal<StreamTabId | undefined>(undefined);
+export const rootRunId = signal<StreamTabId | undefined>(undefined);
 /** Whether the root session holds an unfinished run claim (run promise
  *  pending). Published only by `TuiSession`, so renders read the session
  *  run-state reactively instead of calling impure session closures that
@@ -192,7 +193,7 @@ export const rootRunPending = signal<boolean>(false);
 /** Run-control mirror of `TuiSession.streamId` — cleared while a new run is
  *  pending, unlike `rootStreamId`, which stays put as the transcript anchor
  *  across pending windows. Published only by `TuiSession`. */
-export const rootRunStreamId = signal<StreamTabId | undefined>(undefined);
+export const pendingRootRunId = signal<StreamTabId | undefined>(undefined);
 
 // ---------------------------------------------------------------------------
 // foregroundOverlaySlice
@@ -549,11 +550,11 @@ export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {
   sessionMeta.set(nextSessionMeta);
-  activeStreamId.set(undefined);
-  rootStreamId.set(undefined);
-  expandedStreams.set(new Map());
+  activeRunId.set(undefined);
+  rootRunId.set(undefined);
+  expandedRuns.set(new Map());
   rootRunPending.set(false);
-  rootRunStreamId.set(undefined);
+  pendingRootRunId.set(undefined);
   activeForm.set(undefined);
   goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);

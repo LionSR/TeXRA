@@ -16,7 +16,7 @@ import type {
   AgentCategory,
   ConversationProgress,
   GoalPausedPayload,
-  ExecutionId,
+  RunId,
   RunIdentity,
   RunOutcome,
   SessionEventDraft,
@@ -25,7 +25,7 @@ import type {
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
-  UpdateStreamUsagePayload,
+  UpdateRunUsagePayload,
   UpdateTodosPayload,
   WorkflowCallProgress,
   WorkflowPlanMarker,
@@ -86,7 +86,7 @@ export interface StageStartEvent extends StageStamp {
 interface RunConfigEvent extends StageStamp {
   readonly type: 'run.config';
   readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly config: AgentConfig;
 }
 
@@ -150,7 +150,7 @@ interface ActiveSkillsEvent extends StageStamp {
 /** Token-usage report. */
 interface UsageEvent extends StageStamp {
   readonly type: 'usage';
-  readonly payload: UpdateStreamUsagePayload;
+  readonly payload: UpdateRunUsagePayload;
   /** False when this usage report should not create a transcript stats row. */
   readonly recordTranscript?: boolean;
 }

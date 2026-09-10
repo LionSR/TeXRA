@@ -19,8 +19,8 @@ import {
   interruptedWorkflowCall,
   isTerminalWorkflowCallProgress,
   isTerminalWorkflowCallStatus,
-  type StreamLifecycleStatus,
-  type StreamLogEntry,
+  type RunLifecycleStatus,
+  type RunLogEntry,
   type StreamTabId,
   type TaskGroup,
   type WorkflowCallIdentity,
@@ -78,7 +78,7 @@ function internalMarkerKind(data: unknown): unknown {
  * and a malformed plan is an unknown plan, not the previous attempt's.
  */
 export function workflowMarkerOf(
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
 ): WorkflowMarker | undefined {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
@@ -175,7 +175,7 @@ interface WorkflowRunModelInput {
    *  it never reached are then nothing to show — the projection's settle
    *  sweep has housed every declared card under a stage, so an empty
    *  plan-only phase is its own skipped-empty-phase suppression. */
-  readonly streamPhase: StreamLifecycleStatus | undefined;
+  readonly streamPhase: RunLifecycleStatus | undefined;
   /** Whether the run is durably final: a terminal outcome with no producer
    *  left anywhere (the fold's `runDurablyFinal`), the same fact
    *  `taskGroupDisplayStatus` reads for an unclosed task group, as the bit

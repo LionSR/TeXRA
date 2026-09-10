@@ -4,8 +4,8 @@ import { Effect, Fiber, type Scheduler } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunRegistry } from '@agent/runtime/executionRegistry';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import {
   testExecutionHandle,
   testExecutionRegistry,
@@ -58,7 +58,7 @@ describe('AgentCliSessionRegistry', () => {
           );
           registry.register('session-handoff', {
             childStreamId: 'child-handoff' as StreamTabId,
-            executionId: 'execution-handoff' as ExecutionId,
+            executionId: 'execution-handoff' as RunId,
           });
           const retiring = Effect.runFork(registry.persistenceDrain(), {
             scheduler,
@@ -114,7 +114,7 @@ describe('AgentCliSessionRegistry', () => {
     'contains a $kind session mapping write failure without awaiting registration',
     ({ makePersist }) =>
       Effect.gen(function* () {
-        const executionId = 'execution-write-failure' as ExecutionId;
+        const executionId = 'execution-write-failure' as RunId;
         const writeError = new Error('storage unavailable');
         const persistSessionId = makePersist(writeError);
         const reportPersistenceFailure = vi.fn();
@@ -181,7 +181,7 @@ describe('AgentCliSessionRegistry', () => {
         Effect.gen(function* () {
           registry.register('session-log-failure', {
             childStreamId: 'child-log-failure' as StreamTabId,
-            executionId: 'execution-log-failure' as ExecutionId,
+            executionId: 'execution-log-failure' as RunId,
           });
 
           yield* Effect.promise(() =>
@@ -209,7 +209,7 @@ describe('AgentCliSessionRegistry', () => {
         );
         const entry = {
           childStreamId: 'child-a' as StreamTabId,
-          executionId: 'execution-a' as ExecutionId,
+          executionId: 'execution-a' as RunId,
         };
 
         try {
@@ -280,9 +280,9 @@ describe('AgentCliSessionRegistry', () => {
   it('releases every active alias owned by one execution', () => {
     const executions = testExecutionRegistry();
     const registry = new AgentCliSessionRegistry('test_session_id', executions);
-    const executionA = 'execution-a' as ExecutionId;
-    const executionB = 'execution-b' as ExecutionId;
-    const entry = (executionId: ExecutionId, childStreamId: StreamTabId) => ({
+    const executionA = 'execution-a' as RunId;
+    const executionB = 'execution-b' as RunId;
+    const entry = (executionId: RunId, childStreamId: StreamTabId) => ({
       childStreamId,
       executionId,
     });
@@ -316,11 +316,11 @@ describe('AgentCliSessionRegistry', () => {
   });
 
   it('interrupts an in-flight loop without promoting its reserved resume id', () => {
-    const executionId = 'execution-in-flight' as ExecutionId;
+    const executionId = 'execution-in-flight' as RunId;
     const interrupt = vi.fn();
     const registry = new AgentCliSessionRegistry('test_session_id', {
       getAgentHandleByStream: () => ({ interrupt }),
-    } as unknown as ExecutionRegistry);
+    } as unknown as RunRegistry);
     const releaseClaim = registry.claim('reserved-session');
 
     registry.trackInFlight({
@@ -365,11 +365,11 @@ describe('AgentCliSessionRegistry', () => {
       registry.claim('pending-session');
       registry.register('session-a', {
         childStreamId: 'child-a' as StreamTabId,
-        executionId: 'execution-a' as ExecutionId,
+        executionId: 'execution-a' as RunId,
       });
       registry.register('session-b', {
         childStreamId: 'child-b' as StreamTabId,
-        executionId: 'execution-b' as ExecutionId,
+        executionId: 'execution-b' as RunId,
       });
 
       registry.interruptAll();

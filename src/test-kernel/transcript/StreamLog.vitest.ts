@@ -4,12 +4,12 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type StreamLogEntry,
+  type RunLogEntry,
 } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 
-function logWithMessage(text = ''): StreamLog {
-  const log = new StreamLog();
+function logWithMessage(text = ''): RunLog {
+  const log = new RunLog();
   log.append({
     id: 'message',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -23,7 +23,7 @@ function logWithMessage(text = ''): StreamLog {
 
 describe('StreamLog', () => {
   it('appends trusted entries while preserving sequence and lookup invariants', () => {
-    const log = new StreamLog();
+    const log = new RunLog();
 
     log.append({
       id: 'run',
@@ -76,7 +76,7 @@ describe('StreamLog', () => {
   });
 
   it('does not emit no-op updates', () => {
-    const log = new StreamLog();
+    const log = new RunLog();
     log.append({
       id: 'message',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -95,7 +95,7 @@ describe('StreamLog', () => {
   });
 
   it('assigns one durable settlement order when rows become printable', () => {
-    const log = new StreamLog();
+    const log = new RunLog();
     const header = log.appendSettled({
       id: 'phase',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
@@ -125,7 +125,7 @@ describe('StreamLog', () => {
       },
     });
     const revised = log.settle('task', { text: 'Audit core complete' });
-    const restored = new StreamLog(log.getRange(0));
+    const restored = new RunLog(log.getRange(0));
     const later = restored.appendSettled({
       id: 'summary',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -238,10 +238,10 @@ describe('StreamLog', () => {
       return seed % bound;
     };
 
-    const log = new StreamLog();
+    const log = new RunLog();
     const oracle = new Map<string, string>();
     const ids: string[] = [];
-    const snapshots: Array<{ entry: StreamLogEntry; text: string }> = [];
+    const snapshots: Array<{ entry: RunLogEntry; text: string }> = [];
 
     for (let step = 0; step < 400; step += 1) {
       const op = rand(10);
@@ -284,9 +284,7 @@ describe('StreamLog', () => {
       expect(entry.text).toBe(text);
     }
     // Export serialization sees the same materialized text.
-    const persisted = JSON.parse(
-      JSON.stringify(log.toJSON()),
-    ) as StreamLogEntry[];
+    const persisted = JSON.parse(JSON.stringify(log.toJSON())) as RunLogEntry[];
     for (const entry of persisted) {
       expect(entry.text).toBe(oracle.get(entry.id));
     }

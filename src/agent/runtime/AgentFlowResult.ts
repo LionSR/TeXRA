@@ -4,10 +4,10 @@ import {
   AttachedMemoryMissSchema,
   type AttachedMemoryMiss,
 } from '@agent/types/AttachedMemory';
-import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
+import type { RunId, RunOutcome, StreamTabId } from '@shared/schemas';
 import {
   CompileFailureSummarySchema,
-  ExecutionIdSchema,
+  RunIdSchema,
   OutputFileSummarySchema,
   RetryErrorInfoSchema,
   RunOutcomeSchema,
@@ -16,7 +16,7 @@ import {
 } from '@shared/schemas';
 
 const AgentFlowMetaSchema = z.object({
-  executionId: ExecutionIdSchema,
+  executionId: RunIdSchema,
   streamId: StreamTabIdSchema,
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
   /**
@@ -109,7 +109,7 @@ export function buildOptionalFlowResultFields(
 export function buildTerminalFlowResult(
   category: AgentFlowCategory,
   outcome: RunOutcome,
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   memoryMisses?: AttachedMemoryMiss[],
 ): AgentFlowResult {

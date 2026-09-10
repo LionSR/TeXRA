@@ -17,13 +17,13 @@ import {
   AgentCategory,
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
-  type ExecutionId,
-  type StreamPhase,
+  type RunId,
+  type RunPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import {
-  descendantStreams,
+  descendantRuns,
   type SessionView,
   type StreamView,
 } from '@shared/session/sessionView';
@@ -57,7 +57,7 @@ export interface RunProgressRenderer {
    *  (the first root run the view gains after attach, when omitted). */
   attach(
     session: RunProgressSession,
-    options?: { readonly executionId?: ExecutionId },
+    options?: { readonly executionId?: RunId },
   ): () => void;
   clear(): void;
   preserve(): void;
@@ -107,7 +107,7 @@ export function createRunProgressRenderer(
  */
 function claimRootStream(
   view: SessionView,
-  wantedExecutionId: ExecutionId | undefined,
+  wantedExecutionId: RunId | undefined,
   attachCursor: number,
 ): StreamTabId | undefined {
   const candidates = [...view.streams.values()].filter((stream) =>
@@ -148,11 +148,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastLine = '';
   private liveLine = false;
   private view: SessionView | undefined;
-  private rootStreamId: StreamTabId | undefined;
-  private wantedExecutionId: ExecutionId | undefined;
+  private rootRunId: StreamTabId | undefined;
+  private wantedExecutionId: RunId | undefined;
   private attachCursor = 0;
   /** The last root phase the renderer painted; a repeat is not a change. */
-  private paintedPhase: StreamPhase | undefined;
+  private paintedPhase: RunPhase | undefined;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
@@ -173,7 +173,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   attach(
     session: RunProgressSession,
-    options: { readonly executionId?: ExecutionId } = {},
+    options: { readonly executionId?: RunId } = {},
   ): () => void {
     this.wantedExecutionId = options.executionId;
     this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
@@ -201,9 +201,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private root(): StreamView | undefined {
-    return this.rootStreamId
-      ? this.view?.streams.get(this.rootStreamId)
-      : undefined;
+    return this.rootRunId ? this.view?.streams.get(this.rootRunId) : undefined;
   }
 
   private get rootStreamTerminal(): boolean {
@@ -213,7 +211,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private applyView(view: SessionView): void {
     const previous = this.view;
     this.view = view;
-    this.rootStreamId ??= claimRootStream(
+    this.rootRunId ??= claimRootStream(
       view,
       this.wantedExecutionId,
       this.attachCursor,
@@ -221,8 +219,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const root = this.root();
     if (!root) return;
     const wasTerminal = isTerminalOutcomePhase(
-      previous && this.rootStreamId
-        ? previous.streams.get(this.rootStreamId)?.status
+      previous && this.rootRunId
+        ? previous.streams.get(this.rootRunId)?.status
         : undefined,
     );
     const phase = root.status;
@@ -259,7 +257,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private updateHeartbeat(): void {
-    if (this.rootStreamTerminal || !this.rootStreamId) {
+    if (this.rootStreamTerminal || !this.rootRunId) {
       this.stopHeartbeat();
       return;
     }
@@ -410,7 +408,7 @@ interface WorkflowPlainOutputOptions {
   /** The launched run when the request names it, else the first top-level
    *  stream created after attach: the output prints the workflow streams
    *  under it. */
-  readonly executionId?: ExecutionId;
+  readonly executionId?: RunId;
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
@@ -466,7 +464,7 @@ export function attachWorkflowPlainOutput(
 ): () => void {
   const previous = new Map<StreamTabId, ReadonlyMap<string, string>>();
   let subscribed = '';
-  let rootStreamId: StreamTabId | undefined;
+  let rootRunId: StreamTabId | undefined;
   const attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
   const write = (line: string): void => {
     options.beforeWrite?.();
@@ -486,12 +484,12 @@ export function attachWorkflowPlainOutput(
     }
     // The view also holds every earlier run hydrated from the transcript
     // summary; only the launched run's own subtree is this run's output.
-    rootStreamId ??= claimRootStream(view, options.executionId, attachCursor);
-    const root = rootStreamId;
+    rootRunId ??= claimRootStream(view, options.executionId, attachCursor);
+    const root = rootRunId;
     const rootedIds =
       root === undefined
         ? undefined
-        : new Set(descendantStreams(view, root, { includeRoot: true }));
+        : new Set(descendantRuns(view, root, { includeRoot: true }));
     const workflows =
       rootedIds === undefined
         ? []

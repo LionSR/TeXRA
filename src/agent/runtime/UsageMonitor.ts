@@ -3,7 +3,7 @@ import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type {
-  ExecutionId,
+  RunId,
   ExtendedTokenUsageStats,
   StreamTabId,
   UsageRoute,
@@ -72,7 +72,7 @@ interface UsageMonitorModelInfo {
  */
 interface UsageMonitorContext {
   logger: AgentTrace;
-  executionId: ExecutionId;
+  executionId: RunId;
   runStageId: string | undefined;
   streamId: StreamTabId;
 }

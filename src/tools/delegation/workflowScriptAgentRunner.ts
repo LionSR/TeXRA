@@ -2,7 +2,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import {
   WorkflowRunAbortError,
   type WorkflowAgentInvocation,
@@ -14,10 +14,10 @@ import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import { AgentCategory } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { ensureError } from '@utils/errors/errorMessage';
-import { deriveExecutionId } from '@utils/core/idHash';
+import { deriveRunId } from '@utils/core/idHash';
 
 // Local file imports
 import { executeStableSubagentInBand } from './inBandSubagentExecution';
@@ -66,7 +66,7 @@ function workflowScriptModelSelection(
  * timed-out run is resumed under the same `meta.name`.
  */
 interface WorkflowRunIdentity {
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly streamId: StreamTabId;
 }
 
@@ -79,7 +79,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
     call: Pick<WorkflowAgentInvocation, 'prompt' | 'options'>,
     parent: LaunchRunContext,
     defaultAgent: AgentEntry,
-    runExecutionId: ExecutionId,
+    runExecutionId: RunId,
   ): Effect.fn.Return<
     { configPayload: AgentConfigPayload; agentName: string },
     Error
@@ -202,7 +202,7 @@ export function createWorkflowScriptAgentRunner(
     function* (
       invocation: WorkflowAgentInvocation,
     ): Effect.fn.Return<AgentFinalResult, Error> {
-      const logicalExecutionId = deriveExecutionId({
+      const logicalExecutionId = deriveRunId({
         checkpointId,
         key: invocation.key,
         parentExecutionId: run.executionId,
@@ -212,7 +212,7 @@ export function createWorkflowScriptAgentRunner(
       // durable retry. A host targets the in-flight attempt by THIS id, so it is
       // the one reported to the engine; it also marks the attempt as live, which
       // durable recovery (which never fires the callback) is distinguished by.
-      let activeExecutionId: ExecutionId | undefined;
+      let activeExecutionId: RunId | undefined;
       const completed = yield* executeStableSubagentInBand({
         session: runScope.session,
         executionId: logicalExecutionId,
@@ -288,10 +288,7 @@ export function createWorkflowScriptAgentRunner(
         });
         if (invocation.report !== undefined) {
           const recoveredMeta = yield* Effect.exit(
-            getExecutionRecords(
-              runScope.session,
-              completed.executionId,
-            ).readMeta(),
+            getRunRecords(runScope.session, completed.executionId).readMeta(),
           );
           if (Exit.isSuccess(recoveredMeta)) {
             const recoveredStreamId = recoveredMeta.value?.streamId;

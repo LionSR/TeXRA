@@ -8,7 +8,7 @@ import { assertNever, groupBy } from '@utils/core';
 // Local imports - TUI state
 
 import {
-  approvalPayloadStreamId,
+  approvalPayloadRunId,
   type PendingApproval,
   type PendingApprovalKind,
 } from './state/approvalQueue';
@@ -123,20 +123,19 @@ export function foregroundSurfaceKind({
  */
 export function approvalVisibleForSelection({
   pending,
-  selectedStreamId,
+  selectedRunId,
   view,
 }: {
   readonly pending: PendingApproval | undefined;
-  readonly selectedStreamId: StreamTabId | undefined;
+  readonly selectedRunId: StreamTabId | undefined;
   readonly view: SessionView;
 }): boolean {
   if (!pending) return false;
-  const streamId = approvalPayloadStreamId(pending.payload);
-  if (streamId === undefined || streamId === selectedStreamId) return true;
+  const streamId = approvalPayloadRunId(pending.payload);
+  if (streamId === undefined || streamId === selectedRunId) return true;
   const asking = view.streams.get(streamId);
   return (
-    asking?.ancestors.some((ancestor) => ancestor.id === selectedStreamId) ??
-    false
+    asking?.ancestors.some((ancestor) => ancestor.id === selectedRunId) ?? false
   );
 }
 

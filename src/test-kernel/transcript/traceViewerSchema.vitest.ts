@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentConfigSchema,
@@ -13,7 +13,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
@@ -73,7 +73,7 @@ describe('trace-viewer TraceDataSchema', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
 
   it('accepts a real trace document produced by assembleTrace', async () => {
-    const executionId = 'abc12345' as ExecutionId;
+    const executionId = 'abc12345' as RunId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
     const streamId = getStreamTabId('review', { executionId });
@@ -81,7 +81,7 @@ describe('trace-viewer TraceDataSchema', () => {
     publishTestRunStart(session, streamId, executionId);
     await session.settlePublications();
     await Effect.runPromise(
-      getExecutionRecords(session, executionId).writeRunRecord(executionConfig),
+      getRunRecords(session, executionId).writeRunRecord(executionConfig),
     );
     session.publish([
       {

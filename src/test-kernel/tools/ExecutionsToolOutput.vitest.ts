@@ -9,11 +9,7 @@ import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
-import {
-  getExecutionStore,
-  getExecutionRecords,
-  registerExecution,
-} from '@agent/storage';
+import { getRunStore, getRunRecords, registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
@@ -24,8 +20,8 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecResult,
-  type ExecutionId,
-  type WorkflowExecutionSnapshot,
+  type RunId,
+  type WorkflowRunSnapshot,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -37,13 +33,13 @@ import { withToolEnvironment } from '@test/support/toolEnvironment';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
 
 function writeWorkflowExecutionSnapshot(
   session: ReturnType<typeof defaultSession>,
-  executionId: ExecutionId,
-  workflow: WorkflowExecutionSnapshot,
+  executionId: RunId,
+  workflow: WorkflowRunSnapshot,
 ) {
   return session.commit([
     {
@@ -157,10 +153,10 @@ async function readOutput(
 async function registerProcessExecution(
   instruction: string,
 ): Promise<{ executionId: string; streamId: StreamTabId }> {
-  const executionId = generateExecutionId();
+  const executionId = generateRunId();
   const streamId = `bash@tool#${executionId}` as StreamTabId;
   await Effect.runPromise(
-    registerExecution(
+    registerRun(
       defaultSession(),
       executionId,
       AgentConfigSchema.parse({
@@ -183,9 +179,9 @@ async function registerWorkflowExecution(
   name: string,
   model?: string,
 ): Promise<string> {
-  const executionId = generateExecutionId();
+  const executionId = generateRunId();
   await Effect.runPromise(
-    registerExecution(
+    registerRun(
       defaultSession(),
       executionId,
       {
@@ -447,9 +443,9 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('points a non-process execution at /conversation instead of dumping its transcript', async () => {
-    const executionId = generateExecutionId();
+    const executionId = generateRunId();
     await Effect.runPromise(
-      registerExecution(
+      registerRun(
         defaultSession(),
         executionId,
         AgentConfigSchema.parse({
@@ -570,7 +566,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(
       (
         await Effect.runPromise(
-          getExecutionRecords(defaultSession(), executionId).readMeta(),
+          getRunRecords(defaultSession(), executionId).readMeta(),
         )
       )?.workflow,
     );
@@ -822,7 +818,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('errors on an unknown execution id', async () => {
-    const result = await readOutput(generateExecutionId());
+    const result = await readOutput(generateRunId());
 
     assert.equal(result.status, 'error');
     assert.ok((result.error ?? '').includes('Execution not found'));

@@ -8,15 +8,15 @@ import {
   emptyUsageStats,
   mergeRounds,
   planSummaryLine,
-  StreamSnapshotSchema,
+  RunSnapshotSchema,
   sumUsageStats,
   type CompileFailure,
-  type ExecutionId,
+  type RunId,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
   type RunIdentity,
   type SessionEvent,
-  type StreamSnapshot,
+  type RunSnapshot,
   type StreamTabId,
   type TokenUsageStats,
   type UserFollowUpSupport,
@@ -25,7 +25,7 @@ import {
 import type { Database } from '@shared/session/database';
 
 export interface RunMetadata {
-  readonly executionId?: ExecutionId;
+  readonly executionId?: RunId;
   readonly identity?: RunIdentity;
   readonly userFollowUpSupport?: UserFollowUpSupport;
   readonly config?: AgentConfig;
@@ -36,7 +36,7 @@ interface StreamRecord {
   seq: number;
   startCommit: number;
   removed: boolean;
-  snapshot: StreamSnapshot;
+  snapshot: RunSnapshot;
   metadata: RunMetadata;
 }
 
@@ -49,7 +49,7 @@ function initialRecord(
     startCommit: event.commit,
     removed: false,
     snapshot: {
-      ...StreamSnapshotSchema.parse({ streamId }),
+      ...RunSnapshotSchema.parse({ streamId }),
       executionId: event.executionId,
       parentStreamId: event.parentStreamId ?? undefined,
     },
@@ -134,7 +134,7 @@ function fold(events: readonly SessionEvent[]): StreamRecord | undefined {
  * committed-tail application together, so a read cannot overwrite a newer
  * live fold. There are no files, write queues, overlays or staged directories.
  */
-export class StreamSnapshotStore {
+export class RunSnapshotStore {
   private readonly records = new Map<StreamTabId, StreamRecord>();
   private readonly gate = Semaphore.makeUnsafe(1);
 
@@ -182,7 +182,7 @@ export class StreamSnapshotStore {
         Effect.map((record) =>
           record && !record.removed
             ? structuredClone(record.snapshot)
-            : StreamSnapshotSchema.parse({ streamId: stream }),
+            : RunSnapshotSchema.parse({ streamId: stream }),
         ),
       ),
     );
@@ -300,7 +300,7 @@ export class StreamSnapshotStore {
     return this.current(stream)?.snapshot.parentStreamId;
   }
 
-  getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
+  getExecutionIdMap(): ReadonlyMap<StreamTabId, RunId> {
     return new Map(
       [...this.records].flatMap(([stream, record]) =>
         !record.removed && record.metadata.executionId

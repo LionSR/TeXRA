@@ -12,8 +12,8 @@ import {
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
-import { ExecutionIdSchema } from '@shared/schemas';
+import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
+import { RunIdSchema } from '@shared/schemas';
 
 const log = createLog('ExecuteCommand');
 
@@ -26,7 +26,7 @@ const log = createLog('ExecuteCommand');
  */
 const WrappedExecuteInputSchema = z.object({
   config: z.unknown(),
-  executionId: ExecutionIdSchema.optional(),
+  executionId: RunIdSchema.optional(),
   preferHelperModel: z.boolean().optional(),
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
   copilotRouteOverride: z.literal('direct').optional(),
@@ -66,7 +66,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
         copilotRouteOverride: wrapped?.copilotRouteOverride,
         onRun,
-        onStreamResolved: presentLaunchedProgressStream,
+        onStreamResolved: presentLaunchedProgressRun,
       }),
     );
   } catch (error) {

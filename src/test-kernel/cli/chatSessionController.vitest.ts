@@ -40,7 +40,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  getExecutionRecords: (...args: unknown[]) => {
+  getRunRecords: (...args: unknown[]) => {
     const records = mocks.getExecutionRecords(...args);
     return {
       readMeta: () =>
@@ -55,7 +55,7 @@ vi.mock('@agent/storage', () => ({
         }),
     };
   },
-  ExecutionLeaseActiveError: class ExecutionLeaseActiveError extends Error {},
+  RunLeaseActiveError: class RunLeaseActiveError extends Error {},
 }));
 
 vi.mock('@agent/runtime/resumeRun', () => ({
@@ -119,7 +119,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   appendLocalErrorTranscript: mocks.appendLocalErrorTranscript,
   appendLocalUserTranscript: mocks.appendLocalUserTranscript,
   clearLocalTranscript: mocks.clearLocalTranscript,
-  moveLocalTranscriptToStream: mocks.moveLocalTranscriptToStream,
+  moveLocalTranscriptToRun: mocks.moveLocalTranscriptToStream,
 }));
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
@@ -135,8 +135,8 @@ import type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { ExecutionInteractionOwnership } from '@agent/runtime/executionInteractionOwnership';
-import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { RunInteractionOwnership } from '@agent/runtime/executionInteractionOwnership';
+import { RunRegistry } from '@agent/runtime/executionRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -149,8 +149,8 @@ import { createChatSessionController } from '@cli/chat/chatSessionController';
 import {
   patchSessionMeta,
   rootRunPending,
-  rootRunStreamId,
-  rootStreamId,
+  pendingRootRunId,
+  rootRunId,
   sessionMeta,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -165,7 +165,7 @@ import { DisposableStore } from '@platform/disposable';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
@@ -175,7 +175,7 @@ import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { StreamSnapshotStore } from '@transcript';
+import { RunSnapshotStore } from '@transcript';
 import { ensureError } from '@utils/errors/errorMessage';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
@@ -231,7 +231,7 @@ function makeRunRequest(instruction: string): AgentConfigPayload {
 
 type ToolUseRunResult<Outcome> = {
   category: 'toolUse';
-  executionId: ExecutionId;
+  executionId: RunId;
   outcome: Outcome;
   streamId: StreamTabId;
 };
@@ -277,7 +277,7 @@ function makeResumeSnapshotStore(options: {
   readonly executionId?: string | undefined;
   readonly config?: AgentConfig | undefined;
   readonly parentStreamId?: StreamTabId | undefined;
-}): StreamSnapshotStore {
+}): RunSnapshotStore {
   return {
     preload: vi.fn(() =>
       options.preload
@@ -312,7 +312,7 @@ function makeResumeSnapshotStore(options: {
         : undefined,
     })),
     getParentStreamId: vi.fn(() => options.parentStreamId),
-  } as unknown as StreamSnapshotStore;
+  } as unknown as RunSnapshotStore;
 }
 
 /** Durable run record `resume()` resolves before adopting the stream. */
@@ -362,8 +362,8 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       ...executions,
       // The stubbed registry still answers the surfaces the real ownership
       // index reads, so the controller runs against real ownership.
-      interactionOwnership: new ExecutionInteractionOwnership(
-        executions as unknown as ExecutionRegistry,
+      interactionOwnership: new RunInteractionOwnership(
+        executions as unknown as RunRegistry,
       ),
     },
     transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
@@ -377,7 +377,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
  */
 function installOwnerSession(): {
   readonly session: SessionHandle;
-  readonly executions: ExecutionRegistry;
+  readonly executions: RunRegistry;
   readonly interactions: SessionHostInteractions;
 } {
   const session = createTestSession();
@@ -406,7 +406,7 @@ function installOwnerSession(): {
   };
 }
 function trackRunningExecution(
-  executions: ExecutionRegistry,
+  executions: RunRegistry,
   executionId: string,
   parentStreamId: StreamTabId,
   streamId: StreamTabId,
@@ -426,10 +426,7 @@ function trackRunningExecution(
 /** `resumeRun`'s started result: the run ran and the batch reached it. */
 const STARTED = { started: true, delivered: true } as const;
 
-const defaultResumeRun = (
-  _executionId: ExecutionId,
-  options: ResumeRunOptions,
-) =>
+const defaultResumeRun = (_executionId: RunId, options: ResumeRunOptions) =>
   Effect.tryPromise({
     try: async () => {
       // The real `resumeRun` rearranges the host onto the resumed stream only
@@ -575,10 +572,7 @@ describe('createChatSessionController', () => {
       streamId: 'stream-start',
     });
     mocks.runAgent.mockImplementation(
-      (
-        request: { config: unknown; executionId: ExecutionId },
-        options: object,
-      ) =>
+      (request: { config: unknown; executionId: RunId }, options: object) =>
         Effect.tryPromise({
           try: () =>
             mocks.executeAgent(request.config, request.executionId, options),
@@ -610,9 +604,9 @@ describe('createChatSessionController', () => {
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
     installResumeExecutionStore();
-    rootStreamId.set(undefined);
+    rootRunId.set(undefined);
     rootRunPending.set(false);
-    rootRunStreamId.set(undefined);
+    pendingRootRunId.set(undefined);
   });
 
   it('does not surface an intentional stop as an error', async () => {
@@ -796,7 +790,7 @@ describe('createChatSessionController', () => {
     mocks.executeAgent.mockImplementationOnce(
       async (
         _config: unknown,
-        executionId: ExecutionId,
+        executionId: RunId,
         options: ExecuteAgentMockOptions,
       ) => {
         const rootHandle = testExecutionHandle({
@@ -815,7 +809,7 @@ describe('createChatSessionController', () => {
             executions.untrack(rootHandle.executionId);
             rootRun.resolve({
               category: 'toolUse',
-              executionId: rootHandle.executionId as ExecutionId,
+              executionId: rootHandle.executionId as RunId,
               outcome: RUN_OUTCOME.CANCELLED,
               streamId: rootStream,
             });
@@ -884,9 +878,9 @@ describe('createChatSessionController', () => {
     const rootAStream = 'root-a' as StreamTabId;
     const childAStream = 'child-a' as StreamTabId;
     const rootBStream = 'root-b' as StreamTabId;
-    let childAExecutionId: ExecutionId | undefined;
-    let rootAExecutionId: ExecutionId | undefined;
-    let rootBExecutionId: ExecutionId | undefined;
+    let childAExecutionId: RunId | undefined;
+    let rootAExecutionId: RunId | undefined;
+    let rootBExecutionId: RunId | undefined;
 
     mocks.createCliRuntimeHost
       .mockReturnValueOnce(hostA)
@@ -904,11 +898,11 @@ describe('createChatSessionController', () => {
       .mockImplementationOnce(
         async (
           _config: unknown,
-          executionId: ExecutionId,
+          executionId: RunId,
           options: ExecuteAgentMockOptions,
         ) => {
           rootAExecutionId = executionId;
-          childAExecutionId = 'child-a-exec' as ExecutionId;
+          childAExecutionId = 'child-a-exec' as RunId;
           trackRunningExecution(
             executions,
             executionId,
@@ -930,7 +924,7 @@ describe('createChatSessionController', () => {
       .mockImplementationOnce(
         async (
           _config: unknown,
-          executionId: ExecutionId,
+          executionId: RunId,
           options: ExecuteAgentMockOptions,
         ) => {
           rootBExecutionId = executionId;
@@ -992,7 +986,7 @@ describe('createChatSessionController', () => {
     const disposeAdapter = vi.fn();
     const rootStream = 'activation-root' as StreamTabId;
     const childStream = 'activation-child' as StreamTabId;
-    const childExecutionId = 'activation-child-exec' as ExecutionId;
+    const childExecutionId = 'activation-child-exec' as RunId;
     let releaseChildActivation = (): void => undefined;
 
     mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
@@ -1003,7 +997,7 @@ describe('createChatSessionController', () => {
     mocks.executeAgent.mockImplementationOnce(
       async (
         _config: unknown,
-        executionId: ExecutionId,
+        executionId: RunId,
         options: ExecuteAgentMockOptions,
       ) => {
         trackRunningExecution(
@@ -1095,7 +1089,7 @@ describe('createChatSessionController', () => {
     for (const present of resultPresenters) present('Failure A');
     runA.resolve({
       category: 'toolUse',
-      executionId: 'exec-a' as ExecutionId,
+      executionId: 'exec-a' as RunId,
       outcome: RUN_OUTCOME.CANCELLED,
       streamId: 'root-a' as StreamTabId,
     });
@@ -1112,7 +1106,7 @@ describe('createChatSessionController', () => {
     for (const present of resultPresenters) present('Failure B');
     runB.resolve({
       category: 'toolUse',
-      executionId: 'exec-b' as ExecutionId,
+      executionId: 'exec-b' as RunId,
       outcome: RUN_OUTCOME.FAILED,
       streamId: 'root-b' as StreamTabId,
     });
@@ -1211,7 +1205,7 @@ describe('createChatSessionController', () => {
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    const resumed = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumed = ctrl.resume('aaaaaa' as RunId);
 
     // The claim (tryClaimRootRunSlot) must land synchronously, before
     // resume() ever reaches its first await — same contract as
@@ -1239,7 +1233,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore: makeResumeSnapshotStore({ config }) }),
     );
 
-    await ctrl.resume('exec-resume' as ExecutionId);
+    await ctrl.resume('exec-resume' as RunId);
     await session.runPromise;
 
     expect(sessionMeta.get()).toMatchObject({
@@ -1272,7 +1266,7 @@ describe('createChatSessionController', () => {
       mocks.resumeRun.mockReturnValueOnce(Effect.succeed({ failed: failure }));
       const ctrl = createChatSessionController(makeInit({ session }));
 
-      await ctrl.resume('exec-resume' as ExecutionId);
+      await ctrl.resume('exec-resume' as RunId);
       await session.runPromise;
 
       expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
@@ -1283,7 +1277,7 @@ describe('createChatSessionController', () => {
       expect(mocks.clearLocalTranscript).not.toHaveBeenCalled();
       expect(session.streamId).toBeUndefined();
       expect(session.executionId).toBeUndefined();
-      expect(rootStreamId.get()).toBeUndefined();
+      expect(rootRunId.get()).toBeUndefined();
       expect(session.runCompleted).toBe(true);
     },
   );
@@ -1291,7 +1285,7 @@ describe('createChatSessionController', () => {
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
     const session = makeSession({ runCompleted: true });
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             await options.onResumeResolved?.();
@@ -1310,7 +1304,7 @@ describe('createChatSessionController', () => {
     });
     const ctrl = createChatSessionController(init);
 
-    await ctrl.resume('exec-resume' as ExecutionId);
+    await ctrl.resume('exec-resume' as RunId);
     await session.runPromise;
 
     expect(session.runExitCode).toBe(CliExitCode.Success);
@@ -1327,7 +1321,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
     );
 
-    await ctrl.resume('aaaaaa' as ExecutionId);
+    await ctrl.resume('aaaaaa' as RunId);
     await session.runPromise;
 
     expect(session.streamId).toBe('stream-resume');
@@ -1346,7 +1340,7 @@ describe('createChatSessionController', () => {
     expect(admission.kind).toBe('accepted');
     if (admission.kind !== 'accepted') return;
 
-    const manualResume = ctrl.resume('aaaaaa' as ExecutionId);
+    const manualResume = ctrl.resume('aaaaaa' as RunId);
     teardown.resolve();
 
     await manualResume;
@@ -1380,7 +1374,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore: snapshotStoreForB }),
     );
 
-    const resumeA = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumeA = ctrl.resume('aaaaaa' as RunId);
     // A is now suspended inside the config read; the slot is
     // already claimed.
     expect(session.runPromise).toBeDefined();
@@ -1418,7 +1412,7 @@ describe('createChatSessionController', () => {
     });
     const snapshotStore = makeResumeSnapshotStore({});
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             await options.onResumeResolved?.();
@@ -1433,7 +1427,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    const resumed = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumed = ctrl.resume('aaaaaa' as RunId);
     // resume() has claimed the slot synchronously; once the durable record
     // resolves it suspends inside defaultSession().transcripts.ensureLoaded()
     // with session.streamId already set to the resumed stream.
@@ -1443,7 +1437,7 @@ describe('createChatSessionController', () => {
     // rendering can derive the Ctrl-C hint from signals instead of calling
     // impure session closures that memoized renders cache stale.
     expect(rootRunPending.get()).toBe(true);
-    expect(rootRunStreamId.get()).toBe('stream-resume');
+    expect(pendingRootRunId.get()).toBe('stream-resume');
 
     const canInterruptActiveRun = chatTuiCanInterruptActiveRun(session);
     const canStopActiveRun = chatTuiCanStopActiveRun({
@@ -1488,7 +1482,7 @@ describe('createChatSessionController', () => {
       runCompleted: true,
     });
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             await resumeReached.promise;
@@ -1504,7 +1498,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
     );
 
-    const resumed = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumed = ctrl.resume('aaaaaa' as RunId);
     await vi.waitFor(() => expect(mocks.resumeRun).toHaveBeenCalledOnce());
     ctrl.stop();
     expect(session.interruptedStreamId).toBeUndefined();
@@ -1537,7 +1531,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    await expect(ctrl.resume('aaaaaa' as ExecutionId)).resolves.toBeUndefined();
+    await expect(ctrl.resume('aaaaaa' as RunId)).resolves.toBeUndefined();
     await session.runPromise;
 
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
@@ -1564,12 +1558,12 @@ describe('createChatSessionController', () => {
         }),
       ),
       getRunMetadata: vi.fn(() => ({})),
-    } as unknown as StreamSnapshotStore;
+    } as unknown as RunSnapshotStore;
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             await options.onResumeResolved?.();
@@ -1584,7 +1578,7 @@ describe('createChatSessionController', () => {
         }),
     );
 
-    const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumeStarted = ctrl.resume('aaaaaa' as RunId);
     await vi.waitFor(() =>
       expect(mocks.setCliHelperModel).toHaveBeenCalledWith('demo-model'),
     );
@@ -1662,7 +1656,7 @@ describe('createChatSessionController', () => {
     expect(resumeOptions?.isCancellationRequested?.()).toBe(false);
     session.stopRequested = true;
     expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
-    expect(rootStreamId.get()).toBe('stream-1');
+    expect(rootRunId.get()).toBe('stream-1');
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
@@ -1678,7 +1672,7 @@ describe('createChatSessionController', () => {
     const session = makeSession({ runCompleted: true });
     let resumeOptions: ResumeRunOptions | undefined;
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             resumeOptions = options;
@@ -1902,7 +1896,7 @@ describe('createChatSessionController', () => {
     const resume = pDefer<typeof STARTED>();
     const { ctrl } = makeInterruptedController(Promise.resolve(), true);
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             options.onFollowUpQueueReady?.({
@@ -1962,7 +1956,7 @@ describe('createChatSessionController', () => {
       snapshotStore,
     );
     await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    await ctrl.resume('aaaaaa' as ExecutionId);
+    await ctrl.resume('aaaaaa' as RunId);
     // The rollback rides the run chain now that the rehydration runs inside
     // `resumeRun`'s adoption hook, so the retry follows the settled resume.
     await session.runPromise;
@@ -1983,7 +1977,7 @@ describe('createChatSessionController', () => {
       .mockReset()
       .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
 
-    await ctrl.resume('aaaaaa' as ExecutionId);
+    await ctrl.resume('aaaaaa' as RunId);
 
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'aaaaaa',
@@ -2000,7 +1994,7 @@ describe('createChatSessionController', () => {
   it('preserves root ownership when auto-resuming a child stream', async () => {
     const root = 'root-stream' as StreamTabId;
     const child = 'child-stream' as StreamTabId;
-    rootStreamId.set(root);
+    rootRunId.set(root);
     const snapshotStore = makeResumeSnapshotStore({
       executionId: 'exec-1',
       config: makeResumeConfig(),
@@ -2010,7 +2004,7 @@ describe('createChatSessionController', () => {
 
     await expect(ctrl.tryResumeStream(child)).resolves.toBe(true);
 
-    expect(rootStreamId.get()).toBe(root);
+    expect(rootRunId.get()).toBe(root);
     expect(mocks.notify).toHaveBeenCalledWith('agentFinished');
   });
 
@@ -2024,7 +2018,7 @@ describe('createChatSessionController', () => {
     });
     mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () =>
             options.isCancellationRequested?.() === true

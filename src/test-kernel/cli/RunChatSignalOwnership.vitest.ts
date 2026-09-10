@@ -12,14 +12,14 @@ import { defaultSession } from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { rootStreamId as rootStreamIdSignal } from '@cli/chat/tui/state/cliState';
+import { rootRunId as rootStreamIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -29,7 +29,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -491,7 +491,7 @@ describe('runChat signal ownership wiring', () => {
     const { runChat } = await import('@cli/chat/tui/runChatTui');
     const runPromise = runChat(INTERACTIVE_CONTEXT, {
       initialResume: {
-        id: 'exec-resume' as ExecutionId,
+        id: 'exec-resume' as RunId,
         config,
       },
     });
@@ -537,7 +537,7 @@ describe('runChat signal ownership wiring', () => {
         [history, ownRoot].map((streamId) => ({
           type: 'run.start' as const,
           aggregateId: qualifyAggregateId('stream', streamId),
-          executionId: generateExecutionId(),
+          executionId: generateRunId(),
           identity: { kind: 'agent' as const, agent: 'assistant' },
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
           category: AgentCategory.ToolUse,

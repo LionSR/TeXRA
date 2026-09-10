@@ -32,7 +32,7 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ExecutionBusy } from '@agent/runtime/executionLanes';
+import { RunBusy } from '@agent/runtime/executionLanes';
 import { aggregateId as qualifyAggregateId } from '@shared/schemas';
 import type { LocalRuntimeState, StreamTabId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
@@ -212,7 +212,7 @@ function deleteAdmittedStream(
       )
       .pipe(
         Effect.mapError((error): RequestError => {
-          if (error instanceof ExecutionBusy) return new NotOwner({ streamId });
+          if (error instanceof RunBusy) return new NotOwner({ streamId });
           if (
             error instanceof DatabaseWriteFailed &&
             error.cause instanceof DatabaseClaimRefused

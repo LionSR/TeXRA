@@ -90,7 +90,7 @@ const RECENT_COMMIT_LIMIT = 20;
 
 const log = createLog('ProgressViewProvider');
 
-export type ProgressStreamRevealResult = 'revealed' | 'missing';
+export type ProgressRunRevealResult = 'revealed' | 'missing';
 
 /** One transport port: a VS Code webview attached to the bridge. */
 interface Port {
@@ -597,7 +597,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public async revealStream(
     streamId: StreamTabId,
-  ): Promise<ProgressStreamRevealResult> {
+  ): Promise<ProgressRunRevealResult> {
     const view = SubscriptionRef.getUnsafe(this.session.view);
     if (!view.streams.has(streamId)) return 'missing';
     await this.showProgressView();

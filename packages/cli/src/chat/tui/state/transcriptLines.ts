@@ -3,16 +3,16 @@
 // renders every tool-output line.
 
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
 
-const EMPTY_EXECUTION_LABELS: ExecutionLabels = new Map();
+const EMPTY_EXECUTION_LABELS: RunLabels = new Map();
 
 interface EntryLinesMemo {
   readonly cols: number;
-  readonly labels: ExecutionLabels;
+  readonly labels: RunLabels;
   readonly lines: readonly string[];
 }
 
@@ -28,7 +28,7 @@ const entryLinesCache = new WeakMap<TranscriptRow, EntryLinesMemo>();
 function transcriptEntryLines(
   entry: TranscriptRow,
   cols: number,
-  executionLabels: ExecutionLabels,
+  executionLabels: RunLabels,
 ): readonly string[] {
   const memo = entryLinesCache.get(entry);
   if (memo && memo.cols === cols && memo.labels === executionLabels) {
@@ -71,7 +71,7 @@ function shouldSeparateEntries({
 export function transcriptToLines(
   rows: readonly TranscriptRow[],
   cols: number,
-  executionLabels: ExecutionLabels = EMPTY_EXECUTION_LABELS,
+  executionLabels: RunLabels = EMPTY_EXECUTION_LABELS,
 ): readonly string[] {
   const out: string[] = [];
   let previousEntry: TranscriptRow | undefined;

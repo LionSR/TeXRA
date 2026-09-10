@@ -13,8 +13,8 @@ import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
 import {
-  validateExecutionRequest,
-  type ExecutionRequest,
+  validateRunRequest,
+  type RunRequest,
 } from '@agent/core/state/executionRequests';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
@@ -37,7 +37,7 @@ import {
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import {
-  exportStreamTranscript,
+  exportRunTranscript,
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   type TranscriptExportOpenKind,
 } from '@controllers/progressView/exportTranscript';
@@ -165,10 +165,10 @@ export function createExtensionHostRequests(
 
   /** Validate an agent request and run it through the one launch command. */
   async function runExecutionRequest(
-    request: ExecutionRequest,
+    request: RunRequest,
     runOptions: Parameters<HostRunActionPorts['runExecutionRequest']>[1] = {},
   ): Promise<void> {
-    const validation = validateExecutionRequest(request);
+    const validation = validateRunRequest(request);
     if (!validation.valid) {
       log.error(validation.message);
       throw new Rejected({ reason: validation.message });
@@ -270,7 +270,7 @@ export function createExtensionHostRequests(
       });
     }
     await effectRuntime().runPromise(
-      exportStreamTranscript(executionId, {
+      exportRunTranscript(executionId, {
         pickFormat: async () =>
           (
             await vscode.window.showQuickPick(

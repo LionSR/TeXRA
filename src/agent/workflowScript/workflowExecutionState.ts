@@ -4,8 +4,8 @@ import {
   WORKFLOW_EXECUTION_LIFECYCLE,
   type WorkflowCallIdentity,
   type WorkflowCallKind,
-  type WorkflowExecutionCall,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunCall,
+  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@shared/copy/workflowCall';
 
@@ -19,7 +19,7 @@ interface WorkflowCallDefinition {
   readonly agent?: string;
   /** Model the script declared for this call; the host may still substitute. */
   readonly model?: string;
-  readonly files: WorkflowExecutionCall['files'];
+  readonly files: WorkflowRunCall['files'];
 }
 
 type WorkflowCallRecoverySource = (
@@ -27,11 +27,11 @@ type WorkflowCallRecoverySource = (
 ) & { readonly journalProven: boolean };
 
 /** Owns canonical workflow stage/call transitions and interrupted-run hydration. */
-export class WorkflowExecutionState {
-  readonly #snapshot: WorkflowExecutionSnapshot;
-  readonly #persistedCalls: readonly WorkflowExecutionCall[];
+export class WorkflowRunState {
+  readonly #snapshot: WorkflowRunSnapshot;
+  readonly #persistedCalls: readonly WorkflowRunCall[];
   readonly #recoveryAt: string;
-  readonly #publish: (snapshot: WorkflowExecutionSnapshot) => void;
+  readonly #publish: (snapshot: WorkflowRunSnapshot) => void;
   readonly #hasDeclaredStages: boolean;
   readonly #issuedCallIds = new Set<string>();
   #sealed = false;
@@ -39,13 +39,13 @@ export class WorkflowExecutionState {
   constructor(options: {
     readonly phases: readonly { readonly title: string }[];
     readonly tasks: readonly WorkflowCallIdentity[];
-    readonly initialSnapshot?: WorkflowExecutionSnapshot;
+    readonly initialSnapshot?: WorkflowRunSnapshot;
     /**
      * Receives the live snapshot on every transition, not a copy. Consumers
      * that retain it or persist asynchronously must clone it first (the
      * runner's snapshot writer clones at drain time).
      */
-    readonly publish: (snapshot: WorkflowExecutionSnapshot) => void;
+    readonly publish: (snapshot: WorkflowRunSnapshot) => void;
   }) {
     this.#publish = options.publish;
     this.#hasDeclaredStages = options.phases.length > 0;
@@ -54,7 +54,7 @@ export class WorkflowExecutionState {
     this.#persistedCalls = structuredClone(
       options.initialSnapshot?.calls ?? [],
     );
-    const fresh: WorkflowExecutionSnapshot = {
+    const fresh: WorkflowRunSnapshot = {
       lifecycle: WORKFLOW_EXECUTION_LIFECYCLE.WAITING,
       stages: options.phases.map((phase, index) => ({
         id: stageIdFor(index),
@@ -98,7 +98,7 @@ export class WorkflowExecutionState {
     );
   }
 
-  snapshot(): WorkflowExecutionSnapshot {
+  snapshot(): WorkflowRunSnapshot {
     return structuredClone(this.#snapshot);
   }
 
@@ -205,14 +205,14 @@ export class WorkflowExecutionState {
       ...(definition.agent !== undefined && { agent: definition.agent }),
       ...(definition.model !== undefined && { model: definition.model }),
     };
-    const fresh: WorkflowExecutionCall = {
+    const fresh: WorkflowRunCall = {
       id: definition.id,
       ...canonical,
       attempts: [],
       status: WORKFLOW_CALL_STATUS.PLANNED,
       timestamps: { createdAt: timestamp, updatedAt: timestamp },
     };
-    let prior: WorkflowExecutionCall | undefined;
+    let prior: WorkflowRunCall | undefined;
     if (recoverySource !== undefined) {
       const recoveryId =
         'id' in recoverySource
@@ -246,13 +246,13 @@ export class WorkflowExecutionState {
     this.#emit();
   }
 
-  #call(id: string): WorkflowExecutionCall {
+  #call(id: string): WorkflowRunCall {
     const call = this.#snapshot.calls.find((candidate) => candidate.id === id);
     if (!call) throw new Error(`Workflow snapshot call ${id} is missing.`);
     return call;
   }
 
-  updateCall(id: string, patch: Partial<WorkflowExecutionCall>): void {
+  updateCall(id: string, patch: Partial<WorkflowRunCall>): void {
     const call = this.#call(id);
     if (this.#sealed) return;
     Object.assign(call, patch);
@@ -537,7 +537,7 @@ function stageIdFor(index: number): string {
 }
 
 function totalAttemptCost(
-  attempts: WorkflowExecutionCall['attempts'],
+  attempts: WorkflowRunCall['attempts'],
 ): number | undefined {
   return attempts.some((attempt) => attempt.costUsd !== undefined)
     ? attempts.reduce((total, attempt) => total + (attempt.costUsd ?? 0), 0)
@@ -545,7 +545,7 @@ function totalAttemptCost(
 }
 
 /** Whether a hydrated call's status means its prior result can be replayed as-is. */
-function isReusableStatus(status: WorkflowExecutionCall['status']): boolean {
+function isReusableStatus(status: WorkflowRunCall['status']): boolean {
   return (
     status === WORKFLOW_CALL_STATUS.COMPLETED ||
     status === WORKFLOW_CALL_STATUS.CACHED
@@ -553,9 +553,9 @@ function isReusableStatus(status: WorkflowExecutionCall['status']): boolean {
 }
 
 function closeOpenAttempts(
-  attempts: WorkflowExecutionCall['attempts'],
+  attempts: WorkflowRunCall['attempts'],
   recoveryAt: string,
-): WorkflowExecutionCall['attempts'] {
+): WorkflowRunCall['attempts'] {
   return attempts.map((attempt) =>
     attempt.completedAt === undefined
       ? { ...attempt, completedAt: recoveryAt }
@@ -564,11 +564,11 @@ function closeOpenAttempts(
 }
 
 function recoverCall(
-  fresh: WorkflowExecutionCall,
-  prior: WorkflowExecutionCall | undefined,
+  fresh: WorkflowRunCall,
+  prior: WorkflowRunCall | undefined,
   recoveryAt: string,
   journalProven = false,
-): WorkflowExecutionCall {
+): WorkflowRunCall {
   if (!prior) return fresh;
   const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
   if (isReusableStatus(prior.status) || journalProven) {
@@ -599,10 +599,10 @@ function recoverCall(
 }
 
 function hydrate(
-  fresh: WorkflowExecutionSnapshot,
-  persisted: WorkflowExecutionSnapshot | undefined,
+  fresh: WorkflowRunSnapshot,
+  persisted: WorkflowRunSnapshot | undefined,
   recoveryAt: string,
-): WorkflowExecutionSnapshot {
+): WorkflowRunSnapshot {
   if (!persisted) return fresh;
   const snapshot = structuredClone(fresh);
   snapshot.timestamps.createdAt = persisted.timestamps.createdAt;

@@ -1,6 +1,6 @@
 // Local imports - execution requests
 import { Effect } from 'effect';
-import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
+import type { ValidatedRunRequest } from '@agent/core/state/executionRequests';
 
 // Local imports - team launch
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
@@ -16,9 +16,9 @@ import {
 // Local imports - main-view execution
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
-  type MainViewExecutionPreparationResult,
-  prepareMainViewExecutionRequest,
-  prepareMainViewTeamExecutionRequest,
+  type MainViewRunPreparationResult,
+  prepareMainViewRunRequest,
+  prepareMainViewTeamRunRequest,
 } from '@controllers/mainView/MainViewExecutionController';
 
 // Local imports - shared types and errors
@@ -29,7 +29,7 @@ import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Host interactions needed by the shared team-launch decision sequence. */
-export interface MainViewExecutionLaunchHost {
+export interface MainViewRunLaunchHost {
   chooseTeamAvailability(
     unavailableNames: readonly string[],
   ): Promise<TeamAvailabilityChoice | undefined>;
@@ -38,15 +38,15 @@ export interface MainViewExecutionLaunchHost {
 }
 
 /** Resolve an ordinary or team launch and answer refusals on the request path. */
-export function prepareMainViewExecutionLaunch(
+export function prepareMainViewRunLaunch(
   message: MainViewExecuteMessage,
-  host: MainViewExecutionLaunchHost,
-): Effect.Effect<ValidatedExecutionRequest, Rejected | Cancelled> {
+  host: MainViewRunLaunchHost,
+): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled> {
   return Effect.gen(function* () {
-    let preparation: MainViewExecutionPreparationResult;
+    let preparation: MainViewRunPreparationResult;
     let infoMessage: string | undefined;
     if (message.session?.launchTarget !== 'team') {
-      preparation = prepareMainViewExecutionRequest(message);
+      preparation = prepareMainViewRunRequest(message);
     } else {
       const teamId = message.session.teamId;
       if (!teamId)
@@ -85,7 +85,7 @@ export function prepareMainViewExecutionLaunch(
             ),
           });
         case 'ready':
-          preparation = prepareMainViewTeamExecutionRequest(
+          preparation = prepareMainViewTeamRunRequest(
             message,
             resolution.fields,
           );
@@ -117,9 +117,9 @@ export function prepareMainViewExecutionLaunch(
 /** Both GUI hosts launch the selections carried by the requesting surface. */
 export function prepareSurfaceLaunch(
   { launch, instruction }: Extract<HostRequest, { kind: 'launch' }>,
-  host: MainViewExecutionLaunchHost,
-): Effect.Effect<ValidatedExecutionRequest, Rejected | Cancelled> {
-  return prepareMainViewExecutionLaunch(
+  host: MainViewRunLaunchHost,
+): Effect.Effect<ValidatedRunRequest, Rejected | Cancelled> {
+  return prepareMainViewRunLaunch(
     {
       agent: launch.agent[launch.sessionType],
       model: launch.model,

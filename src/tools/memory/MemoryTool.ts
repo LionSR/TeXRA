@@ -8,7 +8,7 @@ import { z } from 'zod';
 // Local imports
 import {
   getRunContextAgentName,
-  getRunContextExecutionId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type { FileStat } from '@platform/interfaces';
@@ -296,7 +296,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         const ctx = tryUseRunContext();
         const meta = createMeta(
           getRunContextAgentName(ctx),
-          getRunContextExecutionId(ctx),
+          getRunContextRunId(ctx),
           existingMeta,
         );
         return Effect.tryPromise({

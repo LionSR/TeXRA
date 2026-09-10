@@ -10,20 +10,20 @@ import {
 } from '@agent/runtime';
 import {
   deriveResumability,
-  ExecutionLeaseLostError,
+  RunLeaseLostError,
   type ResumabilityDecision,
   finalizeRun,
 } from '@agent/storage';
-import { validateExecutionRequest } from '@agent/core/state/executionRequests';
+import { validateRunRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
-import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
-import { aggregateError, generateExecutionId, onAbort } from '@utils/core';
+import { aggregateError, generateRunId, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { warnApprovalDenied } from './approval/approvalPrompts';
@@ -69,7 +69,7 @@ interface CliExecuteOptions {
   /** Called during signal shutdown after CANCELLED status is durable and the
    *  resumable checkpoint has been drained, before the signal handler exits. */
   readonly onInterruptedExecutionFinalized?: (
-    executionId: ExecutionId,
+    executionId: RunId,
   ) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedExecution?: (
@@ -93,7 +93,7 @@ export interface CliConfigExecuteOptions<
    * Resume an existing execution under its persisted id instead of minting a
    * fresh one. The CLI turns this into explicit resume intent for `runAgent`.
    */
-  readonly executionId?: ExecutionId;
+  readonly executionId?: RunId;
 }
 
 export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
@@ -128,8 +128,8 @@ export function executeCliConfig<
       executionId: resumedExecutionId,
       ...executeOptions
     } = options;
-    const executionId = resumedExecutionId ?? generateExecutionId();
-    const validation = validateExecutionRequest({ config, executionId });
+    const executionId = resumedExecutionId ?? generateRunId();
+    const validation = validateRunRequest({ config, executionId });
     if (!validation.valid) {
       writeTextStderr(validation.message);
       return { ok: false as const, exitCode: CliExitCode.Usage };
@@ -300,7 +300,7 @@ export function executeCliRequest(
         })
       : () => undefined;
     const launchExecutionId = request.executionId;
-    let ownedExecutionId: ExecutionId | undefined;
+    let ownedExecutionId: RunId | undefined;
     // Feeds `runAgent`'s `launchSignal` option: the agent runtime's launch
     // contract is still AbortSignal-native, so the launch-cancellation signal
     // stays until that lane migrates it to fiber interruption (PRD R5 adapts
@@ -399,7 +399,7 @@ export function executeCliRequest(
             Effect.catch((error: unknown) =>
               Effect.sync(() => {
                 if (
-                  !(error instanceof ExecutionLeaseLostError) &&
+                  !(error instanceof RunLeaseLostError) &&
                   launchVerdict.kind === 'interrupted'
                 ) {
                   launchVerdict.artifactFailure = error;

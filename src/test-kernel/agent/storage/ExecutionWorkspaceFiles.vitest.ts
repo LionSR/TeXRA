@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { listExecutionWorkspaceFiles } from '@agent/storage';
+import { listRunWorkspaceFiles } from '@agent/storage';
 import { platform } from '@platform/platform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -23,7 +23,7 @@ describe('listExecutionWorkspaceFiles', () => {
     await AbsoluteFS.write(path.join(WORKSPACE_PATH, 'a-file.tex'), 'content');
 
     await expect(
-      listExecutionWorkspaceFiles(CONFIG, [
+      listRunWorkspaceFiles(CONFIG, [
         'z-dir',
         'missing.tex',
         'a-file.tex',
@@ -53,7 +53,7 @@ describe('listExecutionWorkspaceFiles', () => {
     vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
 
     await expect(
-      listExecutionWorkspaceFiles(CONFIG, ['file/child.tex']),
+      listRunWorkspaceFiles(CONFIG, ['file/child.tex']),
     ).resolves.toEqual([]);
   });
 
@@ -62,7 +62,7 @@ describe('listExecutionWorkspaceFiles', () => {
     vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
 
     await expect(
-      listExecutionWorkspaceFiles(CONFIG, ['unreadable.tex']),
+      listRunWorkspaceFiles(CONFIG, ['unreadable.tex']),
     ).rejects.toBe(error);
   });
 });

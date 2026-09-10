@@ -267,8 +267,8 @@ describe('app interaction policy', () => {
     ]);
     const childApproval = bashApproval(child);
     const globalApproval = bashApproval();
-    const visible = (selectedStreamId: StreamTabId, pending: PendingApproval) =>
-      approvalVisibleForSelection({ pending, selectedStreamId, view });
+    const visible = (selectedRunId: StreamTabId, pending: PendingApproval) =>
+      approvalVisibleForSelection({ pending, selectedRunId, view });
 
     expect(visible(child, childApproval)).toBe(true);
     expect(visible(root, childApproval)).toBe(true);

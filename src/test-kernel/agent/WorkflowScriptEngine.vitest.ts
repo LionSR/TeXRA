@@ -12,7 +12,7 @@ import {
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
-import { deriveWorkflowCounts, type ExecutionId } from '@shared/schemas';
+import { deriveWorkflowCounts, type RunId } from '@shared/schemas';
 
 const META = `export const meta = {
   name: 'test-flow',
@@ -62,8 +62,8 @@ function rejectOnAbort(
  * by the id the runner reports, so a fake runner announces one per attempt
  * exactly as the production runner does — and a retry announces a new one.
  */
-function childExecutionIdFor(index: number, attempt = 1): ExecutionId {
-  return `child-${index}-${attempt}` as ExecutionId;
+function childExecutionIdFor(index: number, attempt = 1): RunId {
+  return `child-${index}-${attempt}` as RunId;
 }
 
 const EMPTY_FILES_JSON = '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}';

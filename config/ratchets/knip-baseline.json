@@ -599,7 +599,7 @@
       "file": "packages/cli/src/runtime/cliContext.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "resolveStreamColor"
+      "name": "resolveRunColor"
     },
     {
       "file": "packages/cli/src/runtime/cliSecrets.ts",
@@ -1007,7 +1007,7 @@
       "file": "src/agent/storage/executionLease.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "ExecutionLeaseSchema"
+      "name": "RunLeaseSchema"
     },
     {
       "file": "src/agent/trace/events.ts",
@@ -1469,7 +1469,7 @@
       "file": "src/tools/agentCliShared.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "publishAgentCliStreamUsage"
+      "name": "publishAgentCliRunUsage"
     },
     {
       "file": "src/tools/claudeAgent.ts",

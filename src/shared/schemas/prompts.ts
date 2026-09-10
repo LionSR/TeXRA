@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { AgentCategory } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
-import { StreamSelectionSchema, StreamTabIdSchema } from './identifiers';
+import { RunSelectionSchema, StreamTabIdSchema } from './identifiers';
 import {
   InquiryTranscriptTurnSchema,
   InquirySessionLinksSchema,
@@ -20,7 +20,7 @@ import { WorkflowDeclaredPlanSchema } from './workflowCallProgress';
 const PermissionBaseSchema = z.strictObject({
   requestId: z.string(),
   allowBypass: z.boolean(),
-  streamId: StreamSelectionSchema,
+  streamId: RunSelectionSchema,
 });
 
 export const ToolEditPermissionSchema = PermissionBaseSchema.extend({

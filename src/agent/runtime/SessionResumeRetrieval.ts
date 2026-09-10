@@ -24,7 +24,7 @@ import {
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import { createLog } from '@logger/logUtils';
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import type { StreamTabId, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
@@ -35,7 +35,7 @@ export interface ToolUseResumeData {
   readonly type: 'toolUse';
   readonly shared: PreparedShared;
   readonly agentConfig: AgentConfig;
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly streamId: StreamTabId;
   readonly parentStreamId?: StreamTabId;
 }
@@ -44,7 +44,7 @@ export interface ToolUseResumeData {
 interface WorkflowResumeData {
   readonly type: 'workflow';
   readonly agentConfig: AgentConfig;
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
 }
 
@@ -64,7 +64,7 @@ type ResumeAgentLabel = 'tool-use' | 'workflow';
  */
 const probeResumableFlowRecord = Effect.fn('probeResumableFlowRecord')(
   function* (
-    executionId: ExecutionId,
+    executionId: RunId,
     agentType: ResumeAgentLabel,
     session: SessionHandle,
   ): Effect.fn.Return<FlowRecord | null, Error> {
@@ -127,7 +127,7 @@ function resumeRetrievalError(
 export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
   function* (
     streamId: StreamTabId,
-    executionId: ExecutionId,
+    executionId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
     options: SessionResumeRetrievalOptions = {},
@@ -162,7 +162,7 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
 const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
   function* (
     streamId: StreamTabId,
-    executionId: ExecutionId,
+    executionId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
     options: SessionResumeRetrievalOptions,
@@ -239,7 +239,7 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
 const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
   function* (
     streamId: StreamTabId,
-    executionId: ExecutionId,
+    executionId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
   ): Effect.fn.Return<WorkflowResumeData | null, Error> {

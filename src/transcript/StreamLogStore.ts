@@ -9,7 +9,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
-import { StreamLog, type StreamLogDelta } from '@shared/session/traceEntries';
+import { RunLog, type RunLogDelta } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { createListenerSet } from '@utils/core/listenerSet';
 
@@ -17,8 +17,8 @@ type TranscriptDatabase = Pick<
   Context.Service.Shape<typeof Database>,
   'readAggregate' | 'readListing'
 >;
-type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
-export type StreamLogStoreMode =
+type StreamLogListener = (streamId: StreamTabId, delta: RunLogDelta) => void;
+export type RunLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
 
@@ -32,7 +32,7 @@ export interface TranscriptResidencyLease {
   close(): void;
 }
 interface StreamState {
-  log?: StreamLog;
+  log?: RunLog;
   fold?: ReturnType<typeof createTranscriptFold>;
   seq?: number;
   pins?: Set<TranscriptResidencyLeaseReason | symbol>;
@@ -41,7 +41,7 @@ interface StreamState {
 
 /** Apply one event with the same projection used by the live recorder. */
 function applyEvent(
-  log: StreamLog,
+  log: RunLog,
   fold: ReturnType<typeof createTranscriptFold>,
   event: SessionEvent,
 ): void {
@@ -60,14 +60,14 @@ function foldEntries(events: readonly SessionEvent[]): StreamState | undefined {
   if (events[0]?.type !== 'run.start' || events[0].seq !== 1) {
     throw new Error('A transcript read must begin with its creation row.');
   }
-  const entries = new StreamLog();
+  const entries = new RunLog();
   const fold = createTranscriptFold(entries);
   for (const event of events) applyEvent(entries, fold, event);
   entries.drainEmission();
   return { log: entries, fold, seq: events.at(-1)!.seq };
 }
 
-export class StreamLogStore {
+export class RunLogStore {
   private readonly streams = new Map<StreamTabId, StreamState>();
   private readonly known = new Set<StreamTabId>();
   private readonly releaseRequests = new Set<StreamTabId>();
@@ -75,7 +75,7 @@ export class StreamLogStore {
   private readonly gate = Semaphore.makeUnsafe(1);
 
   private constructor(
-    readonly mode: StreamLogStoreMode,
+    readonly mode: RunLogStoreMode,
     private readonly database?: TranscriptDatabase,
   ) {}
 
@@ -83,10 +83,10 @@ export class StreamLogStore {
   static open(
     database: TranscriptDatabase,
     listing?: readonly SessionEvent[],
-    mode: StreamLogStoreMode = { kind: 'persistent' },
+    mode: RunLogStoreMode = { kind: 'persistent' },
   ) {
     return Effect.gen(function* () {
-      const store = new StreamLogStore(mode, database);
+      const store = new RunLogStore(mode, database);
       for (const event of listing ?? (yield* database.readListing())) {
         const target = aggregateTarget(event.aggregateId);
         if (target.kind !== 'stream') continue;
@@ -99,17 +99,17 @@ export class StreamLogStore {
   }
 
   /** Explicitly memory-only transcripts for ephemeral session roots. */
-  static ephemeral(reason: string): StreamLogStore {
+  static ephemeral(reason: string): RunLogStore {
     const normalized = reason.trim();
     if (!normalized)
       throw new Error('An ephemeral transcript store requires a reason.');
-    return new StreamLogStore({ kind: 'ephemeral', reason: normalized });
+    return new RunLogStore({ kind: 'ephemeral', reason: normalized });
   }
 
   onChange(listener: StreamLogListener): () => void {
     return this.listeners.add(listener);
   }
-  get(streamId: StreamTabId): StreamLog | undefined {
+  get(streamId: StreamTabId): RunLog | undefined {
     return this.streams.get(streamId)?.log;
   }
   has(streamId: StreamTabId): boolean {
@@ -143,7 +143,7 @@ export class StreamLogStore {
   ensureStream(streamId: StreamTabId): void {
     if (this.known.has(streamId)) return;
     this.known.add(streamId);
-    this.ensureStreamState(streamId).log = new StreamLog();
+    this.ensureStreamState(streamId).log = new RunLog();
   }
 
   requestEviction(streamId: StreamTabId): void {
@@ -242,7 +242,7 @@ export class StreamLogStore {
         // Hydration may already include this tail row. Aggregate sequence is
         // the prefix boundary, independent of when its wake was delivered.
         if (event.seq <= (state.seq ?? 0)) return;
-        state.log ??= new StreamLog();
+        state.log ??= new RunLog();
         state.fold ??= createTranscriptFold(state.log);
         applyEvent(state.log, state.fold, event);
         state.seq = event.seq;

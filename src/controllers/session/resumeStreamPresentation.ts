@@ -7,7 +7,7 @@ import type { StreamTabId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /** Resume a host-owned stream and present an ordinary refusal consistently. */
-export const resumeStreamWithRefusalNotice = Effect.fn(
+export const resumeRunWithRefusalNotice = Effect.fn(
   'resumeStreamWithRefusalNotice',
 )(function* (
   streamId: StreamTabId,

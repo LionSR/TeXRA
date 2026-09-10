@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import {
@@ -42,7 +42,7 @@ import {
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -114,26 +114,24 @@ const WAITING_AT_START = {
 };
 
 async function writeFlowRecord(
-  executionId: ExecutionId,
+  executionId: RunId,
   shared: unknown,
   overrides: Record<string, unknown> = {},
 ): Promise<void> {
-  await getExecutionStore(executionId).write(flowKey(executionId), {
+  await getRunStore(executionId).write(flowKey(executionId), {
     shared,
     cursor: { nextNodeId: 'start' },
     ...overrides,
   });
 }
 
-function readFlowRecord(
-  executionId: ExecutionId,
-): Promise<FlowRecord | undefined> {
-  return getExecutionStore(executionId).read<FlowRecord>(flowKey(executionId));
+function readFlowRecord(executionId: RunId): Promise<FlowRecord | undefined> {
+  return getRunStore(executionId).read<FlowRecord>(flowKey(executionId));
 }
 
 async function retrieveToolUseResume(
   streamId: StreamTabId,
-  executionId: ExecutionId,
+  executionId: RunId,
   config: AgentConfig = CONFIG,
   options?: Parameters<typeof retrieveSessionResumeData>[4],
 ): Promise<ToolUseResumeData> {
@@ -249,7 +247,7 @@ function responseModelHandler(
 }
 
 function buildToolUseResumeData(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
 ): ToolUseResumeData {
   const shared = {
@@ -267,7 +265,7 @@ function buildToolUseResumeData(
 }
 
 function buildResponseResumeData(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   response: string,
 ): ToolUseResumeData {
@@ -307,7 +305,7 @@ interface PersistedFlowRunOptions {
 }
 
 async function runPersistedFlow(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   resume: ToolUseResumeData | undefined,
   options: PersistedFlowRunOptions = {},
@@ -383,7 +381,7 @@ async function runPersistedFlow(
 }
 
 async function runResumedFlowToWaiting(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   resume: ToolUseResumeData,
 ): Promise<void> {
@@ -399,7 +397,7 @@ async function runResumedFlowToWaiting(
  * must distinguish a step write from any other cursor-bearing write.
  */
 function abortOnFirstFlowStepWrite(
-  store: ReturnType<typeof getExecutionStore>,
+  store: ReturnType<typeof getRunStore>,
   getFlowContext: () => ToolUseSetupContext | undefined,
   options: { onlyStepWrite?: boolean; onFlowStepWrite?: () => void } = {},
 ): { writeSpy: ReturnType<typeof vi.spyOn>; abortError: DOMException } {
@@ -447,10 +445,10 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('preserves the checkpoint after a read failure from a later in-flow cycle', async () => {
-    const executionId = 'abc-flow-later-read-failure' as ExecutionId;
+    const executionId = 'abc-flow-later-read-failure' as RunId;
     const streamId = 'chat@gpt54#abc-flow-later-read-failure' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await writeFlowRecord(executionId, snapshot.shared, WAITING_AT_START);
     const readFailure = new Error('flow storage unavailable');
     const realRead = store.read.bind(store);
@@ -485,7 +483,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('preserves the checkpoint after an unrelated read-failed flow error', async () => {
-    const executionId = 'abc-flow-unrelated-read-failure' as ExecutionId;
+    const executionId = 'abc-flow-unrelated-read-failure' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-unrelated-read-failure' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
@@ -523,7 +521,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('retrieves a workflow record in the current shape', async () => {
-    const executionId = 'workflow-current-shape' as ExecutionId;
+    const executionId = 'workflow-current-shape' as RunId;
     const streamId = 'reflection@gpt54#workflow-current-shape' as StreamTabId;
     await writeFlowRecord(
       executionId,
@@ -543,7 +541,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('rejects a workflow record that only has the retired messages field', async () => {
-    const executionId = 'workflow-retired-messages' as ExecutionId;
+    const executionId = 'workflow-retired-messages' as RunId;
     const streamId =
       'reflection@gpt54#workflow-retired-messages' as StreamTabId;
     await writeFlowRecord(executionId, {
@@ -607,7 +605,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('uses the persisted model id while preserving the original stream id', async () => {
-    const executionId = 'abc123' as ExecutionId;
+    const executionId = 'abc123' as RunId;
     const streamId = 'chat@gpt54#abc123' as StreamTabId;
     await writeFlowRecord(executionId, {
       messages: [],
@@ -625,7 +623,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('uses the launch model when only MODEL contains a retired identity', async () => {
-    const executionId = 'abc123-legacy-model' as ExecutionId;
+    const executionId = 'abc123-legacy-model' as RunId;
     const streamId = 'chat@gpt54#abc123-legacy-model' as StreamTabId;
     await writeFlowRecord(executionId, {
       messages: [],
@@ -640,7 +638,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('falls back to the launch model when nothing persisted a model', async () => {
-    const executionId = 'abc123-no-model' as ExecutionId;
+    const executionId = 'abc123-no-model' as RunId;
     const streamId = 'chat@gpt54#abc123-no-model' as StreamTabId;
     await writeFlowRecord(executionId, {
       messages: [],
@@ -659,7 +657,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('preserves a recovered parent stream id in tool-use snapshots', async () => {
-    const executionId = 'abc131' as ExecutionId;
+    const executionId = 'abc131' as RunId;
     const streamId = 'chat@gpt54#abc131-child' as StreamTabId;
     const parentStreamId = 'chat@gpt54#abc131-parent' as StreamTabId;
     await writeFlowRecord(executionId, {
@@ -676,9 +674,9 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('throws when resumable tool-use storage cannot be read', async () => {
-    const executionId = 'abc129' as ExecutionId;
+    const executionId = 'abc129' as RunId;
     const streamId = 'chat@gpt54#abc129' as StreamTabId;
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await writeFlowRecord(executionId, {
       messages: [],
       shouldSkipCycle: false,
@@ -711,7 +709,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('throws when tool-use metadata is invalid even if the flow record is valid', async () => {
-    const executionId = 'abc130' as ExecutionId;
+    const executionId = 'abc130' as RunId;
     const streamId = 'chat@gpt54#abc130' as StreamTabId;
     const readMetadata = vi
       .spyOn(retrievalSession, 'readExecutionRecords')
@@ -751,7 +749,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('rejects a persisted record on a fresh launch', async () => {
-    const executionId = 'abc-flow-fresh-collision' as ExecutionId;
+    const executionId = 'abc-flow-fresh-collision' as RunId;
     const streamId = 'chat@gpt54#abc-flow-fresh-collision' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, snapshot.shared);
@@ -765,7 +763,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves the validation cause for an invalid fresh-launch collision', async () => {
-    const executionId = 'abc-flow-invalid-fresh-collision' as ExecutionId;
+    const executionId = 'abc-flow-invalid-fresh-collision' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-invalid-fresh-collision' as StreamTabId;
     await writeFlowRecord(executionId, { messages: 'not-an-array' });
@@ -780,7 +778,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('creates fresh shared state when the flow record is absent', async () => {
-    const executionId = 'abc-flow-absent' as ExecutionId;
+    const executionId = 'abc-flow-absent' as RunId;
     const streamId = 'chat@gpt54#abc-flow-absent' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
 
@@ -801,7 +799,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     'does not return a prior assistant response when a resumed child produces no new answer: $name',
     async ({ persistRecord }) => {
       const suffix = persistRecord ? 'record' : 'handoff';
-      const executionId = `abc-flow-stale-response-${suffix}` as ExecutionId;
+      const executionId = `abc-flow-stale-response-${suffix}` as RunId;
       const streamId =
         `chat@gpt54#abc-flow-stale-response-${suffix}` as StreamTabId;
       const resume = buildResponseResumeData(executionId, streamId, 'A');
@@ -823,8 +821,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     'returns a response produced by a real resumed model cycle: $name',
     async ({ prior, fresh }) => {
       const suffix = prior === fresh ? 'identical' : 'different';
-      const executionId =
-        `abc-flow-fresh-resumed-response-${suffix}` as ExecutionId;
+      const executionId = `abc-flow-fresh-resumed-response-${suffix}` as RunId;
       const streamId =
         `chat@gpt54#abc-flow-fresh-resumed-response-${suffix}` as StreamTabId;
       const resume = buildResponseResumeData(executionId, streamId, prior);
@@ -840,7 +837,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   );
 
   it('retains identical partial text produced before a resumed cycle fails', async () => {
-    const executionId = 'abc-flow-identical-partial-response' as ExecutionId;
+    const executionId = 'abc-flow-identical-partial-response' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-identical-partial-response' as StreamTabId;
     const resume = buildResponseResumeData(executionId, streamId, 'A');
@@ -867,7 +864,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('scrubs persisted assembly text before an answerless resumed cycle fails', async () => {
-    const executionId = 'abc-flow-stale-assembly-response' as ExecutionId;
+    const executionId = 'abc-flow-stale-assembly-response' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-stale-assembly-response' as StreamTabId;
     const baseResume = buildResponseResumeData(executionId, streamId, 'A');
@@ -903,7 +900,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('returns explanatory text accompanying submit_output', async () => {
-    const executionId = 'abc-flow-terminal-tool-response' as ExecutionId;
+    const executionId = 'abc-flow-terminal-tool-response' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-terminal-tool-response' as StreamTabId;
     const config = structuredOutputConfig();
@@ -928,7 +925,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('retains tool-round text when a later model round fails', async () => {
-    const executionId = 'abc-flow-tool-text-later-failure' as ExecutionId;
+    const executionId = 'abc-flow-tool-text-later-failure' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-tool-text-later-failure' as StreamTabId;
     const providerError = Object.assign(new Error('Later provider failure'), {
@@ -962,7 +959,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('retains a fresh response when compaction replaces the whole message array', async () => {
-    const executionId = 'abc-flow-compacted-response' as ExecutionId;
+    const executionId = 'abc-flow-compacted-response' as RunId;
     const streamId = 'chat@gpt54#abc-flow-compacted-response' as StreamTabId;
     const resume = buildResponseResumeData(executionId, streamId, 'A');
     await writeFlowRecord(executionId, resume.shared, WAITING_AT_START);
@@ -989,7 +986,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('keeps returning a response from a fresh root model cycle', async () => {
-    const executionId = 'abc-flow-fresh-root-response' as ExecutionId;
+    const executionId = 'abc-flow-fresh-root-response' as RunId;
     const streamId = 'chat@gpt54#abc-flow-fresh-root-response' as StreamTabId;
 
     const result = await runPersistedFlow(executionId, streamId, undefined, {
@@ -1005,7 +1002,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('returns the latest response across real same-invocation follow-up cycles', async () => {
-    const executionId = 'abc-flow-multiple-cycle-response' as ExecutionId;
+    const executionId = 'abc-flow-multiple-cycle-response' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-multiple-cycle-response' as StreamTabId;
     const takePendingFollowUps = vi
@@ -1030,7 +1027,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('offers queue ownership again after a resumed subagent parks', async () => {
-    const executionId = 'abc-flow-post-park-owner' as ExecutionId;
+    const executionId = 'abc-flow-post-park-owner' as RunId;
     const streamId = 'chat@gpt54#abc-flow-post-park-owner' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
     const boundaryEvents: string[] = [];
@@ -1061,7 +1058,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // may then interrupt it. A throw anywhere after that first statement used
     // to strand the live context on the handle, because the pairing lived in
     // the value the callback never got to return.
-    const executionId = 'abc-flow-attach-failure' as ExecutionId;
+    const executionId = 'abc-flow-attach-failure' as RunId;
     const streamId = 'chat@gpt54#abc-flow-attach-failure' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
     const attachFailure = new Error('host wiring failed');
@@ -1086,10 +1083,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   // record under the execution lease and hands it in, so only a fresh launch
   // still probes for a leftover record here.
   it('releases follow-ups while preserving the record after a persistence read failure', async () => {
-    const executionId = `abc-flow-read-failure-fresh` as ExecutionId;
+    const executionId = `abc-flow-read-failure-fresh` as RunId;
     const streamId = `chat@gpt54#abc-flow-read-failure-fresh` as StreamTabId;
     const snapshot = undefined;
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const session = createProcessSession();
     const readFailure = new Error('flow storage unavailable');
     const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
@@ -1124,10 +1121,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves a resumed record when its first in-flow read fails', async () => {
-    const executionId = 'abc-flow-read-failure-resumed' as ExecutionId;
+    const executionId = 'abc-flow-read-failure-resumed' as RunId;
     const streamId = 'chat@gpt54#abc-flow-read-failure-resumed' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await writeFlowRecord(executionId, snapshot.shared);
     const readFailure = new Error('flow storage unavailable');
     const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
@@ -1153,7 +1150,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves the structured flow error when teardown also fails', async () => {
-    const executionId = 'abc-flow-primary-and-teardown-failure' as ExecutionId;
+    const executionId = 'abc-flow-primary-and-teardown-failure' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-primary-and-teardown-failure' as StreamTabId;
     const base = buildToolUseResumeData(executionId, streamId);
@@ -1208,7 +1205,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('surfaces the first teardown failure after an otherwise successful exit', async () => {
-    const executionId = 'abc-flow-teardown-failure' as ExecutionId;
+    const executionId = 'abc-flow-teardown-failure' as RunId;
     const streamId = 'chat@gpt54#abc-flow-teardown-failure' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
     const session = createProcessSession();
@@ -1235,7 +1232,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
   it('preserves a missing structured-output failure when teardown also fails', async () => {
     const executionId =
-      'abc-flow-structured-output-and-teardown-failure' as ExecutionId;
+      'abc-flow-structured-output-and-teardown-failure' as RunId;
     const streamId =
       'chat@gpt54#abc-flow-structured-output-and-teardown-failure' as StreamTabId;
     const snapshot = {
@@ -1307,10 +1304,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // the execution lease before any resume reaches the flow.
   ])('rejects and preserves $name', async ({ name, reason, stored }) => {
     const slug = name.replaceAll(' ', '-');
-    const executionId = `abc-flow-${slug}` as ExecutionId;
+    const executionId = `abc-flow-${slug}` as RunId;
     const streamId = `chat@gpt54#abc-flow-${slug}` as StreamTabId;
     const snapshot = undefined;
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     await store.write(flowKey(executionId), stored);
     const deleteSpy = vi.spyOn(store, 'delete');
 
@@ -1331,10 +1328,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('skips persistence recovery when setup hands off a cancellation', async () => {
-    const executionId = 'abc-cancel-setup' as ExecutionId;
+    const executionId = 'abc-cancel-setup' as RunId;
     const streamId = 'chat@gpt54#abc-cancel-setup' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const readSpy = vi.spyOn(store, 'read');
     const writeSpy = vi.spyOn(store, 'write');
     const deleteSpy = vi.spyOn(store, 'delete');
@@ -1359,11 +1356,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
   it('distinguishes reused and fresh startup cancellation checkpoint and queue disposition', async () => {
     {
-      const executionId = 'abc-reused-cancel-setup' as ExecutionId;
+      const executionId = 'abc-reused-cancel-setup' as RunId;
       const streamId = 'chat@gpt54#abc-reused-cancel-setup' as StreamTabId;
       const storedShared = activeHandlerShared();
       await writeFlowRecord(executionId, storedShared);
-      const store = getExecutionStore(executionId);
+      const store = getRunStore(executionId);
       const deleteSpy = vi.spyOn(store, 'delete');
       const session = createProcessSession();
       const releaseSpy = vi.spyOn(session.followUps, 'release');
@@ -1422,7 +1419,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
 
     {
-      const executionId = 'abc-reused-cancel-attachment' as ExecutionId;
+      const executionId = 'abc-reused-cancel-attachment' as RunId;
       const streamId = 'chat@gpt54#abc-reused-cancel-attachment' as StreamTabId;
       const storedShared = activeHandlerShared();
       await writeFlowRecord(executionId, storedShared);
@@ -1471,9 +1468,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
 
     {
-      const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
+      const executionId = 'abc-fresh-cancel-setup' as RunId;
       const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
-      const store = getExecutionStore(executionId);
+      const store = getRunStore(executionId);
       const session = createProcessSession();
       let flowContext: ToolUseSetupContext | undefined;
       const readSpy = vi.spyOn(store, 'read').mockImplementation(async () => {
@@ -1526,10 +1523,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves the resumable flow after an established run is interrupted', async () => {
-    const executionId = 'abc-interrupted-conversation' as ExecutionId;
+    const executionId = 'abc-interrupted-conversation' as RunId;
     const streamId = 'chat@gpt54#abc-interrupted-conversation' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
 
     const result = await runPersistedFlow(executionId, streamId, snapshot, {
@@ -1551,9 +1548,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves an established flow when provider cancellation rejects the run', async () => {
-    const executionId = 'abc-interrupted-provider' as ExecutionId;
+    const executionId = 'abc-interrupted-provider' as RunId;
     const streamId = 'chat@gpt54#abc-interrupted-provider' as StreamTabId;
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(executionId, streamId);
@@ -1602,7 +1599,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // success path, so dropping the item here would lose it for good. (The
     // former async window during a pre-flow recovery read no longer exists:
     // a resumed flow does no disk read before it becomes interruptible.)
-    const executionId = 'abc-cancel-followup' as ExecutionId;
+    const executionId = 'abc-cancel-followup' as RunId;
     const streamId = 'chat@gpt54#abc-cancel-followup' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
     const session = createProcessSession();
@@ -1633,7 +1630,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves late input when an orphaned host-resumed subagent is cancelled mid-turn', async () => {
-    const executionId = 'abc-cancel-active-followup' as ExecutionId;
+    const executionId = 'abc-cancel-active-followup' as RunId;
     const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
     const session = createProcessSession();
     const storedShared = activeHandlerShared();
@@ -1645,7 +1642,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // never drops the owner's queued input, whatever the run's own outcome.
     const recovery = session.followUps.claimRecovery(streamId, true);
     expect(recovery).toBeDefined();
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     // The late input lands while the cancelled turn is mid-flight, modelled at
     // the flow's first node-step persist (the only writes carrying a cursor).
@@ -1690,7 +1687,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // the child-run loop owns the queue across all of its turns and releases it
     // with the terminal/recoverable decision. The borrowing flow may cancel its
     // own wait, but dropping the owner's queued items is not its call to make.
-    const executionId = 'abc-cancel-child-followup' as ExecutionId;
+    const executionId = 'abc-cancel-child-followup' as RunId;
     const streamId = 'chat@gpt54#abc-cancel-child-followup' as StreamTabId;
     const session = createProcessSession();
     const storedShared = activeHandlerShared();
@@ -1698,7 +1695,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     await writeFlowRecord(executionId, storedShared);
     const childLease = session.followUps.claimLive(streamId, 'child');
     expect(childLease).toBeDefined();
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     // The queued input lands while the interrupted turn is mid-flight,
     // modelled at the flow's first node-step persist (the only writes
@@ -1743,7 +1740,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // native-subagent turn, so resume startup must not add its own disk
     // write ahead of the flow's step writes -- otherwise every turn costs
     // a `StorageFSKVStore` disk write for a no-op overwrite.
-    const executionId = 'abc143' as ExecutionId;
+    const executionId = 'abc143' as RunId;
     const streamId = 'chat@gpt54#abc143' as StreamTabId;
     await writeFlowRecord(
       executionId,
@@ -1762,7 +1759,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ACTIVE_COMPATIBILITY_KEY,
     );
 
-    const store = getExecutionStore(executionId);
+    const store = getRunStore(executionId);
     const writeSpy = vi.spyOn(store, 'write');
     try {
       await runResumedFlowToWaiting(executionId, streamId, resume);
@@ -1785,7 +1782,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('keeps a persisted snapshot compatibility key authoritative over the active handler', async () => {
-    const executionId = 'abc142' as ExecutionId;
+    const executionId = 'abc142' as RunId;
     const streamId = 'chat@gpt54#abc142' as StreamTabId;
     const persistedCompatibilityKey = 'ModelHandlerAnthropic';
     await writeFlowRecord(

@@ -1,16 +1,16 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getExecutionRecords, getExecutionStore } from '@agent/storage';
+import { getRunRecords, getRunStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runInSession } from '@agent/runtime/RunContext';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   finalizeRun,
-  acquireResumedExecutionOwnership,
-  registerExecution,
+  acquireResumedRunOwnership,
+  registerRun,
 } from '@agent/storage/executionLifecycle';
-import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { inspectRunLease } from '@agent/storage/executionLease';
 import { effectRuntime } from '@platform/processRuntime';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -33,7 +33,7 @@ const run = <A, E>(effect: Effect.Effect<A, E>) =>
   effectRuntime().runPromise(effect);
 const register = (workingDirectory?: string) =>
   run(
-    registerExecution(
+    registerRun(
       session,
       executionId,
       {
@@ -56,18 +56,18 @@ describe('execution registration and finalization', () => {
     async (workingDirectory) => {
       await register(workingDirectory);
       expect(
-        await run(getExecutionRecords(session, executionId).readConfig()),
+        await run(getRunRecords(session, executionId).readConfig()),
       ).toMatchObject({
         workingDirectory: workingDirectory ?? '/workspace/root',
       });
       expect(
-        await run(getExecutionRecords(session, executionId).readMeta()),
+        await run(getRunRecords(session, executionId).readMeta()),
       ).toMatchObject({
         streamId: options.streamId,
         identity: options.identity,
         userFollowUpSupport: 'nativeInteractive',
       });
-      expect(await getExecutionStore(executionId).listKeys()).toEqual([]);
+      expect(await getRunStore(executionId).listKeys()).toEqual([]);
     },
   );
 
@@ -78,10 +78,10 @@ describe('execution registration and finalization', () => {
     );
     await expect(register()).rejects.toBe(failure);
     expect(
-      await runInSession(session, () => inspectExecutionLease(executionId)),
+      await runInSession(session, () => inspectRunLease(executionId)),
     ).toEqual({ status: 'free' });
     expect(
-      await run(getExecutionRecords(session, executionId).readMeta()),
+      await run(getRunRecords(session, executionId).readMeta()),
     ).toBeNull();
   });
 
@@ -95,16 +95,10 @@ describe('execution registration and finalization', () => {
         Effect.fail(failure),
       );
       await expect(
-        run(
-          acquireResumedExecutionOwnership(
-            session,
-            executionId,
-            options.streamId,
-          ),
-        ),
+        run(acquireResumedRunOwnership(session, executionId, options.streamId)),
       ).rejects.toBe(failure);
       const lease = await runInSession(session, () =>
-        inspectExecutionLease(executionId),
+        inspectRunLease(executionId),
       );
       expect(lease.status).toBe(alreadyOwned ? 'owned' : 'free');
     },
@@ -119,26 +113,24 @@ describe('execution registration and finalization', () => {
     );
     await expect(register()).rejects.toBe(failure);
     await expect(
-      run(getExecutionRecords(session, executionId).writeReport('unowned')),
+      run(getRunRecords(session, executionId).writeReport('unowned')),
     ).rejects.toThrow();
     await run(session.acquireExecutionClaims(executionId, options.streamId));
-    await run(getExecutionRecords(session, executionId).writeReport('owned'));
-    expect(
-      await run(getExecutionRecords(session, executionId).readReport()),
-    ).toBe('owned');
+    await run(getRunRecords(session, executionId).writeReport('owned'));
+    expect(await run(getRunRecords(session, executionId).readReport())).toBe(
+      'owned',
+    );
   });
 
   it('keeps the existing local run claimed when a new birth collides with its stream', async () => {
     await register();
     await expect(
-      run(registerExecution(session, 'bcd234', baseConfig, 'chat', options)),
+      run(registerRun(session, 'bcd234', baseConfig, 'chat', options)),
     ).rejects.toThrow();
-    await run(
-      getExecutionRecords(session, executionId).writeReport('still owned'),
+    await run(getRunRecords(session, executionId).writeReport('still owned'));
+    expect(await run(getRunRecords(session, executionId).readReport())).toBe(
+      'still owned',
     );
-    expect(
-      await run(getExecutionRecords(session, executionId).readReport()),
-    ).toBe('still owned');
   });
 
   it('releases fresh birth claims when the committed publication consumer fails', async () => {
@@ -147,13 +139,13 @@ describe('execution registration and finalization', () => {
     );
     await expect(register()).rejects.toThrow();
     expect(
-      await run(getExecutionRecords(session, executionId).readMeta()),
+      await run(getRunRecords(session, executionId).readMeta()),
     ).not.toBeNull();
     await expect(
-      run(getExecutionRecords(session, executionId).writeReport('unowned')),
+      run(getRunRecords(session, executionId).writeReport('unowned')),
     ).rejects.toThrow();
     expect(
-      await runInSession(session, () => inspectExecutionLease(executionId)),
+      await runInSession(session, () => inspectRunLease(executionId)),
     ).toEqual({ status: 'free' });
   });
 
@@ -161,7 +153,7 @@ describe('execution registration and finalization', () => {
     'retains the existing requested checkpoint disposition %s',
     async (flowRecord) => {
       await register();
-      const store = getExecutionStore(executionId);
+      const store = getRunStore(executionId);
       await runInSession(session, () =>
         store.write(flowKey(executionId), { checkpoint: 'existing format' }),
       );
@@ -194,7 +186,7 @@ describe('execution registration and finalization', () => {
         vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
           Effect.die(statusFailure),
         );
-      const deletion = vi.spyOn(getExecutionStore(executionId), 'delete');
+      const deletion = vi.spyOn(getRunStore(executionId), 'delete');
       if (deletionFails) deletion.mockRejectedValueOnce(deletionFailure);
       const result = await run(
         finalizeRun(session, {

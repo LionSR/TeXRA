@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { finalizeRun, getExecutionRecords } from '@agent/storage';
+import { finalizeRun, getRunRecords } from '@agent/storage';
 import { aggregateId } from '@shared/schemas';
 import {
   createTestSession,
@@ -39,7 +39,7 @@ describe('execution metadata updates', () => {
       ),
     );
     expect(
-      await Effect.runPromise(getExecutionRecords(session, id).readMeta()),
+      await Effect.runPromise(getRunRecords(session, id).readMeta()),
     ).toMatchObject({
       description: 'A described session',
       outcome: 'completed',
@@ -62,7 +62,7 @@ describe('execution metadata updates', () => {
       }),
     );
     expect(
-      await Effect.runPromise(getExecutionRecords(session, id).readMeta()),
+      await Effect.runPromise(getRunRecords(session, id).readMeta()),
     ).toMatchObject({ outcome: 'completed' });
   });
 });

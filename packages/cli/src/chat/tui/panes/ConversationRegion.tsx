@@ -10,7 +10,7 @@ import { useLayoutEffect, type ReactNode } from 'react';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
@@ -42,19 +42,19 @@ import type { PendingApprovalKind } from '../state/approvalQueue';
 // conversation, even though they now render below the input bar.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 interface ConversationRegionSnapshot {
-  readonly activeStreamId: StreamTabId | undefined;
+  readonly activeRunId: StreamTabId | undefined;
   readonly foregroundMaxRows: number | undefined;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
   /** The active stream's parent, when it is a child. */
   readonly parentId: StreamTabId | undefined;
   readonly reverseSearchOpen: boolean;
-  readonly rootStreamId: StreamTabId | undefined;
+  readonly rootRunId: StreamTabId | undefined;
   readonly slashPaletteOpen: boolean;
   readonly selectedChildValue: StreamTabId | undefined;
   readonly childListFocused: boolean;
   /** The visible stream tree and its section headings. */
   readonly sessionRows: readonly SessionListRow[];
-  readonly subagentExecutionLabels: ExecutionLabels;
+  readonly subagentExecutionLabels: RunLabels;
   readonly pendingApprovals: ReadonlyMap<
     string,
     readonly PendingApprovalKind[]
@@ -94,25 +94,25 @@ export function ConversationRegion({
   // Which scrollback the transcript paints: the root's history, or a focused
   // child's own history while that child owns the scrollback.
   const scopedTranscript =
-    snapshot.activeStreamId !== undefined && snapshot.parentId !== undefined;
+    snapshot.activeRunId !== undefined && snapshot.parentId !== undefined;
   const scrollbackTarget = staticScrollbackTarget({
-    activeStreamId: snapshot.activeStreamId,
-    rootStreamId: snapshot.rootStreamId,
+    activeRunId: snapshot.activeRunId,
+    rootRunId: snapshot.rootRunId,
     scopedTranscript,
   });
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
   const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
   const view = useSignal(sessionView());
-  const activeStream = streamViewOf(view, snapshot.activeStreamId);
+  const activeStream = streamViewOf(view, snapshot.activeRunId);
   const activeTodos =
     activeStream?.category === AgentCategory.ToolUse ? activeStream.todos : [];
   const activePlan =
     activeStream?.category === AgentCategory.ToolUse ? activeStream.plan : null;
   const queuedFollowUpMessages =
-    snapshot.activeStreamId === undefined
+    snapshot.activeRunId === undefined
       ? []
-      : (view.queuedFollowUps.get(snapshot.activeStreamId) ?? []);
+      : (view.queuedFollowUps.get(snapshot.activeRunId) ?? []);
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
   // Round-border chrome is the default input height minus its single content
@@ -249,7 +249,7 @@ export function ConversationRegion({
               pendingApprovals={snapshot.pendingApprovals}
               selectedValue={snapshot.selectedChildValue}
               rows={snapshot.sessionRows}
-              activeStreamId={snapshot.activeStreamId}
+              activeRunId={snapshot.activeRunId}
             />
             <TodosPlanPanel
               maxRows={todosPlanRows}

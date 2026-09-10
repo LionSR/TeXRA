@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { registerExecution } from '@agent/storage/executionLifecycle';
+import { registerRun } from '@agent/storage/executionLifecycle';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
@@ -16,7 +16,7 @@ import {
 } from '@agent/followUp/ToolFileInteractionContext';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import {
-  getRunContextExecutionId,
+  getRunContextRunId,
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
 import {
@@ -39,23 +39,23 @@ import {
   AgentCategory,
   ToolError,
   type ExecResult,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { requireRunStream } from '@tools/contextHelpers';
+import { requireRun } from '@tools/contextHelpers';
 import {
   formatBashDelivery,
   formatBashError,
-  type BashDeliveryStreamExcerpt,
+  type BashDeliveryRunExcerpt,
 } from '@tools/delegation/bashDelivery';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
-import { formatDuration, generateExecutionId } from '@utils/core';
+import { formatDuration, generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
@@ -64,10 +64,7 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 // Local file imports
 import { defineTool } from './core/define';
 import { nullishWithDefault } from './core/inputSchema';
-import {
-  childStreamDescription,
-  createChildStream,
-} from './delegation/childStream';
+import { childRunDescription, createChildRun } from './delegation/childStream';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
 import { parseWorkingDirectory } from './pathResolution';
 
@@ -203,7 +200,7 @@ function createBoundedOutputCapture(
  */
 function toDeliveryExcerpt(
   capture: BoundedOutputCapture,
-): BashDeliveryStreamExcerpt {
+): BashDeliveryRunExcerpt {
   const truncated = capture.totalChars > capture.tail.length;
   return {
     tail: capture.tail,
@@ -249,7 +246,7 @@ type BashInput = z.infer<typeof BashInputSchema>;
  * finalization — is the loop's, exactly as it is for every other child type.
  */
 function createBackgroundBashStrategy(params: {
-  executionId: ExecutionId;
+  executionId: RunId;
   command: string;
   timeoutMs: number;
   cwd: string | undefined;
@@ -419,17 +416,14 @@ export class BashTool extends defineTool({
     const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
 
     if (input.run_in_background) {
-      const { streamId } = requireRunStream(
-        'bash run_in_background',
-        runContext,
-      );
+      const { streamId } = requireRun('bash run_in_background', runContext);
       return effectRuntime().runPromise(
         this.executeBackground(
           currentSession(),
           input.command,
           timeoutMs,
           streamId,
-          getRunContextExecutionId(runContext),
+          getRunContextRunId(runContext),
           cwd,
         ),
       );
@@ -512,12 +506,12 @@ export class BashTool extends defineTool({
       command: string,
       timeoutMs: number,
       parentStreamId: StreamTabId,
-      parentExecutionId: ExecutionId | undefined,
+      parentExecutionId: RunId | undefined,
       cwd?: string,
     ) {
       return yield* Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
-          const executionId = generateExecutionId();
+          const executionId = generateRunId();
           const preview = previewLabel(command);
           const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
             executionId,
@@ -532,7 +526,7 @@ export class BashTool extends defineTool({
           // The durable record states only what a shell command has: no execution
           // mode, no model. The synthetic AgentConfig above feeds the ephemeral
           // live wire only.
-          yield* registerExecution(
+          yield* registerRun(
             session,
             executionId,
             { name: 'bash', instruction: command },
@@ -545,7 +539,7 @@ export class BashTool extends defineTool({
               parentStreamId,
               background: true,
               category: AgentCategory.ToolUse,
-              description: childStreamDescription(command),
+              description: childRunDescription(command),
             },
           );
 
@@ -561,7 +555,7 @@ export class BashTool extends defineTool({
             createChildStream: () =>
               restore(Effect.void).pipe(
                 Effect.andThen(
-                  createChildStream(session, executionId, parentStreamId, {
+                  createChildRun(session, executionId, parentStreamId, {
                     streamPrefix: BASH_CHILD_STREAM_PREFIX,
                     run: { kind: 'process', tool: 'bash' },
                     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,

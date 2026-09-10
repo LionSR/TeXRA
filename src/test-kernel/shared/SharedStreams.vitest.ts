@@ -7,13 +7,13 @@ import {
   AgentCategory,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type StreamLifecycleStatus,
+  type RunLifecycleStatus,
 } from '@shared/schemas';
 import {
   formatPhaseStageLabel,
   formatRoundStageLabel,
   formatStageLabel,
-  formatStreamStatusLabel,
+  formatRunStatusLabel,
   progressHeaderStatus,
 } from '@shared/streams/streamStatusDisplay';
 
@@ -62,7 +62,7 @@ describe('formatStageLabel', () => {
 });
 
 describe('stream status display labels', () => {
-  const wordingCases: Array<[StreamLifecycleStatus, string]> = [
+  const wordingCases: Array<[RunLifecycleStatus, string]> = [
     [STREAM_PHASE.WAITING, 'Idle'],
     [STREAM_PHASE.COMPLETED, 'Completed'],
     [STREAM_PHASE.CANCELLED, 'Stopped'],
@@ -70,24 +70,24 @@ describe('stream status display labels', () => {
   ];
 
   it.each(wordingCases)('preserves wording: %s -> "%s"', (status, label) => {
-    expect(formatStreamStatusLabel(status)).toBe(label);
+    expect(formatRunStatusLabel(status)).toBe(label);
   });
 
   it('preserves the STARTING wording', () => {
     expect(
-      formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
+      formatRunStatusLabel(STREAM_PHASE.RUNNING, {
         substate: STREAM_SUBSTATE.STARTING,
       }),
     ).toBe('Initializing');
   });
 
   it('supports an explicit missing label', () => {
-    expect(formatStreamStatusLabel(undefined, { missingLabel: '-' })).toBe('-');
+    expect(formatRunStatusLabel(undefined, { missingLabel: '-' })).toBe('-');
   });
 
   it('uses substate display keys for current running phases', () => {
     expect(
-      formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
+      formatRunStatusLabel(STREAM_PHASE.RUNNING, {
         substate: STREAM_SUBSTATE.RESUMING,
       }),
     ).toBe('Resuming');

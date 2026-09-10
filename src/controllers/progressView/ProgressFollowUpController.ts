@@ -1,6 +1,6 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ExecutionRequest } from '@agent/core/state/executionRequests';
+import type { RunRequest } from '@agent/core/state/executionRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import { decideRunModel } from '@model/runModelDecision';
 import {
@@ -13,7 +13,7 @@ import {
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { pluralize } from '@utils/text/stringUtils';
-import type { StreamOutputsSource } from './streamOutputs';
+import type { RunOutputsSource } from './streamOutputs';
 
 export interface ProgressFollowUpModelOption {
   value: string;
@@ -35,7 +35,7 @@ interface ProgressFollowUpControllerDeps {
   workspace: ProgressFollowUpWorkspace;
 }
 
-export interface ProgressFollowUpState extends StreamOutputsSource {
+export interface ProgressFollowUpState extends RunOutputsSource {
   getCompileFailures(stream: StreamTabId): ReadonlyRoundIndexed<CompileFailure>;
 }
 
@@ -54,7 +54,7 @@ export type ProgressFollowUpPlan =
   // Produced only by planCompileFixer (latexFixer). The progress view opts every
   // 'execute' plan into the helper-model preference, so a new 'execute'-plan
   // producer would inherit it (gate the swap more narrowly if that isn't wanted).
-  | { kind: 'execute'; request: ExecutionRequest };
+  | { kind: 'execute'; request: RunRequest };
 
 interface CompileFixerInput {
   streamId: StreamTabId;

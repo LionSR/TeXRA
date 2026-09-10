@@ -12,7 +12,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { StreamApprovalBypass } from '@agent/runtime/streamApprovalQueue';
+import type { RunApprovalBypass } from '@agent/runtime/streamApprovalQueue';
 import type { StreamTabId } from '@shared/schemas';
 
 /**
@@ -27,7 +27,7 @@ import type { StreamTabId } from '@shared/schemas';
  */
 export function proposalApprovals(
   session: SessionHandle = currentSession(),
-): StreamApprovalBypass {
+): RunApprovalBypass {
   return session.approvals.proposal;
 }
 
@@ -75,7 +75,7 @@ export function configureDelegatedChildApprovals(
  * Host-specific teardown (webview state, backup files, goal store, etc.)
  * remains the caller's responsibility after this returns.
  */
-export function releaseStreamResources(
+export function releaseRunResources(
   streamId: StreamTabId,
   session: SessionHandle = defaultSession(),
 ): void {

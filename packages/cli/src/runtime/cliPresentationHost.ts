@@ -9,7 +9,7 @@ import {
 } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 
 // Local imports - CLI runtime
@@ -32,7 +32,7 @@ export interface CliRuntimeHost {
   ): boolean;
   attachRunProgressRenderer(
     session: SessionHandle,
-    options?: { readonly executionId?: ExecutionId },
+    options?: { readonly executionId?: RunId },
   ): () => void;
   prepareInteractivePrompt?: () => void;
   emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;

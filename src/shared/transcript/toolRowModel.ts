@@ -19,7 +19,7 @@ import {
 } from '@shared/schemas';
 import {
   executionsSubagentSummary,
-  type ExecutionLabels,
+  type RunLabels,
 } from '@shared/tools/executionsDisplay';
 import {
   displayToolName,
@@ -179,7 +179,7 @@ export interface ToolRowModel {
 
 export interface ToolRowModelContext {
   /** Subagent execution id -> label, for the `executions` header summary. */
-  readonly executionLabels?: ExecutionLabels;
+  readonly executionLabels?: RunLabels;
   /** The raw `data.output` of the tool-use payload. Structured sections read
    *  it directly (MCP content blocks, edit start lines, per-file line
    *  changes); `NormalizedToolUse.outputText` is its flattened text. */

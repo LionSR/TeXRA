@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type { ExecutionId, FileOpResult } from '@shared/schemas';
+import type { RunId, FileOpResult } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -21,7 +21,7 @@ const log = createLog(CHANNEL);
  * are dereferenced so the snapshot is a self-contained copy.
  */
 export async function runPackRunDir(
-  executionId: ExecutionId,
+  executionId: RunId,
   agent: string,
   model: string,
   inputFile: string,
@@ -68,7 +68,7 @@ export async function runPackRunDir(
  * from the progress-view toolbar.
  */
 export async function runCleanRunDir(
-  executionId: ExecutionId,
+  executionId: RunId,
 ): Promise<FileOpResult> {
   const runDirAbsolute = await findRunDir(executionId);
   if (!runDirAbsolute) {

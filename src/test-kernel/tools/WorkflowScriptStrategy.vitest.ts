@@ -2,7 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
 import {
   deriveWorkflowScriptCheckpointId,
@@ -14,7 +14,7 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { fingerprintWorkflowAgentDependencies } from '@tools/delegation/inputFields';
@@ -25,7 +25,7 @@ import {
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
-const executionId = '7154strategy' as ExecutionId;
+const executionId = '7154strategy' as RunId;
 const script = `export const meta = {
   name: 'strategy-test',
   description: 'tests the workflow script strategy',
@@ -92,7 +92,7 @@ function strategyParams(
         ),
       ),
     logger: new TraceEmitter(),
-    store: getExecutionStore(executionId),
+    store: getRunStore(executionId),
     checkpointId: checkpointIdFor(overrides.name),
     script,
     scriptPath: '.texra/workflow-scripts/draft-strategy.mjs',
@@ -169,7 +169,7 @@ describe('createWorkflowScriptStrategy', () => {
 
   it('settles zero for a pure checkpoint replay', async () => {
     await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
+      store: getRunStore(executionId),
       checkpointId: checkpointIdFor('strategy-test'),
       script,
       runAgent: async () => finalResult,
@@ -230,7 +230,7 @@ return args`,
 }
 return args`;
     await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
+      store: getRunStore(executionId),
       checkpointId: checkpointIdFor('retained-arguments'),
       script: argsScript,
       args: { topic: 'geometry' },
@@ -290,7 +290,7 @@ await agent('saved call')
 throw new Error('script failed after replay')`;
     await expect(
       runPersistedWorkflowScript({
-        store: getExecutionStore(executionId),
+        store: getRunStore(executionId),
         checkpointId: checkpointIdFor('retained-settlement'),
         script: failingScript,
         runAgent: async () => finalResult,
@@ -345,7 +345,7 @@ return await agent('malformed stale')`;
       outputs: [{ ...finalResult.outputs[0], relativePath: 'stale.tex' }],
     };
     await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
+      store: getRunStore(executionId),
       checkpointId: checkpointIdFor(name),
       script: baselineScript,
       runAgent: async ({ prompt }) =>
@@ -452,7 +452,7 @@ async function drainMacrotasks(): Promise<void> {
  * skip/retry against a call that is genuinely in flight.
  */
 function controllableRunAgent(config: {
-  readonly attemptExecutionIds: readonly ExecutionId[];
+  readonly attemptExecutionIds: readonly RunId[];
   /** 1-based attempt that settles with finalResult; earlier attempts hang.
    *  Omit so every attempt hangs until a control action resolves it. */
   readonly succeedAtAttempt?: number;
@@ -471,7 +471,7 @@ function controllableRunAgent(config: {
       attemptGates.push(createDeferred<void>());
     return attemptGates[attempt - 1]!;
   };
-  const execIdForAttempt = (attempt: number): ExecutionId =>
+  const execIdForAttempt = (attempt: number): RunId =>
     config.attemptExecutionIds[
       Math.min(attempt - 1, config.attemptExecutionIds.length - 1)
     ]!;
@@ -519,7 +519,7 @@ function controllableRunAgent(config: {
 describe('createWorkflowScriptStrategy interactive controls', () => {
   // Real execution ids: the production host always persists snapshots, so the
   // engine's snapshot schema validates every id these fakes report.
-  const grandchildExecutionId = 'ccccc0000001' as ExecutionId;
+  const grandchildExecutionId = 'ccccc0000001' as RunId;
 
   it('skips an in-flight grandchild by execution id via the session registry', async () => {
     const fake = controllableRunAgent({
@@ -537,7 +537,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     );
     await fake.attemptStarted(1);
     // An unknown execution id no-ops (the call stays in flight)...
-    workflowControls.control('ddddd0000009' as ExecutionId, 'skip');
+    workflowControls.control('ddddd0000009' as RunId, 'skip');
     // ...while the right one translates execId → index → engine skip.
     workflowControls.control(grandchildExecutionId, 'skip');
 
@@ -592,7 +592,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     // attempt-specific id (not the logical id) — the id the roster exposes.
     // The control bridge must follow that id, not the stale logical one.
     const logicalExecutionId = grandchildExecutionId;
-    const attemptExecutionId = 'ccccc0000002' as ExecutionId;
+    const attemptExecutionId = 'ccccc0000002' as RunId;
     const fake = controllableRunAgent({
       attemptExecutionIds: [logicalExecutionId, attemptExecutionId],
     });

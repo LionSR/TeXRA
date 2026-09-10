@@ -13,7 +13,7 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
   AgentCategory,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
   type ToolDefinition,
 } from '@shared/schemas';
@@ -79,7 +79,7 @@ async function observeWorkflowTools({
   runtimeUnavailableTools?: readonly string[];
   warn: typeof noopTrace.warn;
 }): Promise<ToolDefinition[][]> {
-  const executionId = `workflow-tools-${crypto.randomUUID()}` as ExecutionId;
+  const executionId = `workflow-tools-${crypto.randomUUID()}` as RunId;
   const streamId = `workflow-tools@stream#${executionId}` as StreamTabId;
   const session = createTestSession();
   const runScope = createRunScope({

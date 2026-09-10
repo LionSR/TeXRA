@@ -37,15 +37,11 @@ vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
 }));
 vi.mock('@agent/storage/executionLease', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionLease')>()),
-  acquireResumedExecutionLease: launchMocks.acquireResumedExecutionLease,
-  assertOwnedExecutionLease: vi.fn(),
+  acquireResumedRunLease: launchMocks.acquireResumedExecutionLease,
+  assertOwnedRunLease: vi.fn(),
 }));
 
-import {
-  clearStoreCache,
-  getExecutionStore,
-  getExecutionRecords,
-} from '@agent/storage';
+import { clearStoreCache, getRunStore, getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -70,9 +66,9 @@ import {
   AgentCategory,
   aggregateId,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
-import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import type { RunId, StreamTabId, TodoItem } from '@shared/schemas';
+import { RunLog } from '@shared/session/traceEntries';
+import type { RunLogAppendInput } from '@shared/session/traceEntries';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -92,8 +88,8 @@ import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation as readCompletedRunConversationEffect,
   readCompletedRunTodos,
-  StreamLogStore,
-  StreamSnapshotStore,
+  RunLogStore,
+  RunSnapshotStore,
 } from '@transcript';
 
 const tempDirs = useTempDirs();
@@ -108,12 +104,12 @@ function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
 
 /** Stamp the execution→stream mapping the way registration does. */
 async function stampStreamId(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
 ): Promise<void> {
   if (
     !(await Effect.runPromise(
-      getExecutionRecords(taskSession, executionId).readMeta(),
+      getRunRecords(taskSession, executionId).readMeta(),
     ))
   ) {
     publishTestRunStart(taskSession, streamId, executionId);
@@ -122,14 +118,14 @@ async function stampStreamId(
 }
 
 let taskSession: ReturnType<typeof createTestSession>;
-const readCompletedRunConversation = (id: ExecutionId) =>
+const readCompletedRunConversation = (id: RunId) =>
   Effect.runPromise(readCompletedRunConversationEffect(id, taskSession));
-const loadChatExportInput = (id: ExecutionId) =>
+const loadChatExportInput = (id: RunId) =>
   Effect.runPromise(loadChatExportInputEffect(id, taskSession));
 
 /** Persist completed tasks as committed stream events. */
 async function seedTasks(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   todos: TodoItem[],
 ): Promise<void> {
@@ -144,7 +140,7 @@ async function seedTasks(
   await settleSessionEvents();
 }
 
-type LogRow = StreamLogAppendInput;
+type LogRow = RunLogAppendInput;
 
 let entryCounter = 0;
 
@@ -167,11 +163,11 @@ function logRow(
 async function appendRows(
   streamId: StreamTabId,
   rows: readonly LogRow[],
-  executionId?: ExecutionId,
+  executionId?: RunId,
 ): Promise<void> {
   if (!taskSession.transcripts.has(streamId))
     publishTestRunStart(taskSession, streamId, executionId);
-  const entries = new StreamLog();
+  const entries = new RunLog();
   for (const row of rows) entries.appendSettled(row);
   taskSession.publish(
     entries.toJSON().map((entry) => ({
@@ -184,7 +180,7 @@ async function appendRows(
 }
 
 async function persistRows(
-  executionId: ExecutionId,
+  executionId: RunId,
   rowsByStream: ReadonlyMap<StreamTabId, readonly LogRow[]>,
 ): Promise<void> {
   for (const [streamId, rows] of rowsByStream) {
@@ -195,7 +191,7 @@ async function persistRows(
 
 /** Write transcript rows and committed task events for a completed execution. */
 async function writeArchiveFixture(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
 ): Promise<void> {
   await seedTasks(executionId, streamId, [
@@ -266,12 +262,12 @@ describe('completedRunArchive facade', () => {
     taskSession = createProcessSession({
       transcriptMode: { kind: 'persistent' },
     });
-    const executionId = 'abc654abc654' as ExecutionId;
+    const executionId = 'abc654abc654' as RunId;
     const streamId = 'stream:secret-export' as StreamTabId;
     const secret = 'sk-private-export-key-1234567890';
     const content = `  retained text ${secret}  `;
     await stampStreamId(executionId, streamId);
-    const records = getExecutionRecords(taskSession, executionId);
+    const records = getRunRecords(taskSession, executionId);
     const config = {
       ...runConfig('orchestrator'),
       instruction: content,
@@ -356,7 +352,7 @@ describe('completedRunArchive facade', () => {
   });
 
   it('keeps concurrent exports of the same execution isolated by session roots', async () => {
-    const executionId = 'abc456abc456' as ExecutionId;
+    const executionId = 'abc456abc456' as RunId;
     const streamId = 'stream:shared-execution-id' as StreamTabId;
     const papers = ['first-paper', 'second-paper'].map((label) => ({
       label,
@@ -368,7 +364,7 @@ describe('completedRunArchive facade', () => {
           publishTestRunStart(session, streamId, executionId);
           await session.settlePublications();
           await Effect.runPromise(
-            getExecutionRecords(session, executionId).writeRunRecord({
+            getRunRecords(session, executionId).writeRunRecord({
               ...runConfig(label),
               instruction: label,
             }),
@@ -426,12 +422,12 @@ describe('completedRunArchive facade', () => {
   });
 
   it('serves conversation and export from transcripts and tasks from committed events', async () => {
-    const executionId = 'abc123abc123' as ExecutionId;
+    const executionId = 'abc123abc123' as RunId;
     const streamId = 'orchestrator@deepseekproT#abc123abc123' as StreamTabId;
     await writeArchiveFixture(executionId, streamId);
 
     await Effect.runPromise(
-      getExecutionRecords(taskSession, executionId).writeRunRecord({
+      getRunRecords(taskSession, executionId).writeRunRecord({
         ...runConfig('orchestrator'),
         instruction: 'Fix the lemma.',
       }),
@@ -532,7 +528,7 @@ describe('completedRunArchive facade', () => {
     'reconstructs both turns when the production resume launch reopens the canonical writer',
     () =>
       Effect.gen(function* () {
-        const executionId = '0aa1110aa111' as ExecutionId;
+        const executionId = '0aa1110aa111' as RunId;
         const streamId = 'orchestrator@legacyModel#0aa1110aa111' as StreamTabId;
         const config = runConfig('orchestrator');
         // The stamped id is the reproduction contract: minting from today's
@@ -547,7 +543,7 @@ describe('completedRunArchive facade', () => {
         taskSession = session;
         publishTestRunStart(session, streamId, executionId);
         yield* Effect.promise(() => session.settlePublications());
-        yield* getExecutionRecords(session, executionId).writeRunRecord(config);
+        yield* getRunRecords(session, executionId).writeRunRecord(config);
         session.publish([
           {
             type: 'log',
@@ -576,7 +572,7 @@ describe('completedRunArchive facade', () => {
           ),
         );
         launchMocks.acquireResumedExecutionLease.mockImplementation(
-          leaseModule.acquireResumedExecutionLease,
+          leaseModule.acquireResumedRunLease,
         );
         launchMocks.hasPersistedParent.mockResolvedValue(false);
         launchMocks.resolveAgent.mockReturnValue({
@@ -604,7 +600,7 @@ describe('completedRunArchive facade', () => {
           },
         });
         yield* Effect.promise(() =>
-          getExecutionStore(executionId).write(flowKey(executionId), {
+          getRunStore(executionId).write(flowKey(executionId), {
             shared: persistedResumeState.shared,
             cursor: { nextNodeId: 'start' },
           }),
@@ -649,7 +645,7 @@ describe('completedRunArchive facade', () => {
 
         expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
         const released = yield* Effect.result(
-          getExecutionRecords(session, executionId).writeReport('late write'),
+          getRunRecords(session, executionId).writeReport('late write'),
         );
         expect(released._tag).toBe('Failure');
         expect(
@@ -667,7 +663,7 @@ describe('completedRunArchive facade', () => {
         expect(
           yield* Effect.promise(() =>
             runInSession(session, () =>
-              leaseModule.inspectExecutionLease(executionId),
+              leaseModule.inspectRunLease(executionId),
             ),
           ),
         ).toEqual({ status: 'free' });
@@ -760,7 +756,7 @@ describe('completedRunArchive facade', () => {
   );
 
   it('reads an empty task list from a committed empty work plan', async () => {
-    const executionId = '0aa2220aa222' as ExecutionId;
+    const executionId = '0aa2220aa222' as RunId;
     const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
     await seedTasks(executionId, streamId, []);
     await stampStreamId(executionId, streamId);
@@ -771,7 +767,7 @@ describe('completedRunArchive facade', () => {
   });
 
   it('reports none, with no conversation evidence, when metadata has no stamped stream', async () => {
-    const executionId = 'ccc333ccc333' as ExecutionId;
+    const executionId = 'ccc333ccc333' as RunId;
 
     const conversationResult = await readCompletedRunConversation(executionId);
     expect(conversationResult).toEqual({ conversation: null, source: 'none' });
@@ -783,13 +779,13 @@ describe('completedRunArchive facade', () => {
   });
 
   it('reads a registered execution without sidecar or suffix scans, even when its transcript is empty (#9590 A1)', async () => {
-    const executionId = 'abc907abc907' as ExecutionId;
+    const executionId = 'abc907abc907' as RunId;
     const streamId = 'orchestrator@deepseekproT#abc907abc907' as StreamTabId;
     await stampStreamId(executionId, streamId);
     // A decoy stream that a suffix scan would match; registration must make
     // it unreachable — the stamped (empty) stream is authoritative.
     await persistRows(
-      'dec000001' as ExecutionId,
+      'dec000001' as RunId,
       new Map([
         [
           `other@model#${executionId}` as StreamTabId,
@@ -798,10 +794,7 @@ describe('completedRunArchive facade', () => {
       ]),
     );
 
-    const scan = vi.spyOn(
-      StreamSnapshotStore.prototype,
-      'listPersistedStreams',
-    );
+    const scan = vi.spyOn(RunSnapshotStore.prototype, 'listPersistedStreams');
 
     const conversationResult = await readCompletedRunConversation(executionId);
     expect(conversationResult).toEqual({
@@ -820,7 +813,7 @@ describe('completedRunArchive facade', () => {
   });
 
   it('reads a sidecar conversation', async () => {
-    const executionId = 'ddd444ddd444' as ExecutionId;
+    const executionId = 'ddd444ddd444' as RunId;
     const streamId = 'orchestrator@deepseekproT#ddd444ddd444' as StreamTabId;
     await writeArchiveFixture(executionId, streamId);
     await stampStreamId(executionId, streamId);
@@ -832,7 +825,7 @@ describe('completedRunArchive facade', () => {
   });
 
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {
-    const executionId = '0ee5550ee555' as ExecutionId;
+    const executionId = '0ee5550ee555' as RunId;
     const streamId = 'orchestrator@deepseekproT#0ee5550ee555' as StreamTabId;
 
     await stampStreamId(executionId, streamId);
@@ -891,7 +884,7 @@ describe('completedRunArchive facade', () => {
   });
 
   it('preserves a diagnostic-only stamped stream as execution evidence without a conversation', async () => {
-    const executionId = '0999cb0999cb' as ExecutionId;
+    const executionId = '0999cb0999cb' as RunId;
     const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
 
     await stampStreamId(executionId, root);
@@ -917,7 +910,7 @@ describe('completedRunArchive facade', () => {
   });
 
   it('never substitutes another stream for an empty stamped stream', async () => {
-    const executionId = '0999cc0999cc' as ExecutionId;
+    const executionId = '0999cc0999cc' as RunId;
     const root = 'orchestrator@model#0999cc0999cc' as StreamTabId;
     const child = 'child@tool#0999cc0999cc' as StreamTabId;
 
@@ -939,7 +932,7 @@ describe('completedRunArchive facade', () => {
   });
 
   it('reads a historical execution whose stamped stream uses the tool-format child id', async () => {
-    const executionId = '0999cd0999cd' as ExecutionId;
+    const executionId = '0999cd0999cd' as RunId;
     const streamId = 'child@tool#0999cd0999cd' as StreamTabId;
     const parentStreamId = 'orchestrator@model#parent' as StreamTabId;
 

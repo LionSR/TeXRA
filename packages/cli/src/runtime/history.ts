@@ -5,12 +5,12 @@ import { Effect, Result, Stream } from 'effect';
 
 import {
   checkpointExists,
-  getExecutionRecords,
-  isUserVisibleExecution,
-  listExecutions,
-  listExecutionWorkspaceFiles,
+  getRunRecords,
+  isUserVisibleRun,
+  listRuns,
+  listRunWorkspaceFiles,
   unwrapResultMeta,
-  type AgentExecutionListingEntry,
+  type AgentRunListingEntry,
 } from '@agent/storage';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
@@ -19,13 +19,13 @@ import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
 import { effectRuntime } from '@platform/processRuntime';
 import {
-  ExecutionIdSchema,
+  RunIdSchema,
   aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
   resolveHistoryRunStatus,
-  type ExecutionId,
-  type ExecutionMeta,
+  type RunId,
+  type RunMeta,
   type HistoryRunStatus,
 } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
@@ -71,7 +71,7 @@ function mergeHistoryFiles(
 }
 
 export interface CliHistoryEntry {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   readonly timestamp: string;
   readonly agent: string;
   readonly model: string;
@@ -90,13 +90,13 @@ export interface CliHistoryEntry {
   readonly category?: string;
   readonly description?: string;
   readonly teamPresetId?: string;
-  readonly parentExecutionId?: ExecutionId;
+  readonly parentExecutionId?: RunId;
 }
 
 interface CliHistoryDetails {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   readonly status: HistoryRunStatus;
-  readonly meta: ExecutionMeta | null;
+  readonly meta: RunMeta | null;
   readonly config: AgentConfig | null;
   readonly result: ReturnType<typeof unwrapResultMeta> | null;
   readonly report: string | null;
@@ -136,21 +136,21 @@ export type CliHistoryDeleteResult =
   | {
       readonly deleted: 'all';
       readonly count: number;
-      readonly active: readonly ExecutionId[];
+      readonly active: readonly RunId[];
       readonly failed: readonly {
-        readonly executionId: ExecutionId;
+        readonly executionId: RunId;
         readonly message: string;
       }[];
     }
   | {
       readonly deleted: 'one';
-      readonly id: ExecutionId;
+      readonly id: RunId;
       readonly found: boolean;
       readonly status: 'deleted' | 'not-found' | 'active';
     };
 
-export function parseCliHistoryId(raw: string): ExecutionId | undefined {
-  return ExecutionIdSchema.safeParse(raw).data;
+export function parseCliHistoryId(raw: string): RunId | undefined {
+  return RunIdSchema.safeParse(raw).data;
 }
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
@@ -160,10 +160,10 @@ export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
   // is bounded here so a history full of failed workflow runs cannot open one
   // file handle burst per run. `Effect.forEach` preserves input order.
   return effectRuntime().runPromise(
-    listExecutions(session).pipe(
+    listRuns(session).pipe(
       Effect.flatMap((entries) =>
         Effect.forEach(
-          entries.filter(isUserVisibleExecution),
+          entries.filter(isUserVisibleRun),
           (entry) => toCliHistoryEntry(entry, session),
           {
             concurrency: HISTORY_ENTRY_CONCURRENCY,
@@ -175,11 +175,11 @@ export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
 }
 
 export async function readCliHistoryDetails(
-  id: ExecutionId,
+  id: RunId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
   const session = await initializeCliTranscriptSession();
-  const store = getExecutionRecords(session, id);
+  const store = getRunRecords(session, id);
   const [
     meta,
     config,
@@ -237,7 +237,7 @@ export async function readCliHistoryDetails(
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
     : undefined;
-  const workspaceFiles = await listExecutionWorkspaceFiles(
+  const workspaceFiles = await listRunWorkspaceFiles(
     config,
     persistedWorkspaceFilePaths,
   );
@@ -304,7 +304,7 @@ type CliHistoryExportInputResult =
  * execution simply never produced a conversation.
  */
 export async function readCliHistoryExportInput(
-  id: ExecutionId,
+  id: RunId,
 ): Promise<CliHistoryExportInputResult> {
   const session = await initializeCliTranscriptSession();
   const { meta, config, conversation, hasTranscriptEvidence, exportInput } =
@@ -417,7 +417,7 @@ export async function stageCliHistoryTraceViewerAssets(params: {
 /** Delete indexed run lifetimes through the session's claim transaction. */
 export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   session: SessionHandle,
-  options: { id?: ExecutionId; all?: boolean },
+  options: { id?: RunId; all?: boolean },
 ) {
   if (!options.all && !options.id) {
     return yield* Effect.fail(new Error('Expected an execution id, or --all.'));
@@ -434,9 +434,9 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   const selected = options.all
     ? starts
     : starts.filter((row) => row.executionId === options.id);
-  const deleted: ExecutionId[] = [];
-  const active: ExecutionId[] = [];
-  const failed: { executionId: ExecutionId; message: string }[] = [];
+  const deleted: RunId[] = [];
+  const active: RunId[] = [];
+  const failed: { executionId: RunId; message: string }[] = [];
   for (const start of selected) {
     const result = yield* Effect.result(
       session.requests.removeStream(
@@ -492,10 +492,7 @@ export function formatCliHistoryText(
     .join('\n');
 }
 
-export function formatCliHistoryNotFoundText(
-  id: ExecutionId,
-  cwd?: string,
-): string {
+export function formatCliHistoryNotFoundText(id: RunId, cwd?: string): string {
   const workspace = cwd?.trim();
   return [
     workspace
@@ -604,7 +601,7 @@ export function formatCliHistoryDetailsText(
 }
 
 const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
-  entry: AgentExecutionListingEntry,
+  entry: AgentRunListingEntry,
   session: SessionHandle,
 ) {
   const config = entry.record;

@@ -17,8 +17,8 @@ import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
   resetCliState,
   rootRunPending,
-  rootRunStreamId,
-  rootStreamId,
+  pendingRootRunId,
+  rootRunId,
 } from '@cli/chat/tui/state/cliState';
 import {
   installTerminalRestoreOnExit,
@@ -29,11 +29,7 @@ import {
   installTerminalTitleUpdates,
   terminalTitleText,
 } from '@cli/chat/tui/terminalTitle';
-import {
-  STREAM_PHASE,
-  type StreamPhase,
-  type StreamTabId,
-} from '@shared/schemas';
+import { STREAM_PHASE, type RunPhase, type StreamTabId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   bindTestSessionView,
@@ -54,7 +50,7 @@ const NO_TERMINAL_CAPABILITIES = {
 
 /** The fold's output the title reads: one root, every later stream its
  *  child, and the session's pending approvals. */
-const phases = new Map<string, StreamPhase>();
+const phases = new Map<string, RunPhase>();
 let approvals: SessionView['approvals'] = [];
 function syncView(): void {
   const ids = [...phases.keys()] as StreamTabId[];
@@ -68,10 +64,10 @@ function syncView(): void {
         : {}),
     }),
   );
-  if (rootId !== undefined) rootStreamId.set(rootId);
+  if (rootId !== undefined) rootRunId.set(rootId);
   seedView(viewWith(streams, { approvals }));
 }
-function setPhase(streamId: string, status: StreamPhase): void {
+function setPhase(streamId: string, status: RunPhase): void {
   phases.set(streamId, status);
   syncView();
 }
@@ -186,7 +182,7 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     rootRunPending.set(true);
-    rootRunStreamId.set('status-pending-root');
+    pendingRootRunId.set('status-pending-root');
 
     const updates = installTerminalTitleUpdates('/work/coauthor');
 
@@ -200,7 +196,7 @@ describe('installTerminalTitleUpdates', () => {
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
     rootRunPending.set(true);
-    rootRunStreamId.set('transition-root');
+    pendingRootRunId.set('transition-root');
     setPhase('transition-root', STREAM_PHASE.WAITING);
     setPhase('transition-child', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();

@@ -9,12 +9,8 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import { sweepLeftoverStreams } from '@controllers/session/sweepLeftoverStreams';
-import {
-  aggregateId,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverStreams';
+import { aggregateId, type RunId, type StreamTabId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -46,7 +42,7 @@ describe('committed stream removal', () => {
         Effect.gen(function* () {
           const parent = 'removed-parent' as StreamTabId;
           const child = 'retained-child' as StreamTabId;
-          const executionId = 'aabb1234' as ExecutionId;
+          const executionId = 'aabb1234' as RunId;
           publishTestRunStart(session, parent);
           publishTestRunStart(session, child, executionId);
           yield* Effect.promise(() => session.settlePublications());
@@ -207,7 +203,7 @@ describe('indexed background-shell cleanup', () => {
               ),
             ),
           );
-          yield* sweepLeftoverStreams(session, rows.flat());
+          yield* sweepLeftoverRuns(session, rows.flat());
           const swept = yield* Stream.runHead(
             session.viewChanges.pipe(
               Stream.filter((view) => !view.streams.has(shell)),

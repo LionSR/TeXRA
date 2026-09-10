@@ -2,12 +2,12 @@ import type { StreamTabId } from '@shared/schemas';
 
 import {
   ProgressViewProvider,
-  type ProgressStreamRevealResult,
+  type ProgressRunRevealResult,
 } from './ProgressViewProvider';
 
-export async function revealProgressStream(
+export async function revealProgressRun(
   streamId: StreamTabId,
-): Promise<ProgressStreamRevealResult | 'unavailable'> {
+): Promise<ProgressRunRevealResult | 'unavailable'> {
   const provider = ProgressViewProvider.getInstance();
   return provider ? provider.revealStream(streamId) : 'unavailable';
 }
@@ -16,12 +16,10 @@ export async function revealProgressStream(
  * Select a stream this window just launched (the launch's `onStreamResolved`
  * callback). The surface's own selection; a fact never carries focus.
  */
-export function presentLaunchedProgressStream(streamId: StreamTabId): void {
+export function presentLaunchedProgressRun(streamId: StreamTabId): void {
   ProgressViewProvider.getInstance()?.presentLaunchedStream(streamId);
 }
 
-export function getProgressStreamLabel(
-  streamId: StreamTabId,
-): string | undefined {
+export function getProgressRunLabel(streamId: StreamTabId): string | undefined {
   return ProgressViewProvider.getInstance()?.streamLabel(streamId);
 }

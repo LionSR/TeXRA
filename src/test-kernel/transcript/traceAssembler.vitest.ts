@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
-import { registerExecution } from '@agent/storage/executionLifecycle';
-import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
+import { getRunRecords } from '@agent/storage';
+import { registerRun } from '@agent/storage/executionLifecycle';
+import { releaseOwnedRunLease } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -15,7 +15,7 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
+  type RunId,
   type RunOutcome,
   type StreamTabId,
   AgentCategory,
@@ -30,11 +30,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  assembleTrace,
-  StreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
+import { assembleTrace, RunLogStore, RunSnapshotStore } from '@transcript';
 
 const tempDirs = useTempDirs();
 let session: ReturnType<typeof createTestSession>;
@@ -70,7 +66,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 
 /** Persist a run record plus a meta row for an execution. */
 async function writeExecution(
-  executionId: ExecutionId,
+  executionId: RunId,
   meta: { outcome?: RunOutcome; streamId?: StreamTabId } = {},
   executionConfig: AgentConfig = config(),
 ): Promise<void> {
@@ -79,7 +75,7 @@ async function writeExecution(
   publishTestRunStart(session, streamId, executionId);
   await session.settlePublications();
   await Effect.runPromise(
-    getExecutionRecords(session, executionId).writeRunRecord(executionConfig),
+    getRunRecords(session, executionId).writeRunRecord(executionConfig),
   );
   if (meta.outcome)
     await Effect.runPromise(
@@ -117,24 +113,21 @@ describe('assembleTrace', () => {
   });
 
   it('resolves a registered execution from its metadata without any sidecar scan (#9590 A1)', async () => {
-    const executionId = 'abc900abc900' as ExecutionId;
+    const executionId = 'abc900abc900' as RunId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
     // Registered under a stream the config would NOT derive: proves the read
     // comes from execution metadata, not from agent/model reconstruction.
     const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
     await Effect.runPromise(
-      registerExecution(session, executionId, executionConfig, 'review', {
+      registerRun(session, executionId, executionConfig, 'review', {
         streamId: registeredId,
         identity: { kind: 'agent', agent: 'review' },
       }),
     );
-    await releaseOwnedExecutionLease(executionId);
+    await releaseOwnedRunLease(executionId);
     await appendLogEntry(registeredId, 'registered row');
 
-    const scan = vi.spyOn(
-      StreamSnapshotStore.prototype,
-      'listPersistedStreams',
-    );
+    const scan = vi.spyOn(RunSnapshotStore.prototype, 'listPersistedStreams');
 
     const trace = unwrapOkTrace(
       await Effect.runPromise(assembleTrace(executionId, session)),
@@ -145,7 +138,7 @@ describe('assembleTrace', () => {
   });
 
   it('assembles a full trace document from the streamId stamped on execution metadata', async () => {
-    const executionId = 'aa11bb22cc33' as ExecutionId;
+    const executionId = 'aa11bb22cc33' as RunId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
     const streamId = getStreamTabId('review', { executionId });
 
@@ -191,13 +184,13 @@ describe('assembleTrace', () => {
 
   it('returns config_missing when no config was ever written', async () => {
     const result = await Effect.runPromise(
-      assembleTrace('exec-no-config' as ExecutionId, session),
+      assembleTrace('exec-no-config' as RunId, session),
     );
     expect(result).toEqual({ status: 'config_missing' });
   });
 
   it('exports a registered stream with an empty transcript', async () => {
-    const executionId = 'eec000001' as ExecutionId;
+    const executionId = 'eec000001' as RunId;
     const streamId = getStreamTabId('orchestrator', { executionId });
     await writeExecution(executionId, { streamId });
 
@@ -211,7 +204,7 @@ describe('assembleTrace', () => {
     // @tools/delegation/childStream.createChildStream) share getStreamTabId's
     // format but carry a tool-specific prefix, disjoint from any agent name —
     // the stamped meta.streamId is the only mapping that reaches them.
-    const executionId = 'eec000002' as ExecutionId;
+    const executionId = 'eec000002' as RunId;
     const executionConfig = config({
       agent: 'orchestrator',
       model: 'deepseekT',

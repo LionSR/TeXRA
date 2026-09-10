@@ -22,9 +22,9 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import {
-  validateExecutionRequest,
-  type ExecutionRequest,
-  type ValidatedExecutionRequest,
+  validateRunRequest,
+  type RunRequest,
+  type ValidatedRunRequest,
 } from '@agent/core/state/executionRequests';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { effectRuntime } from '@platform/processRuntime';
@@ -41,13 +41,13 @@ import {
   launchDesktopAgent,
   type DesktopAgentLaunchOptions as DesktopRunExecutionOptions,
 } from './desktopAgentLaunch.js';
-import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+import type { DesktopAgentRunHost } from './desktopAgentExecutionHost.js';
 
-export interface DesktopAgentExecutionOptions {
-  host: DesktopAgentExecutionHost;
+export interface DesktopAgentRunOptions {
+  host: DesktopAgentRunHost;
   /** Preview operations reject; the approval controller presents failures. */
   toolEditPreview: Pick<
-    DesktopAgentExecutionHost,
+    DesktopAgentRunHost,
     'openPath' | 'openBuildDisplay' | 'openDiff'
   >;
   session: SessionHandle;
@@ -62,14 +62,14 @@ export interface DesktopAgentExecutionOptions {
   logger?: AgentTrace;
 }
 
-export interface DesktopAgentExecution {
+export interface DesktopAgentRun {
   /** Launch a request another host action built (a merge, a compile fix). */
   runExecutionRequest(
-    request: ExecutionRequest,
+    request: RunRequest,
     options?: DesktopRunExecutionOptions,
   ): Promise<void>;
   runValidated(
-    request: ValidatedExecutionRequest,
+    request: ValidatedRunRequest,
     options?: DesktopRunExecutionOptions,
   ): Promise<void>;
   /** The tool-edit approvals this window owns. A prompt's verbs act over its
@@ -79,9 +79,9 @@ export interface DesktopAgentExecution {
   dispose(): void;
 }
 
-export function createDesktopAgentExecution(
-  options: DesktopAgentExecutionOptions,
-): DesktopAgentExecution {
+export function createDesktopAgentRun(
+  options: DesktopAgentRunOptions,
+): DesktopAgentRun {
   const { session, host } = options;
   const logger = options.logger ?? createChannelTrace('DesktopAgentExecution');
   let disposed = false;
@@ -176,7 +176,7 @@ export function createDesktopAgentExecution(
   });
 
   function runValidated(
-    request: ValidatedExecutionRequest,
+    request: ValidatedRunRequest,
     runOptions: DesktopRunExecutionOptions = {},
   ): Promise<void> {
     return launchDesktopAgent(
@@ -191,7 +191,7 @@ export function createDesktopAgentExecution(
 
   return {
     async runExecutionRequest(request, runOptions) {
-      const validated = validateExecutionRequest(request);
+      const validated = validateRunRequest(request);
       if (!validated.valid) {
         logger.error('Invalid desktop execution request', {
           data: validated.issue,

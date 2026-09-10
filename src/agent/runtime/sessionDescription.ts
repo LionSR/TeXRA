@@ -17,7 +17,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { createLog } from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
@@ -101,7 +101,7 @@ export function getDisplayedInstruction(
  * an `updateStreamDescription` event so the progress view can display it.
  */
 export async function generateSessionDescription(
-  executionId: ExecutionId,
+  executionId: RunId,
   streamId: StreamTabId,
   config: AgentConfig,
   agentDescription: string | undefined,

@@ -12,15 +12,15 @@ import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type {
   AgentCategory,
-  ExecutionId,
+  RunId,
   RunIdentity,
-  StreamPhase,
+  RunPhase,
   StreamTabId,
 } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
 
 export interface ExecutionStatusInfo {
-  status: StreamPhase | 'unknown';
+  status: RunPhase | 'unknown';
   elapsed: string | null;
   /**
    * Why the status reads the way it does, when the phase alone would mislead:
@@ -36,15 +36,15 @@ export interface ExecutionStatusInfo {
  * config's execution mode — never re-read from a persisted record or a
  * display projection.
  */
-export interface ExecutionRun {
+export interface RunDescriptor {
   readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly identity: RunIdentity;
   readonly category: AgentCategory;
 }
 
 /** Live run-owned capability that can receive a user stop request. */
-export interface ExecutionInterruptHandler {
+export interface RunInterruptHandler {
   interrupt(): void;
   /**
    * True when `interrupt()` tears down a live background OS process (e.g. a
@@ -91,8 +91,8 @@ type TerminalState = 'open' | 'claimed' | 'settled';
  * the live `ToolUseSessionLifecycle` and the full `RunModelHandler`); the
  * handle keeps only what a consumer of an attached run needs.
  *
- * {@link AgentExecutionHandle.interrupt} falls back to this context's
- * `interrupt()` when no explicit {@link ExecutionInterruptHandler} is
+ * {@link RunHandle.interrupt} falls back to this context's
+ * `interrupt()` when no explicit {@link RunInterruptHandler} is
  * attached. Native child-run strategies use it to delegate a
  * child-run-loop-level interrupt into an in-flight tool-use turn. A live
  * `flowContext` is attached via `attachToolUseFlow` for the duration of one
@@ -117,7 +117,7 @@ export type LiveToolUseFlowContext = {
  * When `parentStreamId` differs from `childStreamId`, the handle represents
  * a subagent whose parent is an orchestrator.
  */
-export class AgentExecutionHandle<
+export class RunHandle<
   Trace extends AgentTrace | undefined = AgentTrace | undefined,
 > {
   /**
@@ -130,7 +130,7 @@ export class AgentExecutionHandle<
    */
   readonly startedAt = Date.now();
   private _parentStreamId: StreamTabId;
-  private interruptHandler?: ExecutionInterruptHandler;
+  private interruptHandler?: RunInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
   private suspension?: RunSuspension;
 
@@ -163,7 +163,7 @@ export class AgentExecutionHandle<
      * terminal `result` reports. Held whole rather than copied field by field,
      * so the handle and the event plane cannot describe the run differently.
      */
-    readonly run: ExecutionRun,
+    readonly run: RunDescriptor,
     parentStreamId: StreamTabId,
     /** The run's discriminated-event channel, for run-scoped subscribers:
      *  present on every launched run, absent on a process or external-CLI
@@ -173,7 +173,7 @@ export class AgentExecutionHandle<
     this._parentStreamId = parentStreamId;
   }
 
-  get executionId(): ExecutionId {
+  get executionId(): RunId {
     return this.run.executionId;
   }
 
@@ -267,7 +267,7 @@ export class AgentExecutionHandle<
     return this.toolUseFlowContext;
   }
 
-  attachInterruptHandler(handler: ExecutionInterruptHandler): () => void {
+  attachInterruptHandler(handler: RunInterruptHandler): () => void {
     this.interruptHandler = handler;
     return () => {
       if (this.interruptHandler === handler) this.interruptHandler = undefined;
@@ -343,7 +343,7 @@ export class AgentExecutionHandle<
  * constructs it over the run's own trace, so the trace is present by type.
  */
 export type AgentRunHandle = Pick<
-  AgentExecutionHandle<AgentTrace>,
+  RunHandle<AgentTrace>,
   | 'executionId'
   | 'parentStreamId'
   | 'childStreamId'

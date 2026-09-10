@@ -1,6 +1,6 @@
 import type {
-  StreamPhaseState,
-  StreamStatusMachine,
+  RunPhaseState,
+  RunStatusMachine,
 } from '@agent/runtime/StreamStatusService';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -11,31 +11,29 @@ import type { StreamTabId } from '@shared/schemas';
 interface StreamStatusMachineInternals {
   readonly streams: Map<
     StreamTabId,
-    { readonly kind: 'phase'; readonly state: StreamPhaseState }
+    { readonly kind: 'phase'; readonly state: RunPhaseState }
   >;
 }
 
-function internals(machine: StreamStatusMachine): StreamStatusMachineInternals {
+function internals(machine: RunStatusMachine): StreamStatusMachineInternals {
   return machine as unknown as StreamStatusMachineInternals;
 }
 
 export function clearStreamStatusForTest(
-  machine: StreamStatusMachine,
+  machine: RunStatusMachine,
   streamId: StreamTabId,
 ): void {
   machine.clearStream(streamId);
 }
 
-export function clearAllStreamStatusesForTest(
-  machine: StreamStatusMachine,
-): void {
+export function clearAllStreamStatusesForTest(machine: RunStatusMachine): void {
   machine.clearAll();
 }
 
 export function seedStreamStatusForTest(
-  machine: StreamStatusMachine,
+  machine: RunStatusMachine,
   streamId: StreamTabId,
-  state: StreamPhaseState,
+  state: RunPhaseState,
 ): void {
   internals(machine).streams.set(streamId, { kind: 'phase', state });
 }

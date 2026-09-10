@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createRunContext,
   getRunContextAgentName,
-  getRunContextExecutionId,
+  getRunContextRunId,
   getRunContextSession,
   getRunContextStreamId,
   getRunContextWorkingDirectory,
@@ -14,7 +14,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 
 import { testModelCell } from '../modelCellTestUtils';
 
@@ -22,7 +22,7 @@ describe('RunContext', () => {
   it('reads the current model through the run model cell', () => {
     const runScope = createRunScope({
       streamId: 'live-model-stream' as StreamTabId,
-      executionId: 'live-model-execution' as ExecutionId,
+      executionId: 'live-model-execution' as RunId,
       agentName: 'test-agent',
       session: {} as SessionHandle,
       signal: new AbortController().signal,
@@ -55,7 +55,7 @@ describe('RunContext', () => {
   it('preserves the exact run scope on launch contexts', () => {
     const runScope = createRunScope({
       streamId: 'scoped-stream' as StreamTabId,
-      executionId: 'scoped-execution' as ExecutionId,
+      executionId: 'scoped-execution' as RunId,
       agentName: 'scoped-agent',
       workingDirectory: '/tmp/scoped-worktree',
       session: {} as SessionHandle,
@@ -78,7 +78,7 @@ describe('RunContext', () => {
     expect('workingDirectory' in context).toBe(false);
     expect('session' in context).toBe(false);
     expect(getRunContextStreamId(context)).toBe(runScope.streamId);
-    expect(getRunContextExecutionId(context)).toBe(runScope.executionId);
+    expect(getRunContextRunId(context)).toBe(runScope.executionId);
     expect(getRunContextAgentName(context)).toBe(runScope.agentName);
     expect(getRunContextWorkingDirectory(context)).toBe(
       runScope.workingDirectory,

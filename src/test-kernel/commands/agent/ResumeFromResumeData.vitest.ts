@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@controllers/session/resumeStreamPresentation', () => ({
-  resumeStreamWithRefusalNotice: mocks.resumeStreamWithRefusalNotice,
+  resumeRunWithRefusalNotice: mocks.resumeStreamWithRefusalNotice,
 }));
 vi.mock('@commands/agent/executeCommand', () => ({
   runExecuteCommand: vi.fn(),
@@ -18,10 +18,10 @@ vi.mock('@commands/agent/executeCommand', () => ({
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 
 const STREAM = 'stream:ext-resume-ports' as StreamTabId;
-const EXECUTION = 'exec:ext-resume' as ExecutionId;
+const EXECUTION = 'exec:ext-resume' as RunId;
 
 async function captureOptions(): Promise<ResumeRunOptions> {
   await tryResumeFromResumeData(STREAM);

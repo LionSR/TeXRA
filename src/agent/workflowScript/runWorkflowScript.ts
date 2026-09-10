@@ -4,10 +4,10 @@ import stableStringify from 'safe-stable-stringify';
 import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
 import type {
-  ExecutionId,
+  RunId,
   WorkflowCallIdentity,
   WorkflowControlAction,
-  WorkflowExecutionSnapshot,
+  WorkflowRunSnapshot,
 } from '@shared/schemas';
 import {
   WORKFLOW_CALL_KIND,
@@ -21,7 +21,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
-import { WorkflowExecutionState } from './workflowExecutionState';
+import { WorkflowRunState } from './workflowExecutionState';
 import {
   WORKFLOW_SKIPPED_RESULT,
   WorkflowAgentCallOptionsSchema,
@@ -217,7 +217,7 @@ class JournalCommitFence {
 class CoalescedSnapshotWriter {
   readonly #write: WorkflowScriptRunOptions['onSnapshot'];
   readonly #onFailure: (failure: WorkflowRunAbortError) => void;
-  #pending: WorkflowExecutionSnapshot | undefined;
+  #pending: WorkflowRunSnapshot | undefined;
   #running: Promise<void> | undefined;
   #failure: WorkflowRunAbortError | undefined;
 
@@ -229,7 +229,7 @@ class CoalescedSnapshotWriter {
     this.#onFailure = onFailure;
   }
 
-  publish(snapshot: WorkflowExecutionSnapshot): void {
+  publish(snapshot: WorkflowRunSnapshot): void {
     if (!this.#write || this.#failure !== undefined) return;
     this.#pending = snapshot;
     this.#running ??= this.#drain();
@@ -352,7 +352,7 @@ export async function runWorkflowScript(
   // attempt a retry starts, and the attempt reads its own requested action
   // from the record it still holds. Control state is control-plane only —
   // never journaled, so resume identity is untouched.
-  const inFlightCalls = new Map<ExecutionId, InFlightAgentCall>();
+  const inFlightCalls = new Map<RunId, InFlightAgentCall>();
   // Journal replays are free: only live runAgent executions count against
   // the runaway-loop cap, so a resume can replay past the cap and finish
   // the remaining work.
@@ -372,7 +372,7 @@ export async function runWorkflowScript(
     options.onSnapshot,
     failRun,
   );
-  const executionState = new WorkflowExecutionState({
+  const executionState = new WorkflowRunState({
     phases: plannedPhases,
     tasks: plannedTasks,
     initialSnapshot: options.initialSnapshot,

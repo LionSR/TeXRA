@@ -4,7 +4,7 @@ import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumul
 import {
   ContextManagementDataSchema,
   STREAM_PHASE,
-  StreamSnapshotSchema,
+  RunSnapshotSchema,
 } from '@shared/schemas';
 
 // Minimal NormalizedUsage fixture: all required fields, no optionals.
@@ -87,7 +87,7 @@ describe('StreamSnapshotSchema.status — canonical phases only', () => {
     'rejects the retired status "%s"',
     (retired) => {
       expect(() =>
-        StreamSnapshotSchema.parse({
+        RunSnapshotSchema.parse({
           streamId: 'stream:retired',
           status: retired,
         }),
@@ -96,7 +96,7 @@ describe('StreamSnapshotSchema.status — canonical phases only', () => {
   );
 
   it('passes a canonical phase through unchanged', () => {
-    const result = StreamSnapshotSchema.parse({
+    const result = RunSnapshotSchema.parse({
       streamId: 'stream:canonical',
       status: STREAM_PHASE.RUNNING,
     });

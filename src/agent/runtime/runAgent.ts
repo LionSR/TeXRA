@@ -1,8 +1,8 @@
 import { Cause, Effect, Exit } from 'effect';
 
-import { registerExecution, getExecutionRecords } from '@agent/storage';
+import { registerRun, getRunRecords } from '@agent/storage';
 import {
-  acquireResumedExecutionOwnership,
+  acquireResumedRunOwnership,
   finalizeRun,
 } from '@agent/storage/executionLifecycle';
 
@@ -10,19 +10,15 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import {
-  aggregateError,
-  generateExecutionId,
-  linkAbortSignals,
-} from '@utils/core';
+import { aggregateError, generateRunId, linkAbortSignals } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
-import { AgentExecutionHandle } from './ExecutionHandle';
+import { RunHandle } from './ExecutionHandle';
 import { runInSession } from './RunContext';
 import { getStreamTabId } from './streamTab';
 import type { SessionHandle } from './SessionHandle';
@@ -58,7 +54,7 @@ export interface RunAgentOptions extends Pick<
    */
   beforeLeaseRelease?: () => Promise<boolean | void>;
   /** Fires once this run owns its execution lease. */
-  onExecutionLeaseAcquired?: (executionId: ExecutionId) => void;
+  onExecutionLeaseAcquired?: (executionId: RunId) => void;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured
@@ -72,12 +68,12 @@ export type RunAgentRequest =
   | {
       readonly kind: 'fresh';
       readonly config: AgentConfig;
-      readonly executionId?: ExecutionId;
+      readonly executionId?: RunId;
     }
   | {
       readonly kind: 'resume';
       readonly config: AgentConfig;
-      readonly executionId: ExecutionId;
+      readonly executionId: RunId;
     };
 
 /**
@@ -102,12 +98,12 @@ export const runAgent = Effect.fn('runAgent')(function* (
     preferHelperModel,
     ...executeAgentOptions
   } = options;
-  const executionId = request.executionId ?? generateExecutionId();
+  const executionId = request.executionId ?? generateRunId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
   const prior = shouldRegister
     ? null
-    : yield* getExecutionRecords(runSession, executionId).readMeta();
+    : yield* getRunRecords(runSession, executionId).readMeta();
   if (!shouldRegister && !prior)
     return yield* Effect.fail(
       new Error(`Execution metadata not found for ${executionId}`),
@@ -122,7 +118,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
     prior?.streamId ?? getStreamTabId(request.config.agent, { executionId });
   const launchHandle = runSession.executions.getHandle(executionId)
     ? undefined
-    : new AgentExecutionHandle(
+    : new RunHandle(
         {
           streamId: launchStreamId,
           executionId,
@@ -164,19 +160,13 @@ export const runAgent = Effect.fn('runAgent')(function* (
             ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
         if (shouldRegister) {
-          yield* registerExecution(
-            runSession,
-            executionId,
-            config,
-            config.agent,
-            {
-              streamId: launchStreamId,
-              identity: { kind: 'agent', agent: config.agent },
-              userFollowUpSupport,
-            },
-          );
+          yield* registerRun(runSession, executionId, config, config.agent, {
+            streamId: launchStreamId,
+            identity: { kind: 'agent', agent: config.agent },
+            userFollowUpSupport,
+          });
         } else {
-          yield* acquireResumedExecutionOwnership(
+          yield* acquireResumedRunOwnership(
             runSession,
             executionId,
             launchStreamId,

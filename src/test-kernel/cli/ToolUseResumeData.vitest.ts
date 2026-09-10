@@ -1,18 +1,14 @@
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/runtime';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   isCliRunResumable as isCliRunResumableEffect,
   type CliRunResumabilityFacts,
 } from '@cli/runtime/toolUseResumeData';
-import {
-  RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type StreamTabId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
@@ -33,7 +29,7 @@ const config = {
 
 /** A failed workflow row: the one shape whose checkpoint is still read. */
 function listingFacts(
-  executionId: ExecutionId,
+  executionId: RunId,
   overrides: Partial<CliRunResumabilityFacts> = {},
 ): CliRunResumabilityFacts {
   return {
@@ -53,10 +49,10 @@ const TERMINAL_REJECTION = {
 };
 
 async function writeFlowRecord(
-  executionId: ExecutionId,
+  executionId: RunId,
   shared: Record<string, unknown>,
 ): Promise<void> {
-  await getExecutionStore(executionId).write(flowKey(executionId), {
+  await getRunStore(executionId).write(flowKey(executionId), {
     shared,
     cursor: { nextNodeId: 'start' },
   });
@@ -76,8 +72,7 @@ describe('CLI listing resumability', () => {
   ])(
     'does not advertise a row with %s, without reading its state',
     async (description, overrides) => {
-      const executionId =
-        `gate-${description.replaceAll(' ', '-')}` as ExecutionId;
+      const executionId = `gate-${description.replaceAll(' ', '-')}` as RunId;
       // A continuable record is on disk, so reading it would answer `true`.
       // Only the two free facts can produce the `false` asserted below.
       await writeFlowRecord(executionId, { currentRound: 0, totalRounds: 4 });
@@ -97,8 +92,7 @@ describe('CLI listing resumability', () => {
   ])(
     'advertises %s without parsing its checkpoint',
     async (description, overrides) => {
-      const executionId =
-        `free-${description.replaceAll(' ', '-')}` as ExecutionId;
+      const executionId = `free-${description.replaceAll(' ', '-')}` as RunId;
       // A terminal rejection is on disk, so a parse would answer `false`.
       // Only the short-circuit can produce the `true` asserted below.
       await writeFlowRecord(executionId, TERMINAL_REJECTION);
@@ -123,7 +117,7 @@ describe('CLI listing resumability', () => {
     'does not advertise a failed workflow with terminal %s as resumable',
     async (description, shared) => {
       const executionId =
-        `workflow-terminal-${description.replaceAll(' ', '-')}` as ExecutionId;
+        `workflow-terminal-${description.replaceAll(' ', '-')}` as RunId;
       await writeFlowRecord(executionId, shared);
 
       await expect(isCliRunResumable(listingFacts(executionId))).resolves.toBe(

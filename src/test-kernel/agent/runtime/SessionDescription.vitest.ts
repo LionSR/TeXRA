@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -10,7 +10,7 @@ import {
 import * as logger from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
+  type RunId,
   type StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -38,7 +38,7 @@ function runDescription(
   agentDescription?: string,
 ): Promise<void> {
   return generateSessionDescription(
-    executionId as ExecutionId,
+    executionId as RunId,
     streamId as StreamTabId,
     AgentConfigSchema.parse({
       agent: category === AgentCategory.ToolUse ? 'chat' : 'correct',
@@ -96,7 +96,7 @@ describe('session description helpers', () => {
 
   it('uses the exact workflow-agent description carried by launch context', async () => {
     const session = createTestSession();
-    publishTestRunStart(session, 'stream-workflow', 'a0b0c1' as ExecutionId);
+    publishTestRunStart(session, 'stream-workflow', 'a0b0c1' as RunId);
     await session.settlePublications();
     const recorded = recordSessionEvents(session);
     const handler = mockToolUseAnswer('Correcting derivation signs');
@@ -113,11 +113,8 @@ describe('session description helpers', () => {
       '<agent-purpose>Corrects a draft</agent-purpose>',
     );
     expect(
-      (
-        await Effect.runPromise(
-          getExecutionRecords(session, 'a0b0c1').readMeta(),
-        )
-      )?.description,
+      (await Effect.runPromise(getRunRecords(session, 'a0b0c1').readMeta()))
+        ?.description,
     ).toBe('Correcting derivation signs');
     await session.settlePublications();
     expect(await recorded.read()).toMatchObject([
@@ -162,7 +159,7 @@ describe('session description helpers', () => {
 
   it('keeps generating compact descriptions for tool-use runs', async () => {
     const session = createTestSession();
-    publishTestRunStart(session, 'stream-tool', 'a0b0c2' as ExecutionId);
+    publishTestRunStart(session, 'stream-tool', 'a0b0c2' as RunId);
     await session.settlePublications();
     const recorded = recordSessionEvents(session);
     mockToolUseAnswer('Fixing proof typos');
@@ -170,11 +167,8 @@ describe('session description helpers', () => {
     await runDescription('a0b0c2', 'stream-tool', session);
 
     expect(
-      (
-        await Effect.runPromise(
-          getExecutionRecords(session, 'a0b0c2').readMeta(),
-        )
-      )?.description,
+      (await Effect.runPromise(getRunRecords(session, 'a0b0c2').readMeta()))
+        ?.description,
     ).toBe('Fixing proof typos');
     await session.settlePublications();
     expect(await recorded.read()).toMatchObject([

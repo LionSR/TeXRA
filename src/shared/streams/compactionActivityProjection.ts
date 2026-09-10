@@ -1,7 +1,7 @@
 import {
   MESSAGE_TYPES,
   type CompactionActivityOutcome,
-  type StreamLogEntry,
+  type RunLogEntry,
 } from '@shared/schemas';
 
 export type CompactionActivityStatus =
@@ -51,7 +51,7 @@ const STREAM_ADVANCING_MESSAGE_TYPES: ReadonlySet<string> = new Set([
 
 function interruptRunningBlocks(
   projection: CompactionActivityProjection,
-  entry: StreamLogEntry,
+  entry: RunLogEntry,
   changedIndices: Set<number>,
 ): void {
   if (!STREAM_ADVANCING_MESSAGE_TYPES.has(entry.messageType ?? '')) return;
@@ -71,7 +71,7 @@ function interruptRunningBlocks(
 /** Apply raw stream-log entries to an existing projection in source order. */
 export function applyCompactionActivityEntries(
   projection: CompactionActivityProjection,
-  entries: readonly StreamLogEntry[],
+  entries: readonly RunLogEntry[],
 ): readonly number[] {
   const changedIndices = new Set<number>();
 

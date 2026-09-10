@@ -9,13 +9,13 @@ import {
   type CliHistoryEntry,
 } from '@cli/runtime/history';
 import { formatCliHistoryResumeSummary } from '@cli/runtime/historyLabels';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import { AsyncListForm } from './_shared/ListForm';
 
 interface ResumeListFormProps {
   readonly availableRows?: number;
-  readonly onSelect: (value: ExecutionId) => void;
+  readonly onSelect: (value: RunId) => void;
   readonly onClose: () => void;
 }
 
@@ -25,7 +25,7 @@ export function resumeEntryDescription(entry: CliHistoryEntry): string {
 
 export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
   return (
-    <AsyncListForm<readonly CliHistoryEntry[], ExecutionId>
+    <AsyncListForm<readonly CliHistoryEntry[], RunId>
       title="/resume"
       loadingLabel="Loading history..."
       load={async () =>

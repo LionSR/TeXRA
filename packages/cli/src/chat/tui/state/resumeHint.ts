@@ -9,10 +9,7 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { usageCostLabel } from '@shared/copy/modelAccess';
-import {
-  descendantStreams,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 
 import { cumulativeUsageOf, streamViewOf } from './sessionView';
 
@@ -24,7 +21,7 @@ export interface ResumeTarget {
 
 interface ResumeTargetsInput {
   readonly view: SessionView;
-  readonly rootStreamId: StreamTabId | undefined;
+  readonly rootRunId: StreamTabId | undefined;
   readonly rootExecutionId: string | undefined;
 }
 
@@ -68,10 +65,10 @@ export function formatResumeCommand(
 /** The session's metered usage: the root run and every descendant. */
 export function collectResumeUsage(
   view: SessionView,
-  rootStreamId: StreamTabId | undefined,
+  rootRunId: StreamTabId | undefined,
 ): TokenUsageStats | undefined {
   const usages: TokenUsageStats[] = [];
-  for (const streamId of descendantStreams(view, rootStreamId, {
+  for (const streamId of descendantRuns(view, rootRunId, {
     includeRoot: true,
   })) {
     const usage = cumulativeUsageOf(streamViewOf(view, streamId));
@@ -104,7 +101,7 @@ function formatResumeUsage(
 
 export function collectResumeTargets({
   view,
-  rootStreamId,
+  rootRunId,
   rootExecutionId,
 }: ResumeTargetsInput): readonly ResumeTarget[] {
   const targets: ResumeTarget[] = [];
@@ -113,7 +110,7 @@ export function collectResumeTargets({
     targets.push({ executionId: rootExecutionId, label: 'main', isRoot: true });
     seen.add(rootExecutionId);
   }
-  for (const streamId of descendantStreams(view, rootStreamId, {
+  for (const streamId of descendantRuns(view, rootRunId, {
     includeRoot: false,
   })) {
     const stream = streamViewOf(view, streamId);

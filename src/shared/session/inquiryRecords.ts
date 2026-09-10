@@ -1,7 +1,7 @@
 /** Canonical global inquiry operations, independent of project display lifetimes. */
 import { Context, type Effect } from 'effect';
 import type {
-  ExecutionId,
+  RunId,
   StreamTabId,
   InquiryThreadId,
   InquiryThreadRecord,
@@ -15,7 +15,7 @@ export class InquiryRecords extends Context.Service<
     readonly recordOpenQuestion: (params: {
       threadId?: InquiryThreadId;
       parentStreamId: StreamTabId;
-      parentExecutionId: ExecutionId | null;
+      parentExecutionId: RunId | null;
       question: string;
       context?: string;
       suggestSearch?: boolean;

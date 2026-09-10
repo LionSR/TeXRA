@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
 import type { SessionHostInteractions } from './HostInteractions';
@@ -202,9 +202,9 @@ export function getRunContextStreamId(
 }
 
 /** Return the execution id for a context, reading launch contexts through RunScope. */
-export function getRunContextExecutionId(
+export function getRunContextRunId(
   context: RunContext | undefined = tryUseRunContext(),
-): ExecutionId | undefined {
+): RunId | undefined {
   return getRunContextField('executionId', context);
 }
 

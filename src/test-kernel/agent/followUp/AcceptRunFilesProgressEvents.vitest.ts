@@ -16,7 +16,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { appSignals } from '@eventBus/AppSignals';
 import { FileType, type FileStat } from '@platform/interfaces';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, StreamTabId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import {
@@ -35,7 +35,7 @@ let testApprovalHandler:
   | undefined;
 let detachHostInteractions = (): void => {};
 
-const executionId = 'abcdef' as ExecutionId;
+const executionId = 'abcdef' as RunId;
 const streamId = 'stream:accept-run-files' as StreamTabId;
 const workspacePath = '/workspace';
 const storagePath = '/storage';

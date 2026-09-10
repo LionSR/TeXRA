@@ -5,7 +5,7 @@ import { createHash, type BinaryLike } from 'node:crypto';
 import stableStringify from 'safe-stable-stringify';
 
 // Local imports - schemas
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 type ExecutionIdentity = Readonly<Record<string, string | number>>;
 
@@ -15,6 +15,6 @@ export function truncatedHexId(source: BinaryLike, length: number): string {
 }
 
 /** Derive a stable execution ID from named identity fields. */
-export function deriveExecutionId(identity: ExecutionIdentity): ExecutionId {
-  return truncatedHexId(stableStringify(identity), 24) as ExecutionId;
+export function deriveRunId(identity: ExecutionIdentity): RunId {
+  return truncatedHexId(stableStringify(identity), 24) as RunId;
 }

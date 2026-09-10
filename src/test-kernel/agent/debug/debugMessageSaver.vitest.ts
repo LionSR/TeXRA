@@ -8,7 +8,7 @@ import {
   resolveRunStoragePath,
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -46,17 +46,17 @@ describe('maybeSaveDebugObject', () => {
       objectType: 'response',
       context: {
         logger,
-        executionId: 'run-42' as ExecutionId,
+        executionId: 'run-42' as RunId,
       },
     });
 
-    const expectedDir = resolveRunStoragePath('run-42' as ExecutionId);
+    const expectedDir = resolveRunStoragePath('run-42' as RunId);
     expect(
       ensureDir.mock.calls.map(([relativePath]) => relativePath),
     ).toStrictEqual([RUNS_STORAGE_DIR, expectedDir]);
 
     const expectedRelativePath = resolveRunStoragePath(
-      'run-42' as ExecutionId,
+      'run-42' as RunId,
       'response.json',
     );
     expect(writeStorage.mock.calls.length).toBe(1);

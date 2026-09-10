@@ -14,17 +14,14 @@
  * Handle registration is a genuine multi-consumer registry channel (the
  * desktop window title reads it too), so scopes subscribe to it. Child
  * activation has exactly one consumer — this index — so the registry calls
- * {@link ExecutionInteractionOwnership.observeChildActivation} directly rather
+ * {@link RunInteractionOwnership.observeChildActivation} directly rather
  * than maintaining a listener set for a single subscriber.
  */
 
 import { DisposableStore } from '@platform/disposable';
 import type { StreamTabId } from '@shared/schemas';
-import type { AgentExecutionHandle } from './ExecutionHandle';
-import type {
-  ChildExecutionActivation,
-  ExecutionRegistry,
-} from './executionRegistry';
+import type { RunHandle } from './ExecutionHandle';
+import type { ChildRunActivation, RunRegistry } from './executionRegistry';
 
 /**
  * One owner generation. The scope object is its own owner token, so the
@@ -59,8 +56,8 @@ function deleteOwnedEntries<K>(
   }
 }
 
-/** Session-wide index of interaction ownership, one per {@link ExecutionRegistry}. */
-export class ExecutionInteractionOwnership {
+/** Session-wide index of interaction ownership, one per {@link RunRegistry}. */
+export class RunInteractionOwnership {
   private readonly executionOwners = new Map<
     string,
     ExecutionInteractionScope
@@ -72,18 +69,18 @@ export class ExecutionInteractionOwnership {
 
   /** One per open scope, added on open and dropped on release. */
   private readonly activationObservers = new Set<
-    (activation: ChildExecutionActivation, active: boolean) => void
+    (activation: ChildRunActivation, active: boolean) => void
   >();
 
-  constructor(private readonly registry: ExecutionRegistry) {}
+  constructor(private readonly registry: RunRegistry) {}
 
   /**
    * Apply one child-activation reservation or release to every open scope.
-   * Called by {@link ExecutionRegistry} as it reserves, releases, and (on
+   * Called by {@link RunRegistry} as it reserves, releases, and (on
    * disposal) drops activations.
    */
   observeChildActivation(
-    activation: ChildExecutionActivation,
+    activation: ChildRunActivation,
     active: boolean,
   ): void {
     for (const observe of [...this.activationObservers]) {
@@ -126,7 +123,7 @@ export class ExecutionInteractionOwnership {
 
     const observeRegistration = (
       executionId: string,
-      handle: AgentExecutionHandle | undefined,
+      handle: RunHandle | undefined,
     ): void => {
       if (!handle) {
         if (this.executionOwners.get(executionId) === scope) {
@@ -161,7 +158,7 @@ export class ExecutionInteractionOwnership {
     };
 
     const observeActivation = (
-      activation: ChildExecutionActivation,
+      activation: ChildRunActivation,
       active: boolean,
     ): void => {
       if (active) {

@@ -3,17 +3,17 @@ import type {
   AddOutputFilesPayload,
   AgentCategory,
   ConversationProgress,
-  ExecutionId,
+  RunId,
   GoalPausedPayload,
   InquiryThreadUpdatedEvent,
   RoundStage,
-  StreamPhase,
-  StreamSubstate,
+  RunPhase,
+  RunSubstate,
   StreamTabId,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
-  UpdateStreamUsagePayload,
+  UpdateRunUsagePayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
 
@@ -32,7 +32,7 @@ export interface CliNdjsonActiveChildRow {
   readonly kind: 'subagent' | 'process';
   readonly executionId: string;
   readonly agentName: string;
-  readonly status?: StreamPhase;
+  readonly status?: RunPhase;
   readonly startedAt?: number;
   readonly finishedAt?: number;
   readonly elapsed?: string | null;
@@ -73,23 +73,23 @@ export interface CliNdjsonProgressEventPayloads {
   setActiveStream: CliNdjsonSetActiveStreamPayload;
   updateStreamStatus: {
     streamId: StreamTabId;
-    status: StreamPhase;
+    status: RunPhase;
     /** Diagnostic transition cause retained for public output. */
     cause?: string;
     /** Previous phase before this update, for detecting transitions. */
-    previousStatus?: StreamPhase;
+    previousStatus?: RunPhase;
     /** Narrower in-flight display state for launch/resume overlays. */
-    substate?: StreamSubstate;
+    substate?: RunSubstate;
   };
   addOutputFiles: AddOutputFilesPayload;
   updateMissingOutputs: UpdateMissingOutputsPayload;
   updateCompileFailures: UpdateCompileFailuresPayload;
   setTaskState: {
     streamId: StreamTabId;
-    executionId?: ExecutionId;
+    executionId?: RunId;
     taskState: TaskState;
   };
-  updateStreamUsage: UpdateStreamUsagePayload;
+  updateStreamUsage: UpdateRunUsagePayload;
   /** Inquiry thread state changed (open, answered, dropped, or resume outcome). */
   inquiryThreadUpdated: InquiryThreadUpdatedEvent;
   updateTodos: UpdateTodosPayload;

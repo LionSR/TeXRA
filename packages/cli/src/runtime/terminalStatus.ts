@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { SessionHandle, runAgent } from '@agent/runtime';
 import { RUN_OUTCOME, type RunOutcome, STREAM_PHASE } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
@@ -65,7 +65,7 @@ export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
     result: ExecuteAgentResult,
     reportReadFailure?: (error: Error) => void,
   ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
-    return yield* getExecutionRecords(session, result.executionId)
+    return yield* getRunRecords(session, result.executionId)
       .readMeta()
       .pipe(
         Effect.map((meta) => ({

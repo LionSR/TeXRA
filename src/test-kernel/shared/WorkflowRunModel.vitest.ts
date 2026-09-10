@@ -9,8 +9,8 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  type StreamLifecycleStatus,
-  type StreamLogEntry,
+  type RunLifecycleStatus,
+  type RunLogEntry,
   type StreamTabId,
   type TaskGroup,
   type WorkflowCallProgress,
@@ -79,7 +79,7 @@ function modelOf(
   tasks: readonly TaskSpec[],
   options: {
     plan?: WorkflowPlanMarker;
-    streamPhase?: StreamLifecycleStatus;
+    streamPhase?: RunLifecycleStatus;
     runDurablyFinal?: boolean;
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
@@ -545,7 +545,7 @@ describe('workflow run model', () => {
   });
 
   it('reads the attempt and plan markers off INTERNAL entries', () => {
-    const entry = (data: unknown): StreamLogEntry =>
+    const entry = (data: unknown): RunLogEntry =>
       ({
         id: 'm',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -554,7 +554,7 @@ describe('workflow run model', () => {
         messageType: MESSAGE_TYPES.INTERNAL,
         data,
         verbose: false,
-      }) as StreamLogEntry;
+      }) as RunLogEntry;
     const plan = {
       kind: 'workflowPlan',
       attemptId: 'a',

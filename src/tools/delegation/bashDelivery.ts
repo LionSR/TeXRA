@@ -23,7 +23,7 @@ import {
 const OUTPUT_PREVIEW_LINES = 20;
 
 /** Tail/head excerpt plus the elided-character gap for one output stream. */
-export interface BashDeliveryStreamExcerpt {
+export interface BashDeliveryRunExcerpt {
   tail: string;
   /**
    * Only pass this (non-empty) when the stream was actually truncated — the
@@ -56,8 +56,8 @@ export function formatBashDelivery(
   command: string,
   wallTimeMs: number,
   result: ExecResult,
-  stdout: BashDeliveryStreamExcerpt,
-  stderr: BashDeliveryStreamExcerpt,
+  stdout: BashDeliveryRunExcerpt,
+  stderr: BashDeliveryRunExcerpt,
 ): string {
   const lines = [
     `<exit-code>${result.exitCode}</exit-code>`,

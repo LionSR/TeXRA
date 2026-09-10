@@ -8,7 +8,7 @@ import {
   TraceEmitter,
 } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
 /** Collect every event a fresh trace emits while `act` runs. */
@@ -145,10 +145,10 @@ describe('emitToolUseCard', () => {
 describe('logFileCategory', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
-  let store: StreamLog;
+  let store: RunLog;
 
   beforeEach(async () => {
-    store = new StreamLog();
+    store = new RunLog();
 
     const runTrace = createTestRunTrace('TestFileListLogger', store);
     logger = runTrace.trace;

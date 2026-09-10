@@ -1,7 +1,7 @@
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type StreamLogEntry,
+  type RunLogEntry,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 
@@ -16,7 +16,7 @@ import { getModelLabel } from '@shared/model/modelLabel';
  * trace exporters so exported/archived traces show the same runtime label
  * as the live surface (see #10178).
  */
-function projectWorkflowCallEntry(entry: StreamLogEntry): StreamLogEntry {
+function projectWorkflowCallEntry(entry: RunLogEntry): RunLogEntry {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
     entry.messageType !== MESSAGE_TYPES.WORKFLOW_TASK
@@ -27,12 +27,12 @@ function projectWorkflowCallEntry(entry: StreamLogEntry): StreamLogEntry {
   if (!('model' in call) || call.model === undefined) return entry;
   const model = getModelLabel(call.model);
   if (model === call.model) return entry;
-  return { ...entry, data: { ...call, model } } as StreamLogEntry;
+  return { ...entry, data: { ...call, model } } as RunLogEntry;
 }
 
 /** Project every entry in a trace/stream-log range. */
 export function projectWorkflowCallEntries(
-  entries: readonly StreamLogEntry[],
-): StreamLogEntry[] {
+  entries: readonly RunLogEntry[],
+): RunLogEntry[] {
   return entries.map(projectWorkflowCallEntry);
 }

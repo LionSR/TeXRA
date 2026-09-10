@@ -1,22 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  prepareMainViewExecutionRequest,
-  prepareMainViewTeamExecutionRequest,
+  prepareMainViewRunRequest,
+  prepareMainViewTeamRunRequest,
 } from '@controllers/mainView/MainViewExecutionController';
 import { AgentCategory } from '@shared/schemas';
 
 describe('MainViewExecutionController', () => {
   it('keeps missing selections explicit before schema prefaults apply', () => {
-    expect(prepareMainViewExecutionRequest({ model: 'gpt-5.4' }).valid).toBe(
-      false,
-    );
-    expect(prepareMainViewExecutionRequest({ agent: 'direct-agent' })).toEqual({
+    expect(prepareMainViewRunRequest({ model: 'gpt-5.4' }).valid).toBe(false);
+    expect(prepareMainViewRunRequest({ agent: 'direct-agent' })).toEqual({
       valid: false,
       message: 'Choose an agent, a model, and a run type first.',
     });
     expect(
-      prepareMainViewExecutionRequest({
+      prepareMainViewRunRequest({
         agent: 'direct-agent',
         model: 'gpt-5.4',
       }).valid,
@@ -25,7 +23,7 @@ describe('MainViewExecutionController', () => {
 
   it('requires an input file for workflow runs', () => {
     expect(
-      prepareMainViewExecutionRequest({
+      prepareMainViewRunRequest({
         agent: 'direct-agent',
         model: 'gpt-5.4',
         agentCategory: AgentCategory.Workflow,
@@ -38,7 +36,7 @@ describe('MainViewExecutionController', () => {
   });
 
   it('normalizes UI execution fields into an agent config request', () => {
-    const result = prepareMainViewExecutionRequest({
+    const result = prepareMainViewRunRequest({
       agent: 'direct-agent',
       model: 'gpt-5.4',
       agentCategory: AgentCategory.Workflow,
@@ -66,7 +64,7 @@ describe('MainViewExecutionController', () => {
   });
 
   it('builds team requests from resolved fields and ignores the UI agent', () => {
-    const result = prepareMainViewTeamExecutionRequest(
+    const result = prepareMainViewTeamRunRequest(
       {
         agent: 'stale-renderer-agent',
         model: 'gpt-5.4',
@@ -107,10 +105,10 @@ describe('MainViewExecutionController', () => {
     };
 
     expect(
-      prepareMainViewTeamExecutionRequest({ agent: 'ignored' }, fields).valid,
+      prepareMainViewTeamRunRequest({ agent: 'ignored' }, fields).valid,
     ).toBe(false);
     expect(
-      prepareMainViewTeamExecutionRequest({ model: 'gpt-5.4' }, fields).valid,
+      prepareMainViewTeamRunRequest({ model: 'gpt-5.4' }, fields).valid,
     ).toBe(true);
   });
 });

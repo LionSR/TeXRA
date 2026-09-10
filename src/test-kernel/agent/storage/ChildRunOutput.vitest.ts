@@ -3,16 +3,12 @@ import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 
 import {
   clearStoreCache,
-  getExecutionRecords,
+  getRunRecords,
   resolveChildRunOutput,
   type ResultMeta,
 } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  aggregateId,
-  type StreamTabId,
-  type ExecutionId,
-} from '@shared/schemas';
+import { aggregateId, type StreamTabId, type RunId } from '@shared/schemas';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -20,9 +16,9 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 
-const parentExecutionId = 'aaaaaa111111' as ExecutionId;
-const childExecutionId = 'bbbbbb222222' as ExecutionId;
-const otherParentExecutionId = 'cccccc333333' as ExecutionId;
+const parentExecutionId = 'aaaaaa111111' as RunId;
+const childExecutionId = 'bbbbbb222222' as RunId;
+const otherParentExecutionId = 'cccccc333333' as RunId;
 const relativePath = 'r1/draft.tex';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
@@ -58,7 +54,7 @@ function completedWorkflowResult(absolutePath: string): ResultMeta {
 }
 
 async function persistCompletedChild(
-  parentId: ExecutionId = parentExecutionId,
+  parentId: RunId = parentExecutionId,
 ): Promise<string> {
   const absolutePath = StorageFS.fullPath(
     `executions/${childExecutionId}/${relativePath}`,
@@ -81,7 +77,7 @@ async function persistCompletedChild(
     ]),
   );
   await Effect.runPromise(
-    getExecutionRecords(session, childExecutionId).writeResultMeta(
+    getRunRecords(session, childExecutionId).writeResultMeta(
       completedWorkflowResult(absolutePath),
     ),
   );

@@ -4,7 +4,7 @@ import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type OutputFileSummary,
   type StreamTabId,
 } from '@shared/schemas';
@@ -26,7 +26,7 @@ function workflowResult(
   return {
     category: 'workflow',
     outcome,
-    executionId: 'auto-open-output' as ExecutionId,
+    executionId: 'auto-open-output' as RunId,
     streamId: 'workflow@gpt54#auto-open-output' as StreamTabId,
     outputs: [OUTPUT],
     compileFailures: [],

@@ -10,7 +10,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
 import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
 
@@ -41,7 +41,7 @@ const LeaseExecutionIdSchema = z
  * Liveness of `owner` is a kernel fact about its pid; no field here is ever
  * compared against a clock.
  */
-export const ExecutionLeaseSchema = z.strictObject({
+export const RunLeaseSchema = z.strictObject({
   version: z.literal(3),
   executionId: LeaseExecutionIdSchema,
   ownerToken: z.uuid(),
@@ -49,7 +49,7 @@ export const ExecutionLeaseSchema = z.strictObject({
   owner: LeaseOwnerSchema,
 });
 
-type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
+type ExecutionLeaseRecord = z.infer<typeof RunLeaseSchema>;
 
 /** How long a claimant waits before re-reading a competitor's claim. */
 const CLAIM_RECHECK_MS = 20;
@@ -62,7 +62,7 @@ const CLAIM_RECHECK_MS = 20;
 const MAX_CLAIM_ROUNDS = 16;
 
 interface OwnedExecutionLease {
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly ownerToken: string;
   readonly storageRoot: string;
   readonly released: Promise<void>;
@@ -75,7 +75,7 @@ interface OwnedExecutionLease {
  * (`owned`), or another process whose owner is alive or unprovable (`held`).
  * Malformed present state rejects deliberately.
  */
-export type ExecutionLeasePresence =
+export type RunLeasePresence =
   | { readonly status: 'free' }
   | { readonly status: 'owned' }
   | { readonly status: 'held'; readonly owner: LeaseOwnerRecord };
@@ -104,15 +104,15 @@ export type LeaseReapPolicy = 'dead' | 'dead-or-unprovable';
 
 /** Why an execution refused a claim, in the words the user is shown. */
 export function executionHeldMessage(
-  executionId: ExecutionId,
+  executionId: RunId,
   owner: LeaseOwnerRecord,
 ): string {
   return `Execution ${executionId} is held by another TeXRA process (pid ${owner.pid} on ${owner.hostname}).`;
 }
 
-export class ExecutionLeaseActiveError extends Error {
+export class RunLeaseActiveError extends Error {
   constructor(
-    readonly executionId: ExecutionId,
+    readonly executionId: RunId,
     readonly owner: LeaseOwnerRecord,
   ) {
     super(executionHeldMessage(executionId, owner));
@@ -120,8 +120,8 @@ export class ExecutionLeaseActiveError extends Error {
   }
 }
 
-export class ExecutionLeaseLostError extends Error {
-  constructor(readonly executionId: ExecutionId) {
+export class RunLeaseLostError extends Error {
+  constructor(readonly executionId: RunId) {
     super(`Execution ${executionId} is no longer owned by this TeXRA process.`);
     this.name = 'ExecutionLeaseLostError';
   }
@@ -134,11 +134,11 @@ function storageRoot(): string {
   return workspaceRoots().storage;
 }
 
-function ownershipKey(root: string, executionId: ExecutionId): string {
+function ownershipKey(root: string, executionId: RunId): string {
   return `${root}\0${executionId}`;
 }
 
-function claimDir(root: string, executionId: ExecutionId): string {
+function claimDir(root: string, executionId: RunId): string {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
   return path.join(
     root,
@@ -147,7 +147,7 @@ function claimDir(root: string, executionId: ExecutionId): string {
   );
 }
 
-function claimPath(root: string, executionId: ExecutionId, ownerToken: string) {
+function claimPath(root: string, executionId: RunId, ownerToken: string) {
   return path.join(claimDir(root, executionId), `${ownerToken}.json`);
 }
 
@@ -159,11 +159,11 @@ interface StoredClaim {
 
 async function readClaimFile(
   file: string,
-  executionId: ExecutionId,
+  executionId: RunId,
 ): Promise<ExecutionLeaseRecord | undefined> {
   let stored: ExecutionLeaseRecord;
   try {
-    stored = await StorageFS.readJson(file, ExecutionLeaseSchema);
+    stored = await StorageFS.readJson(file, RunLeaseSchema);
   } catch (error) {
     if (isFileNotFoundError(error)) return undefined;
     throw error;
@@ -182,7 +182,7 @@ async function readClaimFile(
  * backed out or released, and is simply not reported.
  */
 async function readClaims(
-  executionId: ExecutionId,
+  executionId: RunId,
   root: string,
 ): Promise<StoredClaim[]> {
   const claims: StoredClaim[] = [];
@@ -220,7 +220,7 @@ interface JudgedClaim extends StoredClaim {
  * make a live local owner look dead.
  */
 async function judgeClaims(
-  executionId: ExecutionId,
+  executionId: RunId,
   root: string,
   ownToken?: string,
 ): Promise<JudgedClaim[]> {
@@ -312,7 +312,7 @@ async function publishClaim(
  * deleted the run from under this process, and a release must still settle.
  */
 async function unlinkOwnClaim(
-  executionId: ExecutionId,
+  executionId: RunId,
   root: string,
   ownerToken: string,
 ): Promise<void> {
@@ -353,7 +353,7 @@ type ClaimOutcome =
  *    active is honest: that process really is alive.
  */
 async function claimLease(
-  executionId: ExecutionId,
+  executionId: RunId,
   root: string,
   reap: LeaseReapPolicy,
 ): Promise<ClaimOutcome> {
@@ -363,7 +363,7 @@ async function claimLease(
       reap,
     );
     if (present.length > 0) return heldBy(present);
-    const record = ExecutionLeaseSchema.parse({
+    const record = RunLeaseSchema.parse({
       version: 3,
       executionId,
       ownerToken: randomUUID(),
@@ -416,7 +416,7 @@ function forgetOwnedLease(lease: OwnedExecutionLease): void {
 }
 
 function rememberOwnership(
-  executionId: ExecutionId,
+  executionId: RunId,
   ownerToken: string,
   root: string,
 ): void {
@@ -432,7 +432,7 @@ function rememberOwnership(
 }
 
 /** Whether this process owns the lease in the active storage root. */
-export function ownsExecutionLease(executionId: ExecutionId): boolean {
+export function ownsRunLease(executionId: RunId): boolean {
   const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
   return lease !== undefined && !lease.releasing;
 }
@@ -443,9 +443,9 @@ export function ownsExecutionLease(executionId: ExecutionId): boolean {
  * lane, so the owned record for an id is always the generation doing the
  * asking; no async-context capture is needed to tell generations apart.
  */
-export function assertOwnedExecutionLease(executionId: ExecutionId): void {
-  if (!ownsExecutionLease(executionId)) {
-    throw new ExecutionLeaseLostError(executionId);
+export function assertOwnedRunLease(executionId: RunId): void {
+  if (!ownsRunLease(executionId)) {
+    throw new RunLeaseLostError(executionId);
   }
 }
 
@@ -460,7 +460,7 @@ async function runWithValidatedOwnership<T>(
 ): Promise<T> {
   if (!(await ownClaimPresent(lease))) {
     forgetOwnedLease(lease);
-    throw new ExecutionLeaseLostError(lease.executionId);
+    throw new RunLeaseLostError(lease.executionId);
   }
   return operation();
 }
@@ -469,19 +469,17 @@ async function runWithValidatedOwnership<T>(
  * Validate local ownership against the persisted record at a durability
  * boundary. A pure fencing check: nothing is written and no clock is read.
  */
-export async function validateOwnedExecutionLease(
-  executionId: ExecutionId,
-): Promise<void> {
+export async function validateOwnedRunLease(executionId: RunId): Promise<void> {
   const key = ownershipKey(storageRoot(), executionId);
   const lease = ownedLeases.get(key);
   if (!lease || lease.releasing) {
-    throw new ExecutionLeaseLostError(executionId);
+    throw new RunLeaseLostError(executionId);
   }
   await runWithValidatedOwnership(lease, async () => undefined);
   // A release that started while the disk check was in flight wins: this
   // boundary must not report ownership the process is already giving up.
   if (lease.releasing || ownedLeases.get(key) !== lease) {
-    throw new ExecutionLeaseLostError(executionId);
+    throw new RunLeaseLostError(executionId);
   }
 }
 
@@ -493,8 +491,8 @@ export async function validateOwnedExecutionLease(
  * way) claims the execution for its own duration, so it is never an
  * unsynchronized check-then-write beside another process.
  */
-export async function runWithExecutionLeaseWriteFence<T>(
-  executionId: ExecutionId,
+export async function runWithRunLeaseWriteFence<T>(
+  executionId: RunId,
   operation: () => Promise<T>,
 ): Promise<T> {
   const root = storageRoot();
@@ -502,7 +500,7 @@ export async function runWithExecutionLeaseWriteFence<T>(
   if (maintenanceExecutions.getStore()?.has(key)) return operation();
   const lease = ownedLeases.get(key);
   if (lease) {
-    if (lease.releasing) throw new ExecutionLeaseLostError(executionId);
+    if (lease.releasing) throw new RunLeaseLostError(executionId);
     return runWithValidatedOwnership(lease, operation);
   }
   // Unleased writers in this process take turns, so that two of them never
@@ -510,10 +508,10 @@ export async function runWithExecutionLeaseWriteFence<T>(
   // `runOnPerKeyQueue` also drops the idle queue when the operation throws,
   // which the previous inline epilogue skipped (a small leak on failure).
   const claimed = await runOnPerKeyQueue(unleasedWriteQueues, key, () =>
-    runWithInactiveExecutionLease(executionId, operation),
+    runWithInactiveRunLease(executionId, operation),
   );
   if (claimed.status === 'active') {
-    throw new ExecutionLeaseLostError(executionId);
+    throw new RunLeaseLostError(executionId);
   }
   return claimed.value;
 }
@@ -521,7 +519,7 @@ export async function runWithExecutionLeaseWriteFence<T>(
 const unleasedWriteQueues = new Map<string, PQueue>();
 
 async function acquireExecutionLease(
-  executionId: ExecutionId,
+  executionId: RunId,
   mode: 'fresh' | 'resume',
 ): Promise<'acquired' | 'existing'> {
   const root = storageRoot();
@@ -540,7 +538,7 @@ async function acquireExecutionLease(
 
   const claim = await claimLease(executionId, root, 'dead');
   if (claim.status === 'active') {
-    throw new ExecutionLeaseActiveError(executionId, claim.owner);
+    throw new RunLeaseActiveError(executionId, claim.owner);
   }
   const stale = ownedLeases.get(key);
   if (stale) forgetOwnedLease(stale);
@@ -549,23 +547,21 @@ async function acquireExecutionLease(
 }
 
 /** Acquire a new execution before any execution-scoped data becomes writable. */
-export function acquireFreshExecutionLease(
-  executionId: ExecutionId,
+export function acquireFreshRunLease(
+  executionId: RunId,
 ): Promise<'acquired' | 'existing'> {
   return acquireExecutionLease(executionId, 'fresh');
 }
 
 /** Establish ownership before a persisted execution is resumed. */
-export function acquireResumedExecutionLease(
-  executionId: ExecutionId,
+export function acquireResumedRunLease(
+  executionId: RunId,
 ): Promise<'acquired' | 'existing'> {
   return acquireExecutionLease(executionId, 'resume');
 }
 
 /** Release this process's lease, but never remove a later owner's record. */
-export async function releaseOwnedExecutionLease(
-  executionId: ExecutionId,
-): Promise<void> {
+export async function releaseOwnedRunLease(executionId: RunId): Promise<void> {
   await Promise.all(
     [...ownedLeases.values()]
       .filter((lease) => lease.executionId === executionId)
@@ -591,9 +587,9 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
  * Who holds `executionId` on disk. Reads only: dead claims are reported as
  * absent here and unlinked by the next claim, never by this call.
  */
-export async function inspectExecutionLease(
-  executionId: ExecutionId,
-): Promise<ExecutionLeasePresence> {
+export async function inspectRunLease(
+  executionId: RunId,
+): Promise<RunLeasePresence> {
   const root = storageRoot();
   const judged = await judgeClaims(executionId, root);
   const local = ownedLeases.get(ownershipKey(root, executionId));
@@ -613,8 +609,8 @@ export async function inspectExecutionLease(
  * next claimant unlinks. An owner that is alive refuses maintenance
  * outright; an unprovable one refuses it unless `reap` says otherwise.
  */
-export async function runWithInactiveExecutionLease<T>(
-  executionId: ExecutionId,
+export async function runWithInactiveRunLease<T>(
+  executionId: RunId,
   operation: () => Promise<T>,
   reap: LeaseReapPolicy = 'dead',
 ): Promise<InactiveExecutionLeaseResult<T>> {

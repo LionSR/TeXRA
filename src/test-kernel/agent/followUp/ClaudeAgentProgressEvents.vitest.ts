@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { RunLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/claudeAgent';
 
@@ -25,14 +25,14 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
 }
 
 async function runWithLoggerStore<T>(
-  fn: (store: StreamLog, logger: AgentTrace) => Promise<T>,
+  fn: (store: RunLog, logger: AgentTrace) => Promise<T>,
 ): Promise<T> {
-  const store = new StreamLog();
+  const store = new RunLog();
 
   return await fn(store, createTestRunTrace(streamId, store).trace);
 }
 
-function collectToolLogs(store: StreamLog): unknown[] {
+function collectToolLogs(store: RunLog): unknown[] {
   const entries = store.getRange(0, store.head);
   return entries
     .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)

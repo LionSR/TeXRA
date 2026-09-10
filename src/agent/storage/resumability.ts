@@ -9,10 +9,10 @@ import {
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import { type ExecutionId, type RunOutcome } from '@shared/schemas';
+import { type RunId, type RunOutcome } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { getExecutionRecords, getExecutionStore } from './ExecutionKVStore';
+import { getRunRecords, getRunStore } from './ExecutionKVStore';
 
 const log = createLog('Resumability');
 
@@ -74,10 +74,10 @@ export type ResumabilityDecision =
  * execution lease.
  */
 export const deriveResumability = Effect.fn('deriveResumability')(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ResumabilityDecision> {
-  const metaResult = yield* getExecutionRecords(session, executionId)
+  const metaResult = yield* getRunRecords(session, executionId)
     .readMeta()
     .pipe(Effect.result);
   if (metaResult._tag === 'Failure') {
@@ -98,7 +98,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   const checkpoint = yield* Effect.tryPromise({
     try: () =>
       runInSession(session, () =>
-        getExecutionStore(executionId).read(flowKey(executionId)),
+        getRunStore(executionId).read(flowKey(executionId)),
       ),
     catch: ensureError,
   }).pipe(Effect.result);
@@ -134,13 +134,13 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
  * path re-reads the file and refuses there if it disagrees.
  */
 export const checkpointExists = Effect.fn('checkpointExists')(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<boolean> {
   return yield* Effect.tryPromise({
     try: () =>
       runInSession(session, () =>
-        getExecutionStore(executionId).exists(flowKey(executionId)),
+        getRunStore(executionId).exists(flowKey(executionId)),
       ),
     catch: ensureError,
   }).pipe(

@@ -8,7 +8,7 @@ import { Effect, type Context } from 'effect';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { isPathWithin } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -35,7 +35,7 @@ const log = createLog('DeletionCleanup');
  */
 const removeExecutionDirectories = (
   storage: string,
-  executionIds: readonly ExecutionId[],
+  executionIds: readonly RunId[],
 ) =>
   Effect.tryPromise({
     try: async () => {

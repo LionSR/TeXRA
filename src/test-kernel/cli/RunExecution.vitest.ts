@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { RunHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
@@ -12,7 +12,7 @@ import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
+import type { RunId, StreamTabId, TodoItem } from '@shared/schemas';
 import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -179,7 +179,7 @@ type LeaseOptions = {
   onRun?: () => void;
   launchSignal?: AbortSignal;
   session?: SessionHandle;
-  onExecutionLeaseAcquired?: (executionId: ExecutionId) => void;
+  onExecutionLeaseAcquired?: (executionId: RunId) => void;
 };
 
 /**
@@ -193,9 +193,9 @@ function stubHangingRun(handleOptions: (options: LeaseOptions) => void): {
   let resolveRun!: (result: unknown) => void;
   mocks.runAgent.mockImplementation(async (request, options: LeaseOptions) => {
     handleOptions(options);
-    const executionId = request.executionId as ExecutionId;
+    const executionId = request.executionId as RunId;
     const streamId = `chat#${executionId}` as StreamTabId;
-    const launchHandle = new AgentExecutionHandle(
+    const launchHandle = new RunHandle(
       {
         streamId,
         executionId,
@@ -275,7 +275,7 @@ async function stubRunExecutionDeps(): Promise<void> {
   );
   mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.runAgent.mockImplementation(async (_request, options) => {
-    options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+    options.onExecutionLeaseAcquired?.('exec-1' as RunId);
     return COMPLETED_RUN;
   });
 }
@@ -651,7 +651,7 @@ describe('executeCliRequest', () => {
     const request = baseRequest();
     const context = cliContext();
     mocks.runAgent.mockImplementationOnce(async (_request, options) => {
-      options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+      options.onExecutionLeaseAcquired?.('exec-1' as RunId);
       options.onApprovalPolicyDenial?.();
       return COMPLETED_RUN;
     });
@@ -696,7 +696,7 @@ describe('executeCliRequest', () => {
       const shutdown = platform.lifecycle.runShutdown();
       await Promise.resolve();
       expect(mocks.finalizeRun).not.toHaveBeenCalled();
-      publishLeaseScope?.('exec-1' as ExecutionId);
+      publishLeaseScope?.('exec-1' as RunId);
       publishRun?.();
       await Promise.resolve();
       expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
@@ -772,7 +772,7 @@ describe('executeCliRequest', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.('exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as RunId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
@@ -801,7 +801,7 @@ describe('executeCliRequest', () => {
 
     const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as RunId);
     const shutdown = platform.lifecycle.runShutdown();
 
     await expect(leaseOptions?.beforeLeaseRelease?.()).rejects.toBe(drainError);
@@ -852,7 +852,7 @@ describe('executeCliRequest', () => {
     });
     const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as RunId);
     leaseOptions?.onRun?.();
 
     const shutdown = platform.lifecycle.runShutdown();
@@ -880,7 +880,7 @@ describe('executeCliRequest', () => {
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
 
     const shutdown = platform.lifecycle.runShutdown();
-    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as RunId);
     leaseOptions?.onRun?.();
     await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
     mockCancelledOutcome();
@@ -917,7 +917,7 @@ describe('executeCliRequest', () => {
         }),
     });
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as RunId);
     leaseOptions?.onRun?.();
     await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
 
@@ -953,7 +953,7 @@ describe('executeCliRequest', () => {
     });
     mocks.runAgent.mockImplementationOnce(
       async (_request: unknown, options: LeaseOptions) => {
-        options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+        options.onExecutionLeaseAcquired?.('exec-1' as RunId);
         options.onRun?.();
         try {
           await options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
@@ -1001,9 +1001,9 @@ describe('executeCliRequest', () => {
     // Imported dynamically (matching the module above) so the `instanceof`
     // check in runExecution.ts sees the same module instance even after an
     // earlier test's `vi.resetModules()` in this file.
-    const { ExecutionLeaseLostError } = await import('@agent/storage');
+    const { RunLeaseLostError } = await import('@agent/storage');
     mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(
-      new ExecutionLeaseLostError('exec-1' as ExecutionId),
+      new RunLeaseLostError('exec-1' as RunId),
     );
     let leaseOptions: LeaseOptions | undefined;
     const hangingRun = stubHangingRun((options) => {
@@ -1012,7 +1012,7 @@ describe('executeCliRequest', () => {
 
     const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as RunId);
     const shutdown = platform.lifecycle.runShutdown();
 
     await expect(leaseOptions?.beforeLeaseRelease?.()).resolves.toBe(false);
@@ -1034,7 +1034,7 @@ describe('executeCliRequest', () => {
       return { ok: false, error: persistenceError, outcomePersisted: false };
     });
     const hangingRun = stubHangingRun((options) => {
-      options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
+      options.onExecutionLeaseAcquired?.('exec-1' as RunId);
     });
 
     const onInterruptedExecutionFinalized = vi.fn();
@@ -1134,7 +1134,7 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.('exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as RunId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
@@ -1174,7 +1174,7 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.('exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as RunId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);

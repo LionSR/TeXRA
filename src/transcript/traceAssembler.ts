@@ -1,13 +1,13 @@
 /** Assemble a static trace from execution metadata, transcript entries and the root's folded stream state. */
 import { Effect } from 'effect';
 import {
-  readExecutionRunRecord,
-  resolveStreamForExecution,
+  readRunLaunchRecord,
+  resolveStreamTabIdForRun,
 } from '@agent/storage/executionLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { redactDisplayValue } from '@logger/redaction';
 
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import type { TraceDocument } from './traceDocumentSchema';
 
@@ -21,13 +21,13 @@ export type AssembleTraceResult =
  * carries no stamped stream id.
  */
 export const assembleTrace = Effect.fn('assembleTrace')(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<AssembleTraceResult, Error> {
   const [resolution, config] = yield* Effect.all(
     [
-      resolveStreamForExecution(executionId, session),
-      readExecutionRunRecord(executionId, session),
+      resolveStreamTabIdForRun(executionId, session),
+      readRunLaunchRecord(executionId, session),
     ],
     { concurrency: 2 },
   );

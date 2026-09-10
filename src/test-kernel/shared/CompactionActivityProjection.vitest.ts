@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
+  RunLogEntrySchema,
   type CompactionActivityData,
-  type StreamLogEntry,
+  type RunLogEntry,
 } from '@shared/schemas';
 import {
   applyCompactionActivityEntries,
@@ -16,7 +16,7 @@ import {
 
 /** Test-local full replay through the production reducer (the resync path). */
 function projectCompactionActivities(
-  entries: readonly StreamLogEntry[],
+  entries: readonly RunLogEntry[],
 ): CompactionActivityProjection {
   const projection = createCompactionActivityProjection();
   applyCompactionActivityEntries(projection, entries);
@@ -27,8 +27,8 @@ function activityEntry(
   seqNo: number,
   operationId: string,
   state: CompactionActivityData['state'],
-): StreamLogEntry {
-  return StreamLogEntrySchema.parse({
+): RunLogEntry {
+  return RunLogEntrySchema.parse({
     seqNo,
     id: `event-${seqNo}`,
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -41,9 +41,9 @@ function activityEntry(
 
 function advancingEntry(
   seqNo: number,
-  messageType: StreamLogEntry['messageType'] = MESSAGE_TYPES.MODEL_RESPONSE,
-): StreamLogEntry {
-  return StreamLogEntrySchema.parse({
+  messageType: RunLogEntry['messageType'] = MESSAGE_TYPES.MODEL_RESPONSE,
+): RunLogEntry {
+  return RunLogEntrySchema.parse({
     seqNo,
     id: `event-${seqNo}`,
     type: STREAM_LOG_ENTRY_TYPES.LOG,

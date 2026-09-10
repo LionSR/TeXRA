@@ -5,16 +5,16 @@ import {
   STREAM_SUBSTATE,
   type PhaseStage,
   type RoundStage,
-  type StreamLifecycleStatus,
-  type StreamStage,
-  type StreamSubstate,
+  type RunLifecycleStatus,
+  type RunStage,
+  type RunSubstate,
 } from '@shared/schemas';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
-import type { StreamGroup } from '@shared/session/sessionView';
+import type { RunGroup } from '@shared/session/sessionView';
 
-export type StreamStatusDisplayKey =
-  | Exclude<StreamLifecycleStatus, typeof STREAM_LIFECYCLE_READY>
-  | StreamSubstate
+export type RunStatusDisplayKey =
+  | Exclude<RunLifecycleStatus, typeof STREAM_LIFECYCLE_READY>
+  | RunSubstate
   | 'ready';
 
 /**
@@ -26,26 +26,26 @@ export type StreamStatusDisplayKey =
  */
 const STREAM_DISPLAY_INTERRUPTED = 'interrupted';
 type StreamStatusCopyKey =
-  StreamStatusDisplayKey | typeof STREAM_DISPLAY_INTERRUPTED;
+  RunStatusDisplayKey | typeof STREAM_DISPLAY_INTERRUPTED;
 
 /**
  * Display key for a `StreamLifecycleStatus` (a `StreamPhase`, or the `ready`
  * idle sentinel every host defaults an unstarted stream to).
  */
 function streamStatusDisplayKey(
-  status: StreamLifecycleStatus,
-  substate?: StreamSubstate,
-): StreamStatusDisplayKey;
+  status: RunLifecycleStatus,
+  substate?: RunSubstate,
+): RunStatusDisplayKey;
 
 function streamStatusDisplayKey(
-  status: StreamLifecycleStatus | undefined,
-  substate?: StreamSubstate,
-): StreamStatusDisplayKey | undefined;
+  status: RunLifecycleStatus | undefined,
+  substate?: RunSubstate,
+): RunStatusDisplayKey | undefined;
 
 function streamStatusDisplayKey(
-  status: StreamLifecycleStatus | undefined,
-  substate?: StreamSubstate,
-): StreamStatusDisplayKey | undefined {
+  status: RunLifecycleStatus | undefined,
+  substate?: RunSubstate,
+): RunStatusDisplayKey | undefined {
   if (status === undefined) return undefined;
   if (status === STREAM_LIFECYCLE_READY) return 'ready';
   return substate ?? status;
@@ -105,9 +105,9 @@ const STREAM_STATUS_TONES: Record<StreamStatusCopyKey, StreamStatusTone> = {
  * interrupted reading when an in-flight run has lost its owner.
  */
 export function streamStatusCopy(
-  status: StreamLifecycleStatus,
+  status: RunLifecycleStatus,
   options: {
-    readonly substate?: StreamSubstate;
+    readonly substate?: RunSubstate;
     readonly interrupted?: boolean;
   } = {},
 ): { readonly statusLabel: string; readonly tone: StreamStatusTone } {
@@ -139,26 +139,26 @@ export function streamUnreadableMessage(cause: string): string {
 
 interface FormatStreamStatusLabelOptions {
   readonly missingLabel?: string;
-  readonly substate?: StreamSubstate;
+  readonly substate?: RunSubstate;
 }
 
-export function formatStreamStatusLabel(
-  status: StreamLifecycleStatus | undefined,
+export function formatRunStatusLabel(
+  status: RunLifecycleStatus | undefined,
   options: FormatStreamStatusLabelOptions & { readonly missingLabel: string },
 ): string;
 
-export function formatStreamStatusLabel(
-  status: StreamLifecycleStatus,
+export function formatRunStatusLabel(
+  status: RunLifecycleStatus,
   options?: FormatStreamStatusLabelOptions,
 ): string;
 
-export function formatStreamStatusLabel(
-  status: StreamLifecycleStatus | undefined,
+export function formatRunStatusLabel(
+  status: RunLifecycleStatus | undefined,
   options?: FormatStreamStatusLabelOptions,
 ): string | undefined;
 
-export function formatStreamStatusLabel(
-  status: StreamLifecycleStatus | undefined,
+export function formatRunStatusLabel(
+  status: RunLifecycleStatus | undefined,
   options: FormatStreamStatusLabelOptions = {},
 ): string | undefined {
   if (status === undefined) return options.missingLabel;
@@ -172,14 +172,14 @@ export function formatStreamStatusLabel(
  * that need both compute them together instead of double-parsing the status.
  */
 export function progressHeaderStatus(
-  status: StreamLifecycleStatus | undefined,
-  substate?: StreamSubstate,
+  status: RunLifecycleStatus | undefined,
+  substate?: RunSubstate,
 ): {
   label: string | undefined;
-  displayKey: StreamStatusDisplayKey | undefined;
+  displayKey: RunStatusDisplayKey | undefined;
 } {
   return {
-    label: formatStreamStatusLabel(status, { substate }),
+    label: formatRunStatusLabel(status, { substate }),
     displayKey: streamStatusDisplayKey(status, substate),
   };
 }
@@ -219,7 +219,7 @@ export function formatPhaseStageLabel(
  *  through named phases, a tool-use run through numbered rounds, never both,
  *  so every surface that shows the slot dispatches on the same discriminant. */
 export function formatStageLabel(
-  stage: Readonly<StreamStage> | undefined,
+  stage: Readonly<RunStage> | undefined,
 ): string | undefined {
   if (stage === undefined) return undefined;
   if (stage.kind === 'round') return formatRoundStageLabel(stage);
@@ -236,7 +236,7 @@ export function formatStageLabel(
  * Deep-frozen: the record crosses a module boundary into two renderers, and
  * `readonly` is compile-time only.
  */
-export const STREAM_GROUP_LABELS: Readonly<Record<StreamGroup, string>> =
+export const STREAM_GROUP_LABELS: Readonly<Record<RunGroup, string>> =
   Object.freeze({
     running: 'Running',
     waiting: 'Waiting on you',
@@ -245,6 +245,6 @@ export const STREAM_GROUP_LABELS: Readonly<Record<StreamGroup, string>> =
   });
 
 /** Section order, in the group union's own order. */
-export const STREAM_GROUP_ORDER: readonly StreamGroup[] = Object.freeze(
-  Object.keys(STREAM_GROUP_LABELS) as StreamGroup[],
+export const STREAM_GROUP_ORDER: readonly RunGroup[] = Object.freeze(
+  Object.keys(STREAM_GROUP_LABELS) as RunGroup[],
 );

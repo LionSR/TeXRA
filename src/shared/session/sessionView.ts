@@ -19,7 +19,7 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
-  ExecutionIdSchema,
+  RunIdSchema,
   GoalStateSchema,
   InquiryThreadUpdatedEventSchema,
   LocalRuntimeStateSchema,
@@ -31,9 +31,9 @@ import {
   RunOutcomeSchema,
   RunUsageMapSchema,
   STREAM_LIFECYCLE_READY,
-  StreamPhaseSchema,
-  StreamStageSchema,
-  StreamSubstateSchema,
+  RunPhaseSchema,
+  RunStageSchema,
+  RunSubstateSchema,
   StreamTabIdSchema,
   TaskGroupSchema,
   TodoItemSchema,
@@ -84,12 +84,12 @@ const StreamGroupSchema = z.enum([
 ]);
 /** The section a stream sorts into. Its labels and section order are one
  *  table in `@shared/streams/streamStatusDisplay`, not a per-host switch. */
-export type StreamGroup = z.infer<typeof StreamGroupSchema>;
+export type RunGroup = z.infer<typeof StreamGroupSchema>;
 
 const StreamViewCommonSchema = z.object({
   id: StreamTabIdSchema,
   /** From `run.start`; 1:1 with `id`, never changes. */
-  executionId: ExecutionIdSchema,
+  executionId: RunIdSchema,
   /** From `run.start`; every stream has one. */
   identity: RunIdentitySchema,
   // Launch facts from the `run.start` payload, never derived (5.2).
@@ -110,8 +110,8 @@ const StreamViewCommonSchema = z.object({
   /** The durable phase, or `ready` before the first `status` folds. An
    *  interrupted stream keeps it and reads as interrupted through the copy;
    *  unavailability is `readOnly`, never a status (5.2). */
-  status: z.union([StreamPhaseSchema, z.literal(STREAM_LIFECYCLE_READY)]),
-  substate: StreamSubstateSchema.nullable(),
+  status: z.union([RunPhaseSchema, z.literal(STREAM_LIFECYCLE_READY)]),
+  substate: RunSubstateSchema.nullable(),
   /**
    * The terminal status once nothing can move it: for a run this process
    * owns, after its lifecycle's `result` has folded (a user stop publishes
@@ -134,7 +134,7 @@ const StreamViewCommonSchema = z.object({
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
-  stage: StreamStageSchema.nullable(),
+  stage: RunStageSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** A native tool-use resume can target this run: a plain agent identity in
    *  the tool-use category. The rule lives here so no host restates it. */
@@ -286,7 +286,7 @@ type StreamTopology = {
  * (root to leaf) and `ancestors` (leaf to root) already state on every row,
  * so a host walks the fold's own facts instead of re-deriving them.
  */
-export function descendantStreams(
+export function descendantRuns(
   view: StreamTopology,
   rootStreamId: StreamTabId | undefined,
   { includeRoot }: { includeRoot: boolean },

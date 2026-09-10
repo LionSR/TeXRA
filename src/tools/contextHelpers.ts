@@ -37,9 +37,9 @@ export function requireInteractions(
 /**
  * Return the active stream id, throwing a ToolError if none is active. Use
  * from tools that address a stream (e.g. a goal keyed by stream id) but,
- * unlike {@link requireRunStream}, don't need host interactions to do so.
+ * unlike {@link requireRun}, don't need host interactions to do so.
  */
-export function requireStreamId(
+export function requireRunId(
   toolName: string,
   context: RunContext | undefined = tryUseRunContext(),
 ): StreamTabId {
@@ -55,7 +55,7 @@ export function requireStreamId(
  * ToolError if either is missing. Use from tools that need both a stream
  * to address (e.g. subscribe/approval) and interactions to emit on.
  */
-export function requireRunStream(
+export function requireRun(
   toolName: string,
   context: RunContext | undefined = tryUseRunContext(),
 ): {

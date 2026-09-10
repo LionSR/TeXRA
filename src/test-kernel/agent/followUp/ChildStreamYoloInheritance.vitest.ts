@@ -10,7 +10,7 @@ import type { StreamTabId } from '@shared/schemas';
 import {
   configureDelegatedChildApprovals,
   proposalApprovals,
-  releaseStreamResources,
+  releaseRunResources,
 } from '@tools/approval';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -259,7 +259,7 @@ describe('child subagent stream approval inheritance', () => {
     configureDelegatedChildApprovals(child, parent);
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
 
-    releaseStreamResources(parent);
+    releaseRunResources(parent);
 
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
     currentSession().approvals.bash.bypass.setBypass(parent, false, {
