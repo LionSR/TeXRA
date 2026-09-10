@@ -124,6 +124,28 @@ When updating CHANGELOG.md:
      opening a pull request.
 4. Commit only when `npm run lint` completes without errors.
 
+### Test tiers
+
+`vitest.config.mjs` runs suites in two projects, and a suite's cost is decided
+by what it reaches, not by how many tests it has:
+
+- **`pure`** — suites of host-free modules (`utils`, `shared`, `latex`,
+  `model`, `schemas`, the architecture ratchets, …): no setup file, no fake
+  platform, one module registry shared between files. Roughly 8x cheaper per
+  suite than `kernel`, and deterministic, because nothing in it installs or
+  replaces anything.
+- **`kernel`** — everything that needs a host: the fake platform installed per
+  file, each file in its own module registry.
+
+Membership is computed from the suite's source, not declared. A suite under a
+pure directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
+repository module or imports `@platform/*` or a support module that installs
+a host — then it is `kernel`. So the practical rule for a new suite: test the
+module directly, provide dependencies as values or layers, and do not mock
+repository modules. A `vi.mock` is what moves your suite to the slow tier;
+removing it moves it back. The tier is not a target to opt into — write the
+suite the durable way and it lands there.
+
 ### Scoping the test run
 
 `npm test` runs every suite under `src/test-kernel/`. It is the gate CI enforces

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import process from 'node:process';
 
+import { globSync } from 'glob';
 import { defineConfig } from 'vitest/config';
 
 import { aliases, rootDir } from './scripts/aliases.mjs';
@@ -18,6 +19,76 @@ const quickJsWasmPath = require.resolve(QUICKJS_WASM_ID);
 // is opt-in (see the `test` job in .github/workflows/ci.yml), so this branch
 // still applies to on-demand runs and to local runs on Windows.
 const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
+
+// Suites are tiered by what they reach, and pay only for that.
+//
+// A suite's cost is its import closure evaluated once per file, so a suite of
+// a pure function that never touches a host must not pay for the fake platform,
+// the session runtime and everything behind them. The `pure` project runs the
+// directories whose modules need no host: no setup file, and a module registry
+// shared between files, which is safe there by construction — nothing in it
+// installs process-wide state, so nothing can leak. Measured on 136 suites:
+// 28s against 1m55s isolated, and deterministic.
+//
+// The `kernel` project is everything else: the fake host installed per file,
+// each file in its own module registry, because module-scope state
+// (`platform()`, the process runtime, `vi.mock` factories) still leaks between
+// files when the registry is shared. It flips to `isolate: false` when the
+// effect-migration ratchet counts reach zero for what these suites reach.
+//
+// Membership is computed from the suite's source, not declared: a suite under
+// one of these directories is `pure` unless it mocks a repository module
+// (`vi.mock` / `vi.doMock` — a partial factory left in a shared registry is
+// what the next suite imports) or reaches a host (`@platform/*`, or the
+// support modules that install one). Add a `vi.mock` and the suite moves to
+// `kernel` on its own; remove it and the suite moves back. The tier's premise
+// — nothing in it installs or replaces anything, so nothing can leak — is
+// therefore true by construction, which is what makes the shared registry
+// deterministic here. A directory earns a place in this list by holding
+// suites of host-free modules; the scan decides file by file.
+const PURE_DIRS = [
+  'architecture',
+  'common',
+  'latex',
+  'logger',
+  'model',
+  'replacement',
+  'schemas',
+  'scripts',
+  'shared',
+  'skills',
+  'telemetry',
+  'traceViewer',
+  'transcript',
+  'utils',
+];
+const REACHES_A_HOST = [
+  /\bvi\.(?:do)?[mM]ock\s*\(/,
+  /from\s+['"]@platform\//,
+  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
+  /import\s+['"]@test\/support\/(?:defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
+];
+// Suites whose module under test reads the host itself (`platform()`,
+// workspace roots), which no scan of the suite's source can see. Each is a
+// production module the effect-migration ratchet already counts; when it
+// takes its host as a layer, its suite provides one and leaves this list.
+const HOST_READ_BY_MODULE_UNDER_TEST = [
+  'src/test-kernel/model/KimiCodeModels.vitest.ts',
+  'src/test-kernel/replacement/ReplacementRules.vitest.ts',
+];
+// Resolved to a file list rather than left as globs: Vitest applies a
+// project's `exclude` after its `include`, so `kernel` must exclude exactly
+// the files `pure` runs, not the directories they came from.
+const pureSuites = globSync(
+  PURE_DIRS.map((dir) => `src/test-kernel/${dir}/**/*.vitest.ts`),
+  { cwd: rootDir, posix: true },
+)
+  .filter((file) => {
+    if (HOST_READ_BY_MODULE_UNDER_TEST.includes(file)) return false;
+    const source = readFileSync(resolve(rootDir, file), 'utf8');
+    return !REACHES_A_HOST.some((pattern) => pattern.test(source));
+  })
+  .sort();
 
 export default defineConfig({
   plugins: [texTemplatePlugin(), quickJsWasmPlugin()],
@@ -35,11 +106,29 @@ export default defineConfig({
     ...(process.env.TEXRA_TEST_NODE
       ? { pool: executablePool(process.env.TEXRA_TEST_NODE) }
       : {}),
-    include: ['src/test-kernel/**/*.vitest.ts'],
     passWithNoTests: false,
-    setupFiles: ['src/test-kernel/support/setupFakePlatform.ts'],
     testTimeout: kernelTimeoutMs,
     hookTimeout: kernelTimeoutMs,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'pure',
+          isolate: false,
+          include: pureSuites,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'kernel',
+          isolate: true,
+          include: ['src/test-kernel/**/*.vitest.ts'],
+          exclude: pureSuites,
+          setupFiles: ['src/test-kernel/support/setupFakePlatform.ts'],
+        },
+      },
+    ],
   },
 });
 

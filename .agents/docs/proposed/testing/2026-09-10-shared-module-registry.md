@@ -1,8 +1,14 @@
 # Kernel suite wall time: the module registry, not the tests
 
-Status: proposed — measured 2026-09-10; the flip is blocked on moving the
+Status: proposed — measured 2026-09-10. The `pure` tier (D1) landed the same
+day in `vitest.config.mjs`; the `kernel` flip (D2) is blocked on moving the
 state that leaks between suites behind Effect layers, which is the 1.0
-direction anyway. The leaking suites are listed below.
+direction anyway.
+
+Correction to the first baseline below: the ">45 min unfinished" run was not a
+clean measurement. A clean full run of the current isolated config on the same
+machine is **8m45s** (741 suites). The shared-registry number stands, so the
+payoff of the `kernel` flip is ~3.5x on the full suite, not 20x.
 
 ## Finding
 
@@ -53,8 +59,9 @@ failures into an `isolate: true` project and re-running converged
 geometrically (136 → 38 → 21 new failures per round) but never stabilised —
 two back-to-back runs of the identical split config failed 21 and 15 suites
 with **one** file in common. Across four runs, 209 distinct suites failed at
-least once
-([evidence list](../../evidence/2026-09-10-shared-module-registry/leaking-suites.txt)).
+least once — a number not worth keeping as a list, since which suite leaks
+depends on its neighbours; what a suite _reaches_ is the stable fact, and the
+`pure` tier is computed from that instead.
 Shipping that as the CI default is a flaky CI by construction, and a subset
 run (`npm run test:changed`) reorders neighbours every time, so it would be
 flaky in the commit loop too.
