@@ -205,7 +205,7 @@ export function AccountAccessForm(
     // The rows already describe each preference and account; the detail block
     // only carries what no row says.
     detailLines = [
-      `Otherwise: ${formatCliModelAccessRoute('personal')}`,
+      `Otherwise: ${formatCliModelAccessRoute('api-key')}`,
       ...(status.overview.note ? [status.overview.note] : []),
     ];
   } else if (status?.state === 'failed') {

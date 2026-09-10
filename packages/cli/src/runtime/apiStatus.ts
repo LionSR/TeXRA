@@ -72,7 +72,7 @@ export async function loadCliModelAccessOverview(): Promise<CliModelAccessOvervi
       (plan) =>
         `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
     ),
-    `Otherwise: ${formatCliModelAccessRoute('personal')}`,
+    `Otherwise: ${formatCliModelAccessRoute('api-key')}`,
     formatAccountStatusLine(
       RESEARCHER_ACCESS.label,
       profile.authenticated,
@@ -115,7 +115,7 @@ export async function loadCliApiStatus(
   );
 
   return [
-    `api: ${formatCliModelAccessRouteInline('personal')}`,
+    `api: ${formatCliModelAccessRouteInline('api-key')}`,
     ...(personalKeysLine ? [personalKeysLine] : []),
     authLine,
     ...(profile.note ? [profile.note] : []),
@@ -212,7 +212,7 @@ export async function loadCliDetailedAccountStatusLines(
     if (line) lines.push(withUsage(line, codingPlanUsage.get(plan.id)));
   }
 
-  lines.push(`Otherwise: ${formatCliModelAccessRoute('personal')}`);
+  lines.push(`Otherwise: ${formatCliModelAccessRoute('api-key')}`);
 
   const otherPersonalKeys = formatPersonalApiKeysLine(
     providers.filter(

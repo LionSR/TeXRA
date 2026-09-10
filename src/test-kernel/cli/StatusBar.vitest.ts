@@ -22,7 +22,7 @@ import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
 
 // The bar renders the short access-route label.
-const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('personal');
+const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('api-key');
 
 type StatusBarDisplay = ReturnType<typeof buildStatusBarDisplay>;
 
@@ -64,7 +64,7 @@ function statusInput(
     subagents: 0,
     runningSessions: 0,
     approvalDepth: 0,
-    modelAccess: 'personal',
+    modelAccess: 'api-key',
     ...rest,
     turn: { ...turn },
     foreground: { ...foreground },
@@ -152,8 +152,8 @@ describe('CLI StatusBar display model', () => {
 
   it('uses clear compact labels for API access mode', () => {
     // The session header and the status bar share one mapper, so neither can
-    // print the raw enum value ('personal') the way they once did.
-    expect(shortCliModelAccessRoute('personal')).toBe('API keys');
+    // print the raw enum value ('api-key') the way they once did.
+    expect(shortCliModelAccessRoute('api-key')).toBe('API keys');
   });
 
   it('surfaces non-default approval policies in the durable status row', () => {
@@ -555,7 +555,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         turn: { elapsedMs: 12_000 },
-        modelAccess: 'personal',
+        modelAccess: 'api-key',
         ctrlCAction: 'stop',
         shortcuts: { modifierLabel: 'Option' },
       }),
@@ -593,7 +593,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         turn: { elapsedMs: 12_000 },
         subagents: 1,
-        modelAccess: 'personal',
+        modelAccess: 'api-key',
         ctrlCAction: 'stop',
         shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
       }),
@@ -614,7 +614,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         subagents: 1,
-        modelAccess: 'personal',
+        modelAccess: 'api-key',
         ctrlCAction: 'stop root',
         width: 100,
         shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
@@ -653,7 +653,7 @@ describe('CLI StatusBar display model', () => {
         stage: { kind: 'round', index: 1 },
         subagents: 2,
         approvalDepth: 3,
-        modelAccess: 'personal',
+        modelAccess: 'api-key',
         ctrlCAction: 'stop',
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
@@ -1638,7 +1638,7 @@ describe('CLI StatusBar display model', () => {
   it('shows the limiting coding-plan quota in the persistent status row', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        modelAccess: 'glm-code',
+        modelAccess: 'glm-coding-plan-subscription',
         subscriptionQuota: {
           state: 'available',
           provider: 'glmCodingPlan',
@@ -1664,7 +1664,7 @@ describe('CLI StatusBar display model', () => {
   it('does not render unavailable subscription quota as a false zero', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        modelAccess: 'kimi-code',
+        modelAccess: 'kimi-code-subscription',
         subscriptionQuota: {
           state: 'unavailable',
           provider: 'kimiCode',

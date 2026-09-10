@@ -1,6 +1,6 @@
 /**
  * Extension webview foundations — the public surface shared by extension
- * startup and the main, progress, and settings views.
+ * startup and the progress and settings views.
  *
  * Extension production code and kernel tests import `@common/webview` rather
  * than individual base classes or view-state helpers. Concrete view modules
@@ -12,7 +12,6 @@ export {
   BaseViewMessageHandler,
   type ViewSliceHost,
 } from './BaseViewMessageHandler';
-export { BaseWebviewProvider } from './BaseWebviewProvider';
 export {
   SIDEBAR_VIEWS,
   getActiveSidebarView,

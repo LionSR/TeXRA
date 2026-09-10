@@ -1,7 +1,4 @@
-import {
-  shortCliModelAccessRoute,
-  type CliModelAccessRoute,
-} from '@cli/runtime/modelAccessRoute';
+import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import {
   defaultShortcutModifierLabel,
   metaChordLabel,
@@ -148,7 +145,7 @@ export interface StatusBarDisplayInput {
   readonly runningSessions: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
-  readonly modelAccess: CliModelAccessRoute;
+  readonly modelAccess: UsageRoute | undefined;
   /** The prospective subscription route could not be resolved. */
   readonly subscriptionProbeFailed?: boolean;
   /** Latest quota snapshot for the subscription serving this model. */
@@ -226,7 +223,7 @@ interface StatusBarDisplay {
   readonly bindings: string;
 }
 
-function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
+function accessModeSegment(access: UsageRoute | undefined): StatusBarSegment {
   const label = shortCliModelAccessRoute(access);
   return label === 'subscription'
     ? {

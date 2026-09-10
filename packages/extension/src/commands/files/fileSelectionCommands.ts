@@ -2,9 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { getFilterExtensions } from '@common/files/fileTypeUtils';
-import { FILE_SELECTION_COMMAND_IDS } from '@frontend/files/fileSelectionRegistry';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
@@ -56,45 +54,21 @@ function createMultiPicker(
     );
 }
 
-export function registerFileSelectionCommands(
-  context: vscode.ExtensionContext,
-): void {
-  registerCommandEntries(context, [
-    {
-      id: FILE_SELECTION_COMMAND_IDS.selectInputFiles,
-      handler: selectInputFiles,
-    },
-    {
-      id: FILE_SELECTION_COMMAND_IDS.selectContextFiles,
-      handler: selectContextFiles,
-    },
-    {
-      id: FILE_SELECTION_COMMAND_IDS.selectMediaFiles,
-      handler: selectMediaFiles,
-    },
-    {
-      id: FILE_SELECTION_COMMAND_IDS.selectOutputFiles,
-      handler: selectOutputFiles,
-    },
-    { id: FILE_SELECTION_COMMAND_IDS.getCurrentFile, handler: getCurrentFile },
-  ]);
-}
-
-const selectInputFiles = createMultiPicker({
+export const selectInputFiles = createMultiPicker({
   openLabel: 'Select Files',
   filters: () => ({
     'Text files': getFilterExtensions('input'),
   }),
 });
 
-const selectContextFiles = createMultiPicker({
+export const selectContextFiles = createMultiPicker({
   openLabel: 'Select Context Files',
   filters: () => ({
     'Text files': getFilterExtensions('context'),
   }),
 });
 
-const selectMediaFiles = createMultiPicker({
+export const selectMediaFiles = createMultiPicker({
   openLabel: 'Select Media',
   filters: () => ({
     'Image files': getFilterExtensions('media'),
@@ -102,12 +76,12 @@ const selectMediaFiles = createMultiPicker({
   }),
 });
 
-const selectOutputFiles = createMultiPicker({
+export const selectOutputFiles = createMultiPicker({
   openLabel: 'Select Output Files',
   filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
 });
 
-async function getCurrentFile(): Promise<string | null> {
+export async function getCurrentFile(): Promise<string | null> {
   // Try activeTextEditor first (for text files)
   const doc = vscode.window.activeTextEditor?.document;
   if (doc?.uri.scheme === 'file') {

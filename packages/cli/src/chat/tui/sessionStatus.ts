@@ -1,7 +1,5 @@
-import {
-  formatCliModelAccessRoute,
-  type CliModelAccessRoute,
-} from '@cli/runtime/modelAccessRoute';
+import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import type { UsageRoute } from '@shared/schemas';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
@@ -26,7 +24,7 @@ export interface CliSessionStatusInput {
   readonly agent: string;
   readonly model: string;
   readonly teamName?: string;
-  readonly modelAccess: CliModelAccessRoute;
+  readonly modelAccess: UsageRoute | undefined;
   readonly approvalBypasses?: Partial<BypassState>;
   /** The fold's status label for the reported stream; undefined before a run. */
   readonly statusLabel: string | undefined;

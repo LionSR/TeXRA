@@ -29,7 +29,6 @@ import {
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import { staticTranscriptRepaintEpoch } from '@cli/chat/tui/state/staticTranscriptRepaint';
-import { activeTranscriptViewport } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
   createTuiViewportController,
   type TuiRepaintOptions,
@@ -1217,21 +1216,6 @@ describe('CLI conversation transcript', () => {
         rootStreamId: 'resolved-root' as StreamTabId,
       }),
     ).toEqual({ ownerKey: 'root', streamId: 'resolved-root' });
-  });
-
-  it('separates root scrollback from scoped child transcript viewports', () => {
-    expect(
-      activeTranscriptViewport({
-        activeStreamId: ROOT_STREAM,
-        parentId: undefined,
-      }),
-    ).toEqual({ key: 'root-scrollback', scoped: false });
-    expect(
-      activeTranscriptViewport({
-        activeStreamId: CHILD_STREAM,
-        parentId: ROOT_STREAM,
-      }),
-    ).toEqual({ key: `scoped:${CHILD_STREAM}`, scoped: true });
   });
 
   it('repaints static transcript invalidations from a clean origin', () => {

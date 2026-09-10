@@ -82,7 +82,7 @@ flowchart LR
   logSub[subscribeStreamLog]
   applier[SessionFactApplier + SessionState]
   app[chat/tui/App]
-  viewport[transcriptViewportMode]
+  viewport[chat/tui/panes/ConversationRegion viewport selection]
   staticPane[StaticConversationTranscript]
   livePane[ConversationPane]
   statusBar[StatusBar / SubagentList / side panels]
@@ -96,7 +96,7 @@ flowchart LR
   factAdapter --> applier --> cliState
   cliState --> app
   app --> viewport
-  viewport -->|selected scrollback owner| staticPane
+  viewport -->|staticScrollbackTarget scrollback owner| staticPane
   viewport -->|active stream live tail| livePane
   cliState --> statusBar
 ```

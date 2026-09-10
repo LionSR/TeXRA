@@ -156,7 +156,7 @@ async function updateKeyedCliModelAccess(
   }
   await runtime.setEnabled(true);
   return {
-    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('personal')}.`,
+    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('api-key')}.`,
   };
 }
 

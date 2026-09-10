@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import {
-  BaseWebviewProvider,
   BundledViewContentProvider,
   getSharedLocalResourceRoots,
 } from '@common/webview';
@@ -13,19 +12,21 @@ import {
   isAgentCatalogAuthRefreshDeferred,
   runAfterAgentCatalogAuthRefresh,
 } from '@frontend/auth/agentCatalogRefreshScope';
+import { DisposableStore } from '@platform/disposable';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
-export class SettingsViewProvider extends BaseWebviewProvider {
+export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
-  protected contentProvider: BundledViewContentProvider;
-  protected messageHandler: SettingsViewMessageHandler;
+  private _view?: vscode.WebviewPanel;
+  private _viewDisposables = new DisposableStore();
+  private readonly contentProvider: BundledViewContentProvider;
+  private readonly messageHandler: SettingsViewMessageHandler;
 
-  constructor(protected override readonly context: vscode.ExtensionContext) {
-    super(context);
+  constructor(private readonly context: vscode.ExtensionContext) {
     this.contentProvider = new BundledViewContentProvider(
       context,
       'SettingsView',
@@ -66,9 +67,7 @@ export class SettingsViewProvider extends BaseWebviewProvider {
     tab?: SettingsTabPanelName,
     agentSubTab?: AgentCategory,
   ): Promise<void> {
-    // 'viewColumn' is unique to WebviewPanel; it narrows the view union and
-    // tells an already-open dashboard panel apart from a sidebar WebviewView.
-    if (this._view && 'viewColumn' in this._view) {
+    if (this._view) {
       const panel = this._view;
       panel.reveal(vscode.ViewColumn.One);
       await this.messageHandler.sendAllData(panel.webview);
@@ -104,6 +103,29 @@ export class SettingsViewProvider extends BaseWebviewProvider {
         tab,
         ...(agentSubTab && { agentSubTab }),
       });
+    }
+  }
+
+  /**
+   * Render this provider's HTML into `panel` and route the panel's inbound
+   * messages to this provider's handler. The returned disposable removes that
+   * listener; the caller keeps it in the view disposable store.
+   */
+  private setupWebviewContent(panel: vscode.WebviewPanel): vscode.Disposable {
+    panel.webview.html = this.contentProvider.getHtmlContent(panel.webview);
+    return panel.webview.onDidReceiveMessage((message) =>
+      this.messageHandler.handleMessage(message, panel),
+    );
+  }
+
+  private cleanupView(): void {
+    const disposables = this._viewDisposables;
+    this._viewDisposables = new DisposableStore();
+    try {
+      disposables.dispose();
+    } finally {
+      this._view = undefined;
+      this.messageHandler.clearActiveView();
     }
   }
 }

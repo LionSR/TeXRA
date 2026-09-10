@@ -22,7 +22,6 @@ import {
   staticScrollbackTarget,
   staticTranscriptRowBudget,
 } from '../appLayout';
-import { activeTranscriptViewport } from '../state/transcriptViewportMode';
 import { ConversationPane } from './ConversationPane';
 import {
   QueuedFollowUpsPanel,
@@ -92,11 +91,10 @@ export function ConversationRegion({
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
   const foregroundOpen = snapshot.foregroundKind !== undefined;
-  const { key: viewportKey, scoped: scopedTranscript } =
-    activeTranscriptViewport({
-      activeStreamId: snapshot.activeStreamId,
-      parentId: snapshot.parentId,
-    });
+  // Which scrollback the transcript paints: the root's history, or a focused
+  // child's own history while that child owns the scrollback.
+  const scopedTranscript =
+    snapshot.activeStreamId !== undefined && snapshot.parentId !== undefined;
   const scrollbackTarget = staticScrollbackTarget({
     activeStreamId: snapshot.activeStreamId,
     rootStreamId: snapshot.rootStreamId,

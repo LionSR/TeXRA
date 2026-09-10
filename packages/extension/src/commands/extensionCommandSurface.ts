@@ -12,16 +12,8 @@ import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex
 import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject as sysCreateSampleProject } from '@commands/system/sampleProjectCommands';
 import { showImportOptions as sysShowImportOptions } from '@commands/system/mainViewCommands';
-import {
-  handleClean as fileHandleClean,
-  handleCleanMultiple as fileHandleCleanMultiple,
-  handleCleanSingle as fileHandleCleanSingle,
-} from '@commands/housekeeping/cleanCommands';
-import {
-  handlePack as fileHandlePack,
-  handlePackMultiple as fileHandlePackMultiple,
-  handlePackSingle as fileHandlePackSingle,
-} from '@commands/housekeeping/packCommands';
+import { handleClean as fileHandleClean } from '@commands/housekeeping/cleanCommands';
+import { handlePack as fileHandlePack } from '@commands/housekeeping/packCommands';
 import {
   handleAcceptEdited as latexHandleAcceptEdited,
   handleCompare as latexHandleCompare,
@@ -78,11 +70,7 @@ export function createExtensionCommandActions(
     cleanBuild: runCleanBuild,
     cleanOutput: runCleanOutput,
     pack: fileHandlePack,
-    packSingle: fileHandlePackSingle,
-    packMultiple: fileHandlePackMultiple,
     clean: fileHandleClean,
-    cleanSingle: fileHandleCleanSingle,
-    cleanMultiple: fileHandleCleanMultiple,
     compare: latexHandleCompare,
     acceptEdited: latexHandleAcceptEdited,
     indentTeX: handleIndentTeX,

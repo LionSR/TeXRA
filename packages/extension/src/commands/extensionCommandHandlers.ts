@@ -5,8 +5,6 @@ import { z } from 'zod';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   CleanConfigSchema,
-  FileOpCommandArgsSchema,
-  MultiFileOpCommandArgsSchema,
   PackConfigSchema,
   type CleanConfig,
   type PackConfig,
@@ -65,10 +63,6 @@ type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
  * keep resolving for extension callers.
  */
 export const EXTENSION_INTERNAL_COMMAND_IDS = [
-  'texra.packSingle',
-  'texra.packMultiple',
-  'texra.cleanSingle',
-  'texra.cleanMultiple',
   'texra.compare',
   'texra.acceptEdited',
 ] as const;
@@ -93,21 +87,7 @@ export interface ExtensionCommandActions {
   cleanBuild(): Promise<void>;
   cleanOutput(): Promise<void>;
   pack(config: PackConfig): Promise<void>;
-  packSingle(inputFile: string, agent: string, model: string): Promise<void>;
-  packMultiple(
-    inputFile: string,
-    agent: string,
-    model: string,
-    inputFiles: string[],
-  ): Promise<void>;
   clean(config: CleanConfig): Promise<void>;
-  cleanSingle(inputFile: string, agent: string, model: string): Promise<void>;
-  cleanMultiple(
-    inputFile: string,
-    agent: string,
-    model: string,
-    inputFiles: string[],
-  ): Promise<void>;
   compare(
     baseLocation: FileLocation,
     editedLocation: FileLocation,
@@ -175,30 +155,10 @@ export const EXTENSION_COMMAND_HANDLERS = {
     (actions: ExtensionCommandActions, config) =>
       awaitTrue(actions.pack(config)),
   ),
-  'texra.packSingle': definedHandler(
-    FileOpCommandArgsSchema,
-    (actions: ExtensionCommandActions, inputFile, agent, model) =>
-      awaitTrue(actions.packSingle(inputFile, agent, model)),
-  ),
-  'texra.packMultiple': definedHandler(
-    MultiFileOpCommandArgsSchema,
-    (actions: ExtensionCommandActions, inputFile, agent, model, inputFiles) =>
-      awaitTrue(actions.packMultiple(inputFile, agent, model, inputFiles)),
-  ),
   'texra.clean': definedHandler(
     z.tuple([CleanConfigSchema]),
     (actions: ExtensionCommandActions, config) =>
       awaitTrue(actions.clean(config)),
-  ),
-  'texra.cleanSingle': definedHandler(
-    FileOpCommandArgsSchema,
-    (actions: ExtensionCommandActions, inputFile, agent, model) =>
-      awaitTrue(actions.cleanSingle(inputFile, agent, model)),
-  ),
-  'texra.cleanMultiple': definedHandler(
-    MultiFileOpCommandArgsSchema,
-    (actions: ExtensionCommandActions, inputFile, agent, model, inputFiles) =>
-      awaitTrue(actions.cleanMultiple(inputFile, agent, model, inputFiles)),
   ),
   'texra.compare': definedHandler(
     z.tuple([FileLocationSchema, FileLocationSchema]),
