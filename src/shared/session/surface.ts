@@ -2,8 +2,8 @@
  * The Surface (PRD one-fold-three-renderers, section 9): every interaction
  * fact a renderer owns for one view instance and one open session. It is
  * the second of the two records a component reads (`SessionView` is the
- * first) and the only place selection, drafts, expansion, focus, scroll,
- * and layout live. Components never hold their own copy; they read the
+ * first) and the only place selection, drafts, expansion, focus, and layout
+ * live. Components never hold their own copy; they read the
  * record and dispatch a `SurfaceAction`, and the root applies it through
  * `applySurfaceAction`.
  *
@@ -129,7 +129,6 @@ export interface Surface {
   readonly focusedRow: string | null;
   /** Run-board tab strip; resolved at read like `selected`. */
   readonly phase: ReadonlyMap<StreamTabId, string>;
-  readonly scroll: ReadonlyMap<StreamTabId, number>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
   /** The output list's "where files are stored" hint, dismissed once. */
@@ -158,7 +157,6 @@ export const PersistedSurfaceSchema = z.object({
   expanded: entries(StreamTabIdSchema, ExpansionOverrideSchema),
   groups: entries(StreamTabIdSchema, entries(z.string(), z.boolean())),
   phase: entries(StreamTabIdSchema, z.string()),
-  scroll: entries(StreamTabIdSchema, z.number()),
   drawerOpen: z.boolean().prefault(false),
   storageHintDismissed: z.boolean().prefault(false),
   workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
@@ -192,7 +190,6 @@ export function loadSurface(
     ),
     focusedRow: null,
     phase: new Map(persisted.phase),
-    scroll: new Map(persisted.scroll),
     drawerOpen: persisted.drawerOpen,
     toolsSheetOpen: false,
     storageHintDismissed: persisted.storageHintDismissed,
@@ -213,7 +210,6 @@ export function persistSurface(surface: Surface): PersistedSurface {
     expanded: [...surface.expanded],
     groups: [...surface.groups].map(([id, groups]) => [id, [...groups]]),
     phase: [...surface.phase],
-    scroll: [...surface.scroll],
     drawerOpen: surface.drawerOpen,
     storageHintDismissed: surface.storageHintDismissed,
     workbench: surface.workbench,
@@ -257,7 +253,6 @@ const PER_STREAM_MAPS = [
   'expanded',
   'groups',
   'phase',
-  'scroll',
   'rejected',
 ] as const satisfies readonly StreamKeyedMapField[];
 
@@ -416,11 +411,6 @@ export type SurfaceAction =
       readonly streamId: StreamTabId;
       readonly phase: string;
     }
-  | {
-      readonly kind: 'scroll';
-      readonly streamId: StreamTabId;
-      readonly top: number;
-    }
   | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
   | { readonly kind: 'dismissStorageHint' };
 
@@ -511,11 +501,6 @@ export function applySurfaceAction(
       return {
         ...surface,
         phase: withEntry(surface.phase, action.streamId, action.phase),
-      };
-    case 'scroll':
-      return {
-        ...surface,
-        scroll: withEntry(surface.scroll, action.streamId, action.top),
       };
     case 'workbench':
       return { ...surface, workbench: action.layout };
