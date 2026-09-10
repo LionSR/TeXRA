@@ -119,8 +119,40 @@ When updating CHANGELOG.md:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.
    - Lint TypeScript sources with `npm run lint`.
-   - Run the Vitest suite with `npm test`.
+   - Run the affected Vitest suites with `npm run test:changed` (see
+     "Scoping the test run" below). Run the full suite with `npm test` before
+     opening a pull request.
 4. Commit only when `npm run lint` completes without errors.
+
+### Scoping the test run
+
+`npm test` runs every suite under `src/test-kernel/`. It is the gate CI enforces
+and the one to run before opening a pull request, but it takes minutes, which is
+too slow to sit in front of each local commit — and a check that slow is a check
+that gets skipped. `npm run test:changed` (`scripts/test-changed.mjs`) narrows
+the run to the suites a change can actually reach:
+
+- Changed files come from git — working tree by default, `--staged` for the
+  pre-commit view, `--since <ref>` before pushing a branch.
+- `vitest related` keeps the suites whose module graph reaches one of them.
+- The suites that read the repository from disk rather than importing it — the
+  architecture ratchets, the agent catalog and prompt contracts — always run.
+  No import edge connects them to a changed source file, and they are the guards
+  a refactor is most likely to trip. Seeding `related` with
+  `src/test-kernel/support/repoScan.ts` selects all of them, so there is no
+  hand-maintained list to drift.
+- A change to the harness itself (`vitest.config.mjs`, `tsconfig.json`,
+  `scripts/aliases.mjs`, `src/test-kernel/support/`, any `package.json`,
+  `pnpm-lock.yaml`) invalidates the mapping rather than being covered by it, so
+  those fall back to the full suite.
+- A changed file no module graph can contain — a YAML resource, an image — is
+  named in a notice instead of being quietly dropped, because `related` will not
+  select a suite for it.
+
+Unrecognized arguments are forwarded to Vitest, so `npm run test:changed -- -t
+<pattern>` and `--bail 1` work as usual. Selection is only as good as the module
+graph: it is a fast signal for the edit → commit loop, not a replacement for the
+full suite.
 
 ### Build system: esbuild + Vite
 
