@@ -73,18 +73,18 @@ same runtime table.
 same order in three files, and the hosts assert the parity they cannot
 enforce:
 
-| Call | CLI | Desktop | Extension |
-| --- | --- | --- | --- |
-| `initProcessSettingHost` | `initPlatform.ts:344` | `platform/index.ts:178` | `extension.ts:413` |
-| `installTexraAccountProbes` | `:347` | `:181` | `:524` |
-| `refreshModelListAndLog` | `:354` | `:207` | `:641` |
-| `seedDisabledToolDefaults` | `:378` | `:226` | `:570` |
-| `initNodeAgentRuntime` | `:389` | `:235` | deliberately omitted |
-| `registerRuntimeShutdownHandlers` | `:398` | `index.ts:1637` | `:540` |
-| `UsageLogService.initialize` | `:419` | `:190` | `:670` |
-| `initializeBundledPrompts` | `:441` | `:239` | `:482` |
-| `bootstrapNodeAgentDirectories` | `:444` | `:244` | `:621` |
-| `initializeNodeRuntimeSkills` | `:452` | `:241` | `:562` |
+| Call                              | CLI                   | Desktop                 | Extension            |
+| --------------------------------- | --------------------- | ----------------------- | -------------------- |
+| `initProcessSettingHost`          | `initPlatform.ts:344` | `platform/index.ts:178` | `extension.ts:413`   |
+| `installTexraAccountProbes`       | `:347`                | `:181`                  | `:524`               |
+| `refreshModelListAndLog`          | `:354`                | `:207`                  | `:641`               |
+| `seedDisabledToolDefaults`        | `:378`                | `:226`                  | `:570`               |
+| `initNodeAgentRuntime`            | `:389`                | `:235`                  | deliberately omitted |
+| `registerRuntimeShutdownHandlers` | `:398`                | `index.ts:1637`         | `:540`               |
+| `UsageLogService.initialize`      | `:419`                | `:190`                  | `:670`               |
+| `initializeBundledPrompts`        | `:441`                | `:239`                  | `:482`               |
+| `bootstrapNodeAgentDirectories`   | `:444`                | `:244`                  | `:621`               |
+| `initializeNodeRuntimeSkills`     | `:452`                | `:241`                  | `:562`               |
 
 `packages/cli/src/runtime/initPlatform.ts:352` says "as the extension and
 desktop hosts do at startup"; `packages/desktop/src/main/platform/index.ts:224`
@@ -180,7 +180,7 @@ the repo builds that way on purpose.
 
 Only the pieces below are proposed. Each states what it subsumes, and each is
 constrained by the fact that `src/controllers/**` and `src/shared/**` sit
-*below* the R1 boundary: a shared controller returns `Effect` and contains no
+_below_ the R1 boundary: a shared controller returns `Effect` and contains no
 `Effect.run*`, because the register of below-boundary run sites is closed —
 `check-effect-migration-ratchet.mjs:1318-1335` filters `--update` output to
 files the committed baseline already names.
@@ -191,7 +191,7 @@ Home: `src/shared/session/approvalDecision.ts`.
 
 There is no async in either existing copy, so this is a function, not a
 service. Input: a `PermissionPayload`, a decision, and a two-field capability
-record (`toolEditPreview`, `ownApiKeyRetry`) that carries the two *deliberate*
+record (`toolEditPreview`, `ownApiKeyRetry`) that carries the two _deliberate_
 host differences as data rather than as a fork. Output:
 `readonly ApprovalArm[]`, where
 `ApprovalArm = { runtime: RuntimeRequest } | { host: HostRequest } | { settle: HostSettlementIntent }`
@@ -247,7 +247,7 @@ Both hosts pass every arm in one `use()` call for exactly this reason
 What survives is small and honest: a scoped
 `Stream.runForEach(session.events.all(session.now()), ...)` drain owned once.
 Even that is worth less than it first looked. The extension's chime is inside
-the *same* `Effect.sync` callback as `handleSessionEvent`
+the _same_ `Effect.sync` callback as `handleSessionEvent`
 (`ProgressViewProvider.ts:209-222`), so splitting it gives the extension two
 drains and two interrupts where it has one of each. The two hosts also already
 tear down in opposite orders: the extension pushes the interrupt disposable at
@@ -271,7 +271,7 @@ such.
 
 Home: unchanged, `src/controllers/progressView/`.
 
-The controller is already the right shape. Two things must change *before* any
+The controller is already the right shape. Two things must change _before_ any
 host adopts it, both refuted findings against the original plan:
 
 1. `QuotaFallbackRuntime.setEnabled` is typed `(enabled: boolean) => Promise<void>`
@@ -286,7 +286,7 @@ host adopts it, both refuted findings against the original plan:
    state and the controller must fail on a non-effective disable.
 
 2. The CLI deliberately separates abandoning the wait from letting the commit
-   finish. `runRetryTask` (`:269-295`) races an abort against a *detached*
+   finish. `runRetryTask` (`:269-295`) races an abort against a _detached_
    `start()` promise, and the code says so twice — "The task still runs, and
    stops at the checks below" at `:711` and `:745` — which is what guarantees
    the coding-plan rollback executes. Fiber interruption is the opposite.
@@ -342,7 +342,7 @@ exist.
 
 Home: `src/controllers/bootstrap/nodeHostBootstrap.ts`.
 
-One `Effect.fn` owning the *order* of the ten calls tabulated in §1.1, run
+One `Effect.fn` owning the _order_ of the ten calls tabulated in §1.1, run
 once per host with a single `effectRuntime().runPromise` at each composition
 root (an R1 boundary kind, uncounted).
 
@@ -384,14 +384,14 @@ failure twice. That guard must be named and given a home before this step.
 
 ### 2.7 Shared data structures
 
-| Structure | Home | Subsumes |
-| --- | --- | --- |
-| `ApprovalArm`, per-kind decision union | `src/shared/session/approvalDecision.ts` | `type Arm` (`BaseRequestPanel.ts:22`), `PermissionDecisionByKind` (`events.ts:48-96`), `ApprovalDecision`/`DecisionOf` (`approvalQueue.ts:74-87, 370-373`) |
-| `sessionActivity(view)` | `src/shared/sessionTitle.ts` | `desktopWindowTitle.ts:22-25`; the fold half of `terminalTitle.ts:69-84` |
-| `STREAM_GROUP_LABELS` / `_ORDER` | `src/shared/streams/streamStatusDisplay.ts` | `StreamTabs.ts:53-59`; the inline switch in `cliState.ts:173-186` |
-| `describeRequestRefusal` | `src/shared/copy/requestRefusal.ts` | `ProgressApp.ts:215-231` (drops `ref`), `transcript.ts:221-234` (drops `docsCommand`) |
-| `CredentialChangeKind`, `CredentialSurfaces` | `src/controllers/credentials/` | six untyped fan-out methods |
-| `PendingOAuthState` (Zod, strict, nonce-validated) | `src/auth/pendingOAuthState.ts` | `desktopSupabaseAuth.ts:45-49` (non-strict, unvalidated nonce) and the extension's twin |
+| Structure                                          | Home                                        | Subsumes                                                                                                                                                   |
+| -------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ApprovalArm`, per-kind decision union             | `src/shared/session/approvalDecision.ts`    | `type Arm` (`BaseRequestPanel.ts:22`), `PermissionDecisionByKind` (`events.ts:48-96`), `ApprovalDecision`/`DecisionOf` (`approvalQueue.ts:74-87, 370-373`) |
+| `sessionActivity(view)`                            | `src/shared/sessionTitle.ts`                | `desktopWindowTitle.ts:22-25`; the fold half of `terminalTitle.ts:69-84`                                                                                   |
+| `STREAM_GROUP_LABELS` / `_ORDER`                   | `src/shared/streams/streamStatusDisplay.ts` | `StreamTabs.ts:53-59`; the inline switch in `cliState.ts:173-186`                                                                                          |
+| `describeRequestRefusal`                           | `src/shared/copy/requestRefusal.ts`         | `ProgressApp.ts:215-231` (drops `ref`), `transcript.ts:221-234` (drops `docsCommand`)                                                                      |
+| `CredentialChangeKind`, `CredentialSurfaces`       | `src/controllers/credentials/`              | six untyped fan-out methods                                                                                                                                |
+| `PendingOAuthState` (Zod, strict, nonce-validated) | `src/auth/pendingOAuthState.ts`             | `desktopSupabaseAuth.ts:45-49` (non-strict, unvalidated nonce) and the extension's twin                                                                    |
 
 The `SurfaceStore` proposed for the CLI's selection and expansion state
 survives, with one amendment. It cannot require `SessionViewService`: the CLI
@@ -453,27 +453,27 @@ ratchet column names rows in
 a shrunk count must be regenerated with `--update` in the same PR, because
 stale headroom fails the check as surely as growth does.
 
-| # | Step | Ratchet | Risk |
-| --- | --- | --- | --- |
-| 1 | One decision vocabulary and arms mapper in `src/shared/session/approvalDecision.ts`; both surfaces call it | none | medium surface area, compiler-checked |
-| 2 | `sessionActivity`, `STREAM_GROUP_LABELS`, `describeRequestRefusal` get their shared homes; delete `Surface.scroll` | none; knip consumers in the same PR | low — **partly landed**, see below |
-| 3 | Delete the desktop `toolEditAction` pass-through and its host arm | none | low — **landed** |
-| 4 | `CredentialStore`; move and convert `ProviderKeyController`; delete `packages/cli/src/runtime/providerApiKey.ts` | `platform()` shrinks by 4 | medium-low |
-| 5 | `githubToken` controller; delete the CLI file and the extension's single-caller alias | `platform()` shrinks by 6 | low |
-| 6 | `SubscriptionUsage` as one scoped service | `platform()` shrinks by 2; retires `coalesceAsync` and `AbortSignal.timeout` | medium |
-| 7 | `credentialChanged` fan-out; delete the six host copies | `platform()` shrinks by 2 | medium |
-| 8 | Subscription sign-in/out sequence onto the existing catalog | `platform()` shrinks by 3 | medium-high: changes policy |
-| 9 | Onboarding funnel loop absorbed beside its planner | possibly `catch:effect-importer` on `ProgressViewProvider.ts` — verify before regenerating | low |
-| 10 | Shared pending-OAuth schema and nonce validation | none | low |
-| 11 | Widen `QuotaFallbackRuntime.setEnabled` to report effective state | none | low, but gates step 12 |
-| 12 | CLI adopts `ProgressApiKeyRetryController` | `import:p-queue` −1, `new AbortController()` −1, **`catch:effect-importer` must reach 0 in `subscribeApprovals.ts`** | high |
-| 13 | `ExecutionRegistry.waitForAnyChange` → `settled(ids): Effect<void>` | none directly; prerequisite for the `sessionLayer` row | low |
-| 14 | `ExecutionLanes` on `Deferred` | `import:p-queue` −1, `import:p-defer` −1 | moderate |
-| 15 | `SessionHandle.flushArtifacts` / `settlePublications` as Effects | `import:p-defer` −1, `Effect.run*` `SessionHandle.ts` 3→2, `catch:effect-importer` 3→2 | high |
-| 16 | Desktop project close calls the shared close | none | moderate — see below |
-| 17 | `SessionResumeController` and Effect-typed `AgentResumePort` | `platform()` `hostRunActions.ts` 3→2 | moderate |
-| 18 | `bootstrapNodeHost` phase two; CLI and desktop adopt | `platform()` may shrink; verify | medium |
-| 19 | Extension adopts `bootstrapNodeHost` | `import:p-queue` −1 available | high |
+| #   | Step                                                                                                               | Ratchet                                                                                                              | Risk                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 1   | One decision vocabulary and arms mapper in `src/shared/session/approvalDecision.ts`; both surfaces call it         | none                                                                                                                 | medium surface area, compiler-checked |
+| 2   | `sessionActivity`, `STREAM_GROUP_LABELS`, `describeRequestRefusal` get their shared homes; delete `Surface.scroll` | none; knip consumers in the same PR                                                                                  | low — **partly landed**, see below    |
+| 3   | Delete the desktop `toolEditAction` pass-through and its host arm                                                  | none                                                                                                                 | low — **landed**                      |
+| 4   | `CredentialStore`; move and convert `ProviderKeyController`; delete `packages/cli/src/runtime/providerApiKey.ts`   | `platform()` shrinks by 4                                                                                            | medium-low                            |
+| 5   | `githubToken` controller; delete the CLI file and the extension's single-caller alias                              | `platform()` shrinks by 6                                                                                            | low                                   |
+| 6   | `SubscriptionUsage` as one scoped service                                                                          | `platform()` shrinks by 2; retires `coalesceAsync` and `AbortSignal.timeout`                                         | medium                                |
+| 7   | `credentialChanged` fan-out; delete the six host copies                                                            | `platform()` shrinks by 2                                                                                            | medium                                |
+| 8   | Subscription sign-in/out sequence onto the existing catalog                                                        | `platform()` shrinks by 3                                                                                            | medium-high: changes policy           |
+| 9   | Onboarding funnel loop absorbed beside its planner                                                                 | possibly `catch:effect-importer` on `ProgressViewProvider.ts` — verify before regenerating                           | low                                   |
+| 10  | Shared pending-OAuth schema and nonce validation                                                                   | none                                                                                                                 | low                                   |
+| 11  | Widen `QuotaFallbackRuntime.setEnabled` to report effective state                                                  | none                                                                                                                 | low, but gates step 12                |
+| 12  | CLI adopts `ProgressApiKeyRetryController`                                                                         | `import:p-queue` −1, `new AbortController()` −1, **`catch:effect-importer` must reach 0 in `subscribeApprovals.ts`** | high                                  |
+| 13  | `ExecutionRegistry.waitForAnyChange` → `settled(ids): Effect<void>`                                                | none directly; prerequisite for the `sessionLayer` row                                                               | low                                   |
+| 14  | `ExecutionLanes` on `Deferred`                                                                                     | `import:p-queue` −1, `import:p-defer` −1                                                                             | moderate                              |
+| 15  | `SessionHandle.flushArtifacts` / `settlePublications` as Effects                                                   | `import:p-defer` −1, `Effect.run*` `SessionHandle.ts` 3→2, `catch:effect-importer` 3→2                               | high                                  |
+| 16  | Desktop project close calls the shared close                                                                       | none                                                                                                                 | moderate — see below                  |
+| 17  | `SessionResumeController` and Effect-typed `AgentResumePort`                                                       | `platform()` `hostRunActions.ts` 3→2                                                                                 | moderate                              |
+| 18  | `bootstrapNodeHost` phase two; CLI and desktop adopt                                                               | `platform()` may shrink; verify                                                                                      | medium                                |
+| 19  | Extension adopts `bootstrapNodeHost`                                                                               | `import:p-queue` −1 available                                                                                        | high                                  |
 
 **Steps that cannot ship alone.** Step 12 depends on step 11: adopting the
 shared controller before `setEnabled` reports its effective state trades the
@@ -524,7 +524,7 @@ platform. The same test applies to every later step that relocates a
 **Two ratchet corrections folded in.** Step 12's original claim that
 `platform()` in `subscribeApprovals.ts` drops 2→1 is wrong: the controller has
 no secrets access, `hasUsableKey` is an injected dep, so the read either stays
-or relocates to another CLI file, which would be a *new* file on the
+or relocates to another CLI file, which would be a _new_ file on the
 `platform()` row. And both step 12 and the abandoned attach step would have
 added a runtime `effect` import to a file with raw catches and no such import
 today — `subscribeApprovals.ts` has eight catch clauses and
@@ -533,13 +533,13 @@ today — `subscribeApprovals.ts` has eight catch clauses and
 convert all surviving catches to `Effect.catch` in the same PR.
 
 **Step 16 needs three amendments before it is safe.** The desktop's
-`close(root)` receives the canonicalized *workspace* path
+`close(root)` receives the canonicalized _workspace_ path
 (`desktopProjects.ts:249`), while `heldSession` matches on
 `candidate.storage === root` (`sessionLayer.ts:582-588`) and the project's key
 is a separate `WorkspaceStorageProvider(...).getStoragePath()` (`:255-257`).
 Passing `root` yields `NOTHING_TO_CLOSE` and closes nothing; the step must pass
 `project.key`. Second, on the budget-expiry path `closeSession` deliberately
-does *not* invalidate the entry — it leaves it with `closeAdmissions()` applied
+does _not_ invalidate the entry — it leaves it with `closeAdmissions()` applied
 and warns (`sessionLayer.ts:701-717`) — which is correct for process shutdown
 but wrong for a host that reopens the same project in the same process; the
 desktop needs a caller-supplied budget, or should adopt only `closeAdmissions`
@@ -560,24 +560,24 @@ hold and an explicit refusal channel, not to `withPerKeyLane`.
 
 ## 5. Deletions and net accounting
 
-| Deleted | Location |
-| --- | --- |
-| `decisionArms`, `userQuestionDecision`, `type Arm` (~178 lines) | `BaseRequestPanel.ts:22-207` of a 239-line file |
-| `PermissionDecisionByKind`, `PermissionKind`, `APPROVE_*` (~55 lines) | `events.ts:17,28,48-96` |
-| CLI mapper half (~120 lines) | `approvalQueue.ts:74-87, 343-476` |
-| CLI credential-switch copy (~270 lines) | `subscribeApprovals.ts:20,162,269-306,507-592,600-759` |
-| Desktop `toolEditAction` + its host arm | `desktopAgentExecution.ts:208-214`, `desktopHostRequests.ts:711-717` |
-| `Surface.scroll` in seven places | `surface.ts:132,161,195,216,260,420,518` |
-| `packages/cli/src/runtime/providerApiKey.ts` | whole file |
-| `packages/cli/src/runtime/githubToken.ts` | whole file, 25 lines, 3 ratcheted `platform()` |
-| `SecretManager.gitHubTokenExists` | `secretManager.ts:35-37`, single-caller alias |
-| Six credential fan-out methods | `SettingsViewMessageHandler.ts:627-676`, `desktopCredentialSettingsController.ts:375-413` |
-| Two onboarding refresh loops and their `previousFunnelState` fields | `ProgressViewProvider.ts:397-431`, `desktopOnboardingIpc.ts:100-132` |
-| `selectDesktopSetupModel`, `buildDesktopSetupExecuteMessage` | `setupLaunch.ts:142-161`, host-named single-caller helpers in shared code |
-| Three redundant `SubscriptionUsageService` instances | `apiStatus.ts:30`, `StatusBar.tsx:69`, the `??` fallback |
-| `resumeFromResumeData.ts` | whole file, 70 lines |
-| Desktop `stopProjectExecutions` (~26 lines) | `desktopProjects.ts:154-179, 296-297` |
-| Bootstrap phase-two bodies | three files |
+| Deleted                                                               | Location                                                                                  |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `decisionArms`, `userQuestionDecision`, `type Arm` (~178 lines)       | `BaseRequestPanel.ts:22-207` of a 239-line file                                           |
+| `PermissionDecisionByKind`, `PermissionKind`, `APPROVE_*` (~55 lines) | `events.ts:17,28,48-96`                                                                   |
+| CLI mapper half (~120 lines)                                          | `approvalQueue.ts:74-87, 343-476`                                                         |
+| CLI credential-switch copy (~270 lines)                               | `subscribeApprovals.ts:20,162,269-306,507-592,600-759`                                    |
+| Desktop `toolEditAction` + its host arm                               | `desktopAgentExecution.ts:208-214`, `desktopHostRequests.ts:711-717`                      |
+| `Surface.scroll` in seven places                                      | `surface.ts:132,161,195,216,260,420,518`                                                  |
+| `packages/cli/src/runtime/providerApiKey.ts`                          | whole file                                                                                |
+| `packages/cli/src/runtime/githubToken.ts`                             | whole file, 25 lines, 3 ratcheted `platform()`                                            |
+| `SecretManager.gitHubTokenExists`                                     | `secretManager.ts:35-37`, single-caller alias                                             |
+| Six credential fan-out methods                                        | `SettingsViewMessageHandler.ts:627-676`, `desktopCredentialSettingsController.ts:375-413` |
+| Two onboarding refresh loops and their `previousFunnelState` fields   | `ProgressViewProvider.ts:397-431`, `desktopOnboardingIpc.ts:100-132`                      |
+| `selectDesktopSetupModel`, `buildDesktopSetupExecuteMessage`          | `setupLaunch.ts:142-161`, host-named single-caller helpers in shared code                 |
+| Three redundant `SubscriptionUsageService` instances                  | `apiStatus.ts:30`, `StatusBar.tsx:69`, the `??` fallback                                  |
+| `resumeFromResumeData.ts`                                             | whole file, 70 lines                                                                      |
+| Desktop `stopProjectExecutions` (~26 lines)                           | `desktopProjects.ts:154-179, 296-297`                                                     |
+| Bootstrap phase-two bodies                                            | three files                                                                               |
 
 Added: five files (`approvalDecision.ts`, `requestRefusal.ts`,
 `CredentialStore.ts`, `credentialChange.ts`, `nodeHostBootstrap.ts`), one moved
@@ -618,7 +618,7 @@ Also untouched, with reasons already given in §1.2: the fold and the session
 view; the frames transport; the three exit controllers; the three composition-
 root queues; the settings binding tables; the TUI's one-at-a-time approval
 presentation; the three OAuth sign-in presenters, already correctly factored
-behind `SubscriptionSignInPresenter`; the pending-OAuth *storage*, which
+behind `SubscriptionSignInPresenter`; the pending-OAuth _storage_, which
 differs because multi-window VS Code and a single Electron app genuinely
 differ; and chat export, which is already shared through
 `loadChatExportInput`.
