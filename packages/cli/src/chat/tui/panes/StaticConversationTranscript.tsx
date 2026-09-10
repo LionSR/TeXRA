@@ -4,6 +4,7 @@
 // the width-qualified Static identity remounts these same items so patched Ink
 // can replace its accumulated static output with the new geometry.
 
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -738,15 +739,30 @@ const duplicateRowIdsLogged = createBoundedIdSet(DUPLICATE_ROW_LOG_CAP);
 // mistaken for the old one and suppressed.
 registerCliStateResetHook(() => duplicateRowIdsLogged.clear());
 
-/** Monotonic, so a marker's id can never collide with a real row's: entry
- *  ids are wire content (`z.string().min(1)`, no format constraint), so an
- *  id derived only from the colliding entry's own id could in principle
- *  coincide with an unrelated row's literal id. A process-local counter
- *  can't. */
+/**
+ * A fresh, unguessable per-process token, not a fixed string: entry ids are
+ * wire content (`z.string().min(1)`, no format constraint), so a marker id
+ * built only from a literal prefix and a counter is a string an upstream
+ * producer could — in principle, however unlikely — happen to reproduce.
+ * Nothing outside this module ever sees or influences `randomUUID()`'s
+ * output, so no entry id can be engineered (accidentally or otherwise) to
+ * collide with `${DUPLICATE_ROW_WARNING_NAMESPACE}:`.
+ */
+const DUPLICATE_ROW_WARNING_NAMESPACE = `duplicate-row-warning:${randomUUID()}`;
 let duplicateRowWarningSeq = 0;
 
 function nextDuplicateRowWarningId(entryId: string): string {
-  return `duplicate-row-warning:${duplicateRowWarningSeq++}:${entryId}`;
+  return `${DUPLICATE_ROW_WARNING_NAMESPACE}:${duplicateRowWarningSeq++}:${entryId}`;
+}
+
+/** The source row id a marker's own item id represents, or `undefined` for
+ *  anything that isn't one of this module's markers (namespaced above). */
+function duplicateRowWarningSourceId(itemId: string): string | undefined {
+  const prefix = `${DUPLICATE_ROW_WARNING_NAMESPACE}:`;
+  if (!itemId.startsWith(prefix)) return undefined;
+  const rest = itemId.slice(prefix.length);
+  const counterEnd = rest.indexOf(':');
+  return counterEnd === -1 ? undefined : rest.slice(counterEnd + 1);
 }
 
 interface PendingDuplicateRow {
@@ -1146,9 +1162,20 @@ export function advanceStaticTranscriptState(
   if (plan.appended.length > 0) {
     const seenIds = new Set(nextItems.map((item) => item.id));
     const markedThisPass = new Set<string>();
+    // A collision spread across ticks (one occurrence appends now, another
+    // arrived several ticks ago and already got its marker) must not grow a
+    // second marker for the same id: scan the *current* items for one,
+    // rather than a cache, so a marker that was later trimmed away is free
+    // to reappear (the same requirement as the tail-placement fix above).
+    const alreadyMarked = new Set(
+      nextItems.flatMap((item) => {
+        const sourceId = duplicateRowWarningSourceId(item.id);
+        return sourceId === undefined ? [] : [sourceId];
+      }),
+    );
     for (const entry of plan.appended) {
       if (seenIds.has(entry.id)) {
-        if (!markedThisPass.has(entry.id)) {
+        if (!markedThisPass.has(entry.id) && !alreadyMarked.has(entry.id)) {
           markedThisPass.add(entry.id);
           pendingDuplicates.push({
             entry,
