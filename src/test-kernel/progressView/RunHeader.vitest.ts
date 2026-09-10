@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { RunHeader } from '@progressView/frontend/components/RunHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
-import type { RunId } from '@shared/schemas/identifiers';
+import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { SurfaceAction } from '@shared/session/surface';

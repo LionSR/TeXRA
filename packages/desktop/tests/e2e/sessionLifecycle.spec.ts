@@ -3,11 +3,11 @@ import { join } from 'node:path';
 import { Effect, Layer } from 'effect';
 
 import { expect, test } from '@playwright/test';
+import type { RunId } from '@shared/schemas';
 import {
   loadDatabaseFixture,
   type DatabaseFixture,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
-import type { RunId } from '@shared/schemas';
 
 import {
   closeTexraApp,

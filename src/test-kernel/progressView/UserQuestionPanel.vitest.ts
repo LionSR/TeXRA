@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
-import { RunIdSchema } from '@shared/schemas/identifiers';
+import { RunIdSchema } from '@shared/schemas';
 import type { UserQuestionPrompt } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ToolEditRequestPanel } from '@progressView/frontend/components/ToolEditRequestPanel';
-import { RunIdSchema } from '@shared/schemas/identifiers';
+import { RunIdSchema } from '@shared/schemas';
 import type { ToolEditPermission } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 

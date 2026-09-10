@@ -11,8 +11,8 @@ import type { RunHandle } from '@agent/runtime/RunHandle';
 import { type Plan, type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { createRecordingHost } from '../progressTestUtils';
 import { generateRunId } from '@utils/core';
+import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Compose the per-session runtime owners.' };
 

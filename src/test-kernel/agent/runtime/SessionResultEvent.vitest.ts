@@ -17,8 +17,8 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { createTestLaunchContext } from './launchContextTestUtils';
 import { generateRunId } from '@utils/core';
+import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn().mockResolvedValue({ ok: true }),

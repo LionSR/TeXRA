@@ -24,7 +24,7 @@ import type {
 
 /** The frozen `updateStreamUsage` line: `storageKey` is the run the usage
  *  belongs to, under the field name the 0.40 wire promised. */
-export interface UpdateStreamUsagePayload {
+interface UpdateStreamUsagePayload {
   streamId: RunId;
   storageKey: RunId;
   usage: ExtendedTokenUsageStats;

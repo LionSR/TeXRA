@@ -25,12 +25,12 @@ import {
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { generateRunId } from '@utils/core';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import {
   bashApprovalRequest,
   toolEditApprovalRequest,
 } from '../progressTestUtils';
-import { generateRunId } from '@utils/core';
 
 /**
  * Plan approval, proposal, and retry requests travel `session.interactions`

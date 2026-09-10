@@ -5,11 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
 import {
   AgentReviewRunController,
   type AgentReviewRunToken,
 } from '@frontend/review/AgentReviewRunController';
+import type { RunId } from '@shared/schemas';
 
 function createRunHarness() {
   const stopAgentRun = vi.fn(() => Effect.void);

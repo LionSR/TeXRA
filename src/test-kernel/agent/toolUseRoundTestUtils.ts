@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 // Local imports
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { type RunId } from '@shared/schemas/identifiers';
+import { type RunId } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 

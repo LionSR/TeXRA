@@ -1469,7 +1469,7 @@
       "file": "src/tools/agentCliShared.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "publishAgentCliStreamUsage"
+      "name": "publishAgentCliUsage"
     },
     {
       "file": "src/tools/claudeAgent.ts",

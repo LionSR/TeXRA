@@ -17,8 +17,8 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { createRunTrace } from '@transcript';
-import { createRecordingHost } from '../progressTestUtils';
 import { generateRunId } from '@utils/core';
+import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Scope session-owned state.' };
 

@@ -27,10 +27,10 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { generateRunId } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { createTestLaunchContext } from './launchContextTestUtils';
-import { generateRunId } from '@utils/core';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn().mockResolvedValue({ ok: true }),
