@@ -10,6 +10,7 @@ import {
   type StreamSubstate,
 } from '@shared/schemas';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import type { StreamGroup } from '@shared/session/sessionView';
 
 export type StreamStatusDisplayKey =
   | Exclude<StreamLifecycleStatus, typeof STREAM_LIFECYCLE_READY>
@@ -224,3 +225,26 @@ export function formatStageLabel(
   if (stage.kind === 'round') return formatRoundStageLabel(stage);
   return formatPhaseStageLabel(stage);
 }
+
+/**
+ * One section per `group` arm, and the order the sections are painted in.
+ * Both surfaces that group a stream list — the webview tab strip and the
+ * TUI's stream tree — read this table rather than spelling the four labels
+ * again, so a renamed section cannot say one thing in the dock and another
+ * in the terminal.
+ *
+ * Deep-frozen: the record crosses a module boundary into two renderers, and
+ * `readonly` is compile-time only.
+ */
+export const STREAM_GROUP_LABELS: Readonly<Record<StreamGroup, string>> =
+  Object.freeze({
+    running: 'Running',
+    waiting: 'Waiting on you',
+    interrupted: 'Interrupted',
+    recent: 'Recent',
+  });
+
+/** Section order, in the group union's own order. */
+export const STREAM_GROUP_ORDER: readonly StreamGroup[] = Object.freeze(
+  Object.keys(STREAM_GROUP_LABELS) as StreamGroup[],
+);

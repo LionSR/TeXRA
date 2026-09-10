@@ -82,6 +82,9 @@ const StreamGroupSchema = z.enum([
   'interrupted',
   'recent',
 ]);
+/** The section a stream sorts into. Its labels and section order are one
+ *  table in `@shared/streams/streamStatusDisplay`, not a per-host switch. */
+export type StreamGroup = z.infer<typeof StreamGroupSchema>;
 
 const StreamViewCommonSchema = z.object({
   id: StreamTabIdSchema,
