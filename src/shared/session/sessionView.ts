@@ -39,6 +39,7 @@ import {
   TodoItemSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
+  type StreamTabId,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { STREAM_STATUS_TONE } from '@shared/streams/streamStatusDisplay';
@@ -264,4 +265,40 @@ export function emptySessionView(key: string, cursor = 0): SessionView {
     local: { self: [], dead: [], unreadable: [] },
     queuedFollowUps: new Map(),
   };
+}
+
+/** The read shape `descendantStreams` needs: satisfied by `SessionView`
+ *  itself and by any deep-readonly projection of it (a `Map` structurally
+ *  satisfies `ReadonlyMap`), so a consumer holding a readonly view never
+ *  needs to re-derive the walk to keep its own copy. */
+type StreamTopology = {
+  readonly streams: ReadonlyMap<
+    StreamTabId,
+    { readonly childIds: readonly StreamTabId[] }
+  >;
+};
+
+/**
+ * Every stream under `rootStreamId`, parents first: the topology `childIds`
+ * (root to leaf) and `ancestors` (leaf to root) already state on every row,
+ * so a host walks the fold's own facts instead of re-deriving them.
+ */
+export function descendantStreams(
+  view: StreamTopology,
+  rootStreamId: StreamTabId | undefined,
+  { includeRoot }: { includeRoot: boolean },
+): readonly StreamTabId[] {
+  if (rootStreamId === undefined) return [];
+  const out: StreamTabId[] = [];
+  const pending = [rootStreamId];
+  const seen = new Set<StreamTabId>();
+  while (pending.length > 0) {
+    const id = pending.shift()!;
+    const stream = view.streams.get(id);
+    if (!stream || seen.has(id)) continue;
+    seen.add(id);
+    if (includeRoot || id !== rootStreamId) out.push(id);
+    pending.push(...stream.childIds);
+  }
+  return out;
 }

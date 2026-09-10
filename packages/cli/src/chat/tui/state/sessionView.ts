@@ -24,7 +24,11 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { toSignal, type StreamSignal } from '@shared/signals';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import {
+  descendantStreams,
+  type SessionView,
+  type StreamView,
+} from '@shared/session/sessionView';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
 
@@ -113,25 +117,6 @@ export function streamPhaseOf(
     : stream.status;
 }
 
-/** Every stream under `rootStreamId`, the root included, parents first. */
-export function descendantStreamIds(
-  view: SessionView,
-  rootStreamId: StreamTabId | undefined,
-): readonly StreamTabId[] {
-  const out: StreamTabId[] = [];
-  const pending = rootStreamId === undefined ? [] : [rootStreamId];
-  const seen = new Set<StreamTabId>();
-  while (pending.length > 0) {
-    const id = pending.shift()!;
-    const stream = view.streams.get(id);
-    if (!stream || seen.has(id)) continue;
-    seen.add(id);
-    out.push(id);
-    pending.push(...stream.childIds);
-  }
-  return out;
-}
-
 /**
  * The direct children in the RUNNING phase. The fold's `rollup.running`
  * counts in-flight streams (running or idle-waiting); the TUI's "active"
@@ -152,7 +137,7 @@ export function anyStreamRunning(
   view: SessionView,
   rootStreamId: StreamTabId | undefined,
 ): boolean {
-  return descendantStreamIds(view, rootStreamId).some(
+  return descendantStreams(view, rootStreamId, { includeRoot: true }).some(
     (id) => view.streams.get(id)?.status === STREAM_PHASE.RUNNING,
   );
 }

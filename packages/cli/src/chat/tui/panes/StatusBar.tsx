@@ -14,6 +14,7 @@ import type {
   SubscriptionUsageSnapshot,
   UsageRoute,
 } from '@shared/schemas';
+import { descendantStreams } from '@shared/session/sessionView';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -30,7 +31,6 @@ import {
 import {
   ancestorPhaseLabel,
   cumulativeUsageOf,
-  descendantStreamIds,
   sessionView,
   streamPhaseOf,
   streamViewOf,
@@ -87,7 +87,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     status: streamPhaseOf(streamViewOf(view, rootRunStreamId)),
   };
   const ownedStreamIds = useMemo(
-    () => descendantStreamIds(view, rootStreamId),
+    () => descendantStreams(view, rootStreamId, { includeRoot: true }),
     [view, rootStreamId],
   );
   const target = statusBarStreamTarget({

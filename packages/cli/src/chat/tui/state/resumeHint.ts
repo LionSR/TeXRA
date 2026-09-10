@@ -9,13 +9,12 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { usageCostLabel } from '@shared/copy/modelAccess';
-import type { SessionView } from '@shared/session/sessionView';
-
 import {
-  cumulativeUsageOf,
-  descendantStreamIds,
-  streamViewOf,
-} from './sessionView';
+  descendantStreams,
+  type SessionView,
+} from '@shared/session/sessionView';
+
+import { cumulativeUsageOf, streamViewOf } from './sessionView';
 
 export interface ResumeTarget {
   readonly executionId: string;
@@ -72,7 +71,9 @@ export function collectResumeUsage(
   rootStreamId: StreamTabId | undefined,
 ): TokenUsageStats | undefined {
   const usages: TokenUsageStats[] = [];
-  for (const streamId of descendantStreamIds(view, rootStreamId)) {
+  for (const streamId of descendantStreams(view, rootStreamId, {
+    includeRoot: true,
+  })) {
     const usage = cumulativeUsageOf(streamViewOf(view, streamId));
     if (usage) usages.push(usage);
   }
@@ -112,8 +113,9 @@ export function collectResumeTargets({
     targets.push({ executionId: rootExecutionId, label: 'main', isRoot: true });
     seen.add(rootExecutionId);
   }
-  for (const streamId of descendantStreamIds(view, rootStreamId)) {
-    if (streamId === rootStreamId) continue;
+  for (const streamId of descendantStreams(view, rootStreamId, {
+    includeRoot: false,
+  })) {
     const stream = streamViewOf(view, streamId);
     if (!stream || seen.has(stream.executionId)) continue;
     if (!stream.resumeEligible) continue;

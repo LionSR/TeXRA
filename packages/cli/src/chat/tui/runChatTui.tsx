@@ -53,6 +53,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
+import { descendantStreams } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { platformSettingsStores } from '@utils/config/platformSettings';
@@ -87,7 +88,6 @@ import {
 import {
   bindSessionView,
   currentView,
-  descendantStreamIds,
   sessionView,
   streamPhaseOf,
   streamViewOf,
@@ -439,9 +439,10 @@ export async function runChat(
     // Release this conversation's resident transcripts when their remaining
     // readers and writers leave. Clearing the terminal does not delete history.
     const store = runtimeSession.transcripts;
-    for (const streamId of descendantStreamIds(
+    for (const streamId of descendantStreams(
       currentView(),
       rootStreamIdSignal.get(),
+      { includeRoot: true },
     )) {
       store.requestEviction(streamId);
     }

@@ -22,7 +22,11 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import {
+  descendantStreams,
+  type SessionView,
+  type StreamView,
+} from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
@@ -484,14 +488,17 @@ export function attachWorkflowPlainOutput(
     // summary; only the launched run's own subtree is this run's output.
     rootStreamId ??= claimRootStream(view, options.executionId, attachCursor);
     const root = rootStreamId;
-    const workflows =
+    const rootedIds =
       root === undefined
+        ? undefined
+        : new Set(descendantStreams(view, root, { includeRoot: true }));
+    const workflows =
+      rootedIds === undefined
         ? []
         : [...view.streams.values()].filter(
             (stream) =>
               stream.identity?.kind === 'multiAgentWorkflow' &&
-              (stream.id === root ||
-                stream.ancestors.some((ancestor) => ancestor.id === root)),
+              rootedIds.has(stream.id),
           );
     const key = workflows.map((stream) => stream.id).join('\0');
     if (key !== subscribed) {
