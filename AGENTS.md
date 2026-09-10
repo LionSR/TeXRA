@@ -149,10 +149,11 @@ the run to the suites a change can actually reach:
   named in a notice instead of being quietly dropped, because `related` will not
   select a suite for it.
 
-Unrecognized arguments are forwarded to Vitest, so `npm run test:changed -- -t
-<pattern>` and `--bail 1` work as usual. Selection is only as good as the module
-graph: it is a fast signal for the edit → commit loop, not a replacement for the
-full suite.
+`--dry-run` prints the decision and the Vitest command without running it, for
+when you want to see how wide the run will be first. Unrecognized arguments are
+forwarded to Vitest, so `npm run test:changed -- -t <pattern>` and `--bail 1`
+work as usual. Selection is only as good as the module graph: it is a fast
+signal for the edit → commit loop, not a replacement for the full suite.
 
 ### Build system: esbuild + Vite
 

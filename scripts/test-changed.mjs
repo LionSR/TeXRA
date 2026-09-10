@@ -140,12 +140,19 @@ function changedPaths({ staged, since }) {
 }
 
 function parseArgs(argv) {
-  const options = { staged: false, since: null, passthrough: [] };
+  const options = {
+    dryRun: false,
+    passthrough: [],
+    since: null,
+    staged: false,
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--help' || arg === '-h') return { help: true, ...options };
     if (arg === '--staged') {
       options.staged = true;
+    } else if (arg === '--dry-run') {
+      options.dryRun = true;
     } else if (arg === '--since') {
       options.since = argv[(index += 1)];
       if (!options.since) throw new Error('--since needs a git ref');
@@ -172,6 +179,7 @@ that scan the repository from disk. Use \`npm test\` for the full gate.
 
   --staged        Only files staged for commit (the pre-commit view).
   --since <ref>   Files changed since <ref>, plus the working tree.
+  --dry-run       Print the decision and the Vitest command, run nothing.
   -h, --help      Show this message.
 
 Unrecognized arguments are forwarded to Vitest, so \`-t <pattern>\`,
@@ -200,7 +208,10 @@ function main() {
   const reason = fullRunReason(changed);
   if (reason) {
     console.log(`${NOTICE} ${reason}; running the full suite.`);
-    return run(['run', '--config', VITEST_CONFIG, ...options.passthrough]);
+    return run(
+      ['run', '--config', VITEST_CONFIG, ...options.passthrough],
+      options.dryRun,
+    );
   }
 
   const code = changed.filter(isCode);
@@ -225,26 +236,33 @@ function main() {
   console.log(
     `${NOTICE} ${scope}: ${changed.length} changed file(s) -> ${seeds.length} module graph seed(s) + the repo-scanning suites.`,
   );
-  return run([
-    'related',
-    '--run',
-    '--config',
-    VITEST_CONFIG,
-    // `related` can select nothing (a change no suite reaches); that is a
-    // result, not the misconfiguration the config's passWithNoTests=false
-    // guards against.
-    '--passWithNoTests',
-    ...options.passthrough,
-    ...seeds,
-    REPO_SCAN_SEED,
-  ]);
+  return run(
+    [
+      'related',
+      '--run',
+      '--config',
+      VITEST_CONFIG,
+      // `related` can select nothing (a change no suite reaches); that is a
+      // result, not the misconfiguration the config's passWithNoTests=false
+      // guards against.
+      '--passWithNoTests',
+      ...options.passthrough,
+      ...seeds,
+      REPO_SCAN_SEED,
+    ],
+    options.dryRun,
+  );
 }
 
 /** Run Vitest through the workspace's own package manager. */
-function run(args) {
-  const result = spawnSync('corepack', ['pnpm', 'exec', 'vitest', ...args], {
-    stdio: 'inherit',
-  });
+function run(args, dryRun) {
+  const command = ['corepack', 'pnpm', 'exec', 'vitest', ...args];
+  if (dryRun) {
+    console.log(`${NOTICE} would run: ${command.join(' ')}`);
+    return 0;
+  }
+  const [bin, ...rest] = command;
+  const result = spawnSync(bin, rest, { stdio: 'inherit' });
   if (result.error) throw result.error;
   return result.status ?? 1;
 }
