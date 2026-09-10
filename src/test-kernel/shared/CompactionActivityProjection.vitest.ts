@@ -12,7 +12,7 @@ import {
   createCompactionActivityProjection,
   settleCompactionActivities,
   type CompactionActivityProjection,
-} from '@shared/streams/compactionActivityProjection';
+} from '@shared/runs/compactionActivityProjection';
 
 /** Test-local full replay through the production reducer (the resync path). */
 function projectCompactionActivities(

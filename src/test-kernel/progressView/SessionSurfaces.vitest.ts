@@ -157,12 +157,12 @@ describe('session Surface ownership', () => {
     const image = { fileName: 'figure.png', path: '/pasted/figure.png' };
     surfaces.act(KEY, {
       kind: 'draft',
-      streamId: ROOT,
+      runId: ROOT,
       patch: { images: [image] },
     });
     const request: Extract<RuntimeRequest, { kind: 'followUp.send' }> = {
       kind: 'followUp.send',
-      streamId: ROOT,
+      runId: ROOT,
       text: 'Saved text',
       mediaFiles: [image.path],
     };
@@ -172,7 +172,7 @@ describe('session Surface ownership', () => {
     expect(transport.request).toHaveBeenCalledOnce();
     surfaces.act(KEY, {
       kind: 'draft',
-      streamId: ROOT,
+      runId: ROOT,
       patch: { text: 'New text' },
     });
     reject({ ok: false, error: { _tag: 'Rejected', reason: 'Unavailable' } });
@@ -190,7 +190,7 @@ describe('session Surface ownership', () => {
     surfaces.runtimeRequest(KEY, { ...request, text: 'New text' });
     surfaces.act(KEY, {
       kind: 'draft',
-      streamId: ROOT,
+      runId: ROOT,
       patch: { text: 'Later text' },
     });
     acceptEdited({ ok: true, outcome: { kind: 'done' } });
@@ -248,10 +248,10 @@ describe('session Surface ownership', () => {
           },
         });
       } else {
-        surfaces.act(KEY, { kind: 'select', streamId: CHILD });
+        surfaces.act(KEY, { kind: 'select', runId: CHILD });
         surfaces.act(KEY, {
           kind: 'draft',
-          streamId: CHILD,
+          runId: CHILD,
           patch: { text: 'Other text' },
         });
       }

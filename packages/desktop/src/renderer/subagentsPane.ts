@@ -4,7 +4,7 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -13,14 +13,14 @@ export interface SubagentsPaneModel {
   readonly view: SessionView;
   readonly surface: Surface;
   /** The stream whose family the tab shows; null when nothing is selected. */
-  readonly selected: StreamTabId | null;
+  readonly selected: RunId | null;
 }
 
 export function subagentsPaneTemplate(
   model: SubagentsPaneModel,
 ): TemplateResult {
   const selected =
-    model.selected == null ? undefined : model.view.streams.get(model.selected);
+    model.selected == null ? undefined : model.view.runs.get(model.selected);
   if (!selected) {
     return html`<div class="task-subagents-empty">
       Select a task to see the agents it dispatched.

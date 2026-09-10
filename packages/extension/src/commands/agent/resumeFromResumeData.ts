@@ -5,11 +5,11 @@ import {
   defaultSession,
   trackTerminalResultPresentation,
 } from '@agent/runtime';
-import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
+import { resumeRunWithRefusalNotice } from '@controllers/session/resumeRunPresentation';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runExecuteCommand } from './executeCommand';
@@ -17,28 +17,28 @@ import { runExecuteCommand } from './executeCommand';
 const logger = createLog('resumeFromResumeData');
 
 export async function tryResumeFromResumeData(
-  streamId: StreamTabId,
+  runId: RunId,
   recovery?: RecoveryContinuation,
 ): Promise<boolean> {
   const session = defaultSession();
   const terminalResult = trackTerminalResultPresentation(
     session,
-    (event) => event.streamId === streamId,
+    (event) => event.runId === runId,
   );
   // Per-attempt monotone cancellation latch: once an observed transcript
   // absence invalidates the attempt, re-creating the same stream id cannot
   // make it admissible again.
   let cancellationRequested = false;
   const isCancellationRequested = (): boolean => {
-    if (!cancellationRequested && !session.transcripts.has(streamId)) {
+    if (!cancellationRequested && !session.transcripts.has(runId)) {
       cancellationRequested = true;
     }
     return cancellationRequested;
   };
   try {
     return await effectRuntime().runPromise(
-      resumeStreamWithRefusalNotice(
-        streamId,
+      resumeRunWithRefusalNotice(
+        runId,
         {
           session,
           recovery,
@@ -46,18 +46,18 @@ export async function tryResumeFromResumeData(
           executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
             runExecuteCommand({
               config,
-              executionId: id,
+              runId: id,
               modelHandlerCompatibilityKey,
             }),
         },
         (failure) => {
-          logger.warn(`Stream ${streamId} was not resumed: ${failure}`);
+          logger.warn(`Stream ${runId} was not resumed: ${failure}`);
         },
       ),
     );
   } catch (error) {
     if (isCancellationRequested()) return false;
-    logger.error(`Failed to resume stream: ${streamId}`, { data: error });
+    logger.error(`Failed to resume stream: ${runId}`, { data: error });
     await terminalResult.reportUnhandled(() =>
       vscode.window.showWarningMessage(
         `Resume failed: ${toErrorMessage(error)}`,

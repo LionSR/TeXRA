@@ -12,7 +12,7 @@
 import { signal, type Signal } from '@lit-labs/signals';
 
 import type { StateStore } from '@platform/interfaces';
-import type { SessionType, StreamTabId } from '@shared/schemas';
+import type { SessionType, RunId } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -192,22 +192,22 @@ export function createSessionSurfaces(options: {
   /** An asynchronous operation keeps the draft that started it, even if
    *  selection or the launcher's mode changes before its response. */
   interface DraftOrigin {
-    readonly streamId: StreamTabId | null;
+    readonly runId: RunId | null;
     readonly sessionType: SessionType;
   }
 
   function draftText(entry: Held, origin: DraftOrigin): string {
     const surface = entry.surface$.get();
-    return origin.streamId === null
+    return origin.runId === null
       ? surface.launch.instruction[origin.sessionType]
-      : (surface.drafts.get(origin.streamId)?.text ?? '');
+      : (surface.drafts.get(origin.runId)?.text ?? '');
   }
 
   function setDraftText(entry: Held, origin: DraftOrigin, text: string): void {
-    if (origin.streamId !== null) {
+    if (origin.runId !== null) {
       // A completed operation cannot recreate a deleted conversation.
-      if (!entry.view$.get().streams.has(origin.streamId)) return;
-      act(entry, { kind: 'draft', streamId: origin.streamId, patch: { text } });
+      if (!entry.view$.get().runs.has(origin.runId)) return;
+      act(entry, { kind: 'draft', runId: origin.runId, patch: { text } });
       return;
     }
     act(entry, {
@@ -256,18 +256,18 @@ export function createSessionSurfaces(options: {
         // The launcher has no image draft, so the stored file joins its
         // media list as a picker's paths would; a follow-up draft holds the
         // chip under the pasted name and the send carries the stored file.
-        if (origin.streamId === null) {
+        if (origin.runId === null) {
           act(entry, {
             kind: 'launch',
             patch: withPickedPaths(launch, 'media', [outcome.fileName]),
           });
           return;
         }
-        const draft = entry.surface$.get().drafts.get(origin.streamId);
+        const draft = entry.surface$.get().drafts.get(origin.runId);
         if (!draft) return;
         act(entry, {
           kind: 'draft',
-          streamId: origin.streamId,
+          runId: origin.runId,
           patch: {
             images: draft.images.map((image) =>
               image.fileName === request.fileName
@@ -328,16 +328,16 @@ export function createSessionSurfaces(options: {
 
   function hostRequestFor(entry: Held, request: HostRequest): void {
     const surface = entry.surface$.get();
-    let streamId = resolveSelected(entry.view$.get(), surface);
+    let runId = resolveSelected(entry.view$.get(), surface);
     if (request.kind === 'record' && request.action.kind === 'start') {
-      streamId =
+      runId =
         request.action.target === 'launch' ? null : request.action.target;
     }
     const origin: DraftOrigin = {
-      streamId,
+      runId,
       sessionType: surface.launch.sessionType,
     };
-    const target = origin.streamId ?? `launch:${origin.sessionType}`;
+    const target = origin.runId ?? `launch:${origin.sessionType}`;
     if (request.kind === 'polish') {
       if (surface.polishing.has(target)) return;
       setSurface(entry, {
@@ -366,27 +366,27 @@ export function createSessionSurfaces(options: {
 
   function runtimeRequestFor(entry: Held, request: RuntimeRequest): void {
     const { key } = entry;
-    const streamId = 'streamId' in request ? request.streamId : null;
+    const runId = 'runId' in request ? request.runId : null;
     if (request.kind === 'followUp.send') {
       const current = entry.surface$.get();
-      if (current.sending.has(request.streamId)) return;
+      if (current.sending.has(request.runId)) return;
       setSurface(entry, {
         ...current,
-        sending: new Set([...current.sending, request.streamId]),
+        sending: new Set([...current.sending, request.runId]),
       });
     }
     // A new request on the stream retires the answer to the last one.
-    if (streamId !== null && entry.surface$.get().rejected.has(streamId)) {
+    if (runId !== null && entry.surface$.get().rejected.has(runId)) {
       const current = entry.surface$.get();
       const rejected = new Map(current.rejected);
-      rejected.delete(streamId);
+      rejected.delete(runId);
       setSurface(entry, { ...current, rejected });
     }
     // Keep text and images until admission succeeds. A rejection needs
     // no restoration, and a later edit remains independent of this send.
     const submitted =
       request.kind === 'followUp.send'
-        ? entry.surface$.get().drafts.get(request.streamId)
+        ? entry.surface$.get().drafts.get(request.runId)
         : undefined;
     void transport
       .request({
@@ -404,27 +404,27 @@ export function createSessionSurfaces(options: {
         if (
           !result.ok &&
           result.error._tag !== 'Cancelled' &&
-          streamId !== null
+          runId !== null
         ) {
           const current = entry.surface$.get();
           setSurface(entry, {
             ...current,
-            rejected: new Map(current.rejected).set(streamId, result.error),
+            rejected: new Map(current.rejected).set(runId, result.error),
           });
         }
         if (request.kind !== 'followUp.send') return;
         const current = entry.surface$.get();
         const sending = new Set(current.sending);
-        sending.delete(request.streamId);
+        sending.delete(request.runId);
         setSurface(entry, { ...current, sending });
         if (!result.ok) return;
         if (
           submitted !== undefined &&
-          entry.surface$.get().drafts.get(request.streamId) === submitted
+          entry.surface$.get().drafts.get(request.runId) === submitted
         ) {
           act(entry, {
             kind: 'draft',
-            streamId: request.streamId,
+            runId: request.runId,
             patch: EMPTY_DRAFT,
           });
         }
@@ -436,10 +436,10 @@ export function createSessionSurfaces(options: {
   function submit(entry: Held): void {
     const surface = entry.surface$.get();
     const view = entry.view$.get();
-    const streamId = resolveSelected(view, surface);
-    if (streamId !== null) {
-      const stream = view.streams.get(streamId);
-      const draft = surface.drafts.get(streamId) ?? EMPTY_DRAFT;
+    const runId = resolveSelected(view, surface);
+    if (runId !== null) {
+      const stream = view.runs.get(runId);
+      const draft = surface.drafts.get(runId) ?? EMPTY_DRAFT;
       // The same decision the composer's Send takes, from the same fold
       // fields: a run that ended or that another process owns takes no
       // follow-up, however the send was reached.
@@ -450,7 +450,7 @@ export function createSessionSurfaces(options: {
       );
       runtimeRequestFor(entry, {
         kind: 'followUp.send',
-        streamId,
+        runId,
         text: text === '' ? '(image)' : text,
         mediaFiles: mediaFiles.length > 0 ? mediaFiles : null,
       });

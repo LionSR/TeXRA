@@ -13,12 +13,12 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 /**
  * Every permission kind's wire schema carries `requestId`; retry is the one
- * kind not *keyed* by it — retry is keyed by `streamId` instead (one pending
+ * kind not *keyed* by it — retry is keyed by `runId` instead (one pending
  * retry per stream, a new request replaces the old one).
  */
 function permissionId(permission: PermissionPayload): string {
   return permission.kind === PERMISSION_KIND.RETRY
-    ? permission.data.streamId
+    ? permission.data.runId
     : permission.data.requestId;
 }
 

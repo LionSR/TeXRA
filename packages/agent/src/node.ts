@@ -58,7 +58,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       secrets: environmentSecrets,
       lifecycle: createLifecycleHost(),
       agentResume: {
-        tryResumeStream: async () => false,
+        tryResumeRun: async () => false,
       },
       agentDirectories: {
         custom: async () => options.agentsDir,

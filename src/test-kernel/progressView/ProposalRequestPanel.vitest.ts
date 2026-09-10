@@ -19,7 +19,7 @@ function createPermission(): ProposalRequestPanel['permission'] {
     kind: 'proposal',
     data: {
       requestId: 'proposal-1',
-      streamId: 'stream-a',
+      runId: 'stream-a',
       agentCategory: AgentCategory.Workflow,
       agent: 'writer',
       agentSource: null,
@@ -90,14 +90,14 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       kind: 'policy.set',
       change: {
         field: 'bypass',
-        streamId: 'stream-a',
+        runId: 'stream-a',
         bypass: 'superYolo',
         enabled: true,
       },
     };
     const approve = {
       kind: 'decision.proposal',
-      streamId: 'stream-a',
+      runId: 'stream-a',
       approvalId: 'proposal-1',
       decision: { action: 'approve', model: null, agent: null },
     };

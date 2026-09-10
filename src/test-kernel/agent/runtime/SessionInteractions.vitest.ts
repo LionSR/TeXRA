@@ -19,7 +19,7 @@ import {
   type Plan,
   type PlanApprovalPermission,
   type RetryPermission,
-  type StreamTabId,
+  type RunId,
   type ToolEditPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
@@ -39,7 +39,7 @@ import {
  * installed into a real `SessionHandle` slot.
  */
 
-const streamId = 'stream:interactions-test' as StreamTabId;
+const runId = 'stream:interactions-test' as RunId;
 const plan: Plan = { objective: 'Route approvals through the session port.' };
 const proposal: AgentProposal = {
   agentCategory: AgentCategory.ToolUse,
@@ -81,14 +81,14 @@ function createPortSession(): {
   const setApprovalBypassState = vi.fn();
   const shown = new Map<
     string,
-    { kind: SettledInteractionKind; streamId: string }
+    { kind: SettledInteractionKind; runId: string }
   >();
   const pending = <K extends SettledInteractionKind>(
     kind: K,
-    request: { requestId: string; streamId: string },
+    request: { requestId: string; runId: string },
   ): Promise<never> => {
     uiEvents.push({ event: `show:${kind}`, id: request.requestId });
-    shown.set(request.requestId, { kind, streamId: request.streamId });
+    shown.set(request.requestId, { kind, runId: request.runId });
     return new Promise(() => {});
   };
   const interactions: HostInteractions = {
@@ -155,7 +155,7 @@ function createControllablePlanAdapter() {
       for (const [requestId, entry] of pending) {
         if (
           !matchesCancelSelector(
-            { kind: 'planApproval', streamId: entry.request.streamId },
+            { kind: 'planApproval', runId: entry.request.runId },
             selector,
           )
         )
@@ -196,11 +196,11 @@ const criticism = {
 function requestPlan(
   session: SessionHandle,
   requestId: string,
-  stream: StreamTabId = streamId,
+  stream: RunId = runId,
 ): Promise<PlanApprovalResult> {
   return session.interactions.requestPlanApproval({
     requestId,
-    streamId: stream,
+    runId: stream,
     plan,
     goalEnabled: false,
   });
@@ -212,7 +212,7 @@ function requestProposal(
 ): Promise<ProposalResult> {
   return session.interactions.requestAgentProposal({
     requestId,
-    streamId,
+    runId,
     ...proposal,
   });
 }
@@ -233,7 +233,7 @@ describe('session.interactions immediate capabilities', () => {
   it('forwards approval bypass state through the desktop port', () => {
     const { interactions, setApprovalBypassState } = createPortSession();
     const update = {
-      streamId,
+      runId,
       kind: 'toolEdit',
       bypassActive: true,
     } as const;
@@ -523,7 +523,7 @@ describe('session.interactions request bookkeeping', () => {
           requestId: 'inquiry:unattached',
           threadId: 'inquiry:unattached',
           question: 'Can this notification be shown?',
-          streamId,
+          runId,
           allowBypass: false,
           sessionLinks: null,
           transcript: null,
@@ -562,7 +562,7 @@ describe('session.interactions request bookkeeping', () => {
       // Severity is a field on the entry, not text inside the message.
       expect(parkWarnings()[0]?.level).toBe('WARN');
       expect(String(parkWarnings()[0]?.message)).toContain('planApproval');
-      expect(String(parkWarnings()[0]?.message)).toContain(streamId);
+      expect(String(parkWarnings()[0]?.message)).toContain(runId);
 
       // Parking stays load-bearing: a host attaching later still replays the
       // request exactly once (this is how a webview reload recovers a prompt).
@@ -735,7 +735,7 @@ describe('session.interactions request bookkeeping', () => {
     const session = createTestSession();
     const pending = requestPlan(session, 'approval:cancel-unattached');
 
-    session.interactions.cancel({ streamId, cause: 'Run ended.' });
+    session.interactions.cancel({ runId, cause: 'Run ended.' });
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
@@ -755,11 +755,11 @@ describe('session.interactions request bookkeeping', () => {
         },
       ],
       allowBypass: false,
-      streamId: '',
+      runId: '',
     });
 
     session.interactions.cancel({
-      streamId: null,
+      runId: null,
       cause: 'No stream owns this question.',
     });
 
@@ -813,17 +813,17 @@ describe('session.interactions request bookkeeping', () => {
   it('a stream-scoped cancel settles every pending request for that stream only', async () => {
     const { session, submitPlanDecision, submitProposalDecision } =
       createPortSession();
-    const otherStreamId = 'stream:interactions-other' as StreamTabId;
+    const otherRunId = 'stream:interactions-other' as RunId;
     try {
       const pendingPlan = requestPlan(session, 'approval:cleanup');
       const pendingProposal = requestProposal(session, 'proposal:cleanup');
       const surviving = requestPlan(
         session,
         'approval:survives',
-        otherStreamId,
+        otherRunId,
       );
 
-      session.interactions.cancel({ streamId, cause: 'Run ended.' });
+      session.interactions.cancel({ runId, cause: 'Run ended.' });
 
       await expect(pendingPlan).resolves.toMatchObject({ action: 'reject' });
       await expect(pendingProposal).resolves.toMatchObject({
@@ -859,7 +859,7 @@ describe('session.interactions request bookkeeping', () => {
       const pendingProposal = requestProposal(session, 'proposal:kind-scope');
 
       session.interactions.cancel({
-        streamId,
+        runId,
         kind: 'planApproval',
         cause: 'Plan approval cleared.',
       });

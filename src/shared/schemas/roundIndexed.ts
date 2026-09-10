@@ -150,8 +150,8 @@ export function cloneRoundIndexed<T>(
  * swallowed), empty rounds are omitted, and a genuinely corrupt top-level
  * value degrades to an empty record with a warning. A missing file
  * (`undefined`) is silently empty. Every failure path returns a FRESH object:
- * consumers (e.g. `StreamSnapshotStore`) hold the result by reference and
- * mutate it, so a shared fallback instance would leak rounds across streams.
+ * consumers (e.g. `RunSnapshotStore`) hold the result by reference and
+ * mutate it, so a shared fallback instance would leak rounds across runs.
  */
 export function parsePersistedRoundIndexed<T>(
   kind: string,

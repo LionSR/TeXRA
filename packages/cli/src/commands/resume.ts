@@ -3,7 +3,7 @@ import { defineCommand } from 'citty';
 import { CliExitCode } from '../runtime/exitCodes';
 import { parseCliHistoryId } from '../runtime/history';
 import { writeTextStderr } from '../runtime/logSinks';
-import { runResumeExecution } from './resumeExecution';
+import { runResumeCommand } from './resumeRun';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
@@ -22,17 +22,17 @@ export const resumeCommand = defineCommand({
     id: {
       type: 'positional',
       required: true,
-      description: 'Execution id from `texra history list`',
+      description: 'Run id from `texra history list`',
     },
   },
   async run(ctx) {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
-      writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
+      writeTextStderr(`Invalid run id: ${ctx.args.id}`);
       setExitCode(CliExitCode.Usage);
       return;
     }
     const context = await contextFromArgs(ctx.args, ctx.rawArgs);
-    setExitCode(await runResumeExecution(context, id));
+    setExitCode(await runResumeCommand(context, id));
   },
 });

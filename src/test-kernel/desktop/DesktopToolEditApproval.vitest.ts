@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Effect, Fiber, Stream } from 'effect';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
+import type { DesktopAgentRunHost } from '@desktop/main/desktopAgentRunHost';
 import type { DiffSource } from '@hosts/uiHosts';
 
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -16,9 +16,9 @@ import type {
   ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import {
-  createStubDesktopAgentExecutionHost,
+  createStubDesktopAgentRunHost,
   disposeAfterTest,
-} from './desktopAgentExecutionTestHarness.ts';
+} from './desktopAgentRunTestHarness.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
@@ -98,8 +98,8 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       typeof import('@agent/runtime/RunContext')
     >('@agent/runtime/RunContext');
     const { createSessionApprovals } = await vi.importActual<
-      typeof import('@agent/runtime/streamApprovalQueue')
-    >('@agent/runtime/streamApprovalQueue');
+      typeof import('@agent/runtime/runApprovalQueue')
+    >('@agent/runtime/runApprovalQueue');
     // Session-owned approval state (bypass reads) for the fake run session.
     const approvals = createSessionApprovals({ setApprovalBypassState() {} });
     return {
@@ -152,7 +152,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 
   const [
     { requestToolEditApproval },
-    { releaseStreamResources },
+    { releaseRunResources },
     controllerModule,
     desktopModule,
   ] = await Promise.all([
@@ -164,7 +164,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   return {
     activeApproval,
     requestToolEditApproval,
-    releaseStreamResources,
+    releaseRunResources,
     controllerModule,
     desktopModule,
   };
@@ -173,7 +173,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 /** A controller with real staged previews and an isolated session. */
 async function createApprovalFixture(
   options: {
-    ui?: DesktopAgentExecutionHost;
+    ui?: DesktopAgentRunHost;
     workspacePath?: string;
   } = {},
 ) {
@@ -181,7 +181,7 @@ async function createApprovalFixture(
   const modules = await loadApprovalModules(options.workspacePath);
   const session = disposeAfterTest(createTestSession());
   const host = new modules.desktopModule.DesktopToolEditApprovalHost({
-    ui: options.ui ?? createStubDesktopAgentExecutionHost(),
+    ui: options.ui ?? createStubDesktopAgentRunHost(),
     tempRoot,
   });
   const stagePreview = vi.spyOn(host, 'stagePreview');
@@ -225,7 +225,7 @@ describe('desktop tool edit approval', () => {
           originalContent: 'old target\n',
           proposedContent: 'new target\n',
           sourceTool: 'write_file',
-          streamId: 'stream-target',
+          runId: 'stream-target',
         }),
       );
       const other = controller.requestApproval(
@@ -234,7 +234,7 @@ describe('desktop tool edit approval', () => {
           originalContent: 'old other\n',
           proposedContent: 'new other\n',
           sourceTool: 'write_file',
-          streamId: 'stream-other',
+          runId: 'stream-other',
         }),
       );
       const requests = await waitForPreviews(2);
@@ -243,7 +243,7 @@ describe('desktop tool edit approval', () => {
       void target.then(() => {
         targetSettled = true;
       });
-      await controller.approvePendingForStream('stream-target');
+      await controller.approvePendingForRun('stream-target');
       await expect(target).resolves.toMatchObject({
         action: 'apply',
         appliedContent: 'new target\n',
@@ -251,7 +251,7 @@ describe('desktop tool edit approval', () => {
       expect(targetSettled).toBe(true);
 
       const otherRequest = requests.find(
-        (request) => request.streamId === 'stream-other',
+        (request) => request.runId === 'stream-other',
       );
       expect(otherRequest).toBeDefined();
       controller.handleAction({
@@ -268,7 +268,7 @@ describe('desktop tool edit approval', () => {
       const opened: string[] = [];
       const { requestToolEditApproval, controller, waitForPreviews } =
         await createApprovalFixture({
-          ui: createStubDesktopAgentExecutionHost({
+          ui: createStubDesktopAgentRunHost({
             openPath: async (filePath) => {
               opened.push(filePath);
             },
@@ -280,7 +280,7 @@ describe('desktop tool edit approval', () => {
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        streamId: 'stream-2',
+        runId: 'stream-2',
       });
       const [request] = await waitForPreviews();
 
@@ -320,7 +320,7 @@ describe('desktop tool edit approval', () => {
       );
       const { requestToolEditApproval, controller, waitForPreviews } =
         await createApprovalFixture({
-          ui: createStubDesktopAgentExecutionHost({ openPath, openDiff }),
+          ui: createStubDesktopAgentRunHost({ openPath, openDiff }),
         });
 
       const resultPromise = requestToolEditApproval({
@@ -358,7 +358,7 @@ describe('desktop tool edit approval', () => {
       const opened: string[] = [];
       const { requestToolEditApproval, controller, waitForPreviews } =
         await createApprovalFixture({
-          ui: createStubDesktopAgentExecutionHost({
+          ui: createStubDesktopAgentRunHost({
             openPath: async (filePath) => {
               opened.push(filePath);
             },
@@ -370,7 +370,7 @@ describe('desktop tool edit approval', () => {
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        streamId: 'stream-edited-preview',
+        runId: 'stream-edited-preview',
       });
       const [request] = await waitForPreviews();
 
@@ -404,7 +404,7 @@ describe('desktop tool edit approval', () => {
       const messages: string[] = [];
       const { requestToolEditApproval, controller, waitForPreviews } =
         await createApprovalFixture({
-          ui: createStubDesktopAgentExecutionHost({
+          ui: createStubDesktopAgentRunHost({
             openPath: async (filePath) => {
               opened.push(filePath);
             },
@@ -419,7 +419,7 @@ describe('desktop tool edit approval', () => {
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        streamId: 'stream-failed-read',
+        runId: 'stream-failed-read',
       });
       const [request] = await waitForPreviews();
       const { requestId } = request;
@@ -457,7 +457,7 @@ describe('desktop tool edit approval', () => {
       const openBuildDisplay = vi.fn(async () => {});
       const { requestToolEditApproval, controller, waitForPreviews } =
         await createApprovalFixture({
-          ui: createStubDesktopAgentExecutionHost({ openBuildDisplay }),
+          ui: createStubDesktopAgentRunHost({ openBuildDisplay }),
         });
 
       const resultPromise = requestToolEditApproval({
@@ -507,7 +507,7 @@ describe('desktop tool edit approval', () => {
       const { requestToolEditApproval, controller, waitForPreviews } =
         await createApprovalFixture({
           workspacePath: workspaceRoot,
-          ui: createStubDesktopAgentExecutionHost({
+          ui: createStubDesktopAgentRunHost({
             openBuildDisplay: async (location, options) => {
               displayed.push({ absolutePath: location.absolutePath, options });
             },
@@ -563,17 +563,17 @@ describe('desktop tool edit approval', () => {
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        streamId: 'stream-cancel-during-init',
+        runId: 'stream-cancel-during-init',
       });
       controller.cancel({
         kind: 'toolEdit',
-        streamId: 'stream-cancel-during-init',
-        cause: 'Owning execution ended.',
+        runId: 'stream-cancel-during-init',
+        cause: 'Owning run ended.',
       });
 
       await expect(resultPromise).resolves.toMatchObject({
         action: 'reject',
-        cause: 'Owning execution ended.',
+        cause: 'Owning run ended.',
       });
       await waitForEmptyDir(tempRoot);
     },
@@ -590,7 +590,7 @@ describe('desktop tool edit approval', () => {
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        streamId: 'stream-dispose-during-init',
+        runId: 'stream-dispose-during-init',
       });
       controller.dispose();
 
@@ -613,21 +613,21 @@ describe('desktop tool edit approval', () => {
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        streamId: 'stream-cancelled',
+        runId: 'stream-cancelled',
       });
       const retainedPromise = requestToolEditApproval({
         path: '/workspace/retained.tex',
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        streamId: 'stream-retained',
+        runId: 'stream-retained',
       });
       const requests = await waitForPreviews(2);
       const cancelledRequest = requests.find(
-        (request) => request.streamId === 'stream-cancelled',
+        (request) => request.runId === 'stream-cancelled',
       );
       const retainedRequest = requests.find(
-        (request) => request.streamId === 'stream-retained',
+        (request) => request.runId === 'stream-retained',
       );
       if (!cancelledRequest || !retainedRequest) {
         throw new Error('Expected both stream-scoped approval prompts.');
@@ -635,13 +635,13 @@ describe('desktop tool edit approval', () => {
 
       controller.cancel({
         kind: 'toolEdit',
-        streamId: 'stream-cancelled',
-        cause: 'Owning execution ended.',
+        runId: 'stream-cancelled',
+        cause: 'Owning run ended.',
       });
 
       await expect(cancelledPromise).resolves.toMatchObject({
         action: 'reject',
-        cause: 'Owning execution ended.',
+        cause: 'Owning run ended.',
       });
 
       controller.handleAction({
@@ -661,7 +661,7 @@ describe('desktop tool edit approval', () => {
     'cleans pending entries and temp files when stream cleanup rejects a request',
     async () => {
       const {
-        releaseStreamResources,
+        releaseRunResources,
         controller,
         waitForPreviews,
         session,
@@ -679,13 +679,13 @@ describe('desktop tool edit approval', () => {
           originalContent: 'old\n',
           proposedContent: 'new\n',
           sourceTool: 'write_file',
-          streamId: 'stream-cleanup',
+          runId: 'stream-cleanup',
         }),
       );
       await waitForPreviews();
 
       // Pending interactions are session-owned: sweep the owning session.
-      releaseStreamResources('stream-cleanup', session);
+      releaseRunResources('stream-cleanup', session);
 
       await expect(resultPromise).resolves.toMatchObject({
         action: 'reject',

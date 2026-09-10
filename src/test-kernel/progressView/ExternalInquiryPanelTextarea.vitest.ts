@@ -24,7 +24,7 @@ function createPermission(
     data: {
       requestId: 'inquiry-1',
       allowBypass: false,
-      streamId: 'stream-1',
+      runId: 'stream-1',
       threadId: 'ei_000000000000',
       question: 'What is the answer?',
       ...overrides,
@@ -124,7 +124,7 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
     expect(actions).toEqual([
       {
         kind: 'externalInquiry.submit',
-        streamId: 'stream-1',
+        runId: 'stream-1',
         threadId: 'ei_000000000000',
         turnIndex: 1,
         answer: 'the answer',

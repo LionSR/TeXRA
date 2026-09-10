@@ -1,25 +1,25 @@
 // Local imports - shared stream identity
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 export interface ChildListSelectionState {
   readonly focused: boolean;
-  readonly selectedValue: StreamTabId | undefined;
+  readonly selectedValue: RunId | undefined;
 }
 
 type ChildListSelectionAction =
   | { readonly kind: 'blur' }
-  | { readonly kind: 'focus'; readonly value?: StreamTabId }
-  | { readonly kind: 'focusStream'; readonly streamId: StreamTabId }
-  | { readonly kind: 'highlight'; readonly value: StreamTabId }
+  | { readonly kind: 'focus'; readonly value?: RunId }
+  | { readonly kind: 'focusRun'; readonly runId: RunId }
+  | { readonly kind: 'highlight'; readonly value: RunId }
   | {
-      readonly kind: 'syncActiveStream';
-      readonly streamId: StreamTabId;
-      readonly values: readonly StreamTabId[];
+      readonly kind: 'syncActiveRun';
+      readonly runId: RunId;
+      readonly values: readonly RunId[];
     }
   | {
       readonly kind: 'reconcile';
-      readonly activeStreamId: StreamTabId | undefined;
-      readonly values: readonly StreamTabId[];
+      readonly activeRunId: RunId | undefined;
+      readonly values: readonly RunId[];
     };
 
 export const INITIAL_CHILD_LIST_SELECTION: ChildListSelectionState = {
@@ -28,13 +28,13 @@ export const INITIAL_CHILD_LIST_SELECTION: ChildListSelectionState = {
 };
 
 function resolveChildSelectionValue(
-  values: readonly StreamTabId[],
-  selectedValue: StreamTabId | undefined,
-  activeStreamId: StreamTabId | undefined,
-): StreamTabId | undefined {
+  values: readonly RunId[],
+  selectedValue: RunId | undefined,
+  activeRunId: RunId | undefined,
+): RunId | undefined {
   if (selectedValue && values.includes(selectedValue)) return selectedValue;
-  if (activeStreamId)
-    return values.includes(activeStreamId) ? activeStreamId : undefined;
+  if (activeRunId)
+    return values.includes(activeRunId) ? activeRunId : undefined;
   return values[0];
 }
 
@@ -51,20 +51,20 @@ export function reduceChildListSelection(
         focused: true,
         selectedValue: state.selectedValue ?? action.value,
       };
-    case 'focusStream':
+    case 'focusRun':
       return {
         focused: false,
-        selectedValue: action.streamId,
+        selectedValue: action.runId,
       };
     case 'highlight':
       return action.value === state.selectedValue
         ? state
         : { ...state, selectedValue: action.value };
-    case 'syncActiveStream': {
+    case 'syncActiveRun': {
       const activeValue = resolveChildSelectionValue(
         action.values,
         undefined,
-        action.streamId,
+        action.runId,
       );
       return activeValue === state.selectedValue
         ? state
@@ -75,7 +75,7 @@ export function reduceChildListSelection(
       const selectedValue = resolveChildSelectionValue(
         action.values,
         state.selectedValue,
-        action.activeStreamId,
+        action.activeRunId,
       );
       return selectedValue === state.selectedValue
         ? state

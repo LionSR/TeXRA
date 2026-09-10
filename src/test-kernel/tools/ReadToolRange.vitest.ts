@@ -6,7 +6,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ReadFileTool } from '@tools/ReadTool';
 
@@ -22,8 +22,8 @@ async function callRead(input: unknown) {
   const tool = new ReadFileTool();
   return withRunContext(
     createRunContext({
-      streamId: `stream:${EXECUTION_ID}` as StreamTabId,
-      executionId: EXECUTION_ID,
+      runId: `stream:${EXECUTION_ID}` as RunId,
+      runId: EXECUTION_ID,
     }),
     () => tool.call(input),
   );

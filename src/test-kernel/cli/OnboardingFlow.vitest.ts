@@ -45,7 +45,7 @@ const originalConsoleConstructor = Object.getOwnPropertyDescriptor(
   'Console',
 );
 
-function restoreProcessStream(
+function restoreProcessRun(
   name: 'stdin' | 'stdout' | 'stderr',
   descriptor: PropertyDescriptor | undefined,
 ): void {
@@ -59,9 +59,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  restoreProcessStream('stdin', originalStdin);
-  restoreProcessStream('stdout', originalStdout);
-  restoreProcessStream('stderr', originalStderr);
+  restoreProcessRun('stdin', originalStdin);
+  restoreProcessRun('stdout', originalStdout);
+  restoreProcessRun('stderr', originalStderr);
   if (originalConsoleConstructor) {
     Object.defineProperty(console, 'Console', originalConsoleConstructor);
   } else {

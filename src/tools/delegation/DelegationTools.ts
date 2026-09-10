@@ -17,9 +17,9 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import {
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -42,7 +42,7 @@ import {
   type ToolUseAgentProposal,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
-import { requireRunStream } from '@tools/contextHelpers';
+import { requireLiveRun } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -76,30 +76,30 @@ const log = createLog('delegation');
  */
 const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
   function* (
-    handle: AgentExecutionHandle,
+    handle: RunHandle,
     session: SessionHandle,
-    executionId: string,
+    runId: string,
     err: unknown,
   ): Effect.fn.Return<void, Error> {
     log.warn(
-      `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
+      `Failed to wake resumed subagent '${runId}': ${toErrorMessage(err)}`,
     );
-    const msg = formatSubagentError(executionId, handle.agentName, err);
-    const targetStreamId = handle.deliveryTarget;
-    if (targetStreamId === undefined) {
+    const msg = formatSubagentError(runId, handle.agentName, err);
+    const targetRunId = handle.deliveryTarget;
+    if (targetRunId === undefined) {
       log.warn(
-        `The wake-failure error for '${executionId}' has no parent to deliver to (detached).`,
+        `The wake-failure error for '${runId}' has no parent to deliver to (detached).`,
       );
       return;
     }
     const delivery = yield* deliverChildRunFollowUp({
-      targetStreamId,
+      targetRunId,
       followUp: { text: msg, origin: 'subagent_result' },
       session,
     });
     if (delivery.kind !== 'delivered') {
       log.warn(
-        `Also failed to deliver the wake-failure error for '${executionId}' to the parent (${delivery.kind}).`,
+        `Also failed to deliver the wake-failure error for '${runId}' to the parent (${delivery.kind}).`,
       );
     }
   },
@@ -135,7 +135,7 @@ Optional auto-attach from the input LaTeX:
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
     const agent = requireVisibleAgent('workflow', input.agent);
     const agentName = agent.name;
-    const { streamId, context } = requireRunStream('delegate_workflow');
+    const { runId, context } = requireLiveRun('delegate_workflow');
 
     const model = await effectRuntime().runPromise(
       selectAvailableDelegationModel({
@@ -181,7 +181,7 @@ Optional auto-attach from the input LaTeX:
         getCurrentToolCallContext(),
         proposal,
         agentName,
-        streamId,
+        runId,
       ),
     );
   }
@@ -217,7 +217,7 @@ const DelegateAgentInputSchema = z
       .string()
       .nullish()
       .describe(
-        'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the execution ID from the original delegation result or /executions.',
+        'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the run ID from the original delegation result or /executions.',
       ),
   })
   .refine((data) => Boolean(data.agent) !== Boolean(data.execution_id), {
@@ -263,7 +263,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
           input.execution_id,
           input.instruction,
           currentSession(),
-          getRunContextStreamId(tryUseRunContext()),
+          getRunContextRunId(tryUseRunContext()),
         ),
       );
     }
@@ -274,7 +274,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
     const agent = requireVisibleAgent('toolUse', input.agent!);
     const agentName = agent.name;
 
-    const { streamId, context } = requireRunStream('delegate_agent');
+    const { runId, context } = requireLiveRun('delegate_agent');
 
     const model = await effectRuntime().runPromise(
       selectAvailableDelegationModel({
@@ -306,7 +306,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
         getCurrentToolCallContext(),
         proposal,
         agentName,
-        streamId,
+        runId,
       ),
     );
   }
@@ -314,16 +314,16 @@ Git worktree support: resolved from the active workspace at runtime.`,
   /** Queue follow-up instructions for a tool-use subagent. */
   private readonly resumeAgent = Effect.fn('DelegateAgentTool.resumeAgent')(
     function* (
-      executionId: string,
+      runId: string,
       instruction: string,
       session: SessionHandle,
-      callerStreamId: RunId | undefined,
+      callerRunId: RunId | undefined,
     ): Effect.fn.Return<ToolResult, Error> {
-      const handle = session.executions.getHandle(executionId);
+      const handle = session.runs.getHandle(runId);
       if (!handle) {
         return yield* Effect.fail(
           new Error(
-            `Execution '${executionId}' not found. Use the executions tool to check status.`,
+            `Run '${runId}' not found. Use the executions tool to check status.`,
           ),
         );
       }
@@ -331,7 +331,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       if (handle.category !== 'toolUse') {
         return yield* Effect.fail(
           new Error(
-            `Execution '${executionId}' is a workflow agent. Only tool-use subagents can be resumed.`,
+            `Run '${runId}' is a workflow agent. Only tool-use subagents can be resumed.`,
           ),
         );
       }
@@ -343,21 +343,21 @@ Git worktree support: resolved from the active workspace at runtime.`,
       if (!handle.isChild) {
         return yield* Effect.fail(
           new Error(
-            `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,
+            `Run '${runId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,
           ),
         );
       }
-      if (callerStreamId && !handle.isOwnedBy(callerStreamId)) {
+      if (callerRunId && !handle.isOwnedBy(callerRunId)) {
         return yield* Effect.fail(
           new Error(
-            `Execution '${executionId}' belongs to a different orchestrator session. Its results would be delivered there, not here. Start a new delegation instead.`,
+            `Run '${runId}' belongs to a different orchestrator session. Its results would be delivered there, not here. Start a new delegation instead.`,
           ),
         );
       }
 
       const framedInstruction = formatFollowUpInstruction(instruction);
       const result = yield* submitFollowUp(
-        handle.executionId,
+        handle.runId,
         framedInstruction,
         { session },
       );
@@ -376,7 +376,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
           deliverResumeWakeFailure(
             handle,
             session,
-            executionId,
+            runId,
             new Error(
               'The subagent could not be resumed to process the follow-up.',
             ),
@@ -393,7 +393,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
         return executed(
           [
             `Follow-up instruction queued for '${handle.agentName}', but the subagent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`,
-            `Execution ID: ${executionId}`,
+            `Run ID: ${runId}`,
           ].join('\n'),
           `Follow-up queued for '${handle.agentName}' (resume failed)`,
         );
@@ -403,7 +403,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
         return executed(
           [
             `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-            `Execution ID: ${executionId}`,
+            `Run ID: ${runId}`,
           ].join('\n'),
           `Follow-up sent to '${handle.agentName}'`,
         );
@@ -411,7 +411,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       return executed(
         [
           `Follow-up instruction queued for '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-          `Execution ID: ${executionId}`,
+          `Run ID: ${runId}`,
         ].join('\n'),
         `Follow-up queued for '${handle.agentName}'`,
       );

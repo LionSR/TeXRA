@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  StreamSnapshotSchema,
-  type ExecutionId,
-  type StreamTabId,
+  RunSnapshotSchema,
+  type RunId,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { injectStandaloneTrace, type TraceDocument } from '@transcript';
 
-const STREAM_ID = 'orchestrator@deepseekT#exec-1' as StreamTabId;
+const STREAM_ID = 'orchestrator@deepseekT#exec-1' as RunId;
 
 function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
   return {
-    executionId: 'exec-1' as ExecutionId,
-    streamId: STREAM_ID,
+    runId: 'exec-1' as RunId,
+    runId: STREAM_ID,
     config: AgentConfigSchema.parse({
       agent: 'orchestrator',
       model: 'deepseekT',
@@ -26,11 +26,11 @@ function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
       schemaVersion: 1,
       timestamp: '2026-01-01T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
-      streamId: STREAM_ID,
+      runId: STREAM_ID,
     },
     entries: [],
-    snapshot: StreamSnapshotSchema.parse({
-      streamId: STREAM_ID,
+    snapshot: RunSnapshotSchema.parse({
+      runId: STREAM_ID,
       status: 'running',
     }),
     ...overrides,
@@ -58,10 +58,10 @@ describe('injectStandaloneTrace', () => {
   });
 
   it('embeds the trace as valid, round-trippable JSON', () => {
-    const t = trace({ executionId: 'exec-roundtrip' as ExecutionId });
+    const t = trace({ runId: 'exec-roundtrip' as RunId });
     const html = injectStandaloneTrace(TEMPLATE, t);
 
-    expect(embeddedTrace(html).executionId).toBe('exec-roundtrip');
+    expect(embeddedTrace(html).runId).toBe('exec-roundtrip');
   });
 
   it('escapes a literal </script> inside trace data instead of truncating the page', () => {
@@ -70,7 +70,7 @@ describe('injectStandaloneTrace', () => {
         schemaVersion: 1,
         timestamp: '2026-01-01T00:00:00.000Z',
         identity: { kind: 'agent', agent: 'assistant' },
-        streamId: 'stream-test',
+        runId: 'stream-test',
         description: '</script><img src=x onerror=alert(1)>',
       },
     });

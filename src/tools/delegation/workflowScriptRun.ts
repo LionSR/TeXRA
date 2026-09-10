@@ -16,12 +16,12 @@ import {
   stageTitleFor,
   TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
-  WORKFLOW_EXECUTION_LIFECYCLE,
+  WORKFLOW_RUN_LIFECYCLE,
   type RunOutcome,
   type WorkflowCallProgress,
   type WorkflowCallTerminalProgress,
-  type WorkflowExecutionCall,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunCall,
+  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import {
   formatWorkflowCallLine,
@@ -34,7 +34,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * `onEvent` and `onTransition` are omitted deliberately: this projection owns
  * the engine's event and transition slots outright, so a caller cannot pass a
  * handler that would be silently discarded. Callers that need the run's own
- * account of what happened read the canonical execution snapshot instead
+ * account of what happened read the canonical run snapshot instead
  * (`onSnapshot` remains open and is composed, not replaced).
  */
 type WorkflowScriptRunWithProgressOptions = Omit<
@@ -56,7 +56,7 @@ type WorkflowScriptRunWithProgressOptions = Omit<
  * queued) instead of one undifferentiated "planned".
  */
 function projectWorkflowCallStatus(
-  call: Pick<WorkflowExecutionCall, 'status' | 'issued'>,
+  call: Pick<WorkflowRunCall, 'status' | 'issued'>,
 ): WorkflowCallProgress['status'] {
   switch (call.status) {
     case WORKFLOW_CALL_STATUS.PLANNED:
@@ -182,7 +182,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   // The engine terminalizes and flushes its snapshot before returning or
   // rethrowing, so the last one published is its final account of every call —
   // what the settle sweep below reads instead of re-deciding outcomes here.
-  let lastSnapshot: WorkflowExecutionSnapshot | undefined;
+  let lastSnapshot: WorkflowRunSnapshot | undefined;
   let currentPhase: string | undefined;
   let closed = false;
   // Calls that were already terminal when a retry's hydrated state first
@@ -191,7 +191,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     WorkflowCallProgress['id'],
     {
       status: WorkflowCallProgress['status'];
-      childStreamId: WorkflowCallProgress['childStreamId'];
+      childRunId: WorkflowCallProgress['childRunId'];
     }
   >();
   let constructionEmissionSeen = false;
@@ -260,7 +260,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   /** Progress-only terminal metadata, read off the snapshot's own record. */
   const terminalMetadata = (
     call: Extract<
-      WorkflowExecutionCall,
+      WorkflowRunCall,
       { readonly status: 'completed' | 'failed' | 'cancelled' | 'skipped' }
     >,
   ) => {
@@ -278,8 +278,8 @@ export async function runPersistedWorkflowScriptWithProgress(
   };
 
   const cardFor = (
-    call: WorkflowExecutionCall,
-    snapshot: WorkflowExecutionSnapshot,
+    call: WorkflowRunCall,
+    snapshot: WorkflowRunSnapshot,
   ): WorkflowCallProgress => {
     const status = projectWorkflowCallStatus(call);
     const phase = stageTitleFor(snapshot, call);
@@ -297,7 +297,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       call.kind !== undefined ||
       call.agent !== undefined ||
       call.model !== undefined ||
-      call.childExecutionId !== undefined ||
+      call.childRunId !== undefined ||
       call.attempts.length > 0 ||
       call.timestamps.startedAt !== undefined;
     const includeFiles =
@@ -310,8 +310,8 @@ export async function runPersistedWorkflowScriptWithProgress(
       id: call.id,
       label: call.label,
       ...(phase !== undefined ? { phase } : {}),
-      ...(call.childExecutionId !== undefined
-        ? { childStreamId: call.childExecutionId }
+      ...(call.childRunId !== undefined
+        ? { childRunId: call.childRunId }
         : {}),
       // Project only invocation facts the snapshot owns. Historical issued
       // calls may carry any subset and predate both explicit markers.
@@ -377,7 +377,7 @@ export async function runPersistedWorkflowScriptWithProgress(
    * everything is read here, nothing retained. A projection fault must never
    * abort the run, so the fold guards itself and reports on the run trace.
    */
-  const fold = (snapshot: WorkflowExecutionSnapshot): void => {
+  const fold = (snapshot: WorkflowRunSnapshot): void => {
     if (closed) return;
     // A call carried into the construction emission is hydrated history, not
     // this attempt's activity. Reusable calls are terminal here; failed or
@@ -398,7 +398,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         ) {
           hydratedBaseline.set(call.id, {
             status,
-            childStreamId: call.childExecutionId,
+            childRunId: call.childRunId,
           });
         }
       }
@@ -474,7 +474,7 @@ export async function runPersistedWorkflowScriptWithProgress(
             if (!call.issued) continue;
           } else if (
             baseline.status === status &&
-            baseline.childStreamId === call.childExecutionId
+            baseline.childRunId === call.childRunId
           ) {
             continue;
           }
@@ -487,15 +487,15 @@ export async function runPersistedWorkflowScriptWithProgress(
         // stage loop above opens for them. A card whose group does not exist
         // yet is thereby unrepresentable.
         if (call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED) continue;
-        const streamChanged =
-          call.childExecutionId !== undefined &&
-          last?.childStreamId !== call.childExecutionId;
+        const runChanged =
+          call.childRunId !== undefined &&
+          last?.childRunId !== call.childRunId;
         // The host resolves agent and model after the card first appears;
         // a live card re-emits so it names what actually runs.
         const factsChanged =
           last !== undefined &&
           (last.agent !== call.agent || last.model !== call.model);
-        if (last && last.status === status && !streamChanged && !factsChanged) {
+        if (last && last.status === status && !runChanged && !factsChanged) {
           continue;
         }
         const card = cardFor(call, snapshot);
@@ -569,7 +569,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     runOutcome = RUN_OUTCOME.COMPLETED;
     return result;
   } finally {
-    if (lastSnapshot?.lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED) {
+    if (lastSnapshot?.lifecycle === WORKFLOW_RUN_LIFECYCLE.CANCELLED) {
       runOutcome = RUN_OUTCOME.CANCELLED;
     }
     // The engine's `finish()` publishes its terminal snapshot synchronously
@@ -581,8 +581,8 @@ export async function runPersistedWorkflowScriptWithProgress(
     // only a terminal snapshot is re-folded.
     if (
       lastSnapshot !== undefined &&
-      lastSnapshot.lifecycle !== WORKFLOW_EXECUTION_LIFECYCLE.WAITING &&
-      lastSnapshot.lifecycle !== WORKFLOW_EXECUTION_LIFECYCLE.ACTIVE
+      lastSnapshot.lifecycle !== WORKFLOW_RUN_LIFECYCLE.WAITING &&
+      lastSnapshot.lifecycle !== WORKFLOW_RUN_LIFECYCLE.ACTIVE
     ) {
       fold(lastSnapshot);
     }

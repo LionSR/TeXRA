@@ -10,7 +10,7 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import type { ResolvedAgent } from '@agent/index/agentEntry';
 import {
   createToolPolicy,
@@ -53,9 +53,9 @@ import {
   AgentCategory,
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
-  STREAM_PHASE,
+  RUN_PHASE,
 } from '@shared/schemas';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { isObject, linkAbortSignals } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -91,7 +91,7 @@ export interface AgentLaunchContext extends AgentCore {
 
 interface AgentLaunchInput {
   definition: PreparedAgentDefinition;
-  executionId: RunId;
+  runId: RunId;
   /**
    * The run's `run.start` was committed by an earlier activation: this
    * launch resumes it, so it appends its own `run.activate` and does not
@@ -107,9 +107,9 @@ interface AgentLaunchInput {
    * attaches here, ahead of the instruction log, the root stage, and the
    * launch warnings.
    */
-  onStreamResolved?: (streamId: RunId, trace: AgentTrace) => void;
+  onStreamResolved?: (runId: RunId, trace: AgentTrace) => void;
   /** The launching run, when this run is a delegated child of another. */
-  parentExecutionId?: RunId;
+  parentRunId?: RunId;
   /** A workflow-script run's resume anchor, stamped on `run.start`
    *  (decision 9): the checkpoint it journals into. */
   checkpointId?: string;
@@ -136,7 +136,7 @@ const failIfAborted = (signal: AbortSignal | undefined) =>
     catch: ensureError,
   });
 
-export function withExecutionRunContext<T>(
+export function withLaunchRunContext<T>(
   ctx: AgentLaunchContext,
   options: { onApprovalPolicyDenial?: () => void } = {},
   fn: () => T,
@@ -146,7 +146,7 @@ export function withExecutionRunContext<T>(
   // `stopAfterCycle`) are projected straight from `ctx.toolPolicy` so callers
   // can't drift a hand-maintained copy of the same values; only
   // `onApprovalPolicyDenial` (a callback that is not part of ToolPolicy) is
-  // still supplied explicitly. Run identity (`executionId`/`workingDirectory`)
+  // still supplied explicitly. Run identity (`runId`/`workingDirectory`)
   // travels via `ctx.runScope` unchanged, and
   // the model via the run's `ModelCell`, so tools observe a mid-session model
   // switch without depending on the `AgentConfig.model` mirror.
@@ -233,11 +233,11 @@ async function validateModelExists(
 
 const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
   'inferLaunchModelHandlerCompatibilityKey',
-)(function* (executionId: RunId, session: SessionHandle) {
+)(function* (runId: RunId, session: SessionHandle) {
   const flowRecord = yield* Effect.tryPromise({
     try: async () =>
       runInSession(session, () =>
-        getExecutionStore(executionId).read<FlowRecord>(flowKey(executionId)),
+        getRunStore(runId).read<FlowRecord>(flowKey(runId)),
       ),
     catch: ensureError,
   });
@@ -379,7 +379,7 @@ export type PreparedAgentDefinition = Effect.Success<
 const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   function* (
     input: AgentLaunchInput & { session: SessionHandle },
-    executionId: RunId,
+    runId: RunId,
     resources: Array<() => void | Promise<void>>,
   ): Effect.fn.Return<AgentLaunchContext, Error> {
     yield* failIfAborted(input.signal);
@@ -400,7 +400,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const session = input.session;
     const modelHandlerCompatibilityKey =
       input.modelHandlerCompatibilityKey ??
-      (yield* inferLaunchModelHandlerCompatibilityKey(executionId, session));
+      (yield* inferLaunchModelHandlerCompatibilityKey(runId, session));
     yield* failIfAborted(input.signal);
     const modelHandler = yield* Effect.tryPromise({
       try: async () =>
@@ -424,7 +424,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const modelCell = new ModelCell(modelHandler, config.model);
 
     const residency =
-      yield* session.transcripts.acquireRunResidency(executionId);
+      yield* session.transcripts.acquireRunResidency(runId);
     const rawRunTrace = createRunTrace(residency);
     // The composed trace enters the store BEFORE session attachment, so a
     // failed attachment still disposes the raw trace through the store.
@@ -441,7 +441,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     };
     resources.push(() => runTrace.dispose());
     yield* failIfAborted(input.signal);
-    attachment.detach = session.attachRunTrace(rawRunTrace.trace, executionId);
+    attachment.detach = session.attachRunTrace(rawRunTrace.trace, runId);
 
     const agentLogger = runTrace.trace;
     modelHandler.setAgentCategory(setting.agentCategory);
@@ -455,7 +455,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       yield* session.commit([
         {
           type: 'run.activate',
-          aggregateId: qualifyAggregateId('run', executionId),
+          aggregateId: qualifyAggregateId('run', runId),
           category: setting.agentCategory,
           isRemote,
         },
@@ -466,7 +466,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       try: () => session.settlePublications(),
       catch: ensureError,
     });
-    input.onStreamResolved?.(executionId, runTrace.trace);
+    input.onStreamResolved?.(runId, runTrace.trace);
 
     // Log the initial instruction as a user message so both workflow and
     // tool-use tabs display it inline with the stream log (no separate panel).
@@ -514,7 +514,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     resources.push(detachRunAbortLink);
     const runSignal = runAbortController.signal;
     const runScope = createRunScope({
-      executionId,
+      runId,
       workingDirectory,
       delegationAgentScope: config.delegationAgentScope,
       session,
@@ -553,7 +553,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       modelCell,
       {
         logger: agentLogger,
-        executionId,
+        runId,
         runStageId: parentStage.id,
       },
       {
@@ -590,30 +590,30 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (input: AgentLaunchInput & { session: SessionHandle }) {
     yield* failIfAborted(input.signal);
-    const { session: launchSession, executionId } = input;
+    const { session: launchSession, runId } = input;
     const { config } = input.definition;
-    const streamStatus = launchSession.status;
+    const runStatus = launchSession.status;
 
     // The runtime takes these resources only after assembly succeeds. Failure
     // unwinds them in reverse order while preserving the original cause.
     const resources: Array<() => void | Promise<void>> = [];
-    return yield* assembleAgentLaunchContext(input, executionId, resources).pipe(
+    return yield* assembleAgentLaunchContext(input, runId, resources).pipe(
       Effect.onError((cause) =>
         Effect.gen(function* () {
           const err = Cause.squash(cause);
           const message = `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`;
-          launchSession.publishRunEvent(executionId, {
+          launchSession.publishRunEvent(runId, {
             type: 'result',
             outcome: RUN_OUTCOME.FAILED,
-            runId: executionId,
+            runId,
             agentName: config.agent,
             category: config.agentCategory,
             error: { kind: classifyAgentError(err), message },
           });
-          streamStatus.transitionToTerminal(
-            executionId,
-            STREAM_PHASE.FAILED,
-            STREAM_TRANSITION_CAUSE.LIFECYCLE,
+          runStatus.transitionToTerminal(
+            runId,
+            RUN_PHASE.FAILED,
+            RUN_TRANSITION_CAUSE.LIFECYCLE,
           );
           const publication = yield* Effect.exit(
             Effect.tryPromise({

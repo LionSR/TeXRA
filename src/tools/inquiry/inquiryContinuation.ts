@@ -134,12 +134,12 @@ const archiveAsParentFinished = Effect.fn('archiveAsParentFinished')(function* (
 
 const deliverContinuation = Effect.fn('deliverContinuation')(
   function* (params: {
-    parentStreamId: RunId;
+    parentRunId: RunId;
     text: string;
     threadId: InquiryThreadId;
     session: SessionHandle;
   }): Effect.fn.Return<InjectionOutcome, Error, InquiryRecords> {
-    const result = yield* submitFollowUp(params.parentStreamId, params.text, {
+    const result = yield* submitFollowUp(params.parentRunId, params.text, {
       session: params.session,
     });
 
@@ -147,7 +147,7 @@ const deliverContinuation = Effect.fn('deliverContinuation')(
     // Resume delivers it. A refusal has nothing left to continue.
     if (result.status === 'failed') {
       logger.warn(
-        `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} refused it (${result.reason}).`,
+        `Inquiry continuation for ${params.threadId}: parent stream ${params.parentRunId} refused it (${result.reason}).`,
       );
       return yield* archiveAsParentFinished(params.threadId, params.session);
     }
@@ -188,15 +188,15 @@ const injectContinuation = Effect.fn('injectContinuation')(function* (
     return yield* archiveAsParentFinished(threadId, session);
   }
   if (event === 'answered' && lastTurn.kind !== 'answered') return 'archived';
-  if (manifest.parentStreamId == null) {
+  if (manifest.parentRunId == null) {
     return yield* archiveAsParentFinished(threadId, session);
   }
 
-  const parentStreamId = manifest.parentStreamId;
+  const parentRunId = manifest.parentRunId;
   const stillOpen = yield* records.listThreadsByStatus({
     status: 'open',
     scope: 'stream',
-    streamId: parentStreamId,
+    runId: parentRunId,
   });
   const text = buildContinuationText({
     event,
@@ -210,7 +210,7 @@ const injectContinuation = Effect.fn('injectContinuation')(function* (
   });
 
   return yield* deliverContinuation({
-    parentStreamId: manifest.parentStreamId,
+    parentRunId: manifest.parentRunId,
     text,
     threadId,
     session,

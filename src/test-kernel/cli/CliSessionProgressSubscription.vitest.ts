@@ -13,29 +13,29 @@ import {
 } from '@cli/runtime/sessionProgressSubscription';
 import {
   aggregateId as qualifyAggregateId,
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
+  RUN_PHASE,
+  RUN_SUBSTATE,
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
   type ActiveChildInfo,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, RunId } from '@shared/schemas';
 import {
-  STREAM_TRANSITION_CAUSE,
-  type StreamTransitionCause,
-} from '@shared/streams/streamStatus';
+  RUN_TRANSITION_CAUSE,
+  type RunTransitionCause,
+} from '@shared/runs/runStatus';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 
-const streamId = 'stream:cli-session-projection' as StreamTabId;
-const executionId = 'c11a01' as ExecutionId;
-const childStreamId = 'stream:cli-child' as StreamTabId;
-const childExecutionId = 'c11c01' as ExecutionId;
-const storageKey = 'a00101' as ExecutionId;
+const runId = 'stream:cli-session-projection' as RunId;
+const runId = 'c11a01' as RunId;
+const childRunId = 'stream:cli-child' as RunId;
+const childRunId = 'c11c01' as RunId;
+const storageKey = 'a00101' as RunId;
 
 type WorkflowConfig = Omit<AgentConfig, 'agentCategory'> & {
   agentCategory: typeof AgentCategory.Workflow;
@@ -64,10 +64,10 @@ function workflowConfig(
 
 type RunStatusProjectionPayload =
   CliNdjsonProgressEventPayloads['updateStreamStatus'] & {
-    cause: StreamTransitionCause;
+    cause: RunTransitionCause;
   };
 
-/** A published fact: a run-scoped trace event on `streamId`, or a draft. */
+/** A published fact: a run-scoped trace event on `runId`, or a draft. */
 type Source =
   { readonly run: AgentEvent } | { readonly draft: SessionEventDraft };
 
@@ -82,7 +82,7 @@ function draft(draft: SessionEventDraft): Source {
 function statusDraft(payload: RunStatusProjectionPayload): Source {
   return draft({
     type: 'status',
-    aggregateId: qualifyAggregateId('stream', payload.streamId),
+    aggregateId: qualifyAggregateId('stream', payload.runId),
     phase: payload.status,
     cause: payload.cause,
     ...(payload.previousStatus
@@ -105,7 +105,7 @@ const projectionConfig = workflowConfig({
 });
 const inquiryThread = {
   threadId: 'ei_123456789abc',
-  parentStreamId: streamId,
+  parentRunId: runId,
   status: 'open' as const,
   lastQuestionPreview: 'Which boundary condition is intended?',
   lastActivityIso: '2026-07-10T12:00:00.000Z',
@@ -116,66 +116,66 @@ const PROGRESS_PROJECTION_CASES = {
   setActiveStream: {
     source: draft({
       type: 'run.activate',
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('stream', runId),
       category: AgentCategory.Workflow,
       isRemote: false,
       background: false,
     }),
     payload: {
-      streamId,
+      runId,
       agentCategory: AgentCategory.Workflow,
       isRemote: false,
     },
   },
   updateStreamStatus: {
     source: statusDraft({
-      streamId,
-      status: STREAM_PHASE.RUNNING,
-      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      runId,
+      status: RUN_PHASE.RUNNING,
+      cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
     }),
     payload: {
-      streamId,
-      status: STREAM_PHASE.RUNNING,
-      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      runId,
+      status: RUN_PHASE.RUNNING,
+      cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
     },
   },
   addOutputFiles: {
     source: runEvent({
       type: 'addOutputFiles',
-      streamId,
+      runId,
       filesByRound: { 1: [] },
     }),
-    payload: { streamId, filesByRound: { 1: [] } },
+    payload: { runId, filesByRound: { 1: [] } },
   },
   updateMissingOutputs: {
     source: runEvent({
       type: 'updateMissingOutputs',
-      streamId,
+      runId,
       filesByRound: { 1: ['missing.tex'] },
     }),
     payload: {
-      streamId,
+      runId,
       filesByRound: { 1: ['missing.tex'] },
     },
   },
   updateCompileFailures: {
     source: runEvent({
       type: 'updateCompileFailures',
-      streamId,
+      runId,
       filesByRound: { 1: [] },
     }),
-    payload: { streamId, filesByRound: { 1: [] } },
+    payload: { runId, filesByRound: { 1: [] } },
   },
   setTaskState: {
     source: runEvent({
       type: 'run.config',
-      streamId,
-      executionId,
+      runId,
+      runId,
       config: projectionConfig,
     }),
     payload: {
-      streamId,
-      executionId,
+      runId,
+      runId,
       taskState: {
         agentConfig: projectionConfig,
         activeFiles: {
@@ -191,13 +191,13 @@ const PROGRESS_PROJECTION_CASES = {
     source: runEvent({
       type: 'usage',
       payload: {
-        streamId,
+        runId,
         storageKey,
         usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
       },
     }),
     payload: {
-      streamId,
+      runId,
       storageKey,
       usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
     },
@@ -213,7 +213,7 @@ const PROGRESS_PROJECTION_CASES = {
   updateTodos: {
     source: runEvent({
       type: 'updateTodos',
-      streamId,
+      runId,
       todos: [
         {
           content: 'Check the compactness lemma.',
@@ -223,7 +223,7 @@ const PROGRESS_PROJECTION_CASES = {
       ],
     }),
     payload: {
-      streamId,
+      runId,
       todos: [
         {
           content: 'Check the compactness lemma.',
@@ -236,11 +236,11 @@ const PROGRESS_PROJECTION_CASES = {
   updatePlan: {
     source: runEvent({
       type: 'updatePlan',
-      streamId,
+      runId,
       plan: { objective: 'Check the compactness lemma.' },
     }),
     payload: {
-      streamId,
+      runId,
       plan: { objective: 'Check the compactness lemma.' },
     },
   },
@@ -249,7 +249,7 @@ const PROGRESS_PROJECTION_CASES = {
       type: 'conversation.progress',
       progress: { toolCallCount: 5 },
     }),
-    payload: { streamId, progress: { toolCallCount: 5 } },
+    payload: { runId, progress: { toolCallCount: 5 } },
   },
   updateRoundStage: {
     source: runEvent({
@@ -260,50 +260,50 @@ const PROGRESS_PROJECTION_CASES = {
       index: 2,
       total: 4,
     }),
-    payload: { streamId, roundStage: { index: 2, total: 4 } },
+    payload: { runId, roundStage: { index: 2, total: 4 } },
   },
   updateQueuedFollowUps: {
     source: draft({
       type: 'updateQueuedFollowUps',
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('stream', runId),
       messages: ['queued'],
     }),
-    payload: { streamId },
+    payload: { runId },
   },
   goalPaused: {
-    source: runEvent({ type: 'goalPaused', streamId }),
-    payload: { streamId },
+    source: runEvent({ type: 'goalPaused', runId }),
+    payload: { runId },
   },
-  updateStreamDescription: {
+  updateRunDescription: {
     source: draft({
-      type: 'updateStreamDescription',
-      aggregateId: qualifyAggregateId('stream', streamId),
+      type: 'updateRunDescription',
+      aggregateId: qualifyAggregateId('stream', runId),
       description: 'Checking the compactness lemma',
     }),
-    payload: { streamId, description: 'Checking the compactness lemma' },
+    payload: { runId, description: 'Checking the compactness lemma' },
   },
   setParentStream: {
     source: draft({
       type: 'setParentStream',
-      aggregateId: qualifyAggregateId('stream', childStreamId),
-      parentStreamId: streamId,
+      aggregateId: qualifyAggregateId('stream', childRunId),
+      parentRunId: runId,
     }),
-    payload: { childStreamId, parentStreamId: streamId },
+    payload: { childRunId, parentRunId: runId },
   },
-  removeStream: {
+  removeRun: {
     source: draft({
-      type: 'stream.removed',
-      aggregateId: qualifyAggregateId('stream', childStreamId),
+      type: 'run.removed',
+      aggregateId: qualifyAggregateId('stream', childRunId),
     }),
-    payload: { streamId: childStreamId },
+    payload: { runId: childRunId },
   },
   goalStateChanged: {
     source: draft({
       type: 'goalStateChanged',
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('stream', runId),
       state: { active: false },
     }),
-    payload: { streamId },
+    payload: { runId },
   },
 } satisfies ProgressProjectionCases;
 
@@ -321,7 +321,7 @@ function progressRecord(event: string, payload: unknown) {
 }
 
 type RosterListener = (
-  parentStreamId: StreamTabId,
+  parentRunId: RunId,
   items: readonly ActiveChildInfo[],
 ) => void;
 
@@ -344,14 +344,14 @@ function projectionOver(session: SessionHandle) {
     writeRecord,
   );
   const publish = async (source: Source): Promise<void> => {
-    if ('run' in source) session.publishRunEvent(streamId, source.run);
+    if ('run' in source) session.publishRunEvent(runId, source.run);
     else session.publish([source.draft]);
     await session.settlePublications();
   };
   return {
     writeRecord,
     publish,
-    emitRoster: (parent: StreamTabId, items: readonly ActiveChildInfo[]) =>
+    emitRoster: (parent: RunId, items: readonly ActiveChildInfo[]) =>
       roster?.(parent, items),
     hasRosterListener: () => roster !== undefined,
     detach,
@@ -359,16 +359,16 @@ function projectionOver(session: SessionHandle) {
 }
 
 const resumingStatusPayload: RunStatusProjectionPayload = {
-  streamId,
-  status: STREAM_PHASE.RUNNING,
-  previousStatus: STREAM_PHASE.WAITING,
-  cause: STREAM_TRANSITION_CAUSE.RESUME,
-  substate: STREAM_SUBSTATE.RESUMING,
+  runId,
+  status: RUN_PHASE.RUNNING,
+  previousStatus: RUN_PHASE.WAITING,
+  cause: RUN_TRANSITION_CAUSE.RESUME,
+  substate: RUN_SUBSTATE.RESUMING,
 };
 
 const activation: SessionEventDraft = {
   type: 'run.activate',
-  aggregateId: qualifyAggregateId('stream', streamId),
+  aggregateId: qualifyAggregateId('stream', runId),
   category: AgentCategory.ToolUse,
   background: true,
 };
@@ -383,8 +383,8 @@ describe('attachCliSessionProgressProjection', () => {
       await publish(
         draft({
           type: 'run.start',
-          aggregateId: qualifyAggregateId('stream', streamId),
-          executionId,
+          aggregateId: qualifyAggregateId('stream', runId),
+          runId,
           identity: { kind: 'process', tool: 'bash' },
           category: AgentCategory.ToolUse,
           isRemote: false,
@@ -401,7 +401,7 @@ describe('attachCliSessionProgressProjection', () => {
       expect(activations).toHaveLength(2);
       expect(writeRecord).toHaveBeenCalledWith(
         progressRecord('setActiveStream', {
-          streamId,
+          runId,
           agentCategory: AgentCategory.ToolUse,
           suppressViewSwitch: true,
         }),
@@ -418,8 +418,8 @@ describe('attachCliSessionProgressProjection', () => {
     session.publish([
       {
         type: 'run.start',
-        aggregateId: qualifyAggregateId('stream', streamId),
-        executionId,
+        aggregateId: qualifyAggregateId('stream', runId),
+        runId,
         identity: { kind: 'agent', agent: 'polish' },
         category: AgentCategory.ToolUse,
         isRemote: false,
@@ -427,14 +427,14 @@ describe('attachCliSessionProgressProjection', () => {
       },
       {
         type: 'run.activate',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        aggregateId: qualifyAggregateId('stream', runId),
         category: AgentCategory.ToolUse,
         isRemote: false,
         background: false,
       },
       {
-        type: 'updateStreamDescription',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        type: 'updateRunDescription',
+        aggregateId: qualifyAggregateId('stream', runId),
         description: 'Recorded before the resume',
       },
     ]);
@@ -446,7 +446,7 @@ describe('attachCliSessionProgressProjection', () => {
       await publish(
         draft({
           type: 'run.activate',
-          aggregateId: qualifyAggregateId('stream', streamId),
+          aggregateId: qualifyAggregateId('stream', runId),
           category: AgentCategory.ToolUse,
           isRemote: false,
           background: false,
@@ -456,7 +456,7 @@ describe('attachCliSessionProgressProjection', () => {
 
       expect(vi.mocked(writeRecord).mock.calls.map(([r]) => r)).toEqual([
         progressRecord('setActiveStream', {
-          streamId,
+          runId,
           agentCategory: AgentCategory.ToolUse,
           isRemote: false,
         }),
@@ -470,8 +470,8 @@ describe('attachCliSessionProgressProjection', () => {
   it('projects every public NDJSON progress event with its typed payload', async () => {
     const cases = Object.entries(PROGRESS_PROJECTION_CASES);
     const session = createTestSession();
-    publishTestRunStart(session, streamId, executionId);
-    publishTestRunStart(session, childStreamId, childExecutionId);
+    publishTestRunStart(session, runId, runId);
+    publishTestRunStart(session, childRunId, childRunId);
     const { writeRecord, publish, detach } = projectionOver(session);
     try {
       for (const [, projection] of cases) {
@@ -495,77 +495,77 @@ describe('attachCliSessionProgressProjection', () => {
   it('projects updateActiveSubagents rows byte-for-byte onto the frozen public shape', async () => {
     // One row per identity kind; `toEqual` (not objectContaining) pins the
     // exact pre-consolidation wire shape: `kind` discriminant, `toolName`
-    // encoding, `childStreamId` only on subagent rows, and NO `identity`.
+    // encoding, `childRunId` only on subagent rows, and NO `identity`.
     const items: ActiveChildInfo[] = [
       {
-        executionId: 'a101' as ExecutionId,
-        childStreamId: 'stream:native' as StreamTabId,
+        runId: 'a101' as RunId,
+        childRunId: 'stream:native' as RunId,
         agentName: 'review',
         identity: { kind: 'agent', agent: 'review' },
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
       },
       {
-        executionId: 'a102' as ExecutionId,
-        childStreamId: 'stream:tool' as StreamTabId,
+        runId: 'a102' as RunId,
+        childRunId: 'stream:tool' as RunId,
         agentName: 'polish',
         identity: { kind: 'agent', agent: 'polish', tool: 'delegate' },
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
       },
       {
-        executionId: 'a103' as ExecutionId,
-        childStreamId: 'stream:workflow' as StreamTabId,
+        runId: 'a103' as RunId,
+        childRunId: 'stream:workflow' as RunId,
         agentName: 'plan',
         identity: { kind: 'multiAgentWorkflow', workflowName: 'delegate' },
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
       },
       {
-        executionId: 'a104' as ExecutionId,
-        childStreamId: 'stream:process' as StreamTabId,
+        runId: 'a104' as RunId,
+        childRunId: 'stream:process' as RunId,
         agentName: 'bash',
         identity: { kind: 'process', tool: 'bash' },
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
       },
     ];
     const session = createTestSession();
-    publishTestRunStart(session, streamId, executionId);
-    publishTestRunStart(session, childStreamId, childExecutionId);
+    publishTestRunStart(session, runId, runId);
+    publishTestRunStart(session, childRunId, childRunId);
     const { writeRecord, emitRoster, detach } = projectionOver(session);
     try {
-      emitRoster(streamId, items);
+      emitRoster(runId, items);
       await session.settlePublications();
       expect(writeRecord).toHaveBeenCalledTimes(1);
       const [record] = vi.mocked(writeRecord).mock.calls[0]!;
       expect(record.payload).toEqual({
-        parentStreamId: streamId,
+        parentRunId: runId,
         children: [
           {
             kind: 'subagent',
-            executionId: 'a101',
+            runId: 'a101',
             agentName: 'review',
-            status: STREAM_PHASE.RUNNING,
-            childStreamId: 'stream:native',
+            status: RUN_PHASE.RUNNING,
+            childRunId: 'stream:native',
           },
           {
             kind: 'subagent',
-            executionId: 'a102',
+            runId: 'a102',
             agentName: 'polish',
-            status: STREAM_PHASE.RUNNING,
+            status: RUN_PHASE.RUNNING,
             toolName: 'delegate',
-            childStreamId: 'stream:tool',
+            childRunId: 'stream:tool',
           },
           {
             kind: 'subagent',
-            executionId: 'a103',
+            runId: 'a103',
             agentName: 'plan',
-            status: STREAM_PHASE.RUNNING,
+            status: RUN_PHASE.RUNNING,
             toolName: 'delegate_multi_agents',
-            childStreamId: 'stream:workflow',
+            childRunId: 'stream:workflow',
           },
           {
             kind: 'process',
-            executionId: 'a104',
+            runId: 'a104',
             agentName: 'bash',
-            status: STREAM_PHASE.RUNNING,
+            status: RUN_PHASE.RUNNING,
             toolName: 'bash',
           },
         ],
@@ -578,19 +578,19 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('writes nothing after detach', async () => {
     const session = createTestSession();
-    publishTestRunStart(session, streamId, executionId);
-    publishTestRunStart(session, childStreamId, childExecutionId);
+    publishTestRunStart(session, runId, runId);
+    publishTestRunStart(session, childRunId, childRunId);
     const { writeRecord, publish, detach } = projectionOver(session);
     await publish(
       draft({
-        type: 'updateStreamDescription',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        type: 'updateRunDescription',
+        aggregateId: qualifyAggregateId('stream', runId),
         description: 'Proofread the introduction',
       }),
     );
     expect(writeRecord).toHaveBeenCalledWith(
-      progressRecord('updateStreamDescription', {
-        streamId,
+      progressRecord('updateRunDescription', {
+        runId,
         description: 'Proofread the introduction',
       }),
     );
@@ -599,8 +599,8 @@ describe('attachCliSessionProgressProjection', () => {
     await session.settlePublications();
     await publish(
       draft({
-        type: 'updateStreamDescription',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        type: 'updateRunDescription',
+        aggregateId: qualifyAggregateId('stream', runId),
         description: 'after detach',
       }),
     );
@@ -610,11 +610,11 @@ describe('attachCliSessionProgressProjection', () => {
   it('writes one record per published status fact without renderer dedup', async () => {
     const startingPayload: RunStatusProjectionPayload = {
       ...resumingStatusPayload,
-      substate: STREAM_SUBSTATE.STARTING,
+      substate: RUN_SUBSTATE.STARTING,
     };
     const session = createTestSession();
-    publishTestRunStart(session, streamId, executionId);
-    publishTestRunStart(session, childStreamId, childExecutionId);
+    publishTestRunStart(session, runId, runId);
+    publishTestRunStart(session, childRunId, childRunId);
     const { writeRecord, publish, detach } = projectionOver(session);
     try {
       await publish(statusDraft(resumingStatusPayload));

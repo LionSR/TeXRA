@@ -17,7 +17,7 @@ const canonicalDiffResult = {
       kind: 'runStorage',
       absolutePath: '/tmp/texra/abcdef/r2/main.tex',
       relativePath: 'r2/main.tex',
-      executionId: 'abcdef',
+      runId: 'abcdef',
     },
     round: 2,
     lineage: {

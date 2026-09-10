@@ -17,8 +17,8 @@ vi.mock('@agent/runtime/RunContext', () => {
     context?.kind === 'launch' ? context.runScope[field] : context?.[field];
   return {
     tryUseRunContext: mocks.tryUseRunContext,
-    getRunContextStreamId: (context: any) =>
-      readRunContextField(context, 'streamId'),
+    getRunContextRunId: (context: any) =>
+      readRunContextField(context, 'runId'),
   };
 });
 
@@ -36,10 +36,10 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 }));
 
 // Local imports
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import { FileType, type FileStat } from '@platform/interfaces';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { AgentCategory, type RunId } from '@shared/schemas';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import {
   rejectOversizedBibAttachments,
@@ -157,15 +157,15 @@ describe('DelegationTools', () => {
 });
 
 describe('DelegateAgentTool resume ownership', () => {
-  const executionId = 'exec-resume-ownership';
-  const parentStreamId = 'parent-stream' as StreamTabId;
-  const childStreamId = 'child-stream' as StreamTabId;
+  const runId = 'exec-resume-ownership';
+  const parentRunId = 'parent-stream' as RunId;
+  const childRunId = 'child-stream' as RunId;
 
-  function makeHandle(): AgentExecutionHandle {
-    return testExecutionHandle({
-      executionId,
-      parentStreamId,
-      childStreamId,
+  function makeHandle(): RunHandle {
+    return testRunHandle({
+      runId,
+      parentRunId,
+      childRunId,
       agent: 'review',
       category: AgentCategory.ToolUse,
       trace: { emit: vi.fn() } as never,
@@ -175,7 +175,7 @@ describe('DelegateAgentTool resume ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.tryUseRunContext.mockReturnValue({
-      streamId: parentStreamId,
+      runId: parentRunId,
     } as never);
     mocks.currentSession.mockReturnValue({
       executions: { getHandle: () => makeHandle() },
@@ -189,7 +189,7 @@ describe('DelegateAgentTool resume ownership', () => {
     mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'queued' }));
 
     const result = await new DelegateAgentTool().call({
-      execution_id: executionId,
+      execution_id: runId,
       instruction: 'Keep going.',
     });
 
@@ -207,7 +207,7 @@ describe('DelegateAgentTool resume ownership', () => {
     );
 
     await new DelegateAgentTool().call({
-      execution_id: executionId,
+      execution_id: runId,
       instruction: 'Keep going.',
     });
 
@@ -215,7 +215,7 @@ describe('DelegateAgentTool resume ownership', () => {
       assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1),
     );
     expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
-      expect.objectContaining({ targetStreamId: parentStreamId }),
+      expect.objectContaining({ targetRunId: parentRunId }),
     );
   });
 });

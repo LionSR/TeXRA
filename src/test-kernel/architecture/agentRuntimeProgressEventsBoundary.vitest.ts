@@ -26,9 +26,9 @@ const ALLOWED_PRODUCTION_IMPORTERS = [CLI_PROJECTION_MODULE] as const;
 // The projection module is the single production importer of the NDJSON
 // vocabulary, so its own importers are part of the same containment chain.
 const ALLOWED_CLI_PROJECTION_IMPORTERS = [
-  'packages/cli/src/runtime/runExecution.ts',
+  'packages/cli/src/runtime/executeCli.ts',
   'src/test-kernel/cli/CliSessionProgressSubscription.vitest.ts',
-  'src/test-kernel/cli/RunExecution.vitest.ts',
+  'src/test-kernel/cli/ExecuteCli.vitest.ts',
   'src/test-kernel/cli/RunProgressRenderer.vitest.ts',
 ] as const;
 

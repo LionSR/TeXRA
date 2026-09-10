@@ -1,10 +1,10 @@
 import { Cause, Effect, Exit } from 'effect';
 
-import { registerExecution, getExecutionRecords } from '@agent/storage';
+import { registerRun, getRunRecords } from '@agent/storage';
 import {
-  acquireResumedExecutionOwnership,
+  acquireResumedRunOwnership,
   finalizeRun,
-} from '@agent/storage/executionLifecycle';
+} from '@agent/storage/runLifecycle';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -15,14 +15,14 @@ import {
 } from '@shared/schemas';
 import {
   aggregateError,
-  generateExecutionId,
+  generateRunId,
   linkAbortSignals,
 } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
-import { AgentExecutionHandle } from './ExecutionHandle';
+import { RunHandle } from './RunHandle';
 import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
@@ -56,8 +56,8 @@ export interface RunAgentOptions extends Pick<
    * true when the hook already drained artifacts and disposed of ownership.
    */
   beforeLeaseRelease?: () => Promise<boolean | void>;
-  /** Fires once this run owns its execution lease. */
-  onExecutionLeaseAcquired?: (executionId: RunId) => void;
+  /** Fires once this run owns its run lease. */
+  onRunLeaseAcquired?: (runId: RunId) => void;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured
@@ -71,25 +71,25 @@ export type RunAgentRequest =
   | {
       readonly kind: 'fresh';
       readonly config: AgentConfig;
-      readonly executionId?: RunId;
+      readonly runId?: RunId;
     }
   | {
       readonly kind: 'resume';
       readonly config: AgentConfig;
-      readonly executionId: RunId;
+      readonly runId: RunId;
     };
 
 /**
  * START HERE — the high-level entry every host uses to run an agent.
  *
- * Validates-then-runs: assigns an executionId when a fresh request omits one,
- * registers fresh runs in the execution store, reuses a resumed run's record,
+ * Validates-then-runs: assigns an runId when a fresh request omits one,
+ * registers fresh runs in the run store, reuses a resumed run's record,
  * runs the agent, and — for a
  * workflow result — invokes `openWorkflowOutput` so the host can surface output.
  *
  * Use this unless you need per-chunk streaming/lifecycle callbacks or subagent
  * lineage; for those, drop to the lower-level engine `executeAgent`, where the
- * caller owns executionId generation and `registerExecution`.
+ * caller owns runId generation and `registerRun`.
  */
 export const runAgent = Effect.fn('runAgent')(function* (
   request: RunAgentRequest,
@@ -97,19 +97,19 @@ export const runAgent = Effect.fn('runAgent')(function* (
 ): Effect.fn.Return<AgentFlowResult, Error> {
   const {
     beforeLeaseRelease,
-    onExecutionLeaseAcquired,
+    onRunLeaseAcquired,
     preferHelperModel,
     ...executeAgentOptions
   } = options;
-  const executionId = request.executionId ?? generateExecutionId();
+  const runId = request.runId ?? generateRunId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
   const prior = shouldRegister
     ? null
-    : yield* getExecutionRecords(runSession, executionId).readMeta();
+    : yield* getRunRecords(runSession, runId).readMeta();
   if (!shouldRegister && !prior)
     return yield* Effect.fail(
-      new Error(`Run metadata not found for ${executionId}`),
+      new Error(`Run metadata not found for ${runId}`),
     );
   const launchAbortController = new AbortController();
   const detachLaunchAbortLink = linkAbortSignals(
@@ -117,11 +117,11 @@ export const runAgent = Effect.fn('runAgent')(function* (
     launchAbortController,
   );
   const launchSignal = launchAbortController.signal;
-  const launchHandle = runSession.executions.getHandle(executionId)
+  const launchHandle = runSession.runs.getHandle(runId)
     ? undefined
-    : new AgentExecutionHandle(
+    : new RunHandle(
         {
-          executionId,
+          runId,
           identity: { kind: 'agent', agent: request.config.agent },
           category: request.config.agentCategory,
         },
@@ -132,11 +132,11 @@ export const runAgent = Effect.fn('runAgent')(function* (
   });
 
   return yield* Effect.gen(function* () {
-    if (launchHandle) runSession.executions.track(launchHandle);
-    return yield* runSession.executions.launchExecution(
-      executionId,
+    if (launchHandle) runSession.runs.track(launchHandle);
+    return yield* runSession.runs.launchRun(
+      runId,
       Effect.gen(function* () {
-        // Resolve the selected model before registering the execution.
+        // Resolve the selected model before registering the run.
         const requestedConfig = preferHelperModel
           ? yield* Effect.tryPromise({
               try: async () =>
@@ -160,9 +160,9 @@ export const runAgent = Effect.fn('runAgent')(function* (
             ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
         if (shouldRegister) {
-          yield* registerExecution(
+          yield* registerRun(
             runSession,
-            executionId,
+            runId,
             config,
             config.agent,
             {
@@ -171,15 +171,15 @@ export const runAgent = Effect.fn('runAgent')(function* (
             },
           );
         } else {
-          yield* acquireResumedExecutionOwnership(runSession, executionId);
+          yield* acquireResumedRunOwnership(runSession, runId);
         }
 
         let lifecycleStarted = false;
         const callerOnRun = executeAgentOptions.onRun;
-        const execution = yield* Effect.exit(
+        const run = yield* Effect.exit(
           Effect.gen(function* () {
-            onExecutionLeaseAcquired?.(executionId);
-            return yield* executeAgent(definition, executionId, {
+            onRunLeaseAcquired?.(runId);
+            return yield* executeAgent(definition, runId, {
               ...executeAgentOptions,
               launchSignal,
               session: runSession,
@@ -194,8 +194,8 @@ export const runAgent = Effect.fn('runAgent')(function* (
         );
 
         const failures: unknown[] = [];
-        if (Exit.isFailure(execution)) {
-          const error = Cause.squash(execution.cause);
+        if (Exit.isFailure(run)) {
+          const error = Cause.squash(run.cause);
           failures.push(error);
           const restoredOutcome = shouldRegister
             ? RUN_OUTCOME.FAILED
@@ -203,7 +203,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           if (!lifecycleStarted && restoredOutcome !== undefined) {
             const finalization = yield* Effect.exit(
               finalizeRun(runSession, {
-                executionId,
+                runId,
                 outcome: restoredOutcome,
                 flowRecord: shouldRegister ? 'delete' : 'preserve',
               }),
@@ -226,7 +226,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           failures.push(Cause.squash(artifacts.cause));
         if (Exit.isFailure(artifacts) || artifacts.value !== true) {
           const release = yield* Effect.exit(
-            runSession.releaseExecutionLease(executionId),
+            runSession.releaseRunLease(runId),
           );
           if (Exit.isFailure(release))
             failures.push(Cause.squash(release.cause));
@@ -236,12 +236,12 @@ export const runAgent = Effect.fn('runAgent')(function* (
             ensureError(
               aggregateError(
                 failures,
-                `Run ${executionId} failed or its final artifacts could not be persisted`,
+                `Run ${runId} failed or its final artifacts could not be persisted`,
               ),
             ),
           );
         }
-        return yield* execution;
+        return yield* run;
       }).pipe(Effect.uninterruptible),
     );
   }).pipe(
@@ -251,9 +251,9 @@ export const runAgent = Effect.fn('runAgent')(function* (
         detachLaunchInterrupt?.();
         if (
           launchHandle &&
-          runSession.executions.getHandle(executionId) === launchHandle
+          runSession.runs.getHandle(runId) === launchHandle
         ) {
-          runSession.executions.untrack(executionId);
+          runSession.runs.untrack(runId);
         }
       }),
     ),

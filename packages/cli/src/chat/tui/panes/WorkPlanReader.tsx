@@ -17,7 +17,7 @@ import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import {
   TODO_STATUS,
   type Plan,
-  type StreamTabId,
+  type RunId,
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
@@ -110,18 +110,18 @@ export function WorkPlanReader({
   availableRows,
   loading = false,
   onClose,
-  streamId,
+  runId,
   title,
 }: {
   readonly availableRows: number;
   readonly loading?: boolean;
   readonly onClose: () => void;
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   const snapshots = loading ? undefined : tryDefaultSession()?.snapshots;
-  const workPlan = snapshots?.getWorkPlan(streamId);
+  const workPlan = snapshots?.getWorkPlan(runId);
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
   const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;
@@ -146,7 +146,7 @@ export function WorkPlanReader({
         marginWhenSpacious={false}
         maxRows={layout.bodyRows}
         minContentWidth={1}
-        resetKey={streamId}
+        resetKey={runId}
         scrollHint="scroll work plan"
         showScrollHints={false}
         text={text}

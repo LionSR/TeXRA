@@ -203,10 +203,10 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
   /** Resolve the symlink `mirrorWorkspaceFile` creates in run storage and
    * assert it points back at the real workspace figure. */
   async function expectFigureMirrored(
-    executionId: string,
+    runId: string,
     figurePath: string,
   ): Promise<void> {
-    const mirroredPath = path.join(getRunDir(executionId), 'figures/plot.png');
+    const mirroredPath = path.join(getRunDir(runId), 'figures/plot.png');
     const stats = await lstat(mirroredPath);
     expect(stats.isSymbolicLink()).toBe(true);
     const target = await readlink(mirroredPath);
@@ -219,13 +219,13 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     'extractFiguresFromFiles reuses its resolved baseDir instead of re-resolving it in mirrorFigureDependencies',
     () =>
       Effect.gen(function* () {
-        const executionId = 'extract-basedir-dedup';
+        const runId = 'extract-basedir-dedup';
         const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
         const workspaceState = AgentWorkspaceState.create();
         const manager = new LatexMediaManager(
           logger,
-          new TaskRunFileService(executionId),
+          new TaskRunFileService(runId),
         ) as unknown as LatexMediaManagerFigureInternals;
         yield* manager.extractFiguresFromFiles(
           [createWorkspaceLocation(texPath, 'main.tex')],
@@ -242,7 +242,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
           figurePath,
         ]);
         yield* Effect.promise(() =>
-          expectFigureMirrored(executionId, figurePath),
+          expectFigureMirrored(runId, figurePath),
         );
       }),
   );
@@ -251,12 +251,12 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     'mirrorFiguresForFiles (no precomputed baseDir) still resolves and mirrors the correct path',
     () =>
       Effect.gen(function* () {
-        const executionId = 'mirror-basedir-fallback';
+        const runId = 'mirror-basedir-fallback';
         const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
         const manager = new LatexMediaManager(
           logger,
-          new TaskRunFileService(executionId),
+          new TaskRunFileService(runId),
         ) as unknown as LatexMediaManagerFigureInternals;
         yield* manager.mirrorFiguresForFiles([
           createWorkspaceLocation(texPath, 'main.tex'),
@@ -268,7 +268,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
 
         yield* Effect.promise(() =>
-          expectFigureMirrored(executionId, figurePath),
+          expectFigureMirrored(runId, figurePath),
         );
       }),
   );

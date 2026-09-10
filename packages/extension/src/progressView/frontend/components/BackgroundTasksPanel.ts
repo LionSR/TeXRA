@@ -8,7 +8,7 @@
  * "Waiting on N subagents" line while any run. The `inquiries` scope is the
  * same card over the inquiry threads alone (the workflow body, whose run
  * board already lists every call). Every row is a child of the fold: label,
- * status, tone, latest line, and clock facts come from `view.streams`; the
+ * status, tone, latest line, and clock facts come from `view.runs`; the
  * host paints the glyph and the time. The card's open state is the
  * surface's (`Surface.groups`, key {@link DISPATCH_GROUP_KEY}); a toggle
  * goes out as a `group` action. Selecting a row is the navigation.
@@ -28,12 +28,12 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import type { InquiryThreadUpdatedEvent, StreamTabId } from '@shared/schemas';
+import type { InquiryThreadUpdatedEvent, RunId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import {
-  descendantStreams,
+  descendantRuns,
   type SessionView,
-  type StreamView,
+  type RunView,
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -51,7 +51,7 @@ import { dispatchGroupToggle } from '../utils';
 const DISPATCH_GROUP_KEY = 'dispatch';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
-const TONE_ICONS: Record<StreamView['tone'], TeXRAIconName> = {
+const TONE_ICONS: Record<RunView['tone'], TeXRAIconName> = {
   running: 'circle',
   success: 'circle-check',
   danger: 'circle-xmark',
@@ -234,7 +234,7 @@ export class BackgroundTasksPanel extends LitElement {
   ];
 
   /** The dispatching stream: its `childIds` are the rows. */
-  @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) stream: RunView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   /** The card's open state lives here (`groups`, key `dispatch`). */
   @property({ attribute: false }) surface: Surface | null = null;
@@ -245,30 +245,30 @@ export class BackgroundTasksPanel extends LitElement {
    *  whose run board already lists every call). */
   @property() scope: 'all' | 'inquiries' = 'all';
 
-  private childrenOf(stream: StreamView): StreamView[] {
+  private childrenOf(stream: RunView): RunView[] {
     const view = this.view;
     if (!view) return [];
     return stream.childIds
-      .map((id) => view.streams.get(id))
-      .filter((child): child is StreamView => child !== undefined);
+      .map((id) => view.runs.get(id))
+      .filter((child): child is RunView => child !== undefined);
   }
 
   /** Every descendant `rollup` counts, so the card's running badge and its
    *  since time read the same set: a direct child that finishes while a
    *  grandchild runs leaves the badge lit and the time standing. */
-  private descendantsOf(streams: readonly StreamView[]): StreamView[] {
+  private descendantsOf(runs: readonly RunView[]): RunView[] {
     const view = this.view;
     if (!view) return [];
-    return streams.flatMap((child) =>
-      descendantStreams(view, child.id, { includeRoot: true })
-        .map((id) => view.streams.get(id))
-        .filter((stream): stream is StreamView => stream !== undefined),
+    return runs.flatMap((child) =>
+      descendantRuns(view, child.id, { includeRoot: true })
+        .map((id) => view.runs.get(id))
+        .filter((stream): stream is RunView => stream !== undefined),
     );
   }
 
-  private inquiriesOf(stream: StreamView): InquiryThreadUpdatedEvent[] {
+  private inquiriesOf(stream: RunView): InquiryThreadUpdatedEvent[] {
     return (this.view?.inquiries ?? []).filter(
-      (thread) => thread.parentStreamId === stream.id,
+      (thread) => thread.parentRunId === stream.id,
     );
   }
 
@@ -365,7 +365,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private renderChildren(
-    children: readonly StreamView[],
+    children: readonly RunView[],
     depth: number,
   ): TemplateResult {
     return html`${repeat(
@@ -379,7 +379,7 @@ export class BackgroundTasksPanel extends LitElement {
     )}`;
   }
 
-  private renderChildRow(child: StreamView, depth: number): TemplateResult {
+  private renderChildRow(child: RunView, depth: number): TemplateResult {
     const pendingApproval = child.approval === 'own';
     const glyph = pendingApproval ? 'circle-dot' : TONE_ICONS[child.tone];
     const latest = child.latestLine ?? child.description ?? '';
@@ -394,7 +394,7 @@ export class BackgroundTasksPanel extends LitElement {
         })}
         style=${`padding-inline-start: calc(var(--wa-space-xs) + ${depth} * var(--wa-space-m))`}
         aria-label=${label}
-        @click=${() => this.navigateToStream(child.id)}
+        @click=${() => this.navigateToRun(child.id)}
       >
         ${waIcon(glyph, { className: 'task-icon' })}
         <span class="task-name">${child.label}</span>
@@ -437,8 +437,8 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private navigateToStream(streamId: StreamTabId): void {
-    this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', streamId }));
+  private navigateToRun(runId: RunId): void {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', runId }));
   }
 }
 
@@ -447,7 +447,7 @@ export class BackgroundTasksPanel extends LitElement {
  * elapsed while it runs (the host ticks), else when it was last active.
  */
 function renderClock(
-  child: StreamView,
+  child: RunView,
   pendingApproval: boolean,
   nowMs: number | null,
 ): TemplateResult | typeof nothing {

@@ -71,7 +71,7 @@ describe('CLI agent proposal approval layout', () => {
   it('budgets a compact multi-agent workflow summary and saved script path', () => {
     const payload = {
       requestId: 'proposal-1',
-      streamId: 'stream-1',
+      runId: 'stream-1',
       agent: 'reviewer',
       agentCategory: AgentCategory.Workflow,
       instruction: 'Review in parallel',

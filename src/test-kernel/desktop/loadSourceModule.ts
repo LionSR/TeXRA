@@ -25,7 +25,7 @@ interface TestSourceModules {
   '@desktop/shared/desktopDiffMessages': typeof import('@desktop/shared/desktopDiffMessages');
   '@desktop/shared/desktopOnboardingMessages': typeof import('@desktop/shared/desktopOnboardingMessages');
   '@desktop/shared/desktopPdfMessages': typeof import('@desktop/shared/desktopPdfMessages');
-  '@desktop/main/desktopAgentExecution': typeof import('@desktop/main/desktopAgentExecution');
+  '@desktop/main/desktopAgentRun': typeof import('@desktop/main/desktopAgentRun');
   '@desktop/main/desktopDiffHost': typeof import('@desktop/main/desktopDiffHost');
   '@desktop/main/desktopFileSelection': typeof import('@desktop/main/desktopFileSelection');
   '@desktop/main/desktopMenuTemplate': typeof import('@desktop/main/desktopMenuTemplate');

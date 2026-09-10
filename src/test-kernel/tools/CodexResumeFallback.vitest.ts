@@ -10,15 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, RunId } from '@shared/schemas';
 import { codexThreadsFor } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
   requestBashApproval: vi.fn(),
   getCurrentToolContexts: vi.fn(),
-  registerExecution: vi.fn(),
-  getExecutionStore: vi.fn(),
-  createChildStream: vi.fn(),
+  registerRun: vi.fn(),
+  getRunStore: vi.fn(),
+  createChildRun: vi.fn(),
   startChildRunLoop: vi.fn(),
   currentSession: vi.fn(),
   importCodexClass: vi.fn(),
@@ -42,8 +42,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 
 vi.mock('@agent/runtime/RunContext', () => ({
   runInSession: (_session: unknown, run: () => unknown) => run(),
-  getRunContextExecutionId: (ctx: any) => ctx?.executionId,
-  getRunContextStreamId: (ctx: any) => ctx?.streamId,
+  getRunContextRunId: (ctx: any) => ctx?.runId,
+  getRunContextRunId: (ctx: any) => ctx?.runId,
   getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
   getRunContextInteractions: (ctx: any) => ctx?.interactions,
 }));
@@ -57,7 +57,7 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   // The session-keyed registry resolves live handles through its session's
-  // ExecutionRegistry; this suite never tracks real handles, so lookups miss.
+  // RunRegistry; this suite never tracks real handles, so lookups miss.
   executions: {
     getHandle: () => undefined,
     getAgentHandleByStream: () => undefined,
@@ -66,23 +66,23 @@ const testSession = {
 const CodexThreads = codexThreadsFor(testSession);
 
 vi.mock('@agent/storage', () => ({
-  registerExecution: mocks.registerExecution,
-  getExecutionStore: mocks.getExecutionStore,
+  registerRun: mocks.registerRun,
+  getRunStore: mocks.getRunStore,
 }));
 
-vi.mock('@agent/storage/executionLease', () => ({
-  assertOwnedExecutionLease: vi.fn(),
+vi.mock('@agent/storage/runLease', () => ({
+  assertOwnedRunLease: vi.fn(),
 }));
 
-vi.mock('@tools/delegation/childStream', () => ({
-  createChildStream: mocks.createChildStream,
-  childStreamDescription: (raw: string) => raw,
+vi.mock('@tools/delegation/childRun', () => ({
+  createChildRun: mocks.createChildRun,
+  childRunDescription: (raw: string) => raw,
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
-  runWithOwnedExecutionLeaseLaunchGuard: (
+  runWithOwnedRunLeaseLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedExecutionLeaseLaunchGuard
+      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
     >
   ) => args[2],
   startChildRunLoop: mocks.startChildRunLoop,
@@ -108,11 +108,11 @@ vi.mock('@tools/codexImport', () => ({
 }));
 
 import { CodexTool } from '@tools/codex';
-import { createFakeAgentCliChildStream } from '../support/agentCliResumeTestUtils';
+import { createFakeAgentCliChildRun } from '../support/agentCliResumeTestUtils';
 
-const parentStreamId = 'stream:parent' as StreamTabId;
-const childStreamId = 'stream:codex-child' as StreamTabId;
-const executionId = 'parent-exec' as ExecutionId;
+const parentRunId = 'stream:parent' as RunId;
+const childRunId = 'stream:codex-child' as RunId;
+const runId = 'parent-exec' as RunId;
 
 function completedChildRunLoop() {
   return Effect.forkDetach(Effect.void);
@@ -121,8 +121,8 @@ function completedChildRunLoop() {
 function toolContext(runContext: Record<string, unknown> = {}): unknown {
   return {
     runContext: {
-      streamId: parentStreamId,
-      executionId,
+      runId: parentRunId,
+      runId,
       workingDirectory: undefined,
       interactions: { name: 'fake-runtime-host' },
       ...runContext,
@@ -152,28 +152,28 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.findCodexBinaryPath.mockReset();
     mocks.requestBashApproval.mockResolvedValue({ action: 'approve' });
     mocks.getCurrentToolContexts.mockReturnValue(toolContext());
-    mocks.registerExecution.mockReturnValue(Effect.void);
-    mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
+    mocks.registerRun.mockReturnValue(Effect.void);
+    mocks.getRunStore.mockReturnValue({ write: async () => {} });
     mocks.findCodexBinaryPath.mockResolvedValue(undefined);
-    mocks.createChildStream.mockReturnValue(
-      Effect.succeed(createFakeAgentCliChildStream(childStreamId)),
+    mocks.createChildRun.mockReturnValue(
+      Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );
     mocks.currentSession.mockReturnValue(testSession);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
-    CodexThreads.releaseByExecutionId(executionId);
+    CodexThreads.releaseByRunId(runId);
     CodexThreads.release('stale-thread');
   });
 
   it('logs a detached run-loop rejection from a fresh Codex thread launch', async () => {
-    const childStream = createFakeAgentCliChildStream(childStreamId);
+    const childRun = createFakeAgentCliChildRun(childRunId);
     const error = vi
-      .spyOn(childStream.logger, 'error')
+      .spyOn(childRun.logger, 'error')
       .mockImplementation(() => {});
     const lateFailure = new Error('late Codex finalization failed');
-    mocks.createChildStream.mockReturnValue(Effect.succeed(childStream));
+    mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
     mocks.startChildRunLoop.mockReturnValue(
       Effect.forkDetach(Effect.fail(lateFailure)),
     );
@@ -273,7 +273,7 @@ describe('codex tool - atomic resume fallback', () => {
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
     expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
     expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-      childStreamId,
+      childRunId,
       'also update the tests',
       expect.objectContaining({ session: expect.anything() }),
     );

@@ -14,26 +14,26 @@ import type {
   SubscriptionUsageSnapshot,
   UsageRoute,
 } from '@shared/schemas';
-import { descendantStreams } from '@shared/session/sessionView';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import { descendantRuns } from '@shared/session/sessionView';
+import { isActivePhase } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
-  selectedStreamId as selectedStreamIdSignal,
+  selectedRunId as selectedRunIdSignal,
   rootRunPending as rootRunPendingSignal,
-  rootRunStreamId as rootRunStreamIdSignal,
+  rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
-  rootStreamId as rootStreamIdSignal,
+  rootRunId as rootRunIdSignal,
 } from '../state/cliState';
 import {
   ancestorPhaseLabel,
   cumulativeUsageOf,
   sessionView,
-  streamPhaseOf,
-  streamViewOf,
+  runPhaseOf,
+  runViewOf,
 } from '../state/sessionView';
 import {
   chatTuiCanStopActiveRun,
@@ -44,7 +44,7 @@ import { useSignal } from '../state/useSignal';
 import {
   approvalQueueStatusKind,
   buildStatusBarDisplay,
-  statusBarStreamTarget,
+  statusBarRunTarget,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
 
@@ -61,16 +61,16 @@ interface StatusBarProps {
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
   readonly foregroundInputActive?: boolean;
-  readonly streamFocusAvailable: boolean;
+  readonly runFocusAvailable: boolean;
   readonly transcriptAvailable?: boolean;
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsage = useMemo(() => new SubscriptionUsageService(), []);
   const { write: writeStderr } = useStderr();
-  const activeStreamId = useSignal(selectedStreamIdSignal);
+  const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
-  const rootStreamId = useSignal(rootStreamIdSignal);
+  const rootRunId = useSignal(rootRunIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const transientNotice = useSignal(transientNoticeSignal);
   const caps = useSignal(terminalCapabilities);
@@ -80,34 +80,34 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // on the closure's identity, which froze the hint at its boot-time value
   // for the whole run (#8273).
   const rootRunPending = useSignal(rootRunPendingSignal);
-  const rootRunStreamId = useSignal(rootRunStreamIdSignal);
+  const rootRunId = useSignal(rootRunIdSignal);
   const runStopFacts = {
     runPending: rootRunPending,
-    streamId: rootRunStreamId,
-    status: streamPhaseOf(streamViewOf(view, rootRunStreamId)),
+    runId: rootRunId,
+    status: runPhaseOf(runViewOf(view, rootRunId)),
   };
-  const ownedStreamIds = useMemo(
-    () => descendantStreams(view, rootStreamId, { includeRoot: true }),
-    [view, rootStreamId],
+  const ownedRunIds = useMemo(
+    () => descendantRuns(view, rootRunId, { includeRoot: true }),
+    [view, rootRunId],
   );
-  const target = statusBarStreamTarget({
-    activeStreamId,
+  const target = statusBarRunTarget({
+    activeRunId,
     canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
     // The whole pending-run window, not just its launch gap: a restored
     // stream's phase is derived, so a run whose stream has not reported one
     // yet must still read "stop" — Ctrl-C would stop it.
     canStopPendingRun: chatTuiCanStopActiveRun(runStopFacts),
-    ownedStreamIds,
+    ownedRunIds,
     view,
   });
-  const displayStreamId = target.displayStreamId;
-  const displayStream = streamViewOf(view, displayStreamId);
-  const displayStatus = streamPhaseOf(displayStream);
+  const displayRunId = target.displayRunId;
+  const displayRun = runViewOf(view, displayRunId);
+  const displayStatus = runPhaseOf(displayRun);
   // The run's cumulative usage: the same figure the subagent rows and the
   // exit summary present.
-  const displayUsage = cumulativeUsageOf(displayStream);
+  const displayUsage = cumulativeUsageOf(displayRun);
   // Use root-session access facts only before any stream exists.
-  const accessModel = displayStream?.model ?? sessionMeta.model;
+  const accessModel = displayRun?.model ?? sessionMeta.model;
 
   // Which subscription, if any, would serve the selected stream's model on its
   // next request. The completed usage snapshot supersedes this prospective
@@ -243,51 +243,51 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       : undefined;
 
   const runStartedAt =
-    isActivePhase(displayStatus) && displayStream?.runStartedAt !== null
-      ? displayStream?.runStartedAt
+    isActivePhase(displayStatus) && displayRun?.runStartedAt !== null
+      ? displayRun?.runStartedAt
       : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
-  const subagentCount = displayStream?.rollup.total ?? 0;
+  const subagentCount = displayRun?.rollup.total ?? 0;
   // Every request awaiting the user: the fold's approvals and open
   // inquiries, the same list the modal and the title read.
   const attention = attentionRequests(view);
 
   // Nested-session location: the nearest workflow-script ancestor's open
   // phase, then the focused stream's label.
-  const focusedStreamId = target.isChildStream ? displayStreamId : undefined;
+  const focusedRunId = target.isChildRun ? displayRunId : undefined;
   const focusedLabel =
-    focusedStreamId === undefined
+    focusedRunId === undefined
       ? undefined
-      : (streamViewOf(view, focusedStreamId)?.label ?? focusedStreamId);
+      : (runViewOf(view, focusedRunId)?.label ?? focusedRunId);
   const focusedPhaseHeading =
-    focusedStreamId === undefined
+    focusedRunId === undefined
       ? undefined
-      : ancestorPhaseLabel(view, focusedStreamId);
+      : ancestorPhaseLabel(view, focusedRunId);
 
   const display = buildStatusBarDisplay({
     status: displayStatus,
-    statusLabel: displayStream?.statusLabel,
+    statusLabel: displayRun?.statusLabel,
     turn: {
       elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
       runningFrame:
         runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
-      thinkingActive: displayStream?.thinkingActive ?? false,
-      compactingActive: displayStream?.compactingActive ?? false,
+      thinkingActive: displayRun?.thinkingActive ?? false,
+      compactingActive: displayRun?.compactingActive ?? false,
     },
     transientNotice,
     commandName: props.commandName,
     bypass:
-      displayStreamId === undefined
+      displayRunId === undefined
         ? undefined
-        : view.policy.get(displayStreamId)?.bypasses,
+        : view.policy.get(displayRunId)?.bypasses,
     queuedFollowUpMessages:
-      displayStreamId === undefined
+      displayRunId === undefined
         ? []
-        : (view.queuedFollowUps.get(displayStreamId) ?? []),
+        : (view.queuedFollowUps.get(displayRunId) ?? []),
     usage: displayUsage,
-    contextState: displayStream?.context ?? undefined,
-    stage: displayStream?.stage ?? undefined,
+    contextState: displayRun?.context ?? undefined,
+    stage: displayRun?.stage ?? undefined,
     subagents: subagentCount,
     runningSessions: props.runningSessions ?? 0,
     approvalDepth: attention.length,
@@ -300,7 +300,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
     ctrlCAction: target.ctrlCAction,
-    isChildStream: target.isChildStream,
+    isChildRun: target.isChildRun,
     location:
       focusedLabel === undefined
         ? undefined
@@ -319,8 +319,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       chatInputAvailable: props.chatInputAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable:
-        streamViewOf(view, activeStreamId)?.parentId != null,
-      streamFocusAvailable: props.streamFocusAvailable,
+        runViewOf(view, activeRunId)?.parentId != null,
+      runFocusAvailable: props.runFocusAvailable,
       shiftEnterNewline: caps.kittyKeyboard,
       transcriptAvailable: props.transcriptAvailable,
     },

@@ -58,7 +58,7 @@ describe('chat TUI session exit controller', () => {
 
   it('prints an artifact flush failure during signal teardown despite quiet logging', async () => {
     const session = new TuiSession();
-    session.executionId = 'exec-flush-warning';
+    session.runId = 'exec-flush-warning';
     session.runExitCode = CliExitCode.Success;
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
       return undefined as never;

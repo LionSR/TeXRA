@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { StreamTabId } from './identifiers';
+import type { RunId } from './identifiers';
 
 /**
  * A plan is a plain objective document: what to achieve, the intended
@@ -29,6 +29,6 @@ export type Plan = z.infer<typeof PlanSchema>;
  * schema would own no boundary.
  */
 export interface UpdatePlanPayload {
-  streamId: StreamTabId;
+  runId: RunId;
   plan: Plan | null;
 }

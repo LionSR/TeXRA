@@ -8,7 +8,7 @@ import { platform } from '@platform/platform';
 const log = createLog('LeaseOwnerLiveness');
 
 /**
- * Identity of the process that owns an execution lease: a pid, the opaque
+ * Identity of the process that owns a run lease: a pid, the opaque
  * process-start identity the `processes` port produced for it when the lease
  * was written (null where the host could not read one), and the machine it
  * runs on. Liveness is a kernel fact derived from these three fields;

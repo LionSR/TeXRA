@@ -73,7 +73,7 @@ export type {
 export type { AgentPlatform } from './effect/runtime.js';
 export type {
   SessionView,
-  StreamView,
+  RunView,
   TranscriptView,
 } from './effect/sessions.js';
 
@@ -124,7 +124,7 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
    * through a cast corrupts the session every host and every later run on
    * it reads.
    *
-   * The run's transcript rows (`StreamView.transcript`) are resident for the
+   * The run's transcript rows (`RunView.transcript`) are resident for the
    * life of the package session, which is the process: its stream and, as
    * they appear, its descendants are subscribed on the run's behalf.
    *
@@ -196,7 +196,7 @@ function agentServices(
     flushArtifacts: async (signal) => {
       await Effect.runPromise(sessions.close(platform.roots, signal));
     },
-    afterExecutionSettlement: [
+    afterRunSettlement: [
       async () => {
         composition = undefined;
         await Effect.runPromise(hold.release);

@@ -130,7 +130,7 @@ function createClientSideCompactionHandler(
  * Exposes an `abort` spy so tests can assert the handler stops consuming once
  * the client-side summary cap is reached.
  */
-function createStreamMock(options: {
+function createRunMock(options: {
   deltas?: string[];
   finalResponse?: unknown;
 }) {
@@ -600,7 +600,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const handler = createClientSideCompactionHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
-    const streamRequests: any[] = [];
+    const runRequestSpies: any[] = [];
     // compactionResult is only populated between the compaction call and this
     // turn's own finalizeResponse() (which clears it on success so it can
     // never leak into a later turn - see createResponseImpl). Snapshot it
@@ -616,10 +616,10 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
           );
         },
         stream: async (params: any) => {
-          streamRequests.push(params);
+          runRequestSpies.push(params);
           // Summary finishes under the client-side cap, so the handler drains
           // the (empty) delta stream and reads the final response.
-          return createStreamMock({
+          return createRunMock({
             finalResponse: {
               id: 'compaction-summary-response',
               status: 'completed',
@@ -653,10 +653,10 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(compactRequests).toHaveLength(0);
 
     // The client-side path summarizes via a throwaway streaming call.
-    expect(streamRequests).toHaveLength(1);
+    expect(runRequestSpies).toHaveLength(1);
     expect(client.withOptions).toHaveBeenCalledWith({ maxRetries: 2 });
-    expect(streamRequests[0].instructions).toBe(COMPACTION_SYSTEM_PROMPT);
-    expect(streamRequests[0].input).toEqual([
+    expect(runRequestSpies[0].instructions).toBe(COMPACTION_SYSTEM_PROMPT);
+    expect(runRequestSpies[0].input).toEqual([
       ...secondTurnMessages,
       userTextMessage(COMPACTION_USER_PROMPT),
     ]);
@@ -695,14 +695,14 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     // (~8000 chars) if the handler failed to stop early.
     const oversizedDeltas = Array.from({ length: 200 }, () => 'x'.repeat(100));
     const fullSummaryChars = oversizedDeltas.join('').length;
-    let capturedStream: ReturnType<typeof createStreamMock> | undefined;
+    let capturedStream: ReturnType<typeof createRunMock> | undefined;
     const client = withSdkOptions({
       responses: {
         compact: async () => {
           throw new Error('stateless backend must not call /responses/compact');
         },
         stream: async () => {
-          capturedStream = createStreamMock({
+          capturedStream = createRunMock({
             deltas: oversizedDeltas,
             finalResponse: {
               id: 'should-not-be-read',
@@ -763,7 +763,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
           throw new Error('stateless backend must not call /responses/compact');
         },
         stream: async () =>
-          createStreamMock({
+          createRunMock({
             deltas: ['streamed summary ', 'from the deltas'],
             finalResponse: {
               id: 'codex-empty-final-response',

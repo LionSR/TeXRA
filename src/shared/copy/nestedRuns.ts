@@ -19,7 +19,7 @@
  * "background task" when the focused row might not be an agent.
  *
  * Hosts import these strings instead of paraphrasing stream-tree or roster
- * vocabulary. Wire identifiers (`childStreamId`, `parentStream`, …) stay
+ * vocabulary. Wire identifiers (`childRunId`, `parentRun`, …) stay
  * internal and never reach the screen.
  */
 

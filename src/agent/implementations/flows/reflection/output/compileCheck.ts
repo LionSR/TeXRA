@@ -8,7 +8,7 @@ import {
   isGenericOutputStem,
   type CompileFailure,
   type CompileResult,
-  type ExecutionId,
+  type RunId,
   type FileLocation,
   type OutputFileInfo,
   type RunStorageFileLocation,
@@ -34,7 +34,7 @@ interface CompileCheckContext {
   fileService: TaskRunFileService;
   outputState: OutputState;
   logger: AgentTrace;
-  streamId: string;
+  runId: RunId;
 }
 
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
@@ -89,7 +89,7 @@ export function resolveWorkspaceSourceDir(
 
   const runStorageRelative =
     location.kind === 'runStorage'
-      ? path.relative(getRunDir(location.executionId), location.absolutePath)
+      ? path.relative(getRunDir(location.runId), location.absolutePath)
       : null;
   const separatorMatch = runStorageRelative
     ? /^([^/\\]+)[/\\]/.exec(runStorageRelative)
@@ -225,7 +225,7 @@ interface CompileTarget {
   displayName: string;
   currentRound: number;
   outputFile: OutputFileInfo;
-  executionId: ExecutionId;
+  runId: RunId;
 }
 
 // Short hex digest length appended to safeName below — enough to make
@@ -282,7 +282,7 @@ async function compileOne(
   const logFileName = `r${currentRound}_${safeName}.log`;
   const logAbsolutePath = path.join(opts.compileRoot, logFileName);
   const logRelativePath = path.join('compile', logFileName);
-  const { executionId } = ctx.fileService;
+  const { runId } = ctx.fileService;
 
   const target: CompileTarget = {
     ctx,
@@ -290,7 +290,7 @@ async function compileOne(
     displayName,
     currentRound,
     outputFile,
-    executionId,
+    runId,
   };
 
   const clearStaleLogs = (): Promise<void> =>
@@ -324,7 +324,7 @@ async function compileOne(
     // execa's timeout option kills the child process on expiry, so we don't
     // orphan hanging latexmk/pdflatex runs.
     compileResult = await compileLatex2Pdf(outputFile.location, {
-      channel: ctx.streamId,
+      channel: ctx.runId,
       outputDirectory: buildDir,
       timeout: opts.timeoutMs,
       extraInputDirs,
@@ -391,7 +391,7 @@ async function writeCompileFailure({
   displayName,
   currentRound,
   outputFile,
-  executionId,
+  runId,
   logAbsolutePath,
   logRelativePath,
   failureLogExcerpt,
@@ -413,7 +413,7 @@ async function writeCompileFailure({
   const logLocation = createRunStorageLocation(
     logAbsolutePath,
     logRelativePath,
-    executionId,
+    runId,
   );
   return {
     failure: {
@@ -444,12 +444,12 @@ async function tryPublishArtifact({
   currentRound,
   outputFile,
   compiledPdfPath,
-  executionId,
+  runId,
 }: TryPublishArtifactArgs): Promise<RunStorageFileLocation | null> {
   try {
     const artifact = await publishCompiledPdfArtifact({
       runDirectory: opts.runDirectory,
-      executionId,
+      runId,
       round: currentRound,
       displayName,
       source: outputFile.location,

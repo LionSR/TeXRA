@@ -17,10 +17,10 @@ import {
   type ContextStateData,
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageProvider,
-  type StreamPhase,
-  type StreamStage,
+  type RunPhase,
+  type RunStage,
   type ApprovalPolicySnapshot,
-  type StreamTabId,
+  type RunId,
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
@@ -31,8 +31,8 @@ import {
   SESSION_LIST,
   SUBAGENT,
 } from '@shared/copy/nestedRuns';
-import { isActivePhase } from '@shared/streams/streamStatus';
-import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
+import { isActivePhase } from '@shared/runs/runStatus';
+import { formatStageLabel } from '@shared/runs/runStatusDisplay';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   assertNever,
@@ -45,7 +45,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
-import { streamPhaseOf, streamViewOf } from '../state/sessionView';
+import { runPhaseOf, runViewOf } from '../state/sessionView';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** The approval bypass flags a stream's policy snapshot carries. */
@@ -121,7 +121,7 @@ interface StatusBarSegment {
 }
 
 export interface StatusBarDisplayInput {
-  readonly status: StreamPhase | undefined;
+  readonly status: RunPhase | undefined;
   /** The fold's label for `status` (G4, one table); undefined with no stream. */
   readonly statusLabel: string | undefined;
   /** Liveness of the running turn — omitted entirely in tests/headless runs,
@@ -136,9 +136,9 @@ export interface StatusBarDisplayInput {
    *  to show), never for context occupancy: that is `contextState`. */
   readonly usage: TokenUsageStats | undefined;
   /** Model-handler-authoritative context occupancy for the displayed stream
-   *  (`StreamView.context`). */
+   *  (`RunView.context`). */
   readonly contextState: ContextStateData | undefined;
-  readonly stage: StreamStage | undefined;
+  readonly stage: RunStage | undefined;
   /** Retained and active direct subagents owned by the displayed stream. */
   readonly subagents: number;
   /** Visible child sessions still in flight (see RUNNING_SESSION copy). */
@@ -156,8 +156,8 @@ export interface StatusBarDisplayInput {
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
   /** True when `status` belongs to a focused child/subagent stream rather
-   *  than the root session — see `statusBarStreamTarget`. */
-  readonly isChildStream?: boolean;
+   *  than the root session — see `statusBarRunTarget`. */
+  readonly isChildRun?: boolean;
   /** Nested-session location (`Survey (1/1) › Agent runtime`). Omitted on
    *  the root session, where the header already names the conversation. */
   readonly location?: { readonly context?: string; readonly label: string };
@@ -209,7 +209,7 @@ interface StatusBarShortcutsInput {
   /** True when the persistent child list has a session row. */
   readonly childNavigationAvailable?: boolean;
   /** True when Alt/Esc-1..9 has at least one stream target. */
-  readonly streamFocusAvailable?: boolean;
+  readonly runFocusAvailable?: boolean;
   readonly modifierLabel?: string;
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
@@ -268,7 +268,7 @@ function subscriptionQuotaSegment(
   };
 }
 
-// The gauge renders `StreamView.context` — the model handler's
+// The gauge renders `RunView.context` — the model handler's
 // own reading of the window it served the last response under, which is the
 // only value that stays right across subscription caps and compaction. The
 // `usage` fallback covers the pre-first-response window, where the handler has
@@ -327,7 +327,7 @@ function locationSegment(
 // One status-bar slot carries whichever stage this stream has (mirrors the
 // SubagentList row's `stageLabel`).
 function stageSegment(
-  stage: StreamStage | undefined,
+  stage: RunStage | undefined,
 ): StatusBarSegment | undefined {
   if (stage === undefined) return undefined;
   const text = formatStageLabel(stage);
@@ -660,7 +660,7 @@ function statusBarBindingsText(
     chatInputAvailable,
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
-    streamFocusAvailable = false,
+    runFocusAvailable = false,
     modifierLabel = defaultShortcutModifierLabel(),
     shiftEnterNewline = false,
     transcriptAvailable = false,
@@ -674,7 +674,7 @@ function statusBarBindingsText(
   const parentBack = parentNavigationAvailable
     ? keyHintText({ key: 'Esc', action: SESSION_LIST.parentAction })
     : undefined;
-  const streamFocus = streamFocusAvailable
+  const runFocus = runFocusAvailable
     ? keyHintText({
         key: metaChordLabel(modifierLabel, '1..9'),
         action: 'focus',
@@ -700,10 +700,10 @@ function statusBarBindingsText(
     chatInputAvailable && agentSelectionAvailable && !childNavigationAvailable;
   const candidates = [
     // Child navigation only applies when the current tree has a visible row;
-    // unrelated or not-yet-attached streams do not make Tab actionable.
+    // unrelated or not-yet-attached runs do not make Tab actionable.
     statusBarBindingRow([
       childList,
-      streamFocus,
+      runFocus,
       fullOutput,
       status,
       agent,
@@ -856,41 +856,41 @@ function approvalPolicySegment(
   }
 }
 
-interface StatusBarStreamTarget {
+interface StatusBarRunTarget {
   readonly ctrlCAction: CtrlCAction;
-  readonly displayStreamId: StreamTabId | undefined;
-  readonly isChildStream: boolean;
+  readonly displayRunId: RunId | undefined;
+  readonly isChildRun: boolean;
 }
 
 /**
  * Which stream the status bar describes: the active stream when the view
  * holds it, else its nearest live ancestor; and what Ctrl-C does there.
  */
-export function statusBarStreamTarget({
-  activeStreamId,
+export function statusBarRunTarget({
+  activeRunId,
   canStopActiveRun,
   canStopPendingRun = false,
-  ownedStreamIds,
+  ownedRunIds,
   view,
 }: {
-  readonly activeStreamId: StreamTabId | undefined;
+  readonly activeRunId: RunId | undefined;
   readonly canStopActiveRun: boolean;
   readonly canStopPendingRun?: boolean;
-  /** The streams this TUI runs: the root run and its descendants. */
-  readonly ownedStreamIds: readonly StreamTabId[];
+  /** The runs this TUI runs: the root run and its descendants. */
+  readonly ownedRunIds: readonly RunId[];
   readonly view: SessionView;
-}): StatusBarStreamTarget {
-  const active = streamViewOf(view, activeStreamId);
-  const isLive = (streamId: StreamTabId): boolean =>
-    isActivePhase(streamPhaseOf(streamViewOf(view, streamId)));
+}): StatusBarRunTarget {
+  const active = runViewOf(view, activeRunId);
+  const isLive = (runId: RunId): boolean =>
+    isActivePhase(runPhaseOf(runViewOf(view, runId)));
   // Root first in the view; the nearest live ancestor wins.
   const liveAncestor = (active?.ancestors ?? [])
     .toReversed()
     .find((ancestor) => isLive(ancestor.id));
-  const hasLiveStream = ownedStreamIds.some(isLive);
+  const hasLiveRun = ownedRunIds.some(isLive);
   const canStopVisibleRun =
-    canStopActiveRun && (canStopPendingRun || hasLiveStream);
-  const displayStreamId = active ? active.id : liveAncestor?.id;
+    canStopActiveRun && (canStopPendingRun || hasLiveRun);
+  const displayRunId = active ? active.id : liveAncestor?.id;
   let ctrlCAction: CtrlCAction;
   if (!canStopVisibleRun) {
     ctrlCAction = 'exit';
@@ -899,10 +899,10 @@ export function statusBarStreamTarget({
   }
   return {
     ctrlCAction,
-    displayStreamId,
-    isChildStream:
-      displayStreamId !== undefined &&
-      streamViewOf(view, displayStreamId)?.parentId != null,
+    displayRunId,
+    isChildRun:
+      displayRunId !== undefined &&
+      runViewOf(view, displayRunId)?.parentId != null,
   };
 }
 
@@ -968,7 +968,7 @@ export function buildStatusBarDisplay(
   const turn = input.turn;
 
   // No stream yet: a child row has no status column, the root keeps its slot.
-  const statusLabel = input.statusLabel ?? (input.isChildStream ? '' : '-');
+  const statusLabel = input.statusLabel ?? (input.isChildRun ? '' : '-');
   const spinPrefix =
     isActivePhase(input.status) && turn?.runningFrame
       ? `${turn.runningFrame} `

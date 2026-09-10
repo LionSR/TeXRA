@@ -24,7 +24,7 @@ function createRetryPermission(
     kind: PERMISSION_KIND.RETRY,
     data: {
       requestId: 'retry-1',
-      streamId: 'stream-1',
+      runId: 'stream-1',
       operation: 'model request',
       model: 'test-model',
       errorMessage: 'Provider quota exhausted',
@@ -118,7 +118,7 @@ describe('retry-request-panel', () => {
     expect(actions).toEqual([
       {
         kind: 'decision.retry',
-        streamId: 'stream-1',
+        runId: 'stream-1',
         approvalId: 'retry-1',
         decision: { action: 'retry' },
       },

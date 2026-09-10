@@ -26,7 +26,7 @@ export interface LaunchRunContext extends RunContextCommon {
 }
 
 type BareRunIdentity = Partial<
-  Pick<RunScope, 'executionId' | 'workingDirectory' | 'session'>
+  Pick<RunScope, 'runId' | 'workingDirectory' | 'session'>
 >;
 
 interface BareRunContext extends RunContextCommon, BareRunIdentity {
@@ -124,7 +124,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
   return Object.freeze({
     kind: 'bare',
     ...commonRunContextFields(options),
-    executionId: options.executionId,
+    runId: options.runId,
     workingDirectory: options.workingDirectory,
     session: options.session,
     get model() {
@@ -140,7 +140,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
 /**
  * Run code with an active per-run context.
  *
- * The context is populated by `withExecutionRunContext` (in
+ * The context is populated by `withLaunchRunContext` (in
  * `AgentLaunchContext.ts`), which projects an {@link AgentLaunchContext} into
  * the ALS scope. Tools and utilities call `tryUseRunContext()` to read it.
  * A context with a session also enters that session's workspace roots, so
@@ -190,10 +190,10 @@ export function getRunContextInteractions(
 }
 
 /** Return the run id for a context, reading launch contexts through RunScope. */
-export function getRunContextExecutionId(
+export function getRunContextRunId(
   context: RunContext | undefined = tryUseRunContext(),
 ): RunId | undefined {
-  return getRunContextField('executionId', context);
+  return getRunContextField('runId', context);
 }
 
 /** Return the working directory for a context, reading launch contexts through RunScope. */

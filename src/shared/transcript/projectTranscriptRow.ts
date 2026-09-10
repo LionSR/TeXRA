@@ -64,8 +64,8 @@ export interface TranscriptRowContext {
    *  opening it. Phase headers are unaffected — they stay transcript rows
    *  everywhere. */
   readonly projectLifecycleToTaskGroups?: boolean;
-  /** Subagent execution id -> label, for the `executions` tool header. */
-  readonly executionLabels?: ToolRowModelContext['executionLabels'];
+  /** Subagent run id -> label, for the `executions` tool header. */
+  readonly runLabels?: ToolRowModelContext['runLabels'];
 }
 
 // ---------------------------------------------------------------------------
@@ -386,8 +386,8 @@ export function projectTranscriptRow(
         kind: 'tool',
         toolUse,
         model: toolRowModel(toolUse, {
-          ...(ctx.executionLabels
-            ? { executionLabels: ctx.executionLabels }
+          ...(ctx.runLabels
+            ? { runLabels: ctx.runLabels }
             : {}),
           parsedOutput: entry.data.output,
         }),
@@ -564,7 +564,7 @@ export function projectTranscriptRow(
     // demand from the log (the CLI's `/status`), not a transcript row, and
     // `internal` is a durable marker (the workflow plan) that
     // nothing renders. Context utilization is a status surface on both hosts —
-    // the CLI reads it off `StreamView.context` and the webview
+    // the CLI reads it off `RunView.context` and the webview
     // off the raw entry in `logSlice` — so it has no transcript row either.
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
     case MESSAGE_TYPES.ACTIVE_SKILLS:

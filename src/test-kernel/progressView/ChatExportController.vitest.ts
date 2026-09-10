@@ -1,13 +1,12 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { beforeEach, describe, expect } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import { getStreamTabId } from '@agent/runtime/runTab';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -21,7 +20,7 @@ import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -82,24 +81,24 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   };
 }
 
-function persistTranscriptEntry(
-  executionId: ExecutionId,
+async function persistTranscriptEntry(
+  runId: RunId,
   agent: string,
-): Effect.Effect<StreamTabId> {
-  return Effect.gen(function* () {
-    const streamId = getStreamTabId(agent, { executionId });
-    yield* session.commit([
+): Promise<RunId> {
+  const runId = getStreamTabId(agent, { runId });
+  await Effect.runPromise(
+    session.commit([
       {
         type: 'log',
-        aggregateId: aggregateId('stream', streamId),
+        aggregateId: aggregateId('stream', runId),
         level: LOG_LEVELS.INFO,
         messageType: MESSAGE_TYPES.USER_MESSAGE,
         message: 'hello',
       },
-    ]);
+    ]),
+  );
 
-    return streamId;
-  });
+  return runId;
 }
 
 describe('ChatExportController.exportAsHtml', () => {
@@ -114,78 +113,69 @@ describe('ChatExportController.exportAsHtml', () => {
     });
   });
 
-  it.live('returns config_missing when nothing is stored', () =>
-    Effect.gen(function* () {
-      const templatePath = yield* Effect.promise(() => writeTemplate());
+  it('returns config_missing when nothing is stored', async () => {
+    const templatePath = await writeTemplate();
 
-      const outcome = yield* controller.exportAsHtml('missing', templatePath);
+    const outcome = await Effect.runPromise(
+      controller.exportAsHtml('missing', templatePath),
+    );
 
-      expect(outcome).toEqual({ status: 'config_missing' });
-    }),
-  );
+    expect(outcome).toEqual({ status: 'config_missing' });
+  });
 
-  it.live(
-    'writes a self-contained HTML file with the trace embedded, when everything is present',
-    () =>
-      Effect.gen(function* () {
-        const templatePath = yield* Effect.promise(() => writeTemplate());
-        const executionId = 'eec001' as ExecutionId;
-        const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-        publishTestRunStart(
-          session,
-          getStreamTabId(executionConfig.agent, { executionId }),
-          executionId,
-        );
-        yield* Effect.promise(() => session.settlePublications());
-        yield* getExecutionRecords(session, executionId).writeRunRecord(
-          executionConfig,
-        );
-        const streamId = yield* persistTranscriptEntry(executionId, 'review');
+  it('writes a self-contained HTML file with the trace embedded, when everything is present', async () => {
+    const templatePath = await writeTemplate();
+    const runId = 'eec001' as RunId;
+    const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
+    publishTestRunStart(
+      session,
+      getStreamTabId(runConfigRecord.agent, { runId }),
+      runId,
+    );
+    await session.settlePublications();
+    await Effect.runPromise(
+      getRunRecords(session, runId).writeRunRecord(runConfigRecord),
+    );
+    const runId = await persistTranscriptEntry(runId, 'review');
 
-        const outcome = yield* controller.exportAsHtml(
-          executionId,
-          templatePath,
-        );
+    const outcome = await Effect.runPromise(
+      controller.exportAsHtml(runId, templatePath),
+    );
 
-        expect(outcome.status).toBe('ok');
-        if (outcome.status !== 'ok') return;
-        expect(outcome.result.storagePath).toMatch(
-          /^executions\/eec001\/texra-chat-.*\.html$/,
-        );
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') return;
+    expect(outcome.result.storagePath).toMatch(
+      /^executions\/eec001\/texra-chat-.*\.html$/,
+    );
 
-        const written = yield* Effect.promise(() =>
-          nodeFilesystem.readFile(outcome.result.absolutePath),
-        );
-        const html = new TextDecoder().decode(written);
-        expect(html).toContain('<script>window.__TEXRA_TRACE__');
-        expect(html).toContain('"text":"hello"');
-        expect(html).toContain(
-          '<script type="module" crossorigin src="./index.js">',
-        );
-      }),
-  );
+    const written = await nodeFilesystem.readFile(outcome.result.absolutePath);
+    const html = new TextDecoder().decode(written);
+    expect(html).toContain('<script>window.__TEXRA_TRACE__');
+    expect(html).toContain('"text":"hello"');
+    expect(html).toContain(
+      '<script type="module" crossorigin src="./index.js">',
+    );
+  });
 
-  it.live('throws when the standalone template bundle is missing', () =>
-    Effect.gen(function* () {
-      const executionId = 'eec002' as ExecutionId;
-      publishTestRunStart(
-        session,
-        getStreamTabId(config().agent, { executionId }),
-        executionId,
-      );
-      yield* Effect.promise(() => session.settlePublications());
-      yield* getExecutionRecords(session, executionId).writeRunRecord(config());
-      const streamId = yield* persistTranscriptEntry(
-        executionId,
-        'orchestrator',
-      );
+  it('throws when the standalone template bundle is missing', async () => {
+    const runId = 'eec002' as RunId;
+    publishTestRunStart(
+      session,
+      getStreamTabId(config().agent, { runId }),
+      runId,
+    );
+    await session.settlePublications();
+    await Effect.runPromise(
+      getRunRecords(session, runId).writeRunRecord(config()),
+    );
+    const runId = await persistTranscriptEntry(runId, 'orchestrator');
 
-      const failure = yield* Effect.flip(
-        controller.exportAsHtml(executionId, '/nonexistent/index.html'),
-      );
-      expect(failure.message).toMatch(/Trace-viewer standalone bundle missing/);
-    }),
-  );
+    await expect(
+      Effect.runPromise(
+        controller.exportAsHtml(runId, '/nonexistent/index.html'),
+      ),
+    ).rejects.toThrow(/Trace-viewer standalone bundle missing/);
+  });
 });
 
 describe('ChatExportController.buildExportInput', () => {
@@ -200,53 +190,50 @@ describe('ChatExportController.buildExportInput', () => {
     });
   });
 
-  it.live('reports config_missing when nothing is stored', () =>
-    Effect.gen(function* () {
-      expect(yield* controller.buildExportInput('missing')).toEqual({
-        status: 'config_missing',
-      });
-    }),
-  );
+  it('reports config_missing when nothing is stored', async () => {
+    await expect(
+      Effect.runPromise(controller.buildExportInput('missing')),
+    ).resolves.toEqual({
+      status: 'config_missing',
+    });
+  });
 
-  it.live('returns ok when config and transcript are stored', () =>
-    Effect.gen(function* () {
-      const executionId = 'eec001' as ExecutionId;
-      publishTestRunStart(
-        session,
-        getStreamTabId(config().agent, { executionId }),
-        executionId,
-      );
-      yield* Effect.promise(() => session.settlePublications());
-      yield* getExecutionRecords(session, executionId).writeRunRecord(config());
-      const streamId = yield* persistTranscriptEntry(
-        executionId,
-        'orchestrator',
-      );
+  it('returns ok when config and transcript are stored', async () => {
+    const runId = 'eec001' as RunId;
+    publishTestRunStart(
+      session,
+      getStreamTabId(config().agent, { runId }),
+      runId,
+    );
+    await session.settlePublications();
+    await Effect.runPromise(
+      getRunRecords(session, runId).writeRunRecord(config()),
+    );
+    const runId = await persistTranscriptEntry(runId, 'orchestrator');
 
-      expect(yield* controller.buildExportInput(executionId)).toMatchObject({
-        status: 'ok',
-      });
-    }),
-  );
+    await expect(
+      Effect.runPromise(controller.buildExportInput(runId)),
+    ).resolves.toMatchObject({
+      status: 'ok',
+    });
+  });
 
-  it.live(
-    'reports conversation_missing when a config is stored but no transcript exists',
-    () =>
-      Effect.gen(function* () {
-        const executionId = 'eec003' as ExecutionId;
-        publishTestRunStart(
-          session,
-          getStreamTabId(config().agent, { executionId }),
-          executionId,
-        );
-        yield* Effect.promise(() => session.settlePublications());
-        yield* getExecutionRecords(session, executionId).writeRunRecord(
-          config(),
-        );
+  it('reports conversation_missing when a config is stored but no transcript exists', async () => {
+    const runId = 'eec003' as RunId;
+    publishTestRunStart(
+      session,
+      getStreamTabId(config().agent, { runId }),
+      runId,
+    );
+    await session.settlePublications();
+    await Effect.runPromise(
+      getRunRecords(session, runId).writeRunRecord(config()),
+    );
 
-        expect(yield* controller.buildExportInput(executionId)).toEqual({
-          status: 'conversation_missing',
-        });
-      }),
-  );
+    await expect(
+      Effect.runPromise(controller.buildExportInput(runId)),
+    ).resolves.toEqual({
+      status: 'conversation_missing',
+    });
+  });
 });

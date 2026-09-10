@@ -3,7 +3,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import {
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type { RejectionProvenance } from '@agent/runtime/HostInteractions';
@@ -16,7 +16,7 @@ import {
 import {
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type LineChanges,
-  type StreamTabId,
+  type RunId,
   type ToolEditPermission,
   type ToolResult,
 } from '@shared/schemas';
@@ -41,7 +41,7 @@ export interface ToolEditApprovalRequest {
   readonly originalContent: string;
   readonly proposedContent: string;
   readonly sourceTool: string;
-  readonly streamId?: StreamTabId | null;
+  readonly runId?: RunId | null;
   /**
    * What the UI shows for this request, prepared once at the tool boundary
    * (`prepareToolEditApprovalPrompt`): the payload of the `approval.requested`
@@ -90,9 +90,9 @@ export function prepareToolEditApprovalPrompt(
   },
 ): ToolEditPermission {
   const { requestId, request, relativePath } = params;
-  const { streamId } = request;
-  const isBypassed = streamId
-    ? session.approvals.toolEdit.bypass.isBypassed(streamId)
+  const { runId } = request;
+  const isBypassed = runId
+    ? session.approvals.toolEdit.bypass.isBypassed(runId)
     : false;
   const lineChanges = computeLineChangeSummary(
     request.originalContent,
@@ -104,7 +104,7 @@ export function prepareToolEditApprovalPrompt(
     relativePath,
     sourceTool: request.sourceTool,
     allowBypass: !isBypassed,
-    streamId: streamId ?? '',
+    runId: runId ?? '',
     addedLines: lineChanges.added,
     removedLines: lineChanges.removed,
     isLatex: isLatexFile(request.path),
@@ -181,15 +181,15 @@ export async function requestToolEditApproval(
 
   const context = tryUseRunContext();
   const session = currentSession();
-  const contextStreamId = getRunContextStreamId(context);
+  const contextRunId = getRunContextRunId(context);
   const preparedRequest =
-    request.streamId || !contextStreamId
+    request.runId || !contextRunId
       ? request
-      : { ...request, streamId: contextStreamId };
+      : { ...request, runId: contextRunId };
 
-  const streamId = preparedRequest.streamId ?? undefined;
-  const isStreamBypassed = Boolean(
-    streamId && session.approvals.toolEdit.bypass.isBypassed(streamId),
+  const runId = preparedRequest.runId ?? undefined;
+  const isRunBypassed = Boolean(
+    runId && session.approvals.toolEdit.bypass.isBypassed(runId),
   );
   const acceptProposedAsIs = (): ToolEditApprovalResult =>
     finalizeApprovalResult(
@@ -199,7 +199,7 @@ export async function requestToolEditApproval(
   const decision = decideTexraApproval({
     policy: session.approvalPolicy,
     promptRequired: approvalsEnabled,
-    scopedBypass: isStreamBypassed,
+    scopedBypass: isRunBypassed,
     canPresent: context?.approvalPromptsUnavailable !== true,
   });
   if (decision === 'allow') return acceptProposedAsIs();
@@ -211,7 +211,7 @@ export async function requestToolEditApproval(
     };
   }
 
-  return session.approvals.toolEdit.enqueue(streamId, {
+  return session.approvals.toolEdit.enqueue(runId, {
     prompt: async () =>
       finalizeApprovalResult(
         await session.interactions.requestToolEditApproval({

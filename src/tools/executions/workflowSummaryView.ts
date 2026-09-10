@@ -1,5 +1,5 @@
 /**
- * Bounded projection of a workflow run's execution snapshot for the executions
+ * Bounded projection of a workflow run's run snapshot for the executions
  * tool's `/executions/{id}` summary.
  *
  * A live workflow snapshot is unbounded in stages, calls, attempts, and file
@@ -13,7 +13,7 @@ import {
   deriveWorkflowCounts,
   stageTitleFor,
   TERMINAL_WORKFLOW_CALL_STATUSES,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunSnapshot,
   WORKFLOW_CALL_STATUS,
 } from '@shared/schemas';
 
@@ -27,7 +27,7 @@ function compactWorkflowText(value: string | undefined): string | undefined {
 }
 
 function workflowPhaseView(
-  stage: WorkflowExecutionSnapshot['stages'][number],
+  stage: WorkflowRunSnapshot['stages'][number],
 ): unknown {
   return {
     id: compactWorkflowText(stage.id),
@@ -40,12 +40,12 @@ function workflowPhaseView(
 }
 
 function workflowAttemptView(
-  attempt: WorkflowExecutionSnapshot['calls'][number]['attempts'][number],
+  attempt: WorkflowRunSnapshot['calls'][number]['attempts'][number],
 ): unknown {
   return {
     number: attempt.number,
     id: compactWorkflowText(attempt.id),
-    childStreamId: compactWorkflowText(attempt.childStreamId),
+    childRunId: compactWorkflowText(attempt.childRunId),
     model: compactWorkflowText(attempt.model),
     costUsd: attempt.costUsd,
     startedAt: attempt.startedAt,
@@ -79,8 +79,8 @@ function workflowCallFailurePriority(status: string): number {
   return 1;
 }
 
-export function workflowExecutionView(
-  snapshot: WorkflowExecutionSnapshot,
+export function workflowRunView(
+  snapshot: WorkflowRunSnapshot,
 ): unknown {
   const byPriority = snapshot.calls.toSorted(
     (left, right) =>
@@ -93,7 +93,7 @@ export function workflowExecutionView(
       right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt),
   );
   const phasePriority = (
-    stage: WorkflowExecutionSnapshot['stages'][number],
+    stage: WorkflowRunSnapshot['stages'][number],
   ): number => {
     if (stage.id === snapshot.currentStageId) return 0;
     if (stage.lifecycle === 'failed' || stage.lifecycle === 'cancelled') {
@@ -124,8 +124,8 @@ export function workflowExecutionView(
           context: compactWorkflowFiles(call.files.context),
           media: compactWorkflowFiles(call.files.media),
         },
-        childExecutionId: compactWorkflowText(call.childExecutionId),
-        childStreamId: compactWorkflowText(call.childStreamId),
+        childRunId: compactWorkflowText(call.childRunId),
+        childRunId: compactWorkflowText(call.childRunId),
         attempts: call.attempts
           .slice(-WORKFLOW_SUMMARY_MAX_ATTEMPTS)
           .map(workflowAttemptView),

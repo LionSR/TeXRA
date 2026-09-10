@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 
 import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import { type ExecutionId, type FileLocation } from '@shared/schemas';
+import { type RunId, type FileLocation } from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputRoundDir,
@@ -36,8 +36,8 @@ export class TaskRunFileService {
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
-  constructor(public readonly executionId: ExecutionId) {
-    this.runDirectory = getRunDir(executionId);
+  constructor(public readonly runId: RunId) {
+    this.runDirectory = getRunDir(runId);
   }
 
   /**
@@ -59,7 +59,7 @@ export class TaskRunFileService {
   ): Promise<void> {
     if (this.hasPreparedSnapshot) return;
 
-    await ensureRunDir(this.executionId);
+    await ensureRunDir(this.runId);
 
     const linkTargets = new Map<string, FileLocation>();
     for (const target of [...baseFiles, ...(options.linkFiles ?? [])]) {
@@ -100,7 +100,7 @@ export class TaskRunFileService {
       if (!stats.isFile()) return;
 
       const snapshotAbsolute = getOriginalSnapshotPath(
-        this.executionId,
+        this.runId,
         target.relativePath,
       );
 
@@ -129,13 +129,13 @@ export class TaskRunFileService {
     }
 
     const runAbsolute = getRunStorageAbsolutePath(
-      this.executionId,
+      this.runId,
       resolved.relativePath,
     );
     return createRunStorageLocation(
       runAbsolute,
       resolved.relativePath,
-      this.executionId,
+      this.runId,
     );
   }
 
@@ -166,9 +166,9 @@ export class TaskRunFileService {
       return location;
     }
 
-    await ensureRunDir(this.executionId);
+    await ensureRunDir(this.runId);
     const runAbsolute = getRunStorageAbsolutePath(
-      this.executionId,
+      this.runId,
       location.relativePath,
     );
 
@@ -184,7 +184,7 @@ export class TaskRunFileService {
     return createRunStorageLocation(
       runAbsolute,
       location.relativePath,
-      this.executionId,
+      this.runId,
     );
   }
 
@@ -255,11 +255,11 @@ export class TaskRunFileService {
         // workspace mirror at `runDir/<rel>`, which is correct — those
         // are never written to.
         const snapshotAbsolute = getOriginalSnapshotPath(
-          this.executionId,
+          this.runId,
           relativePath,
         );
         const workspaceMirrorAbsolute = getRunStorageAbsolutePath(
-          this.executionId,
+          this.runId,
           relativePath,
         );
         let sourceAbsolute = workspaceMirrorAbsolute;
@@ -274,7 +274,7 @@ export class TaskRunFileService {
           }
         }
         const destinationAbsolute = getRunStorageAbsolutePath(
-          this.executionId,
+          this.runId,
           path.join(relativeDirectory, relativePath),
         );
 

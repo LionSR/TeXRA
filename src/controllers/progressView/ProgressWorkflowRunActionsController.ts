@@ -4,11 +4,11 @@ import { createLog } from '@logger/logUtils';
 import type {
   OutputFileInfo,
   ReadonlyRoundIndexed,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import { AgentCategory, cloneRoundIndexed } from '@shared/schemas';
 import { unique } from '@utils/core';
-import type { StreamOutputsSource } from './streamOutputs';
+import type { RunOutputsSource } from './runOutputs';
 
 const log = createLog('ProgressWorkflowRunActions');
 
@@ -18,7 +18,7 @@ export interface WorkflowDiffRequest {
   inputFile: string;
   outputFiles: string[];
   outputFilesActive: boolean;
-  streamId: StreamTabId;
+  runId: RunId;
   runId?: string;
   outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo>;
 }
@@ -30,11 +30,11 @@ export interface WorkflowFileOperationRequest {
   model: string;
   inputFile: string;
   outputFiles: string[];
-  executionId?: string;
+  runId?: string;
 }
 
-interface ProgressWorkflowRunActionsState extends StreamOutputsSource {
-  getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
+interface ProgressWorkflowRunActionsState extends RunOutputsSource {
+  getKnownWorkspaceOutputPaths(stream: RunId): Set<string>;
 }
 
 interface ProgressWorkflowRunActionsControllerDeps {
@@ -52,18 +52,18 @@ export class ProgressWorkflowRunActionsController {
   ) {}
 
   async diffStream(
-    stream: StreamTabId,
+    stream: RunId,
     config: AgentConfig | undefined,
   ): Promise<void> {
     await this.withWorkflowConfig(
       stream,
       config,
-      async (config, executionId) => {
+      async (config, runId) => {
         // Round keys are non-negative integers by construction (enforced by
         // the shared RoundKeySchema at every write into the snapshot store's
         // accumulator, see `@shared/schemas/roundIndexed.ts`), so this record
         // already enumerates ascending per the ES2015+ integer-key spec rule;
-        // runLatexdiffForExecution consumes `outputsByRound` in that order
+        // runLatexdiffForRun consumes `outputsByRound` in that order
         // without needing an explicit sort here.
         // Frozen at click time. `getOutputFiles` returns the store's live
         // record, and this request crosses an interactive quick pick
@@ -81,8 +81,8 @@ export class ProgressWorkflowRunActionsController {
           inputFile: config.inputFiles[0] ?? '',
           outputFiles: config.outputFiles,
           outputFilesActive: config.outputFiles.length > 0,
-          streamId: stream,
-          runId: executionId,
+          runId: stream,
+          runId,
           outputsByRound,
         });
       },
@@ -90,14 +90,14 @@ export class ProgressWorkflowRunActionsController {
   }
 
   async runFileOperation(
-    stream: StreamTabId,
+    stream: RunId,
     operation: WorkflowFileOperation,
     config: AgentConfig | undefined,
   ): Promise<void> {
     await this.withWorkflowConfig(
       stream,
       config,
-      async (config, executionId) => {
+      async (config, runId) => {
         const outputFiles = this.resolveOutputFiles(stream, config);
 
         await this.deps.runFileOperation(operation, {
@@ -105,18 +105,18 @@ export class ProgressWorkflowRunActionsController {
           model: config.model,
           inputFile: config.inputFiles[0] ?? '',
           outputFiles,
-          ...(executionId && { executionId }),
+          ...(runId && { runId }),
         });
       },
     );
   }
 
   private async withWorkflowConfig(
-    stream: StreamTabId,
+    stream: RunId,
     config: AgentConfig | undefined,
-    action: (config: AgentConfig, executionId?: string) => Promise<void>,
+    action: (config: AgentConfig, runId?: string) => Promise<void>,
   ): Promise<void> {
-    const { executionId } = this.deps.state.getRunMetadata(stream);
+    const { runId } = this.deps.state.getRunMetadata(stream);
     if (!config) {
       // This controller holds no messaging port, so the refusal is at least
       // recorded rather than dropped: the toolbar action does nothing.
@@ -127,11 +127,11 @@ export class ProgressWorkflowRunActionsController {
     }
     if (config.agentCategory !== AgentCategory.Workflow) return;
 
-    await action(config, executionId);
+    await action(config, runId);
   }
 
   private resolveOutputFiles(
-    stream: StreamTabId,
+    stream: RunId,
     config: AgentConfig,
   ): string[] {
     const generatedPaths = this.deps.state.getKnownWorkspaceOutputPaths(stream);

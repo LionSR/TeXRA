@@ -16,19 +16,19 @@ import {
 } from './googleInteractionsTestUtils';
 import type { Interactions } from '@google/genai';
 
-type StreamRecord = {
+type RunSnapshotRecord = {
   type: string;
   appends: string[];
   finalized?: string;
 };
 
-function createStreamRecorder(records: StreamRecord[]): AgentTrace {
+function createStreamRecorder(records: RunSnapshotRecord[]): AgentTrace {
   let counter = 0;
   return {
     ...noopTrace,
-    openStream: (type: string) => {
+    openRun: (type: string) => {
       counter += 1;
-      const record: StreamRecord = { type, appends: [] };
+      const record: RunSnapshotRecord = { type, appends: [] };
       records.push(record);
       return {
         id: `stream-${counter}`,
@@ -45,7 +45,7 @@ function createStreamRecorder(records: StreamRecord[]): AgentTrace {
 }
 
 function createHandler(
-  records: StreamRecord[],
+  records: RunSnapshotRecord[],
 ): ModelHandlerGoogleInteractions {
   const handler = new StreamingGoogleInteractionsHandler(
     buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG, {
@@ -86,7 +86,7 @@ function runPrompt(
 
 describe('ModelHandlerGoogleInteractions streaming', () => {
   it('routes text to output, thought summary to thinking, and captures signature', async () => {
-    const records: StreamRecord[] = [];
+    const records: RunSnapshotRecord[] = [];
     const handler = createHandler(records);
 
     const events: Interactions.InteractionSSEEvent[] = [
@@ -178,13 +178,13 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
     expect(result.response.status).toBe('completed');
   });
 
-  // Regression for #10372: finalizeProgressStreams must run
+  // Regression for #10372: finalizeProgressRuns must run
   // processThinkingBlock (committing the processed reasoning to the thinking
   // stream) BEFORE the extract step. If extraction throws, the thinking
   // stream must already hold the processed reasoning — not fall through to
   // the error-path finalize with only the raw streamed chunks.
   it('commits processed reasoning before extractResponse runs on the streaming finalize', async () => {
-    const records: StreamRecord[] = [];
+    const records: RunSnapshotRecord[] = [];
     const handler = createHandler(records);
 
     const callOrder: string[] = [];
@@ -253,7 +253,7 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
   });
 
   it('reports incomplete when the stream ends without an interaction.completed event', async () => {
-    const records: StreamRecord[] = [];
+    const records: RunSnapshotRecord[] = [];
     const handler = createHandler(records);
 
     // A text turn that is cut off — no interaction.completed (or error) event.

@@ -37,7 +37,7 @@ import {
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
+import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -318,7 +318,7 @@ class AgentReviewServiceImpl {
             session: run.session,
             onRun: (handle) =>
               effectRuntime().runPromise(this.reviewRuns.bind(run, handle)),
-            onStreamResolved: presentLaunchedProgressStream,
+            onStreamResolved: presentLaunchedProgressRun,
           },
         ),
       );
@@ -447,7 +447,7 @@ class AgentReviewServiceImpl {
   /**
    * Clear results and forget dismissals. A reviewer session still running is
    * stopped; its future reports are rejected and its outcome is discarded.
-   * The run slot stays occupied until that execution actually settles.
+   * The run slot stays occupied until that run actually settles.
    */
   clear(): ReturnType<AgentReviewRunController['discard']> {
     const settlement = this.reviewRuns.discard();

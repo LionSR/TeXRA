@@ -2,7 +2,7 @@
 
 import type { FileLocation } from '@shared/schemas';
 import type { LaTeXdiffService } from '../latexdiff';
-import type { RunLatexdiffForExecutionParams } from './runLatexdiff';
+import type { RunLatexdiffForRunParams } from './runLatexdiff';
 
 /**
  * Host-supplied latexdiff runtime: the diff service instance bound to the
@@ -27,12 +27,12 @@ export interface DiffProgressReporter {
 
 /**
  * Command-payload config for a latexdiff run. The six run-scoped fields are
- * the shared subset of {@link RunLatexdiffForExecutionParams} — declared once
+ * the shared subset of {@link RunLatexdiffForRunParams} — declared once
  * there, derived here — so command handlers can forward a config straight into
- * `runLatexdiffForExecution` without re-declaring or re-mapping the shape.
+ * `runLatexdiffForRun` without re-declaring or re-mapping the shape.
  */
 export type RunLatexdiffCommandConfig = Pick<
-  RunLatexdiffForExecutionParams,
+  RunLatexdiffForRunParams,
   'agent' | 'model' | 'inputFile' | 'outputFiles' | 'runId' | 'outputsByRound'
 >;
 

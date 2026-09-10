@@ -1,11 +1,11 @@
 // Based on https://github.com/Yuyz0112/koala-code-reader/blob/main/src/code-reader/persisted-flow.ts
-// Enhanced to use ExecutionKVStore as first-citizen interface
+// Enhanced to use RunKVStore as first-citizen interface
 
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports - agent
-import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+import type { RunKVStore } from '@agent/storage/RunKVStore';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - utilities
@@ -112,7 +112,7 @@ export class PersistedFlowStateError extends Error {
  * validating `shared`.
  */
 export async function readPersistedFlowRecord(
-  kv: ExecutionKVStore,
+  kv: RunKVStore,
   runId: string,
 ): Promise<FlowRecord | null> {
   let stored: unknown;
@@ -141,7 +141,7 @@ export async function readPersistedFlowRecord(
 }
 
 /**
- * Result from a step execution.
+ * Result from a step run.
  * Used by stepWithResult() for subclasses that need action and shared state.
  */
 interface StepResult<S> {
@@ -149,16 +149,16 @@ interface StepResult<S> {
   hasMore: boolean;
   /** The action returned by the node (for routing) */
   action: string | undefined;
-  /** The shared state after node execution (mutated in-place) */
+  /** The shared state after node run (mutated in-place) */
   shared: S;
 }
 
 /**
- * A Flow that persists its execution state to a KVStore after each node.
+ * A Flow that persists its run state to a KVStore after each node.
  *
  * This enables:
  * - Resume from any node on crash/restart
- * - Distributed execution (different processes can resume)
+ * - Distributed run (different processes can resume)
  *
  * Key design principles:
  * - Only shared state is persisted (not services - they're runtime dependencies)
@@ -177,7 +177,7 @@ export class PersistedFlow<
   Svc = unknown,
 > extends Flow<S, Svc> {
   protected readonly runId: string;
-  protected readonly kv: ExecutionKVStore;
+  protected readonly kv: RunKVStore;
 
   /**
    * Optional schema for the persisted `shared` blob. When provided, every
@@ -193,7 +193,7 @@ export class PersistedFlow<
    *
    * Since a PersistedFlow instance is the sole owner/mutator of its record,
    * we can serve reads from cache after the first KVStore read or any write.
-   * This eliminates one filesystem read per node execution (the read in
+   * This eliminates one filesystem read per node run (the read in
    * stepWithResult that immediately follows the previous step's write).
    */
   private cachedRecord: FlowRecord | null = null;
@@ -221,24 +221,24 @@ export class PersistedFlow<
    * Errors are swallowed — the authoritative flow blob is already written.
    */
   private projection:
-    ((shared: S, kv: ExecutionKVStore) => Promise<void>) | null = null;
+    ((shared: S, kv: RunKVStore) => Promise<void>) | null = null;
 
   /**
    * Create a new PersistedFlow.
    *
    * @param start - The starting node of the flow graph
-   * @param kv - Storage backend (ExecutionKVStore)
-   * @param runId - Optional run identifier. Defaults to kv.getExecutionId().
+   * @param kv - Storage backend (RunKVStore)
+   * @param runId - Optional run identifier. Defaults to kv.getRunId().
    */
   constructor(
     start: BaseNode,
-    kv: ExecutionKVStore,
+    kv: RunKVStore,
     runId?: string,
     sharedSchema?: z.ZodType<S>,
   ) {
     super(start);
     this.kv = kv;
-    this.runId = runId ?? kv.getExecutionId();
+    this.runId = runId ?? kv.getRunId();
     this.sharedSchema = sharedSchema;
   }
 
@@ -289,7 +289,7 @@ export class PersistedFlow<
   }
 
   /** Register a write-through projection that fires after each persist. */
-  setProjection(fn: (shared: S, kv: ExecutionKVStore) => Promise<void>): void {
+  setProjection(fn: (shared: S, kv: RunKVStore) => Promise<void>): void {
     this.projection = fn;
   }
 

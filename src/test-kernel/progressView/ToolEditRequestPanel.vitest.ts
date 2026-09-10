@@ -20,7 +20,7 @@ function createPermission(
     data: {
       requestId: 'request-1',
       allowBypass: false,
-      streamId: '',
+      runId: '',
       path: '/workspace/example.ts',
       relativePath: 'example.ts',
       sourceTool: 'edit',
@@ -184,8 +184,8 @@ describe('tool-edit-request-panel', () => {
       permission: createPermission({ allowBypass: false }),
     },
     {
-      name: 'streamId is empty despite allowBypass',
-      permission: createPermission({ allowBypass: true, streamId: '' }),
+      name: 'runId is empty despite allowBypass',
+      permission: createPermission({ allowBypass: true, runId: '' }),
     },
   ])(
     'renders a non-bypass Approve and ignores "a" when $name',
@@ -203,7 +203,7 @@ describe('tool-edit-request-panel', () => {
 
   it('passes canBypass to the split button and "a" emits approveSession', async () => {
     const element = await mountPanel(
-      createPermission({ allowBypass: true, streamId: 'stream-1' }),
+      createPermission({ allowBypass: true, runId: 'stream-1' }),
     );
     const actions = recordPermissionActions(element);
 
@@ -219,7 +219,7 @@ describe('tool-edit-request-panel', () => {
 
   it('ignores "a" while the rejection feedback box is open', async () => {
     const element = await mountPanel(
-      createPermission({ allowBypass: true, streamId: 'stream-1' }),
+      createPermission({ allowBypass: true, runId: 'stream-1' }),
     );
     const actions = recordPermissionActions(element);
 

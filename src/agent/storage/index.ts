@@ -3,46 +3,46 @@
  *
  * One curated barrel the hosts (CLI, desktop, extension) import instead of
  * deep-reaching each storage module by path. Beyond unified key-value storage
- * for execution-scoped data, this is the curated host boundary for execution
- * lifecycle and listing, resumability, the `executionLease` lifecycle, and
+ * for run-scoped data, this is the curated host boundary for run
+ * lifecycle and listing, resumability, the `runLease` lifecycle, and
  * conversation formatting — decoupling host code from the storage internals'
  * file layout, per the module-level barrel pattern set by `@agent/runtime`
  * (#10011). The R-b deep-import width ratchet
  * (`config/ratchets/host-agent-import-baseline.json`) records the remaining
  * host `@agent/storage/*` specifiers — CLI's `conversationFormat` and
- * `executionLease` — collapsed to this single door.
+ * `runLease` — collapsed to this single door.
  */
 
 export {
-  type ExecutionKVStore,
+  type RunKVStore,
   type ChildRecord,
-  getExecutionStore,
-  getExecutionRecords,
+  getRunStore,
+  getRunRecords,
   clearStoreCache,
   isReservedKvKeyName,
-} from './ExecutionKVStore';
+} from './RunKVStore';
 export {
   buildCliWorkflowResultMeta,
   unwrapResultMeta,
   type ResultMeta,
 } from './resultMeta';
 export {
-  listExecutionWorkspaceFiles,
-  resolveExecutionWorkspaceFilePath,
-} from './executionWorkspaceFiles';
+  listRunWorkspaceFiles,
+  resolveRunWorkspaceFilePath,
+} from './runWorkspaceFiles';
 export {
   finalizeRun,
-  registerExecution,
-  readExecutionChildren,
-  type FinalizeExecutionInput,
-} from './executionLifecycle';
+  registerRun,
+  readRunChildren,
+  type FinalizeRunInput,
+} from './runLifecycle';
 export {
-  type AgentExecutionListingEntry,
-  type ExecutionListingEntry,
-  createLatexExecutionDiscovery,
-  listExecutions,
-  isUserVisibleExecution,
-} from './executionListing';
+  type AgentRunListingEntry,
+  type RunListingEntry,
+  createLatexRunDiscovery,
+  listRuns,
+  isUserVisibleRun,
+} from './runListing';
 export {
   checkpointExists,
   deriveResumability,
@@ -50,8 +50,8 @@ export {
 } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
 export {
-  ExecutionLeaseActiveError,
-  ExecutionLeaseLostError,
-  executionHeldMessage,
-} from './executionLease';
+  RunLeaseActiveError,
+  RunLeaseLostError,
+  runLeaseHeldMessage,
+} from './runLease';
 export { resolveChildRunOutput } from './childRunOutput';

@@ -3,16 +3,16 @@
 // renders every tool-output line.
 
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
 
-const EMPTY_EXECUTION_LABELS: ExecutionLabels = new Map();
+const EMPTY_EXECUTION_LABELS: RunLabels = new Map();
 
 interface EntryLinesMemo {
   readonly cols: number;
-  readonly labels: ExecutionLabels;
+  readonly labels: RunLabels;
   readonly lines: readonly string[];
 }
 
@@ -28,14 +28,14 @@ const entryLinesCache = new WeakMap<TranscriptRow, EntryLinesMemo>();
 function transcriptEntryLines(
   entry: TranscriptRow,
   cols: number,
-  executionLabels: ExecutionLabels,
+  runLabels: RunLabels,
 ): readonly string[] {
   const memo = entryLinesCache.get(entry);
-  if (memo && memo.cols === cols && memo.labels === executionLabels) {
+  if (memo && memo.cols === cols && memo.labels === runLabels) {
     return memo.lines;
   }
-  const lines = fullTranscriptEntryLayout(entry, cols, executionLabels).lines;
-  entryLinesCache.set(entry, { cols, labels: executionLabels, lines });
+  const lines = fullTranscriptEntryLayout(entry, cols, runLabels).lines;
+  entryLinesCache.set(entry, { cols, labels: runLabels, lines });
   return lines;
 }
 
@@ -66,19 +66,19 @@ function shouldSeparateEntries({
 }
 
 /** Render the active slice into a flat line array with blank separators between
- *  substantial entries. Tool execution rows stay attached to the prompt or
+ *  substantial entries. Tool run rows stay attached to the prompt or
  *  adjacent compact tools so command-heavy traces do not waste vertical space. */
 export function transcriptToLines(
   rows: readonly TranscriptRow[],
   cols: number,
-  executionLabels: ExecutionLabels = EMPTY_EXECUTION_LABELS,
+  runLabels: RunLabels = EMPTY_EXECUTION_LABELS,
 ): readonly string[] {
   const out: string[] = [];
   let previousEntry: TranscriptRow | undefined;
   let previousLines: readonly string[] = [];
   for (const entry of rows) {
     if (!isRenderableTranscriptEntry(entry)) continue;
-    const lines = transcriptEntryLines(entry, cols, executionLabels);
+    const lines = transcriptEntryLines(entry, cols, runLabels);
     if (lines.length === 0) continue;
     if (
       previousEntry !== undefined &&

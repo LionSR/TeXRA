@@ -36,7 +36,7 @@ interface QueueEntry {
  * manager and cannot manufacture a consumer.
  */
 export interface FollowUpConsumerLease {
-  readonly streamId: RunId;
+  readonly runId: RunId;
   readonly kind: FollowUpConsumerKind;
 }
 
@@ -68,7 +68,7 @@ type FollowUpSubmission =
  * parked run torn down) is marked so that a producer that is not an owner,
  * such as a child whose activation outlives its parent's teardown, cannot
  * recreate the queue and trigger a resume of a run that is gone; only an
- * explicit claim reopens the stream. Stream ids embed their execution id, so
+ * explicit claim reopens the stream. Stream ids embed their run id, so
  * the mark never collides with a later run. Tombstones are bounded; after
  * eviction, callers must revalidate persisted authority before recoverable
  * admission.
@@ -81,12 +81,12 @@ export class ToolUseFollowUpQueue {
     ToolUseFollowUpQueue.TERMINALIZED_CAP,
   );
   private readonly releaseObservers = new Set<
-    (streamId: RunId) => void
+    (runId: RunId) => void
   >();
-  private readonly sentObservers = new Set<(streamId: RunId) => void>();
+  private readonly sentObservers = new Set<(runId: RunId) => void>();
   private disposed = false;
 
-  onRelease(observer: (streamId: RunId) => void): () => void {
+  onRelease(observer: (runId: RunId) => void): () => void {
     if (this.disposed) return () => {};
     this.releaseObservers.add(observer);
     return () => {
@@ -100,7 +100,7 @@ export class ToolUseFollowUpQueue {
    * occurrence, not state: it is what `executions wait` ends its wait on,
    * and it lives in this process only, never on the session's event plane.
    */
-  onSent(observer: (streamId: RunId) => void): () => void {
+  onSent(observer: (runId: RunId) => void): () => void {
     if (this.disposed) return () => {};
     this.sentObservers.add(observer);
     return () => {
@@ -108,50 +108,50 @@ export class ToolUseFollowUpQueue {
     };
   }
 
-  notifySent(streamId: RunId): void {
-    for (const observer of [...this.sentObservers]) observer(streamId);
+  notifySent(runId: RunId): void {
+    for (const observer of [...this.sentObservers]) observer(runId);
   }
 
   /** Claim a live flow/child consumer. A competing owner is rejected. */
   claimLive(
-    streamId: RunId,
+    runId: RunId,
     kind: Exclude<FollowUpConsumerKind, 'recovery'>,
   ): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
-    this.terminalized.delete(streamId);
-    const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
-    return this.claim(entry, streamId, kind);
+    this.terminalized.delete(runId);
+    const entry = this.entries.get(runId) ?? this.createEntry(runId);
+    return this.claim(entry, runId, kind);
   }
 
   /**
    * Begin a separately authorized child run. The caller must already own the
-   * execution lease.
+   * run lease.
    */
-  claimChildRun(streamId: RunId): FollowUpConsumerLease | undefined {
+  claimChildRun(runId: RunId): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
-    this.terminalized.delete(streamId);
-    const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
-    return this.claim(entry, streamId, 'child');
+    this.terminalized.delete(runId);
+    const entry = this.entries.get(runId) ?? this.createEntry(runId);
+    return this.claim(entry, runId, 'child');
   }
 
   /** Claim persisted recovery before any asynchronous resume preparation. */
   claimRecovery(
-    streamId: RunId,
+    runId: RunId,
     createIfMissing = false,
   ): FollowUpRecoveryLease | undefined {
     if (this.disposed) return undefined;
-    if (createIfMissing) this.terminalized.delete(streamId);
+    if (createIfMissing) this.terminalized.delete(runId);
     const entry =
-      this.entries.get(streamId) ??
-      (createIfMissing ? this.createEntry(streamId) : undefined);
+      this.entries.get(runId) ??
+      (createIfMissing ? this.createEntry(runId) : undefined);
     if (!entry || entry.owner) return undefined;
-    return this.claim(entry, streamId, 'recovery');
+    return this.claim(entry, runId, 'recovery');
   }
 
   useRecovery(
     recovery: RecoveryContinuation,
   ): FollowUpRecoveryLease | undefined {
-    const entry = this.entries.get(recovery.streamId);
+    const entry = this.entries.get(recovery.runId);
     return entry?.owner === recovery && recovery.kind === 'recovery'
       ? (entry.owner as FollowUpRecoveryLease)
       : undefined;
@@ -165,20 +165,20 @@ export class ToolUseFollowUpQueue {
    * queue when needed.
    */
   submit(
-    streamId: RunId,
+    runId: RunId,
     followUp: FollowUpQueueInput,
     admission: 'live_owner' | 'recoverable',
   ): FollowUpSubmission {
     if (this.disposed) return { kind: 'refused' };
 
-    let entry = this.entries.get(streamId);
+    let entry = this.entries.get(runId);
     if (admission === 'live_owner') {
       if (!entry) return { kind: 'refused' };
     } else {
-      if (!entry && this.terminalized.has(streamId)) {
+      if (!entry && this.terminalized.has(runId)) {
         return { kind: 'refused' };
       }
-      entry ??= this.createEntry(streamId);
+      entry ??= this.createEntry(runId);
     }
 
     // Replay suppression is synchronous check-and-add: concurrent submissions
@@ -194,7 +194,7 @@ export class ToolUseFollowUpQueue {
     }
 
     entry.queue.enqueue(followUp);
-    logger.debug(`Queued follow-up for stream ${streamId}.`);
+    logger.debug(`Queued follow-up for stream ${runId}.`);
     const owner = entry.owner;
     if (owner?.kind === 'flow') return { kind: 'delivered_live' };
     // Live notifications use the live_owner path to reach WAITING parents
@@ -203,19 +203,19 @@ export class ToolUseFollowUpQueue {
       return { kind: 'queued' };
     }
 
-    const lease = this.claim(entry, streamId, 'recovery');
+    const lease = this.claim(entry, runId, 'recovery');
     return lease ? { kind: 'queued', lease } : { kind: 'queued' };
   }
 
   /** Read-only lifecycle probe used by diagnostics and teardown assertions. */
-  hasLiveOwner(streamId: RunId): boolean {
-    const owner = this.entries.get(streamId)?.owner;
+  hasLiveOwner(runId: RunId): boolean {
+    const owner = this.entries.get(runId)?.owner;
     return owner?.kind === 'flow' || owner?.kind === 'child';
   }
 
   /** Inner child/recovery flows borrow the queue their outer owner consumes. */
-  externallyOwnedQueue(streamId: RunId): FollowUpQueue | undefined {
-    const entry = this.entries.get(streamId);
+  externallyOwnedQueue(runId: RunId): FollowUpQueue | undefined {
+    const entry = this.entries.get(runId);
     const kind = entry?.owner?.kind;
     return kind === 'child' || kind === 'recovery' ? entry?.queue : undefined;
   }
@@ -237,9 +237,9 @@ export class ToolUseFollowUpQueue {
     entry.owner = undefined;
     if (next === 'recoverable') return true;
     entry.queue.dispose();
-    this.entries.delete(lease.streamId);
-    logger.debug(`Terminalized follow-up queue for stream ${lease.streamId}.`);
-    this.notifyReleaseObservers(lease.streamId);
+    this.entries.delete(lease.runId);
+    logger.debug(`Terminalized follow-up queue for stream ${lease.runId}.`);
+    this.notifyReleaseObservers(lease.runId);
     return true;
   }
 
@@ -247,13 +247,13 @@ export class ToolUseFollowUpQueue {
    * End a stream's queue: any outstanding lease becomes stale immediately, and
    * no producer can recreate the queue until an explicit claim reopens it.
    */
-  terminalize(streamId: RunId): boolean {
+  terminalize(runId: RunId): boolean {
     if (this.disposed) return false;
-    const entry = this.entries.get(streamId);
+    const entry = this.entries.get(runId);
     entry?.queue.dispose();
-    this.entries.delete(streamId);
-    this.terminalized.add(streamId);
-    this.notifyReleaseObservers(streamId);
+    this.entries.delete(runId);
+    this.terminalized.add(runId);
+    this.notifyReleaseObservers(runId);
     return true;
   }
 
@@ -284,12 +284,12 @@ export class ToolUseFollowUpQueue {
     throwAggregated(failures, 'Multiple follow-up queues failed to dispose');
   }
 
-  private notifyReleaseObservers(streamId: RunId): void {
+  private notifyReleaseObservers(runId: RunId): void {
     for (const observer of this.releaseObservers) {
       try {
-        observer(streamId);
+        observer(runId);
       } catch (err) {
-        logger.warn(`Release observer threw for stream ${streamId}`, {
+        logger.warn(`Release observer threw for stream ${runId}`, {
           data: err,
         });
       }
@@ -297,18 +297,18 @@ export class ToolUseFollowUpQueue {
   }
 
   /** Presentation-only snapshot; does not grant consumption rights. */
-  getAll(streamId: RunId): string[] {
-    return this.entries.get(streamId)?.queue.getAll() ?? [];
+  getAll(runId: RunId): string[] {
+    return this.entries.get(runId)?.queue.getAll() ?? [];
   }
 
-  private createEntry(streamId: RunId): QueueEntry {
+  private createEntry(runId: RunId): QueueEntry {
     const entry: QueueEntry = {
       queue: new FollowUpQueue(),
       admittedDeliveryIds: createBoundedIdSet(
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
     };
-    this.entries.set(streamId, entry);
+    this.entries.set(runId, entry);
     return entry;
   }
 
@@ -319,12 +319,12 @@ export class ToolUseFollowUpQueue {
    */
   private claim<K extends FollowUpConsumerKind>(
     entry: QueueEntry,
-    streamId: RunId,
+    runId: RunId,
     kind: K,
   ): (FollowUpConsumerLease & { readonly kind: K }) | undefined {
     if (entry.owner) return undefined;
     const lease: FollowUpConsumerLease & { readonly kind: K } = {
-      streamId,
+      runId,
       kind,
     };
     entry.owner = lease;
@@ -335,7 +335,7 @@ export class ToolUseFollowUpQueue {
     const entry = this.entryForLease(lease);
     if (!entry) {
       throw new Error(
-        `Follow-up consumer lease is stale for stream ${lease.streamId}.`,
+        `Follow-up consumer lease is stale for stream ${lease.runId}.`,
       );
     }
     return entry;
@@ -343,7 +343,7 @@ export class ToolUseFollowUpQueue {
 
   /** The entry `lease` still owns, or `undefined` if it has gone stale. */
   private entryForLease(lease: FollowUpConsumerLease): QueueEntry | undefined {
-    const entry = this.entries.get(lease.streamId);
+    const entry = this.entries.get(lease.runId);
     return entry?.owner === lease ? entry : undefined;
   }
 }

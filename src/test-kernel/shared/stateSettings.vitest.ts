@@ -445,7 +445,7 @@ describe('state settings catalog', () => {
     //  - texra.approvalPolicy is read by cliConfig / cliContext and seeded onto
     //    SessionHandle before bash/edit approval boundaries decide.
     //  - detach-subagents-on-stop is read by detachSubagentsOnStop() when the
-    //    chat TUI stops the root run (Ctrl-C) or kills a subagent execution.
+    //    chat TUI stops the root run (Ctrl-C) or kills a subagent run.
     //  - allow-orchestrator-kill is read by ExecutionsTool when an
     //    orchestrator asks to kill one of its own child executions.
     //  - compaction threshold and retry attempts are read by the shared model

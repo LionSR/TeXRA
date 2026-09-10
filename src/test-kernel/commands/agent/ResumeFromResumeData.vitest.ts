@@ -5,11 +5,11 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  resumeStreamWithRefusalNotice: vi.fn(),
+  resumeRunWithRefusalNotice: vi.fn(),
 }));
 
-vi.mock('@controllers/session/resumeStreamPresentation', () => ({
-  resumeStreamWithRefusalNotice: mocks.resumeStreamWithRefusalNotice,
+vi.mock('@controllers/session/resumeRunPresentation', () => ({
+  resumeRunWithRefusalNotice: mocks.resumeRunWithRefusalNotice,
 }));
 vi.mock('@commands/agent/executeCommand', () => ({
   runExecuteCommand: vi.fn(),
@@ -18,21 +18,21 @@ vi.mock('@commands/agent/executeCommand', () => ({
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, RunId } from '@shared/schemas';
 
-const STREAM = 'stream:ext-resume-ports' as StreamTabId;
-const EXECUTION = 'exec:ext-resume' as ExecutionId;
+const STREAM = 'stream:ext-resume-ports' as RunId;
+const EXECUTION = 'exec:ext-resume' as RunId;
 
 async function captureOptions(): Promise<ResumeRunOptions> {
   await tryResumeFromResumeData(STREAM);
-  const options = mocks.resumeStreamWithRefusalNotice.mock.calls[0]?.[1];
+  const options = mocks.resumeRunWithRefusalNotice.mock.calls[0]?.[1];
   expect(options).toBeDefined();
   return options as ResumeRunOptions;
 }
 
 describe('tryResumeFromResumeData', () => {
   beforeEach(() => {
-    mocks.resumeStreamWithRefusalNotice
+    mocks.resumeRunWithRefusalNotice
       .mockReset()
       .mockReturnValue(Effect.succeed(true));
   });

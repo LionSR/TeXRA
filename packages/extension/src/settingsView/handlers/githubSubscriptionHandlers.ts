@@ -17,8 +17,8 @@ import { SecretManager } from '@frontend/secretManager';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { platform } from '@platform/platform';
 import {
-  getProgressStreamLabel,
-  revealProgressStream,
+  getProgressRunLabel,
+  revealProgressRun,
 } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
@@ -88,7 +88,7 @@ export class GitHubSubscriptionHandlers {
   async sendPRSubscriptions(webview: vscode.Webview): Promise<void> {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: listGitHubSubscriptionEntries(getProgressStreamLabel),
+      subscriptions: listGitHubSubscriptionEntries(getProgressRunLabel),
     });
   }
 
@@ -108,7 +108,7 @@ export class GitHubSubscriptionHandlers {
       typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM
     >,
   ): Promise<void> {
-    const result = await revealProgressStream(data.streamId);
+    const result = await revealProgressRun(data.runId);
     if (result === 'unavailable') {
       await showLoggedMessage(
         this.ctx.channel,

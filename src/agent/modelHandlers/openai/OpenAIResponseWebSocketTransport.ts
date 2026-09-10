@@ -311,7 +311,7 @@ export class OpenAIResponseWebSocketTransport {
 
       /**
        * Settle the request as a failure: detach listeners, optionally drop the
-       * connection, finalize the processor's streams, then reject with any
+       * connection, finalize the processor's runs, then reject with any
        * partial-text tail attached. Finalizing the processor here keeps a
        * mid-stream failure from leaving the progress view hanging: unlike the
        * HTTP path (which finalizes via the caller's catch), the processor is
@@ -344,7 +344,7 @@ export class OpenAIResponseWebSocketTransport {
         settled = true;
         cleanup();
         // Stream finalization is deferred to the caller so that background
-        // polling (if needed) can replace the response before streams close.
+        // polling (if needed) can replace the response before runs close.
         resolve({ response, processor });
       };
 
@@ -445,7 +445,7 @@ export class OpenAIResponseWebSocketTransport {
       } catch (sendError) {
         // If send() throws synchronously, clean up listeners to prevent leaks
         // on the reused WebSocket connection, and finalize the processor's
-        // streams (via failRequest) so they do not hang.
+        // runs (via failRequest) so they do not hang.
         failRequest(sendError);
       }
     });

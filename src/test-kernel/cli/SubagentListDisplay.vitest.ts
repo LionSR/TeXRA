@@ -9,13 +9,13 @@ import {
   selectControlledHighlightIndex,
   type SelectItem,
 } from '@cli/tui/ui/Select';
-import { type StreamTabId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 
 function session(
   id: string,
   _active = false,
-): { readonly id: StreamTabId; readonly label: string } {
-  return { id: id as StreamTabId, label: id };
+): { readonly id: RunId; readonly label: string } {
+  return { id: id as RunId, label: id };
 }
 
 describe('CLI child list display model', () => {
@@ -41,7 +41,7 @@ describe('CLI child list display model', () => {
       session('lean'),
       session('review'),
     ];
-    const items: SelectItem<StreamTabId>[] = sessions.map(({ id, label }) => ({
+    const items: SelectItem<RunId>[] = sessions.map(({ id, label }) => ({
       label,
       value: id,
     }));
@@ -63,7 +63,7 @@ describe('CLI child list display model', () => {
   });
 
   it('relocates a controlled highlight after a same-length reorder', () => {
-    const selected = 'lean' as StreamTabId;
+    const selected = 'lean' as RunId;
     const items = [session('main'), session('lean'), session('review')].map(
       ({ id, label }) => ({ label, value: id }),
     );

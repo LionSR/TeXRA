@@ -65,7 +65,7 @@ type WolframInput = z.infer<typeof WolframInputSchema>;
 interface WolframPorts {
   readonly requestApproval: typeof requestBashApproval;
   readonly runTool: typeof runToolWithCheck;
-  readonly onExecutionReady: (() => void) | undefined;
+  readonly onRunReady: (() => void) | undefined;
 }
 
 const runWolfram = Effect.fn('WolframTool.execute')(function* (
@@ -78,7 +78,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
     return buildBashApprovalRejectedResult(command, approval);
   }
 
-  ports.onExecutionReady?.();
+  ports.onRunReady?.();
 
   const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
   const result = yield* hostPort(() =>
@@ -99,7 +99,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   const parts: string[] = [];
   if (result.timedOut) {
     parts.push(
-      `Execution timed out after ${effectiveTimeout / 1000}s.\n` +
+      `Run timed out after ${effectiveTimeout / 1000}s.\n` +
         `To fix: increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }`,
     );
   }
@@ -111,7 +111,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
 
   const details = parts.join('\n') || 'No error details available';
   return yield* Effect.fail(
-    new ToolError(`Wolfram execution failed: ${details}`),
+    new ToolError(`Wolfram run failed: ${details}`),
   );
 });
 
@@ -120,15 +120,15 @@ export class WolframTool extends defineTool({
   requiresApproval: true,
   slow: true,
   deferLogUntilApproval: true,
-  description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each execution starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. Compute and print actual results: do not hardcode expected values in Print statements; use VerificationTest or assertions so output reflects real computation.`,
+  description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each run starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. Compute and print actual results: do not hardcode expected values in Print statements; use VerificationTest or assertions so output reflects real computation.`,
   schema: WolframInputSchema,
 }) {
   protected execute(input: WolframInput): Promise<ToolResult> {
     const ports: WolframPorts = {
       requestApproval: AsyncLocalStorage.bind(requestBashApproval),
       runTool: AsyncLocalStorage.bind(runToolWithCheck),
-      onExecutionReady:
-        getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady,
+      onRunReady:
+        getCurrentToolContexts()?.callContext?.hooks?.onRunReady,
     };
     return effectRuntime().runPromise(runWolfram(ports, input));
   }

@@ -100,7 +100,7 @@ async function handleNoOutputs(
     );
   }
   reportMissingOutputs(deps.logger, {
-    streamId: deps.runScope.streamId,
+    runId: deps.runScope.runId,
     round: currRound,
     missing: [],
     xmlFile: outputLocation.absolutePath,

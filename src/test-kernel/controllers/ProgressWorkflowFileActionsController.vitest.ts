@@ -100,7 +100,7 @@ describe('ProgressWorkflowFileActionsController', () => {
         throw failure;
       },
     });
-    const getRunMetadata = vi.fn(() => ({ executionId: 'run-1' }));
+    const getRunMetadata = vi.fn(() => ({ runId: 'run-1' }));
     deps.state.getRunMetadata = getRunMetadata;
     const controller = new ProgressWorkflowFileActionsController(deps);
 

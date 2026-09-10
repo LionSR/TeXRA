@@ -34,7 +34,7 @@ export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
 const InquiryThreadSummarySchema = z.object({
   threadId: InquiryThreadIdSchema,
   /** The run the last question was asked under; continuations flow back to it. */
-  parentStreamId: RunIdSchema.nullable(),
+  parentRunId: RunIdSchema.nullable(),
   status: InquiryThreadStatusSchema,
   lastQuestionPreview: z.string(),
   lastActivityIso: z.iso.datetime(),
@@ -142,7 +142,7 @@ const ExternalInquiryTurnRecordSchema = z.discriminatedUnion('kind', [
 const InquiryThreadRecordShape = {
   threadId: InquiryThreadIdSchema,
   /** The run the last question was asked under; a continuation is addressed to it. */
-  parentStreamId: RunIdSchema.nullable(),
+  parentRunId: RunIdSchema.nullable(),
   status: InquiryThreadStatusSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),

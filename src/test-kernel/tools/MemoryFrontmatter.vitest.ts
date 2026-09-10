@@ -14,7 +14,7 @@ describe('memory frontmatter (yaml-backed)', () => {
   it('round-trips metadata through build and parse', () => {
     const meta: MemoryFileMeta = {
       modifiedBy: 'reviser-agent',
-      executionId: 'exec_123',
+      runId: 'exec_123',
       modifiedAt: '2026-06-20T14:30:45.123Z',
       pinned: true,
     };
@@ -32,13 +32,13 @@ describe('memory frontmatter (yaml-backed)', () => {
     };
     const file = buildFile('body', meta);
 
-    // executionId and pinned must not appear in the serialized block.
-    expect(file).not.toContain('executionId');
+    // runId and pinned must not appear in the serialized block.
+    expect(file).not.toContain('runId');
     expect(file).not.toContain('pinned');
 
     const parsed = parseFrontmatter(file);
     expect(parsed.meta).toEqual(meta);
-    expect(parsed.meta?.executionId).toBeUndefined();
+    expect(parsed.meta?.runId).toBeUndefined();
     expect(parsed.meta?.pinned).toBeUndefined();
   });
 
@@ -46,7 +46,7 @@ describe('memory frontmatter (yaml-backed)', () => {
     const legacy = [
       '---',
       'modifiedBy: agent-name',
-      'executionId: abc',
+      'runId: abc',
       'modifiedAt: 2026-06-20T14:30:45.123Z',
       'pinned: true',
       '---',
@@ -56,7 +56,7 @@ describe('memory frontmatter (yaml-backed)', () => {
     const parsed = parseFrontmatter(legacy);
     expect(parsed.meta).toEqual({
       modifiedBy: 'agent-name',
-      executionId: 'abc',
+      runId: 'abc',
       modifiedAt: '2026-06-20T14:30:45.123Z',
       pinned: true,
     });
@@ -108,7 +108,7 @@ describe('memory frontmatter (yaml-backed)', () => {
     };
     const meta = createMeta('new-agent', 'exec_9', existing);
     expect(meta?.modifiedBy).toBe('new-agent');
-    expect(meta?.executionId).toBe('exec_9');
+    expect(meta?.runId).toBe('exec_9');
     expect(meta?.pinned).toBe(true);
   });
 

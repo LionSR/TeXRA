@@ -4,9 +4,9 @@ import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   type OutputFileSummary,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -26,8 +26,8 @@ function workflowResult(
   return {
     category: 'workflow',
     outcome,
-    executionId: 'auto-open-output' as ExecutionId,
-    streamId: 'workflow@gpt54#auto-open-output' as StreamTabId,
+    runId: 'auto-open-output' as RunId,
+    runId: 'workflow@gpt54#auto-open-output' as RunId,
     outputs: [OUTPUT],
     compileFailures: [],
   };

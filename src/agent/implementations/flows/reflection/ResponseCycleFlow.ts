@@ -378,7 +378,7 @@ class ResponseProcessNode extends BaseNode<
 /**
  * Finalizes the response cycle by recording round statistics. Every flow exit
  * path routes through this single finalization node, so no guard flag is
- * needed: the graph guarantees one execution.
+ * needed: the graph guarantees one run.
  */
 class ResponseCycleFinalizeNode extends BaseNode<
   ResponseCycleShared,

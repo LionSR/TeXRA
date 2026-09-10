@@ -64,13 +64,13 @@ interface UsageMonitorModelInfo {
  * never a whole run context:
  *
  * - logger: For error logging and the single `usage` trace event
- * - executionId: The run whose usage this is; keys its usage map (immutable)
+ * - runId: The run whose usage this is; keys its usage map (immutable)
  * - runStageId: The run stage this run opened, used only to stamp the
  *   trace event when usage is logged outside an ambient stage
  */
 interface UsageMonitorContext {
   logger: AgentTrace;
-  executionId: RunId;
+  runId: RunId;
   runStageId: string | undefined;
 }
 
@@ -112,7 +112,7 @@ export class UsageMonitor {
   }
 
   async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
-    const { logger, executionId, runStageId } = this.context;
+    const { logger, runId, runStageId } = this.context;
     const { agentCategory } = this.metadata;
     const runKind: UsageMonitorRunKind =
       agentCategory === AgentCategory.ToolUse ? 'tool-use' : 'workflow';
@@ -176,7 +176,7 @@ export class UsageMonitor {
 
       // One typed trace event feeds both transcript and progress projections.
       logger.usage(
-        { runId: executionId, usage: payload },
+        { runId, usage: payload },
         {
           recordTranscript: agentCategory === AgentCategory.Workflow,
           // The ambient stage's AsyncLocalStorage scope stamps its structural
@@ -257,7 +257,7 @@ export class UsageMonitor {
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usageRoute: usage.usageRoute,
-        streamId: this.context.executionId,
+        runId: this.context.runId,
       });
     } catch (error) {
       this.context.logger.warn('Backend usage logging failed', {

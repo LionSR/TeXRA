@@ -79,7 +79,7 @@ vi.mock('@cli/runtime/runModel', () => ({
   ),
 }));
 
-vi.mock('@cli/runtime/runExecution', () => ({
+vi.mock('@cli/runtime/executeCli', () => ({
   executeCliToolUseConfig: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.executeCliToolUseConfig(...args),
@@ -269,8 +269,8 @@ describe('CLI multi-agent run command', () => {
       ok: true,
       result: {
         category: 'toolUse',
-        executionId: 'exec-team',
-        streamId: 'stream-team',
+        runId: 'exec-team',
+        runId: 'stream-team',
         outcome: RUN_OUTCOME.COMPLETED,
         response: 'The proof is correct.',
         workingDirectory: '/tmp/project',
@@ -317,8 +317,8 @@ describe('CLI multi-agent run command', () => {
     const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
     expect(emission?.json.result).toEqual({
       category: 'toolUse',
-      executionId: 'exec-team',
-      streamId: 'stream-team',
+      runId: 'exec-team',
+      runId: 'stream-team',
       outcome: RUN_OUTCOME.COMPLETED,
       response: 'The proof is correct.',
       workingDirectory: '/tmp/project',
@@ -326,8 +326,8 @@ describe('CLI multi-agent run command', () => {
     // `outcome` is the only terminal fact the headless JSON publishes.
     expect(Object.keys(emission?.json.result ?? {})).toEqual([
       'category',
-      'executionId',
-      'streamId',
+      'runId',
+      'runId',
       'outcome',
       'response',
       'workingDirectory',

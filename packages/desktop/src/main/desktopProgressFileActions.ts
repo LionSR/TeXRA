@@ -2,11 +2,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { getHelperModelName, type SessionHandle } from '@agent/runtime';
-import { createLatexExecutionDiscovery } from '@agent/storage';
+import { createLatexRunDiscovery } from '@agent/storage';
 import {
-  validateExecutionRequest,
-  type ValidatedExecutionRequest,
-} from '@agent/core/state/executionRequests';
+  validateRunRequest,
+  type ValidatedRunRequest,
+} from '@agent/core/state/runRequests';
 import { appSignals } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -16,7 +16,7 @@ import {
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
-import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
+import { runLatexdiffForRun } from '@latex/latexdiff/runLatexdiff';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
@@ -30,12 +30,12 @@ import {
   createExternalLocation,
   pathToLocation,
 } from '@utils/files/fileLocation';
-import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';
 
 type DesktopProgressFileActionUi = Pick<
-  DesktopAgentExecutionHost,
+  DesktopAgentRunHost,
   | 'openPath'
   | 'openBuildDisplay'
   | 'openDiff'
@@ -46,13 +46,13 @@ type DesktopProgressFileActionUi = Pick<
 
 /**
  * Bridge-owned capabilities the file actions reach back into: starting a fresh
- * agent execution (merge) and enumerating workspace input/context files (label
+ * agent run (merge) and enumerating workspace input/context files (label
  * search). Kept as a narrow interface so the actions stay decoupled from the
  * full progress bridge.
  */
 interface DesktopProgressFileActionHost {
   readonly session: SessionHandle;
-  startExecution(request: ValidatedExecutionRequest): void;
+  startRun(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
 
@@ -66,7 +66,7 @@ export interface DesktopLatexdiffWorkspaceScan {
 
 export interface DesktopLatexdiffRunContext {
   outputsByRound: ReadonlyRoundIndexed<OutputFileInfo>;
-  executionId?: string;
+  runId?: string;
   workspaceScan?: DesktopLatexdiffWorkspaceScan;
 }
 
@@ -85,7 +85,7 @@ export class DesktopProgressFileActions {
   }
 
   async runMergeFile(baseFile: string, editedFile: string): Promise<void> {
-    const validation = validateExecutionRequest({
+    const validation = validateRunRequest({
       config: {
         agent: 'merge',
         model: getHelperModelName(),
@@ -97,7 +97,7 @@ export class DesktopProgressFileActions {
       await this.ui.showErrorMessage(`Merge: ${validation.message}`);
       return;
     }
-    this.host.startExecution(validation.request);
+    this.host.startRun(validation.request);
   }
 
   async acceptEditedFile(
@@ -215,18 +215,18 @@ export class DesktopProgressFileActions {
     const progress: DiffProgressReporter = { report: () => undefined };
     try {
       const { outcome } = await effectRuntime().runPromise(
-        runLatexdiffForExecution({
+        runLatexdiffForRun({
           snapshots: this.host.session.snapshots,
           filesystem: nodeFilesystem,
           agent: scan?.agent ?? '',
           model: scan?.model ?? '',
           inputFile: scan?.inputFile ?? '',
           outputFiles: scan?.outputFiles,
-          runId: runContext.executionId ?? null,
+          runId: runContext.runId ?? null,
           outputsByRound: hasOutputs ? runContext.outputsByRound : null,
           mathMarkup: DEFAULT_MATH_MARKUP,
           generateBetweenRoundDiffs: true,
-          executionDiscovery: createLatexExecutionDiscovery(this.host.session),
+          runDiscovery: createLatexRunDiscovery(this.host.session),
           latexdiff: {
             channel: DESKTOP_LATEXDIFF_CHANNEL,
             service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),

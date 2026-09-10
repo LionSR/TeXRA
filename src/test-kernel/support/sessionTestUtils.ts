@@ -11,14 +11,14 @@ import { isDebugModeEnabled } from '@logger/logUtils';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
+  type RunId,
 } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createRunTrace } from '@transcript';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 
 type TestSessionInit = SessionHandleInit;
 
@@ -74,27 +74,27 @@ export function createProcessSession(
 /** Publish the existence fact before a test exercises a run's later events. */
 export function publishTestRunStart(
   session: SessionHandle,
-  streamId: StreamTabId,
-  executionId: ExecutionId = generateExecutionId(),
-): ExecutionId {
+  runId: RunId,
+  runId: RunId = generateRunId(),
+): RunId {
   session.publish([
     {
       type: 'run.start',
-      aggregateId: aggregateId('stream', streamId),
-      executionId,
+      aggregateId: aggregateId('stream', runId),
+      runId,
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: 'unsupported',
       category: 'toolUse',
       isRemote: false,
     },
   ]);
-  return executionId;
+  return runId;
 }
 
 /** Exercise the pure transcript projection with deterministic source coordinates. */
 export function attachTestTranscriptFold(
   trace: AgentTrace,
-  streamId: StreamTabId,
+  runId: RunId,
   log: StreamLog,
 ) {
   const fold = createTranscriptFold(log);
@@ -113,7 +113,7 @@ export function attachTestTranscriptFold(
         : event,
       {
         at: seq,
-        id: JSON.stringify([streamId, seq]),
+        id: JSON.stringify([runId, seq]),
         debug: isDebugModeEnabled(),
       },
     );
@@ -121,18 +121,18 @@ export function attachTestTranscriptFold(
   return {
     unsubscribe,
     handleStatus: (event: StatusEvent) => {
-      if (event.streamId === streamId) fold.status(event.phase);
+      if (event.runId === runId) fold.status(event.phase);
     },
   };
 }
 
 /** Standalone trace projection for tests that exercise formatting without a session. */
 export function createTestRunTrace(
-  streamId: StreamTabId,
+  runId: RunId,
   log: StreamLog = new StreamLog(),
 ) {
   const run = createRunTrace();
-  const projection = attachTestTranscriptFold(run.trace, streamId, log);
+  const projection = attachTestTranscriptFold(run.trace, runId, log);
   return {
     trace: run.trace,
     handleStatus: projection.handleStatus,

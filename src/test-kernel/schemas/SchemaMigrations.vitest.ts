@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumulator';
 import {
   ContextManagementDataSchema,
-  STREAM_PHASE,
-  StreamSnapshotSchema,
+  RUN_PHASE,
+  RunSnapshotSchema,
 } from '@shared/schemas';
 
 // Minimal NormalizedUsage fixture: all required fields, no optionals.
@@ -79,16 +79,16 @@ describe('ContextManagementDataSchema', () => {
   });
 });
 
-describe('StreamSnapshotSchema.status — canonical phases only', () => {
-  // The retired 7-value StreamStatus vocabulary is no longer normalized at the
+describe('RunSnapshotSchema.status — canonical phases only', () => {
+  // The retired 7-value RunStatus vocabulary is no longer normalized at the
   // parse boundary: an archived trace.json export still carrying it fails
-  // loudly rather than being collapsed into a StreamPhase.
+  // loudly rather than being collapsed into a RunPhase.
   it.each(['initializing', 'resuming', 'error', 'stopped', 'ready'])(
     'rejects the retired status "%s"',
     (retired) => {
       expect(() =>
-        StreamSnapshotSchema.parse({
-          streamId: 'stream:retired',
+        RunSnapshotSchema.parse({
+          runId: 'stream:retired',
           status: retired,
         }),
       ).toThrow();
@@ -96,11 +96,11 @@ describe('StreamSnapshotSchema.status — canonical phases only', () => {
   );
 
   it('passes a canonical phase through unchanged', () => {
-    const result = StreamSnapshotSchema.parse({
-      streamId: 'stream:canonical',
-      status: STREAM_PHASE.RUNNING,
+    const result = RunSnapshotSchema.parse({
+      runId: 'stream:canonical',
+      status: RUN_PHASE.RUNNING,
     });
 
-    expect(result.status).toBe(STREAM_PHASE.RUNNING);
+    expect(result.status).toBe(RUN_PHASE.RUNNING);
   });
 });

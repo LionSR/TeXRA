@@ -14,36 +14,36 @@ import {
   type RepoKey,
   type RepoSubscribeInput,
 } from './RepoPollingSource';
-import { StreamSubscriptionRegistry } from './StreamSubscriptionRegistry';
+import { RunSubscriptionRegistry } from './RunSubscriptionRegistry';
 
 /**
  * The three process-wide subscription registries, one per polling source.
  * Shared by the github_subscription tool (bind/unbind/list) and the settings
  * UI (list/unbindAll) so both see the same ownership.
  */
-export const prSubscriptionRegistry = new StreamSubscriptionRegistry<
+export const prSubscriptionRegistry = new RunSubscriptionRegistry<
   string,
   PRSubscribeInput
 >({
-  name: 'PRStreamSubscriptionRegistry',
+  name: 'PRRunSubscriptionRegistry',
   source: SharedPRPollingSource,
   keyOf: prKeyToString,
 });
 
-export const repoSubscriptionRegistry = new StreamSubscriptionRegistry<
+export const repoSubscriptionRegistry = new RunSubscriptionRegistry<
   RepoKey,
   RepoSubscribeInput
 >({
-  name: 'RepoStreamSubscriptionRegistry',
+  name: 'RepoRunSubscriptionRegistry',
   source: SharedRepoPollingSource,
   keyOf: repoKeyToString,
 });
 
-export const issueSubscriptionRegistry = new StreamSubscriptionRegistry<
+export const issueSubscriptionRegistry = new RunSubscriptionRegistry<
   string,
   IssueKey
 >({
-  name: 'IssueStreamSubscriptionRegistry',
+  name: 'IssueRunSubscriptionRegistry',
   source: SharedIssuePollingSource,
   keyOf: issueKeyToString,
 });

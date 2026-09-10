@@ -33,7 +33,7 @@ import {
   type ToolSectionFile,
   type TranscriptText,
 } from '@shared/transcript';
-import { type ExecutionLabels } from '@shared/tools/executionsDisplay';
+import { type RunLabels } from '@shared/tools/executionsDisplay';
 import {
   isMcpToolName,
   normalizeToolName,
@@ -83,7 +83,7 @@ interface DisplayLineOptions {
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
   /** Retained subagent identities used by executions wait/view headers. */
-  readonly executionLabels?: ExecutionLabels;
+  readonly runLabels?: RunLabels;
   /** Include complete output even when the ordinary tool card omits it. */
   readonly showFullOutput?: boolean;
 }
@@ -206,7 +206,7 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
           ? ''
           : `:${section.startLine}${section.endLine === undefined ? '' : `-${section.endLine}`}`;
       // The path vocabulary matters in a terminal, where nothing is clickable:
-      // a memory or execution path is not a workspace file.
+      // a memory or run path is not a workspace file.
       const namespace =
         section.namespace === 'workspace' ? '' : ` [${section.namespace}]`;
       return [labeled(section.label, `${section.path}${range}${namespace}`)];
@@ -419,14 +419,14 @@ export function toolUseStyledLines(
   options: DisplayLineOptions = {},
 ): readonly ToolDisplayLine[] {
   const { toolUse } = toolRow;
-  // Subagent execution labels name live executions, so they only exist at
+  // Subagent run labels name live executions, so they only exist at
   // paint time and the shared model was built without them. Re-derive the
   // preview through the shared rule rather than restating its precedence here.
   const headerPreview =
     normalizeToolName(toolUse.toolName) === 'executions' &&
-    options.executionLabels
+    options.runLabels
       ? toolHeaderPreview(toolUse, {
-          executionLabels: options.executionLabels,
+          runLabels: options.runLabels,
         })
       : toolRow.model.headerPreview;
   const key = `${options.elide === false ? 'f' : 'e'}|${options.showFullOutput ? 'f' : 'n'}|${options.width ?? 'd'}|${headerPreview}`;

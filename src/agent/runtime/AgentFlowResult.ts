@@ -11,11 +11,11 @@ import {
   OutputFileSummarySchema,
   RetryErrorInfoSchema,
   RunOutcomeSchema,
-  STREAM_PHASE,
+  RUN_PHASE,
 } from '@shared/schemas';
 
 const AgentFlowMetaSchema = z.object({
-  executionId: RunIdSchema,
+  runId: RunIdSchema,
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
   /**
    * Total model cost (USD) of the run, including its own subagents.
@@ -67,7 +67,7 @@ const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.omit({
   error: true,
 }).extend({
   category: z.literal('toolUse'),
-  outcome: z.literal(STREAM_PHASE.WAITING),
+  outcome: z.literal(RUN_PHASE.WAITING),
   ...ToolUseFlowResultSchema.pick({ response: true, files: true }).shape,
 });
 
@@ -82,7 +82,7 @@ export function isWaitingFlowResult(
   result: AgentRuntimeFlowResult,
 ): result is WaitingToolUseFlowResult {
   return (
-    result.category === 'toolUse' && result.outcome === STREAM_PHASE.WAITING
+    result.category === 'toolUse' && result.outcome === RUN_PHASE.WAITING
   );
 }
 
@@ -107,11 +107,11 @@ export function buildOptionalFlowResultFields(
 export function buildTerminalFlowResult(
   category: AgentFlowCategory,
   outcome: RunOutcome,
-  executionId: RunId,
+  runId: RunId,
   memoryMisses?: AttachedMemoryMiss[],
 ): AgentFlowResult {
   const meta = {
-    executionId,
+    runId,
     ...buildOptionalFlowResultFields(memoryMisses, undefined),
   };
   if (category === 'toolUse') {

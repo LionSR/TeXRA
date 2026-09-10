@@ -22,7 +22,7 @@ import type {
   WorkflowScriptRunOptions,
 } from '@agent/workflowScript';
 import type { AgentTrace } from '@agent/trace';
-import type { ExecutionKVStore } from '@agent/storage';
+import type { RunKVStore } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
@@ -31,8 +31,8 @@ import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { createLog } from '@logger/logUtils';
 import type {
-  ExecutionId,
-  WorkflowExecutionSnapshot,
+  RunId,
+  WorkflowRunSnapshot,
   WorkflowScriptDeliverySummary,
   WorkflowScriptFiles,
 } from '@shared/schemas';
@@ -59,7 +59,7 @@ const SUMMARY_CHANNEL = 'WorkflowDeliverySummary';
 const summaryLog = createLog(SUMMARY_CHANNEL);
 
 /**
- * What the delivery line needs from a settled run: the canonical execution
+ * What the delivery line needs from a settled run: the canonical run
  * snapshot the engine terminalizes (phase and task tallies) and the durable
  * journal (delivered files). A run that died before the engine published any
  * snapshot has none, and reports zero work.
@@ -114,12 +114,12 @@ export interface WorkflowScriptStrategyParams {
   readonly fingerprintAgentDependencies: NonNullable<
     WorkflowScriptRunOptions['fingerprintAgentDependencies']
   >;
-  /** The detached run's execution id — echoed on the delivery envelope. */
-  readonly executionId: ExecutionId;
+  /** The detached run's run id — echoed on the delivery envelope. */
+  readonly runId: RunId;
   /** The run's child-stream trace — where phase/log progress projects. */
   readonly logger: AgentTrace;
   /** Orchestrator store that owns the durable journal (checkpoint anchor). */
-  readonly store: ExecutionKVStore;
+  readonly store: RunKVStore;
   readonly checkpointId: string;
   readonly script: string;
   /** Canonical editable path to this submitted script in the workspace. */
@@ -136,9 +136,9 @@ export interface WorkflowScriptStrategyParams {
    */
   readonly workflowControls: WorkflowControlRegistry;
   /** Snapshot read from the detached run metadata that receives subsequent writes. */
-  readonly initialSnapshot?: WorkflowExecutionSnapshot;
+  readonly initialSnapshot?: WorkflowRunSnapshot;
   /** Persist the canonical snapshot on the detached run metadata. */
-  readonly onSnapshot?: (snapshot: WorkflowExecutionSnapshot) => Promise<void>;
+  readonly onSnapshot?: (snapshot: WorkflowRunSnapshot) => Promise<void>;
   /** Persist-only when a headless caller awaits and returns the report itself. */
   readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
@@ -263,7 +263,7 @@ export function createWorkflowScriptStrategy(
         // hold superseded or malformed untouched recovery history, and baseline
         // history is irrelevant to this invocation's cost and delivered files.
         const settleAttempt = (
-          snapshot: WorkflowExecutionSnapshot | undefined,
+          snapshot: WorkflowRunSnapshot | undefined,
         ): void => {
           const journal = attemptJournal();
           const costUsd = attemptCost.total(journal);
@@ -280,8 +280,8 @@ export function createWorkflowScriptStrategy(
         // The engine flushes its terminal snapshot before it rethrows, so the
         // last one *persisted* is the run's own final account of what ran; the
         // only source the failure path has for phase and task tallies, and by
-        // construction never newer than the durable execution record.
-        let lastSnapshot: WorkflowExecutionSnapshot | undefined;
+        // construction never newer than the durable run record.
+        let lastSnapshot: WorkflowRunSnapshot | undefined;
         const result = yield* Effect.exit(
           Effect.tryPromise({
             try: () =>
@@ -318,7 +318,7 @@ export function createWorkflowScriptStrategy(
                     await params.onSnapshot?.(snapshot);
                     lastSnapshot = snapshot;
                   },
-                  // The engine's control is already keyed by the grandchild execution
+                  // The engine's control is already keyed by the grandchild run
                   // id a host targets, so the run registers it as-is.
                   onControl: (control) => {
                     unregisterControls =
@@ -355,13 +355,13 @@ export function createWorkflowScriptStrategy(
     isTerminal: () => true,
 
     // Wrap the free-form result in the shared child-run envelope so the async
-    // follow-up carries the run's executionId, like every other detached
+    // follow-up carries the run's runId, like every other detached
     // delivery — the invoking model correlates and can resume by that id.
     formatDelivery: (turn) =>
       formatChildRunDelivery(
         {
           tag: DELIVERY_TAG.workflowScriptResult,
-          executionId: params.executionId,
+          runId: params.runId,
         },
         {
           response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
@@ -374,7 +374,7 @@ export function createWorkflowScriptStrategy(
       return formatChildRunError(
         {
           tag: DELIVERY_TAG.workflowScriptError,
-          executionId: params.executionId,
+          runId: params.runId,
         },
         {
           message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}' for this agent; rerunning that file with the same agent resumes without repeating them (failed, cancelled, and skipped calls run again).`,

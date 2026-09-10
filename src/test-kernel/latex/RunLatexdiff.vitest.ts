@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { LaTeXdiffService } from '@latex/latexdiff';
-import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
+import type { LatexRunDiscoveryPort } from '@latex/latexdiff/runDiscovery';
 import type { DiffRunOutcome } from '@latex/latexdiff/types';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -15,7 +15,7 @@ import { createOutputFile } from '../support/ProgressControllerHarnesses';
 
 const mocks = vi.hoisted(() => ({
   scanRunDirForOutputs: vi.fn(),
-  discoverLatestExecutionOutputs: vi.fn(),
+  discoverLatestRunOutputs: vi.fn(),
   runLatexdiffFromMetadata: vi.fn(),
   runLatexdiffViaWorkspaceScan: vi.fn(),
 }));
@@ -25,7 +25,7 @@ vi.mock('@latex/latexdiff/runOutputFiles', () => ({
 }));
 
 vi.mock('@latex/latexdiff/outputDiscovery', () => ({
-  discoverLatestExecutionOutputs: mocks.discoverLatestExecutionOutputs,
+  discoverLatestRunOutputs: mocks.discoverLatestRunOutputs,
 }));
 
 vi.mock('@latex/latexdiff/diffOperations', () => ({
@@ -33,7 +33,7 @@ vi.mock('@latex/latexdiff/diffOperations', () => ({
   runLatexdiffViaWorkspaceScan: mocks.runLatexdiffViaWorkspaceScan,
 }));
 
-const { runLatexdiffForExecution } =
+const { runLatexdiffForRun } =
   await import('@latex/latexdiff/runLatexdiff');
 
 const latexdiff = {
@@ -52,9 +52,9 @@ function roundMap(): RoundIndexed<OutputFileInfo> {
   return { 1: [] as OutputFileInfo[] };
 }
 
-const executionDiscovery: LatexExecutionDiscoveryPort = {
+const runDiscovery: LatexRunDiscoveryPort = {
   listAgentRuns: () => Effect.succeed([]),
-  readStreamId: () => Effect.succeed(undefined),
+  readRunId: () => Effect.succeed(undefined),
 };
 
 const snapshots = { read: vi.fn() };
@@ -65,13 +65,13 @@ const baseRequest = {
   agent: 'revise',
   model: 'claude-opus-4-8',
   inputFile: 'paper.tex',
-  executionDiscovery,
+  runDiscovery,
   generateBetweenRoundDiffs: false,
   latexdiff,
   progress: { report: () => undefined },
 } as const;
 
-describe('runLatexdiffForExecution', () => {
+describe('runLatexdiffForRun', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.runLatexdiffFromMetadata.mockReturnValue(
@@ -85,7 +85,7 @@ describe('runLatexdiffForExecution', () => {
   it.effect('uses caller-supplied outputs without any discovery', () =>
     Effect.gen(function* () {
       const rounds = roundMap();
-      const result = yield* runLatexdiffForExecution({
+      const result = yield* runLatexdiffForRun({
         ...baseRequest,
         outputsByRound: rounds,
       });
@@ -95,7 +95,7 @@ describe('runLatexdiffForExecution', () => {
         expect.objectContaining({ rounds }),
       );
       expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
-      expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
+      expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
     }),
   );
 
@@ -105,13 +105,13 @@ describe('runLatexdiffForExecution', () => {
       Effect.gen(function* () {
         mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
 
-        const result = yield* runLatexdiffForExecution({
+        const result = yield* runLatexdiffForRun({
           ...baseRequest,
           runId: 'abc123',
         });
 
         expect(result.source).toBe('run-dir-scan');
-        expect(result.executionId).toBe('abc123');
+        expect(result.runId).toBe('abc123');
         expect(mocks.scanRunDirForOutputs).toHaveBeenCalledWith(
           'abc123',
           'paper.tex',
@@ -119,7 +119,7 @@ describe('runLatexdiffForExecution', () => {
           'test',
           baseRequest.filesystem,
         );
-        expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
+        expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
         expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
       }),
   );
@@ -130,13 +130,13 @@ describe('runLatexdiffForExecution', () => {
       Effect.gen(function* () {
         mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(null));
 
-        const result = yield* runLatexdiffForExecution({
+        const result = yield* runLatexdiffForRun({
           ...baseRequest,
           runId: 'abc123',
         });
 
         expect(result.source).toBe('workspace-scan');
-        expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
+        expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
         expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalled();
       }),
   );
@@ -145,33 +145,33 @@ describe('runLatexdiffForExecution', () => {
     'ignores an invalid runId without scanning or auto-discovering',
     () =>
       Effect.gen(function* () {
-        const result = yield* runLatexdiffForExecution({
+        const result = yield* runLatexdiffForRun({
           ...baseRequest,
           runId: 'not-hex!',
         });
 
         expect(result.source).toBe('workspace-scan');
         expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
-        expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
+        expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
         expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalled();
       }),
   );
 
   it.effect('auto-discovers by agent/model/input when no runId is given', () =>
     Effect.gen(function* () {
-      mocks.discoverLatestExecutionOutputs.mockReturnValue(
+      mocks.discoverLatestRunOutputs.mockReturnValue(
         Effect.succeed({
-          executionId: 'def456',
+          runId: 'def456',
           rounds: roundMap(),
         }),
       );
 
-      const result = yield* runLatexdiffForExecution({ ...baseRequest });
+      const result = yield* runLatexdiffForRun({ ...baseRequest });
 
       expect(result.source).toBe('metadata');
-      expect(result.executionId).toBe('def456');
-      expect(mocks.discoverLatestExecutionOutputs).toHaveBeenCalledWith(
-        executionDiscovery,
+      expect(result.runId).toBe('def456');
+      expect(mocks.discoverLatestRunOutputs).toHaveBeenCalledWith(
+        runDiscovery,
         snapshots,
         {
           agent: 'revise',
@@ -189,11 +189,11 @@ describe('runLatexdiffForExecution', () => {
     'falls back to a workspace scan when auto-discovery finds nothing',
     () =>
       Effect.gen(function* () {
-        mocks.discoverLatestExecutionOutputs.mockReturnValue(
+        mocks.discoverLatestRunOutputs.mockReturnValue(
           Effect.succeed(null),
         );
 
-        const result = yield* runLatexdiffForExecution({ ...baseRequest });
+        const result = yield* runLatexdiffForRun({ ...baseRequest });
 
         expect(result.source).toBe('workspace-scan');
         expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalledWith(
@@ -207,9 +207,9 @@ describe('runLatexdiffForExecution', () => {
   );
 });
 
-// #10635: runLatexdiffForExecution names the latexdiff runtime channel once
+// #10635: runLatexdiffForRun names the latexdiff runtime channel once
 // for the whole run, so a line any discovery step writes lands on it.
-describe('runLatexdiffForExecution diagnostics', () => {
+describe('runLatexdiffForRun diagnostics', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     // Debug mode on: the Effect logger drops `Debug` entries otherwise, and
@@ -230,7 +230,7 @@ describe('runLatexdiffForExecution diagnostics', () => {
       mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
       const logs = captureLogEntries();
 
-      const result = yield* runLatexdiffForExecution({
+      const result = yield* runLatexdiffForRun({
         ...baseRequest,
         runId: 'abc123',
       });
@@ -240,7 +240,7 @@ describe('runLatexdiffForExecution diagnostics', () => {
         logs.has(
           'DEBUG',
           'test',
-          'Using run-dir scan outputs from execution abc123',
+          'Using run-dir scan outputs from run abc123',
         ),
       ).toBe(true);
     }).pipe(Effect.provide(effectDiagnosticsLayer)),

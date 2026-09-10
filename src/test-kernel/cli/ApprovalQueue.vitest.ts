@@ -5,37 +5,37 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  approvalPayloadStreamId,
+  approvalPayloadRunId,
   attentionRequests,
   currentApproval,
-  promoteApprovalsForStream,
+  promoteApprovalsForRun,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 
 import {
   bindTestSessionView,
-  makeStreamView,
+  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
 
-function bashPayload(streamId: string, requestId = `bash-${streamId}`) {
+function bashPayload(runId: string, requestId = `bash-${runId}`) {
   return {
     kind: 'bash',
-    data: { requestId, allowBypass: true, streamId, command: 'echo ok' },
+    data: { requestId, allowBypass: true, runId, command: 'echo ok' },
   } satisfies ApprovalPayload;
 }
 
-function questionPayload(streamId: string) {
+function questionPayload(runId: string) {
   return {
     kind: 'userQuestion',
     data: {
-      requestId: `question-${streamId}`,
+      requestId: `question-${runId}`,
       allowBypass: false,
-      streamId,
+      runId,
       questions: [{ question: 'Continue?', options: [{ label: 'Yes' }] }],
     },
   } satisfies ApprovalPayload;
@@ -43,12 +43,12 @@ function questionPayload(streamId: string) {
 
 /** The view after each payload's `approval.requested` folded, in order. */
 function viewOfApprovals(...payloads: readonly ApprovalPayload[]): SessionView {
-  const streams = [...new Set(payloads.map((p) => p.data.streamId))].map((id) =>
-    makeStreamView({ id }),
+  const runs = [...new Set(payloads.map((p) => p.data.runId))].map((id) =>
+    makeRunView({ id }),
   );
-  return viewWith(streams, {
+  return viewWith(runs, {
     approvals: payloads.map((payload) => ({
-      streamId: payload.data.streamId as StreamTabId,
+      runId: payload.data.runId as RunId,
       requestId: payload.data.requestId,
       payload,
     })),
@@ -93,7 +93,7 @@ describe('CLI approval surface', () => {
     seedView(view);
     expect(currentApproval.get()?.payload).toEqual(a);
 
-    promoteApprovalsForStream('stream-b' as StreamTabId);
+    promoteApprovalsForRun('stream-b' as RunId);
     expect(currentApproval.get()?.payload).toEqual(b1);
     expect(attentionRequests(view).map((r) => r.requestId)).toEqual([
       'bash-b-1',
@@ -108,8 +108,8 @@ describe('CLI approval surface', () => {
     const view = viewOfApprovals(a, child);
     seedView(view);
 
-    promoteApprovalsForStream('workflow' as StreamTabId, {
-      includeStreamIds: new Set(['workflow-child' as StreamTabId]),
+    promoteApprovalsForRun('workflow' as RunId, {
+      includeRunIds: new Set(['workflow-child' as RunId]),
     });
     expect(currentApproval.get()?.payload).toEqual(child);
   });
@@ -120,7 +120,7 @@ describe('CLI approval surface', () => {
       data: {
         requestId: 'edit-1',
         allowBypass: true,
-        streamId: 'stream-a',
+        runId: 'stream-a',
         path: 'paper.tex',
         summary: 'Edit paper.tex',
         diff: '',
@@ -134,10 +134,10 @@ describe('CLI approval surface', () => {
   });
 
   it('extracts stream ids from every approval payload used by the TUI', () => {
-    expect(approvalPayloadStreamId(bashPayload('stream-a'))).toBe('stream-a');
-    expect(approvalPayloadStreamId(questionPayload('stream-b'))).toBe(
+    expect(approvalPayloadRunId(bashPayload('stream-a'))).toBe('stream-a');
+    expect(approvalPayloadRunId(questionPayload('stream-b'))).toBe(
       'stream-b',
     );
-    expect(approvalPayloadStreamId(bashPayload(''))).toBeUndefined();
+    expect(approvalPayloadRunId(bashPayload(''))).toBeUndefined();
   });
 });

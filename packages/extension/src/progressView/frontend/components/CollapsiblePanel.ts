@@ -19,7 +19,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
  */
 export abstract class CollapsiblePanel extends LitElement {
   /** When this key changes, the panel collapses. Used by the parent to reset
-   *  open state on context switches (e.g. switching streams). */
+   *  open state on context switches (e.g. switching runs). */
   @property({ type: String }) collapseKey = '';
 
   @state() private open = false;

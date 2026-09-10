@@ -42,12 +42,12 @@ import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
+  RUN_PHASE,
   TOOL_USE_STATUS,
   type NormalizedToolUse,
   type RunOutcome,
-  type StreamPhase,
-  type StreamTabId,
+  type RunPhase,
+  type RunId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import {
@@ -67,9 +67,9 @@ import {
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
 
-const STREAM_ID = 'cli-test-stream' as StreamTabId;
-const ROOT_STREAM = 'root-stream' as StreamTabId;
-const CHILD_STREAM = 'claude@agent-sdk#1' as StreamTabId;
+const STREAM_ID = 'cli-test-stream' as RunId;
+const ROOT_STREAM = 'root-stream' as RunId;
+const CHILD_STREAM = 'claude@agent-sdk#1' as RunId;
 const SESSION_META = {
   agent: 'research',
   model: 'deepseekT',
@@ -177,7 +177,7 @@ describe('CLI conversation transcript', () => {
     const running = splitTranscriptEntries(
       [user, assistant],
       settledPrefix([user, assistant]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
     );
     expect(running.finalized).toEqual([user]);
     expect(running.pending).toEqual([assistant]);
@@ -185,7 +185,7 @@ describe('CLI conversation transcript', () => {
     const waitingBeforeFinalize = splitTranscriptEntries(
       [user, assistant],
       settledPrefix([user, assistant]),
-      STREAM_PHASE.WAITING,
+      RUN_PHASE.WAITING,
     );
     expect(waitingBeforeFinalize.finalized).toEqual([user]);
     expect(waitingBeforeFinalize.pending).toEqual([]);
@@ -202,7 +202,7 @@ describe('CLI conversation transcript', () => {
     const split = splitTranscriptEntries(
       [user, assistant, tool],
       settledPrefix([user, assistant, tool]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['a1', 't1']);
@@ -221,7 +221,7 @@ describe('CLI conversation transcript', () => {
     const toolSplit = splitTranscriptEntries(
       [tool, toolPhase],
       settledPrefix([tool, toolPhase]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
     );
     expect(toolSplit.finalized).toEqual([]);
     expect(toolSplit.pending.map((item) => item.id)).toEqual(['t1', 'p1']);
@@ -229,7 +229,7 @@ describe('CLI conversation transcript', () => {
     const workflowSplit = splitTranscriptEntries(
       [workflowTask, workflowPhase],
       settledPrefix([workflowTask, workflowPhase]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
     );
     expect(workflowSplit.finalized).toEqual([]);
     expect(workflowSplit.pending.map((item) => item.id)).toEqual(['w1', 'p2']);
@@ -241,7 +241,7 @@ describe('CLI conversation transcript', () => {
       splitTranscriptEntries(
         [running],
         settledPrefix([running]),
-        STREAM_PHASE.RUNNING,
+        RUN_PHASE.RUNNING,
       ).pending,
     ).toEqual([running]);
     expect(staticItemIds([running])).toEqual(['session-header']);
@@ -251,7 +251,7 @@ describe('CLI conversation transcript', () => {
       splitTranscriptEntries(
         [completed],
         settledPrefix([completed]),
-        STREAM_PHASE.RUNNING,
+        RUN_PHASE.RUNNING,
       ).finalized,
     ).toEqual([completed]);
     expect(staticItemIds([completed])).toEqual([
@@ -275,7 +275,7 @@ describe('CLI conversation transcript', () => {
       splitTranscriptEntries(
         [interrupted, laterUser],
         settledPrefix([interrupted, laterUser]),
-        STREAM_PHASE.RUNNING,
+        RUN_PHASE.RUNNING,
       ).pending,
     ).toEqual([interrupted, laterUser]);
 
@@ -564,7 +564,7 @@ describe('CLI conversation transcript', () => {
     const split = splitTranscriptEntries(
       [user, emptyAssistant, tool],
       settledPrefix([user, emptyAssistant, tool]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['t1']);
@@ -599,7 +599,7 @@ describe('CLI conversation transcript', () => {
     const split = splitTranscriptEntries(
       [continuation, assistant],
       settledPrefix([continuation, assistant]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['a1']);
@@ -632,7 +632,7 @@ describe('CLI conversation transcript', () => {
       splitTranscriptEntries(
         [user, invisibleAssistant, tool],
         settledPrefix([user, invisibleAssistant, tool]),
-        STREAM_PHASE.RUNNING,
+        RUN_PHASE.RUNNING,
       ).pending.map((item) => item.id),
     ).toEqual(['t1']);
     expect(transcriptToLines([user, invisibleAssistant, tool], 80)).toEqual([
@@ -957,14 +957,14 @@ describe('CLI conversation transcript', () => {
       orderedStaticTranscriptEntries(
         [user, assistant, tool],
         settledPrefix([user, assistant, tool]),
-        STREAM_PHASE.RUNNING,
+        RUN_PHASE.RUNNING,
       ).map((item) => item.id),
     ).toEqual(['u1']);
 
     const first = incrementalStaticTranscriptEntries(
       [user, assistant, tool],
       settledPrefix([user, assistant, tool]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       emptyCursor,
     );
     expect(first.appended.map((item) => item.id)).toEqual(['u1']);
@@ -973,7 +973,7 @@ describe('CLI conversation transcript', () => {
     const second = incrementalStaticTranscriptEntries(
       [user, settledAssistant, tool],
       settledPrefix([user, settledAssistant, tool]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       first.cursor,
     );
     expect(second.appended.map((item) => item.id)).toEqual(['a1', 't1']);
@@ -995,7 +995,7 @@ describe('CLI conversation transcript', () => {
     const first = incrementalStaticTranscriptEntries(
       [user],
       settledPrefix([user]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       emptyCursor,
     );
     expect(first.appended).toEqual([]);
@@ -1004,7 +1004,7 @@ describe('CLI conversation transcript', () => {
     const second = incrementalStaticTranscriptEntries(
       [user, assistantPending],
       settledPrefix([user, assistantPending]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       first.cursor,
     );
     expect(second.appended.map((item) => item.id)).toEqual(['u1']);
@@ -1013,7 +1013,7 @@ describe('CLI conversation transcript', () => {
     const third = incrementalStaticTranscriptEntries(
       [user, assistantSettled],
       settledPrefix([user, assistantSettled]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       second.cursor,
     );
     expect(third.appended.map((item) => item.id)).toEqual(['a1']);
@@ -1041,14 +1041,14 @@ describe('CLI conversation transcript', () => {
       entriesRef: prefix,
       scannedIndex: prefix.length,
       lastScannedEntry: prefix.at(-1),
-      status: STREAM_PHASE.RUNNING,
+      status: RUN_PHASE.RUNNING,
       lastAppendedKey: [prefix.length, 0] as const,
     };
 
     const result = incrementalStaticTranscriptEntries(
       source,
       settledPrefix(rows),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       previous,
     );
 
@@ -1069,7 +1069,7 @@ describe('CLI conversation transcript', () => {
     const oracle = orderedStaticTranscriptEntries(
       rows,
       settledPrefix(rows),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
     ).map((row) => row.id);
     expect(oracle).toEqual(['a1', 't1']);
 
@@ -1083,7 +1083,7 @@ describe('CLI conversation transcript', () => {
     const live = incrementalStaticTranscriptEntries(
       rows,
       settledPrefix(rows),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       emptyCursor,
     );
     expect(live.appended.map((row) => row.id)).toEqual(oracle);
@@ -1109,14 +1109,14 @@ describe('CLI conversation transcript', () => {
     const tick1 = incrementalStaticTranscriptEntries(
       [a, running],
       settledPrefix([a, running]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       emptyCursor,
     );
     expect(tick1.appended.map((row) => row.id)).toEqual(['a']);
     const tick2 = incrementalStaticTranscriptEntries(
       [a, c, b],
       settledPrefix([a, c, b]),
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
       tick1.cursor,
     );
     expect(tick2.rebuild).toBe(true);
@@ -1125,7 +1125,7 @@ describe('CLI conversation transcript', () => {
       orderedStaticTranscriptEntries(
         [a, c, b],
         settledPrefix([a, c, b]),
-        STREAM_PHASE.RUNNING,
+        RUN_PHASE.RUNNING,
       ).map((row) => row.id),
     ).toEqual(['b', 'a', 'c']);
   });
@@ -1155,13 +1155,13 @@ describe('CLI conversation transcript', () => {
 
   it('keeps background children out of the root scrollback owner', () => {
     const scrollbackTarget = staticScrollbackTarget({
-      activeStreamId: CHILD_STREAM,
-      rootStreamId: ROOT_STREAM,
+      activeRunId: CHILD_STREAM,
+      rootRunId: ROOT_STREAM,
       scopedTranscript: false,
     });
     const items = buildStaticTranscriptItems({
       source: rootChildSource(
-        scrollbackTarget.streamId,
+        scrollbackTarget.runId,
         'root prompt',
         'child detail',
       ),
@@ -1170,20 +1170,20 @@ describe('CLI conversation transcript', () => {
 
     expect(scrollbackTarget).toEqual({
       ownerKey: 'root',
-      streamId: ROOT_STREAM,
+      runId: ROOT_STREAM,
     });
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
   });
 
   it('uses the focused child as the static scrollback owner in scoped view', () => {
     const scrollbackTarget = staticScrollbackTarget({
-      activeStreamId: CHILD_STREAM,
-      rootStreamId: ROOT_STREAM,
+      activeRunId: CHILD_STREAM,
+      rootRunId: ROOT_STREAM,
       scopedTranscript: true,
     });
     const items = buildStaticTranscriptItems({
       source: rootChildSource(
-        scrollbackTarget.streamId,
+        scrollbackTarget.runId,
         'root prompt',
         'child detail',
       ),
@@ -1192,7 +1192,7 @@ describe('CLI conversation transcript', () => {
 
     expect(scrollbackTarget).toEqual({
       ownerKey: `stream:${CHILD_STREAM}`,
-      streamId: CHILD_STREAM,
+      runId: CHILD_STREAM,
     });
     expect(items.slice(1).map((item) => item.id)).toEqual(['a1']);
   });
@@ -1200,22 +1200,22 @@ describe('CLI conversation transcript', () => {
   it('keeps the root static owner stable while the root stream resolves', () => {
     expect(
       staticScrollbackTarget({
-        activeStreamId: STREAM_ID,
-        rootStreamId: undefined,
+        activeRunId: STREAM_ID,
+        rootRunId: undefined,
       }),
-    ).toEqual({ ownerKey: 'root', streamId: STREAM_ID });
+    ).toEqual({ ownerKey: 'root', runId: STREAM_ID });
     expect(
       staticScrollbackTarget({
-        activeStreamId: CLI_LOCAL_STREAM_ID,
-        rootStreamId: undefined,
+        activeRunId: CLI_LOCAL_STREAM_ID,
+        rootRunId: undefined,
       }),
-    ).toEqual({ ownerKey: 'root', streamId: CLI_LOCAL_STREAM_ID });
+    ).toEqual({ ownerKey: 'root', runId: CLI_LOCAL_STREAM_ID });
     expect(
       staticScrollbackTarget({
-        activeStreamId: STREAM_ID,
-        rootStreamId: 'resolved-root' as StreamTabId,
+        activeRunId: STREAM_ID,
+        rootRunId: 'resolved-root' as RunId,
       }),
-    ).toEqual({ ownerKey: 'root', streamId: 'resolved-root' });
+    ).toEqual({ ownerKey: 'root', runId: 'resolved-root' });
   });
 
   it('repaints static transcript invalidations from a clean origin', () => {
@@ -1387,7 +1387,7 @@ function settledPrefix(entries: readonly TranscriptRow[] | undefined): number {
  *  fold's prefix reaches. */
 function sourceOf(
   entries: readonly TranscriptRow[] | undefined,
-  status?: StreamPhase,
+  status?: RunPhase,
 ): StaticScrollbackSource {
   return {
     entries,
@@ -1401,14 +1401,14 @@ function sourceOf(
 /** The scrollback owner's rows out of a root with one user entry and a
  *  background child with one assistant entry. */
 function rootChildSource(
-  scrollbackStreamId: StreamTabId | undefined,
+  scrollbackRunId: RunId | undefined,
   rootText: string,
   childText: string,
 ): StaticScrollbackSource {
-  if (scrollbackStreamId === ROOT_STREAM) {
+  if (scrollbackRunId === ROOT_STREAM) {
     return sourceOf([entry('u1', 'user', rootText, true)]);
   }
-  if (scrollbackStreamId === CHILD_STREAM) {
+  if (scrollbackRunId === CHILD_STREAM) {
     return sourceOf([entry('a1', 'assistant', childText, true)]);
   }
   return sourceOf(undefined);

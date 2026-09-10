@@ -20,7 +20,7 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { formatError } from '@common/errors';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
@@ -243,7 +243,7 @@ export async function assertWorkflowFilesExist(
 export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   function* (
     session: SessionHandle,
-    parentExecutionId: ExecutionId,
+    parentRunId: RunId,
     label: string,
     files: readonly string[],
   ): Effect.fn.Return<{ file: string; absolutePath: string }[], Error> {
@@ -303,7 +303,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
           Effect.gen(function* () {
             if (runStoragePath !== undefined) {
               const output = yield* resolveChildRunOutput(
-                parentExecutionId,
+                parentRunId,
                 runStoragePath,
                 session,
               );
@@ -338,7 +338,7 @@ export const fingerprintWorkflowAgentDependencies = Effect.fn(
   'fingerprintWorkflowAgentDependencies',
 )(function* (
   session: SessionHandle,
-  parentExecutionId: ExecutionId,
+  parentRunId: RunId,
   options: WorkflowAgentCallOptions,
 ): Effect.fn.Return<string, Error> {
   const groups = [
@@ -362,7 +362,7 @@ export const fingerprintWorkflowAgentDependencies = Effect.fn(
   for (const { kind, label, files } of groups) {
     const resolved = yield* resolveInvocationFileList(
       session,
-      parentExecutionId,
+      parentRunId,
       label,
       files,
     );

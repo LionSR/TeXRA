@@ -12,15 +12,15 @@ import { defaultSession } from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { rootStreamId as rootStreamIdSignal } from '@cli/chat/tui/state/cliState';
+import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
+  type RunId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -29,7 +29,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -324,8 +324,8 @@ describe('runChat signal ownership wiring', () => {
       resume: vi.fn(async () => undefined),
       startRootRun: mocks.startRootRun,
       stop: vi.fn(),
-      stopStream: vi.fn(),
-      tryResumeStream: vi.fn(async () => false),
+      stopRun: vi.fn(),
+      tryResumeRun: vi.fn(async () => false),
       submit: mocks.submit,
       activateSkill: vi.fn(),
       clearPendingSkills: vi.fn(),
@@ -491,7 +491,7 @@ describe('runChat signal ownership wiring', () => {
     const { runChat } = await import('@cli/chat/tui/runChatTui');
     const runPromise = runChat(INTERACTIVE_CONTEXT, {
       initialResume: {
-        id: 'exec-resume' as ExecutionId,
+        id: 'exec-resume' as RunId,
         config,
       },
     });
@@ -529,30 +529,30 @@ describe('runChat signal ownership wiring', () => {
         expect(mocks.createChatSessionController).toHaveBeenCalled(),
       );
       const session = defaultSession();
-      const ownRoot = 'stream:clear-own-root' as StreamTabId;
-      const history = 'stream:clear-history' as StreamTabId;
+      const ownRoot = 'stream:clear-own-root' as RunId;
+      const history = 'stream:clear-history' as RunId;
       // Both land the way the transcript summary's runs hydrate: top-level
-      // streams in the view, only one of them this chat's root.
+      // runs in the view, only one of them this chat's root.
       session.publish(
-        [history, ownRoot].map((streamId) => ({
+        [history, ownRoot].map((runId) => ({
           type: 'run.start' as const,
-          aggregateId: qualifyAggregateId('stream', streamId),
-          executionId: generateExecutionId(),
+          aggregateId: qualifyAggregateId('stream', runId),
+          runId: generateRunId(),
           identity: { kind: 'agent' as const, agent: 'assistant' },
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
           category: AgentCategory.ToolUse,
           isRemote: false,
           worktree: null,
-          parentStreamId: null,
+          parentRunId: null,
           background: false,
           approvalPolicy: null,
           checkpointId: null,
         })),
       );
       await vi.waitFor(() =>
-        expect(currentView().streams.has(ownRoot)).toBe(true),
+        expect(currentView().runs.has(ownRoot)).toBe(true),
       );
-      rootStreamIdSignal.set(ownRoot);
+      rootRunIdSignal.set(ownRoot);
       const released = vi.spyOn(session.transcripts, 'requestEviction');
 
       const { getSlashCommandContext } =
@@ -560,7 +560,7 @@ describe('runChat signal ownership wiring', () => {
       getSlashCommandContext().resetSession();
 
       await vi.waitFor(() =>
-        expect(released.mock.calls.map(([streamId]) => streamId)).toEqual([
+        expect(released.mock.calls.map(([runId]) => runId)).toEqual([
           ownRoot,
         ]),
       );

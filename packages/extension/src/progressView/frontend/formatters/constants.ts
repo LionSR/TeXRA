@@ -174,7 +174,7 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
   delegate_multi_agents: 'list-ul',
   delegate_agent: 'circle-user',
 
-  // Execution history
+  // Run history
   executions: 'clock-rotate-left',
   runs: 'clock-rotate-left',
   accept_run_files: 'check',

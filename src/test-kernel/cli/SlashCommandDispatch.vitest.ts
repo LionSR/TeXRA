@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { Effect } from 'effect';
 
-// Slash command execution dispatch.
+// Slash command run dispatch.
 
 import {
   afterEach,
@@ -44,7 +44,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
-  activeStreamId,
+  activeRunId,
   closeForegroundReader,
   closeInfoPane,
   foregroundReader,
@@ -65,41 +65,41 @@ import * as codexPreference from '@model/codex/codexPreference';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
-  STREAM_PHASE,
+  RUN_PHASE,
   type ActiveChildInfo,
-  type ExecutionId,
+  type RunId,
   type Plan,
-  type StreamPhase,
-  type StreamTabId,
+  type RunPhase,
+  type RunId,
   type TodoItem,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
-import type { StreamView } from '@shared/session/sessionView';
+import type { RunView } from '@shared/session/sessionView';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 import {
   bindTestSessionView,
-  makeStreamView,
+  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
 
-// The streams a case names live in the fold's view: /status reads child
+// The runs a case names live in the fold's view: /status reads child
 // counts, parent edges, and each stream's phase from there.
-const seeded = new Map<StreamTabId, StreamView>();
+const seeded = new Map<RunId, RunView>();
 function syncSeededView(): void {
   seedView(viewWith([...seeded.values()]));
 }
-function ensureStream(
-  id: StreamTabId,
-  over: Partial<Omit<StreamView, 'category'>> = {},
+function ensureRun(
+  id: RunId,
+  over: Partial<Omit<RunView, 'category'>> = {},
 ): void {
   const current = seeded.get(id);
   seeded.set(
     id,
-    makeStreamView({ ...(current ?? {}), ...over, id }) as StreamView,
+    makeRunView({ ...(current ?? {}), ...over, id }) as RunView,
   );
   syncSeededView();
 }
@@ -113,22 +113,22 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 function seedChildRoster(
-  parentStreamId: StreamTabId,
+  parentRunId: RunId,
   rows: readonly ActiveChildInfo[],
 ): void {
-  ensureStream(parentStreamId);
-  const parent = seeded.get(parentStreamId);
+  ensureRun(parentRunId);
+  const parent = seeded.get(parentRunId);
   for (const row of rows) {
-    ensureStream(row.childStreamId, {
-      parentId: parentStreamId,
+    ensureRun(row.childRunId, {
+      parentId: parentRunId,
       ancestors: [
         ...(parent?.ancestors ?? []),
-        { id: parentStreamId, label: parentStreamId },
+        { id: parentRunId, label: parentRunId },
       ],
-      executionId: row.executionId,
+      runId: row.runId,
       label: row.agentName,
       identity: row.identity,
-      status: row.status ?? STREAM_PHASE.COMPLETED,
+      status: row.status ?? RUN_PHASE.COMPLETED,
     });
   }
 }
@@ -184,15 +184,15 @@ function createContext(
     },
     canSelectModel: () => true,
     resetSession: vi.fn(),
-    resumeExecution: (_id: ExecutionId) => Promise.resolve(),
+    resumeRun: (_id: RunId) => Promise.resolve(),
     ...overrides,
   };
 }
 
 function lastEntryText(
-  streamId: StreamTabId = CLI_LOCAL_STREAM_ID,
+  runId: RunId = CLI_LOCAL_STREAM_ID,
 ): string | undefined {
-  const last = noticesFor(notices.get(), streamId).at(-1)?.row;
+  const last = noticesFor(notices.get(), runId).at(-1)?.row;
   return last && transcriptRowHeadline(last);
 }
 
@@ -239,7 +239,7 @@ function deferred<T>(): {
 }
 
 function workPlanSnapshots(
-  read: (streamId: StreamTabId) => {
+  read: (runId: RunId) => {
     readonly plan: Plan | null;
     readonly todos: readonly TodoItem[];
   },
@@ -247,8 +247,8 @@ function workPlanSnapshots(
 ): StreamArtifactReader {
   return {
     preload: vi.fn(preload),
-    getWorkPlan: (streamId) => {
-      const { plan, todos } = read(streamId);
+    getWorkPlan: (runId) => {
+      const { plan, todos } = read(runId);
       return { plan, todos: [...todos], planSummary: null };
     },
   };
@@ -332,9 +332,9 @@ describe('handleTuiSlashCommand', () => {
     await handleTuiSlashCommand('/plan', context);
     expect(transientNotice.get()?.text).toBe('No focused session.');
 
-    const streamId = 'plan-reader' as StreamTabId;
-    ensureStream(streamId);
-    activeStreamId.set(streamId);
+    const runId = 'plan-reader' as RunId;
+    ensureRun(runId);
+    activeRunId.set(runId);
     await handleTuiSlashCommand('/plan', context);
     expect(transientNotice.get()?.text).toBe(
       'The focused session has no work plan.',
@@ -352,17 +352,17 @@ describe('handleTuiSlashCommand', () => {
     };
     await handleTuiSlashCommand('/plan', context);
     expect(snapshots.preload).toHaveBeenCalledTimes(2);
-    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
+    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 
-    activeStreamId.set('another-stream');
-    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
+    activeRunId.set('another-stream');
+    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
     expect(localEntries()).toEqual([]);
     closeForegroundReader();
   });
 
   it('waits for canonical hydration before deciding a focused plan is empty', async () => {
     const { promise: preload, resolve: resolvePreload } = deferred<void>();
-    const streamId = 'historical-plan' as StreamTabId;
+    const runId = 'historical-plan' as RunId;
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
         () => ({
@@ -377,13 +377,13 @@ describe('handleTuiSlashCommand', () => {
           }),
       ),
     });
-    ensureStream(streamId);
-    activeStreamId.set(streamId);
+    ensureRun(runId);
+    activeRunId.set(runId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
     expect(foregroundReader.get()).toMatchObject({
       kind: 'workPlan',
-      streamId,
+      runId,
       loading: true,
     });
     expect(transientNotice.get()).toBeUndefined();
@@ -391,61 +391,61 @@ describe('handleTuiSlashCommand', () => {
     resolvePreload();
     await dispatched;
 
-    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
+    expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
   });
 
   it('lets a newer plan request win when preloads resolve in reverse order', async () => {
-    const streamA = 'plan-a' as StreamTabId;
-    const streamB = 'plan-b' as StreamTabId;
-    const resolvers = new Map<StreamTabId, () => void>();
+    const runA = 'plan-a' as RunId;
+    const runB = 'plan-b' as RunId;
+    const resolvers = new Map<RunId, () => void>();
     const snapshots = workPlanSnapshots(
-      (streamId) => {
-        return streamId === streamB
+      (runId) => {
+        return runId === runB
           ? { plan: { objective: 'Plan B.' }, todos: [] }
           : { plan: null, todos: [] };
       },
-      ([streamId]) =>
+      ([runId]) =>
         Effect.promise(
           () =>
             new Promise<void>((resolve) => {
-              resolvers.set(streamId!, resolve);
+              resolvers.set(runId!, resolve);
             }),
         ),
     );
     registerBuiltinSlashCommands({ workPlanSnapshots: snapshots });
-    ensureStream(streamA);
-    ensureStream(streamB);
+    ensureRun(runA);
+    ensureRun(runB);
 
-    activeStreamId.set(streamA);
+    activeRunId.set(runA);
     const requestA = handleTuiSlashCommand('/plan', createContext());
-    activeStreamId.set(streamB);
+    activeRunId.set(runB);
     const requestB = handleTuiSlashCommand('/plan', createContext());
     expect(foregroundReader.get()).toMatchObject({
       kind: 'workPlan',
-      streamId: streamB,
+      runId: runB,
       loading: true,
     });
 
-    resolvers.get(streamB)?.();
+    resolvers.get(runB)?.();
     await requestB;
     expect(foregroundReader.get()).toEqual({
       kind: 'workPlan',
-      streamId: streamB,
+      runId: runB,
     });
     expect(transientNotice.get()).toBeUndefined();
 
-    resolvers.get(streamA)?.();
+    resolvers.get(runA)?.();
     await requestA;
     expect(foregroundReader.get()).toEqual({
       kind: 'workPlan',
-      streamId: streamB,
+      runId: runB,
     });
     expect(transientNotice.get()).toBeUndefined();
   });
 
   it('lets a newer no-focus request cancel pending ownership', async () => {
     const { promise: preload, resolve: resolvePreload } = deferred<void>();
-    const streamId = 'superseded-loading-plan' as StreamTabId;
+    const runId = 'superseded-loading-plan' as RunId;
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
         () => ({ plan: { objective: 'Late plan.' }, todos: [] }),
@@ -457,11 +457,11 @@ describe('handleTuiSlashCommand', () => {
           }),
       ),
     });
-    ensureStream(streamId);
-    activeStreamId.set(streamId);
+    ensureRun(runId);
+    activeRunId.set(runId);
 
     const first = handleTuiSlashCommand('/plan', createContext());
-    activeStreamId.set(undefined);
+    activeRunId.set(undefined);
     await handleTuiSlashCommand('/plan', createContext());
     expect(foregroundReader.get()).toBeUndefined();
     expect(transientNotice.get()?.text).toBe('No focused session.');
@@ -474,7 +474,7 @@ describe('handleTuiSlashCommand', () => {
 
   it('does not reopen a loading plan reader after Escape', async () => {
     const { promise: preload, resolve: resolvePreload } = deferred<void>();
-    const streamId = 'escape-loading-plan' as StreamTabId;
+    const runId = 'escape-loading-plan' as RunId;
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
         () => ({ plan: { objective: 'Late plan.' }, todos: [] }),
@@ -486,11 +486,11 @@ describe('handleTuiSlashCommand', () => {
           }),
       ),
     });
-    ensureStream(streamId);
-    activeStreamId.set(streamId);
+    ensureRun(runId);
+    activeRunId.set(runId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
-    expect(foregroundReader.get()).toMatchObject({ loading: true, streamId });
+    expect(foregroundReader.get()).toMatchObject({ loading: true, runId });
     closeForegroundReader();
     resolvePreload();
     await dispatched;
@@ -501,7 +501,7 @@ describe('handleTuiSlashCommand', () => {
 
   it('closes a loading reader and reports a current preload error', async () => {
     const { promise: preload, reject: rejectPreload } = deferred<void>();
-    const streamId = 'error-loading-plan' as StreamTabId;
+    const runId = 'error-loading-plan' as RunId;
     registerBuiltinSlashCommands({
       workPlanSnapshots: workPlanSnapshots(
         () => ({ plan: null, todos: [] }),
@@ -513,11 +513,11 @@ describe('handleTuiSlashCommand', () => {
           }),
       ),
     });
-    ensureStream(streamId);
-    activeStreamId.set(streamId);
+    ensureRun(runId);
+    activeRunId.set(runId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
-    expect(foregroundReader.get()).toMatchObject({ loading: true, streamId });
+    expect(foregroundReader.get()).toMatchObject({ loading: true, runId });
     rejectPreload(new Error('historical sidecar unreadable'));
     await dispatched;
 
@@ -902,17 +902,17 @@ describe('handleTuiSlashCommand', () => {
     // is deliberately NOT raised — the teardown owns that policy.
     expect(session.stopRequested).toBe(true);
     expect(requestInputExit).toHaveBeenCalledOnce();
-    expect(activeStreamId.get()).toBeUndefined();
+    expect(activeRunId.get()).toBeUndefined();
   });
 
   it('uses the provided process cwd when formatting /status resume hints', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const streamId = 'stream-1' as StreamTabId;
-    session.streamId = streamId;
-    session.executionId = 'exec-1' as ExecutionId;
-    activeStreamId.set(streamId);
-    ensureStream(streamId, { status: STREAM_PHASE.WAITING });
+    const runId = 'stream-1' as RunId;
+    session.runId = runId;
+    session.runId = 'exec-1' as RunId;
+    activeRunId.set(runId);
+    ensureRun(runId, { status: RUN_PHASE.WAITING });
 
     const handled = await handleTuiSlashCommand(
       '/status',
@@ -920,7 +920,7 @@ describe('handleTuiSlashCommand', () => {
     );
 
     expect(handled).toBe(true);
-    const statusText = lastEntryText(streamId);
+    const statusText = lastEntryText(runId);
     expect(statusText).toContain('resume later with: texra resume exec-1');
     expect(statusText).not.toContain('--cwd');
   });
@@ -928,25 +928,25 @@ describe('handleTuiSlashCommand', () => {
   it('reports active children while preserving an idle focused root status', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
-    const childStreamId = 'stream-child' as StreamTabId;
-    activeStreamId.set(rootStreamId);
-    ensureStream(rootStreamId, { status: STREAM_PHASE.WAITING });
-    ensureStream(childStreamId, { status: STREAM_PHASE.RUNNING });
-    seedChildRoster(rootStreamId, [
+    const rootRunId = 'stream-root' as RunId;
+    const childRunId = 'stream-child' as RunId;
+    activeRunId.set(rootRunId);
+    ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
+    ensureRun(childRunId, { status: RUN_PHASE.RUNNING });
+    seedChildRoster(rootRunId, [
       {
-        executionId: 'child-exec',
+        runId: 'child-exec',
         identity: { kind: 'agent', agent: 'critic' },
         agentName: 'critic',
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         startedAt: 1,
-        childStreamId,
+        childRunId,
       },
     ]);
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('status: Idle');
     expect(statusText).toContain('active background tasks: 1');
   });
@@ -954,47 +954,47 @@ describe('handleTuiSlashCommand', () => {
   it('counts only running children among mixed direct-children phases', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
-    const parentStreamId = 'stream-parent' as StreamTabId;
+    const rootRunId = 'stream-root' as RunId;
+    const parentRunId = 'stream-parent' as RunId;
     const rootSiblingIds = [
       'stream-root-sibling-1',
       'stream-root-sibling-2',
-    ] as StreamTabId[];
-    const runningChildId = 'stream-child-running' as StreamTabId;
-    const waitingChildId = 'stream-child-waiting' as StreamTabId;
-    activeStreamId.set(parentStreamId);
-    for (const streamId of rootSiblingIds) {
-      ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
+    ] as RunId[];
+    const runningChildId = 'stream-child-running' as RunId;
+    const waitingChildId = 'stream-child-waiting' as RunId;
+    activeRunId.set(parentRunId);
+    for (const runId of rootSiblingIds) {
+      ensureRun(runId, { status: RUN_PHASE.RUNNING });
     }
-    ensureStream(parentStreamId, { status: STREAM_PHASE.WAITING });
-    ensureStream(runningChildId, { status: STREAM_PHASE.RUNNING });
-    ensureStream(waitingChildId, { status: STREAM_PHASE.WAITING });
+    ensureRun(parentRunId, { status: RUN_PHASE.WAITING });
+    ensureRun(runningChildId, { status: RUN_PHASE.RUNNING });
+    ensureRun(waitingChildId, { status: RUN_PHASE.WAITING });
     const rosterRow = (
-      childStreamId: StreamTabId,
+      childRunId: RunId,
       index: number,
-      status: StreamPhase,
+      status: RunPhase,
     ) => ({
-      executionId: `child-exec-${index}`,
+      runId: `child-exec-${index}`,
       identity: { kind: 'agent' as const, agent: `critic-${index}` },
       agentName: `critic-${index}`,
       status,
       startedAt: index + 1,
-      childStreamId,
+      childRunId,
     });
-    seedChildRoster(rootStreamId, [
-      rosterRow(parentStreamId, 0, STREAM_PHASE.WAITING),
-      ...rootSiblingIds.map((streamId, index) =>
-        rosterRow(streamId, index + 1, STREAM_PHASE.RUNNING),
+    seedChildRoster(rootRunId, [
+      rosterRow(parentRunId, 0, RUN_PHASE.WAITING),
+      ...rootSiblingIds.map((runId, index) =>
+        rosterRow(runId, index + 1, RUN_PHASE.RUNNING),
       ),
     ]);
-    seedChildRoster(parentStreamId, [
-      rosterRow(runningChildId, 3, STREAM_PHASE.RUNNING),
-      rosterRow(waitingChildId, 4, STREAM_PHASE.WAITING),
+    seedChildRoster(parentRunId, [
+      rosterRow(runningChildId, 3, RUN_PHASE.RUNNING),
+      rosterRow(waitingChildId, 4, RUN_PHASE.WAITING),
     ]);
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('active background tasks: 1');
     expect(statusText).not.toContain('active background tasks: 2');
   });
@@ -1002,33 +1002,33 @@ describe('handleTuiSlashCommand', () => {
   it('does not count retained idle children as active background tasks', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
-    const childStreamIds = [
+    const rootRunId = 'stream-root' as RunId;
+    const childRunIds = [
       'stream-child-1',
       'stream-child-2',
-    ] as StreamTabId[];
-    activeStreamId.set(rootStreamId);
-    ensureStream(rootStreamId, { status: STREAM_PHASE.WAITING });
-    for (const [index, childStreamId] of childStreamIds.entries()) {
-      ensureStream(childStreamId, {
-        status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
+    ] as RunId[];
+    activeRunId.set(rootRunId);
+    ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
+    for (const [index, childRunId] of childRunIds.entries()) {
+      ensureRun(childRunId, {
+        status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
       });
     }
     seedChildRoster(
-      rootStreamId,
-      childStreamIds.map((childStreamId, index) => ({
-        executionId: `child-exec-${index}`,
+      rootRunId,
+      childRunIds.map((childRunId, index) => ({
+        runId: `child-exec-${index}`,
         identity: { kind: 'agent' as const, agent: `critic-${index}` },
         agentName: `critic-${index}`,
-        status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
+        status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
         startedAt: index + 1,
-        childStreamId,
+        childRunId,
       })),
     );
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    expect(lastEntryText(rootStreamId)).not.toContain(
+    expect(lastEntryText(rootRunId)).not.toContain(
       'active background tasks:',
     );
   });
@@ -1036,28 +1036,28 @@ describe('handleTuiSlashCommand', () => {
   it('reports the owning workflow count while a background task is focused', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
-    const focusedChildId = 'stream-focused-child' as StreamTabId;
-    const siblingChildId = 'stream-sibling-child' as StreamTabId;
-    activeStreamId.set(focusedChildId);
-    for (const streamId of [focusedChildId, siblingChildId]) {
-      ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
+    const rootRunId = 'stream-root' as RunId;
+    const focusedChildId = 'stream-focused-child' as RunId;
+    const siblingChildId = 'stream-sibling-child' as RunId;
+    activeRunId.set(focusedChildId);
+    for (const runId of [focusedChildId, siblingChildId]) {
+      ensureRun(runId, { status: RUN_PHASE.RUNNING });
     }
     seedChildRoster(
-      rootStreamId,
-      [focusedChildId, siblingChildId].map((childStreamId, index) => ({
-        executionId: `child-exec-${index}`,
+      rootRunId,
+      [focusedChildId, siblingChildId].map((childRunId, index) => ({
+        runId: `child-exec-${index}`,
         identity: { kind: 'agent' as const, agent: `critic-${index}` },
         agentName: `critic-${index}`,
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         startedAt: index + 1,
-        childStreamId,
+        childRunId,
       })),
     );
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('status: Running');
     expect(statusText).toContain('active background tasks: 2');
   });
@@ -1065,34 +1065,34 @@ describe('handleTuiSlashCommand', () => {
   it('filters idle siblings from the owning workflow count', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
-    const focusedChildId = 'stream-focused-child' as StreamTabId;
-    const runningSiblingId = 'stream-running-sibling' as StreamTabId;
-    const idleSiblingId = 'stream-idle-sibling' as StreamTabId;
-    activeStreamId.set(focusedChildId);
-    ensureStream(focusedChildId, { status: STREAM_PHASE.WAITING });
-    ensureStream(runningSiblingId, { status: STREAM_PHASE.RUNNING });
-    ensureStream(idleSiblingId, { status: STREAM_PHASE.WAITING });
+    const rootRunId = 'stream-root' as RunId;
+    const focusedChildId = 'stream-focused-child' as RunId;
+    const runningSiblingId = 'stream-running-sibling' as RunId;
+    const idleSiblingId = 'stream-idle-sibling' as RunId;
+    activeRunId.set(focusedChildId);
+    ensureRun(focusedChildId, { status: RUN_PHASE.WAITING });
+    ensureRun(runningSiblingId, { status: RUN_PHASE.RUNNING });
+    ensureRun(idleSiblingId, { status: RUN_PHASE.WAITING });
     seedChildRoster(
-      rootStreamId,
+      rootRunId,
       [focusedChildId, runningSiblingId, idleSiblingId].map(
-        (childStreamId, index) => ({
-          executionId: `child-exec-${index}`,
+        (childRunId, index) => ({
+          runId: `child-exec-${index}`,
           identity: { kind: 'agent' as const, agent: `critic-${index}` },
           agentName: `critic-${index}`,
           status:
-            childStreamId === runningSiblingId
-              ? STREAM_PHASE.RUNNING
-              : STREAM_PHASE.WAITING,
+            childRunId === runningSiblingId
+              ? RUN_PHASE.RUNNING
+              : RUN_PHASE.WAITING,
           startedAt: index + 1,
-          childStreamId,
+          childRunId,
         }),
       ),
     );
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('active background tasks: 1');
     expect(statusText).not.toContain('active background tasks: 3');
   });
@@ -1100,34 +1100,34 @@ describe('handleTuiSlashCommand', () => {
   it('counts delegated work owned by a focused intermediate parent', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const rootStreamId = 'stream-root' as StreamTabId;
-    const parentStreamId = 'stream-parent' as StreamTabId;
+    const rootRunId = 'stream-root' as RunId;
+    const parentRunId = 'stream-parent' as RunId;
     const rootSiblingIds = [
       'stream-root-sibling-1',
       'stream-root-sibling-2',
-    ] as StreamTabId[];
-    const grandchildId = 'stream-grandchild' as StreamTabId;
-    activeStreamId.set(parentStreamId);
-    for (const streamId of [parentStreamId, ...rootSiblingIds, grandchildId]) {
-      ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
+    ] as RunId[];
+    const grandchildId = 'stream-grandchild' as RunId;
+    activeRunId.set(parentRunId);
+    for (const runId of [parentRunId, ...rootSiblingIds, grandchildId]) {
+      ensureRun(runId, { status: RUN_PHASE.RUNNING });
     }
-    const rosterRow = (childStreamId: StreamTabId, index: number) => ({
-      executionId: `nested-exec-${index}`,
+    const rosterRow = (childRunId: RunId, index: number) => ({
+      runId: `nested-exec-${index}`,
       identity: { kind: 'agent' as const, agent: `reviewer-${index}` },
       agentName: `reviewer-${index}`,
-      status: STREAM_PHASE.RUNNING,
+      status: RUN_PHASE.RUNNING,
       startedAt: index + 1,
-      childStreamId,
+      childRunId,
     });
     seedChildRoster(
-      rootStreamId,
-      [parentStreamId, ...rootSiblingIds].map(rosterRow),
+      rootRunId,
+      [parentRunId, ...rootSiblingIds].map(rosterRow),
     );
-    seedChildRoster(parentStreamId, [rosterRow(grandchildId, 3)]);
+    seedChildRoster(parentRunId, [rosterRow(grandchildId, 3)]);
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(rootStreamId);
+    const statusText = lastEntryText(rootRunId);
     expect(statusText).toContain('active background tasks: 1');
     expect(statusText).not.toContain('active background tasks: 3');
   });
@@ -1136,12 +1136,12 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands();
     const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
     const session = createSession();
-    const streamId = 'stream-access' as StreamTabId;
-    activeStreamId.set(streamId);
+    const runId = 'stream-access' as RunId;
+    activeRunId.set(runId);
     patchSessionMeta({ model: 'gpt55' });
     // The access route comes off the fold's cumulative usage for the stream.
-    ensureStream(streamId, {
-      status: STREAM_PHASE.WAITING,
+    ensureRun(runId, {
+      status: RUN_PHASE.WAITING,
       usage: {
         'stream-access-run': {
           inputTokens: 1_000,
@@ -1154,7 +1154,7 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    const statusText = lastEntryText(streamId);
+    const statusText = lastEntryText(runId);
     expect(statusText).toContain('model access: Your own API keys');
     expect(statusText).not.toContain('model access: ChatGPT subscription');
     expect(overview).not.toHaveBeenCalled();

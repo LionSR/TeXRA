@@ -3,7 +3,7 @@
  * of the live workflow-script runs.
  *
  * Both sides speak one identity: the host UI targets a run's `agent()`
- * grandchild by its execution id (the same identity the child list, focus, and
+ * grandchild by its run id (the same identity the child list, focus, and
  * kill use), and {@link WorkflowScriptControl} takes that id directly. The
  * registry fans a request out to every registered run, so the one run that
  * currently owns that grandchild acts and the rest no-op, and it answers
@@ -15,7 +15,7 @@
  */
 
 import type { WorkflowScriptControl } from '@agent/workflowScript';
-import type { ExecutionId, WorkflowControlAction } from '@shared/schemas';
+import type { RunId, WorkflowControlAction } from '@shared/schemas';
 
 /** Session-owned set of the control handles of live workflow runs. */
 export class WorkflowControlRegistry {
@@ -36,10 +36,10 @@ export class WorkflowControlRegistry {
   }
 
   /**
-   * Skip or retry the in-flight grandchild `agent()` call with this execution
+   * Skip or retry the in-flight grandchild `agent()` call with this run
    * id. True when a live run owned it and acted; false when none did.
    */
-  control(grandchildId: ExecutionId, action: WorkflowControlAction): boolean {
+  control(grandchildId: RunId, action: WorkflowControlAction): boolean {
     let claimed = false;
     for (const control of this.runs) {
       if (control(grandchildId, action)) claimed = true;

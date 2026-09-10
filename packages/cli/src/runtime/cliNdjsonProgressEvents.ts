@@ -3,16 +3,15 @@ import type {
   AddOutputFilesPayload,
   AgentCategory,
   ConversationProgress,
-  GoalPausedPayload,
+  ExtendedTokenUsageStats,
   InquiryThreadUpdatedEvent,
   RoundStage,
   RunId,
-  StreamPhase,
-  StreamSubstate,
+  RunPhase,
+  RunSubstate,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
-  UpdateStreamUsagePayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
 
@@ -24,6 +23,14 @@ import type {
  */
 type StreamTabId = RunId;
 type ExecutionId = RunId;
+
+/** The frozen `updateStreamUsage` line: `storageKey` is the run the usage
+ *  belongs to, under the field name the 0.40 wire promised. */
+export interface UpdateStreamUsagePayload {
+  streamId: StreamTabId;
+  storageKey: ExecutionId;
+  usage: ExtendedTokenUsageStats;
+}
 
 // Derived rather than deep-imported from '@agent/core/state/TaskState', so the
 // cli host does not pin @agent's internal module layout for one payload type.
@@ -40,7 +47,7 @@ export interface CliNdjsonActiveChildRow {
   readonly kind: 'subagent' | 'process';
   readonly executionId: string;
   readonly agentName: string;
-  readonly status?: StreamPhase;
+  readonly status?: RunPhase;
   readonly startedAt?: number;
   readonly finishedAt?: number;
   readonly elapsed?: string | null;
@@ -82,17 +89,26 @@ export interface CliNdjsonProgressEventPayloads {
   setActiveStream: CliNdjsonSetActiveStreamPayload;
   updateStreamStatus: {
     streamId: StreamTabId;
-    status: StreamPhase;
+    status: RunPhase;
     /** Diagnostic transition cause retained for public output. */
     cause?: string;
     /** Previous phase before this update, for detecting transitions. */
-    previousStatus?: StreamPhase;
+    previousStatus?: RunPhase;
     /** Narrower in-flight display state for launch/resume overlays. */
-    substate?: StreamSubstate;
+    substate?: RunSubstate;
   };
-  addOutputFiles: AddOutputFilesPayload;
-  updateMissingOutputs: UpdateMissingOutputsPayload;
-  updateCompileFailures: UpdateCompileFailuresPayload;
+  addOutputFiles: {
+    streamId: StreamTabId;
+    filesByRound: AddOutputFilesPayload['filesByRound'];
+  };
+  updateMissingOutputs: {
+    streamId: StreamTabId;
+    filesByRound: UpdateMissingOutputsPayload['filesByRound'];
+  };
+  updateCompileFailures: {
+    streamId: StreamTabId;
+    filesByRound: UpdateCompileFailuresPayload['filesByRound'];
+  };
   setTaskState: {
     streamId: StreamTabId;
     executionId?: ExecutionId;
@@ -101,11 +117,11 @@ export interface CliNdjsonProgressEventPayloads {
   updateStreamUsage: UpdateStreamUsagePayload;
   /** Inquiry thread state changed (open, answered, dropped, or resume outcome).
    *  The internal edge is the asking run under the 0.40 key. */
-  inquiryThreadUpdated: Omit<InquiryThreadUpdatedEvent, 'parentStreamId'> & {
+  inquiryThreadUpdated: Omit<InquiryThreadUpdatedEvent, 'parentRunId'> & {
     readonly parentStreamId: StreamTabId | null;
   };
-  updateTodos: UpdateTodosPayload;
-  updatePlan: UpdatePlanPayload;
+  updateTodos: { streamId: StreamTabId; todos: UpdateTodosPayload['todos'] };
+  updatePlan: { streamId: StreamTabId; plan: UpdatePlanPayload['plan'] };
   updateConversationProgress: {
     streamId: StreamTabId;
     progress: ConversationProgress;
@@ -113,7 +129,7 @@ export interface CliNdjsonProgressEventPayloads {
   /** Round advance projected from stage.start with kind round. */
   updateRoundStage: { streamId: StreamTabId; roundStage: RoundStage };
   updateQueuedFollowUps: { streamId: StreamTabId };
-  goalPaused: GoalPausedPayload;
+  goalPaused: { streamId: StreamTabId };
   updateActiveSubagents: {
     parentStreamId: StreamTabId;
     children: CliNdjsonActiveChildRow[];

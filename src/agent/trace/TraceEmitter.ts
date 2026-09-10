@@ -229,7 +229,7 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Streams ───────────────────────────────────────────────────────
 
-  openStream(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
+  openRun(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
     const id = options.id ?? generateShortId();
     const phaseOnly = options.phaseOnly === true;
 
@@ -339,7 +339,7 @@ class StreamHandleImpl implements StreamHandle {
     private readonly phaseOnly: boolean,
     /**
      * Deferred `stream.start` emission (see `StreamOptions.deferStart`); null
-     * once started — eager streams are constructed already started. A deferred
+     * once started — eager runs are constructed already started. A deferred
      * stream finalized without content emits no events at all, while a
      * finalize that carries text emits the start/end pair so reasoning that
      * only arrives in the final response still lands as a single entry.

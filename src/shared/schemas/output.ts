@@ -6,7 +6,7 @@ import {
   LineCountSchema,
   type DiffStats,
 } from './lineChanges';
-import { ExecutionIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { RoundNumberSchema } from './roundIndexed';
 
 const WorkspaceFileLocationSchema = z.strictObject({
@@ -19,7 +19,7 @@ const RunStorageFileLocationSchema = z.strictObject({
   kind: z.literal('runStorage'),
   absolutePath: z.string(),
   relativePath: z.string(),
-  executionId: ExecutionIdSchema,
+  runId: RunIdSchema,
 });
 
 const ExternalFileLocationSchema = z.strictObject({
@@ -86,25 +86,25 @@ export function fileLocationShortDisplayPath(location: FileLocation): string {
 
 /**
  * Reference to a run-storage file the way an agent prompt addresses it:
- * `/executions/<executionId>/files/<relativePath>`. The one definition of that
+ * `/executions/<runId>/files/<relativePath>`. The one definition of that
  * convention.
  */
 export function runStorageFilePath(
-  executionId: string,
+  runId: string,
   relativePath: string,
 ): string {
-  return `/executions/${executionId}/files/${relativePath}`;
+  return `/executions/${runId}/files/${relativePath}`;
 }
 
 /**
  * How a location is addressed in text that leaves the UI — copied run context,
  * follow-up prompts, subagent results. A run-storage location carries the
- * execution that owns it, so its `/executions/...` route resolves without the
+ * run that owns it, so its `/executions/...` route resolves without the
  * caller supplying one; every other kind reads as its display path.
  */
 export function fileLocationAddressPath(location: FileLocation): string {
   return location.kind === 'runStorage'
-    ? runStorageFilePath(location.executionId, location.relativePath)
+    ? runStorageFilePath(location.runId, location.relativePath)
     : fileLocationDisplayPath(location);
 }
 
@@ -156,7 +156,7 @@ export const OutputFileInfoSchema = OutputFileSchema.extend({
 
 /**
  * Flattened projection of {@link OutputFileInfo} for agent results and
- * execution metadata. It keeps persisted workflow summaries independent from
+ * run metadata. It keeps persisted workflow summaries independent from
  * the richer file-location internals used while a run is active.
  */
 export const OutputFileSummarySchema = z.object({
@@ -235,7 +235,7 @@ export function finalWorkflowOutput(
 
 /**
  * Flattened projection of {@link CompileFailure} for agent results and
- * execution metadata.
+ * run metadata.
  */
 export const CompileFailureSummarySchema = z.object({
   round: RoundNumberSchema,

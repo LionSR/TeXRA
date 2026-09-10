@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { defaultSession } from '@agent/runtime';
-import { createLatexExecutionDiscovery } from '@agent/storage';
+import { createLatexRunDiscovery } from '@agent/storage';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
   prepareBuildDisplay,
@@ -28,7 +28,7 @@ import type {
 } from '@latex/latexdiff/types';
 import {
   normalizeRunLatexdiffOutputsByRound,
-  runLatexdiffForExecution,
+  runLatexdiffForRun,
 } from '@latex/latexdiff/runLatexdiff';
 import {
   latexdiffAllFailedMessage,
@@ -430,14 +430,14 @@ async function handleRunLatexdiff(
           });
           const session = defaultSession();
           return effectRuntime().runPromise(
-            runLatexdiffForExecution({
+            runLatexdiffForRun({
               snapshots: session.snapshots,
               filesystem: nodeFilesystem,
               ...config,
               outputsByRound,
               mathMarkup,
               generateBetweenRoundDiffs,
-              executionDiscovery: createLatexExecutionDiscovery(session),
+              runDiscovery: createLatexRunDiscovery(session),
               latexdiff: { channel: CHANNEL, service: latexdiffService },
               progress,
             }),

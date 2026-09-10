@@ -10,7 +10,7 @@ import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { OutputFileInfo } from '@shared/schemas';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
-import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.ts';
+import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 const mocks = createModuleMocks();
@@ -72,16 +72,16 @@ async function loadFileActions(options: {
     typeof import('@desktop/main/desktopProgressFileActions').DesktopProgressFileActions
   >;
   openBuildDisplay: ReturnType<typeof vi.fn>;
-  runLatexdiffForExecution: ReturnType<typeof vi.fn>;
+  runLatexdiffForRun: ReturnType<typeof vi.fn>;
   runDiff: ReturnType<typeof vi.fn>;
 }> {
   vi.resetModules();
 
   // The desktop adapter delegates the resolve + dispatch policy to the shared
-  // host-neutral `runLatexdiffForExecution`; mock it at that boundary so these
+  // host-neutral `runLatexdiffForRun`; mock it at that boundary so these
   // tests cover the desktop param-building + outcome-handling, not the core
   // (which `RunLatexdiff.vitest.ts` exercises in isolation).
-  const runLatexdiffForExecution = vi.fn(() =>
+  const runLatexdiffForRun = vi.fn(() =>
     options.throws
       ? Effect.fail(new Error('No workspace path found'))
       : Effect.succeed({
@@ -107,7 +107,7 @@ async function loadFileActions(options: {
     effectRuntime: () => ({ runPromise: Effect.runPromise }),
   }));
   mocks.doMock('@latex/latexdiff/runLatexdiff', () => ({
-    runLatexdiffForExecution,
+    runLatexdiffForRun,
   }));
   mocks.doMock('@latex/latexdiff', () => ({
     LaTeXdiffService: class {
@@ -137,9 +137,9 @@ async function loadFileActions(options: {
 
   const openBuildDisplay = vi.fn();
   const actions = new DesktopProgressFileActions(
-    createStubDesktopAgentExecutionHost({ openBuildDisplay }),
+    createStubDesktopAgentRunHost({ openBuildDisplay }),
     {
-      startExecution: vi.fn(),
+      startRun: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),
       session: { snapshots: { read: vi.fn() } } as unknown as SessionHandle,
     },
@@ -148,7 +148,7 @@ async function loadFileActions(options: {
   return {
     actions,
     openBuildDisplay,
-    runLatexdiffForExecution,
+    runLatexdiffForRun,
     runDiff,
   };
 }
@@ -162,7 +162,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
     const outcome: DiffRunOutcome = {
       results: [successResult(absolutePath('run', 'r1', 'main.tex'))],
     };
-    const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
+    const { actions, openBuildDisplay, runLatexdiffForRun, runDiff } =
       await loadFileActions({ outcome });
     const outputsByRound = {
       1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
@@ -173,11 +173,11 @@ describe('DesktopProgressFileActions latexdiff', () => {
       absolutePath('run', 'r1', 'main.tex'),
       {
         outputsByRound,
-        executionId: 'exec-1',
+        runId: 'exec-1',
       },
     );
 
-    expect(runLatexdiffForExecution).toHaveBeenCalledWith(
+    expect(runLatexdiffForRun).toHaveBeenCalledWith(
       expect.objectContaining({
         outputsByRound,
         runId: 'exec-1',
@@ -196,7 +196,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
     const outcome: DiffRunOutcome = {
       results: [successResult(absolutePath('workspace', 'main.tex'))],
     };
-    const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
+    const { actions, openBuildDisplay, runLatexdiffForRun, runDiff } =
       await loadFileActions({ outcome });
 
     await actions.diffAcceptedFilePair(
@@ -212,7 +212,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     );
 
-    expect(runLatexdiffForExecution).toHaveBeenCalledWith(
+    expect(runLatexdiffForRun).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'orchestrator',
         model: 'gpt-5',
@@ -230,7 +230,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
   });
 
   it('falls back to single-file latexdiff when the shared core finds no operations', async () => {
-    const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
+    const { actions, openBuildDisplay, runLatexdiffForRun, runDiff } =
       await loadFileActions({
         outcome: { results: [] },
         fallbackResult: {
@@ -250,7 +250,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     );
 
-    expect(runLatexdiffForExecution).toHaveBeenCalledOnce();
+    expect(runLatexdiffForRun).toHaveBeenCalledOnce();
     expect(runDiff).toHaveBeenCalledOnce();
     expectOpenedDiff(
       openBuildDisplay,
@@ -348,7 +348,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
   });
 
   it('threads the run output files into the shared core for scan resolution', async () => {
-    const { actions, runLatexdiffForExecution } = await loadFileActions({
+    const { actions, runLatexdiffForRun } = await loadFileActions({
       outcome: {
         results: [
           successResult(absolutePath('workspace', 'a.tex'), 'a_diff.tex'),
@@ -370,7 +370,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       },
     );
 
-    expect(runLatexdiffForExecution).toHaveBeenCalledWith(
+    expect(runLatexdiffForRun).toHaveBeenCalledWith(
       expect.objectContaining({ outputFiles: ['a.tex', 'b.tex'] }),
     );
   });

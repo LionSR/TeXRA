@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   aggregateId as qualifyAggregateId,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import type * as VSCode from 'vscode';
@@ -116,7 +116,7 @@ const { registerFileDecorations } =
 const { AbsoluteFS } = await import('@utils/files/absoluteFS');
 const vscode = await import('vscode');
 
-const streamId = 'stream:frontend-run-fact' as StreamTabId;
+const runId = 'stream:frontend-run-fact' as RunId;
 
 async function emitOutputFiles(
   session: ReturnType<typeof createTestSession>,
@@ -125,7 +125,7 @@ async function emitOutputFiles(
   session.publish([
     {
       type: 'addOutputFiles',
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('stream', runId),
       filesByRound: {
         1: [
           {
@@ -177,7 +177,7 @@ describe('output-file run fact frontend subscriptions', () => {
 
   it('badges run-fact output files and app-scoped workspace writes', async () => {
     const session = createTestSession();
-    publishTestRunStart(session, streamId);
+    publishTestRunStart(session, runId);
     const context = { subscriptions: [] };
     registerFileDecorations(
       context as unknown as VSCode.ExtensionContext,
@@ -218,7 +218,7 @@ describe('output-file run fact frontend subscriptions', () => {
     );
 
     const session = createTestSession();
-    publishTestRunStart(session, streamId);
+    publishTestRunStart(session, runId);
     const context = { subscriptions: [] };
     registerInlineCriticism(
       context as unknown as VSCode.ExtensionContext,

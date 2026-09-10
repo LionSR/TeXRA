@@ -15,17 +15,17 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
  * a default:
  *
  * - Bare Escape in the CLI TUI is a focus-scoped gesture — "stop only the
- *   focused stream" — so `stopStream` always detaches descendants instead of
- *   cascading into streams the user never focused
+ *   focused stream" — so `stopRun` always detaches descendants instead of
+ *   cascading into runs the user never focused
  *   (`packages/cli/src/chat/chatSessionController.ts`, #9009).
  * - Headless CLI shutdown always cascades: a detached child cannot outlive the
  *   exiting process, so honoring the toggle there would strand children
- *   without finalization (`packages/cli/src/runtime/runExecution.ts`).
+ *   without finalization (`packages/cli/src/runtime/executeCli.ts`).
  *
  * Host quit is a separate axis this toggle does not govern, and detaching does
  * not opt a child out of it: `detachActiveChildren` detaches a child from its
  * parent without untracking its handle, so the shared exit drain
- * (`settleLiveSessionExecutions`, #11355) still settles every tracked child on
+ * (`settleLiveSessionRuns`, #11355) still settles every tracked child on
  * the way out, on every host. The CLI additionally kills or interrupts them,
  * because the process that owns them is the one going away.
  *

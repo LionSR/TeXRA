@@ -79,14 +79,14 @@ describe('renderAnsiMarkdown', () => {
   it('renders common HTML formatting without leaking tags', () => {
     const plain = renderPlain(
       [
-        '<blockquote class="result"><strong data-kind="agent">Subagent <code title=tool>prover</code> finished execution abc:</strong>',
+        '<blockquote class="result"><strong data-kind="agent">Subagent <code title=tool>prover</code> finished run abc:</strong>',
         '',
         'Done.</blockquote>',
       ].join('\n'),
       { colorEnabled: false, width: 80 },
     );
 
-    expect(plain).toContain('│ Subagent `prover` finished execution abc:');
+    expect(plain).toContain('│ Subagent `prover` finished run abc:');
     expect(plain).toContain('│ Done.');
     expect(plain).not.toContain('<blockquote');
     expect(plain).not.toContain('<strong');

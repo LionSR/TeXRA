@@ -28,7 +28,7 @@ export type {
   Session,
   SessionView,
   StartInput,
-  StreamView,
+  RunView,
   TranscriptView,
 } from './effect/sessions.js';
 

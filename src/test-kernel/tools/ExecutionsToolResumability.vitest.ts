@@ -3,9 +3,9 @@ import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
@@ -15,10 +15,10 @@ const BASE_FLOW_RECORD: FlowRecord = {
 };
 
 async function writeRecord(
-  executionId: ExecutionId,
+  runId: RunId,
   record: unknown,
 ): Promise<void> {
-  await getExecutionStore(executionId).write(flowKey(executionId), record);
+  await getRunStore(runId).write(flowKey(runId), record);
 }
 
 describe('ExecutionsTool resumability fallback', () => {
@@ -29,11 +29,11 @@ describe('ExecutionsTool resumability fallback', () => {
   });
 
   it('does not label metadata-free resumable flow records as completed', async () => {
-    const executionId = 'abc123abc123' as ExecutionId;
-    await writeRecord(executionId, BASE_FLOW_RECORD);
+    const runId = 'abc123abc123' as RunId;
+    await writeRecord(runId, BASE_FLOW_RECORD);
 
     const result = await new ExecutionsTool().call({
-      path: `/executions/${executionId}`,
+      path: `/executions/${runId}`,
     });
 
     expect(result.status).toBe('executed');
@@ -42,20 +42,20 @@ describe('ExecutionsTool resumability fallback', () => {
   });
 
   it.each([
-    { pathSuffix: '', executionId: 'abc123abc124' },
-    { pathSuffix: '/conversation', executionId: 'abc123abc125' },
+    { pathSuffix: '', runId: 'abc123abc124' },
+    { pathSuffix: '/conversation', runId: 'abc123abc125' },
   ] as const)(
     'does not treat invalid metadata-free flow records as found (path suffix "$pathSuffix")',
-    async ({ pathSuffix, executionId: rawId }) => {
-      const executionId = rawId as ExecutionId;
-      await writeRecord(executionId, { ...BASE_FLOW_RECORD, shared: null });
+    async ({ pathSuffix, runId: rawId }) => {
+      const runId = rawId as RunId;
+      await writeRecord(runId, { ...BASE_FLOW_RECORD, shared: null });
 
       const result = await new ExecutionsTool().call({
-        path: `/executions/${executionId}${pathSuffix}`,
+        path: `/executions/${runId}${pathSuffix}`,
       });
 
       expect(result.status).toBe('error');
-      expect(result.error).toContain(`Execution not found: ${executionId}`);
+      expect(result.error).toContain(`Run not found: ${runId}`);
     },
   );
 });

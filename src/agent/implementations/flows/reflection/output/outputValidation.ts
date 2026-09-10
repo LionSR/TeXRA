@@ -46,7 +46,7 @@ export async function checkExpectedOutputs(
             outputLocation.absolutePath,
           );
           reportMissingOutputs(deps.logger, {
-            streamId: deps.runScope.streamId,
+            runId: deps.runScope.runId,
             round: currRound,
             missing,
             xmlFile: xmlExists ? outputLocation.absolutePath : null,
@@ -70,7 +70,7 @@ export async function checkExpectedOutputs(
       // distinguish "checked, all present" from "never reported".
       if (missing.length === 0) {
         emitRunFact(deps.logger, 'updateMissingOutputs', {
-          streamId: deps.runScope.streamId,
+          runId: deps.runScope.runId,
           filesByRound: { [currRound]: [] },
         });
       }

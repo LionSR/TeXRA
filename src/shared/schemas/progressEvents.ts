@@ -3,8 +3,7 @@ import type { z } from 'zod';
 import type { AgentCategory } from './agent';
 import type { RunId } from './identifiers';
 import type { FileLocation } from './output';
-import type { RoundKeyedOutputSidecarValueSchemas } from './streamState';
-import type { ExtendedTokenUsageStats } from './usage';
+import type { RoundKeyedOutputSidecarValueSchemas } from './runState';
 
 /**
  * Shared output-file, usage, goal-pause, and host-presentation payloads.
@@ -13,30 +12,22 @@ import type { ExtendedTokenUsageStats } from './usage';
  */
 
 export interface AddOutputFilesPayload {
-  streamId: RunId;
+  runId: RunId;
   filesByRound: z.infer<typeof RoundKeyedOutputSidecarValueSchemas.outputFiles>;
 }
 
 export interface UpdateMissingOutputsPayload {
-  streamId: RunId;
+  runId: RunId;
   filesByRound: z.infer<
     typeof RoundKeyedOutputSidecarValueSchemas.missingOutputs
   >;
 }
 
 export interface UpdateCompileFailuresPayload {
-  streamId: RunId;
+  runId: RunId;
   filesByRound: z.infer<
     typeof RoundKeyedOutputSidecarValueSchemas.compileFailures
   >;
-}
-
-/** The frozen NDJSON `updateStreamUsage` line: `storageKey` is the run the
- *  usage belongs to, under the field name the 0.40 wire promised. */
-export interface UpdateStreamUsagePayload {
-  streamId: RunId;
-  storageKey: RunId;
-  usage: ExtendedTokenUsageStats;
 }
 
 /**
@@ -44,7 +35,7 @@ export interface UpdateStreamUsagePayload {
  * leg. Hosts surface this so a paused goal is distinguishable from a hang.
  */
 export interface GoalPausedPayload {
-  streamId: RunId;
+  runId: RunId;
 }
 
 /**

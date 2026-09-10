@@ -79,7 +79,7 @@ import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import { runResumeExecution } from './resumeExecution';
+import { runResumeCommand } from './resumeRun';
 import { type CliContext } from '../runtime/cliContext';
 
 const log = createLog('orchestrate');
@@ -138,7 +138,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // This is one of the real interactive entry points (see
   // initInteractiveCliPlatform): most branches below mount the chat TUI
   // directly (chat/preset/setupAgentOverride) or hand off to
-  // runResumeExecution (which also mounts it), at which point the TUI takes
+  // runResumeCommand (which also mounts it), at which point the TUI takes
   // over signal ownership. The `help` and `exit` launcher actions below mount
   // nothing and return instead — the platform's own handler, still installed
   // by initInteractiveCliPlatform, covers those the same way it would a
@@ -344,7 +344,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         return result.exitCode;
       }
       case 'resume':
-        return runResumeExecution(context, action.id);
+        return runResumeCommand(context, action.id);
       case 'configure-settings': {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({

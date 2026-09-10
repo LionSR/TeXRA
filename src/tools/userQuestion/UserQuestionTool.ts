@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { classifyRejection } from '@agent/runtime/HostInteractions';
 import {
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
@@ -48,7 +48,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
 ) {
   const context = tryUseRunContext();
   requireInteractions('ask_user_question', context);
-  const streamId = getRunContextStreamId(context);
+  const runId = getRunContextRunId(context);
   const requestId = `user-question-${generateShortId()}`;
 
   logger.info('User question requested', {
@@ -60,7 +60,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     questions: input.questions,
     context: input.context ?? undefined,
     allowBypass: false,
-    streamId: streamId ?? '',
+    runId: runId ?? '',
   };
   const session = currentSession();
   const result = yield* hostPort(() =>

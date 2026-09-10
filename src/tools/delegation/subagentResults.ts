@@ -58,12 +58,12 @@ type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
  */
 function formatOutputFile(
   o: OutputFileSummary,
-  executionId: RunId,
+  runId: RunId,
   diffInfo?: ResultDiffSummary,
 ): string {
   const readPath =
     o.location === 'runStorage'
-      ? runStorageFilePath(executionId, o.relativePath)
+      ? runStorageFilePath(runId, o.relativePath)
       : o.absolutePath;
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
@@ -91,11 +91,11 @@ function formatOutputFile(
  */
 function formatWorkflowOutputs(
   outputs: OutputFileSummary[],
-  executionId: RunId,
+  runId: RunId,
   diffInfos?: ReadonlyMap<string, ResultDiffSummary>,
 ): string[] {
   const format = (o: OutputFileSummary): string =>
-    formatOutputFile(o, executionId, diffInfos?.get(o.absolutePath));
+    formatOutputFile(o, runId, diffInfos?.get(o.absolutePath));
   const rounds = unique(outputs.map((o) => o.round)).sort((a, b) => a - b);
   if (rounds.length <= 1) {
     return ['<output-files>', ...outputs.map(format), '</output-files>'];
@@ -152,7 +152,7 @@ export function formatSubagentDelivery(
   agentName: string,
   result: AgentFinalResult,
   options: {
-    executionId: RunId;
+    runId: RunId;
     memoryMisses?: readonly AttachedMemoryMiss[];
     wallTimeMs?: number;
     workingDirectory?: string;
@@ -176,7 +176,7 @@ export function formatSubagentDelivery(
       lines.push(
         ...formatWorkflowOutputs(
           result.outputs,
-          options.executionId,
+          options.runId,
           diffsByPath,
         ),
       );
@@ -206,7 +206,7 @@ export function formatSubagentDelivery(
   return formatChildRunDelivery(
     {
       tag: DELIVERY_TAG.subagentResult,
-      executionId: options.executionId,
+      runId: options.runId,
       attributes: [
         { name: 'agent', value: agentName },
         { name: 'category', value: result.category },
@@ -227,7 +227,7 @@ export function formatSubagentDelivery(
  * Format an error as a delivery message.
  */
 export function formatSubagentError(
-  executionId: string,
+  runId: string,
   agentName: string,
   err: unknown,
   options?: {
@@ -240,7 +240,7 @@ export function formatSubagentError(
   return formatChildRunError(
     {
       tag: DELIVERY_TAG.subagentError,
-      executionId,
+      runId,
       attributes: [
         { name: 'agent', value: agentName },
         { name: 'retryable', value: formatted.userRetryable },
@@ -279,7 +279,7 @@ export function formatFollowUpInstruction(instruction: string): string {
 /**
  * Build the structured result manifest for a finished subagent — the
  * machine-readable counterpart of {@link formatSubagentDelivery}'s XML.
- * Persisted to the execution KV store so later stages (orchestrator or a
+ * Persisted to the run KV store so later stages (orchestrator or a
  * workflow script) can chain on outputs/diffs/outcome as data instead of
  * parsing prose.
  */
@@ -370,7 +370,7 @@ function truncateDiff(diff: string, maxLines: number): string {
   return lines.slice(0, maxLines).join('\n') + '\n[... diff truncated]';
 }
 
-/** Info about a diff file written to the execution's run directory. */
+/** Info about a diff file written to the run's run directory. */
 interface DiffFileInfo {
   /** The relative path within the run directory (e.g. "diffs/chapter1.tex.diff"). */
   diffRelPath: string;
@@ -379,7 +379,7 @@ interface DiffFileInfo {
 }
 
 /**
- * Compute diffs for workflow output files and write them to the execution's
+ * Compute diffs for workflow output files and write them to the run's
  * run directory as `.diff` files. Returns a map from output absolutePath to
  * diff file info, so the delivery formatter can reference them by path.
  *
@@ -390,7 +390,7 @@ interface DiffFileInfo {
  * Files without an original (new files) or where reading fails are omitted.
  */
 export async function computeAndWriteWorkflowDiffs(
-  executionId: RunId,
+  runId: RunId,
   outputs: OutputFileSummary[],
 ): Promise<Map<string, DiffFileInfo>> {
   const results = new Map<string, DiffFileInfo>();
@@ -443,8 +443,8 @@ export async function computeAndWriteWorkflowDiffs(
 
   // Second pass: write diff files to disk.
   if (diffsToWrite.length > 0) {
-    const runDir = getRunDir(executionId);
-    await ensureRunDir(executionId);
+    const runDir = getRunDir(runId);
+    await ensureRunDir(runId);
     const diffsDir = path.join(runDir, 'diffs');
     await AbsoluteFS.ensureDir(diffsDir);
 
@@ -472,11 +472,11 @@ export interface BuiltSubagentResult {
 /**
  * Build a subagent's typed terminal result and persistence record.
  * For workflow results, computes latexdiffs and writes them as files to the
- * execution's run directory first — the delivery references diff file paths
+ * run's run directory first — the delivery references diff file paths
  * so the orchestrator can read them on demand via /executions/{id}/files/.
  */
 export async function buildSubagentResult(
-  executionId: RunId,
+  runId: RunId,
   agentName: string,
   result: AgentFlowResult,
   options: {
@@ -488,7 +488,7 @@ export async function buildSubagentResult(
   if (result.category === 'workflow' && result.outputs.length > 0) {
     try {
       diffInfos = await computeAndWriteWorkflowDiffs(
-        executionId,
+        runId,
         result.outputs,
       );
     } catch (err) {
@@ -496,7 +496,7 @@ export async function buildSubagentResult(
       // the orchestrator to read the output files directly.
       diffsUnavailable = toErrorMessage(err);
       deliveryLog.warn(
-        `Diff computation failed for ${executionId}: ${diffsUnavailable}`,
+        `Diff computation failed for ${runId}: ${diffsUnavailable}`,
       );
     }
   }

@@ -2,10 +2,10 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - stream state
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
-import { STREAM_PHASE, type TokenUsageStats } from '@shared/schemas';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { RUN_PHASE, type TokenUsageStats } from '@shared/schemas';
+import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
 
 /**
  * The tracker holds no state: it projects from the session status plane and
@@ -13,42 +13,42 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
  * `getRunUsage` read the real store serves.
  */
 function trackerOverStatusPlane(): {
-  status: StreamStatusMachine;
-  usageByStream: Map<string, Map<string, TokenUsageStats>>;
+  status: RunStatusMachine;
+  usageByRun: Map<string, Map<string, TokenUsageStats>>;
   tracker: StatusBarUsageTracker;
 } {
-  const status = new StreamStatusMachine(
+  const status = new RunStatusMachine(
     () => {},
     () => {},
   );
-  const usageByStream = new Map<string, Map<string, TokenUsageStats>>();
+  const usageByRun = new Map<string, Map<string, TokenUsageStats>>();
   const tracker = new StatusBarUsageTracker(status, {
-    getRunUsage: (stream) => usageByStream.get(stream) ?? new Map(),
+    getRunUsage: (stream) => usageByRun.get(stream) ?? new Map(),
   });
-  return { status, usageByStream, tracker };
+  return { status, usageByRun, tracker };
 }
 
-function startStream(status: StreamStatusMachine, streamId: string): void {
+function startStream(status: RunStatusMachine, runId: string): void {
   status.transition(
-    streamId,
-    STREAM_PHASE.RUNNING,
-    STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    runId,
+    RUN_PHASE.RUNNING,
+    RUN_TRANSITION_CAUSE.LIFECYCLE,
   );
 }
 
 function setRunUsage(
-  usageByStream: Map<string, Map<string, TokenUsageStats>>,
-  streamId: string,
+  usageByRun: Map<string, Map<string, TokenUsageStats>>,
+  runId: string,
   runs: Record<string, TokenUsageStats>,
 ): void {
-  usageByStream.set(streamId, new Map(Object.entries(runs)));
+  usageByRun.set(runId, new Map(Object.entries(runs)));
 }
 
 describe('StatusBarUsageTracker', () => {
-  it('reports zero usage for streams without a known in-flight status', () => {
-    const { usageByStream, tracker } = trackerOverStatusPlane();
+  it('reports zero usage for runs without a known in-flight status', () => {
+    const { usageByRun, tracker } = trackerOverStatusPlane();
 
-    setRunUsage(usageByStream, 'stream-a', {
+    setRunUsage(usageByRun, 'stream-a', {
       'run-a': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
     });
 
@@ -58,83 +58,83 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('sums the accumulated per-run usage of every in-flight stream', () => {
-    const { status, usageByStream, tracker } = trackerOverStatusPlane();
+    const { status, usageByRun, tracker } = trackerOverStatusPlane();
     startStream(status, 'stream-a');
     startStream(status, 'stream-b');
-    setRunUsage(usageByStream, 'stream-a', {
+    setRunUsage(usageByRun, 'stream-a', {
       'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
       'run-2': { cost: 0.02, inputTokens: 30, outputTokens: 40 },
     });
-    setRunUsage(usageByStream, 'stream-b', {
+    setRunUsage(usageByRun, 'stream-b', {
       'run-3': { cost: 0.04, inputTokens: 5, outputTokens: 6 },
     });
 
-    expect(tracker.activeStreamCount).toBe(2);
+    expect(tracker.activeRunCount).toBe(2);
     expect(tracker.totalUsage.cost).toBeCloseTo(0.07);
     expect(tracker.totalUsage.inputTokens).toBe(45);
     expect(tracker.totalUsage.outputTokens).toBe(66);
   });
 
   it('keeps counting a stream that waits for follow-up input', () => {
-    const { status, usageByStream, tracker } = trackerOverStatusPlane();
+    const { status, usageByRun, tracker } = trackerOverStatusPlane();
     startStream(status, 'stream-a');
-    setRunUsage(usageByStream, 'stream-a', {
+    setRunUsage(usageByRun, 'stream-a', {
       'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
     });
 
     status.transition(
       'stream-a',
-      STREAM_PHASE.WAITING,
-      STREAM_TRANSITION_CAUSE.WAIT,
+      RUN_PHASE.WAITING,
+      RUN_TRANSITION_CAUSE.WAIT,
     );
 
     // Waiting is in flight but not active: the spend stays in the tooltip
     // total while the spinner count drops to zero.
-    expect(tracker.activeStreamCount).toBe(0);
+    expect(tracker.activeRunCount).toBe(0);
     expect(tracker.totalUsage.cost).toBeCloseTo(0.01);
     expect(tracker.totalUsage.inputTokens).toBe(10);
   });
 
   it('drops a stream from the total once it reaches a final status', () => {
-    const { status, usageByStream, tracker } = trackerOverStatusPlane();
+    const { status, usageByRun, tracker } = trackerOverStatusPlane();
     startStream(status, 'stream-a');
-    setRunUsage(usageByStream, 'stream-a', {
+    setRunUsage(usageByRun, 'stream-a', {
       'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
     });
 
     status.transition(
       'stream-a',
-      STREAM_PHASE.COMPLETED,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      RUN_PHASE.COMPLETED,
+      RUN_TRANSITION_CAUSE.LIFECYCLE,
     );
 
-    expect(tracker.activeStreamCount).toBe(0);
+    expect(tracker.activeRunCount).toBe(0);
     expect(tracker.totalUsage.cost).toBe(0);
 
     // Resuming re-enters flight, and the store-accumulated usage — including
     // the earlier runs' — is projected again.
     status.transition(
       'stream-a',
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.RESUME,
+      RUN_PHASE.RUNNING,
+      RUN_TRANSITION_CAUSE.RESUME,
     );
     expect(tracker.totalUsage.cost).toBeCloseTo(0.01);
     expect(tracker.totalUsage.inputTokens).toBe(10);
     expect(tracker.totalUsage.outputTokens).toBe(20);
   });
 
-  it('counts only the streams the session status plane reports as active', () => {
+  it('counts only the runs the session status plane reports as active', () => {
     const { status, tracker } = trackerOverStatusPlane();
 
-    expect(tracker.activeStreamCount).toBe(0);
+    expect(tracker.activeRunCount).toBe(0);
 
     startStream(status, 'stream-a');
     startStream(status, 'stream-b');
-    expect(tracker.activeStreamCount).toBe(2);
+    expect(tracker.activeRunCount).toBe(2);
 
     // A stream cleared out of the status plane without a published phase
     // change stops being counted; there is no second copy to go stale.
-    status.clearStream('stream-b');
-    expect(tracker.activeStreamCount).toBe(1);
+    status.clearRun('stream-b');
+    expect(tracker.activeRunCount).toBe(1);
   });
 });

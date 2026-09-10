@@ -7,7 +7,7 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT } from '@cli/tui/ui/glyphs';
-import type { StreamView } from '@shared/session/sessionView';
+import type { RunView } from '@shared/session/sessionView';
 import { TOKENS_GENERATED } from '@shared/copy/workflowCall';
 import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -16,7 +16,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** The fold owns status meaning; terminal colors express only its tone. */
-export const CHILD_TONE_COLOR: Readonly<Record<StreamView['tone'], string>> =
+export const CHILD_TONE_COLOR: Readonly<Record<RunView['tone'], string>> =
   Object.freeze({
     running: COLOR_HINT,
     warning: COLOR_WARNING,

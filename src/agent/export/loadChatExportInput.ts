@@ -1,8 +1,8 @@
 /**
- * Host-neutral loader for a stored execution's chat export input.
+ * Host-neutral loader for a stored run's chat export input.
  *
  * Both the CLI (`texra history show <id> --export`) and the progress-view
- * toolbar export need to read the same execution triple (config,
+ * toolbar export need to read the same run triple (config,
  * conversation, meta) and assemble the same format-agnostic
  * {@link ChatExportInput} the markdown and LaTeX formatters consume (the HTML
  * export path uses `assembleTrace` instead), so the two hosts render a stored
@@ -21,26 +21,26 @@
 
 import { Effect } from 'effect';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
 import { redactDisplayValue } from '@logger/redaction';
-import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
+import type { RunId, RunMeta } from '@shared/schemas';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
 
 /**
- * Facts read from the execution store, plus the assembled
+ * Facts read from the run store, plus the assembled
  * {@link ChatExportInput} when both `config` and a non-empty `conversation`
  * are present. `exportInput` is `null` whenever there is nothing (or not
  * enough) to export; callers distinguish "nothing at all" from "something is
  * missing" using `meta`/`config`/`conversation` themselves.
  */
 export interface ChatExportLoadResult {
-  readonly meta: ExecutionMeta | null;
+  readonly meta: RunMeta | null;
   readonly config: AgentConfig | null;
   /** Normalized: `null` when absent *or* empty — an empty array never counts
    *  as "a conversation is present" (see module doc). */
@@ -70,14 +70,14 @@ function hasConversationMessages(
 }
 
 export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
-  id: ExecutionId,
+  id: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ChatExportLoadResult, Error> {
   const [config, conversationResult, meta] = yield* Effect.all(
     [
-      getExecutionRecords(session, id).readConfig(),
+      getRunRecords(session, id).readConfig(),
       readCompletedRunConversation(id, session),
-      getExecutionRecords(session, id).readMeta(),
+      getRunRecords(session, id).readMeta(),
     ],
     { concurrency: 3 },
   );

@@ -29,7 +29,7 @@ describe('createLifecycleHost registrations', () => {
     },
   );
 
-  // Join-with-deadline (moved from RunExecution.vitest.ts's pre-checkpoint
+  // Join-with-deadline (moved from ExecuteCli.vitest.ts's pre-checkpoint
   // shutdown bound): a handler that never settles is aborted at the phase
   // deadline, reported as a laggard, and the drain advances past it.
   it('aborts and advances past a handler that misses the phase deadline', async () => {

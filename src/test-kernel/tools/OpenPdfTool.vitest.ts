@@ -97,7 +97,7 @@ describe('OpenPdfTool', () => {
 
     const result = await withRunContext(
       createRunContext({
-        executionId: 'run-1',
+        runId: 'run-1',
       }),
       () =>
         tool.call({
@@ -112,7 +112,7 @@ describe('OpenPdfTool', () => {
         kind: 'runStorage',
         absolutePath: '/storage/executions/run-1/output.pdf',
         relativePath: 'output.pdf',
-        executionId: 'run-1',
+        runId: 'run-1',
       },
       preserveFocus: true,
     });
@@ -124,7 +124,7 @@ describe('OpenPdfTool', () => {
 
     const result = await withRunContext(
       createRunContext({
-        executionId: 'run-1',
+        runId: 'run-1',
         workingDirectory: 'relative-path',
       }),
       () => tool.call({ path: '/storage/executions/run-1/output.pdf' }),

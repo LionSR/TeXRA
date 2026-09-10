@@ -1,6 +1,6 @@
 import {
   forEachLiveSession,
-  settleLiveSessionExecutions,
+  settleLiveSessionRuns,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
@@ -26,7 +26,7 @@ function sessionRegistries() {
     for: (session: SessionHandle): AgentCliSessionRegistry => {
       let registry = registries.get(session);
       if (!registry) {
-        registry = new AgentCliSessionRegistry(session.executions);
+        registry = new AgentCliSessionRegistry(session.runs);
         registries.set(session, registry);
       }
       return registry;
@@ -54,7 +54,7 @@ export const claudeAgentSessionsFor = claudeAgentSessions.for;
 function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
     forEachLiveSession((session) => {
-      session.executions.killBackgroundProcesses();
+      session.runs.killBackgroundProcesses();
     });
   });
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
@@ -78,28 +78,28 @@ export interface RuntimeShutdownHooks {
   readonly flushArtifacts: ShutdownHandler;
   /** BEFORE handlers that require artifact persistence to have finished. */
   readonly afterFlushArtifacts?: readonly ShutdownHandler[];
-  /** ON handlers that run after live executions have settled. */
-  readonly afterExecutionSettlement?: readonly ShutdownHandler[];
+  /** ON handlers that run after live runs have settled. */
+  readonly afterRunSettlement?: readonly ShutdownHandler[];
 }
 
 /**
  * Register the cross-host runtime shutdown order with named host hooks.
  *
  * The ordering is load-bearing, not stylistic: of the handlers registered
- * *here*, `settleLiveSessionExecutions` must come first in the `ON` phase. A
+ * *here*, `settleLiveSessionRuns` must come first in the `ON` phase. A
  * quit has to leave a durable `CANCELLED` outcome and a released follow-up
  * lease before host teardown (`teardownDefaultSession()` /
  * `processResources.dispose()`) tears the session out from under it. Anything
- * that runs before settlement can leave a live execution's outcome
+ * that runs before settlement can leave a live run's outcome
  * un-persisted, which surfaces later as a run stuck in RUNNING with no owner.
  *
- * `afterExecutionSettlement` is the safe place to add work, precisely because
+ * `afterRunSettlement` is the safe place to add work, precisely because
  * it is registered after settlement by construction. Do not reorder these two
  * calls to get a hook in earlier.
  *
  * This constrains only this registrar's own ordering. A host may register its
  * own `ON` handler before calling here (the extension does, for Lean server
- * cleanup), which is fine as long as it does not touch execution state.
+ * cleanup), which is fine as long as it does not touch run state.
  *
  * Each host used to carry this rationale in its own inline comment; the three
  * copies were consolidated here by #11355.
@@ -114,12 +114,12 @@ export function registerRuntimeShutdownHandlers(
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, hooks.flushArtifacts);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterFlushArtifacts);
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-    hooks.runSettlement(settleLiveSessionExecutions(signal)),
+    hooks.runSettlement(settleLiveSessionRuns(signal)),
   );
   registerHandlers(
     lifecycle,
     SHUTDOWN_PHASE.ON,
-    hooks.afterExecutionSettlement,
+    hooks.afterRunSettlement,
   );
 }
 

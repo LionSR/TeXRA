@@ -5,7 +5,7 @@ import {
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
 } from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import { filterNotNullish } from '@utils/core';
 
 export interface WorkflowRunContextInput {
@@ -15,7 +15,7 @@ export interface WorkflowRunContextInput {
     readonly label: string;
     readonly model?: string;
     readonly modelLabel?: string;
-    readonly executionId?: string;
+    readonly runId?: string;
     readonly description?: string;
   };
   files: ReadonlyRoundIndexed<OutputFileInfo>;
@@ -47,7 +47,7 @@ export function formatWorkflowRunContext(
 
   const lines: (string | undefined)[] = [
     `Workflow run: ${model ? `${agent} (${model})` : agent}`,
-    stream.executionId ? `Execution: ${stream.executionId}` : undefined,
+    stream.runId ? `Run: ${stream.runId}` : undefined,
     stream.description ? `Goal: ${stream.description}` : undefined,
   ];
 

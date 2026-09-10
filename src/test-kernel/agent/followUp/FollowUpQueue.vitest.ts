@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId, RunId } from '@shared/schemas';
 
-const stream = (value: string) => value as StreamTabId;
+const stream = (value: string) => value as RunId;
 
 function liveFlowQueue(id: string) {
   const queues = new ToolUseFollowUpQueue();
-  const streamId = stream(id);
-  queues.claimLive(streamId, 'flow');
-  return { queues, id: streamId };
+  const runId = stream(id);
+  queues.claimLive(runId, 'flow');
+  return { queues, id: runId };
 }
 
 function childResult(deliveryId: string) {
@@ -162,16 +162,16 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('starts a new child generation for an authorized retry', () => {
     const queues = new ToolUseFollowUpQueue();
-    const executionId = 'retry-execution' as ExecutionId;
-    const id = stream(`stream#${executionId}`);
-    const first = queues.claimChildRun(id, executionId)!;
+    const runId = 'retry-run' as RunId;
+    const id = stream(`stream#${runId}`);
+    const first = queues.claimChildRun(id, runId)!;
     queues.release(first, 'terminal');
 
     expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
       kind: 'refused',
     });
 
-    const retry = queues.claimChildRun(id, executionId);
+    const retry = queues.claimChildRun(id, runId);
     expect(retry).toBeDefined();
     expect(retry?.kind).toBe('child');
     expect(
@@ -180,16 +180,16 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.hasLiveOwner(id)).toBe(true);
   });
 
-  it('refuses a child claim for an unrelated execution', () => {
+  it('refuses a child claim for an unrelated run', () => {
     const queues = new ToolUseFollowUpQueue();
-    const executionId = 'owned-execution' as ExecutionId;
-    const id = stream(`stream#${executionId}`);
-    const first = queues.claimChildRun(id, executionId)!;
+    const runId = 'owned-run' as RunId;
+    const id = stream(`stream#${runId}`);
+    const first = queues.claimChildRun(id, runId)!;
     queues.release(first, 'terminal');
 
     expect(() =>
-      queues.claimChildRun(id, 'unrelated-execution' as ExecutionId),
-    ).toThrow('does not belong to execution');
+      queues.claimChildRun(id, 'unrelated-run' as RunId),
+    ).toThrow('does not belong to run');
   });
 
   it('deletion invalidates a live generation', () => {
@@ -206,14 +206,14 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('refuses to rebuild entries after dispose', () => {
     const queues = new ToolUseFollowUpQueue();
-    const executionId = 'disposed-execution' as ExecutionId;
-    const childId = stream(`stream#${executionId}`);
+    const runId = 'disposed-run' as RunId;
+    const childId = stream(`stream#${runId}`);
     const liveId = stream('stream:disposed-live');
     queues.claimLive(liveId, 'flow');
     queues.dispose();
 
     expect(queues.claimLive(liveId, 'flow')).toBeUndefined();
-    expect(queues.claimChildRun(childId, executionId)).toBeUndefined();
+    expect(queues.claimChildRun(childId, runId)).toBeUndefined();
     expect(queues.claimRecovery(liveId, true)).toBeUndefined();
     expect(queues.submit(liveId, { text: 'late' }, 'recoverable')).toEqual({
       kind: 'refused',

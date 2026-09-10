@@ -121,14 +121,14 @@ function createApprovalHarness(): ApprovalHarness {
 function requestApproval(
   controller: ToolEditApprovalController,
   filePath: string,
-  streamId: string,
+  runId: string,
 ): Pick<StartedApproval, 'approval' | 'requestId'> {
   const request = toolEditApprovalRequest({
     path: filePath,
     originalContent: 'old\n',
     proposedContent: 'new\n',
     sourceTool: 'write_file',
-    streamId,
+    runId,
   });
   const approval = controller.requestApproval(request);
   activeApprovals.push(approval);
@@ -196,7 +196,7 @@ describe('VS Code tool edit approval', () => {
     );
 
     await expect(
-      controller.approvePendingForStream('stream-initializing'),
+      controller.approvePendingForRun('stream-initializing'),
     ).resolves.toBeUndefined();
     await expect(approval).resolves.toMatchObject({
       action: 'apply',
@@ -209,7 +209,7 @@ describe('VS Code tool edit approval', () => {
     const { approval, controller } = await startApproval();
 
     await expect(
-      controller.approvePendingForStream('stream-approval'),
+      controller.approvePendingForRun('stream-approval'),
     ).resolves.toBeUndefined();
     await expect(approval).resolves.toMatchObject({
       action: 'apply',
@@ -220,12 +220,12 @@ describe('VS Code tool edit approval', () => {
   it('keeps each session controller scoped to its own requests', async () => {
     const target = createApprovalHarness();
     const other = createApprovalHarness();
-    const { approval: targetStream } = requestApproval(
+    const { approval: targetRun } = requestApproval(
       target.controller,
       '/workspace/target.txt',
       'stream-target',
     );
-    const { approval: otherStream } = requestApproval(
+    const { approval: otherRun } = requestApproval(
       target.controller,
       '/workspace/other-stream.txt',
       'stream-other',
@@ -243,12 +243,12 @@ describe('VS Code tool edit approval', () => {
       ).toHaveLength(3),
     );
 
-    await target.controller.approvePendingForStream('stream-target');
-    await expect(targetStream).resolves.toMatchObject({ action: 'apply' });
+    await target.controller.approvePendingForRun('stream-target');
+    await expect(targetRun).resolves.toMatchObject({ action: 'apply' });
 
-    target.controller.cancel({ streamId: 'stream-other' });
-    other.controller.cancel({ streamId: 'stream-target' });
-    await expect(otherStream).resolves.toMatchObject({ action: 'reject' });
+    target.controller.cancel({ runId: 'stream-other' });
+    other.controller.cancel({ runId: 'stream-target' });
+    await expect(otherRun).resolves.toMatchObject({ action: 'reject' });
     await expect(otherSessionRequest).resolves.toMatchObject({
       action: 'reject',
     });
@@ -264,7 +264,7 @@ describe('VS Code tool edit approval', () => {
 
     controller.cancel({
       kind: 'toolEdit',
-      streamId: 'stream-initializing',
+      runId: 'stream-initializing',
       cause: 'Run ended.',
     });
 
@@ -280,7 +280,7 @@ describe('VS Code tool edit approval', () => {
 
     controller.cancel({
       kind: 'toolEdit',
-      streamId: 'stream-approval',
+      runId: 'stream-approval',
       cause: 'Stream resources released.',
     });
 

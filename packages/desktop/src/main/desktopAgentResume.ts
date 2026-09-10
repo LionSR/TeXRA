@@ -8,10 +8,10 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
+import { resumeRunWithRefusalNotice } from '@controllers/session/resumeRunPresentation';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
@@ -40,15 +40,15 @@ export class DesktopProcessResumeOwner {
     this.shuttingDown = true;
   }
 
-  tryResumeStream(
-    streamId: StreamTabId,
+  tryResumeRun(
+    runId: RunId,
     recovery?: RecoveryContinuation,
   ): Promise<boolean> {
     for (const session of this.options.sessions()) {
-      if (!session.transcripts.has(streamId)) continue;
+      if (!session.transcripts.has(runId)) continue;
       return Promise.resolve(
         runInSession(session, () =>
-          this.resumeDesktopStream(streamId, session, recovery),
+          this.resumeDesktopRun(runId, session, recovery),
         ),
       );
     }
@@ -61,14 +61,14 @@ export class DesktopProcessResumeOwner {
     return false;
   }
 
-  private async resumeDesktopStream(
-    streamId: StreamTabId,
+  private async resumeDesktopRun(
+    runId: RunId,
     session: SessionHandle,
     recovery: RecoveryContinuation | undefined,
   ): Promise<boolean> {
     let transcriptMissing = false;
     const isCancellationRequested = (): boolean => {
-      if (!transcriptMissing && !session.transcripts.has(streamId)) {
+      if (!transcriptMissing && !session.transcripts.has(runId)) {
         transcriptMissing = true;
       }
       return this.shuttingDown || transcriptMissing || !this.isOpen(session);
@@ -76,7 +76,7 @@ export class DesktopProcessResumeOwner {
     // The resident transcript index is a cache of this process; the stream may
     // have been deleted from the durable transcript store by another process
     // since it was loaded. Read the store before resuming: neither the lease
-    // (a deleted stream holds none) nor the execution lane (in-process only)
+    // (a deleted stream holds none) nor the run lane (in-process only)
     // sees that fact.
     if (isCancellationRequested()) return false;
     const result = await effectRuntime().runPromise(
@@ -87,16 +87,16 @@ export class DesktopProcessResumeOwner {
             catch: ensureError,
           });
           const exists =
-            yield* session.transcripts.hasAuthoritativeStream(streamId);
+            yield* session.transcripts.hasAuthoritativeRun(runId);
           if (!exists) return false;
-          return yield* resumeStreamWithRefusalNotice(streamId, {
+          return yield* resumeRunWithRefusalNotice(runId, {
             session,
             recovery,
             runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
             isCancellationRequested,
             executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
               launchDesktopAgent(
-                { kind: 'resume', config, executionId: id },
+                { kind: 'resume', config, runId: id },
                 { session },
                 { modelHandlerCompatibilityKey },
               ),
@@ -107,7 +107,7 @@ export class DesktopProcessResumeOwner {
     if (Exit.isSuccess(result)) return result.value;
     const error = Cause.squash(result.cause);
     if (isCancellationRequested()) return false;
-    this.logger.error(`Failed to resume desktop stream ${streamId}`, {
+    this.logger.error(`Failed to resume desktop stream ${runId}`, {
       data: toLogData(error),
     });
     const primaryError = primaryAgentError(error);

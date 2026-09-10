@@ -23,7 +23,7 @@ type BypassPermission = Extract<
 // concretely-typed helper (bound to the literal `BypassPermissionKind`, not
 // the generic `K`) gives the compiler a resolvable type to check against.
 function canBypassSession({ data }: BypassPermission): boolean {
-  return Boolean(data.allowBypass && data.streamId);
+  return Boolean(data.allowBypass && data.runId);
 }
 
 /** Per-kind grant wording: the menu item names only the kind it enables. */

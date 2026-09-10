@@ -402,7 +402,7 @@ const CORE_SETTING_ROWS: Record<
       command:
         'texra agents run <tool-use-agent> --instruction "dispatch two subagents"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/delegation/detachedChildRun.ts -> src/agent/runtime/childRunLoop.ts -> src/agent/runtime/childRunBudget.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/delegation/detachedChildRun.ts -> src/agent/runtime/childRunLoop.ts -> src/agent/runtime/childRunBudget.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
@@ -502,7 +502,7 @@ const CORE_SETTING_ROWS: Record<
     default: true,
     title: 'Parallel tool calls',
     description:
-      'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.',
+      'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts',
     ),
@@ -510,7 +510,7 @@ const CORE_SETTING_ROWS: Record<
       provider: 'openai',
       label: 'Parallel tool calls',
       description:
-        'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential execution.',
+        'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential run.',
     },
   }),
   // No `configTarget`: both runtime readers resolve the *merged* config value
@@ -526,7 +526,7 @@ const CORE_SETTING_ROWS: Record<
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
@@ -539,7 +539,7 @@ const CORE_SETTING_ROWS: Record<
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts -> src/agent/core/flows/ModelInvocationNode.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts -> src/agent/core/flows/ModelInvocationNode.ts',
     }),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
@@ -560,7 +560,7 @@ const CORE_SETTING_ROWS: Record<
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/openai/modelHandlerCodex.ts -> src/model/providerCapabilities.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/openai/modelHandlerCodex.ts -> src/model/providerCapabilities.ts',
     }),
     // This bucket controls snapshot/rebroadcast routing, not tab placement;
     // reuse it for the Subscriptions control because no subscriptions bucket exists.
@@ -737,7 +737,7 @@ const CORE_SETTING_ROWS: Record<
       command:
         'texra agents run <tool-use-agent> --instruction "answer a short question"',
       through:
-        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts',
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts',
     }),
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
@@ -827,7 +827,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
           command:
             'texra agents run <tool-use-agent> --instruction "run a shell command"',
           through:
-            'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> src/agent/runtime/SessionHandle.ts -> src/tools/approval/bashApproval.ts',
+            'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> src/agent/runtime/SessionHandle.ts -> src/tools/approval/bashApproval.ts',
         },
       },
     },
@@ -854,13 +854,13 @@ const GIT_AUTHOR_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "create a git commit"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/utils/system/execUtils.ts -> src/utils/system/gitAuthorEnv.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/utils/system/execUtils.ts -> src/utils/system/gitAuthorEnv.ts',
 } satisfies CliRuntimeReachability;
 const GIT_WORKTREE_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "delegate a task to a subagent"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/delegation/DelegationTools.ts -> src/tools/delegation/inputFields.ts -> src/utils/config/worktreeConfig.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/delegation/DelegationTools.ts -> src/tools/delegation/inputFields.ts -> src/utils/config/worktreeConfig.ts',
 } satisfies CliRuntimeReachability;
 const DETACH_SUBAGENTS_RUNTIME_REACHABILITY = {
   command: 'texra chat',
@@ -895,50 +895,50 @@ const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --model <openrouter-routable-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
 } satisfies CliRuntimeReachability;
 const KIMI_CODE_ROUTING_RUNTIME_REACHABILITY = {
   // Requires a Kimi Code API key (`texra chat` /key flow or KIMI_CODE_API_KEY).
   command:
     'texra agents run <tool-use-agent> --model kimi3 --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/model/kimiCodeSubscriptionRouting.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/model/kimiCodeSubscriptionRouting.ts',
 } satisfies CliRuntimeReachability;
 const PROVIDER_REGION_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --model <dashscope/minimax/moonshot/glm-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
 } satisfies CliRuntimeReachability;
 const PROVIDER_ENDPOINT_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --model <provider-model> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
 } satisfies CliRuntimeReachability;
 const CODEX_AGENT_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "launch a Codex subagent"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/codex.ts -> src/tools/codexConfig.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/codex.ts -> src/tools/codexConfig.ts',
 } satisfies CliRuntimeReachability;
 const CLAUDE_AGENT_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "launch a Claude Code subagent"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/claudeAgent.ts -> src/tools/claudeAgentConfig.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/claudeAgent.ts -> src/tools/claudeAgentConfig.ts',
 } satisfies CliRuntimeReachability;
 const TOOL_AVAILABILITY_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "use an external tool"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/agentToolResolution.ts -> src/tools/toolAvailability.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/agentToolResolution.ts -> src/tools/toolAvailability.ts',
 } satisfies CliRuntimeReachability;
 const TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "read a file outside the working directory"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/pathResolution.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/tools/pathResolution.ts',
 } satisfies CliRuntimeReachability;
 
 /**
@@ -957,7 +957,7 @@ const SKILL_AVAILABILITY_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/executeCli.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
 } satisfies CliRuntimeReachability;
 
 const GIT_AUTHOR_HONORED_BY = everyHost(

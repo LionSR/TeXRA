@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type { ExecutionId, FileOpResult } from '@shared/schemas';
+import type { RunId, FileOpResult } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -21,27 +21,27 @@ const log = createLog(CHANNEL);
  * are dereferenced so the snapshot is a self-contained copy.
  */
 export async function runPackRunDir(
-  executionId: ExecutionId,
+  runId: RunId,
   agent: string,
   model: string,
   inputFile: string,
 ): Promise<FileOpResult> {
   log.info(
-    `Packing runDir for execution ${executionId} (agent=${agent}, model=${model}, inputFile=${inputFile})`,
+    `Packing runDir for run ${runId} (agent=${agent}, model=${model}, inputFile=${inputFile})`,
   );
 
-  const runDirAbsolute = await findRunDir(executionId);
+  const runDirAbsolute = await findRunDir(runId);
   if (!runDirAbsolute) {
-    log.warn(`Run directory not found for execution ${executionId}`);
+    log.warn(`Run directory not found for run ${runId}`);
     return { status: 'noFiles' };
   }
 
   const baseName = inputFile ? path.parse(inputFile).name : 'run';
   const cleanAgent = getCleanAgentName(agent);
-  // Include an executionId fragment in the destination folder so two packs
+  // Include an runId fragment in the destination folder so two packs
   // of the same input+agent+model within the same second (the timestamp's
   // granularity) don't collide and silently merge via `errorOnExist: false`.
-  const idFragment = executionId.replaceAll('-', '').slice(0, 8);
+  const idFragment = runId.replaceAll('-', '').slice(0, 8);
   const destinationRelative = path.join(
     HISTORY_DIR,
     `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}_${idFragment}`,
@@ -68,15 +68,15 @@ export async function runPackRunDir(
  * from the progress-view toolbar.
  */
 export async function runCleanRunDir(
-  executionId: ExecutionId,
+  runId: RunId,
 ): Promise<FileOpResult> {
-  const runDirAbsolute = await findRunDir(executionId);
+  const runDirAbsolute = await findRunDir(runId);
   if (!runDirAbsolute) {
-    log.warn(`Run directory not found for execution ${executionId}`);
+    log.warn(`Run directory not found for run ${runId}`);
     return { status: 'noFiles' };
   }
 
-  log.info(`Removing runDir for execution ${executionId}: ${runDirAbsolute}`);
+  log.info(`Removing runDir for run ${runId}: ${runDirAbsolute}`);
 
   try {
     await platform().fs.delete(runDirAbsolute, { recursive: true });

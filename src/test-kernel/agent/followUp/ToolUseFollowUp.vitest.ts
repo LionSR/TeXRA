@@ -1,6 +1,5 @@
-import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { afterEach, describe, expect, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
 import {
@@ -8,9 +7,9 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { ToolUseFollowUpTarget } from '@agent/runtime/executionRegistry';
+import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
 function mockTryResume(): Mock<() => Promise<boolean>> {
@@ -42,168 +41,162 @@ function activeTarget(): ToolUseFollowUpTarget {
   };
 }
 
-const id = (value: string) => value as StreamTabId;
+const id = (value: string) => value as RunId;
 
 describe('submitFollowUp', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it.effect(
-    'uses the live child owner while waiting, between turns, and during a turn',
-    () =>
-      Effect.gen(function* () {
-        const streamId = id('stream:live-child');
-        const session = fakeSession({ kind: 'queue' });
-        const child = session.followUps.claimLive(streamId, 'child')!;
-        const tryResumeStream = mockTryResume();
+  it('uses the live child owner while waiting, between turns, and during a turn', async () => {
+    const runId = id('stream:live-child');
+    const session = fakeSession({ kind: 'queue' });
+    const child = session.followUps.claimLive(runId, 'child')!;
+    const tryResumeRun = mockTryResume();
 
-        for (const text of ['while waiting', 'between turns', 'during turn']) {
-          expect(
-            yield* submitFollowUp(streamId, text, {
-              session,
-              resumePort: { tryResumeStream },
-            }),
-          ).toMatchObject({ status: 'queued' });
-        }
-
-        expect(tryResumeStream).not.toHaveBeenCalled();
-        expect(
-          session.followUps
-            .queue(child)
-            .drainItems()
-            .map((item) => item.text),
-        ).toEqual(['while waiting', 'between turns', 'during turn']);
-      }),
-  );
-
-  it.effect('reports input admitted by a live flow as sent', () =>
-    Effect.gen(function* () {
-      const streamId = id('stream:live-flow');
-      const session = fakeSession(activeTarget());
-      const sent: StreamTabId[] = [];
-      session.followUps.onSent((sentStreamId) => sent.push(sentStreamId));
-      const flow = session.followUps.claimLive(streamId, 'flow')!;
-      const tryResumeStream = mockTryResume();
-
-      expect(
-        yield* submitFollowUp(streamId, 'during active turn', {
-          session,
-          resumePort: { tryResumeStream },
-        }),
-      ).toEqual({ status: 'sent' });
-
-      expect(tryResumeStream).not.toHaveBeenCalled();
-      expect(session.followUps.queue(flow).drainItems()).toMatchObject([
-        { text: 'during active turn' },
-      ]);
-      expect(sent).toEqual([streamId]);
-    }),
-  );
-
-  it.effect(
-    'does not report an automatic live-flow notification as user input',
-    () =>
-      Effect.gen(function* () {
-        const streamId = id('stream:live-flow-notification');
-        const session = fakeSession(activeTarget());
-        const sent: StreamTabId[] = [];
-        session.followUps.onSent((sentStreamId) => sent.push(sentStreamId));
-        const flow = session.followUps.claimLive(streamId, 'flow')!;
-
-        expect(
-          yield* submitFollowUp(streamId, 'child progress', {
+    for (const text of ['while waiting', 'between turns', 'during turn']) {
+      await expect(
+        Effect.runPromise(
+          submitFollowUp(runId, text, {
             session,
-            mode: 'live_notification',
+            resumePort: { tryResumeRun },
           }),
-        ).toEqual({ status: 'queued' });
+        ),
+      ).resolves.toMatchObject({ status: 'queued' });
+    }
 
-        expect(session.followUps.queue(flow).drainItems()).toMatchObject([
-          { text: 'child progress' },
-        ]);
-        expect(sent).toEqual([]);
-      }),
-  );
+    expect(tryResumeRun).not.toHaveBeenCalled();
+    expect(
+      session.followUps
+        .queue(child)
+        .drainItems()
+        .map((item) => item.text),
+    ).toEqual(['while waiting', 'between turns', 'during turn']);
+  });
 
-  it.effect(
-    'enqueues live notifications for a waiting parent without child owner',
-    () =>
-      Effect.gen(function* () {
-        const streamId = id('stream:waiting-notification');
-        const session = fakeSession({ kind: 'queue' });
-        const tryResumeStream = mockTryResume();
+  it('reports input admitted by a live flow as sent', async () => {
+    const runId = id('stream:live-flow');
+    const session = fakeSession(activeTarget());
+    const sent: RunId[] = [];
+    session.followUps.onSent((sentRunId) => sent.push(sentRunId));
+    const flow = session.followUps.claimLive(runId, 'flow')!;
+    const tryResumeRun = mockTryResume();
 
-        // Create a child-owned entry (simulates a running child loop), then
-        // release the lease so the entry exists but has no owner — the exact
-        // state of a WAITING parent queue after a child finishes its turn and
-        // a live_notification (progress update, execution event) arrives.
-        const child = session.followUps.claimLive(streamId, 'child')!;
-        session.followUps.release(child, 'recoverable');
-
-        // live_notification on a WAITING queue without child owner should enqueue
-        // without claiming recovery or triggering a stream resume.
-        const result = yield* submitFollowUp(streamId, 'child progress', {
+    await expect(
+      Effect.runPromise(
+        submitFollowUp(runId, 'during active turn', {
           session,
-          resumePort: { tryResumeStream },
-          mode: 'live_notification',
-        });
+          resumePort: { tryResumeRun },
+        }),
+      ),
+    ).resolves.toEqual({ status: 'sent' });
 
-        expect(result).toMatchObject({ status: 'queued' });
-        expect(tryResumeStream).not.toHaveBeenCalled();
-        expect(session.followUps.getAll(streamId)).toEqual(['child progress']);
+    expect(tryResumeRun).not.toHaveBeenCalled();
+    expect(session.followUps.queue(flow).drainItems()).toMatchObject([
+      { text: 'during active turn' },
+    ]);
+    expect(sent).toEqual([runId]);
+  });
+
+  it('does not report an automatic live-flow notification as user input', async () => {
+    const runId = id('stream:live-flow-notification');
+    const session = fakeSession(activeTarget());
+    const sent: RunId[] = [];
+    session.followUps.onSent((sentRunId) => sent.push(sentRunId));
+    const flow = session.followUps.claimLive(runId, 'flow')!;
+
+    await expect(
+      Effect.runPromise(
+        submitFollowUp(runId, 'child progress', {
+          session,
+          mode: 'live_notification',
+        }),
+      ),
+    ).resolves.toEqual({ status: 'queued' });
+
+    expect(session.followUps.queue(flow).drainItems()).toMatchObject([
+      { text: 'child progress' },
+    ]);
+    expect(sent).toEqual([]);
+  });
+
+  it('enqueues live notifications for a waiting parent without child owner', async () => {
+    const runId = id('stream:waiting-notification');
+    const session = fakeSession({ kind: 'queue' });
+    const tryResumeRun = mockTryResume();
+
+    // Create a child-owned entry (simulates a running child loop), then
+    // release the lease so the entry exists but has no owner — the exact
+    // state of a WAITING parent queue after a child finishes its turn and
+    // a live_notification (progress update, run event) arrives.
+    const child = session.followUps.claimLive(runId, 'child')!;
+    session.followUps.release(child, 'recoverable');
+
+    // live_notification on a WAITING queue without child owner should enqueue
+    // without claiming recovery or triggering a stream resume.
+    const result = await Effect.runPromise(
+      submitFollowUp(runId, 'child progress', {
+        session,
+        resumePort: { tryResumeRun },
+        mode: 'live_notification',
       }),
-  );
+    );
+
+    expect(result).toMatchObject({ status: 'queued' });
+    expect(tryResumeRun).not.toHaveBeenCalled();
+    expect(session.followUps.getAll(runId)).toEqual(['child progress']);
+  });
 
   it('claims one recovery and orders repeated submissions once', async () => {
-    const streamId = id('stream:recovery');
+    const runId = id('stream:recovery');
     const session = fakeSession({ kind: 'queue' });
     const barrier = createDeferred<boolean>();
     const claimed: unknown[] = [];
-    const tryResumeStream = vi.fn((_: StreamTabId, recovery: unknown) => {
+    const tryResumeRun = vi.fn((_: RunId, recovery: unknown) => {
       claimed.push(recovery);
       return barrier.promise;
     });
 
     const first = Effect.runPromise(
-      submitFollowUp(streamId, 'one', {
+      submitFollowUp(runId, 'one', {
         session,
-        resumePort: { tryResumeStream },
+        resumePort: { tryResumeRun },
       }),
     );
     const second = Effect.runPromise(
-      submitFollowUp(streamId, 'two', {
+      submitFollowUp(runId, 'two', {
         session,
-        resumePort: { tryResumeStream },
+        resumePort: { tryResumeRun },
       }),
     );
     const third = Effect.runPromise(
-      submitFollowUp(streamId, 'three', {
+      submitFollowUp(runId, 'three', {
         session,
-        resumePort: { tryResumeStream },
+        resumePort: { tryResumeRun },
       }),
     );
 
     await vi.waitFor(() => {
-      expect(tryResumeStream).toHaveBeenCalledTimes(1);
+      expect(tryResumeRun).toHaveBeenCalledTimes(1);
       expect(claimed).toHaveLength(1);
     });
     await expect(second).resolves.toEqual({ status: 'queued' });
     await expect(third).resolves.toEqual({ status: 'queued' });
-    expect(session.followUps.getAll(streamId)).toEqual(['one', 'two', 'three']);
+    expect(session.followUps.getAll(runId)).toEqual(['one', 'two', 'three']);
 
     barrier.resolve(true);
     await expect(first).resolves.toEqual({ status: 'queued' });
   });
 
   it('releases declined recovery after the submitting fiber is interrupted', async () => {
-    const streamId = id('stream:interrupted-submission');
+    const runId = id('stream:interrupted-submission');
     const session = fakeSession({ kind: 'queue' });
     const resumed = createDeferred<boolean>();
     const admitted = createDeferred<void>();
     const fiber = Effect.runFork(
-      submitFollowUp(streamId, 'keep this input', {
+      submitFollowUp(runId, 'keep this input', {
         session,
-        resumePort: { tryResumeStream: () => resumed.promise },
+        resumePort: { tryResumeRun: () => resumed.promise },
         onAdmitted: () => admitted.resolve(),
       }),
     );
@@ -212,181 +205,175 @@ describe('submitFollowUp', () => {
     resumed.resolve(false);
     await resumed.promise;
 
-    const successor = session.followUps.claimLive(streamId, 'child');
+    const successor = session.followUps.claimLive(runId, 'child');
     expect(successor).toBeDefined();
     expect(session.followUps.queue(successor!).getAll()).toEqual([
       'keep this input',
     ]);
   });
 
-  it.effect('starts recovery after the child generation releases', () =>
-    Effect.gen(function* () {
-      const streamId = id('stream:child-release');
-      const session = fakeSession({ kind: 'queue' });
-      const child = session.followUps.claimLive(streamId, 'child')!;
-      session.followUps.release(child, 'recoverable');
-      const tryResumeStream = mockTryResume();
+  it('starts recovery after the child generation releases', async () => {
+    const runId = id('stream:child-release');
+    const session = fakeSession({ kind: 'queue' });
+    const child = session.followUps.claimLive(runId, 'child')!;
+    session.followUps.release(child, 'recoverable');
+    const tryResumeRun = mockTryResume();
 
-      expect(
-        yield* submitFollowUp(streamId, 'continue', {
+    await expect(
+      Effect.runPromise(
+        submitFollowUp(runId, 'continue', {
           session,
-          resumePort: { tryResumeStream },
+          resumePort: { tryResumeRun },
         }),
-      ).toEqual({ status: 'queued' });
-      expect(tryResumeStream).toHaveBeenCalledTimes(1);
-    }),
-  );
+      ),
+    ).resolves.toEqual({ status: 'queued' });
+    expect(tryResumeRun).toHaveBeenCalledTimes(1);
+  });
 
-  it.effect(
-    'enqueues live notifications for children-running parent without recovery',
-    () =>
-      Effect.gen(function* () {
-        const streamId = id('stream:children-running-notification');
-        const session = fakeSession({ kind: 'queue' });
-        // Create a child-owned entry to simulate the parent having active children.
-        const child = session.followUps.claimLive(streamId, 'child')!;
-        // Release the child so the queue stays but loses its owner.
-        session.followUps.release(child, 'recoverable');
-        const tryResumeStream = mockTryResume();
+  it('enqueues live notifications for children-running parent without recovery', async () => {
+    const runId = id('stream:children-running-notification');
+    const session = fakeSession({ kind: 'queue' });
+    // Create a child-owned entry to simulate the parent having active children.
+    const child = session.followUps.claimLive(runId, 'child')!;
+    // Release the child so the queue stays but loses its owner.
+    session.followUps.release(child, 'recoverable');
+    const tryResumeRun = mockTryResume();
 
-        const result = yield* submitFollowUp(streamId, 'child update', {
-          session,
-          resumePort: { tryResumeStream },
-          mode: 'live_notification',
-        });
-
-        expect(result).toMatchObject({ status: 'queued' });
-        expect(tryResumeStream).not.toHaveBeenCalled();
-        expect(session.followUps.getAll(streamId)).toEqual(['child update']);
+    const result = await Effect.runPromise(
+      submitFollowUp(runId, 'child update', {
+        session,
+        resumePort: { tryResumeRun },
+        mode: 'live_notification',
       }),
-  );
+    );
 
-  it.effect(
-    'keeps children-running explicitly recoverable after child untracking',
-    () =>
-      Effect.gen(function* () {
-        const streamId = id('stream:children-running');
-        const session = fakeSession({ kind: 'queue' });
-        const tryResumeStream = mockTryResume();
+    expect(result).toMatchObject({ status: 'queued' });
+    expect(tryResumeRun).not.toHaveBeenCalled();
+    expect(session.followUps.getAll(runId)).toEqual(['child update']);
+  });
 
-        yield* submitFollowUp(streamId, 'child result', {
-          session,
-          resumePort: { tryResumeStream },
-        });
+  it('keeps children-running explicitly recoverable after child untracking', async () => {
+    const runId = id('stream:children-running');
+    const session = fakeSession({ kind: 'queue' });
+    const tryResumeRun = mockTryResume();
 
-        expect(tryResumeStream).toHaveBeenCalledTimes(1);
+    await Effect.runPromise(
+      submitFollowUp(runId, 'child result', {
+        session,
+        resumePort: { tryResumeRun },
       }),
-  );
+    );
 
-  it.effect(
-    'admits a child delivery to the retained queue after the parent completes',
-    () =>
-      Effect.gen(function* () {
-        const streamId = id('stream:retained-child-generation');
-        const session = fakeSession({ kind: 'queue' });
-        const parent = session.followUps.claimLive(streamId, 'flow')!;
-        session.followUps.release(parent, 'recoverable');
-        const deriveSpy = vi.spyOn(resumability, 'deriveResumability');
-        const tryResumeStream = mockTryResume();
+    expect(tryResumeRun).toHaveBeenCalledTimes(1);
+  });
 
-        expect(
-          yield* submitFollowUp(
-            streamId,
-            { text: 'retained child result', origin: 'subagent_result' },
-            {
-              session,
-              resumePort: { tryResumeStream },
-              mode: 'child_delivery',
-            },
-          ),
-        ).toEqual({ status: 'queued' });
+  it('admits a child delivery to the retained queue after the parent completes', async () => {
+    const runId = id('stream:retained-child-generation');
+    const session = fakeSession({ kind: 'queue' });
+    const parent = session.followUps.claimLive(runId, 'flow')!;
+    session.followUps.release(parent, 'recoverable');
+    const deriveSpy = vi.spyOn(resumability, 'deriveResumability');
+    const tryResumeRun = mockTryResume();
 
-        expect(deriveSpy).not.toHaveBeenCalled();
-        expect(session.followUps.getAll(streamId)).toEqual([
-          'retained child result',
-        ]);
-      }),
-  );
-
-  it.effect('refuses child delivery to a parent with no session', () =>
-    Effect.gen(function* () {
-      const streamId = id('stream:terminal-child-delivery');
-      const session = fakeSession({
-        kind: 'no_session',
-        streamStatus: 'completed',
-      });
-      const tryResumeStream = mockTryResume();
-
-      expect(
-        yield* submitFollowUp(
-          streamId,
-          { text: 'late child result', origin: 'subagent_result' },
+    await expect(
+      Effect.runPromise(
+        submitFollowUp(
+          runId,
+          { text: 'retained child result', origin: 'subagent_result' },
           {
             session,
-            resumePort: { tryResumeStream },
+            resumePort: { tryResumeRun },
             mode: 'child_delivery',
           },
         ),
-      ).toEqual({ status: 'failed', reason: 'not_resumable' });
-      expect(tryResumeStream).not.toHaveBeenCalled();
-    }),
-  );
+      ),
+    ).resolves.toEqual({ status: 'queued' });
 
-  it.effect(
-    'admits a replayed child delivery at most once and wakes at most once',
-    () =>
-      Effect.gen(function* () {
-        const streamId = id('stream:replay-child-delivery');
-        const session = fakeSession({ kind: 'queue' });
-        const tryResumeStream = mockTryResume();
-        const delivery = {
-          text: 'child result',
-          origin: 'subagent_result' as const,
-          deliveryId: 'exec-1:turn:1:delivery',
-        };
+    expect(deriveSpy).not.toHaveBeenCalled();
+    expect(session.followUps.getAll(runId)).toEqual([
+      'retained child result',
+    ]);
+  });
 
-        expect(
-          yield* submitFollowUp(streamId, delivery, {
+  it('refuses child delivery to a parent with no session', async () => {
+    const runId = id('stream:terminal-child-delivery');
+    const session = fakeSession({
+      kind: 'no_session',
+      runStatus: 'completed',
+    });
+    const tryResumeRun = mockTryResume();
+
+    await expect(
+      Effect.runPromise(
+        submitFollowUp(
+          runId,
+          { text: 'late child result', origin: 'subagent_result' },
+          {
             session,
-            resumePort: { tryResumeStream },
+            resumePort: { tryResumeRun },
+            mode: 'child_delivery',
+          },
+        ),
+      ),
+    ).resolves.toEqual({ status: 'failed', reason: 'not_resumable' });
+    expect(tryResumeRun).not.toHaveBeenCalled();
+  });
+
+  it('admits a replayed child delivery at most once and wakes at most once', async () => {
+    const runId = id('stream:replay-child-delivery');
+    const session = fakeSession({ kind: 'queue' });
+    const tryResumeRun = mockTryResume();
+    const delivery = {
+      text: 'child result',
+      origin: 'subagent_result' as const,
+      deliveryId: 'exec-1:turn:1:delivery',
+    };
+
+    await expect(
+      Effect.runPromise(
+        submitFollowUp(runId, delivery, {
+          session,
+          resumePort: { tryResumeRun },
+          mode: 'child_delivery',
+        }),
+      ),
+    ).resolves.toEqual({ status: 'queued' });
+    expect(tryResumeRun).toHaveBeenCalledTimes(1);
+
+    // A producer repeating the same logical result callback must not append
+    // another parent message nor trigger another parent wake.
+    for (let replay = 0; replay < 100; replay++) {
+      await expect(
+        Effect.runPromise(
+          submitFollowUp(runId, delivery, {
+            session,
+            resumePort: { tryResumeRun },
             mode: 'child_delivery',
           }),
-        ).toEqual({ status: 'queued' });
-        expect(tryResumeStream).toHaveBeenCalledTimes(1);
-
-        // A producer repeating the same logical result callback must not append
-        // another parent message nor trigger another parent wake.
-        for (let replay = 0; replay < 100; replay++) {
-          expect(
-            yield* submitFollowUp(streamId, delivery, {
-              session,
-              resumePort: { tryResumeStream },
-              mode: 'child_delivery',
-            }),
-          ).toEqual({ status: 'sent' });
-        }
-        expect(tryResumeStream).toHaveBeenCalledTimes(1);
-        expect(session.followUps.getAll(streamId)).toEqual(['child result']);
-      }),
-  );
+        ),
+      ).resolves.toEqual({ status: 'sent' });
+    }
+    expect(tryResumeRun).toHaveBeenCalledTimes(1);
+    expect(session.followUps.getAll(runId)).toEqual(['child result']);
+  });
 });
 
 describe('ToolUseFollowUpQueue claim exclusivity', () => {
   it('makes recovery-vs-child claims exclusive in either order', () => {
-    const streamId = id('stream:claim-race');
+    const runId = id('stream:claim-race');
     const recoveryFirst = new ToolUseFollowUpQueue();
     const submission = recoveryFirst.submit(
-      streamId,
+      runId,
       { text: 'recover' },
       'recoverable',
     );
     expect(submission).toMatchObject({ kind: 'queued' });
     expect(submission.kind === 'queued' && submission.lease).toBeTruthy();
-    expect(recoveryFirst.claimLive(streamId, 'child')).toBeUndefined();
+    expect(recoveryFirst.claimLive(runId, 'child')).toBeUndefined();
 
     const childFirst = new ToolUseFollowUpQueue();
-    expect(childFirst.claimLive(streamId, 'child')).toBeDefined();
-    expect(childFirst.claimRecovery(streamId)).toBeUndefined();
+    expect(childFirst.claimLive(runId, 'child')).toBeDefined();
+    expect(childFirst.claimRecovery(runId)).toBeUndefined();
   });
 });
 

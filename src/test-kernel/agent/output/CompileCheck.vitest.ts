@@ -14,7 +14,7 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import type { RunId, FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 // Local file imports
@@ -52,10 +52,10 @@ vi.mock('@latex/latexToolchain', () => ({
 }));
 
 /** Seeds a single round-0 `main.tex` output -- the common single-file case. */
-function seedMainTexOutput(executionId: ExecutionId) {
+function seedMainTexOutput(runId: RunId) {
   const outputState = createOutputState();
   ensureRoundData(outputState, 0).outputs = [
-    outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
+    outputFile(runId, path.join('r0', 'main.tex'), 'main.tex', 0),
   ];
   return outputState;
 }
@@ -64,9 +64,9 @@ const COMPILABLE_TEX =
   '\\documentclass{article}\\begin{document}Hi\\end{document}';
 
 /** Seeds a compilable round-0 `main.tex` on the fake FS. */
-async function seedCompilableMainTex(executionId: ExecutionId): Promise<void> {
+async function seedCompilableMainTex(runId: RunId): Promise<void> {
   await initLatexPlatform({
-    [path.join(runDir(executionId), 'r0', 'main.tex')]: COMPILABLE_TEX,
+    [path.join(runDir(runId), 'r0', 'main.tex')]: COMPILABLE_TEX,
   });
 }
 
@@ -89,15 +89,15 @@ describe('runCompileCheck', () => {
   });
 
   it('counts a per-file exception as a failure, never a silent skip', async () => {
-    const executionId = 'compile-exception';
+    const runId = 'compile-exception';
     // No file is seeded at the tex path, so AbsoluteFS.read throws ENOENT
     // before compileLatex2Pdf is ever invoked.
     await initLatexPlatform({});
 
-    const outputState = seedMainTexOutput(executionId);
+    const outputState = seedMainTexOutput(runId);
 
     const result = await runCompileCheck(
-      compileContext(executionId, outputState),
+      compileContext(runId, outputState),
       0,
     );
 
@@ -117,19 +117,19 @@ describe('runCompileCheck', () => {
   });
 
   it('treats a fragment with no \\documentclass as a graceful skip, not a failure', async () => {
-    const executionId = 'compile-fragment';
-    const texPath = path.join(runDir(executionId), 'r0', 'chunk.tex');
+    const runId = 'compile-fragment';
+    const texPath = path.join(runDir(runId), 'r0', 'chunk.tex');
     await initLatexPlatform({
       [texPath]: '\\section{Included fragment}\n',
     });
 
     const outputState = createOutputState();
     ensureRoundData(outputState, 0).outputs = [
-      outputFile(executionId, path.join('r0', 'chunk.tex'), 'chunk.tex', 0),
+      outputFile(runId, path.join('r0', 'chunk.tex'), 'chunk.tex', 0),
     ];
 
     const result = await runCompileCheck(
-      compileContext(executionId, outputState),
+      compileContext(runId, outputState),
       0,
     );
 
@@ -145,8 +145,8 @@ describe('runCompileCheck', () => {
   // through, unmodified, into the persisted failure excerpt -- it is not
   // read from disk a second time.
   it('sources the failing log tail from compileLatex2Pdf, not a separate disk read', async () => {
-    const executionId = 'compile-tail-passthrough';
-    await seedCompilableMainTex(executionId);
+    const runId = 'compile-tail-passthrough';
+    await seedCompilableMainTex(runId);
 
     // Zero-padded so containment checks below can't be fooled by numeric
     // substrings (e.g. "L0001" would otherwise match inside "L00010").
@@ -157,7 +157,7 @@ describe('runCompileCheck', () => {
     mocks.compileLatex2Pdf.mockResolvedValue({ ok: false, logTail });
 
     const result = await runCompileCheck(
-      compileContext(executionId, seedMainTexOutput(executionId)),
+      compileContext(runId, seedMainTexOutput(runId)),
       0,
     );
 
@@ -168,8 +168,8 @@ describe('runCompileCheck', () => {
   });
 
   it('truncates the combined excerpt to the last 12000 characters', async () => {
-    const executionId = 'compile-char-truncation';
-    await seedCompilableMainTex(executionId);
+    const runId = 'compile-char-truncation';
+    await seedCompilableMainTex(runId);
 
     // 150 lines * 101 chars (100 + newline) stays under the 200-line cap but
     // comfortably exceeds the 12000-character combined-excerpt limit once
@@ -186,7 +186,7 @@ describe('runCompileCheck', () => {
     });
 
     const result = await runCompileCheck(
-      compileContext(executionId, seedMainTexOutput(executionId)),
+      compileContext(runId, seedMainTexOutput(runId)),
       0,
     );
 
@@ -199,16 +199,16 @@ describe('runCompileCheck', () => {
   });
 
   it('clears a stale failure log once a later attempt at the same round succeeds', async () => {
-    const executionId = 'compile-stale-log';
-    await seedCompilableMainTex(executionId);
+    const runId = 'compile-stale-log';
+    await seedCompilableMainTex(runId);
 
     mocks.compileLatex2Pdf.mockResolvedValueOnce({
       ok: false,
       logTail: 'stale failure log',
     });
 
-    const outputState = seedMainTexOutput(executionId);
-    const ctx = compileContext(executionId, outputState);
+    const outputState = seedMainTexOutput(runId);
+    const ctx = compileContext(runId, outputState);
 
     const firstResult = await runCompileCheck(ctx, 0);
     expect(firstResult.compileResult?.status).toBe('failed');
@@ -232,15 +232,15 @@ describe('runCompileCheck', () => {
   });
 
   it('gives colliding-after-sanitization paths distinct, non-clobbering log slots', async () => {
-    const executionId = 'compile-collision';
+    const runId = 'compile-collision';
     // Both sanitize (non [a-zA-Z0-9._-] -> "_") to the same "dir_a_b.tex":
     // "dir/a:b.tex" (":" -> "_") and "dir/a_b.tex" ("/" -> "_", "_" already
     // allowed). Without a disambiguating hash, the second file's log write
     // would silently replace the first's.
     const pathA = path.join('r0', 'dir', 'a:b.tex');
     const pathB = path.join('r0', 'dir', 'a_b.tex');
-    const texPathA = path.join(runDir(executionId), pathA);
-    const texPathB = path.join(runDir(executionId), pathB);
+    const texPathA = path.join(runDir(runId), pathA);
+    const texPathB = path.join(runDir(runId), pathB);
     await initLatexPlatform({
       [texPathA]: '\\documentclass{article}\\begin{document}A\\end{document}',
       [texPathB]: '\\documentclass{article}\\begin{document}B\\end{document}',
@@ -253,12 +253,12 @@ describe('runCompileCheck', () => {
 
     const outputState = createOutputState();
     ensureRoundData(outputState, 0).outputs = [
-      outputFile(executionId, pathA, 'a:b.tex', 0),
-      outputFile(executionId, pathB, 'a_b.tex', 0),
+      outputFile(runId, pathA, 'a:b.tex', 0),
+      outputFile(runId, pathB, 'a_b.tex', 0),
     ];
 
     const result = await runCompileCheck(
-      compileContext(executionId, outputState),
+      compileContext(runId, outputState),
       0,
     );
 
@@ -280,8 +280,8 @@ describe('runCompileCheck', () => {
     // Simulates a bug in compileOne's own pre-compile bookkeeping (path/hash
     // computation), which runs before compileOne's internal try/catch and so
     // can only be caught by runCompileCheck's outer per-file backstop.
-    const executionId = 'compile-outer-backstop';
-    await seedCompilableMainTex(executionId);
+    const runId = 'compile-outer-backstop';
+    await seedCompilableMainTex(runId);
 
     const schemasModule = await import('@shared/schemas');
     const comparablePathSpy = vi
@@ -292,10 +292,10 @@ describe('runCompileCheck', () => {
 
     try {
       const relativePath = path.join('r0', 'main.tex');
-      const outputState = seedMainTexOutput(executionId);
+      const outputState = seedMainTexOutput(runId);
 
       const result = await runCompileCheck(
-        compileContext(executionId, outputState),
+        compileContext(runId, outputState),
         0,
       );
 
@@ -308,7 +308,7 @@ describe('runCompileCheck', () => {
       // resolvable path instead of a broken placeholder string.
       expect(failures[0].logRelativePath).toBe(relativePath);
       expect(failures[0].log).toEqual(
-        outputFile(executionId, relativePath, 'main.tex', 0).location,
+        outputFile(runId, relativePath, 'main.tex', 0).location,
       );
     } finally {
       comparablePathSpy.mockRestore();

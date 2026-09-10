@@ -156,6 +156,6 @@ export function runEventDraft(
 export function statusDraft(event: StatusEvent): SessionEventDraft {
   return {
     ...event,
-    aggregateId: qualifyAggregateId('run', event.streamId),
+    aggregateId: qualifyAggregateId('run', event.runId),
   };
 }

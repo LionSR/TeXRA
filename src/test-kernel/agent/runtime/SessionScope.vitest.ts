@@ -1,18 +1,17 @@
 import '@test/support/defaultSessionTestSetup';
 
-import { it } from '@effect/vitest';
-import { describe, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   MESSAGE_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   type Plan,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
@@ -23,101 +22,91 @@ import { createRecordingHost } from '../progressTestUtils';
 const plan: Plan = { objective: 'Scope session-owned state.' };
 
 describe('session-owned transcripts and follow-up queues', () => {
-  it.effect(
-    "writes run trace entries to the launching session's transcript store only",
-    () =>
-      Effect.gen(function* () {
-        const launching = createTestSession();
-        const sibling = createTestSession();
-        const streamId = 'stream:session-transcript-owner' as StreamTabId;
+  it("writes run trace entries to the launching session's transcript store only", async () => {
+    const launching = createTestSession();
+    const sibling = createTestSession();
+    const runId = 'stream:session-transcript-owner' as RunId;
 
-        try {
-          publishTestRunStart(launching, streamId);
-          yield* Effect.promise(() => launching.settlePublications());
-          const lease = yield* launching.transcripts.acquireRunResidency(
-            streamId,
-            streamId,
-          );
-          const handle = createRunTrace(lease);
-          const detach = launching.attachRunTrace(handle.trace, streamId);
-          try {
-            const output = handle.trace.openStream(
-              MESSAGE_TYPES.MODEL_RESPONSE,
-            );
-            output.append('owned by launching session');
-            output.finalize();
-            yield* Effect.promise(() => launching.settlePublications());
-
-            expect(
-              launching.transcripts
-                .get(streamId)
-                ?.getRange(0)
-                .map((entry) => entry.text),
-            ).toEqual(['owned by launching session']);
-            expect(sibling.transcripts.get(streamId)).toBeUndefined();
-            expect(defaultSession().transcripts.get(streamId)).toBeUndefined();
-          } finally {
-            detach();
-            handle.dispose();
-          }
-        } finally {
-          launching.dispose();
-          sibling.dispose();
-        }
-      }),
-  );
-
-  it.effect('commits partial streaming text when status closes the run', () =>
-    Effect.gen(function* () {
-      const session = createTestSession();
-      const streamId = 'stream:partial-status-close' as StreamTabId;
-      publishTestRunStart(session, streamId);
-      yield* Effect.promise(() => session.settlePublications());
-      const lease = yield* session.transcripts.acquireRunResidency(
-        streamId,
-        streamId,
+    try {
+      publishTestRunStart(launching, runId);
+      await launching.settlePublications();
+      const lease = await Effect.runPromise(
+        launching.transcripts.acquireRunResidency(runId, runId),
       );
       const handle = createRunTrace(lease);
-      const detach = session.attachRunTrace(handle.trace, streamId);
+      const detach = launching.attachRunTrace(handle.trace, runId);
       try {
-        const output = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-        output.append('partial text');
-        session.publishStatus({
-          type: 'status',
-          streamId,
-          phase: STREAM_PHASE.WAITING,
-          cause: 'wait',
-        });
-        yield* Effect.promise(() => session.settlePublications());
-        const entries = yield* session.transcripts.readEntries(streamId);
+        const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+        output.append('owned by launching session');
+        output.finalize();
+        await launching.settlePublications();
+
         expect(
-          entries
-            .filter(
-              (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
-            )
+          launching.transcripts
+            .get(runId)
+            ?.getRange(0)
             .map((entry) => entry.text),
-        ).toEqual(['partial text']);
+        ).toEqual(['owned by launching session']);
+        expect(sibling.transcripts.get(runId)).toBeUndefined();
+        expect(defaultSession().transcripts.get(runId)).toBeUndefined();
       } finally {
         detach();
         handle.dispose();
-        session.dispose();
       }
-    }),
-  );
+    } finally {
+      launching.dispose();
+      sibling.dispose();
+    }
+  });
+
+  it('commits partial streaming text when status closes the run', async () => {
+    const session = createTestSession();
+    const runId = 'stream:partial-status-close' as RunId;
+    publishTestRunStart(session, runId);
+    await session.settlePublications();
+    const lease = await Effect.runPromise(
+      session.transcripts.acquireRunResidency(runId, runId),
+    );
+    const handle = createRunTrace(lease);
+    const detach = session.attachRunTrace(handle.trace, runId);
+    try {
+      const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+      output.append('partial text');
+      session.publishStatus({
+        type: 'status',
+        runId,
+        phase: RUN_PHASE.WAITING,
+        cause: 'wait',
+      });
+      await session.settlePublications();
+      const entries = await Effect.runPromise(
+        session.transcripts.readEntries(runId),
+      );
+      expect(
+        entries
+          .filter((entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE)
+          .map((entry) => entry.text),
+      ).toEqual(['partial text']);
+    } finally {
+      detach();
+      handle.dispose();
+      session.dispose();
+    }
+  });
 
   it('keeps same-stream follow-up queues isolated by session', () => {
     const a = createTestSession();
     const b = createTestSession();
-    const streamId = 'stream:session-followups' as StreamTabId;
+    const runId = 'stream:session-followups' as RunId;
 
     try {
-      a.followUps.submit(streamId, { text: 'from a' }, 'recoverable');
-      b.followUps.submit(streamId, { text: 'from b' }, 'recoverable');
+      a.followUps.submit(runId, { text: 'from a' }, 'recoverable');
+      b.followUps.submit(runId, { text: 'from b' }, 'recoverable');
 
-      a.followUps.terminalize(streamId);
+      a.followUps.terminalize(runId);
 
-      expect(a.followUps.getAll(streamId)).toEqual([]);
-      expect(b.followUps.getAll(streamId)).toEqual(['from b']);
+      expect(a.followUps.getAll(runId)).toEqual([]);
+      expect(b.followUps.getAll(runId)).toEqual(['from b']);
     } finally {
       a.dispose();
       b.dispose();
@@ -131,20 +120,20 @@ describe('approval reset scope', () => {
     const b = createTestSession();
     const hostA = createRecordingHost();
     const hostB = createRecordingHost();
-    const streamId = 'stream:approval-scope' as StreamTabId;
+    const runId = 'stream:approval-scope' as RunId;
     a.interactions.use(hostA.interactions);
     b.interactions.use(hostB.interactions);
 
     try {
       const planA = a.interactions.requestPlanApproval({
         requestId: 'approval:a',
-        streamId,
+        runId,
         plan,
         goalEnabled: false,
       });
       const planB = b.interactions.requestPlanApproval({
         requestId: 'approval:b',
-        streamId,
+        runId,
         plan,
         goalEnabled: false,
       });
@@ -166,48 +155,48 @@ describe('approval reset scope', () => {
 });
 
 describe('sendFollowUp host-path session routing', () => {
-  it.effect(
-    'resolves the follow-up target against the passed session, not the process default',
-    () =>
-      Effect.gen(function* () {
-        const processSession = createTestSession();
-        const parentStream = 'stream:fu-parent' as StreamTabId;
+  it('resolves the follow-up target against the passed session, not the process default', async () => {
+    const processSession = createTestSession();
+    const parentRun = 'stream:fu-parent' as RunId;
 
-        try {
-          // A child run is tracked in the explicit process session, as desktop
-          // composition does instead of using the module default.
-          processSession.executions.track(
-            testExecutionHandle({
-              executionId: 'exec:fu-child',
-              parentStreamId: parentStream,
-              childStreamId: 'stream:fu-child' as StreamTabId,
-              agent: 'orchestrator',
-            }),
-          );
+    try {
+      // A child run is tracked in the explicit process session, as desktop
+      // composition does instead of using the module default.
+      processSession.runs.track(
+        testRunHandle({
+          runId: 'exec:fu-child',
+          parentRunId: parentRun,
+          childRunId: 'stream:fu-child' as RunId,
+          agent: 'orchestrator',
+        }),
+      );
 
-          // A host-path caller (outside any run ALS, like the desktop IPC handler)
-          // that passes its process session sees the live child and queues.
-          expect(
-            yield* submitFollowUp(parentStream, 'continue', {
-              session: processSession,
-              resumePort: { tryResumeStream: async () => false },
-            }),
-          ).toEqual({ status: 'queued', wake: 'failed' });
+      // A host-path caller (outside any run ALS, like the desktop IPC handler)
+      // that passes its process session sees the live child and queues.
+      await expect(
+        Effect.runPromise(
+          submitFollowUp(parentRun, 'continue', {
+            session: processSession,
+            resumePort: { tryResumeRun: async () => false },
+          }),
+        ),
+      ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
-          // The default session does not own this run; selecting the actual
-          // session is required for desktop follow-up delivery.
-          expect(
-            yield* submitFollowUp(parentStream, 'continue', {
-              session: defaultSession(),
-            }),
-          ).toEqual({
-            status: 'failed',
-            reason: 'not_resumable',
-          });
-        } finally {
-          processSession.followUps.terminalize(parentStream);
-          processSession.dispose();
-        }
-      }),
-  );
+      // The default session does not own this run; selecting the actual
+      // session is required for desktop follow-up delivery.
+      await expect(
+        Effect.runPromise(
+          submitFollowUp(parentRun, 'continue', {
+            session: defaultSession(),
+          }),
+        ),
+      ).resolves.toEqual({
+        status: 'failed',
+        reason: 'not_resumable',
+      });
+    } finally {
+      processSession.followUps.terminalize(parentRun);
+      processSession.dispose();
+    }
+  });
 });

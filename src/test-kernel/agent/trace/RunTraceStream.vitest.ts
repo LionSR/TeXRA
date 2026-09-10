@@ -17,8 +17,8 @@ function streamEntries(store: StreamLog): StreamLogEntry[] {
 
 function openDeferredThinking(
   logger: AgentTrace,
-): ReturnType<AgentTrace['openStream']> {
-  return logger.openStream(MESSAGE_TYPES.THINKING, { deferStart: true });
+): ReturnType<AgentTrace['openRun']> {
+  return logger.openRun(MESSAGE_TYPES.THINKING, { deferStart: true });
 }
 
 /** Run against a fresh, test-local store. */
@@ -37,9 +37,9 @@ describe('AgentTrace stream output', () => {
     vi.useRealTimers();
   });
 
-  it('materializes streams at stream start, before any delta', () => {
+  it('materializes runs at stream start, before any delta', () => {
     withStore((store, logger) => {
-      const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+      const thinking = logger.openRun(MESSAGE_TYPES.THINKING);
 
       // The running entry exists immediately — the CLI keys its "model is
       // thinking" indicator off it, and hidden reasoning may never emit a
@@ -107,11 +107,11 @@ describe('AgentTrace stream output', () => {
     });
   });
 
-  it('announces phase boundaries without content for phase-only streams', () => {
+  it('announces phase boundaries without content for phase-only runs', () => {
     withStore((store, logger) => {
       // Workflow runs hide the response text (it is extracted and logged
       // separately) but still announce that the response phase started.
-      const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+      const output = logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
         deferStart: true,
         phaseOnly: true,
       });
@@ -134,11 +134,11 @@ describe('AgentTrace stream output', () => {
     });
   });
 
-  it('accumulates disabled progress streams without scheduled updates', () => {
+  it('accumulates disabled progress runs without scheduled updates', () => {
     vi.useFakeTimers();
 
     withStore((store, logger) => {
-      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+      const stream = logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
         progressViewEnabled: false,
       });
 

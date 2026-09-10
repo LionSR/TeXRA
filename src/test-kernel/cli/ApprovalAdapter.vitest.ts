@@ -60,7 +60,7 @@ import {
   RUN_OUTCOME,
   type AgentProposalPermission,
   type RetryPermission,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
@@ -107,7 +107,7 @@ function agentProposal(
 ): AgentProposalPermission {
   const base = {
     requestId: 'proposal-1',
-    streamId: 'root@deepseekT#abc',
+    runId: 'root@deepseekT#abc',
     agent: 'review',
     model: 'deepseekT',
     instruction: 'Please check this proof.',
@@ -156,7 +156,7 @@ function trackPromptEvents(): {
 
 const credentialExhaustedRetry: RetryPermission = {
   requestId: 'upstream-credit-retry',
-  streamId: 'test-stream' as RetryPermission['streamId'],
+  runId: 'test-stream' as RetryPermission['runId'],
   operation: 'Model request',
   errorMessage: 'HTTP 429 Too Many Requests',
   errorDetails: {
@@ -205,7 +205,7 @@ describe('shared retry and human-input decisions', () => {
       const result = yield* Effect.promise(async () =>
         createHeadlessCliHostInteractions(ctx).requestRetry?.({
           requestId: 'transient-retry',
-          streamId: 'test-stream' as StreamTabId,
+          runId: 'test-stream' as RunId,
           operation: 'Model request',
           errorMessage: 'stream dropped before first token',
         }),
@@ -364,7 +364,7 @@ describe('approval prompt hooks', () => {
           threadId: 'ei_aabbccdd0011',
           question: 'May I ask an external model to verify this proof?',
           allowBypass: false,
-          streamId: 'root@deepseekT#abc',
+          runId: 'root@deepseekT#abc',
           sessionLinks: null,
           transcript: null,
         }),
@@ -387,7 +387,7 @@ describe('approval prompt hooks', () => {
 describe('requestRetry classification (#7331)', () => {
   const retryRequest: HostRetryRequest = {
     requestId: 'headless-retry',
-    streamId: 'root@deepseekT#abc' as StreamTabId,
+    runId: 'root@deepseekT#abc' as RunId,
     operation: 'Model invocation',
     errorMessage: 'stream dropped before first token',
   };
@@ -526,7 +526,7 @@ class RepresentativeFailingProviderNode extends ModelInvocationNode<BaseCycleFie
 
   constructor(
     private readonly interactions: HostInteractions,
-    private readonly streamId: StreamTabId,
+    private readonly runId: RunId,
   ) {
     super({
       operationName: 'Model invocation',
@@ -557,8 +557,8 @@ class RepresentativeFailingProviderNode extends ModelInvocationNode<BaseCycleFie
 
   override async retryPrompt(): Promise<boolean> {
     const result = await this.interactions.requestRetry?.({
-      requestId: `retry-${this.streamId}`,
-      streamId: this.streamId,
+      requestId: `retry-${this.runId}`,
+      runId: this.runId,
       operation: 'Model invocation',
       errorMessage: 'permanent provider failure',
     });
@@ -567,20 +567,20 @@ class RepresentativeFailingProviderNode extends ModelInvocationNode<BaseCycleFie
 }
 
 describe('bounded yolo retry batches (#9532)', () => {
-  it.effect('stops two representative streams after one automatic batch', () =>
+  it.effect('stops two representative runs after one automatic batch', () =>
     Effect.gen(function* () {
-      // Representative streams share the session's CLI policy adapter. This
+      // Representative runs share the session's CLI policy adapter. This
       // proves stream-agnostic bounding, not delegation inheritance.
       const interactions = createHeadlessCliHostInteractions(
         context({ approvalPolicy: 'yolo' }),
       );
       const first = new RepresentativeFailingProviderNode(
         interactions,
-        'representative-a' as StreamTabId,
+        'representative-a' as RunId,
       );
       const second = new RepresentativeFailingProviderNode(
         interactions,
-        'representative-b' as StreamTabId,
+        'representative-b' as RunId,
       );
 
       const firstError = yield* Effect.flip(
@@ -961,7 +961,7 @@ describe('buildAgentProposalApprovalContent', () => {
     expect(summary).toContain('Instruction:');
     expect(summary).toContain('  Please verify the proof carefully.');
     expect(summary).not.toContain('requestId');
-    expect(summary).not.toContain('streamId');
+    expect(summary).not.toContain('runId');
     expect(summary).not.toContain('{');
     expect(details).toBeUndefined();
   });

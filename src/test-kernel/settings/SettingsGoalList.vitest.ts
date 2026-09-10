@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
@@ -24,8 +24,8 @@ vi.mock('vscode', async (importOriginal) => {
   };
 });
 
-const STREAM_ID = 'stream:settings-goal-list' as StreamTabId;
-const GOAL_KEY = `goals:byStream:${STREAM_ID}`;
+const STREAM_ID = 'stream:settings-goal-list' as RunId;
+const GOAL_KEY = `goals:byRun:${STREAM_ID}`;
 
 /**
  * The real constructor wires channel/viewName and the history watcher from

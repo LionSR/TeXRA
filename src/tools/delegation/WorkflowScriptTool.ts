@@ -3,15 +3,15 @@ import { z } from 'zod';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
-import { getExecutionStore, getExecutionRecords } from '@agent/storage';
+import { getRunStore, getRunRecords } from '@agent/storage';
 import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
   readWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
 import { runInSession, withRunContext } from '@agent/runtime/RunContext';
-import { registerExecution } from '@agent/storage/executionLifecycle';
-import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
+import { registerRun } from '@agent/storage/runLifecycle';
+import { RunLeaseActiveError } from '@agent/storage/runLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -39,8 +39,8 @@ import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { deriveExecutionId } from '@utils/core/idHash';
-import { childStreamDescription, createChildStream } from './childStream';
+import { deriveRunId } from '@utils/core/idHash';
+import { childRunDescription, createChildRun } from './childRun';
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
@@ -193,13 +193,13 @@ export class WorkflowScriptTool extends defineTool({
   // roster is what the description advertises.
   availabilityCategory: 'workflow',
   slow: true,
-  description: `Run a deterministic JavaScript workflow that coordinates workflow agents and tool-use agents in parallel. Workflow agent calls (with inputFiles) resolve to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files they produced, never prose. Tool-use agent calls (with agentName, model, schema) resolve to a structured JSON result via agent().structured: use these for analysis, code edits, test runs, and any task that benefits from a focused interactive agent rather than a whole-document rewriter. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before execution and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.
+  description: `Run a deterministic JavaScript workflow that coordinates workflow agents and tool-use agents in parallel. Workflow agent calls (with inputFiles) resolve to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files they produced, never prose. Tool-use agent calls (with agentName, model, schema) resolve to a structured JSON result via agent().structured: use these for analysis, code edits, test runs, and any task that benefits from a focused interactive agent rather than a whole-document rewriter. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before run and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.
 
 Script input: every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
 
 Script rules:
 - Meta: start with an export const meta object containing name and description. No imports or require: only the injected primitives exist: agent, phase, log, parallel, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
-- Tasks: when the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent.
+- Tasks: when the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before run. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent.
 - Files: the tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is required unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Structured (tool-use) agent() calls do not accept file options.
 - Calls: every call may use agentName (another visible workflow or tool-use agent; defaults to this tool's agent field) and model (an available model short name for this call); omit model to follow ordinary delegation policy. A call without meta.tasks may also use id, label, and phase. Its logical identity is the explicit id when present, otherwise its call ordinal. Logical ids must be unique. Canonical labels prefer an explicit label, then a meaningful file and agent, then agent role and ordinal.
 - Awaiting: agent() and parallel() return Promises: await them. Use ordinary JavaScript loops and awaited calls for sequential stages.
@@ -207,7 +207,7 @@ Script rules:
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
-Async: this tool returns immediately with an execution ID and runs the workflow as its own detached execution. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Check intermediate progress with the executions tool (path=/executions/<id>, action=wait).
+Async: this tool returns immediately with a run ID and runs the workflow as its own detached run. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Check intermediate progress with the executions tool (path=/executions/<id>, action=wait).
 
 Example:
 export const meta = {
@@ -276,8 +276,8 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           script = input.script as string;
           const submissionId =
             callContext.toolCallId ??
-            deriveExecutionId({
-              parentExecutionId: runScope.executionId,
+            deriveRunId({
+              parentRunId: runScope.runId,
               script,
             });
           scriptPath = yield* Effect.tryPromise({
@@ -322,10 +322,10 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         const checkpointId = deriveWorkflowScriptCheckpointId({
           name: meta.name,
           defaultAgent: defaultAgent.name,
-          parentExecutionId: runScope.executionId,
+          parentRunId: runScope.runId,
         });
         const store = runInSession(runScope.session, () =>
-          getExecutionStore(runScope.executionId),
+          getRunStore(runScope.runId),
         );
         const files = yield* runPhase(async () => {
           const priorCheckpoint =
@@ -349,12 +349,12 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           return withScriptReference(oversizedBibRejection, scriptPath);
         }
 
-        // The run executionId is deterministic from the checkpoint identity, NOT a
+        // The run runId is deterministic from the checkpoint identity, NOT a
         // fresh random id: a relaunch with the same meta.name regenerates the same
         // run id, so registration, stream, and grandchildren re-root at one stable
         // anchor and resume still replays completed calls (#8712). The journal
         // itself stays on the orchestrator store, where the checkpoint lives.
-        const runExecutionId = deriveExecutionId({ checkpointId });
+        const runId = deriveRunId({ checkpointId });
 
         // Captured now, while the launching tool call's ALS frame is live, so the
         // detached run can still roll its cost into the parent after this call
@@ -422,7 +422,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           try: () =>
             requestDelegationProposal(
               proposal,
-              runScope.executionId,
+              runScope.runId,
               runScope.session,
               parent,
             ),
@@ -435,15 +435,15 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         );
         if (declined) return withScriptReference(declined, scriptPath);
 
-        // Preserve the committed workflow snapshot when reopening this named execution.
-        const runStore = getExecutionRecords(runScope.session, runExecutionId);
+        // Preserve the committed workflow snapshot when reopening this named run.
+        const runStore = getRunRecords(runScope.session, runId);
         const priorMeta = yield* runStore
           .readMeta()
           .pipe(
             Effect.mapError((error) =>
               workflowScriptToolError(
                 new ToolError(
-                  `Failed to launch workflow script '${meta.name}': prior workflow execution snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
+                  `Failed to launch workflow script '${meta.name}': prior workflow run snapshot is malformed and cannot be recovered (${toErrorMessage(error)})`,
                 ),
                 scriptPath,
               ),
@@ -455,9 +455,9 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           const launched = yield* Effect.uninterruptibleMask((restore) =>
             Effect.gen(function* () {
               const registration = yield* Effect.exit(
-                registerExecution(
+                registerRun(
                   runScope.session,
-                  runExecutionId,
+                  runId,
                   {
                     name: meta.name,
                     instruction: `Workflow script '${meta.name}'`,
@@ -475,8 +475,8 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                       workflowName: meta.name,
                     },
                     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                    parentExecutionId: runScope.executionId,
-                    description: childStreamDescription(meta.description),
+                    parentRunId: runScope.runId,
+                    description: childRunDescription(meta.description),
                   },
                 ),
               );
@@ -486,13 +486,13 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                 // id: the fresh-lease acquisition fails closed rather than starting a
                 // second competing run over the same journal. Point the model at the
                 // live run instead of erroring.
-                if (error instanceof ExecutionLeaseActiveError) {
+                if (error instanceof RunLeaseActiveError) {
                   return withScriptReference(
                     executed(
                       [
                         `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name and agent if it did not complete.`,
-                        `Execution ID: ${runExecutionId}`,
-                        `To check progress or collect the result: executions tool with path=/executions/${runExecutionId} and action=wait (returns immediately if it already finished).`,
+                        `Run ID: ${runId}`,
+                        `To check progress or collect the result: executions tool with path=/executions/${runId} and action=wait (returns immediately if it already finished).`,
                       ].join('\n'),
                       `Workflow script '${meta.name}' is already running`,
                     ),
@@ -513,14 +513,14 @@ Durability: the journal is keyed by meta.name and the agent field within this se
               // a prompt relaunch is refused.
               return yield* startDetachedChildRunLoop({
                 session: runScope.session,
-                executionId: runExecutionId,
-                parentStreamId: runScope.executionId,
+                runId,
+                parentRunId: runScope.runId,
                 agentName: meta.name,
                 recordCost,
-                createChildStream: () =>
+                createChildRun: () =>
                   Effect.gen(function* () {
                     yield* restore(Effect.void);
-                    // A deterministic execution id may retain the prior attempt's report.
+                    // A deterministic run id may retain the prior attempt's report.
                     // Clear it before starting this attempt so an interruption before
                     // delivery cannot be mistaken for a newly persisted result.
                     yield* runStore.clearReport();
@@ -528,10 +528,10 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                     // meta.name deliberately reuses one deterministic stream across
                     // launches. Reserve its writer while rehydrating so transcript
                     // eviction cannot race a resumed run.
-                    return yield* createChildStream(
+                    return yield* createChildRun(
                       runScope.session,
-                      runExecutionId,
-                      runScope.executionId,
+                      runId,
+                      runScope.runId,
                       {
                         run: {
                           kind: 'multiAgentWorkflow',
@@ -544,14 +544,14 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                       },
                     );
                   }),
-                buildLaunch: (childStream) =>
+                buildLaunch: (childRun) =>
                   Effect.sync(() => {
                     // A proposal-bypass approval carries the same explicit child edit
                     // grant as delegate_agent/delegate_workflow. A human one-off approval
                     // inherits only the parent's ordinary per-kind bypass state.
                     configureDelegatedChildApprovals(
-                      childStream.childStreamId,
-                      runScope.executionId,
+                      childRun.childRunId,
+                      runScope.runId,
                       proposalDecision.autoApproved
                         ? 'auto-approved'
                         : 'inherit',
@@ -564,13 +564,13 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                           effectRuntime().runPromise(
                             fingerprintWorkflowAgentDependencies(
                               runScope.session,
-                              runExecutionId,
+                              runId,
                               options,
                             ),
                           ),
                         session: runScope.session,
-                        executionId: runExecutionId,
-                        logger: childStream.logger,
+                        runId,
+                        logger: childRun.logger,
                         store,
                         checkpointId,
                         script,
@@ -583,8 +583,8 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                         onSnapshot: async (snapshot) => {
                           runScope.session.publish([
                             {
-                              type: 'execution.workflow',
-                              aggregateId: aggregateId('run', runExecutionId),
+                              type: 'run.workflow',
+                              aggregateId: aggregateId('run', runId),
                               workflow: snapshot,
                             },
                           ]);
@@ -599,7 +599,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                             defaultAgent,
                             checkpointId,
                             {
-                              executionId: runExecutionId,
+                              runId,
                             },
                             hooks,
                           );
@@ -612,7 +612,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                       // its one user-facing result/error delivery.
                       ...(!parent.stopAfterCycle && {
                         onLoopFailed: (error: unknown): void => {
-                          childStream.logger.error(
+                          childRun.logger.error(
                             `Workflow script '${meta.name}' run loop failed after launch`,
                             { data: error },
                           );
@@ -624,7 +624,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
             }),
           );
           if ('status' in launched) return launched;
-          const { childStreamId: runChildStreamId, completion: runCompletion } =
+          const { childRunId: childRunId, completion: runCompletion } =
             launched;
 
           if (parent.stopAfterCycle) {
@@ -650,10 +650,10 @@ Durability: the journal is keyed by meta.name and the agent field within this se
             executed(
               [
                 `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
-                `Execution ID: ${runExecutionId}`,
+                `Run ID: ${runId}`,
                 `Agent: ${defaultAgent.name} (part of the checkpoint identity with meta.name)`,
-                `Stream tab: ${runChildStreamId}`,
-                `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runExecutionId}; use action=wait only when you cannot proceed without it.`,
+                `Stream tab: ${childRunId}`,
+                `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
                 `To resume after a timeout or interruption: call this tool again with the same meta.name and agent.`,
               ].join('\n'),
               `Launched workflow script '${meta.name}' (async)`,

@@ -7,7 +7,7 @@ import { Deferred, Effect, Layer, ManagedRuntime } from 'effect';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTestSession,
@@ -15,7 +15,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { ExternalInquiryTool } from '@tools/inquiry/ExternalInquiryTool';
 
-const STREAM = 'stream:inquiry-host-interaction' as StreamTabId;
+const STREAM = 'stream:inquiry-host-interaction' as RunId;
 
 describe('ExternalInquiryTool host interaction dispatch', () => {
   // Tool writes a new inquiry record to storage; keep state isolated.
@@ -32,7 +32,7 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
 
     try {
       const result = await withRunContext(
-        createRunContext({ streamId: STREAM, session }),
+        createRunContext({ runId: STREAM, session }),
         () =>
           new ExternalInquiryTool().call({
             command: 'ask',
@@ -60,17 +60,17 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
         Effect.gen(function* () {
           const owners = ['first', 'second'].map((name) => {
             const session = createTestSession();
-            const stream = `stream:inquiry-${name}` as StreamTabId;
-            const executionId = publishTestRunStart(session, stream);
+            const stream = `stream:inquiry-${name}` as RunId;
+            const runId = publishTestRunStart(session, stream);
             const lease = session.followUps.claimLive(stream, 'flow')!;
-            const received: { question: string; streamId?: StreamTabId }[] = [];
+            const received: { question: string; runId?: RunId }[] = [];
             session.interactions.use({
               cancel: () => {},
               openExternalInquiry: async (permission) => {
                 received.push(permission);
               },
             });
-            return { name, session, stream, executionId, lease, received };
+            return { name, session, stream, runId, lease, received };
           });
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => {
@@ -106,8 +106,8 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
             withRunContext(
               createRunContext({
                 session: owner.session,
-                streamId: owner.stream,
-                executionId: owner.executionId,
+                runId: owner.stream,
+                runId: owner.runId,
               }),
               () => new DispatchInquiry().dispatch(owner.name),
             ),
@@ -127,11 +127,11 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
           ]);
           for (const owner of owners) {
             expect(
-              owner.received.map(({ question, streamId }) => ({
+              owner.received.map(({ question, runId }) => ({
                 question,
-                streamId,
+                runId,
               })),
-            ).toEqual([{ question: owner.name, streamId: owner.stream }]);
+            ).toEqual([{ question: owner.name, runId: owner.stream }]);
           }
         }),
       ),

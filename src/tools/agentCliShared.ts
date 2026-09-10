@@ -3,15 +3,14 @@
 
 import { Cause, Data, Effect, Exit, Fiber } from 'effect';
 
-import { registerExecution } from '@agent/storage';
+import { registerRun } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import {
   startChildRunLoop,
-  runWithOwnedExecutionLeaseLaunchGuard,
+  runWithOwnedRunLeaseLaunchGuard,
   type ChildRunPorts,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
@@ -23,36 +22,34 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
-  getRunContextExecutionId,
   runInSession,
-  getRunContextStreamId,
+  getRunContextRunId,
   getRunContextWorkingDirectory,
   type RunContext,
 } from '@agent/runtime/RunContext';
 import {
   RUN_OUTCOME,
   ToolError,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type TokenUsageStats,
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { requireRunStream } from '@tools/contextHelpers';
+import { requireLiveRun } from '@tools/contextHelpers';
 import {
   type requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
 import {
-  childStreamDescription,
-  createChildStream,
-  type ChildStream,
-} from './delegation/childStream';
+  childRunDescription,
+  createChildRun,
+  type ChildRun,
+} from './delegation/childRun';
 import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
@@ -104,23 +101,15 @@ export const reraiseAgentCliCallFailure = <A, R>(
   );
 
 /**
- * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
+ * Publish a turn's token usage to the progress UI for an agent-CLI child run.
  * Shared by the codex and claudeAgent session strategies.
  */
 export function publishAgentCliStreamUsage(
-  childStreamId: StreamTabId,
-  executionId: ExecutionId,
+  runId: RunId,
   usage: TokenUsageStats,
   logger: AgentTrace,
 ): void {
-  logger.usage(
-    {
-      streamId: childStreamId,
-      storageKey: executionId,
-      usage,
-    },
-    { recordTranscript: false },
-  );
+  logger.usage({ runId, usage }, { recordTranscript: false });
 }
 
 interface AgentCliResumeLabels {
@@ -132,11 +121,11 @@ interface AgentCliResumeLabels {
 
 function requireCallerOwnership(
   id: string,
-  callerStreamId: StreamTabId | undefined,
-  handle: AgentExecutionHandle | undefined,
+  callerRunId: RunId | undefined,
+  handle: RunHandle | undefined,
   labels: AgentCliResumeLabels,
 ): Effect.Effect<void, ToolError> {
-  if (!callerStreamId || !handle || handle.isOwnedBy(callerStreamId)) {
+  if (!callerRunId || !handle || handle.isOwnedBy(callerRunId)) {
     return Effect.void;
   }
   return Effect.fail(
@@ -154,22 +143,22 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       session: SessionHandle;
       id: string;
       prompt: string;
-      callerStreamId: StreamTabId | undefined;
+      callerRunId: RunId | undefined;
       labels: AgentCliResumeLabels;
     },
   ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
-    const { id, prompt, callerStreamId, labels } = params;
+    const { id, prompt, callerRunId, labels } = params;
     // Ownership is a live-handle fact: a detached or re-parented child must not
     // accept follow-ups from its former orchestrator. A missing handle falls
     // through to submitFollowUp's no-session outcome below.
     yield* requireCallerOwnership(
       id,
-      callerStreamId,
+      callerRunId,
       registry.getHandle(stored),
       labels,
     );
 
-    const result = yield* submitFollowUp(stored.childStreamId, prompt, {
+    const result = yield* submitFollowUp(stored.childRunId, prompt, {
       session: params.session,
     });
     if (result.status === 'failed') {
@@ -188,7 +177,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
       : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
     return executed(
-      [followUpLine, `Execution ID: ${stored.executionId}`].join('\n'),
+      [followUpLine, `Run ID: ${stored.runId}`].join('\n'),
       `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
     );
   },
@@ -211,7 +200,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
     session: SessionHandle;
     id: string | undefined;
     prompt: string;
-    callerStreamId: StreamTabId | undefined;
+    callerRunId: RunId | undefined;
     labels: AgentCliResumeLabels;
     launch: (
       releaseClaim?: () => void,
@@ -237,7 +226,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
       session: params.session,
       id,
       prompt: params.prompt,
-      callerStreamId: params.callerStreamId,
+      callerRunId: params.callerRunId,
       labels: params.labels,
     });
   }
@@ -245,16 +234,15 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
 
 interface AgentCliLaunchParams {
   session: SessionHandle;
-  parentStreamId: StreamTabId;
-  parentExecutionId: ExecutionId | undefined;
+  /** The launching run: the child's parent edge. */
+  parentRunId: RunId;
   agentName: string;
-  streamPrefix: string;
   description: string;
   config: AgentConfig;
   registerFailedMessage: string;
   startLoop: (ctx: {
-    childStream: ChildStream;
-    executionId: ExecutionId;
+    childRun: ChildRun;
+    runId: RunId;
   }) => Effect.Effect<void, Error>;
   summary: string;
   launchedLine: string;
@@ -262,7 +250,7 @@ interface AgentCliLaunchParams {
 }
 
 /**
- * Register a fresh agent-CLI execution, create its child stream tab, start the
+ * Register a fresh agent-CLI run, create its child stream tab, start the
  * provider's turn loop, and return the "launched" ToolResult.
  */
 export const launchAgentCliSession = Effect.fn(
@@ -272,10 +260,7 @@ export const launchAgentCliSession = Effect.fn(
 ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const executionId = generateExecutionId();
-      const childStreamId = getStreamTabId(params.streamPrefix, {
-        executionId,
-      });
+      const runId = generateRunId();
       // An external CLI drives this agent: the CLI is both the agent name and the
       // driving tool, and `identity.tool` is what gates native-only affordances
       // (resume/rerun) off for this cohort.
@@ -285,19 +270,16 @@ export const launchAgentCliSession = Effect.fn(
         tool: params.agentName,
       } as const;
 
-      yield* registerExecution(
+      yield* registerRun(
         params.session,
-        executionId,
+        runId,
         params.config,
         params.agentName,
         {
-          streamId: childStreamId,
           identity,
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-          parentExecutionId: params.parentExecutionId,
-          parentStreamId: params.parentStreamId,
-          background: true,
-          description: childStreamDescription(params.description),
+          parentRunId: params.parentRunId,
+          description: childRunDescription(params.description),
         },
       ).pipe(
         Effect.mapError(
@@ -312,18 +294,16 @@ export const launchAgentCliSession = Effect.fn(
       // (bash background, the two detached child paths, and this one): a failed
       // launch must not leave a record that refuses a relaunch for the rest of the
       // process's life.
-      const childStream = yield* runWithOwnedExecutionLeaseLaunchGuard(
+      const childRun = yield* runWithOwnedRunLeaseLaunchGuard(
         params.session,
-        executionId,
+        runId,
         Effect.gen(function* () {
           yield* restore(Effect.void);
-
-          const stream = yield* createChildStream(
+          const stream = yield* createChildRun(
             params.session,
-            executionId,
-            params.parentStreamId,
+            runId,
+            params.parentRunId,
             {
-              streamPrefix: params.streamPrefix,
               run: identity,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
               description: params.description,
@@ -332,7 +312,7 @@ export const launchAgentCliSession = Effect.fn(
           );
           const started = yield* Effect.exit(
             Effect.suspend(() =>
-              params.startLoop({ childStream: stream, executionId }),
+              params.startLoop({ childRun: stream, runId }),
             ),
           );
           if (Exit.isFailure(started)) {
@@ -348,7 +328,7 @@ export const launchAgentCliSession = Effect.fn(
               return yield* Effect.fail(
                 new AggregateError(
                   [startError, Cause.squash(finalized.cause)],
-                  `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
+                  `Agent CLI run ${runId} failed and its child stream could not be finalized`,
                 ),
               );
             }
@@ -364,8 +344,8 @@ export const launchAgentCliSession = Effect.fn(
       return executed(
         [
           params.launchedLine,
-          `Execution ID: ${executionId}`,
-          `Stream tab: ${childStream.childStreamId}`,
+          `Run ID: ${runId}`,
+          `Stream tab: ${childRun.childRunId}`,
           params.followUpLine,
         ].join('\n'),
         params.summary,
@@ -410,7 +390,7 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
       return buildBashApprovalRejectedResult(approvalLabel, approval);
     }
 
-    contexts?.callContext?.hooks?.onExecutionReady?.();
+    contexts?.callContext?.hooks?.onRunReady?.();
     return yield* run(contexts?.runContext);
   },
 );
@@ -418,8 +398,7 @@ const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
 interface AgentCliLaunchContext {
-  parentStreamId: StreamTabId;
-  parentExecutionId: ExecutionId | undefined;
+  parentRunId: RunId;
   parentWorkingDirectory: string | undefined;
   /** Release the disk-based fallback claim if the launch fails before promoting
    * it. Undefined for a fresh (non-resumed) launch. */
@@ -431,7 +410,7 @@ interface AgentCliLaunchContext {
  * boilerplate-identical chain both providers (codex, claudeAgent) run: request
  * approval for the labelled command, choose atomically between queueing onto an
  * owned session and launching a disk-based fallback, and resolve the run context
- * a launch needs (parent stream/execution/working-directory). A missing
+ * a launch needs (parent stream/run/working-directory). A missing
  * in-memory entry denotes a disk-based SDK fallback, so `launch` receives the
  * `releaseFallbackClaim` it must promote or release. Callers supply only their
  * approval label, session store, resume id, resume labels, and the
@@ -475,11 +454,11 @@ export function dispatchAgentCliTool(params: {
     (runContext) =>
       Effect.gen(function* () {
         const registry = store(params.session);
-        const callerStreamId = getRunContextStreamId(runContext);
+        const callerRunId = getRunContextRunId(runContext);
         if (sourceId) {
           yield* requireCallerOwnership(
             sourceId,
-            callerStreamId,
+            callerRunId,
             registry.getHandle(registry.lookup(sourceId)),
             labels,
           );
@@ -488,18 +467,17 @@ export function dispatchAgentCliTool(params: {
           session: params.session,
           id: resumeId,
           prompt,
-          callerStreamId,
+          callerRunId,
           labels,
           launch: (releaseFallbackClaim) => {
             // A missing in-memory entry denotes a disk-based SDK fallback.
-            // requireRunStream throws its ToolError synchronously; as a defect
+            // requireLiveRun throws its ToolError synchronously; as a defect
             // it still reaches the tool runner as the same instance and the
             // claim-release in resumeOrLaunchAgentCliSession still fires
             // (onError observes every cause).
-            const { streamId } = requireRunStream(agentName, runContext);
+            const { runId } = requireLiveRun(agentName, runContext);
             return launch({
-              parentStreamId: streamId,
-              parentExecutionId: getRunContextExecutionId(runContext),
+              parentRunId: runId,
               parentWorkingDirectory: getRunContextWorkingDirectory(runContext),
               releaseFallbackClaim,
             });
@@ -522,9 +500,9 @@ interface AgentCliTurnUsage {
 
 interface AgentCliLoopParams<TTurn> {
   session: SessionHandle;
-  childStream: ChildStream;
-  parentStreamId: StreamTabId;
-  executionId: ExecutionId;
+  childRun: ChildRun;
+  parentRunId: RunId;
+  runId: RunId;
   /** Passed through to `startChildRunLoop` (registry lookups, log labels). */
   agentName: string;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
@@ -537,7 +515,7 @@ interface AgentCliLoopParams<TTurn> {
    * loop starts, if any. Release it if the loop exits before promoting it.
    */
   releaseFallbackClaim: (() => void) | undefined;
-  /** Provider-specific single-turn execution, given the joined follow-up prompt. */
+  /** Provider-specific single-turn run, given the joined follow-up prompt. */
   runProviderTurn: (
     prompt: string,
     ports: ChildRunPorts,
@@ -574,7 +552,7 @@ interface AgentCliLoopParams<TTurn> {
  * `formatDelivery`/`formatError`, and the boilerplate-identical
  * `ChildRunStrategy` fields (`isTerminal`, `getUsage`, `onLoopStart`,
  * `onTurnSuccess`, `publishUsage`, `releaseSessionOwnership`). Callers supply
- * only their provider-specific turn execution, usage/delivery formatting, and
+ * only their provider-specific turn run, usage/delivery formatting, and
  * registry entry construction.
  */
 export function startAgentCliLoop<TTurn>(
@@ -582,9 +560,9 @@ export function startAgentCliLoop<TTurn>(
 ): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     const {
-      childStream,
-      parentStreamId,
-      executionId,
+      childRun,
+      parentRunId,
+      runId,
       agentName,
       stageLabel,
       initialPrompt,
@@ -600,12 +578,12 @@ export function startAgentCliLoop<TTurn>(
       onTurnError,
       loopFailedMessage,
     } = params;
-    const { childStreamId, logger } = childStream;
+    const { childRunId, logger } = childRun;
     const registry = store(params.session);
 
     // The one entry this loop registers and tracks: the child run's identity
     // and follow-up address. Live handles are resolved by the registry itself.
-    const target: AgentCliSessionEntry = { childStreamId, executionId };
+    const target: AgentCliSessionEntry = { childRunId, runId };
 
     // Fresh and resumed session/thread ids are registered after the first
     // successful turn is persisted, immediately before its result reaches the
@@ -654,7 +632,7 @@ export function startAgentCliLoop<TTurn>(
       publishUsage: (turn) => {
         const usage = buildUsageStats(turn);
         if (usage) {
-          publishAgentCliStreamUsage(childStreamId, executionId, usage, logger);
+          publishAgentCliStreamUsage(runId, usage, logger);
         }
       },
       formatDelivery: (turn, wallTimeMs) =>
@@ -662,16 +640,15 @@ export function startAgentCliLoop<TTurn>(
       formatError: (turn, err) => formatError(turn, err, lastPrompt),
       releaseSessionOwnership: () => {
         releaseFallbackClaim?.();
-        registry.releaseByExecutionId(executionId);
+        registry.releaseByRunId(runId);
       },
     };
 
     const completion = yield* startChildRunLoop({
       session: params.session,
-      childStream,
-      childStreamId,
-      parentStreamId,
-      executionId,
+      childRun,
+      parentRunId,
+      runId,
       agentName,
       strategy,
     });

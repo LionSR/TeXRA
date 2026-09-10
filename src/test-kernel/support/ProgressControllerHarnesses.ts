@@ -15,7 +15,7 @@ import {
 import type {
   OutputFileInfo,
   RoundIndexed,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
@@ -51,7 +51,7 @@ type RunStorageLocationOverrides = {
   kind: 'runStorage';
   absolutePath?: string;
   relativePath?: string;
-  executionId?: string;
+  runId?: string;
 };
 
 type ExternalLocationOverrides = {
@@ -85,7 +85,7 @@ function createOutputFileLocation(
       kind: 'runStorage',
       absolutePath: overrides.absolutePath ?? '/tmp/exec/answer.tex',
       relativePath: overrides.relativePath ?? 'answer.tex',
-      executionId: overrides.executionId ?? 'exec-old',
+      runId: overrides.runId ?? 'exec-old',
     };
   }
 
@@ -111,14 +111,14 @@ export function createOutputFile(
 }
 
 export interface ProgressWorkflowRunActionsHarnessOptions {
-  executionIds?: Map<StreamTabId, string>;
-  outputs?: Map<StreamTabId, RoundIndexed<OutputFileInfo>>;
-  knownWorkspaceOutputs?: Map<StreamTabId, Set<string>>;
+  runIds?: Map<RunId, string>;
+  outputs?: Map<RunId, RoundIndexed<OutputFileInfo>>;
+  knownWorkspaceOutputs?: Map<RunId, Set<string>>;
 }
 
 export interface ProgressWorkflowRunActionsHarness {
   controller: ProgressWorkflowRunActionsController;
-  metadataReads: StreamTabId[];
+  metadataReads: RunId[];
   diffs: WorkflowDiffRequest[];
   fileOperations: Array<{
     operation: WorkflowFileOperation;
@@ -129,7 +129,7 @@ export interface ProgressWorkflowRunActionsHarness {
 export function createProgressWorkflowRunActionsHarness(
   options: ProgressWorkflowRunActionsHarnessOptions = {},
 ): ProgressWorkflowRunActionsHarness {
-  const metadataReads: StreamTabId[] = [];
+  const metadataReads: RunId[] = [];
   const diffs: WorkflowDiffRequest[] = [];
   const fileOperations: Array<{
     operation: WorkflowFileOperation;
@@ -142,7 +142,7 @@ export function createProgressWorkflowRunActionsHarness(
         getRunMetadata: (stream) => {
           metadataReads.push(stream);
           return {
-            executionId: options.executionIds?.get(stream),
+            runId: options.runIds?.get(stream),
           };
         },
         getOutputFiles: (stream) => options.outputs?.get(stream) ?? {},

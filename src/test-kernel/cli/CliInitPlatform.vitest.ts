@@ -10,7 +10,7 @@ import {
   setCliAgentResumeHandler,
 } from '@cli/runtime/initPlatform';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -416,8 +416,8 @@ describe('CLI platform init', () => {
 
     type NodePlatformOptions = {
       readonly agentResume: {
-        tryResumeStream(
-          streamId: StreamTabId,
+        tryResumeRun(
+          runId: RunId,
           recovery?: unknown,
         ): Promise<boolean>;
       };
@@ -428,19 +428,19 @@ describe('CLI platform init', () => {
     expect(nodePlatformOptions?.agentResume).toBeDefined();
     if (!nodePlatformOptions) throw new Error('expected node platform options');
 
-    const streamId = 'stream:cli-resume' as StreamTabId;
+    const runId = 'stream:cli-resume' as RunId;
     await expect(
-      nodePlatformOptions.agentResume.tryResumeStream(streamId),
+      nodePlatformOptions.agentResume.tryResumeRun(runId),
     ).resolves.toBe(false);
 
-    const tryResumeStream = vi.fn(async () => true);
-    const dispose = setCliAgentResumeHandler(tryResumeStream);
+    const tryResumeRun = vi.fn(async () => true);
+    const dispose = setCliAgentResumeHandler(tryResumeRun);
 
     try {
       await expect(
-        nodePlatformOptions.agentResume.tryResumeStream(streamId),
+        nodePlatformOptions.agentResume.tryResumeRun(runId),
       ).resolves.toBe(true);
-      expect(tryResumeStream).toHaveBeenCalledWith(streamId, undefined);
+      expect(tryResumeRun).toHaveBeenCalledWith(runId, undefined);
     } finally {
       dispose();
     }

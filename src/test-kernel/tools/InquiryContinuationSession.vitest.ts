@@ -27,7 +27,7 @@ import {
   type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
   type InquiryThreadId,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -43,7 +43,7 @@ import {
 import { recordSessionEvents } from '../agent/progressTestUtils';
 
 const THREAD = 'ei_aabbccdd0011' as InquiryThreadId;
-const STREAM = 'stream:desktop-parent' as StreamTabId;
+const STREAM = 'stream:desktop-parent' as RunId;
 
 /**
  * A host-supplied session: only identity plus the publisher the continuation
@@ -89,8 +89,8 @@ function captureFacts(session: SessionHandle): {
 function answeredManifest(): InquiryThreadRecord {
   return {
     threadId: THREAD,
-    parentStreamId: STREAM,
-    parentExecutionId: null,
+    parentRunId: STREAM,
+    parentRunId: null,
     status: 'answered',
     createdAt: '2026-06-14T08:00:00.000Z',
     updatedAt: '2026-06-14T08:01:00.000Z',
@@ -115,7 +115,7 @@ describe('external inquiry continuation session routing', () => {
     getThreadSummaryMock.mockReturnValue(
       Effect.succeed({
         threadId: THREAD,
-        parentStreamId: STREAM,
+        parentRunId: STREAM,
         status: 'answered',
         lastQuestionPreview: 'Check the boundary case.',
         lastActivityIso: '2026-06-14T08:01:00.000Z',
@@ -190,7 +190,7 @@ describe('external inquiry continuation session routing', () => {
               type: 'inquiryThreadUpdated',
               aggregateId: qualifyAggregateId('inquiry', THREAD),
               threadId: THREAD,
-              parentStreamId: STREAM,
+              parentRunId: STREAM,
               status: 'answered',
               lastQuestionPreview: 'Check the boundary case.',
               lastActivityIso: '2026-06-14T08:01:00.000Z',

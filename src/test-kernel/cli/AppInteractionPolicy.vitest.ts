@@ -15,9 +15,9 @@ import {
   type ForegroundSurfaceKind,
 } from '@cli/chat/tui/appInteractionPolicy';
 import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
-import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
+import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
 type ForegroundSurfaceInput = Parameters<typeof foregroundSurfaceKind>[0];
 type ForegroundEscapeInput = Parameters<typeof foregroundEscapeAction>[0];
@@ -29,7 +29,7 @@ type MetaChordState = Parameters<
 
 const escChordHidden = {
   shortcutModifierLabel: 'Esc',
-  streamFocusAvailable: false,
+  runFocusAvailable: false,
 } satisfies MetaChordState;
 
 function ctrlCFixture({ draft }: { readonly draft: string }): {
@@ -54,7 +54,7 @@ function ctrlCFixture({ draft }: { readonly draft: string }): {
   };
 }
 
-function bashApproval(streamId?: StreamTabId): PendingApproval {
+function bashApproval(runId?: RunId): PendingApproval {
   return {
     payload: {
       kind: 'bash',
@@ -62,7 +62,7 @@ function bashApproval(streamId?: StreamTabId): PendingApproval {
         requestId: 'bash-1',
         command: 'echo ok',
         allowBypass: true,
-        streamId: streamId ?? '',
+        runId: runId ?? '',
       },
     },
     decide: () => undefined,
@@ -175,12 +175,12 @@ describe('app interaction policy', () => {
 
   it('defers Escape interrupt whenever an Esc chord binding is visible', () => {
     const cases = [
-      [{ ...escChordHidden, streamFocusAvailable: true }, true],
+      [{ ...escChordHidden, runFocusAvailable: true }, true],
       [
         {
           ...escChordHidden,
           shortcutModifierLabel: 'Alt',
-          streamFocusAvailable: true,
+          runFocusAvailable: true,
         },
         false,
       ],
@@ -256,19 +256,19 @@ describe('app interaction policy', () => {
   });
 
   it('shows a stream-owned approval on its stream and its ancestors', () => {
-    const root = 'root' as StreamTabId;
-    const child = 'child-1' as StreamTabId;
-    const sibling = 'child-2' as StreamTabId;
+    const root = 'root' as RunId;
+    const child = 'child-1' as RunId;
+    const sibling = 'child-2' as RunId;
     const ancestors = [{ id: root, label: 'root' }];
     const view = viewWith([
-      makeStreamView({ id: root }),
-      makeStreamView({ id: child, parentId: root, ancestors }),
-      makeStreamView({ id: sibling, parentId: root, ancestors }),
+      makeRunView({ id: root }),
+      makeRunView({ id: child, parentId: root, ancestors }),
+      makeRunView({ id: sibling, parentId: root, ancestors }),
     ]);
     const childApproval = bashApproval(child);
     const globalApproval = bashApproval();
-    const visible = (selectedStreamId: StreamTabId, pending: PendingApproval) =>
-      approvalVisibleForSelection({ pending, selectedStreamId, view });
+    const visible = (selectedRunId: RunId, pending: PendingApproval) =>
+      approvalVisibleForSelection({ pending, selectedRunId, view });
 
     expect(visible(child, childApproval)).toBe(true);
     expect(visible(root, childApproval)).toBe(true);

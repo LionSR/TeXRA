@@ -6,7 +6,7 @@
  * and response a bridge posts (8.4) arrive with that bridge.
  *
  * Arm tags are `group.action` throughout, so two groups cannot claim one
- * tag. Every stream-scoped arm names a bare `streamId`: a `StreamTabId`
+ * tag. Every stream-scoped arm names a bare `runId`: a `RunId`
  * names one run for its whole life (decision 9), so a request that waits
  * while its stream is deleted can only miss, never land on a different run.
  * The union carries the arms the runtime answers today; a lane that routes
@@ -17,11 +17,11 @@ import { z } from 'zod';
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import {
   InquiryThreadIdSchema,
-  StreamTabIdSchema,
+  RunIdSchema,
   UserQuestionAnswersSchema,
 } from '@shared/schemas';
 
-const streamScoped = { streamId: StreamTabIdSchema };
+const streamScoped = { runId: RunIdSchema };
 
 /** A decision names the stream its `approval.requested` carries and the
  *  `approvalId` that fact carries: domain identity, never the envelope's
@@ -137,15 +137,15 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
       enabled: z.boolean(),
     }),
   }),
-  /** A workflow-script run's grandchild `agent()` call. `streamId` is that
-   *  call's own child stream, never the run's: the control acts on one call,
-   *  so concurrent skips and retries stay one request per target and the
-   *  runtime's refusal names the call it acted on. `executionId` is the id
-   *  the child list, focus, and kill already share. */
+  /** A workflow-script run's grandchild `agent()` call. `childRunId` is
+   *  that call's own run, never the workflow run's: the control acts on one
+   *  call, so concurrent skips and retries stay one request per target and
+   *  the runtime's refusal names the call it acted on. It is the id the
+   *  child list, focus, and kill already share. */
   z.object({
     kind: z.literal('workflow.control'),
     ...streamScoped,
-    executionId: z.string().min(1),
+    childRunId: RunIdSchema,
     action: z.enum(['skip', 'retry']),
   }),
 ]);

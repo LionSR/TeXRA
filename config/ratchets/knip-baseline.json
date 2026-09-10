@@ -656,7 +656,7 @@
       "name": "resolvePagerCommand"
     },
     {
-      "file": "packages/cli/src/runtime/runExecution.ts",
+      "file": "packages/cli/src/runtime/executeCli.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "executeCliRequest"
@@ -998,10 +998,16 @@
       "name": "shouldUseResponsesAPI"
     },
     {
-      "file": "src/agent/storage/executionLease.ts",
+      "file": "src/agent/storage/conversationFormat.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "ExecutionLeaseSchema"
+      "name": "formatConversationContent"
+    },
+    {
+      "file": "src/agent/storage/runLease.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "RunLeaseSchema"
     },
     {
       "file": "src/agent/trace/events.ts",

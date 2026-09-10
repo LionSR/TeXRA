@@ -20,7 +20,7 @@ const STREAM = 'chat#ab12cd';
 const start: SessionEventDraft = {
   type: 'run.start',
   aggregateId: aggregateId('stream', STREAM),
-  executionId: 'ab12cd',
+  runId: 'ab12cd',
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
   category: 'toolUse',
@@ -97,9 +97,9 @@ describe('StreamLogStore event reads', () => {
         yield* database.appendAll(history);
         const store = yield* StreamLogStore.open(database);
         yield* database.appendAll([
-          { type: 'stream.removed', aggregateId: start.aggregateId },
+          { type: 'run.removed', aggregateId: start.aggregateId },
         ]);
-        expect(yield* store.hasAuthoritativeStream(STREAM)).toBe(false);
+        expect(yield* store.hasAuthoritativeRun(STREAM)).toBe(false);
         expect(yield* store.readEntries(STREAM)).toEqual([]);
         yield* store.ensureLoaded(STREAM);
         expect(store.has(STREAM)).toBe(false);
@@ -124,14 +124,14 @@ describe('StreamLogStore event reads', () => {
             }),
         });
         const loading = yield* Effect.forkChild(
-          store.acquireRunResidency(STREAM, 'execution'),
+          store.acquireRunResidency(STREAM, 'run'),
         );
         yield* Deferred.await(entered);
         store.requestEviction(STREAM);
         yield* Deferred.succeed(release, undefined);
         const writer = yield* Fiber.join(loading);
         expect(store.get(STREAM)?.head).toBeGreaterThan(0);
-        const successor = yield* store.acquireRunResidency(STREAM, 'execution');
+        const successor = yield* store.acquireRunResidency(STREAM, 'run');
         writer.close();
         expect(store.get(STREAM)).toBeDefined();
         successor.close();
@@ -158,7 +158,7 @@ describe('StreamLogStore event reads', () => {
             }),
         });
         const loading = yield* Effect.forkChild(
-          store.acquireRunResidency(STREAM, 'execution'),
+          store.acquireRunResidency(STREAM, 'run'),
         );
         yield* Deferred.await(entered);
         const suffix = yield* database.appendAll([
@@ -225,7 +225,7 @@ describe('StreamLogStore event reads', () => {
         const tail = yield* Effect.forkChild(store.acceptCommitted(suffix[0]!));
         yield* Effect.yieldNow;
         const loading = yield* Effect.forkChild(
-          store.acquireRunResidency(STREAM, 'execution'),
+          store.acquireRunResidency(STREAM, 'run'),
         );
         yield* Effect.yieldNow;
         yield* Deferred.succeed(release, undefined);
@@ -250,7 +250,7 @@ describe('StreamLogStore event reads', () => {
         expect(store.has(STREAM)).toBe(true);
         yield* store.ensureLoaded(STREAM);
         const removed = yield* database.appendAll([
-          { type: 'stream.removed', aggregateId: start.aggregateId },
+          { type: 'run.removed', aggregateId: start.aggregateId },
         ]);
         yield* Effect.forEach(removed, (row) => store.acceptCommitted(row));
         expect(store.has(STREAM)).toBe(false);

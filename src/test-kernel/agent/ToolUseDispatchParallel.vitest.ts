@@ -13,7 +13,7 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -83,7 +83,7 @@ interface HarnessOptions {
 
 function dispatchHarness(opts: HarnessOptions) {
   const runTrace = createTestRunTrace(
-    'DispatchParallelTest' as StreamTabId,
+    'DispatchParallelTest' as RunId,
     new StreamLog(),
   );
   const services = {
@@ -207,13 +207,13 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     await withDispatchHarness(
       { tools: { malformed_attachment: malformedAttachmentTool } },
       async ({ node }) => {
-        const [execution] = (await runDispatch(node, [
+        const [run] = (await runDispatch(node, [
           makeCall('c1', 'malformed_attachment', {}),
         ])) as ExecResult[];
 
-        assert.equal(execution?.result.status, 'error');
+        assert.equal(run?.result.status, 'error');
         assert.match(
-          execution?.result.status === 'error' ? execution.result.error : '',
+          run?.result.status === 'error' ? run.result.error : '',
           /malformed_attachment: Tool returned an invalid result/i,
         );
       },

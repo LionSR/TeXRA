@@ -18,7 +18,7 @@
  * `commit` ordinals, none of which a caller can supply.
  *
  * The official Node SQLite driver owns the scoped connection.
- * Effect SQL owns statement execution, connection reservation and transactions;
+ * Effect SQL owns statement run, connection reservation and transactions;
  * this layer owns the C1 schema, claims, validation and committed wake levels.
  */
 import { mkdirSync } from 'node:fs';
@@ -314,10 +314,10 @@ export const databaseLayer = (
           WHERE type = 'run.start.1' AND json_extract(data, '$.parent.startCommit') = (SELECT start FROM parent)),
         relevant AS (
           SELECT id, 'run.start.1' AS type FROM children
-          UNION ALL SELECT id, 'stream.removed.1' FROM children
-          UNION ALL SELECT id, 'execution.launchLabel.1' FROM children
+          UNION ALL SELECT id, 'run.removed.1' FROM children
+          UNION ALL SELECT id, 'run.launchLabel.1' FROM children
           UNION ALL SELECT ?, 'run.start.1'
-          UNION ALL SELECT ?, 'stream.removed.1'
+          UNION ALL SELECT ?, 'run.removed.1'
         ),
         latest AS (SELECT e.aggregate_id,e.type,MAX(e.seq) AS seq FROM relevant r JOIN event e ON e.aggregate_id=r.id AND e.type=r.type GROUP BY e.aggregate_id,e.type)
         SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq) ORDER BY "commit"
@@ -455,19 +455,19 @@ export const databaseLayer = (
         s.owner_id AS claimOwner FROM event e
         JOIN event_sequence s ON s.aggregate_id = e.aggregate_id
         WHERE e.aggregate_id = ? AND e."commit" = ?
-          AND e.seq = s.seq AND s.closed = 1 AND e.type = 'stream.removed.1'`;
+          AND e.seq = s.seq AND s.closed = 1 AND e.type = 'run.removed.1'`;
       const claimCleanup = `UPDATE event_sequence SET owner_id = ?
         WHERE aggregate_id = ? AND owner_id IS ? AND closed = 1
           AND EXISTS (SELECT 1 FROM event e
             WHERE e.aggregate_id = event_sequence.aggregate_id
               AND e.seq = event_sequence.seq AND e."commit" = ?
-              AND e.type = 'stream.removed.1') RETURNING aggregate_id`;
+              AND e.type = 'run.removed.1') RETURNING aggregate_id`;
       const collectClosed = `DELETE FROM event_sequence
         WHERE aggregate_id = ? AND owner_id = ? AND closed = 1
           AND EXISTS (SELECT 1 FROM event e
             WHERE e.aggregate_id = event_sequence.aggregate_id
               AND e.seq = event_sequence.seq AND e."commit" = ?
-              AND e.type = 'stream.removed.1') RETURNING aggregate_id`;
+              AND e.type = 'run.removed.1') RETURNING aggregate_id`;
       const openDependent = `${dependents}
         SELECT aggregate_id FROM event_sequence
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
@@ -566,7 +566,7 @@ export const databaseLayer = (
               }
               if (
                 previous &&
-                previous.parentStreamId !== draft.parentStreamId &&
+                previous.parentRunId !== draft.parentRunId &&
                 !reopened
               ) {
                 throw new Error(
@@ -590,9 +590,9 @@ export const databaseLayer = (
                   `A dropped inquiry cannot reopen: ${draft.aggregateId}`,
                 );
               }
-              if ((!previous || reopened) && draft.parentStreamId !== null) {
+              if ((!previous || reopened) && draft.parentRunId !== null) {
                 const parent = (yield* readState([
-                  qualifyAggregateId('run', draft.parentStreamId),
+                  qualifyAggregateId('run', draft.parentRunId),
                 ]))[0];
                 if (
                   !parent ||
@@ -600,7 +600,7 @@ export const databaseLayer = (
                   parent.ownerId !== identity.ownerId
                 ) {
                   throw new Error(
-                    `Inquiry opening requires an owned open parent: ${draft.parentStreamId}`,
+                    `Inquiry opening requires an owned open parent: ${draft.parentRunId}`,
                   );
                 }
               }
@@ -626,7 +626,7 @@ export const databaseLayer = (
               );
             }
             if (
-              (draft.type === 'run.start' || draft.type === 'stream.removed') &&
+              (draft.type === 'run.start' || draft.type === 'run.removed') &&
               target.kind !== 'run'
             ) {
               throw new Error(
@@ -656,10 +656,10 @@ export const databaseLayer = (
             // lifecycle. Derive the targets under the same write permit
             // and transaction as closure; no caller chooses cleanup paths.
             const committedDraft =
-              draft.type === 'stream.removed'
+              draft.type === 'run.removed'
                 ? {
                     ...draft,
-                    executionIds: (yield* sql.unsafe<Record<string, unknown>>(
+                    runIds: (yield* sql.unsafe<Record<string, unknown>>(
                       deletionRuns,
                       [draft.aggregateId],
                     )).map((row) => RunIdSchema.parse(row.runId)),
@@ -697,9 +697,9 @@ export const databaseLayer = (
             }
             if (draft.type === 'inquiryThreadUpdated') {
               yield* sql.unsafe<Record<string, unknown>>(reparentInquiry, [
-                draft.parentStreamId === null
+                draft.parentRunId === null
                   ? null
-                  : qualifyAggregateId('run', draft.parentStreamId),
+                  : qualifyAggregateId('run', draft.parentRunId),
                 draft.aggregateId,
                 identity.ownerId,
               ]);
@@ -708,7 +708,7 @@ export const databaseLayer = (
                 identity.ownerId,
               ]);
             }
-            if (draft.type === 'stream.removed') {
+            if (draft.type === 'run.removed') {
               // C5/C9: admission must hold every open dependent claim.
               // This check shares the write transaction with the tombstone
               // and recursive closure, so no claimant can change between them.
@@ -786,7 +786,7 @@ export const databaseLayer = (
               ])).map(decodeEvent);
             }),
           ),
-        readExecutionRecords: (id) =>
+        readRunRecords: (id) =>
           query(
             Effect.gen(function* () {
               return (yield* sql.unsafe<Record<string, unknown>>(runRecords, [
@@ -795,7 +795,7 @@ export const databaseLayer = (
               ])).map(decodeEvent);
             }),
           ),
-        readExecutionChildren: (id) =>
+        readRunChildren: (id) =>
           query(
             Effect.gen(function* () {
               return (yield* sql.unsafe<Record<string, unknown>>(runChildren, [
@@ -970,7 +970,7 @@ export const databaseLayer = (
               }),
             );
           }),
-        removeStream: (id, mode, expectedStartCommit) =>
+        removeRun: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
             const deletionMode = yield* Effect.try({
               try: () => DeletionModeSchema.parse(mode),
@@ -1002,7 +1002,7 @@ export const databaseLayer = (
             const at = yield* Clock.currentTimeMillis;
             const removal = yield* Effect.try({
               try: () =>
-                prepareEventDraft({ type: 'stream.removed', aggregateId: id }),
+                prepareEventDraft({ type: 'run.removed', aggregateId: id }),
               catch: writeFailed,
             });
             return yield* transact(
@@ -1057,7 +1057,7 @@ export const databaseLayer = (
                     `Deletion record is no longer current: ${id}`,
                   );
                 const tombstone = decodeEvent(row);
-                if (tombstone.type !== 'stream.removed') {
+                if (tombstone.type !== 'run.removed') {
                   throw new Error(`Expected a deletion record: ${id}`);
                 }
                 return {
@@ -1101,7 +1101,7 @@ export const databaseLayer = (
                 Effect.gen(function* () {
                   // Filesystem promises cannot be undone by fiber interruption.
                   // Keep the local claim lane until that work has actually settled.
-                  yield* cleanup(observed.tombstone.executionIds).pipe(
+                  yield* cleanup(observed.tombstone.runIds).pipe(
                     Effect.uninterruptible,
                   );
                   yield* transact(

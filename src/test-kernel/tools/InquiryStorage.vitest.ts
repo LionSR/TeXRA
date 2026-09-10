@@ -10,14 +10,14 @@ import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import {
   ExternalInquiryPermissionSchema,
   ToolError,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { inquiryRecordToTranscript } from '@tools/inquiry/inquiryRecordFormatting';
 
-const STREAM_A = 'stream:a' as StreamTabId;
-const STREAM_B = 'stream:b' as StreamTabId;
+const STREAM_A = 'stream:a' as RunId;
+const STREAM_B = 'stream:b' as RunId;
 
 describe('InquiryStorage', () => {
   let storage: string;
@@ -44,15 +44,15 @@ describe('InquiryStorage', () => {
     Effect.gen(function* () {
       const records = yield* InquiryRecords;
       const opened = yield* records.recordOpenQuestion({
-        parentStreamId: STREAM_A,
-        parentExecutionId: null,
+        parentRunId: STREAM_A,
+        parentRunId: null,
         question: 'What is the Sobolev constant?',
         context: 'Use the sharp Euclidean inequality.',
         suggestSearch: false,
       });
 
       expect(opened.status).toBe('open');
-      expect(opened.parentStreamId).toBe(STREAM_A);
+      expect(opened.parentRunId).toBe(STREAM_A);
       expect(opened.turns).toHaveLength(1);
       expect(opened.turns.at(-1)?.suggestSearch).toBe(false);
 
@@ -104,8 +104,8 @@ describe('InquiryStorage', () => {
     Effect.gen(function* () {
       const records = yield* InquiryRecords;
       const opened = yield* records.recordOpenQuestion({
-        parentStreamId: STREAM_A,
-        parentExecutionId: null,
+        parentRunId: STREAM_A,
+        parentRunId: null,
         question: 'Q1',
       });
       if (drop)
@@ -114,8 +114,8 @@ describe('InquiryStorage', () => {
       const rejection = yield* Effect.result(
         records.recordOpenQuestion({
           threadId: opened.threadId,
-          parentStreamId: STREAM_A,
-          parentExecutionId: null,
+          parentRunId: STREAM_A,
+          parentRunId: null,
           question: 'Q2',
         }),
       );
@@ -131,8 +131,8 @@ describe('InquiryStorage', () => {
       Effect.gen(function* () {
         const records = yield* InquiryRecords;
         const t = yield* records.recordOpenQuestion({
-          parentStreamId: STREAM_A,
-          parentExecutionId: null,
+          parentRunId: STREAM_A,
+          parentRunId: null,
           question: 'Q1',
         });
         yield* records.recordAnswerForOpenTurn({
@@ -143,8 +143,8 @@ describe('InquiryStorage', () => {
 
         const followUp = yield* records.recordOpenQuestion({
           threadId: t.threadId,
-          parentStreamId: STREAM_A,
-          parentExecutionId: null,
+          parentRunId: STREAM_A,
+          parentRunId: null,
           question: 'Q2 (follow-up)',
         });
 
@@ -167,12 +167,12 @@ describe('InquiryStorage', () => {
       }).pipe(Effect.provide(layer)),
   );
 
-  it.live('updates parentStreamId on cross-stream follow-up', () =>
+  it.live('updates parentRunId on cross-stream follow-up', () =>
     Effect.gen(function* () {
       const records = yield* InquiryRecords;
       const t = yield* records.recordOpenQuestion({
-        parentStreamId: STREAM_A,
-        parentExecutionId: null,
+        parentRunId: STREAM_A,
+        parentRunId: null,
         question: 'Q1',
       });
       yield* records.recordAnswerForOpenTurn({
@@ -183,21 +183,21 @@ describe('InquiryStorage', () => {
 
       const fromB = yield* records.recordOpenQuestion({
         threadId: t.threadId,
-        parentStreamId: STREAM_B,
-        parentExecutionId: null,
+        parentRunId: STREAM_B,
+        parentRunId: null,
         question: 'Q2 from B',
       });
-      expect(fromB.parentStreamId).toBe(STREAM_B);
+      expect(fromB.parentRunId).toBe(STREAM_B);
 
       const openOnA = yield* records.listThreadsByStatus({
         status: 'open',
         scope: 'stream',
-        streamId: STREAM_A,
+        runId: STREAM_A,
       });
       const openOnB = yield* records.listThreadsByStatus({
         status: 'open',
         scope: 'stream',
-        streamId: STREAM_B,
+        runId: STREAM_B,
       });
       expect(openOnA).toHaveLength(0);
       expect(openOnB).toHaveLength(1);
@@ -208,8 +208,8 @@ describe('InquiryStorage', () => {
     Effect.gen(function* () {
       const records = yield* InquiryRecords;
       const t1 = yield* records.recordOpenQuestion({
-        parentStreamId: STREAM_A,
-        parentExecutionId: null,
+        parentRunId: STREAM_A,
+        parentRunId: null,
         question: 'Q1',
       });
       yield* records.recordAnswerForOpenTurn({
@@ -219,14 +219,14 @@ describe('InquiryStorage', () => {
       });
 
       const t2 = yield* records.recordOpenQuestion({
-        parentStreamId: STREAM_A,
-        parentExecutionId: null,
+        parentRunId: STREAM_A,
+        parentRunId: null,
         question: 'Q2',
       });
 
       const t3 = yield* records.recordOpenQuestion({
-        parentStreamId: STREAM_B,
-        parentExecutionId: null,
+        parentRunId: STREAM_B,
+        parentRunId: null,
         question: 'Q3',
       });
       yield* records.markDropped({ threadId: t3.threadId, turnIndex: 1 });
@@ -234,7 +234,7 @@ describe('InquiryStorage', () => {
       const openOnA = yield* records.listThreadsByStatus({
         status: 'open',
         scope: 'stream',
-        streamId: STREAM_A,
+        runId: STREAM_A,
       });
       expect(openOnA.map((t) => t.threadId)).toEqual([t2.threadId]);
 

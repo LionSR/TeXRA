@@ -21,15 +21,15 @@ import {
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
+import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
   ActiveChildInfo,
-  ExecutionId,
+  RunId,
   ProgressPermissionKind,
   DisplaySessionEvent,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
@@ -114,19 +114,19 @@ export function recordSessionEvents(
 
 /** Every child roster a registry tells its listeners from this call on. */
 export function recordChildRosters(
-  registry: Pick<SessionHandle['executions'], 'onChildActivity'>,
+  registry: Pick<SessionHandle['runs'], 'onChildActivity'>,
 ): {
   readonly rosters: Array<{
-    readonly parentStreamId: StreamTabId;
+    readonly parentRunId: RunId;
     readonly items: readonly ActiveChildInfo[];
   }>;
 } {
   const rosters: Array<{
-    readonly parentStreamId: StreamTabId;
+    readonly parentRunId: RunId;
     readonly items: readonly ActiveChildInfo[];
   }> = [];
-  registry.onChildActivity((parentStreamId, items) => {
-    rosters.push({ parentStreamId, items });
+  registry.onChildActivity((parentRunId, items) => {
+    rosters.push({ parentRunId, items });
   });
   return { rosters };
 }
@@ -134,9 +134,9 @@ export function recordChildRosters(
 /** Every stream whose follow-up queue reports input sent from this call on. */
 export function recordFollowUpsSent(
   session: Pick<SessionHandle, 'followUps'>,
-): { readonly sent: StreamTabId[] } {
-  const sent: StreamTabId[] = [];
-  session.followUps.onSent((streamId) => sent.push(streamId));
+): { readonly sent: RunId[] } {
+  const sent: RunId[] = [];
+  session.followUps.onSent((runId) => sent.push(runId));
   return { sent };
 }
 
@@ -229,27 +229,27 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
   const events: RecordedProgressEvent[] = [];
   const pendingPlans = new Map<
     string,
-    { streamId: string; settle: (result: PlanApprovalResult) => void }
+    { runId: string; settle: (result: PlanApprovalResult) => void }
   >();
   const pendingProposals = new Map<
     string,
-    { streamId: string; settle: (result: ProposalResult) => void }
+    { runId: string; settle: (result: ProposalResult) => void }
   >();
   const pendingRetries = new Map<
     string,
-    { streamId: string; settle: (result: RetryResult) => void }
+    { runId: string; settle: (result: RetryResult) => void }
   >();
   const pendingBashes = new Map<
     string,
-    { streamId?: string; settle: (result: BashSettlement) => void }
+    { runId?: string; settle: (result: BashSettlement) => void }
   >();
   const pendingUserQuestions = new Map<
     string,
-    { streamId?: string; settle: (result: UserQuestionSettlement) => void }
+    { runId?: string; settle: (result: UserQuestionSettlement) => void }
   >();
   // Mirrors the host contract: interaction requests ensure the view is
   // open without switching the active tab (#8246).
-  const revealStream = () => {
+  const revealRun = () => {
     events.push({ event: 'requestEnsureProgressView', payload: {} });
   };
   const decisions: RecordingHostDecisions = {
@@ -292,7 +292,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       pendingRetries.delete(requestId);
       events.push({
         event: 'resolveRetryRequest',
-        payload: { streamId: requestId },
+        payload: { runId: requestId },
       });
       pending.settle(decision);
       return true;
@@ -318,8 +318,8 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       events.push({ event: 'setApprovalBypassState', payload: update }),
     requestBashApproval: (request) => {
       const requestId = `bash-${pendingBashes.size + 1}`;
-      const streamId = request.streamId ?? '';
-      revealStream();
+      const runId = request.runId ?? '';
+      revealRun();
       events.push({
         event: 'showBashPermission',
         payload: {
@@ -327,12 +327,12 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
           command: request.command,
           ...(request.cwd ? { cwd: request.cwd } : {}),
           allowBypass: true,
-          streamId,
+          runId,
         },
       });
       return new Promise((resolve) => {
         pendingBashes.set(requestId, {
-          streamId: request.streamId ?? undefined,
+          runId: request.runId ?? undefined,
           settle: resolve,
         });
       });
@@ -344,7 +344,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       });
       return new Promise((resolve) => {
         pendingPlans.set(request.requestId, {
-          streamId: request.streamId,
+          runId: request.runId,
           settle: resolve,
         });
       });
@@ -356,7 +356,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       });
       return new Promise((resolve) => {
         pendingProposals.set(request.requestId, {
-          streamId: request.streamId,
+          runId: request.runId,
           settle: resolve,
         });
       });
@@ -367,21 +367,21 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
         payload: request,
       });
       return new Promise((resolve) => {
-        pendingRetries.set(request.streamId, {
-          streamId: request.streamId,
+        pendingRetries.set(request.runId, {
+          runId: request.runId,
           settle: resolve,
         });
       });
     },
     askUserQuestion: (request) => {
-      revealStream();
+      revealRun();
       events.push({
         event: 'showUserQuestion',
         payload: request,
       });
       return new Promise((resolve) => {
         pendingUserQuestions.set(request.requestId, {
-          streamId: request.streamId || undefined,
+          runId: request.runId || undefined,
           settle: resolve,
         });
       });
@@ -390,13 +390,13 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
     dispose: () => cancelWhere({}),
   };
   function cancelWhere(selector: HostInteractionCancelSelector): void {
-    const match = (kind: ProgressPermissionKind, streamId?: string) =>
+    const match = (kind: ProgressPermissionKind, runId?: string) =>
       matchesCancelSelector(
-        { kind, streamId: streamId || undefined },
+        { kind, runId || undefined },
         selector,
       );
     for (const [requestId, pending] of pendingBashes) {
-      if (!match('bash', pending.streamId)) continue;
+      if (!match('bash', pending.runId)) continue;
       pendingBashes.delete(requestId);
       events.push({
         event: 'resolveBashPermission',
@@ -405,7 +405,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       pending.settle({ action: 'reject' });
     }
     for (const [requestId, pending] of pendingPlans) {
-      if (!match('planApproval', pending.streamId)) continue;
+      if (!match('planApproval', pending.runId)) continue;
       pendingPlans.delete(requestId);
       events.push({
         event: 'resolvePlanApproval',
@@ -414,7 +414,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       pending.settle({ action: 'reject' });
     }
     for (const [requestId, pending] of pendingProposals) {
-      if (!match('proposal', pending.streamId)) continue;
+      if (!match('proposal', pending.runId)) continue;
       pendingProposals.delete(requestId);
       events.push({
         event: 'resolveAgentProposal',
@@ -422,17 +422,17 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       });
       pending.settle({ action: 'reject' });
     }
-    for (const [streamId, pending] of pendingRetries) {
-      if (!match('retry', pending.streamId)) continue;
-      pendingRetries.delete(streamId);
+    for (const [runId, pending] of pendingRetries) {
+      if (!match('retry', pending.runId)) continue;
+      pendingRetries.delete(runId);
       events.push({
         event: 'resolveRetryRequest',
-        payload: { streamId },
+        payload: { runId },
       });
       pending.settle({ action: 'cancel' });
     }
     for (const [requestId, pending] of pendingUserQuestions) {
-      if (!match('userQuestion', pending.streamId)) continue;
+      if (!match('userQuestion', pending.runId)) continue;
       pendingUserQuestions.delete(requestId);
       events.push({
         event: 'resolveUserQuestion',
@@ -493,7 +493,7 @@ export function sessionWithInteractions(
  * one scope, as production does.
  */
 export function testRunScope(
-  streamId: string,
+  runId: string,
   options: {
     session?: SessionHandle;
     signal?: AbortSignal;
@@ -504,8 +504,8 @@ export function testRunScope(
   const interactions =
     options.interactions ?? sessionWithInteractions(undefined).interactions;
   return createRunScope({
-    streamId: streamId as StreamTabId,
-    executionId: 'deadbeef' as ExecutionId,
+    runId as RunId,
+    runId: 'deadbeef' as RunId,
     agentName: 'test-agent',
     session: options.session ?? sessionWithInteractions(interactions),
     signal: options.signal ?? new AbortController().signal,
@@ -547,7 +547,7 @@ export function bashApprovalRequest(
       command: request.command,
       ...(request.cwd ? { cwd: request.cwd } : {}),
       allowBypass: true,
-      streamId: request.streamId ?? '',
+      runId: request.runId ?? '',
     },
   };
 }

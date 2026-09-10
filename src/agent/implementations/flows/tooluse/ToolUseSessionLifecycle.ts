@@ -7,7 +7,7 @@ import type {
   FollowUpQueueBatch,
 } from '@agent/followUp/FollowUpQueue';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
@@ -16,7 +16,7 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   private waitCancelled = false;
 
   constructor(
-    private readonly streamTabId: StreamTabId,
+    private readonly streamTabId: RunId,
     private readonly queue: ToolUseFollowUpQueue,
   ) {
     const lease = queue.claimLive(streamTabId, 'flow');

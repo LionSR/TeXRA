@@ -377,12 +377,12 @@ describe('Edge cases', () => {
   // and web_fetch_tool_result are — see AnthropicStreamHandler) and land
   // in the switch's `case undefined` arm, same as any other unrecognized
   // block type.
-  it('does not map unused code-execution block types to a node', () => {
+  it('does not map unused code-run block types to a node', () => {
     const nodes = normalize([
       {
         role: 'assistant',
         content: [
-          { type: 'code_execution_tool_result', content: 'execution output' },
+          { type: 'code_execution_tool_result', content: 'run output' },
           { type: 'bash_code_execution_tool_result', content: 'bash output' },
           {
             type: 'text_editor_code_execution_tool_result',

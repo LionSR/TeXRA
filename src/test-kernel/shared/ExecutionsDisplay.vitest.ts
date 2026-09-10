@@ -23,7 +23,7 @@ describe('executions tool display', () => {
     ).toBe('wait: reviewer, leanSolver');
   });
 
-  it('labels a subagent selected through a specific execution path', () => {
+  it('labels a subagent selected through a specific run path', () => {
     expect(
       executionsSubagentSummary({ path: '/executions/sub-1/report' }, labels),
     ).toBe('view: reviewer/report');
@@ -53,7 +53,7 @@ describe('executions tool display', () => {
     ).toBeUndefined();
   });
 
-  it('does not treat the current execution alias as a subagent id', () => {
+  it('does not treat the current run alias as a subagent id', () => {
     expect(
       executionsSubagentSummary({ path: '/executions/current' }, labels),
     ).toBeUndefined();

@@ -25,15 +25,15 @@ describe('agent shutdown', () => {
     const secondSession = createTestSession();
     const compatibilitySession = defaultSession();
     const firstDrain = vi.spyOn(
-      firstSession.executions,
+      firstSession.runs,
       'killBackgroundProcesses',
     );
     const secondDrain = vi.spyOn(
-      secondSession.executions,
+      secondSession.runs,
       'killBackgroundProcesses',
     );
     const compatibilityDrain = vi.spyOn(
-      compatibilitySession.executions,
+      compatibilitySession.runs,
       'killBackgroundProcesses',
     );
     // Session-keyed registries: only sessions whose registry exists are swept.
@@ -68,7 +68,7 @@ describe('agent shutdown', () => {
   it('preserves the shared shutdown order around host hooks', async () => {
     const session = createTestSession();
     const order: string[] = [];
-    vi.spyOn(session.executions, 'killBackgroundProcesses').mockImplementation(
+    vi.spyOn(session.runs, 'killBackgroundProcesses').mockImplementation(
       () => {
         order.push('agent-shutdown');
       },
@@ -82,7 +82,7 @@ describe('agent shutdown', () => {
         afterAgentShutdown: [() => void order.push('after-agent')],
         flushArtifacts: () => void order.push('flush'),
         afterFlushArtifacts: [() => void order.push('after-flush')],
-        afterExecutionSettlement: [() => void order.push('after-settle')],
+        afterRunSettlement: [() => void order.push('after-settle')],
       });
 
       await lifecycle.runShutdown();

@@ -130,7 +130,7 @@ export const sessionInputsLayer = Layer.effect(
                       const slash = key.indexOf('/');
                       const chunk: TextChunk = {
                         _tag: 'chunk',
-                        streamId: RunIdSchema.parse(key.slice(0, slash)),
+                        runId: RunIdSchema.parse(key.slice(0, slash)),
                         rowId: key.slice(slash + 1),
                         from,
                         to: value.length,

@@ -40,7 +40,7 @@ interface TaskSidebarModel {
   readonly projects: readonly RailProject[];
   readonly shell: Shell;
   /** The shown workbench (the active project's) has its Subagents tab open:
-   *  that project's tree lives there and its section lists top-level streams
+   *  that project's tree lives there and its section lists top-level runs
    *  only. Other projects' workbenches are not shown, so their sections keep
    *  their trees. */
   readonly subagentsOpen: boolean;
@@ -112,7 +112,7 @@ function projectBadge(view: SessionView): TemplateResult | typeof nothing {
   return nothing;
 }
 
-function streamTabsTemplate(
+function runTabsTemplate(
   project: RailProject,
   options: { topLevelOnly: boolean },
 ): TemplateResult {
@@ -133,16 +133,16 @@ function streamTabsTemplate(
  * then says where its calls went (W2). Nothing when the selection has no
  * children, since there would be no tree to reach.
  */
-function childStreamsAccess(
+function childRunsAccess(
   project: RailProject,
   options: { active: boolean; flattened: boolean },
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult | typeof nothing {
   const { view, surface } = project;
   const selected = resolveSelected(view, surface);
-  const stream = selected === null ? undefined : view.streams.get(selected);
+  const stream = selected === null ? undefined : view.runs.get(selected);
   const rootId = stream?.ancestors[0]?.id ?? stream?.id;
-  const root = rootId === undefined ? undefined : view.streams.get(rootId);
+  const root = rootId === undefined ? undefined : view.runs.get(rootId);
   if (root === undefined || root.rollup.total === 0) return nothing;
   const { total } = root.rollup;
   const { icon, label } = WORKBENCH_KIND_META.subagents;
@@ -150,7 +150,7 @@ function childStreamsAccess(
     ${
       options.flattened && root.category === 'workflow'
         ? html`<div class="task-workflow-calls-note">
-            ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
+            ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child runs`},
             reachable from the board. They never appear here.
           </div>`
         : nothing
@@ -192,7 +192,7 @@ function projectSection(
   const collapsed = model.shell.collapsed.includes(key);
   const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
   // The tree has one home at a time: the Subagents tab holds the shown
-  // project's, and this section then lists its top-level streams only.
+  // project's, and this section then lists its top-level runs only.
   const flattened = active && model.subagentsOpen;
   return html`
     <div class="task-project-item">
@@ -242,9 +242,9 @@ function projectSection(
       collapsed
         ? nothing
         : html`
-            <div class="task-sidebar-sessions task-project-streams">
-              ${streamTabsTemplate(project, { topLevelOnly: flattened })}
-              ${childStreamsAccess(project, { active, flattened }, callbacks)}
+            <div class="task-sidebar-sessions task-project-runs">
+              ${runTabsTemplate(project, { topLevelOnly: flattened })}
+              ${childRunsAccess(project, { active, flattened }, callbacks)}
             </div>
           `
     }

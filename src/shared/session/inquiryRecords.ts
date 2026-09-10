@@ -14,7 +14,7 @@ export class InquiryRecords extends Context.Service<
     readonly recordOpenQuestion: (params: {
       threadId?: InquiryThreadId;
       /** The asking run; continuations flow back to it. */
-      parentStreamId: RunId;
+      parentRunId: RunId;
       question: string;
       context?: string;
       suggestSearch?: boolean;
@@ -39,7 +39,7 @@ export class InquiryRecords extends Context.Service<
     readonly listThreadsByStatus: (params: {
       status: InquiryThreadStatus | 'any';
       scope: 'stream' | 'all';
-      streamId?: RunId;
+      runId?: RunId;
       limit?: number;
     }) => Effect.Effect<InquiryThreadSummary[], Error>;
   }

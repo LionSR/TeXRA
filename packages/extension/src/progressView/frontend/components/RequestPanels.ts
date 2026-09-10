@@ -39,7 +39,7 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
-import type { PermissionPayload, StreamTabId } from '@shared/schemas';
+import type { PermissionPayload, RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 
@@ -219,8 +219,8 @@ export class RequestPanels extends LitElement {
 
     if (changedProperties.has('permissions') || changedProperties.has('view')) {
       // Captions key off every pending run, not the stream-filtered prop.
-      const runIds = new Set<StreamTabId>(
-        (this.view?.approvals ?? []).map((approval) => approval.streamId),
+      const runIds = new Set<RunId>(
+        (this.view?.approvals ?? []).map((approval) => approval.runId),
       );
       this.multiRunPending = runIds.size > 1;
     }
@@ -359,11 +359,11 @@ export class RequestPanels extends LitElement {
       .surface=${this.surface}
     ></${config.tag}>`;
     if (!this.multiRunPending) return panel;
-    const streamId = permission.data.streamId;
-    if (!streamId) return panel;
+    const runId = permission.data.runId;
+    if (!runId) return panel;
     // If the run's stream was evicted, skip the group caption rather than
-    // show the raw `agent#executionId` handle.
-    const label = this.view?.streams.get(streamId)?.label;
+    // show the raw `agent#runId` handle.
+    const label = this.view?.runs.get(runId)?.label;
     if (!label) return panel;
     return html`
       <div class="request-run-group">

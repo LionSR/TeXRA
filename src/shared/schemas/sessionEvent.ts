@@ -31,11 +31,11 @@ import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
 import { GoalStateSchema } from './goal';
 import {
-  ExecutionRunRecordSchema,
-  ExecutionWorkspaceFilesSchema,
+  RunRecordFieldsSchema,
+  RunWorkspaceFilesSchema,
   ResultMetaSchema,
-} from './executionRecords';
-import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
+} from './runRecords';
+import { WorkflowRunSnapshotSchema } from './workflowRunSnapshot';
 import { RunIdSchema, type RunId } from './identifiers';
 import {
   InquiryThreadRecordSchema,
@@ -45,17 +45,17 @@ import { PlanSchema } from './plan';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RunIdentitySchema } from './runIdentity';
 import {
-  StreamPhaseSchema,
-  StreamSubstateSchema,
+  RunPhaseSchema,
+  RunSubstateSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
-} from './stream';
+} from './run';
 import { StreamLogEntrySchema } from './streamLogEntry';
 import {
   ApprovalBypassesSchema,
   ConversationProgressSchema,
   RoundKeyedOutputSidecarValueSchemas,
-} from './streamState';
+} from './runState';
 import { TodoItemSchema } from './todo';
 import { ResultEventSchema, TranscriptEventSchemas } from './traceEvent';
 
@@ -229,7 +229,7 @@ function durable<T extends string, S extends z.ZodRawShape>(
  * database inside the child's creation transaction so a logical id a
  * workflow-script retry reuses can never redirect the child to a later
  * incarnation of its parent. Everything else that used to spell the edge
- * (`parentStreamId`, `parentExecutionId`, `isSubagent`, `background`) is
+ * (`parentRunId`, `parentRunId`, `isSubagent`, `background`) is
  * `parent !== null`, computed from the fold or the handle.
  */
 const RunParentSchema = z.object({
@@ -256,7 +256,7 @@ export type RunParent = z.infer<typeof RunParentSchema>;
 const RunStartEventSchema = durable('run.start', {
   identity: RunIdentitySchema,
   userFollowUpSupport: UserFollowUpSupportSchema,
-  /** The `StreamView` discriminant: `toolUse` for an agent in tool-use mode
+  /** The `RunView` discriminant: `toolUse` for an agent in tool-use mode
    *  and for a process run, `workflow` for a workflow agent or script. */
   category: AgentCategorySchema,
   /** Agent-registry remoteness; false for a run with no registry entry. */
@@ -271,22 +271,22 @@ const RunStartEventSchema = durable('run.start', {
 });
 
 /** C9 cleanup targets: the run directories owned by this lifecycle, derived by the database. */
-const StreamRemovedEventSchema = durable('stream.removed', {
-  executionIds: z.array(RunIdSchema),
+const RunRemovedEventSchema = durable('run.removed', {
+  runIds: z.array(RunIdSchema),
 });
 
 /** A launcher names the parent; the database stamps its creation commit. */
 const RunStartDraftSchema = RunStartEventSchema.omit({ parent: true }).extend({
   parent: RunParentSchema.pick({ id: true }).nullable(),
 });
-const StreamRemovedDraftSchema = StreamRemovedEventSchema.omit({
-  executionIds: true,
+const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
+  runIds: true,
 });
 
 /**
  * The durable arms every renderer folds. Run-scoped arms mirror `AgentEvent`
  * (`src/agent/trace/events.ts`); session-scoped arms mirror the session
- * facts with the payload flattened. `stream.removed` is the tombstone: the
+ * facts with the payload flattened. `run.removed` is the tombstone: the
  * last row of its aggregate, final (PRD 5.2, "Existence").
  */
 const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
@@ -321,12 +321,12 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     ResultEventSchema.unwrap().omit({ type: true, runId: true }).shape,
   ),
   durable('status', {
-    phase: StreamPhaseSchema,
-    previousPhase: StreamPhaseSchema.nullish(),
-    /** `STREAM_TRANSITION_CAUSE` (`@shared/streams/streamStatus`); diagnostic,
+    phase: RunPhaseSchema,
+    previousPhase: RunPhaseSchema.nullish(),
+    /** `RUN_TRANSITION_CAUSE` (`@shared/runs/runStatus`); diagnostic,
      *  not a fold input. */
     cause: z.string(),
-    substate: StreamSubstateSchema.nullish(),
+    substate: RunSubstateSchema.nullish(),
     runStartedAt: z.int().positive().nullish(),
   }),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
@@ -342,12 +342,12 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
   }),
   durable('goalPaused', {}),
-  StreamRemovedDraftSchema,
-  durable('updateStreamDescription', { description: z.string() }),
+  RunRemovedDraftSchema,
+  durable('updateRunDescription', { description: z.string() }),
   /** Goal is per run; the fact carries the state so the fold never reads
    *  `GoalStore`. */
   durable('goalStateChanged', { state: GoalStateSchema }),
-  /** Aggregate is the thread id; `parentStreamId` is the payload's edge. */
+  /** Aggregate is the thread id; `parentRunId` is the payload's edge. */
   durable(
     'inquiryThreadUpdated',
     InquiryThreadUpdatedEventSchema.shape,
@@ -388,14 +388,14 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
  * by the runtime's typed accessors and never by a renderer
  * (`isDisplaySessionEvent` keeps them out of the transport by type).
  */
-const ExecutionEventDraftSchema = z.discriminatedUnion('type', [
-  durable('execution.config', { record: ExecutionRunRecordSchema }),
-  durable('execution.launchLabel', { label: z.string() }),
-  durable('execution.description', { description: z.string() }),
-  durable('execution.report', { report: z.string().nullable() }),
-  durable('execution.result', { result: ResultMetaSchema }),
-  durable('execution.workspaceFiles', { paths: ExecutionWorkspaceFilesSchema }),
-  durable('execution.workflow', { workflow: WorkflowExecutionSnapshotSchema }),
+const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
+  durable('run.record', { record: RunRecordFieldsSchema }),
+  durable('run.launchLabel', { label: z.string() }),
+  durable('run.description', { description: z.string() }),
+  durable('run.report', { report: z.string().nullable() }),
+  durable('run.result', { result: ResultMetaSchema }),
+  durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
+  durable('run.workflow', { workflow: WorkflowRunSnapshotSchema }),
 ]);
 const DesktopProjectsDraftSchema = durable(
   'desktop.projects.changed',
@@ -414,24 +414,24 @@ const UpdateCheckDraftSchema = durable(
 );
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
-  ...ExecutionEventDraftSchema.options,
+  ...RunRecordEventDraftSchema.options,
   DesktopProjectsDraftSchema,
   GlobalInquiryDraftSchema,
   UpdateCheckDraftSchema,
 ]);
 const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
-  StreamRemovedEventSchema.extend(envelope),
+  RunRemovedEventSchema.extend(envelope),
   ...DisplaySessionEventDraftSchema.options
     .filter(
       (
         schema,
       ): schema is Exclude<
         typeof schema,
-        typeof RunStartDraftSchema | typeof StreamRemovedDraftSchema
+        typeof RunStartDraftSchema | typeof RunRemovedDraftSchema
       > =>
         schema.shape.type.value !== 'run.start' &&
-        schema.shape.type.value !== 'stream.removed',
+        schema.shape.type.value !== 'run.removed',
     )
     .map((schema) => schema.extend(envelope)),
 ]);
@@ -441,7 +441,7 @@ export type DisplaySessionEventDraft = z.infer<
 export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
-  ...ExecutionEventDraftSchema.options.map((schema) => schema.extend(envelope)),
+  ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),
   DesktopProjectsDraftSchema.extend(envelope),
   GlobalInquiryDraftSchema.extend(envelope),
   UpdateCheckDraftSchema.extend(envelope),
@@ -464,8 +464,8 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
     if (event.checkpointId != null)
       ids.push(aggregateId('workflow-checkpoint', event.checkpointId));
   }
-  if (event.type === 'inquiryThreadUpdated' && event.parentStreamId !== null) {
-    ids.push(aggregateId('run', event.parentStreamId));
+  if (event.type === 'inquiryThreadUpdated' && event.parentRunId !== null) {
+    ids.push(aggregateId('run', event.parentRunId));
   }
   return ids;
 }
@@ -473,7 +473,7 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
 /**
  * The listing types the fold keys `latest` by (PRD 5.1): every durable arm
  * but the transcript tier. The approval pair shares one entry because it
- * folds to one set, and the lifecycle pair (`run.start`, `stream.removed`)
+ * folds to one set, and the lifecycle pair (`run.start`, `run.removed`)
  * shares one because it folds to one existence: a tombstone's commit then
  * outranks a replayed `run.start` below it, which is what makes the
  * tombstone final under every read (5.2, "Existence").
@@ -499,7 +499,7 @@ export function listingTypeOf(
     case 'approval.resolved':
       return 'approval';
     case 'run.start':
-    case 'stream.removed':
+    case 'run.removed':
       return 'lifecycle';
     default:
       return event.type;
@@ -526,7 +526,7 @@ export const FoldEventSchema = z.object({
  */
 export const TextChunkSchema = z.object({
   _tag: z.literal('chunk'),
-  streamId: RunIdSchema,
+  runId: RunIdSchema,
   rowId: z.string(),
   from: z.int().nonnegative(),
   to: z.int().positive(),
@@ -542,7 +542,7 @@ export type TextChunk = z.infer<typeof TextChunkSchema>;
 export const LocalRuntimeStateSchema = z.object({
   self: z.array(OwnerIdSchema),
   dead: z.array(OwnerIdSchema),
-  unreadable: z.array(z.object({ streamId: RunIdSchema, detail: z.string() })),
+  unreadable: z.array(z.object({ runId: RunIdSchema, detail: z.string() })),
 });
 export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
 

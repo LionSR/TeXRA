@@ -48,14 +48,14 @@ import {
 } from '@shared/approvalPolicy';
 import type {
   AgentDelegationScope,
-  ExecutionId,
-  StreamPhase,
+  RunId,
+  RunPhase,
 } from '@shared/schemas';
-import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
+import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { descendantStreams } from '@shared/session/sessionView';
+import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import { isActivePhase } from '@shared/runs/runStatus';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -79,18 +79,18 @@ import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
-  activeStreamId as activeStreamIdSignal,
+  activeRunId as activeRunIdSignal,
   resetCliState,
   patchSessionMeta,
-  rootStreamId as rootStreamIdSignal,
+  rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
 import {
   bindSessionView,
   currentView,
   sessionView,
-  streamPhaseOf,
-  streamViewOf,
+  runPhaseOf,
+  runViewOf,
 } from './state/sessionView';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
@@ -132,7 +132,7 @@ interface RunChatInit {
   readonly delegationAgentScope?: AgentDelegationScope;
   /** Startup resume from `texra resume <id>`, with the run's persisted config. */
   readonly initialResume?: {
-    readonly id: ExecutionId;
+    readonly id: RunId;
     readonly config: AgentConfig;
   };
 }
@@ -271,7 +271,7 @@ export async function runChat(
     setApprovalPolicy,
     canSelectModel: canSelectCurrentModel,
     resetSession: resetSessionForClear,
-    resumeExecution: chatController.resume,
+    resumeRun: chatController.resume,
   });
   const initialPresetId =
     initialResume?.config.cli?.multiAgentPresetId ?? init.cliMultiAgentPresetId;
@@ -332,12 +332,12 @@ export async function runChat(
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposables.add(terminalTitleUpdates.dispose);
   disposables.add(announceForegroundApprovals());
-  let subscribedStreams = '';
+  let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
-    const ids = [...currentView().streams.keys()];
+    const ids = [...currentView().runs.keys()];
     const key = ids.join('\0');
-    if (key === subscribedStreams) return;
-    subscribedStreams = key;
+    if (key === subscribedRuns) return;
+    subscribedRuns = key;
     effectRuntime().runFork(
       runtimeSession.setTranscriptSubscriptions(
         'tui',
@@ -353,18 +353,18 @@ export async function runChat(
   const session = new TuiSession();
 
   const followUpQueue = new PQueue({ concurrency: 1 });
-  const rootStreamStatus = (): StreamPhase | undefined =>
-    streamPhaseOf(streamViewOf(currentView(), session.streamId));
+  const rootRunStatus = (): RunPhase | undefined =>
+    runPhaseOf(runViewOf(currentView(), session.runId));
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
-      session.streamId &&
-      runtimeSession.executions.getToolUseFlowContext(session.streamId),
+      session.runId &&
+      runtimeSession.runs.getToolUseFlowContext(session.runId),
     );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
       canStartRootRun: chatTuiCanStartRootRun(session),
-      streamId: session.streamId,
-      status: rootStreamStatus(),
+      runId: session.runId,
+      status: rootRunStatus(),
       hasActiveToolUseFlow: hasActiveToolUseFlow(),
     });
   const getModelSwitchDisabledReason = (
@@ -373,8 +373,8 @@ export async function runChat(
     if (chatTuiCanStartRootRun(session) || !canSelectCurrentModel()) {
       return undefined;
     }
-    const activeFlow = session.streamId
-      ? runtimeSession.executions.getToolUseFlowContext(session.streamId)
+    const activeFlow = session.runId
+      ? runtimeSession.runs.getToolUseFlowContext(session.runId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
@@ -383,8 +383,8 @@ export async function runChat(
   const canStopActiveRun = (): boolean =>
     chatTuiCanStopVisibleRun({
       runPending: chatTuiRunPending(session),
-      streamId: session.streamId,
-      status: rootStreamStatus(),
+      runId: session.runId,
+      status: rootRunStatus(),
     });
   const isResumableIdle = (): boolean =>
     chatTuiIsResumableIdleOnExit({
@@ -408,17 +408,17 @@ export async function runChat(
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
   });
-  disposables.add(setCliAgentResumeHandler(chatController.tryResumeStream));
+  disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
 
   const resetSessionForClear = (): void => {
-    const currentStreamId = session.streamId ?? activeStreamIdSignal.get();
-    const activeStatus = streamPhaseOf(
-      streamViewOf(currentView(), currentStreamId),
+    const currentRunId = session.runId ?? activeRunIdSignal.get();
+    const activeStatus = runPhaseOf(
+      runViewOf(currentView(), currentRunId),
     );
     const isRunPending = chatTuiRunPending(session);
 
     if (
-      (isRunPending && activeStatus !== STREAM_PHASE.WAITING) ||
+      (isRunPending && activeStatus !== RUN_PHASE.WAITING) ||
       isActivePhase(activeStatus)
     ) {
       appendLocalAssistantTranscript(
@@ -437,12 +437,12 @@ export async function runChat(
     // Release this conversation's resident transcripts when their remaining
     // readers and writers leave. Clearing the terminal does not delete history.
     const store = runtimeSession.transcripts;
-    for (const streamId of descendantStreams(
+    for (const runId of descendantRuns(
       currentView(),
-      rootStreamIdSignal.get(),
+      rootRunIdSignal.get(),
       { includeRoot: true },
     )) {
-      store.requestEviction(streamId);
+      store.requestEviction(runId);
     }
     resetCliState(meta);
     clearTerminalScrollback();
@@ -495,26 +495,26 @@ export async function runChat(
       onSubmit={(line, mediaFiles, images) =>
         void chatController.submit(line, mediaFiles, images)
       }
-      canInterruptStream={(streamId) =>
-        (streamId === session.streamId && canInterruptActiveRun()) ||
-        runtimeSession.status.isInFlight(streamId)
+      canInterruptRun={(runId) =>
+        (runId === session.runId && canInterruptActiveRun()) ||
+        runtimeSession.status.isInFlight(runId)
       }
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
-      onInterruptStream={chatController.stopStream}
+      onInterruptRun={chatController.stopRun}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
-      onKillExecution={(executionId) => {
+      onKillRun={(runId) => {
         runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
-        const stop = runtimeSession.executions.kill(executionId, {
+        const stop = runtimeSession.runs.kill(runId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
         effectRuntime().runFork(stop.settlement);
       }}
-      onWorkflowControl={(executionId, action) => {
+      onWorkflowControl={(runId, action) => {
         runtimeSession.workflowControls.control(
-          executionId as ExecutionId,
+          runId as RunId,
           action,
         );
       }}
@@ -575,20 +575,20 @@ export async function runChat(
   // mounted (so the rehydrated transcript + streamed continuation render) and
   // the signal handlers are armed. Fire-and-forget, resumeAgentRun installs
   // session.runPromise, and the normal first-input path stays available so the
-  // user can keep chatting (follow-ups target session.streamId as usual).
+  // user can keep chatting (follow-ups target session.runId as usual).
   if (initialResume) {
     void chatController.resume(initialResume.id);
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
   // signals "your turn," alongside the StatusBar pill.
-  let rootPhase = rootStreamStatus();
+  let rootPhase = rootRunStatus();
   disposables.add(
     subscribeToSignalChanges([sessionView()], () => {
-      const phase = rootStreamStatus();
+      const phase = rootRunStatus();
       if (phase === rootPhase) return;
       rootPhase = phase;
-      if (phase === STREAM_PHASE.WAITING && !session.stopRequested) {
+      if (phase === RUN_PHASE.WAITING && !session.stopRequested) {
         notify('agentFinished');
       }
     }),

@@ -407,7 +407,7 @@ export function buildMemoryPathDisplay(
 // Executions Path Display (non-clickable, virtual paths)
 // ============================================================================
 
-/** Build an executions path display with history icon. Execution paths are virtual (/executions/...) and not directly openable in the editor. */
+/** Build an executions path display with history icon. Run paths are virtual (/executions/...) and not directly openable in the editor. */
 export function buildExecutionsPathDisplay(
   execPath: string,
 ): TemplateResult | typeof nothing {

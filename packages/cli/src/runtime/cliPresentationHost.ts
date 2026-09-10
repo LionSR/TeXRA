@@ -9,7 +9,7 @@ import {
 } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 
 // Local imports - CLI runtime
@@ -32,7 +32,7 @@ export interface CliRuntimeHost {
   ): boolean;
   attachRunProgressRenderer(
     session: SessionHandle,
-    options?: { readonly executionId?: ExecutionId },
+    options?: { readonly runId?: RunId },
   ): () => void;
   prepareInteractivePrompt?: () => void;
   emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
@@ -125,13 +125,13 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     attachRunProgressRenderer: (session, options) =>
       runProgress ? runProgress.attach(session, options) : () => undefined,
     prepareInteractivePrompt: () => runProgress?.preserve(),
-    emitApprovalBypassState({ streamId, kind, bypassActive }) {
+    emitApprovalBypassState({ runId, kind, bypassActive }) {
       if (closed || !ndjson) return;
       const record: CliNdjsonRecord = {
         kind: 'progress',
         event: ApprovalBypassNdjsonEvent[kind],
         ts: new Date().toISOString(),
-        payload: { streamId, bypassActive },
+        payload: { runId, bypassActive },
       };
       writeNdjsonStdout(record);
     },

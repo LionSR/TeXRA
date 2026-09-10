@@ -9,10 +9,10 @@ import {
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import { type ExecutionId, type RunOutcome } from '@shared/schemas';
+import { type RunId, type RunOutcome } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { getExecutionRecords, getExecutionStore } from './ExecutionKVStore';
+import { getRunRecords, getRunStore } from './RunKVStore';
 
 const log = createLog('Resumability');
 
@@ -45,7 +45,7 @@ export type ResumabilityFault =
   | 'checkpoint-malformed';
 
 /**
- * What the durable run facts alone say about continuing an execution:
+ * What the durable run facts alone say about continuing a run:
  * a valid checkpoint exists, nothing is left to resume, or the storage
  * itself could not be read (reported with its cause, never guessed).
  */
@@ -71,41 +71,41 @@ export type ResumabilityDecision =
  * completed run, so a failed run that still has one is offered as "retry
  * from the last checkpoint". Ownership is not decided here; `classifyRun`
  * (`@agent/runtime/runClassification`) combines this decision with the
- * execution lease.
+ * run lease.
  */
 export const deriveResumability = Effect.fn('deriveResumability')(function* (
-  executionId: ExecutionId,
+  runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ResumabilityDecision> {
-  const metaResult = yield* getExecutionRecords(session, executionId)
+  const metaResult = yield* getRunRecords(session, runId)
     .readMeta()
     .pipe(Effect.result);
   if (metaResult._tag === 'Failure') {
     const error = metaResult.failure;
     const malformed = error instanceof z.ZodError;
     log.debug(
-      `Failed to read execution metadata for ${executionId}: ${toErrorMessage(error)}`,
+      `Failed to read run metadata for ${runId}: ${toErrorMessage(error)}`,
     );
     return {
       kind: 'unreadable',
       fault: malformed ? 'metadata-malformed' : 'metadata-unreadable',
       cause: malformed
-        ? 'execution metadata is malformed'
-        : `execution metadata could not be read (${toErrorMessage(error)})`,
+        ? 'run metadata is malformed'
+        : `run metadata could not be read (${toErrorMessage(error)})`,
     };
   }
   const metaFields = { outcome: metaResult.success?.outcome };
   const checkpoint = yield* Effect.tryPromise({
     try: () =>
       runInSession(session, () =>
-        getExecutionStore(executionId).read(flowKey(executionId)),
+        getRunStore(runId).read(flowKey(runId)),
       ),
     catch: ensureError,
   }).pipe(Effect.result);
   if (checkpoint._tag === 'Failure') {
     const error = checkpoint.failure;
     log.debug(
-      `Failed to read flow record for ${executionId}: ${toErrorMessage(error)}`,
+      `Failed to read flow record for ${runId}: ${toErrorMessage(error)}`,
     );
     return {
       kind: 'unreadable',
@@ -129,25 +129,25 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
  * Whether a run's checkpoint file is on disk — one `stat`, never a parse.
  *
  * A probe that fails answers "no checkpoint" and says so at `warn` with the
- * execution it belongs to: a listing must still show the row it can read from
+ * run it belongs to: a listing must still show the row it can read from
  * meta and record rather than dropping the run out of history, and the open
  * path re-reads the file and refuses there if it disagrees.
  */
 export const checkpointExists = Effect.fn('checkpointExists')(function* (
-  executionId: ExecutionId,
+  runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<boolean> {
   return yield* Effect.tryPromise({
     try: () =>
       runInSession(session, () =>
-        getExecutionStore(executionId).exists(flowKey(executionId)),
+        getRunStore(runId).exists(flowKey(runId)),
       ),
     catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
         log.warn(
-          `Could not stat the checkpoint of ${executionId}: ${toErrorMessage(error)}`,
+          `Could not stat the checkpoint of ${runId}: ${toErrorMessage(error)}`,
           { data: error },
         );
         return false;

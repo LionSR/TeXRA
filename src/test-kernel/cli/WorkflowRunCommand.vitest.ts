@@ -20,9 +20,9 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type {
   CliConfigExecuteOptions,
   CliConfigExecuteResult,
-} from '@cli/runtime/runExecution';
+} from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import { durableFinalizationResult } from '@test/support/agentStorageFixtures';
 import { withTempDir } from '@test/support/tempDirPlatform';
@@ -41,12 +41,12 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@agent/storage', async (importOriginal) => {
-  const { createFakeExecutionRecords } =
-    await import('@test/support/FakeExecutionKVStore');
+  const { createFakeRunRecords } =
+    await import('@test/support/FakeRunKVStore');
   return {
     ...(await importOriginal<typeof import('@agent/storage')>()),
-    getExecutionRecords: vi.fn(() =>
-      createFakeExecutionRecords({
+    getRunRecords: vi.fn(() =>
+      createFakeRunRecords({
         writeResultMeta: (meta) =>
           Effect.tryPromise({
             try: () => mocks.writeResultMeta(meta),
@@ -63,7 +63,7 @@ vi.mock('@agent/storage', async (importOriginal) => {
 
 vi.mock('@utils/files/runStorageFs', async (importActual) => ({
   ...(await importActual<typeof import('@utils/files/runStorageFs')>()),
-  getRunDir: vi.fn((executionId: string) => `/tmp/runs/${executionId}`),
+  getRunDir: vi.fn((runId: string) => `/tmp/runs/${runId}`),
 }));
 
 vi.mock('@cli/runtime/runModel', () => ({
@@ -89,7 +89,7 @@ vi.mock('@cli/runtime/transcriptSession', () => ({
   initializeCliTranscriptSession: vi.fn(async () => ({})),
 }));
 
-vi.mock('@cli/runtime/runExecution', () => ({
+vi.mock('@cli/runtime/executeCli', () => ({
   executeCliConfig: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.executeCliConfig(...args),
@@ -132,12 +132,12 @@ type WorkflowRunPayload = Extract<
 
 function expectedRecoveryHint(
   context: CliContext,
-  executionId: string,
+  runId: string,
   workingDirectory = context.cwd,
 ): string {
   return `Resume this workflow with: ${formatResumeCommand(
     context.commandName,
-    executionId,
+    runId,
     {
       cwd: workingDirectory,
       processCwd: process.cwd(),
@@ -179,20 +179,20 @@ function runOutputSummary(absolutePath: string, originalPath: string) {
   } as const;
 }
 
-function workflowExecution(
-  executionId: string,
+function workflowRun(
+  runId: string,
   overrides: Partial<
     Pick<WorkflowRunPayload, 'outcome' | 'outputs' | 'compileFailures'>
   > = {},
 ): WorkflowExecuteResult {
   return {
     ok: true,
-    executionId,
+    runId,
     outcomePersisted: true,
     result: {
       category: AgentCategory.Workflow,
-      executionId,
-      streamId: executionId.replace(/^exec-/, 'stream-'),
+      runId,
+      runId.replace(/^exec-/, 'stream-'),
       outcome: RUN_OUTCOME.COMPLETED,
       outputs: [],
       compileFailures: [],
@@ -201,7 +201,7 @@ function workflowExecution(
   };
 }
 
-function mockWorkflowExecution(
+function mockWorkflowRun(
   result: WorkflowExecuteResult,
   once = false,
 ): void {
@@ -291,18 +291,18 @@ async function writeGeneratedOutput(root: string): Promise<string> {
   return generated;
 }
 
-/** Cancelled-run fixture: real source file plus a cancelled execution mock. */
+/** Cancelled-run fixture: real source file plus a cancelled run mock. */
 async function setupCancelledOutput(
   root: string,
-  executionId: string,
+  runId: string,
 ): Promise<ReturnType<typeof runOutputSummary>> {
   const generated = await writeGeneratedOutput(root);
   const outputSummary = runOutputSummary(
     generated,
     path.join(root, 'paper.tex'),
   );
-  mockWorkflowExecution(
-    workflowExecution(executionId, {
+  mockWorkflowRun(
+    workflowRun(runId, {
       outcome: RUN_OUTCOME.CANCELLED,
       outputs: [outputSummary],
     }),
@@ -354,7 +354,7 @@ describe('CLI workflow run command', () => {
         }) => Promise<unknown>,
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
-    mockWorkflowExecution(workflowExecution('exec-1'));
+    mockWorkflowRun(workflowRun('exec-1'));
   });
 
   it('reports conflicting output targets before platform or model lookup', async () => {
@@ -474,7 +474,7 @@ describe('CLI workflow run command', () => {
     });
   });
 
-  it('enforces workflow results at the shared execution boundary', async () => {
+  it('enforces workflow results at the shared run boundary', async () => {
     const exitCode = await runWorkflow();
 
     expect(exitCode).toBe(0);
@@ -498,8 +498,8 @@ describe('CLI workflow run command', () => {
         logPath: 'compile/r1_paper.tex.log',
         logAbsolutePath: path.join(root, 'run', 'compile', 'r1_paper.tex.log'),
       };
-      mockWorkflowExecution(
-        workflowExecution('exec-output', {
+      mockWorkflowRun(
+        workflowRun('exec-output', {
           outputs: [outputSummary],
           compileFailures: [compileFailure],
         }),
@@ -545,8 +545,8 @@ describe('CLI workflow run command', () => {
       // order `resolveWorkflowOutput` builds it.
       expect(Object.keys(emission?.json ?? {})).toEqual([
         'category',
-        'executionId',
-        'streamId',
+        'runId',
+        'runId',
         'outcome',
         'outputs',
         'compileFailures',
@@ -569,8 +569,8 @@ describe('CLI workflow run command', () => {
         generated,
         path.join(workspace, 'paper.tex'),
       );
-      mockWorkflowExecution(
-        workflowExecution('exec-output-dir', { outputs: [outputSummary] }),
+      mockWorkflowRun(
+        workflowRun('exec-output-dir', { outputs: [outputSummary] }),
         true,
       );
 
@@ -602,7 +602,7 @@ describe('CLI workflow run command', () => {
   });
 
   effectIt.live(
-    'persists workflow metadata before the execution claim is released',
+    'persists workflow metadata before the run claim is released',
     () =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -625,32 +625,32 @@ describe('CLI workflow run command', () => {
             Effect.sync(() => createTestSession()),
             (owned) => Effect.sync(() => owned.dispose()),
           );
-          const executionId = 'abc123abc123' as ExecutionId;
+          const runId = 'abc123abc123' as RunId;
           const { runInSession } = yield* Effect.promise(
             () => import('@agent/runtime/RunContext'),
           );
-          const { acquireFreshExecutionLease } = yield* Effect.promise(
-            () => import('@agent/storage/executionLease'),
+          const { acquireFreshRunLease } = yield* Effect.promise(
+            () => import('@agent/storage/runLease'),
           );
           yield* Effect.promise(() =>
             runInSession(session, () =>
-              acquireFreshExecutionLease(executionId),
+              acquireFreshRunLease(runId),
             ),
           );
-          const execution = workflowExecution(executionId);
-          if (!execution.ok) throw new Error('Expected workflow result.');
+          const run = workflowRun(runId);
+          if (!run.ok) throw new Error('Expected workflow result.');
           vi.mocked(initializeCliTranscriptSession).mockResolvedValueOnce(
             session,
           );
-          const records = storage.getExecutionRecords(session, executionId);
-          vi.mocked(mockedStorage.getExecutionRecords).mockReturnValueOnce(
+          const records = storage.getRunRecords(session, runId);
+          vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(
             records,
           );
           yield* session.commit([
             {
               type: 'run.start',
-              aggregateId: aggregateId('stream', execution.result.streamId),
-              executionId,
+              aggregateId: aggregateId('stream', run.result.runId),
+              runId,
               identity: { kind: 'agent', agent: 'polish' },
               category: AgentCategory.Workflow,
               userFollowUpSupport: 'unsupported',
@@ -663,12 +663,12 @@ describe('CLI workflow run command', () => {
             (_config, _context, options) =>
               Effect.runPromise(
                 options
-                  .openWorkflowOutput(execution.result, () => true)
+                  .openWorkflowOutput(run.result, () => true)
                   .pipe(
-                    Effect.as(execution),
+                    Effect.as(run),
                     Effect.ensuring(
                       session
-                        .releaseExecutionLease(executionId)
+                        .releaseRunLease(runId)
                         .pipe(Effect.orDie),
                     ),
                   ),
@@ -685,7 +685,7 @@ describe('CLI workflow run command', () => {
           });
           const afterRelease = yield* Effect.result(
             records.writeResultMeta(
-              storage.buildCliWorkflowResultMeta(execution.result),
+              storage.buildCliWorkflowResultMeta(run.result),
             ),
           );
           expect(Result.isFailure(afterRelease)).toBe(true);
@@ -696,8 +696,8 @@ describe('CLI workflow run command', () => {
   it('reports failure when completed workflow metadata cannot be persisted', async () => {
     await withTempDir('texra-workflow-', async (root) => {
       const generated = await writeGeneratedOutput(root);
-      mockWorkflowExecution(
-        workflowExecution('exec-output-meta-fail', {
+      mockWorkflowRun(
+        workflowRun('exec-output-meta-fail', {
           outputs: [runOutputSummary(generated, path.join(root, 'paper.tex'))],
         }),
         true,
@@ -725,8 +725,8 @@ describe('CLI workflow run command', () => {
       '/missing/run/r1/paper.tex',
       '/workspace/paper.tex',
     );
-    mockWorkflowExecution(
-      workflowExecution('exec-copy-fail', { outputs: [outputSummary] }),
+    mockWorkflowRun(
+      workflowRun('exec-copy-fail', { outputs: [outputSummary] }),
       true,
     );
 
@@ -744,8 +744,8 @@ describe('CLI workflow run command', () => {
   });
 
   it('leaves failed output finalization to the live run lifecycle', async () => {
-    mockWorkflowExecution(
-      workflowExecution('exec-copy-fail', {
+    mockWorkflowRun(
+      workflowRun('exec-copy-fail', {
         outputs: [
           runOutputSummary('/missing/run/r1/paper.tex', '/workspace/paper.tex'),
         ],
@@ -764,8 +764,8 @@ describe('CLI workflow run command', () => {
 
   it('prints a resumable recovery command after persisting a cancelled workflow', async () => {
     await withTempDir('texra-workflow-', async (root) => {
-      mockWorkflowExecution(
-        workflowExecution('exec-interrupted', {
+      mockWorkflowRun(
+        workflowRun('exec-interrupted', {
           outcome: RUN_OUTCOME.CANCELLED,
         }),
         true,
@@ -897,8 +897,8 @@ describe('CLI workflow run command', () => {
           generated,
           path.join(root, 'paper.tex'),
         );
-        mockWorkflowExecution(
-          workflowExecution('exec-failed-output', {
+        mockWorkflowRun(
+          workflowRun('exec-failed-output', {
             outcome: RUN_OUTCOME.FAILED,
             outputs: [outputSummary],
           }),
@@ -947,7 +947,7 @@ describe('CLI workflow run command', () => {
 
   it('presents the lifecycle verdict when cancellation lands during output finalization', async () => {
     mockCancellationDuringOutputFinalization(
-      workflowExecution('exec-output-interrupted'),
+      workflowRun('exec-output-interrupted'),
       () => true,
     );
 
@@ -1008,7 +1008,7 @@ describe('CLI workflow run command', () => {
           path.join(root, 'paper.tex'),
         );
         mockCancellationDuringOutputFinalization(
-          workflowExecution('exec-output-interrupted', {
+          workflowRun('exec-output-interrupted', {
             outputs: [outputSummary],
           }),
           () => false,
@@ -1049,12 +1049,12 @@ describe('CLI workflow run command', () => {
   );
 
   it('does not advertise resume when cancelled status is not durable', async () => {
-    const durableExecution = workflowExecution('exec-undurable', {
+    const durableRun = workflowRun('exec-undurable', {
       outcome: RUN_OUTCOME.CANCELLED,
     });
-    if (!durableExecution.ok) throw new Error('Expected a workflow result.');
-    mockWorkflowExecution(
-      { ...durableExecution, outcomePersisted: false },
+    if (!durableRun.ok) throw new Error('Expected a workflow result.');
+    mockWorkflowRun(
+      { ...durableRun, outcomePersisted: false },
       true,
     );
 
@@ -1075,8 +1075,8 @@ describe('CLI workflow run command', () => {
           stdinInputPath: stdinPath,
         }),
     );
-    mockWorkflowExecution(
-      workflowExecution('exec-stdin-interrupted', {
+    mockWorkflowRun(
+      workflowRun('exec-stdin-interrupted', {
         outcome: RUN_OUTCOME.CANCELLED,
       }),
       true,
@@ -1090,7 +1090,7 @@ describe('CLI workflow run command', () => {
     ).resolves.toBe(CliExitCode.Interrupted);
 
     expect(
-      mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedExecutionFinalized,
+      mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedRunFinalized,
     ).toBeUndefined();
     expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
     expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
@@ -1108,8 +1108,8 @@ describe('CLI workflow run command', () => {
       async (_inputs, _contexts, _cwd, _options, run) =>
         run({ inputFiles: [lookalike], contextFiles: [] }),
     );
-    mockWorkflowExecution(
-      workflowExecution('exec-stdin-lookalike', {
+    mockWorkflowRun(
+      workflowRun('exec-stdin-lookalike', {
         outcome: RUN_OUTCOME.CANCELLED,
       }),
       true,
@@ -1118,7 +1118,7 @@ describe('CLI workflow run command', () => {
     await expect(runWorkflow()).resolves.toBe(CliExitCode.Interrupted);
 
     expect(
-      mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedExecutionFinalized,
+      mocks.executeCliConfig.mock.calls[0]?.[2].onInterruptedRunFinalized,
     ).toBeTypeOf('function');
     expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledOnce();
   });
@@ -1127,7 +1127,7 @@ describe('CLI workflow run command', () => {
     await runWorkflow();
     const canAdvertise =
       mocks.executeCliConfig.mock.calls[0]?.[2]
-        .canAdvertiseInterruptedExecution;
+        .canAdvertiseInterruptedRun;
 
     expect(
       canAdvertise?.({
@@ -1144,7 +1144,7 @@ describe('CLI workflow run command', () => {
     await runWorkflow();
     const canAdvertise =
       mocks.executeCliConfig.mock.calls[0]?.[2]
-        .canAdvertiseInterruptedExecution;
+        .canAdvertiseInterruptedRun;
 
     expect(
       canAdvertise?.({
@@ -1188,18 +1188,18 @@ describe('CLI workflow run command', () => {
   });
 
   it('prints the durable shutdown hint once with the persisted workspace', async () => {
-    const execution = workflowExecution('exec-signal', {
+    const run = workflowRun('exec-signal', {
       outcome: RUN_OUTCOME.CANCELLED,
     });
     mocks.executeCliConfig.mockImplementationOnce(
       async (_config, _context, options) => {
-        if (!execution.ok) return execution;
+        if (!run.ok) return run;
         if (options.openWorkflowOutput)
           await Effect.runPromise(
-            options.openWorkflowOutput(execution.result, () => true),
+            options.openWorkflowOutput(run.result, () => true),
           );
-        options.onInterruptedExecutionFinalized?.('exec-signal');
-        return execution;
+        options.onInterruptedRunFinalized?.('exec-signal');
+        return run;
       },
     );
     const resumeInvocation = path.join(path.sep, 'tmp', 'resume-invocation');
@@ -1236,10 +1236,10 @@ describe('CLI workflow run command', () => {
   });
 
   it('prints recovery when the original process directory is unavailable', async () => {
-    const execution = workflowExecution('exec-deleted-cwd', {
+    const run = workflowRun('exec-deleted-cwd', {
       outcome: RUN_OUTCOME.CANCELLED,
     });
-    mockWorkflowExecution(execution, true);
+    mockWorkflowRun(run, true);
     const stableWorkspace = path.join(path.sep, 'tmp', 'stable-workspace');
     const context = createRunCommandCliContext({ cwd: stableWorkspace });
     const cwdSpy = vi.spyOn(process, 'cwd').mockImplementation(() => {
@@ -1290,8 +1290,8 @@ describe('CLI workflow run command', () => {
   it.each(['json', 'ndjson'] as const)(
     'keeps %s stdout free of the cancellation recovery hint',
     async (outputFormat) => {
-      mockWorkflowExecution(
-        workflowExecution('exec-interrupted', {
+      mockWorkflowRun(
+        workflowRun('exec-interrupted', {
           outcome: RUN_OUTCOME.CANCELLED,
         }),
         true,
@@ -1314,8 +1314,8 @@ describe('CLI workflow run command', () => {
   );
 
   it('does not print a recovery command for failed workflows', async () => {
-    mockWorkflowExecution(
-      workflowExecution('exec-failed', { outcome: RUN_OUTCOME.FAILED }),
+    mockWorkflowRun(
+      workflowRun('exec-failed', { outcome: RUN_OUTCOME.FAILED }),
       true,
     );
 

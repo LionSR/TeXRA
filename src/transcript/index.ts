@@ -5,7 +5,7 @@
  */
 export { StreamLogStore } from './StreamLogStore';
 export { createRunTrace, type RunTrace } from './runTrace';
-export { StreamSnapshotStore } from './StreamSnapshotStore';
+export { RunSnapshotStore } from './RunSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';
 export {

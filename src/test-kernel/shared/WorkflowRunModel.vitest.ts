@@ -8,10 +8,10 @@ import { describe, expect, it } from 'vitest';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
-  type StreamLifecycleStatus,
+  RUN_PHASE,
+  type RunLifecycleStatus,
   type StreamLogEntry,
-  type StreamTabId,
+  type RunId,
   type TaskGroup,
   type WorkflowCallProgress,
   type WorkflowPlanMarker,
@@ -24,12 +24,12 @@ import {
   workflowRunModel,
   type ChildRunProgress,
   type WorkflowRunModel,
-} from '@shared/streams/workflowRunModel';
+} from '@shared/runs/workflowRunModel';
 
 interface TaskSpec {
   readonly id: string;
   readonly phase?: string;
-  readonly childStreamId?: StreamTabId;
+  readonly childRunId?: RunId;
   readonly status?: WorkflowCallProgress['status'];
   readonly attemptId?: string;
 }
@@ -51,9 +51,9 @@ function taskRow(task: TaskSpec): WorkflowTaskRow {
     id: task.id,
     label: task.id,
     ...(task.phase === undefined ? {} : { phase: task.phase }),
-    ...(task.childStreamId === undefined
+    ...(task.childRunId === undefined
       ? {}
-      : { childStreamId: task.childStreamId }),
+      : { childRunId: task.childRunId }),
     ...(task.attemptId === undefined ? {} : { attemptId: task.attemptId }),
   };
   const status = task.status ?? 'running';
@@ -79,9 +79,9 @@ function modelOf(
   tasks: readonly TaskSpec[],
   options: {
     plan?: WorkflowPlanMarker;
-    streamPhase?: StreamLifecycleStatus;
+    runPhase?: RunLifecycleStatus;
     runDurablyFinal?: boolean;
-    childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
+    childProgress?: ReadonlyMap<RunId, ChildRunProgress>;
   } = {},
 ): WorkflowRunModel {
   return workflowRunModel({
@@ -96,7 +96,7 @@ function modelOf(
       ),
     ),
     plan: options.plan,
-    streamPhase: options.streamPhase,
+    runPhase: options.runPhase,
     runDurablyFinal: options.runDurablyFinal === true,
     childProgress: options.childProgress ?? new Map(),
   });
@@ -107,7 +107,7 @@ describe('workflow run model', () => {
     const model = modelOf(
       ['Map', 'Reduce'],
       [
-        { id: 'inspect', phase: 'Map', childStreamId: 'c1' as StreamTabId },
+        { id: 'inspect', phase: 'Map', childRunId: 'c1' as RunId },
         { id: 'extract', phase: 'Map' },
         { id: 'merge', phase: 'Reduce' },
         { id: 'report', phase: 'Reduce' },
@@ -183,7 +183,7 @@ describe('workflow run model', () => {
       // the transcript authority regardless of that input arrangement.
       rows: [resumedUngrouped, resumedPhase, old],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      streamPhase: undefined,
+      runPhase: undefined,
       runDurablyFinal: false,
       childProgress: new Map(),
     });
@@ -267,7 +267,7 @@ describe('workflow run model', () => {
       taskGroups: [stale, current],
       rows: [staleUntaggedCard],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      streamPhase: undefined,
+      runPhase: undefined,
       runDurablyFinal: false,
       childProgress: new Map(),
     });
@@ -302,7 +302,7 @@ describe('workflow run model', () => {
       taskGroups: [oldMap, currentReview],
       rows: [oldCard],
       plan: undefined,
-      streamPhase: undefined,
+      runPhase: undefined,
       runDurablyFinal: false,
       childProgress: new Map(),
     });
@@ -335,7 +335,7 @@ describe('workflow run model', () => {
       // seqNo/timestamp sorting. Attempt selection must not depend on that sort.
       rows: [currentLegacyRoot, currentChild, oldChild],
       plan: undefined,
-      streamPhase: undefined,
+      runPhase: undefined,
       runDurablyFinal: false,
       childProgress: new Map(),
     });
@@ -464,7 +464,7 @@ describe('workflow run model', () => {
     // holds no declared task is gone; one still holding declared tasks stays.
     expect(
       summarize(
-        modelOf(['Map'], tasks, { plan, streamPhase: STREAM_PHASE.COMPLETED }),
+        modelOf(['Map'], tasks, { plan, runPhase: RUN_PHASE.COMPLETED }),
       ),
     ).toEqual([
       ['Map', true, 1, ['extract']],
@@ -473,8 +473,8 @@ describe('workflow run model', () => {
   });
 
   it('gives an ambiguous child stream to no card at all', () => {
-    const shared = 'shared-child' as StreamTabId;
-    const own = 'own-child' as StreamTabId;
+    const shared = 'shared-child' as RunId;
+    const own = 'own-child' as RunId;
     const live: ChildRunProgress = {
       runStartedAt: 1_000,
       toolCallCount: 7,
@@ -484,9 +484,9 @@ describe('workflow run model', () => {
     const model = modelOf(
       [],
       [
-        { id: 'first', childStreamId: shared },
-        { id: 'second', childStreamId: shared },
-        { id: 'third', childStreamId: own },
+        { id: 'first', childRunId: shared },
+        { id: 'second', childRunId: shared },
+        { id: 'third', childRunId: own },
       ],
       {
         childProgress: new Map([
@@ -496,7 +496,7 @@ describe('workflow run model', () => {
       },
     );
     expect(
-      model.tasks.map((row) => model.childStreamOf.get(row.id)),
+      model.tasks.map((row) => model.childRunOf.get(row.id)),
     ).toStrictEqual([undefined, undefined, 'own-child']);
     // The live join follows the same claimant rule, and its copy is one
     // string per fact — elapsed only with a clock, tokens and tools always.
@@ -537,7 +537,7 @@ describe('workflow run model', () => {
         taskGroups: [closed],
         rows: [taskRow({ id: 'v', phase: 'Verify' })],
         plan: undefined,
-        streamPhase: STREAM_PHASE.COMPLETED,
+        runPhase: RUN_PHASE.COMPLETED,
         runDurablyFinal: false,
         childProgress: new Map(),
       }).phases[0]?.heading,

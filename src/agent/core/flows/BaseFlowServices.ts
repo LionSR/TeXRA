@@ -28,7 +28,7 @@ export interface ToolPolicy {
   readonly approvalPromptsUnavailable?: boolean;
   /** Hide tools unavailable because the current host/runtime cannot support them. */
   readonly runtimeUnavailableTools?: readonly string[];
-  /** Stop a tool-use execution after one model/tool cycle instead of waiting. */
+  /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
 }
 

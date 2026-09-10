@@ -84,7 +84,7 @@ describe('AgentConfigSchema', () => {
 });
 
 /**
- * `agentSource` is persisted (execution `config.json`, trace documents), so
+ * `agentSource` is persisted (run `config.json`, trace documents), so
  * widening `AGENT_SOURCE` is a persisted-schema change in both directions.
  */
 describe('AgentConfigSchema agentSource compatibility', () => {

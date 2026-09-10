@@ -11,7 +11,7 @@
  * 24 h detach gate) lives here once.
  *
  * The subscribe path is Effect-typed end to end (`register` →
- * `StreamSubscriptionRegistry.bind` → the tool's `execute()` runs it, R1);
+ * `RunSubscriptionRegistry.bind` → the tool's `execute()` runs it, R1);
  * this module holds no `Effect.run*` call. Listener fan-out returns delivery
  * programs that the emit turn forks detached ({@link PollEventListener}), so
  * a slow listener never stalls a poll round.

@@ -18,7 +18,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
 import { effectRuntime } from '@platform/processRuntime';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 // Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -30,18 +30,18 @@ import {
   type PollHookRejected,
 } from '@tools/github/PollingSourceBase';
 import {
-  StreamSubscriptionRegistry,
-  type StreamSubscriptionRegistryOptions,
-} from '@tools/github/StreamSubscriptionRegistry';
+  RunSubscriptionRegistry,
+  type RunSubscriptionRegistryOptions,
+} from '@tools/github/RunSubscriptionRegistry';
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 function createTestRegistry(
   source: RegistryTestSource,
-  overrides: Partial<StreamSubscriptionRegistryOptions<string, string>> = {},
-): StreamSubscriptionRegistry<string, string> {
-  return new StreamSubscriptionRegistry<string, string>({
+  overrides: Partial<RunSubscriptionRegistryOptions<string, string>> = {},
+): RunSubscriptionRegistry<string, string> {
+  return new RunSubscriptionRegistry<string, string>({
     name: 'test subscriptions',
     source,
     keyOf: (input) => input,
@@ -172,13 +172,13 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
     try {
       await effectRuntime().runPromise(
-        registry.bind('stream-a' as StreamTabId, 'owner/repo'),
+        registry.bind('stream-a' as RunId, 'owner/repo'),
       );
       expect(signal.events).toEqual([
         { event: 'githubSubscriptionsChanged', payload: undefined },
       ]);
 
-      registry.unbind('stream-a' as StreamTabId, 'owner/repo');
+      registry.unbind('stream-a' as RunId, 'owner/repo');
 
       expect(signal.events).toEqual([
         { event: 'githubSubscriptionsChanged', payload: undefined },
@@ -252,12 +252,12 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
     try {
       await effectRuntime().runPromise(
-        registry.bind('stream-a' as StreamTabId, 'owner/repo'),
+        registry.bind('stream-a' as RunId, 'owner/repo'),
       );
       host.events.length = 0;
       signal.events.length = 0;
 
-      expect(registry.unbind('stream-a' as StreamTabId, 'owner/repo')).toBe(
+      expect(registry.unbind('stream-a' as RunId, 'owner/repo')).toBe(
         true,
       );
 
@@ -271,21 +271,21 @@ describe('GitHub subscription app signals and follow-ups', () => {
   });
 
   it('passes the bind-time session to detached subscription follow-ups', async () => {
-    const streamId = 'stream-a' as StreamTabId;
+    const runId = 'stream-a' as RunId;
     const source = new RegistryTestSource();
     const session = createTestSession();
-    session.followUps.claimLive(streamId, 'flow');
+    session.followUps.claimLive(runId, 'flow');
     const registry = createTestRegistry(source);
 
     try {
-      await withRunContext(createRunContext({ streamId, session }), () =>
-        effectRuntime().runPromise(registry.bind(streamId, 'owner/repo')),
+      await withRunContext(createRunContext({ runId, session }), () =>
+        effectRuntime().runPromise(registry.bind(runId, 'owner/repo')),
       );
 
       await source.emit('owner/repo', 'new github event');
 
       expect(submitFollowUpMock).toHaveBeenCalledWith(
-        streamId,
+        runId,
         'new github event',
         { session, mode: 'live_notification' },
       );
@@ -295,28 +295,28 @@ describe('GitHub subscription app signals and follow-ups', () => {
   });
 
   it('rebinds an existing subscription to the session that rebound it', async () => {
-    const streamId = 'stream-a' as StreamTabId;
+    const runId = 'stream-a' as RunId;
     const source = new RegistryTestSource();
     const firstSession = createTestSession();
-    firstSession.followUps.claimLive(streamId, 'flow');
+    firstSession.followUps.claimLive(runId, 'flow');
     const secondSession = createTestSession();
-    secondSession.followUps.claimLive(streamId, 'flow');
+    secondSession.followUps.claimLive(runId, 'flow');
     const registry = createTestRegistry(source);
 
     try {
       await withRunContext(
-        createRunContext({ streamId, session: firstSession }),
-        () => effectRuntime().runPromise(registry.bind(streamId, 'owner/repo')),
+        createRunContext({ runId, session: firstSession }),
+        () => effectRuntime().runPromise(registry.bind(runId, 'owner/repo')),
       );
       await withRunContext(
-        createRunContext({ streamId, session: secondSession }),
-        () => effectRuntime().runPromise(registry.bind(streamId, 'owner/repo')),
+        createRunContext({ runId, session: secondSession }),
+        () => effectRuntime().runPromise(registry.bind(runId, 'owner/repo')),
       );
 
       await source.emit('owner/repo', 'new github event');
 
       expect(submitFollowUpMock).toHaveBeenCalledWith(
-        streamId,
+        runId,
         'new github event',
         { session: secondSession, mode: 'live_notification' },
       );
@@ -327,7 +327,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
   });
 
   it('warns instead of leaking an unhandled rejection when delivery fails', async () => {
-    const streamId = 'stream-a' as StreamTabId;
+    const runId = 'stream-a' as RunId;
     const source = new RegistryTestSource();
     const logger = {
       info: vi.fn(),
@@ -341,7 +341,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
     try {
       process.once('unhandledRejection', unhandledRejection);
-      await effectRuntime().runPromise(registry.bind(streamId, 'owner/repo'));
+      await effectRuntime().runPromise(registry.bind(runId, 'owner/repo'));
 
       // emit() awaits the delivery program, so the recovery has run by the
       // time it resolves — no settle-and-hope.
@@ -353,7 +353,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             key: 'owner/repo',
-            streamId,
+            runId,
           }),
         }),
       );

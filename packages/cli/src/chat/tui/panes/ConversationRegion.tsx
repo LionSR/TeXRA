@@ -8,9 +8,9 @@ import { useLayoutEffect, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
@@ -31,7 +31,7 @@ import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import { inputBarContentRows } from '../state/cliState';
-import { sessionView, streamViewOf } from '../state/sessionView';
+import { sessionView, runViewOf } from '../state/sessionView';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import { useSignal } from '../state/useSignal';
 import type { SessionListRow } from '../state/cliState';
@@ -42,19 +42,19 @@ import type { PendingApprovalKind } from '../state/approvalQueue';
 // conversation, even though they now render below the input bar.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 interface ConversationRegionSnapshot {
-  readonly activeStreamId: StreamTabId | undefined;
+  readonly activeRunId: RunId | undefined;
   readonly foregroundMaxRows: number | undefined;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
   /** The active stream's parent, when it is a child. */
-  readonly parentId: StreamTabId | undefined;
+  readonly parentId: RunId | undefined;
   readonly reverseSearchOpen: boolean;
-  readonly rootStreamId: StreamTabId | undefined;
+  readonly rootRunId: RunId | undefined;
   readonly slashPaletteOpen: boolean;
-  readonly selectedChildValue: StreamTabId | undefined;
+  readonly selectedChildValue: RunId | undefined;
   readonly childListFocused: boolean;
   /** The visible stream tree and its section headings. */
   readonly sessionRows: readonly SessionListRow[];
-  readonly subagentExecutionLabels: ExecutionLabels;
+  readonly subagentRunLabels: RunLabels;
   readonly pendingApprovals: ReadonlyMap<
     string,
     readonly PendingApprovalKind[]
@@ -71,9 +71,9 @@ interface ConversationRegionProps {
   readonly rows: number;
   readonly snapshot: ConversationRegionSnapshot;
   readonly onCancelChildList: () => void;
-  readonly onChildSelectionChange: (value: StreamTabId) => void;
-  readonly onFocusSession: (streamId: StreamTabId) => void;
-  readonly onKillExecution: (executionId: string) => void;
+  readonly onChildSelectionChange: (value: RunId) => void;
+  readonly onFocusSession: (runId: RunId) => void;
+  readonly onKillRun: (runId: string) => void;
 }
 
 export function ConversationRegion({
@@ -83,7 +83,7 @@ export function ConversationRegion({
   onCancelChildList,
   onChildSelectionChange,
   onFocusSession,
-  onKillExecution,
+  onKillRun,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -94,25 +94,25 @@ export function ConversationRegion({
   // Which scrollback the transcript paints: the root's history, or a focused
   // child's own history while that child owns the scrollback.
   const scopedTranscript =
-    snapshot.activeStreamId !== undefined && snapshot.parentId !== undefined;
+    snapshot.activeRunId !== undefined && snapshot.parentId !== undefined;
   const scrollbackTarget = staticScrollbackTarget({
-    activeStreamId: snapshot.activeStreamId,
-    rootStreamId: snapshot.rootStreamId,
+    activeRunId: snapshot.activeRunId,
+    rootRunId: snapshot.rootRunId,
     scopedTranscript,
   });
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
   const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
   const view = useSignal(sessionView());
-  const activeStream = streamViewOf(view, snapshot.activeStreamId);
+  const activeRun = runViewOf(view, snapshot.activeRunId);
   const activeTodos =
-    activeStream?.category === AgentCategory.ToolUse ? activeStream.todos : [];
+    activeRun?.category === AgentCategory.ToolUse ? activeRun.todos : [];
   const activePlan =
-    activeStream?.category === AgentCategory.ToolUse ? activeStream.plan : null;
+    activeRun?.category === AgentCategory.ToolUse ? activeRun.plan : null;
   const queuedFollowUpMessages =
-    snapshot.activeStreamId === undefined
+    snapshot.activeRunId === undefined
       ? []
-      : (view.queuedFollowUps.get(snapshot.activeStreamId) ?? []);
+      : (view.queuedFollowUps.get(snapshot.activeRunId) ?? []);
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
   // Round-border chrome is the default input height minus its single content
@@ -159,7 +159,7 @@ export function ConversationRegion({
   // while it has focus, otherwise the todos/plan panel. Reserve only as many
   // rows as that panel actually needs.
   const todosPlanContentRows =
-    hasTodosPlanPanel && activeStream
+    hasTodosPlanPanel && activeRun
       ? todosPlanPanelRowCount(activeTodos, activePlan)
       : 0;
   const sessionPanelItemCount = snapshot.sessionRows.length;
@@ -200,8 +200,8 @@ export function ConversationRegion({
         ownerKey={scrollbackTarget.ownerKey}
         onRenderKeyChange={onStaticTranscriptChange}
         renderKey={staticTranscriptKey}
-        scrollbackStreamId={scrollbackTarget.streamId}
-        subagentExecutionLabels={snapshot.subagentExecutionLabels}
+        scrollbackRunId={scrollbackTarget.runId}
+        subagentRunLabels={snapshot.subagentRunLabels}
         width={transcriptWidth}
       />
       <Box flexDirection="column">
@@ -212,7 +212,7 @@ export function ConversationRegion({
               colorEnabled={colorEnabled}
               width={transcriptWidth}
               maxRows={conversationRows}
-              subagentExecutionLabels={snapshot.subagentExecutionLabels}
+              subagentRunLabels={snapshot.subagentRunLabels}
             />
           ) : null}
           {foregroundSurface ? (
@@ -243,13 +243,13 @@ export function ConversationRegion({
               keyboardActive={snapshot.childListFocused && childListVisible}
               maxRows={subagentRows}
               onCancel={onCancelChildList}
-              onFocusStream={onFocusSession}
-              onKillExecution={onKillExecution}
+              onFocusRun={onFocusSession}
+              onKillRun={onKillRun}
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
               selectedValue={snapshot.selectedChildValue}
               rows={snapshot.sessionRows}
-              activeStreamId={snapshot.activeStreamId}
+              activeRunId={snapshot.activeRunId}
             />
             <TodosPlanPanel
               maxRows={todosPlanRows}

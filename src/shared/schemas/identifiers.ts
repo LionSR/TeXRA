@@ -14,4 +14,4 @@ export const RunIdSchema = z
 export type RunId = z.infer<typeof RunIdSchema>;
 
 /** A run id, or the empty-string sentinel meaning "no active run". */
-export const StreamSelectionSchema = z.union([RunIdSchema, z.literal('')]);
+export const RunSelectionSchema = z.union([RunIdSchema, z.literal('')]);

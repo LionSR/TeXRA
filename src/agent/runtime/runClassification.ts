@@ -6,7 +6,7 @@
  * process's registry". Every other run in the shared bucket is one of these,
  * decided once here and never inferred:
  *
- * - `held_elsewhere`: its execution lease is held by an owner that is alive
+ * - `held_elsewhere`: its run lease is held by an owner that is alive
  *   or cannot be proven dead (another TeXRA process). Shown read-only.
  * - `owned_here`: its lease is held by this very process, yet no live flow
  *   context exists for it: a registry/lease disagreement. Shown read-only.
@@ -26,14 +26,14 @@ import { Effect } from 'effect';
 
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { inspectRunLease } from '@agent/storage/runLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import {
   deriveResumability,
   type ResumabilityFault,
 } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId, RunOutcome } from '@shared/schemas';
+import type { RunId, RunOutcome } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunClassification');
@@ -63,38 +63,38 @@ type RunFactsClassification = Exclude<
 
 /** The one mapping from durable resumability facts to this vocabulary. */
 const classifyRunFacts = Effect.fn('classifyRunFacts')(function* (
-  executionId: ExecutionId,
+  runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<RunFactsClassification> {
-  const facts = yield* deriveResumability(executionId, session);
+  const facts = yield* deriveResumability(runId, session);
   if (facts.kind === 'checkpoint') {
     return { kind: 'resumable', outcome: facts.outcome };
   }
   if (facts.kind === 'none') {
     return { kind: 'finished', outcome: facts.outcome };
   }
-  log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
+  log.warn(`Cannot classify ${runId}: ${facts.cause}`);
   return { kind: 'unclassified', cause: facts.cause, fault: facts.fault };
 });
 
-/** Classify one execution. Never throws: an unreadable fact is `unclassified`. */
+/** Classify one run. Never throws: an unreadable fact is `unclassified`. */
 export const classifyRun = Effect.fn('classifyRun')(function* (
-  executionId: ExecutionId,
+  runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<RunClassification> {
   const leaseResult = yield* Effect.tryPromise({
-    try: () => runInSession(session, () => inspectExecutionLease(executionId)),
+    try: () => runInSession(session, () => inspectRunLease(runId)),
     catch: ensureError,
   }).pipe(Effect.result);
   if (leaseResult._tag === 'Failure') {
     const error = leaseResult.failure;
     const cause = `lease unreadable (${toErrorMessage(error)})`;
-    log.warn(`Cannot classify ${executionId}: ${cause}`, { data: error });
+    log.warn(`Cannot classify ${runId}: ${cause}`, { data: error });
     return { kind: 'unclassified', cause, fault: 'lease-unreadable' };
   }
   const lease = leaseResult.success;
   if (lease.status === 'owned') return { kind: 'owned_here' };
   if (lease.status === 'held')
     return { kind: 'held_elsewhere', owner: lease.owner };
-  return yield* classifyRunFacts(executionId, session);
+  return yield* classifyRunFacts(runId, session);
 });

@@ -1,5 +1,5 @@
 // Wire contract for the workspace shell surfaces: editor file I/O, terminal
-// pty streams, and embedded browser control.
+// pty runs, and embedded browser control.
 //
 // These cross the renderer/main IPC boundary, so unlike the in-memory tab model
 // they are Zod schemas: the renderer's requests are validated in the main

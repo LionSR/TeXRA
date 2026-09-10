@@ -49,10 +49,10 @@ describe('workflow sandbox host bundles', () => {
         tsconfig: path.join(REPO_ROOT, 'tsconfig.json'),
       });
 
-      const execution = await execFileAsync(process.execPath, [outfile], {
+      const run = await execFileAsync(process.execPath, [outfile], {
         timeout: 5_000,
       });
-      expect(execution.stdout.trim()).toBe('42');
+      expect(run.stdout.trim()).toBe('42');
     },
   );
 });

@@ -6,7 +6,7 @@ import type { FollowUpQueueInput } from '@agent/followUp';
 import { createLog } from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -14,7 +14,7 @@ const logger = createLog('ProgressFollowUpSubmit');
 
 export interface ProgressFollowUpSubmitArgs {
   readonly session: SessionHandle;
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly input: FollowUpQueueInput;
   /**
    * Admission ack for the composer that sent this. Fires exactly once, as
@@ -37,7 +37,7 @@ export interface ProgressFollowUpSubmitArgs {
  */
 export const submitProgressFollowUp = Effect.fn('submitProgressFollowUp')(
   function* (args: ProgressFollowUpSubmitArgs) {
-    const { session, streamId, input, showInfo } = args;
+    const { session, runId, input, showInfo } = args;
     const admission = yield* Deferred.make<boolean>();
     const acknowledge = (accepted: boolean): void => {
       if (Deferred.doneUnsafe(admission, Effect.succeed(accepted))) {
@@ -52,7 +52,7 @@ export const submitProgressFollowUp = Effect.fn('submitProgressFollowUp')(
         catch: ensureError,
       });
     const deliver = Effect.gen(function* () {
-      const result = yield* submitFollowUp(streamId, input, {
+      const result = yield* submitFollowUp(runId, input, {
         session,
         onAdmitted: acknowledge,
       }).pipe(
@@ -61,9 +61,9 @@ export const submitProgressFollowUp = Effect.fn('submitProgressFollowUp')(
             acknowledge(false);
             const message = toErrorMessage(error);
             logger.warn(
-              `Failed to submit follow-up for stream ${streamId}: ${message}`,
+              `Failed to submit follow-up for stream ${runId}: ${message}`,
               {
-                data: { streamId, error: message },
+                data: { runId, error: message },
               },
             );
             yield* present(`Could not send the follow-up: ${message}`);
@@ -76,8 +76,8 @@ export const submitProgressFollowUp = Effect.fn('submitProgressFollowUp')(
       session.publish([
         {
           type: 'updateQueuedFollowUps',
-          aggregateId: qualifyAggregateId('run', streamId),
-          messages: session.followUps.getAll(streamId),
+          aggregateId: qualifyAggregateId('run', runId),
+          messages: session.followUps.getAll(runId),
         },
       ]);
       const presentation = presentFollowUpResult(result);
@@ -88,7 +88,7 @@ export const submitProgressFollowUp = Effect.fn('submitProgressFollowUp')(
         Effect.sync(() => {
           acknowledge(false);
           logger.warn(
-            `Follow-up presentation failed for stream ${streamId}: ${String(cause)}`,
+            `Follow-up presentation failed for stream ${runId}: ${String(cause)}`,
           );
         }),
       ),

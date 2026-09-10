@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
 import {
-  getRunContextExecutionId,
+  getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import {
@@ -236,20 +236,20 @@ export class ExternalInquiryTool extends defineTool({
   protected execute(input: InquiryInput): Promise<ToolResult> {
     // Capture the run owner before the shared Effect scheduler can yield.
     const context = tryUseRunContext();
-    const streamId = getRunContextExecutionId(context);
+    const runId = getRunContextRunId(context);
     const signal = getCurrentToolCallContext()?.signal;
     let operation: Effect.Effect<ToolResult, Error, InquiryRecords>;
 
     switch (input.command) {
       case 'ask':
         requireInteractions('inquiry', context);
-        operation = this.executeAsk(input, streamId, currentSession());
+        operation = this.executeAsk(input, runId, currentSession());
         break;
       case 'read':
         operation = this.executeRead(input);
         break;
       case 'list':
-        operation = this.executeList(input, streamId);
+        operation = this.executeList(input, runId);
         break;
     }
     return effectRuntime().runPromise(operation, { signal });
@@ -257,12 +257,12 @@ export class ExternalInquiryTool extends defineTool({
 
   private executeAsk(
     input: Extract<InquiryInput, { command: 'ask' }>,
-    streamId: RunId | undefined,
+    runId: RunId | undefined,
     session: SessionHandle,
   ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {
       const records = yield* InquiryRecords;
-      if (!streamId) {
+      if (!runId) {
         return yield* Effect.fail(
           new ToolError(
             'inquiry { command: "ask" } requires an active stream context.',
@@ -279,7 +279,7 @@ export class ExternalInquiryTool extends defineTool({
 
       const manifest = yield* records.recordOpenQuestion({
         threadId: input.thread_id ?? undefined,
-        parentStreamId: streamId,
+        parentRunId: runId,
         question: input.question,
         context: questionContext,
         suggestSearch,
@@ -297,7 +297,7 @@ export class ExternalInquiryTool extends defineTool({
         suggestSearch,
         attachFiles,
         allowBypass: false,
-        streamId,
+        runId,
         sessionLinks: collectKnownSessionLinks(manifest),
         transcript: inquiryRecordToTranscript(manifest),
       };
@@ -356,15 +356,15 @@ export class ExternalInquiryTool extends defineTool({
 
   private executeList(
     input: Extract<InquiryInput, { command: 'list' }>,
-    streamId: RunId | undefined,
+    runId: RunId | undefined,
   ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {
       const records = yield* InquiryRecords;
-      if (input.scope === 'stream' && !streamId) {
+      if (input.scope === 'stream' && !runId) {
         return yield* Effect.fail(
           new ToolError(
             'inquiry { command: "list", scope: "stream" } requires an active stream context. ' +
-              'Use scope: "all" to list across streams.',
+              'Use scope: "all" to list across runs.',
           ),
         );
       }
@@ -372,7 +372,7 @@ export class ExternalInquiryTool extends defineTool({
       const summaries = yield* records.listThreadsByStatus({
         status: input.status,
         scope: input.scope,
-        streamId,
+        runId,
       });
       return buildListOutput(summaries, input.status, input.scope);
     });

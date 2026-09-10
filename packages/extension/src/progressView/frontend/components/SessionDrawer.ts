@@ -24,7 +24,7 @@ import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import './StreamTabs';
+import './RunTabs';
 
 @customElement('session-drawer')
 export class SessionDrawer extends LitElement {

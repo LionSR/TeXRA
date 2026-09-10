@@ -5,15 +5,14 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, afterEach, describe, vi } from 'vitest';
+import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
 import {
-  getExecutionStore,
-  getExecutionRecords,
-  registerExecution,
+  getRunStore,
+  getRunRecords,
+  registerRun,
 } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
@@ -25,9 +24,9 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecResult,
-  type ExecutionId,
-  type WorkflowExecutionSnapshot,
-  type StreamTabId,
+  type RunId,
+  type WorkflowRunSnapshot,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import {
@@ -38,18 +37,18 @@ import { withToolEnvironment } from '@test/support/toolEnvironment';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';
-import { generateExecutionId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
 
-function writeWorkflowExecutionSnapshot(
+function writeWorkflowRunSnapshot(
   session: ReturnType<typeof defaultSession>,
-  executionId: ExecutionId,
-  workflow: WorkflowExecutionSnapshot,
+  runId: RunId,
+  workflow: WorkflowRunSnapshot,
 ) {
   return session.commit([
     {
-      type: 'execution.workflow',
-      aggregateId: aggregateId('execution', executionId),
+      type: 'run.workflow',
+      aggregateId: aggregateId('run', runId),
       workflow,
     },
   ]);
@@ -61,7 +60,7 @@ import {
   recordSessionEvents,
 } from '../agent/progressTestUtils';
 
-const PARENT_STREAM_ID = 'executions-output-parent' as StreamTabId;
+const PARENT_STREAM_ID = 'executions-output-parent' as RunId;
 
 type ExecChunkSink = Pick<
   Parameters<typeof execUtils.executeCommand>[1] & object,
@@ -69,7 +68,7 @@ type ExecChunkSink = Pick<
 >;
 
 interface BackgroundRun {
-  readonly executionId: string;
+  readonly runId: string;
   /** Settle the mocked process and wait for its completion follow-up. */
   readonly finish: () => Promise<void>;
 }
@@ -107,7 +106,7 @@ async function launchBackgroundRun(
   publishTestRunStart(defaultSession(), PARENT_STREAM_ID);
   const launched = await withToolEnvironment(
     {
-      run: { streamId: PARENT_STREAM_ID, session: defaultSession() },
+      run: { runId: PARENT_STREAM_ID, session: defaultSession() },
       call: { tracker: new FileInteractionState() },
     },
     () =>
@@ -120,11 +119,11 @@ async function launchBackgroundRun(
   assert.equal(launched.status, 'executed');
   await outputEmitted;
   await defaultSession().settlePublications();
-  const executionId = /Execution ID: (\S+)/.exec(launched.output ?? '')?.[1];
-  assert.ok(executionId, 'Background launch should report its execution ID');
+  const runId = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
+  assert.ok(runId, 'Background launch should report its run ID');
 
   return {
-    executionId,
+    runId,
     finish: async () => {
       release({
         success: true,
@@ -144,26 +143,26 @@ async function launchBackgroundRun(
 }
 
 async function readOutput(
-  executionId: string,
+  runId: string,
   viewRange?: [number, number],
 ): Promise<{ status: string; output?: string; error?: string }> {
   await defaultSession().settlePublications();
   return new ExecutionsTool().call({
-    path: `/executions/${executionId}/output`,
+    path: `/executions/${runId}/output`,
     ...(viewRange ? { view_range: viewRange } : {}),
   });
 }
 
-/** Register a process-identity bash execution and return its stream id. */
-async function registerProcessExecution(
+/** Register a process-identity bash run and return its stream id. */
+async function registerProcessRun(
   instruction: string,
-): Promise<{ executionId: string; streamId: StreamTabId }> {
-  const executionId = generateExecutionId();
-  const streamId = `bash@tool#${executionId}` as StreamTabId;
+): Promise<{ runId: string; runId: RunId }> {
+  const runId = generateRunId();
+  const runId = `bash@tool#${runId}` as RunId;
   await Effect.runPromise(
-    registerExecution(
+    registerRun(
       defaultSession(),
-      executionId,
+      runId,
       AgentConfigSchema.parse({
         agent: 'bash',
         instruction,
@@ -171,24 +170,24 @@ async function registerProcessExecution(
       }),
       'bash',
       {
-        streamId,
+        runId,
         identity: { kind: 'process', tool: 'bash' },
       },
     ),
   );
-  return { executionId, streamId };
+  return { runId, runId };
 }
 
-/** Register a multi-agent-workflow execution and return its id. */
-async function registerWorkflowExecution(
+/** Register a multi-agent-workflow run and return its id. */
+async function registerWorkflowRun(
   name: string,
   model?: string,
 ): Promise<string> {
-  const executionId = generateExecutionId();
+  const runId = generateRunId();
   await Effect.runPromise(
-    registerExecution(
+    registerRun(
       defaultSession(),
-      executionId,
+      runId,
       {
         name,
         instruction: `Workflow script ${name}`,
@@ -196,12 +195,12 @@ async function registerWorkflowExecution(
       },
       name,
       {
-        streamId: `workflow-script#${executionId}` as StreamTabId,
+        runId: `workflow-script#${runId}` as RunId,
         identity: { kind: 'multiAgentWorkflow', workflowName: name },
       },
     ),
   );
-  return executionId;
+  return runId;
 }
 
 describe('ExecutionsTool /executions/{id}/output', () => {
@@ -224,7 +223,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       sink.onStdout?.('[ 84%] Building CXX object src/bar.cc.o\n');
     });
 
-    const result = await readOutput(run.executionId);
+    const result = await readOutput(run.runId);
 
     assert.equal(result.status, 'executed');
     const output = result.output ?? '';
@@ -256,7 +255,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     });
     await run.finish();
 
-    const result = await readOutput(run.executionId);
+    const result = await readOutput(run.runId);
     const output = result.output ?? '';
 
     assert.ok(
@@ -273,13 +272,13 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       sink.onStdout?.('ne3\nline4\nline5\n');
     });
 
-    const full = await readOutput(run.executionId);
+    const full = await readOutput(run.runId);
     assert.ok(
       (full.output ?? '').includes('line3'),
       'A line split across chunks must be rejoined, not broken in two',
     );
 
-    const paged = await readOutput(run.executionId, [2, 3]);
+    const paged = await readOutput(run.runId, [2, 3]);
     const output = paged.output ?? '';
     assert.equal(paged.status, 'executed');
     assert.ok(output.includes('Showing lines 2-3 of 5.'));
@@ -288,7 +287,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(!output.includes('line1'));
     assert.ok(!output.includes('line4'));
 
-    const past = await readOutput(run.executionId, [900, 950]);
+    const past = await readOutput(run.runId, [900, 950]);
     assert.equal(past.status, 'executed');
     assert.ok((past.output ?? '').includes('No lines in the requested range'));
 
@@ -305,7 +304,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       sink.onStdout?.('tail');
     });
 
-    const result = await readOutput(run.executionId);
+    const result = await readOutput(run.runId);
     const output = result.output ?? '';
 
     assert.ok(output.includes('Showing lines 1-7 of 7.'));
@@ -321,8 +320,8 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('renders consecutive untagged legacy rows standalone', async () => {
-    const { executionId, streamId } =
-      await registerProcessExecution('legacy command');
+    const { runId, runId } =
+      await registerProcessRun('legacy command');
     const session = defaultSession();
     let seqNo = 0;
     const append = (
@@ -333,7 +332,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       session.publish([
         {
           type: 'transcript.entry',
-          aggregateId: aggregateId('stream', streamId),
+          aggregateId: aggregateId('stream', runId),
           entry: {
             seqNo: ++seqNo,
             id,
@@ -354,7 +353,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       LOG_LEVELS.WARN,
     );
 
-    const result = await readOutput(executionId);
+    const result = await readOutput(runId);
     const output = result.output ?? '';
 
     assert.ok(output.includes('Showing lines 1-5 of 5.'));
@@ -375,7 +374,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       sink.onStdout?.('  0%\r 50%\r100%\r\ndownload complete\n');
     });
 
-    const result = await readOutput(run.executionId);
+    const result = await readOutput(run.runId);
     const output = result.output ?? '';
 
     assert.ok(output.includes('Showing lines 1-4 of 4.'));
@@ -393,7 +392,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       );
     });
 
-    const result = await readOutput(run.executionId);
+    const result = await readOutput(run.runId);
     const output = result.output ?? '';
 
     assert.ok(
@@ -406,7 +405,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(!output.includes('line1300\n'));
 
     // A wide view_range still cannot pull back an unbounded window.
-    const wide = await readOutput(run.executionId, [1, lineCount]);
+    const wide = await readOutput(run.runId, [1, lineCount]);
     const wideOutput = wide.output ?? '';
     assert.ok(wideOutput.includes(`Showing lines 1-1000 of ${lineCount}`));
     assert.ok(wideOutput.includes('capped at 1000 lines per read'));
@@ -423,7 +422,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     });
     await run.finish();
 
-    const result = await readOutput(run.executionId);
+    const result = await readOutput(run.runId);
     const output = result.output ?? '';
 
     assert.equal(result.status, 'executed');
@@ -437,370 +436,345 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('points at /report when a registered process has no output yet', async () => {
-    const { executionId } = await registerProcessExecution('sleep 1');
+    const { runId } = await registerProcessRun('sleep 1');
 
-    const result = await readOutput(executionId);
+    const result = await readOutput(runId);
 
     assert.equal(result.status, 'executed');
     const output = result.output ?? '';
     assert.ok(output.includes('0 retained transcript chars'));
-    assert.ok(output.includes(`/executions/${executionId}/report`));
+    assert.ok(output.includes(`/executions/${runId}/report`));
   });
 
-  it.effect(
-    'points a non-process execution at /conversation instead of dumping its transcript',
-    () =>
-      Effect.gen(function* () {
-        const executionId = generateExecutionId();
-        yield* registerExecution(
-          defaultSession(),
-          executionId,
-          AgentConfigSchema.parse({
-            agent: 'chat',
-            instruction: 'Check the proof.',
-            agentCategory: AgentCategory.ToolUse,
-          }),
-          'chat',
+  it('points a non-process run at /conversation instead of dumping its transcript', async () => {
+    const runId = generateRunId();
+    await Effect.runPromise(
+      registerRun(
+        defaultSession(),
+        runId,
+        AgentConfigSchema.parse({
+          agent: 'chat',
+          instruction: 'Check the proof.',
+          agentCategory: AgentCategory.ToolUse,
+        }),
+        'chat',
+        {
+          runId: `chat@model#${runId}` as RunId,
+          identity: { kind: 'agent', agent: 'chat' },
+        },
+      ),
+    );
+
+    const result = await readOutput(runId);
+
+    assert.equal(result.status, 'executed');
+    assert.ok(
+      (result.output ?? '').includes(`/executions/${runId}/conversation`),
+    );
+  });
+
+  it('exposes the canonical workflow aggregate without full instructions', async () => {
+    const runId = await registerWorkflowRun('observable');
+    const timestamp = new Date().toISOString();
+    const longStageId = `stage-${'s'.repeat(2_500)}-stage-tail`;
+    const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
+    const longTitle = `Draft ${'t'.repeat(3_000)}-title-tail`;
+    const longError = `Failure ${'e'.repeat(4_000)}-error-tail`;
+    const longFiles = Array.from(
+      { length: 513 },
+      (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
+    );
+    await Effect.runPromise(
+      writeWorkflowRunSnapshot(defaultSession(), runId, {
+        lifecycle: 'active',
+        currentStageId: longStageId,
+        stages: [
           {
-            streamId: `chat@model#${executionId}` as StreamTabId,
-            identity: { kind: 'agent', agent: 'chat' },
+            id: longStageId,
+            title: longTitle,
+            order: 0,
+            lifecycle: 'active',
+            startedAt: timestamp,
           },
-        );
-
-        const result = yield* Effect.promise(() => readOutput(executionId));
-
-        assert.equal(result.status, 'executed');
-        assert.ok(
-          (result.output ?? '').includes(
-            `/executions/${executionId}/conversation`,
-          ),
-        );
-      }),
-  );
-
-  it.effect(
-    'exposes the canonical workflow aggregate without full instructions',
-    () =>
-      Effect.gen(function* () {
-        const executionId = yield* Effect.promise(() =>
-          registerWorkflowExecution('observable'),
-        );
-        const timestamp = new Date().toISOString();
-        const longStageId = `stage-${'s'.repeat(2_500)}-stage-tail`;
-        const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
-        const longTitle = `Draft ${'t'.repeat(3_000)}-title-tail`;
-        const longError = `Failure ${'e'.repeat(4_000)}-error-tail`;
-        const longFiles = Array.from(
-          { length: 513 },
-          (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
-        );
-        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
-          lifecycle: 'active',
-          currentStageId: longStageId,
-          stages: [
-            {
-              id: longStageId,
-              title: longTitle,
-              order: 0,
-              lifecycle: 'active',
-              startedAt: timestamp,
-            },
-          ],
-          calls: [
-            {
-              id: longCallId,
-              label: '   ',
-              stageId: longStageId,
-              agent: 'writer',
-              files: { input: longFiles, context: [], media: [] },
-              childExecutionId: 'abcdef123456',
-              attempts: [
-                {
-                  number: 1,
-                  id: '111111111111',
-                  startedAt: timestamp,
-                  completedAt: timestamp,
-                },
-                {
-                  number: 2,
-                  id: '222222222222',
-                  childStreamId: 'writer#222222222222',
-                  model: 'historical-model',
-                  costUsd: 0.2,
-                  startedAt: timestamp,
-                  completedAt: timestamp,
-                },
-                {
-                  number: 3,
-                  id: 'abcdef123456',
-                  childStreamId: 'writer#abcdef123456',
-                  model: 'replacement-model',
-                  costUsd: 0.3,
-                  startedAt: timestamp,
-                  completedAt: timestamp,
-                },
-              ],
-              status: 'failed',
-              error: longError,
-              timestamps: {
-                createdAt: timestamp,
+        ],
+        calls: [
+          {
+            id: longCallId,
+            label: '   ',
+            stageId: longStageId,
+            agent: 'writer',
+            files: { input: longFiles, context: [], media: [] },
+            childRunId: 'abcdef123456',
+            attempts: [
+              {
+                number: 1,
+                id: '111111111111',
                 startedAt: timestamp,
-                updatedAt: timestamp,
                 completedAt: timestamp,
               },
-            },
-          ],
-          timestamps: { createdAt: timestamp, updatedAt: timestamp },
-        });
-
-        const result = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
-            path: `/executions/${executionId}`,
-          }),
-        );
-        const output = result.output ?? '';
-        assert.equal(result.status, 'executed');
-        assert.ok(output.includes('"currentPhase"'));
-        assert.ok(output.includes('"calls"'));
-        assert.ok(output.includes('"stageBlocked": 0'));
-        assert.ok(output.includes('"childExecutionId": "abcdef123456"'));
-        assert.ok(output.includes('"number": 3'));
-        assert.ok(output.includes('"childStreamId": "writer#222222222222"'));
-        assert.ok(output.includes('"model": "historical-model"'));
-        assert.ok(output.includes('"costUsd": 0.2'));
-        assert.ok(output.includes('"error": "Failure '));
-        assert.ok(!output.includes('"number": 1'));
-        assert.ok(!output.includes('private full instruction'));
-        assert.ok(!output.includes('stage-tail'));
-        assert.ok(!output.includes('call-tail'));
-        assert.ok(!output.includes('title-tail'));
-        assert.ok(!output.includes('error-tail'));
-        assert.ok(!output.includes('file-tail'));
-        assert.ok(output.length < 20_000);
-        assert.ok(
-          (yield* getExecutionRecords(defaultSession(), executionId).readMeta())
-            ?.workflow,
-        );
-      }),
-  );
-
-  it.effect(
-    'keeps cancellation reasons on the aggregate and omits per-call error',
-    () =>
-      Effect.gen(function* () {
-        const executionId = yield* Effect.promise(() =>
-          registerWorkflowExecution('cancelled-summary'),
-        );
-        const timestamp = new Date().toISOString();
-        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
-          lifecycle: 'cancelled',
-          stages: [],
-          calls: [
-            {
-              id: 'cancelled-call',
-              label: 'Cancelled call',
-              issued: true,
-              kind: 'document',
-              files: { input: [], context: [], media: [] },
-              attempts: [],
-              status: 'cancelled',
-              timestamps: {
-                createdAt: timestamp,
-                updatedAt: timestamp,
+              {
+                number: 2,
+                id: '222222222222',
+                childRunId: 'writer#222222222222',
+                model: 'historical-model',
+                costUsd: 0.2,
+                startedAt: timestamp,
                 completedAt: timestamp,
               },
-            },
-          ],
-          error: 'Workflow cancelled by user.',
-          timestamps: {
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            completedAt: timestamp,
-          },
-        });
-
-        const result = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
-            path: `/executions/${executionId}`,
-          }),
-        );
-        const output = result.output ?? '';
-
-        assert.equal(result.status, 'executed');
-        assert.ok(output.includes('"error": "Workflow cancelled by user."'));
-        assert.ok(output.includes('"status": "cancelled"'));
-        assert.equal(output.match(/"error":/g)?.length, 1);
-      }),
-  );
-
-  it.effect(
-    'keeps a failed call ahead of newer completed current-stage calls when bounded',
-    () =>
-      Effect.gen(function* () {
-        const executionId = yield* Effect.promise(() =>
-          registerWorkflowExecution('failed-rank'),
-        );
-        const base = Date.parse('2026-04-01T00:00:00.000Z');
-        const completedCalls = Array.from({ length: 8 }, (_, index) => {
-          const updatedAt = new Date(base + (index + 1) * 1_000).toISOString();
-          return {
-            id: `completed-${index}`,
-            label: `Completed ${index}`,
-            stageId: 'stage-2',
-            files: { input: [], context: [], media: [] },
-            attempts: [],
-            status: 'completed' as const,
+              {
+                number: 3,
+                id: 'abcdef123456',
+                childRunId: 'writer#abcdef123456',
+                model: 'replacement-model',
+                costUsd: 0.3,
+                startedAt: timestamp,
+                completedAt: timestamp,
+              },
+            ],
+            status: 'failed',
+            error: longError,
             timestamps: {
-              createdAt: updatedAt,
-              updatedAt,
-              completedAt: updatedAt,
-            },
-          };
-        });
-        const failedAt = new Date(base).toISOString();
-        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
-          lifecycle: 'active',
-          currentStageId: 'stage-2',
-          stages: [
-            {
-              id: 'stage-1',
-              title: 'Earlier stage',
-              order: 0,
-              lifecycle: 'failed',
-              startedAt: failedAt,
-              completedAt: failedAt,
-            },
-            {
-              id: 'stage-2',
-              title: 'Current stage',
-              order: 1,
-              lifecycle: 'active',
-              startedAt: failedAt,
-            },
-          ],
-          calls: [
-            {
-              id: 'older-failed',
-              label: 'Older failed',
-              stageId: 'stage-1',
-              files: { input: [], context: [], media: [] },
-              attempts: [
-                {
-                  number: 1,
-                  startedAt: failedAt,
-                  completedAt: failedAt,
-                },
-              ],
-              status: 'failed',
-              error: 'expected failure',
-              timestamps: {
-                createdAt: failedAt,
-                startedAt: failedAt,
-                updatedAt: failedAt,
-                completedAt: failedAt,
-              },
-            },
-            ...completedCalls,
-          ],
-          timestamps: { createdAt: failedAt, updatedAt: failedAt },
-        });
-
-        const result = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
-            path: `/executions/${executionId}`,
-          }),
-        );
-        const output = result.output ?? '';
-
-        assert.equal(result.status, 'executed');
-        assert.ok(output.includes('"id": "older-failed"'));
-        assert.ok(output.includes('"omittedCalls": 1'));
-        assert.ok(!output.includes('"id": "completed-0"'));
-      }),
-  );
-
-  it.effect(
-    'keeps an earlier-stage live call ahead of current-stage terminal calls when bounded',
-    () =>
-      Effect.gen(function* () {
-        const executionId = yield* Effect.promise(() =>
-          registerWorkflowExecution('ranked'),
-        );
-        const timestamp = new Date().toISOString();
-        const terminalCalls = Array.from({ length: 8 }, (_, index) => ({
-          id: `current-terminal-${index}`,
-          label: `Current terminal ${index}`,
-          stageId: 'stage-2',
-          files: { input: [], context: [], media: [] },
-          attempts: [],
-          status: 'completed' as const,
-          timestamps: {
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            completedAt: timestamp,
-          },
-        }));
-        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
-          lifecycle: 'active',
-          currentStageId: 'stage-2',
-          stages: [
-            {
-              id: 'stage-1',
-              title: 'Earlier stage',
-              order: 0,
-              lifecycle: 'completed',
+              createdAt: timestamp,
               startedAt: timestamp,
+              updatedAt: timestamp,
               completedAt: timestamp,
             },
-            {
-              id: 'stage-2',
-              title: 'Current stage',
-              order: 1,
-              lifecycle: 'active',
-              startedAt: timestamp,
-            },
-          ],
-          calls: [
-            ...terminalCalls,
-            {
-              id: 'earlier-live',
-              label: 'Earlier live',
-              stageId: 'stage-1',
-              files: { input: [], context: [], media: [] },
-              attempts: [{ number: 1, startedAt: timestamp }],
-              status: 'running',
-              timestamps: {
-                createdAt: timestamp,
-                startedAt: timestamp,
-                updatedAt: timestamp,
-              },
-            },
-          ],
-          timestamps: { createdAt: timestamp, updatedAt: timestamp },
-        });
-
-        const result = yield* Effect.promise(() =>
-          new ExecutionsTool().call({
-            path: `/executions/${executionId}`,
-          }),
-        );
-        const output = result.output ?? '';
-
-        assert.equal(result.status, 'executed');
-        assert.ok(output.includes('"id": "earlier-live"'));
-        assert.ok(output.includes('"omittedCalls": 1'));
-        assert.ok(!output.includes('"id": "current-terminal-7"'));
+          },
+        ],
+        timestamps: { createdAt: timestamp, updatedAt: timestamp },
       }),
-  );
+    );
+
+    const result = await new ExecutionsTool().call({
+      path: `/executions/${runId}`,
+    });
+    const output = result.output ?? '';
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('"currentPhase"'));
+    assert.ok(output.includes('"calls"'));
+    assert.ok(output.includes('"stageBlocked": 0'));
+    assert.ok(output.includes('"childRunId": "abcdef123456"'));
+    assert.ok(output.includes('"number": 3'));
+    assert.ok(output.includes('"childRunId": "writer#222222222222"'));
+    assert.ok(output.includes('"model": "historical-model"'));
+    assert.ok(output.includes('"costUsd": 0.2'));
+    assert.ok(output.includes('"error": "Failure '));
+    assert.ok(!output.includes('"number": 1'));
+    assert.ok(!output.includes('private full instruction'));
+    assert.ok(!output.includes('stage-tail'));
+    assert.ok(!output.includes('call-tail'));
+    assert.ok(!output.includes('title-tail'));
+    assert.ok(!output.includes('error-tail'));
+    assert.ok(!output.includes('file-tail'));
+    assert.ok(output.length < 20_000);
+    assert.ok(
+      (
+        await Effect.runPromise(
+          getRunRecords(defaultSession(), runId).readMeta(),
+        )
+      )?.workflow,
+    );
+  });
+
+  it('keeps cancellation reasons on the aggregate and omits per-call error', async () => {
+    const runId = await registerWorkflowRun('cancelled-summary');
+    const timestamp = new Date().toISOString();
+    await Effect.runPromise(
+      writeWorkflowRunSnapshot(defaultSession(), runId, {
+        lifecycle: 'cancelled',
+        stages: [],
+        calls: [
+          {
+            id: 'cancelled-call',
+            label: 'Cancelled call',
+            issued: true,
+            kind: 'document',
+            files: { input: [], context: [], media: [] },
+            attempts: [],
+            status: 'cancelled',
+            timestamps: {
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              completedAt: timestamp,
+            },
+          },
+        ],
+        error: 'Workflow cancelled by user.',
+        timestamps: {
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          completedAt: timestamp,
+        },
+      }),
+    );
+
+    const result = await new ExecutionsTool().call({
+      path: `/executions/${runId}`,
+    });
+    const output = result.output ?? '';
+
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('"error": "Workflow cancelled by user."'));
+    assert.ok(output.includes('"status": "cancelled"'));
+    assert.equal(output.match(/"error":/g)?.length, 1);
+  });
+
+  it('keeps a failed call ahead of newer completed current-stage calls when bounded', async () => {
+    const runId = await registerWorkflowRun('failed-rank');
+    const base = Date.parse('2026-04-01T00:00:00.000Z');
+    const completedCalls = Array.from({ length: 8 }, (_, index) => {
+      const updatedAt = new Date(base + (index + 1) * 1_000).toISOString();
+      return {
+        id: `completed-${index}`,
+        label: `Completed ${index}`,
+        stageId: 'stage-2',
+        files: { input: [], context: [], media: [] },
+        attempts: [],
+        status: 'completed' as const,
+        timestamps: {
+          createdAt: updatedAt,
+          updatedAt,
+          completedAt: updatedAt,
+        },
+      };
+    });
+    const failedAt = new Date(base).toISOString();
+    await Effect.runPromise(
+      writeWorkflowRunSnapshot(defaultSession(), runId, {
+        lifecycle: 'active',
+        currentStageId: 'stage-2',
+        stages: [
+          {
+            id: 'stage-1',
+            title: 'Earlier stage',
+            order: 0,
+            lifecycle: 'failed',
+            startedAt: failedAt,
+            completedAt: failedAt,
+          },
+          {
+            id: 'stage-2',
+            title: 'Current stage',
+            order: 1,
+            lifecycle: 'active',
+            startedAt: failedAt,
+          },
+        ],
+        calls: [
+          {
+            id: 'older-failed',
+            label: 'Older failed',
+            stageId: 'stage-1',
+            files: { input: [], context: [], media: [] },
+            attempts: [
+              {
+                number: 1,
+                startedAt: failedAt,
+                completedAt: failedAt,
+              },
+            ],
+            status: 'failed',
+            error: 'expected failure',
+            timestamps: {
+              createdAt: failedAt,
+              startedAt: failedAt,
+              updatedAt: failedAt,
+              completedAt: failedAt,
+            },
+          },
+          ...completedCalls,
+        ],
+        timestamps: { createdAt: failedAt, updatedAt: failedAt },
+      }),
+    );
+
+    const result = await new ExecutionsTool().call({
+      path: `/executions/${runId}`,
+    });
+    const output = result.output ?? '';
+
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('"id": "older-failed"'));
+    assert.ok(output.includes('"omittedCalls": 1'));
+    assert.ok(!output.includes('"id": "completed-0"'));
+  });
+
+  it('keeps an earlier-stage live call ahead of current-stage terminal calls when bounded', async () => {
+    const runId = await registerWorkflowRun('ranked');
+    const timestamp = new Date().toISOString();
+    const terminalCalls = Array.from({ length: 8 }, (_, index) => ({
+      id: `current-terminal-${index}`,
+      label: `Current terminal ${index}`,
+      stageId: 'stage-2',
+      files: { input: [], context: [], media: [] },
+      attempts: [],
+      status: 'completed' as const,
+      timestamps: {
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        completedAt: timestamp,
+      },
+    }));
+    await Effect.runPromise(
+      writeWorkflowRunSnapshot(defaultSession(), runId, {
+        lifecycle: 'active',
+        currentStageId: 'stage-2',
+        stages: [
+          {
+            id: 'stage-1',
+            title: 'Earlier stage',
+            order: 0,
+            lifecycle: 'completed',
+            startedAt: timestamp,
+            completedAt: timestamp,
+          },
+          {
+            id: 'stage-2',
+            title: 'Current stage',
+            order: 1,
+            lifecycle: 'active',
+            startedAt: timestamp,
+          },
+        ],
+        calls: [
+          ...terminalCalls,
+          {
+            id: 'earlier-live',
+            label: 'Earlier live',
+            stageId: 'stage-1',
+            files: { input: [], context: [], media: [] },
+            attempts: [{ number: 1, startedAt: timestamp }],
+            status: 'running',
+            timestamps: {
+              createdAt: timestamp,
+              startedAt: timestamp,
+              updatedAt: timestamp,
+            },
+          },
+        ],
+        timestamps: { createdAt: timestamp, updatedAt: timestamp },
+      }),
+    );
+
+    const result = await new ExecutionsTool().call({
+      path: `/executions/${runId}`,
+    });
+    const output = result.output ?? '';
+
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('"id": "earlier-live"'));
+    assert.ok(output.includes('"omittedCalls": 1'));
+    assert.ok(!output.includes('"id": "current-terminal-7"'));
+  });
 
   it('shows one model for a workflow run in both the listing and its summary', async () => {
-    const executionId = await registerWorkflowExecution(
+    const runId = await registerWorkflowRun(
       'model-parity',
       'parity-model-1',
     );
 
     const summary = await new ExecutionsTool().call({
-      path: `/executions/${executionId}`,
+      path: `/executions/${runId}`,
     });
     const listing = await new ExecutionsTool().call({ path: '/executions' });
     const summaryOutput = summary.output ?? '';
@@ -821,36 +795,36 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     });
 
     const running = await new ExecutionsTool().call({
-      path: `/executions/${run.executionId}`,
+      path: `/executions/${run.runId}`,
     });
     const runningOutput = running.output ?? '';
     assert.equal(running.status, 'executed');
-    // The stamped identity, not the live wire's fabricated execution mode.
+    // The stamped identity, not the live wire's fabricated run mode.
     assert.ok(runningOutput.includes('Category: process'));
     assert.ok(!runningOutput.includes('Category: toolUse'));
     // /output is readable while the process runs, so the running summary
     // must advertise it — the same path the completed row lists.
     assert.ok(
-      runningOutput.includes(`/executions/${run.executionId}/output`),
+      runningOutput.includes(`/executions/${run.runId}/output`),
       'a running process must advertise its /output path',
     );
 
     await run.finish();
 
     const completed = await new ExecutionsTool().call({
-      path: `/executions/${run.executionId}`,
+      path: `/executions/${run.runId}`,
     });
     const completedOutput = completed.output ?? '';
     assert.ok(completedOutput.includes('Category: process'));
     assert.ok(
-      completedOutput.includes(`/executions/${run.executionId}/output`),
+      completedOutput.includes(`/executions/${run.runId}/output`),
     );
   });
 
-  it('errors on an unknown execution id', async () => {
-    const result = await readOutput(generateExecutionId());
+  it('errors on an unknown run id', async () => {
+    const result = await readOutput(generateRunId());
 
     assert.equal(result.status, 'error');
-    assert.ok((result.error ?? '').includes('Execution not found'));
+    assert.ok((result.error ?? '').includes('Run not found'));
   });
 });

@@ -3,7 +3,7 @@ import PQueue from 'p-queue';
 import { z } from 'zod';
 
 // Local imports - storage
-import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+import type { RunKVStore } from '@agent/storage/RunKVStore';
 import {
   JsonValueSchema,
   type WorkflowScriptFiles,
@@ -75,16 +75,16 @@ export interface PersistedWorkflowScriptRunOptions extends Omit<
   WorkflowScriptRunOptions,
   'script' | 'journal' | 'onJournalEntry'
 > {
-  /** Execution-scoped KV store that owns this invocation's checkpoint. */
-  store: ExecutionKVStore;
+  /** Run-scoped KV store that owns this invocation's checkpoint. */
+  store: RunKVStore;
   /** Stable identity, normally the parent tool call id. */
   checkpointId: string;
   /** Omit only when resuming the script already stored at checkpointId. */
   script?: string;
 }
 
-// An execution is owned by one active runtime host. This lock prevents two
-// callers in that host from racing the same checkpoint; execution KV is not a
+// A run is owned by one active runtime host. This lock prevents two
+// callers in that host from racing the same checkpoint; run KV is not a
 // distributed coordination service between separate TeXRA processes.
 const checkpointMutex = new KeyedMutex<string>();
 
@@ -126,7 +126,7 @@ function orderedJournal(
 
 /** Read one checkpoint. Absence returns null; malformed data fails. */
 export async function readWorkflowScriptCheckpoint(
-  store: ExecutionKVStore,
+  store: RunKVStore,
   checkpointId: string,
 ): Promise<WorkflowScriptCheckpoint | null> {
   const raw = await store.read(workflowScriptCheckpointKvKey(checkpointId));
@@ -149,7 +149,7 @@ export async function readWorkflowScriptCheckpoint(
 
 /** Atomically replace the script, arguments, and journal for one invocation. */
 export async function writeWorkflowScriptCheckpoint(
-  store: ExecutionKVStore,
+  store: RunKVStore,
   checkpointId: string,
   checkpoint: WorkflowScriptCheckpoint,
 ): Promise<void> {
@@ -172,13 +172,13 @@ export async function writeWorkflowScriptCheckpoint(
 }
 
 /**
- * Run or resume a workflow script with a durable execution-scoped journal.
+ * Run or resume a workflow script with a durable run-scoped journal.
  * Completed agent calls are persisted before the script can consume them.
  */
 export async function runPersistedWorkflowScript(
   options: PersistedWorkflowScriptRunOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const lockKey = `${options.store.getExecutionId()}:${options.checkpointId}`;
+  const lockKey = `${options.store.getRunId()}:${options.checkpointId}`;
   return checkpointMutex.runExclusive(lockKey, () =>
     runPersistedWorkflowScriptLocked(options),
   );
@@ -200,7 +200,7 @@ async function runPersistedWorkflowScriptLocked(
   // evolve the script between attempts (a model retrying after a timeout
   // rarely reproduces its source byte-for-byte). Adopt the requested script
   // and args, keep the journal: an entry replays only on a matching
-  // prompt/execution-options hash, so drifted calls re-execute while
+  // prompt/run-options hash, so drifted calls re-execute while
   // presentation-only edits, unchanged calls, and calls that merely moved
   // stay free. Keep the key union while this invocation is running so a
   // crash can resume prior branches and newly completed work together. A
@@ -253,7 +253,7 @@ async function runPersistedWorkflowScriptLocked(
     await writeQueue.add(persistCheckpoint);
   };
 
-  // Establish the checkpoint once before execution. Snapshot transitions are
+  // Establish the checkpoint once before run. Snapshot transitions are
   // persisted separately and never rewrite script or journal metadata.
   await persistCheckpoint();
   const result = await runWorkflowScript({
@@ -263,7 +263,7 @@ async function runPersistedWorkflowScriptLocked(
     files,
     journal: prior?.journal,
     // `...runOptions` carries the caller's own `onSnapshot`: snapshots
-    // belong to the detached execution that owns their writes, while this
+    // belong to the detached run that owns their writes, while this
     // checkpoint store may belong to its orchestrator.
     onJournalEntry: persistEntry,
   });

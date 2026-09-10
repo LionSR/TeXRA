@@ -73,7 +73,7 @@ export const WORKBENCH_KIND_META = {
     singleton: false,
   },
   /** The selected stream's root subtree. While it is open the rail lists
-   *  top-level streams only: the tree has one home at a time. */
+   *  top-level runs only: the tree has one home at a time. */
   subagents: {
     defaultPlacement: 'right',
     icon: 'diagram-project',

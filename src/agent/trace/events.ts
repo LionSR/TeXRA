@@ -122,7 +122,7 @@ interface ToolEndEvent extends StageStamp {
 
 /**
  * Correlatable workflow-script call state. The same `logId` is emitted as a
- * call moves from its declared plan through execution to a terminal state.
+ * call moves from its declared plan through run to a terminal state.
  */
 interface WorkflowCallEvent extends StageStamp {
   readonly type: 'workflow.call';
@@ -169,7 +169,7 @@ interface UsageEvent extends StageStamp {
 export type StatusEvent = Omit<
   Extract<SessionEventDraft, { type: 'status' }>,
   'aggregateId'
-> & { readonly streamId: RunId };
+> & { readonly runId: RunId };
 
 /** UI progress counters for a run, projected by hosts but not transcript logs. */
 interface ConversationProgressEvent extends StageStamp {

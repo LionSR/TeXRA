@@ -81,13 +81,13 @@ function createCompileFailure(
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.tex',
       relativePath: 'answer.tex',
-      executionId: 'exec-old',
+      runId: 'exec-old',
     },
     log: {
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.log',
       relativePath: 'answer.log',
-      executionId: 'exec-old',
+      runId: 'exec-old',
     },
     logRelativePath: 'answer.log',
     ...overrides,
@@ -129,14 +129,14 @@ describe('ProgressFollowUpController', () => {
     });
     const output = createRunStorageOutputFile({ source: 'source.tex' });
     const plan = await controller.planCompileFixer({
-      streamId: 'stream-a',
+      runId: 'stream-a',
       runConfig: createFollowUpWorkflowConfig({
         inputFiles: ['main.tex', 'source.tex'],
       }),
       compileFailures: [createCompileFailure()],
       runOutputs: { 2: [output] },
       modelOptions: [{ value: 'other-model' }],
-      executionId: 'exec-123',
+      runId: 'exec-123',
     });
 
     expect(plan.kind).toBe('execute');
@@ -148,8 +148,8 @@ describe('ProgressFollowUpController', () => {
     expect(config.instruction ?? '').toMatch(
       /Editable workspace targets: source\.tex, main\.tex/,
     );
-    // Addressed through the execution that owns the artifact (`exec-old`, on
-    // the failure's own locations), not the execution asking about it.
+    // Addressed through the run that owns the artifact (`exec-old`, on
+    // the failure's own locations), not the run asking about it.
     expect(config.instruction ?? '').toMatch(
       /output \/executions\/exec-old\/files\/answer\.tex; compile log \/executions\/exec-old\/files\/answer\.log/,
     );
@@ -160,14 +160,14 @@ describe('ProgressFollowUpController', () => {
       existingFiles: new Set(['main.tex', 'chapter.tex']),
     });
     const plan = await controller.planCompileFixer({
-      streamId: 'stream-a',
+      runId: 'stream-a',
       runConfig: createFollowUpWorkflowConfig({
         inputFiles: ['main.tex', 'chapter.tex'],
       }),
       compileFailures: [createCompileFailure()],
       runOutputs: {},
       modelOptions: [{ value: 'gemini31p' }],
-      executionId: 'exec-123',
+      runId: 'exec-123',
     });
 
     expect(plan.kind).toBe('execute');
@@ -183,7 +183,7 @@ describe('ProgressFollowUpController', () => {
     const plan = await createController({
       existingFiles: new Set(),
     }).planCompileFixer({
-      streamId: 'stream-a',
+      runId: 'stream-a',
       runConfig: createFollowUpWorkflowConfig({
         inputFiles: ['/external/main.tex'],
       }),
@@ -192,7 +192,7 @@ describe('ProgressFollowUpController', () => {
         2: [createRunStorageOutputFile({ source: '/external/main.tex' })],
       },
       modelOptions: [{ value: 'gemini31p' }],
-      executionId: 'exec-123',
+      runId: 'exec-123',
     });
 
     expect(plan).toEqual({
@@ -206,7 +206,7 @@ describe('ProgressFollowUpController', () => {
     const plan = await createController({
       existingFiles: new Set(['main.tex', 'main-diffea268c1.tex']),
     }).planCompileFixer({
-      streamId: 'stream-a',
+      runId: 'stream-a',
       runConfig: createExactInputsConfig({
         inputFiles: ['main-diffea268c1.tex'],
       }),
@@ -215,7 +215,7 @@ describe('ProgressFollowUpController', () => {
         2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
       },
       modelOptions: [{ value: 'gemini31p' }],
-      executionId: 'exec-123',
+      runId: 'exec-123',
     });
 
     expect(plan.kind).toBe('execute');
@@ -239,7 +239,7 @@ describe('ProgressFollowUpController', () => {
     const plan = await createController({
       existingFiles: new Set(['main-diffea268c1.tex']),
     }).planCompileFixer({
-      streamId: 'stream-a',
+      runId: 'stream-a',
       runConfig: createExactInputsConfig({
         inputFiles: ['main-diffea268c1.tex'],
       }),
@@ -248,7 +248,7 @@ describe('ProgressFollowUpController', () => {
         2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
       },
       modelOptions: [{ value: 'gemini31p' }],
-      executionId: 'exec-123',
+      runId: 'exec-123',
     });
 
     expect(plan.kind).toBe('execute');
@@ -261,7 +261,7 @@ describe('ProgressFollowUpController', () => {
 
   it('uses the inferred source when a generated latexdiff artifact is absent', async () => {
     const plan = await createController().planCompileFixer({
-      streamId: 'stream-a',
+      runId: 'stream-a',
       runConfig: createExactInputsConfig({
         inputFiles: ['main-diffea268c1.tex'],
       }),
@@ -270,7 +270,7 @@ describe('ProgressFollowUpController', () => {
         2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
       },
       modelOptions: [{ value: 'gemini31p' }],
-      executionId: 'exec-123',
+      runId: 'exec-123',
     });
 
     expect(plan.kind).toBe('execute');
@@ -283,14 +283,14 @@ describe('ProgressFollowUpController', () => {
 
   it('keeps missing latexdiff context when a source target is already present', async () => {
     const plan = await createController().planCompileFixer({
-      streamId: 'stream-a',
+      runId: 'stream-a',
       runConfig: createExactInputsConfig({
         inputFiles: ['main.tex', 'main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],
       runOutputs: {},
       modelOptions: [{ value: 'gemini31p' }],
-      executionId: 'exec-123',
+      runId: 'exec-123',
     });
 
     expect(plan.kind).toBe('execute');

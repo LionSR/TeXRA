@@ -15,11 +15,11 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import {
-  acquireResumedExecutionOwnership,
+  acquireResumedRunOwnership,
   getPersistedUserFollowUpSupport,
-} from '@agent/storage/executionLifecycle';
-import { getExecutionRecords } from '@agent/storage/ExecutionKVStore';
-import { assertOwnedExecutionLease } from '@agent/storage/executionLease';
+} from '@agent/storage/runLifecycle';
+import { getRunRecords } from '@agent/storage/RunKVStore';
+import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
@@ -45,7 +45,7 @@ import {
   buildAgentLaunchContext,
   prepareAgentDefinition,
   type PreparedAgentDefinition,
-  withExecutionRunContext,
+  withLaunchRunContext,
   type AgentLaunchContext,
 } from './AgentLaunchContext';
 import {
@@ -68,14 +68,14 @@ import {
 } from './SessionResumeRetrieval';
 import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
+import type { RunHandle, AgentRunHandle } from './RunHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const logger = createLog('executeAgent');
 
 /** A claimed run no longer has the persisted tool-use state to resume. */
 export class ResumeSessionUnavailableError extends Error {
-  constructor(readonly executionId: RunId) {
+  constructor(readonly runId: RunId) {
     super('This session can no longer be resumed. Start a new run instead.');
     this.name = 'ResumeSessionUnavailableError';
   }
@@ -112,7 +112,7 @@ type ToolUseLaunchVariant =
     };
 
 /**
- * Run the tool-use flow for a single agent execution, fresh or resumed.
+ * Run the tool-use flow for a single agent run, fresh or resumed.
  *
  * Owns all tool-use-specific wiring: progress counters, follow-up queuing, and
  * model-change side effects. A failed run arrives as a FAILED result carrying
@@ -123,7 +123,7 @@ type ToolUseLaunchVariant =
  */
 async function launchToolUseRun(
   ctx: AgentLaunchContext,
-  handle: AgentExecutionHandle,
+  handle: RunHandle,
   lifecycle: FlowLifecycleControl,
   shared: SubagentRunOptions & {
     readonly setting: AgentToolUseSetting;
@@ -131,7 +131,7 @@ async function launchToolUseRun(
   },
   variant: ToolUseLaunchVariant,
 ): Promise<AgentRuntimeFlowResult> {
-  const { executionId: runExecutionId } = ctx.runScope;
+  const { runId } = ctx.runScope;
   const result = await runToolUseFlow(
     {
       ...ctx,
@@ -140,7 +140,7 @@ async function launchToolUseRun(
       // A child (a run with a parent) takes the subagent prompt and may park
       // at WAITING for its loop; the fresh launch and the resume both read
       // the same edge.
-      isSubagent: shared.parentExecutionId !== undefined,
+      isSubagent: shared.parentRunId !== undefined,
       tools: shared.tools,
       onProgress: (update) => {
         if (update.kind === 'overview') {
@@ -151,12 +151,12 @@ async function launchToolUseRun(
         shared.onProgress?.(update);
       },
       onFollowUpConsumed: () => {
-        const { session, executionId } = ctx.runScope;
+        const { session, runId } = ctx.runScope;
         session.publish([
           {
             type: 'updateQueuedFollowUps',
-            aggregateId: qualifyAggregateId('run', executionId),
-            messages: session.followUps.getAll(executionId),
+            aggregateId: qualifyAggregateId('run', runId),
+            messages: session.followUps.getAll(runId),
           },
         ]);
         shared.onFollowUpConsumed?.();
@@ -195,7 +195,7 @@ async function launchToolUseRun(
     outcome: result.outcome,
     response: result.response,
     files: result.files,
-    executionId: runExecutionId,
+    runId,
     ...(result.structured !== undefined
       ? { structured: result.structured }
       : {}),
@@ -214,10 +214,10 @@ async function launchToolUseRun(
  */
 function buildLifecycleOptions(
   options: SubagentRunOptions,
-  parentExecutionId: RunId | undefined,
+  parentRunId: RunId | undefined,
 ): RunFlowLifecycleOptions {
   return {
-    parentExecutionId,
+    parentRunId,
     workflowPhase: options.workflowPhase,
     onError: options.onRunError,
     onRun: options.onRun,
@@ -226,7 +226,7 @@ function buildLifecycleOptions(
 }
 
 /**
- * Run the reflection (workflow) flow for a single agent execution.
+ * Run the reflection (workflow) flow for a single agent run.
  *
  * Owns workflow-specific usage recording. The caller (`executeAgent`) owns
  * lifecycle and stream-status.
@@ -235,7 +235,7 @@ async function runReflectionAgent(
   ctx: AgentLaunchContext,
   setting: AgentWorkflowSetting,
 ): Promise<WorkflowFlowResult> {
-  const { executionId: runExecutionId } = ctx.runScope;
+  const { runId } = ctx.runScope;
   const result = await runReflectionFlow({
     ...ctx,
     onRoundFinalized: createUsageRecordingCallback(ctx),
@@ -246,7 +246,7 @@ async function runReflectionAgent(
     outcome: result.outcome,
     outputs: roundOutputsToOutputSummaries(result.roundOutputs),
     compileFailures: roundOutputsToCompileFailureSummaries(result.roundOutputs),
-    executionId: runExecutionId,
+    runId,
     ...(result.error ? { error: result.error } : {}),
     ...buildOptionalFlowResultFields(
       ctx.attachedMemoryMisses,
@@ -296,7 +296,7 @@ export interface SubagentRunOptions {
    * loop. A fresh launch takes it from the caller; a resume ignores it and
    * reads the persisted `run.start`.
    */
-  parentExecutionId?: RunId;
+  parentRunId?: RunId;
   /** Fires on meaningful progress: todo changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
@@ -353,10 +353,10 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * own surface state. The run's trace comes with it, before its first
    * event, for a consumer that must hear every trace event.
    */
-  onStreamResolved?: (streamId: RunId, trace: AgentTrace) => void;
+  onStreamResolved?: (runId: RunId, trace: AgentTrace) => void;
   /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: () => void;
-  /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
+  /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
@@ -373,47 +373,47 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 // `isWaitingFlowResult`.
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: RunId,
+  runId: RunId,
   options: ExecuteAgentOptions & {
-    parentExecutionId: RunId;
+    parentRunId: RunId;
     session: SessionHandle;
   },
 ): Effect.Effect<AgentFlowResult | WaitingToolUseFlowResult, Error>;
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: RunId,
+  runId: RunId,
   options: ExecuteAgentOptions & {
-    parentExecutionId?: undefined;
+    parentRunId?: undefined;
     session: SessionHandle;
   },
 ): Effect.Effect<AgentFlowResult, Error>;
 
 /**
- * Low-level execution runner for an already-registered execution. Fresh
- * launches should use `runAgent()` or call `registerExecution()` first so the
- * canonical configuration is committed with the execution's creation.
- * Its prepared definition must be the one registration used. Resume paths reuse the existing execution record.
+ * Low-level run runner for an already-registered run. Fresh
+ * launches should use `runAgent()` or call `registerRun()` first so the
+ * canonical configuration is committed with the run's creation.
+ * Its prepared definition must be the one registration used. Resume paths reuse the existing run record.
  */
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: RunId,
+  runId: RunId,
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error> {
   return Effect.gen(function* () {
     yield* Effect.tryPromise({
       try: async () =>
         runInSession(options.session, () =>
-          assertOwnedExecutionLease(executionId),
+          assertOwnedRunLease(runId),
         ),
       catch: ensureError,
     });
-    const isSubagent = options.parentExecutionId !== undefined;
+    const isSubagent = options.parentRunId !== undefined;
     const ctx = yield* buildAgentLaunchContext({
       definition,
-      executionId,
+      runId,
       resumed: options.resumed,
       onStreamResolved: options.onStreamResolved,
-      parentExecutionId: options.parentExecutionId,
+      parentRunId: options.parentRunId,
       userFollowUpSupport: options.userFollowUpSupport,
       suppressErrorNotification:
         options.suppressErrorNotification ?? isSubagent,
@@ -428,7 +428,7 @@ export function executeAgent(
       },
     });
     return yield* Effect.suspend(() =>
-      withExecutionRunContext(
+      withLaunchRunContext(
         ctx,
         { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
         () => {
@@ -437,7 +437,7 @@ export function executeAgent(
           );
           return Effect.gen(function* () {
             const { setting, config } = ctx;
-            const { executionId: runExecutionId, session: runSession } =
+            const { runId, session: runSession } =
               ctx.runScope;
 
             // Start description generation concurrently with the run, but join it
@@ -445,7 +445,7 @@ export function executeAgent(
             // metadata write from recreating a run deleted by another host.
             const sessionDescription = runInScope(() =>
               generateSessionDescription(
-                runExecutionId,
+                runId,
                 config,
                 ctx.resolvedAgentDescription,
                 runSession,
@@ -457,17 +457,17 @@ export function executeAgent(
                 ctx,
                 async (handle, lifecycle) =>
                   runInScope(async () => {
-                    // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
-                    await ensureRunDir(executionId);
+                    // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
+                    await ensureRunDir(runId);
                     logger.info(
-                      `Starting task execution (runId: ${runExecutionId})`,
+                      `Starting task run (runId: ${runId})`,
                     );
                     logger.info(
                       `Input file: ${config.inputFiles[0] ?? '(none)'}`,
                     );
-                    logger.debug('Task execution details', {
+                    logger.debug('Task run details', {
                       data: {
-                        runId: runExecutionId,
+                        runId,
                         agent: config.agent,
                         model: config.model,
                       },
@@ -508,7 +508,7 @@ export function executeAgent(
                       ? result
                       : { ...result, outcome: outputOutcome };
                   }),
-                buildLifecycleOptions(options, options.parentExecutionId),
+                buildLifecycleOptions(options, options.parentRunId),
               );
               if (isWaitingFlowResult(result) && !isSubagent) {
                 throw new Error(
@@ -564,10 +564,10 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
         const [meta, userFollowUpSupport] = yield* Effect.all([
-          getExecutionRecords(runSession, resume.executionId).readMeta(),
-          getPersistedUserFollowUpSupport(resume.executionId, runSession),
+          getRunRecords(runSession, resume.runId).readMeta(),
+          getPersistedUserFollowUpSupport(resume.runId, runSession),
         ]);
-        const parentExecutionId = meta?.parentExecutionId;
+        const parentRunId = meta?.parentRunId;
         const definition = yield* prepareAgentDefinition({
           config: resume.agentConfig,
           enforceCategory: true,
@@ -576,11 +576,11 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
         });
         const ctx = yield* buildAgentLaunchContext({
           definition,
-          executionId: resume.executionId,
+          runId: resume.runId,
           resumed: true,
           modelHandlerCompatibilityKey:
             resume.shared.modelHandlerCompatibilityKey,
-          parentExecutionId,
+          parentRunId,
           userFollowUpSupport,
           suppressErrorNotification: true,
           session: runSession,
@@ -589,21 +589,21 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
             runtimeUnavailableTools: options.runtimeUnavailableTools,
           },
         });
-        return { ctx, parentExecutionId };
+        return { ctx, parentRunId };
       }),
     );
     if (Exit.isFailure(setup)) {
       return yield* Effect.failCause(setup.cause).pipe(
         Effect.onExit(() =>
-          runSession.releaseExecutionLease(resume.executionId),
+          runSession.releaseRunLease(resume.runId),
         ),
       );
     }
-    const { ctx, parentExecutionId } = setup.value;
+    const { ctx, parentRunId } = setup.value;
     const { setting } = ctx;
     const result = yield* Effect.exit(
       Effect.suspend(() =>
-        withExecutionRunContext(
+        withLaunchRunContext(
           ctx,
           { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
           () => {
@@ -626,7 +626,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                     ctx,
                     handle,
                     lifecycle,
-                    { ...options, setting, parentExecutionId },
+                    { ...options, setting, parentRunId },
                     {
                       kind: 'resume',
                       resume,
@@ -638,7 +638,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                     },
                   );
                 }),
-              buildLifecycleOptions(options, parentExecutionId),
+              buildLifecycleOptions(options, parentRunId),
             );
           },
         ),
@@ -646,13 +646,13 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     );
     if (Exit.isFailure(result)) {
       const released = yield* Effect.exit(
-        runSession.releaseExecutionLease(resume.executionId),
+        runSession.releaseRunLease(resume.runId),
       );
       if (Exit.isFailure(released)) {
         return yield* Effect.fail(
           new AggregateError(
             [Cause.squash(result.cause), Cause.squash(released.cause)],
-            `Run ${resume.executionId} failed and its final artifacts could not be persisted`,
+            `Run ${resume.runId} failed and its final artifacts could not be persisted`,
           ),
         );
       }
@@ -660,7 +660,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     }
     // A WAITING result retains ownership for the next resumed turn.
     if (!isWaitingFlowResult(result.value)) {
-      yield* runSession.releaseExecutionLease(resume.executionId);
+      yield* runSession.releaseRunLease(resume.runId);
     }
     return result.value;
   },
@@ -675,27 +675,27 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
  *
  * This is the inner, unserialized turn: a native child loop runs it for every
  * turn inside the child's own generation, which already holds the child's
- * execution lane. Hosts resume through {@link resumeToolUseFromResumeData}.
+ * run lane. Hosts resume through {@link resumeToolUseFromResumeData}.
  */
 const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
   resume: ToolUseResumeData,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ) {
   const session = options.session;
-  const rollback = yield* acquireResumedExecutionOwnership(
+  const rollback = yield* acquireResumedRunOwnership(
     session,
-    resume.executionId,
+    resume.runId,
   );
   const retrieval = yield* Effect.exit(
     retrieveSessionResumeData(
-      resume.executionId,
+      resume.runId,
       resume.agentConfig,
       session,
     ).pipe(
       Effect.flatMap((retrieved) =>
         retrieved?.type === 'toolUse'
           ? Effect.succeed(retrieved)
-          : Effect.fail(new ResumeSessionUnavailableError(resume.executionId)),
+          : Effect.fail(new ResumeSessionUnavailableError(resume.runId)),
       ),
     ),
   );
@@ -705,7 +705,7 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
       Exit.isFailure(released)
         ? new AggregateError(
             [Cause.squash(retrieval.cause), Cause.squash(released.cause)],
-            `Resume retrieval and admission rollback failed for ${resume.executionId}`,
+            `Resume retrieval and admission rollback failed for ${resume.runId}`,
           )
         : ensureError(Cause.squash(retrieval.cause)),
     );
@@ -719,8 +719,8 @@ export function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error> {
-  return options.session.executions.launchExecution(
-    resume.executionId,
+  return options.session.runs.launchRun(
+    resume.runId,
     resumeToolUseTurn(resume, options),
   );
 }

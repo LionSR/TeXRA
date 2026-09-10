@@ -1210,7 +1210,7 @@ describe('ModelHandlerAnthropic model capabilities', () => {
       assert.deepEqual(
         options.thinking,
         { type: 'adaptive', display: 'summarized' },
-        'Opus 4.8 should request adaptive thinking with display: summarized so reasoning still streams',
+        'Opus 4.8 should request adaptive thinking with display: summarized so reasoning still runs',
       );
       assert.equal(
         options.output_config?.effort,
@@ -2635,7 +2635,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
    *     populated once finalMessage() has resolved/rejected
    *   - `.request_id` undefined
    */
-  function buildStreamStub(
+  function buildRunStub(
     error: unknown,
     options: { emitMessageStart?: boolean } = {},
   ): unknown {
@@ -2673,17 +2673,17 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
     return handler;
   }
 
-  function streamClientOf(streamStub: unknown): any {
-    return { beta: { messages: { stream: () => streamStub } } } as any;
+  function streamClientOf(runStub: unknown): any {
+    return { beta: { messages: { stream: () => runStub } } } as any;
   }
 
   it('preserves AnthropicUserAbortError thrown before message_start (does not wrap it)', async () => {
     const handler = createStreamingHandler();
 
     const abortError = new AnthropicUserAbortError();
-    const streamStub = buildStreamStub(abortError);
+    const runStub = buildRunStub(abortError);
 
-    const client = streamClientOf(streamStub);
+    const client = streamClientOf(runStub);
 
     const messages = helloMessages();
 
@@ -2725,11 +2725,11 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
         '37004 thinking chars, 0 text chars). Stream truncated, likely ' +
         'proxy idle timeout during extended thinking.',
     );
-    const streamStub = buildStreamStub(droppedStreamError, {
+    const runStub = buildRunStub(droppedStreamError, {
       emitMessageStart: true,
     });
 
-    const client = streamClientOf(streamStub);
+    const client = streamClientOf(runStub);
 
     const messages = helloMessages();
 
@@ -2775,7 +2775,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       undefined,
       new Headers([['request-id', 'req_low_credit']]),
     );
-    const stream = buildStreamStub(providerError);
+    const stream = buildRunStub(providerError);
     const client = streamClientOf(stream);
 
     await expect(

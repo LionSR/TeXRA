@@ -50,8 +50,8 @@ function workflowResult(
   return {
     category: AgentCategory.Workflow,
     outcome,
-    executionId: 'workflow-output-test',
-    streamId: 'workflow-output-test',
+    runId: 'workflow-output-test',
+    runId: 'workflow-output-test',
     compileFailures: [],
     outputs: outputs.map((output) => ({
       round: output.round ?? 1,

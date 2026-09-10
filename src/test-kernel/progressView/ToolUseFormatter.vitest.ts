@@ -70,7 +70,7 @@ function renderTemplateInDocument(template: FormatterTemplate): HTMLElement {
 function toolUseRow(
   id: string,
   data: unknown,
-  executionLabels?: Map<string, string>,
+  runLabels?: Map<string, string>,
 ): ToolRow {
   const entry = StreamLogEntrySchema.parse({
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -84,7 +84,7 @@ function toolUseRow(
   });
   return projectTranscriptRow(
     entry,
-    executionLabels ? { executionLabels } : {},
+    runLabels ? { runLabels } : {},
   ) as ToolRow;
 }
 

@@ -280,8 +280,8 @@ export class SessionHandle {
       approvals,
       publishResult: (event, streamId) => this.publishRunEvent(streamId, event),
       finalizeExecution: (input) => finalizeRun(this, input),
-      releaseRootExecutionLease: (executionId) =>
-        this.releaseExecutionLease(executionId),
+      releaseRootExecutionLease: (runId) =>
+        this.releaseExecutionLease(runId),
     });
 
     this.status = status;
@@ -377,7 +377,7 @@ export class SessionHandle {
    * This is the one exit choreography every run driver calls.
    */
   releaseExecutionLease(
-    executionId: RunId,
+    runId: RunId,
     afterArtifactsDrained: Effect.Effect<void, Error> = Effect.void,
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
@@ -386,7 +386,7 @@ export class SessionHandle {
           yield* Effect.tryPromise({
             try: () =>
               runInSession(this, async () => {
-                await validateOwnedExecutionLease(executionId);
+                await validateOwnedExecutionLease(runId);
                 await this.flushArtifacts();
               }),
             catch: ensureError,
@@ -406,12 +406,12 @@ export class SessionHandle {
         }),
       );
       const claimRelease = yield* Effect.exit(
-        this.graph.releaseExecutionClaims(executionId),
+        this.graph.releaseExecutionClaims(runId),
       );
       const fileRelease = yield* Effect.exit(
         Effect.tryPromise({
           try: () =>
-            runInSession(this, () => releaseOwnedExecutionLease(executionId)),
+            runInSession(this, () => releaseOwnedExecutionLease(runId)),
           catch: ensureError,
         }),
       );
@@ -420,7 +420,7 @@ export class SessionHandle {
       );
       const primary = failures.shift();
       for (const error of failures)
-        logger.warn(`Execution ${executionId}: lease release also failed`, {
+        logger.warn(`Execution ${runId}: lease release also failed`, {
           data: error,
         });
       if (primary !== undefined)
@@ -430,9 +430,9 @@ export class SessionHandle {
 
   /** Admit the run's existing claim before resume reads or mutations. */
   acquireExecutionClaims(
-    executionId: RunId,
+    runId: RunId,
   ): Effect.Effect<Effect.Effect<void, Error>, Error> {
-    return this.graph.acquireExecutionClaims(executionId).pipe(
+    return this.graph.acquireExecutionClaims(runId).pipe(
       Effect.map((release) =>
         release.pipe(
           Effect.catchCause((cause) =>
@@ -589,7 +589,7 @@ export class SessionHandle {
 
   /** Read and append under the same local publisher permit. C5 excludes foreign writers. */
   updateRecordFacts<A>(
-    executionId: RunId,
+    runId: RunId,
     update: (rows: readonly SessionEvent[]) => {
       readonly events: readonly SessionEventDraft[];
       readonly value: A;
@@ -598,7 +598,7 @@ export class SessionHandle {
     const graph = this.graph;
     return this.publicationGate.withPermit(
       Effect.gen(function* () {
-        const updateResult = update(yield* graph.executionRecords(executionId));
+        const updateResult = update(yield* graph.executionRecords(runId));
         yield* graph.publish(updateResult.events);
         return updateResult.value;
       }),
@@ -607,15 +607,15 @@ export class SessionHandle {
 
   /** Internal typed metadata accessors read the database, never the display fold. */
   readExecutionRecords(
-    executionId: RunId,
+    runId: RunId,
   ): Effect.Effect<readonly SessionEvent[]> {
-    return this.graph.executionRecords(executionId);
+    return this.graph.executionRecords(runId);
   }
 
   readExecutionChildren(
-    executionId: RunId,
+    runId: RunId,
   ): Effect.Effect<readonly SessionEvent[]> {
-    return this.graph.executionChildren(executionId);
+    return this.graph.executionChildren(runId);
   }
 
   readRecordListing(): Effect.Effect<readonly SessionEvent[]> {
@@ -790,22 +790,22 @@ export function forEachLiveSession(
 export const settleLiveSessionExecutions = Effect.fn(
   'settleLiveSessionExecutions',
 )(function* (signal: AbortSignal) {
-  const pending: { session: SessionHandle; executionId: RunId }[] = [];
+  const pending: { session: SessionHandle; runId: RunId }[] = [];
   forEachLiveSession((session) => {
-    for (const executionId of session.executions.getActiveIds()) {
-      pending.push({ session, executionId });
+    for (const runId of session.executions.getActiveIds()) {
+      pending.push({ session, runId });
     }
   });
-  for (const { session, executionId } of pending) {
+  for (const { session, runId } of pending) {
     if (signal.aborted) {
       logger.warn(
-        `Host exit deadline passed before execution ${executionId} could settle`,
+        `Host exit deadline passed before execution ${runId} could settle`,
       );
       continue;
     }
     const settlement = Effect.gen(function* () {
-      if (!runInSession(session, () => ownsExecutionLease(executionId))) return;
-      const tracked = session.executions.getHandle(executionId) !== undefined;
+      if (!runInSession(session, () => ownsExecutionLease(runId))) return;
+      const tracked = session.executions.getHandle(runId) !== undefined;
       // Read the committed transcript once after queued publications settle.
       // Host exit needs no presentation residency or mutable writer handle.
       const transcript = yield* Effect.exit(
@@ -815,34 +815,34 @@ export const settleLiveSessionExecutions = Effect.fn(
             catch: ensureError,
           });
           return tracked
-            ? yield* session.transcripts.readEntries(executionId)
+            ? yield* session.transcripts.readEntries(runId)
             : [];
         }),
       );
       yield* session.releaseExecutionLease(
-        executionId,
+        runId,
         Effect.gen(function* () {
           const finalization = yield* finalizeRun(session, {
-            executionId,
+            runId,
             outcome: RUN_OUTCOME.CANCELLED,
             flowRecord: 'preserve',
             keepExistingOutcome: true,
           });
           if (!finalization.ok) {
             throw new Error(
-              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+              `Failed to persist the CANCELLED outcome for execution ${runId}`,
               { cause: finalization.error },
             );
           }
           if (signal.aborted) {
             logger.warn(
-              `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open`,
+              `Host exit deadline passed after execution ${runId}'s outcome was written; its transcript groups stay open`,
             );
             return;
           }
           if (!tracked) {
             logger.warn(
-              `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
+              `Execution ${runId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
             );
             return;
           }
@@ -854,20 +854,20 @@ export const settleLiveSessionExecutions = Effect.fn(
           // closure as the resident transcript.
           for (const entry of transcript.value) {
             if (isRunningGroupEntry(entry)) {
-              session.publishRunEvent(executionId, {
+              session.publishRunEvent(runId, {
                 type: 'stage.end',
                 id: entry.id,
                 status: finalization.outcome,
               });
             } else if (isRunningStreamingTextEntry(entry)) {
-              session.publishRunEvent(executionId, {
+              session.publishRunEvent(runId, {
                 type: 'stream.end',
                 id: entry.id,
               });
             } else {
               const call = nonterminalWorkflowCall(entry);
               if (call)
-                session.publishRunEvent(executionId, {
+                session.publishRunEvent(runId, {
                   type: 'workflow.call',
                   logId: entry.id,
                   stageId: entry.groupId,
@@ -883,7 +883,7 @@ export const settleLiveSessionExecutions = Effect.fn(
       Effect.catchCause((cause) =>
         Effect.sync(() => {
           logger.warn(
-            `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
+            `Failed to settle execution ${runId} at host exit; a later launch classifies it from its checkpoint`,
             { data: Cause.squash(cause) },
           );
         }),

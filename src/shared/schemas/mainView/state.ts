@@ -112,7 +112,7 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
-/** Open workspace folder offered as an execution working directory. */
+/** Open workspace folder offered as a run working directory. */
 export const WorkspaceRootOptionDataSchema = PickerOptionBaseSchema;
 type WorkspaceRootOptionData = z.infer<typeof WorkspaceRootOptionDataSchema>;
 

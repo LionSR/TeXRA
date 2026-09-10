@@ -19,7 +19,7 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
-  ExecutionIdSchema,
+  RunIdSchema,
   GoalStateSchema,
   InquiryThreadUpdatedEventSchema,
   OwnerIdSchema,
@@ -88,7 +88,7 @@ export type StreamGroup = z.infer<typeof StreamGroupSchema>;
 const StreamViewCommonSchema = z.object({
   id: RunIdSchema,
   /** From `run.start`; 1:1 with `id`, never changes. */
-  executionId: ExecutionIdSchema,
+  runId: RunIdSchema,
   /** From `run.start`; every stream has one. */
   identity: RunIdentitySchema,
   // Launch facts from the `run.start` payload, never derived (5.2).

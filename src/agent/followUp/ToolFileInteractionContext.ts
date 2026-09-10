@@ -13,7 +13,7 @@ import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
  *  vary together by call site rather than independently. */
 interface ToolCallHooks {
   /** Called by tools with approval flows to trigger in-progress log after approval. */
-  onExecutionReady?: () => void;
+  onRunReady?: () => void;
   /** Called by tools to push partial output for live streaming to the UI. */
   onToolOutput?: (chunk: string) => void;
   /**

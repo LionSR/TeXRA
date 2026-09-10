@@ -520,20 +520,20 @@ export function tryParseUrl(input: string): URL | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// executionId
+// runId
 // ---------------------------------------------------------------------------
 
 /**
  * Generate a 12-char lowercase-hex ID (48 bits of entropy). Shared by
- * schemas that constrain IDs to hex (execution IDs, inquiry thread IDs,
+ * schemas that constrain IDs to hex (run IDs, inquiry thread IDs,
  * goal IDs).
  */
 export const hexId12 = customAlphabet('0123456789abcdef', 12);
 
 /** Mint a run id: 12 lowercase hex chars (48 bits of entropy). One of the
- *  two minting sites (`deriveExecutionId` is the other), so the brand is
+ *  two minting sites (`deriveRunId` is the other), so the brand is
  *  applied here and nowhere downstream. */
-export function generateExecutionId(): RunId {
+export function generateRunId(): RunId {
   return hexId12() as RunId;
 }
 

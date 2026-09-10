@@ -15,10 +15,9 @@ export function subscribeAddOutputFilesRunFact(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
         if (event.type !== 'addOutputFiles') return;
-        listener({
-          streamId: aggregateTarget(event.aggregateId).id,
-          filesByRound: event.filesByRound,
-        });
+        const target = aggregateTarget(event.aggregateId);
+        if (target.kind !== 'run') return;
+        listener({ runId: target.id, filesByRound: event.filesByRound });
       }),
     ),
   );

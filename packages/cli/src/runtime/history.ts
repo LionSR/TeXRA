@@ -5,12 +5,12 @@ import { Effect, Result, Stream } from 'effect';
 
 import {
   checkpointExists,
-  getExecutionRecords,
-  isUserVisibleExecution,
-  listExecutions,
-  listExecutionWorkspaceFiles,
+  getRunRecords,
+  isUserVisibleRun,
+  listRuns,
+  listRunWorkspaceFiles,
   unwrapResultMeta,
-  type AgentExecutionListingEntry,
+  type AgentRunListingEntry,
 } from '@agent/storage';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
@@ -19,16 +19,16 @@ import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
 import { effectRuntime } from '@platform/processRuntime';
 import {
-  ExecutionIdSchema,
+  RunIdSchema,
   aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
   resolveHistoryRunStatus,
-  type ExecutionId,
-  type ExecutionMeta,
+  type RunId,
+  type RunMeta,
   type HistoryRunStatus,
 } from '@shared/schemas';
-import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
+import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
@@ -71,7 +71,7 @@ function mergeHistoryFiles(
 }
 
 export interface CliHistoryEntry {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   readonly timestamp: string;
   readonly agent: string;
   readonly model: string;
@@ -90,13 +90,13 @@ export interface CliHistoryEntry {
   readonly category?: string;
   readonly description?: string;
   readonly teamPresetId?: string;
-  readonly parentExecutionId?: ExecutionId;
+  readonly parentRunId?: RunId;
 }
 
 interface CliHistoryDetails {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   readonly status: HistoryRunStatus;
-  readonly meta: ExecutionMeta | null;
+  readonly meta: RunMeta | null;
   readonly config: AgentConfig | null;
   readonly result: ReturnType<typeof unwrapResultMeta> | null;
   readonly report: string | null;
@@ -136,21 +136,21 @@ export type CliHistoryDeleteResult =
   | {
       readonly deleted: 'all';
       readonly count: number;
-      readonly active: readonly ExecutionId[];
+      readonly active: readonly RunId[];
       readonly failed: readonly {
-        readonly executionId: ExecutionId;
+        readonly runId: RunId;
         readonly message: string;
       }[];
     }
   | {
       readonly deleted: 'one';
-      readonly id: ExecutionId;
+      readonly id: RunId;
       readonly found: boolean;
       readonly status: 'deleted' | 'not-found' | 'active';
     };
 
-export function parseCliHistoryId(raw: string): ExecutionId | undefined {
-  return ExecutionIdSchema.safeParse(raw).data;
+export function parseCliHistoryId(raw: string): RunId | undefined {
+  return RunIdSchema.safeParse(raw).data;
 }
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
@@ -160,10 +160,10 @@ export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
   // is bounded here so a history full of failed workflow runs cannot open one
   // file handle burst per run. `Effect.forEach` preserves input order.
   return effectRuntime().runPromise(
-    listExecutions(session).pipe(
+    listRuns(session).pipe(
       Effect.flatMap((entries) =>
         Effect.forEach(
-          entries.filter(isUserVisibleExecution),
+          entries.filter(isUserVisibleRun),
           (entry) => toCliHistoryEntry(entry, session),
           {
             concurrency: HISTORY_ENTRY_CONCURRENCY,
@@ -175,11 +175,11 @@ export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
 }
 
 export async function readCliHistoryDetails(
-  id: ExecutionId,
+  id: RunId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
   const session = await initializeCliTranscriptSession();
-  const store = getExecutionRecords(session, id);
+  const store = getRunRecords(session, id);
   const [
     meta,
     config,
@@ -221,7 +221,7 @@ export async function readCliHistoryDetails(
           {
             id,
             checkpointPresent: values[7],
-            streamId: values[0]?.streamId,
+            runId: values[0]?.runId,
             agentCategory: values[1].agentCategory,
             outcome: values[0]?.outcome,
           },
@@ -237,7 +237,7 @@ export async function readCliHistoryDetails(
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
     : undefined;
-  const workspaceFiles = await listExecutionWorkspaceFiles(
+  const workspaceFiles = await listRunWorkspaceFiles(
     config,
     persistedWorkspaceFilePaths,
   );
@@ -277,18 +277,18 @@ export async function readCliHistoryDetails(
   });
 }
 
-/** Outcome of loading a stored execution's export input (see {@link readCliHistoryExportInput}). */
+/** Outcome of loading a stored run's export input (see {@link readCliHistoryExportInput}). */
 type CliHistoryExportInputResult =
   | { readonly status: 'ok'; readonly exportInput: ChatExportInput }
-  /** No trace of this execution at all — matches `history show`'s notion of "not found". */
+  /** No trace of this run at all — matches `history show`'s notion of "not found". */
   | { readonly status: 'not_found' }
-  /** The execution exists (has meta and/or config) but is missing what an
+  /** The run exists (has meta and/or config) but is missing what an
    *  export needs (config and/or conversation) — a different failure than
    *  "not found", so it gets a different message. */
   | { readonly status: 'incomplete' };
 
 /**
- * Load a stored execution's config + conversation as the format-agnostic
+ * Load a stored run's config + conversation as the format-agnostic
  * {@link ChatExportInput} the markdown export formatter consumes (the HTML
  * export path uses `assembleTrace` instead — see `commands/history.ts`).
  * Thin CLI-specific wrapper around the shared {@link loadChatExportInput}
@@ -296,15 +296,15 @@ type CliHistoryExportInputResult =
  * `ChatExportController.buildExportInput` — so the CLI and GUI render
  * the same conversation identically.
  *
- * Distinguishes "this execution id has no stored data at all" (`not_found`
- * — the same case `history show` reports as not found) from "this execution
+ * Distinguishes "this run id has no stored data at all" (`not_found`
+ * — the same case `history show` reports as not found) from "this run
  * exists but has nothing to export" (`incomplete` — e.g. `history show`
  * would still display it, just without a conversation to render). Reporting
  * both as "not found" would mislead a caller whose id is valid but whose
- * execution simply never produced a conversation.
+ * run simply never produced a conversation.
  */
 export async function readCliHistoryExportInput(
-  id: ExecutionId,
+  id: RunId,
 ): Promise<CliHistoryExportInputResult> {
   const session = await initializeCliTranscriptSession();
   const { meta, config, conversation, hasTranscriptEvidence, exportInput } =
@@ -417,15 +417,15 @@ export async function stageCliHistoryTraceViewerAssets(params: {
 /** Delete indexed run lifetimes through the session's claim transaction. */
 export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   session: SessionHandle,
-  options: { id?: ExecutionId; all?: boolean },
+  options: { id?: RunId; all?: boolean },
 ) {
   if (!options.all && !options.id) {
-    return yield* Effect.fail(new Error('Expected an execution id, or --all.'));
+    return yield* Effect.fail(new Error('Expected a run id, or --all.'));
   }
   const rows = yield* Stream.runCollect(session.events.listing());
   const removed = new Set(
     rows
-      .filter((row) => row.type === 'stream.removed')
+      .filter((row) => row.type === 'run.removed')
       .map((row) => row.aggregateId),
   );
   const starts = rows
@@ -433,26 +433,26 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
     .filter((row) => !removed.has(row.aggregateId));
   const selected = options.all
     ? starts
-    : starts.filter((row) => row.executionId === options.id);
-  const deleted: ExecutionId[] = [];
-  const active: ExecutionId[] = [];
-  const failed: { executionId: ExecutionId; message: string }[] = [];
+    : starts.filter((row) => row.runId === options.id);
+  const deleted: RunId[] = [];
+  const active: RunId[] = [];
+  const failed: { runId: RunId; message: string }[] = [];
   for (const start of selected) {
     const result = yield* Effect.result(
-      session.requests.removeStream(
+      session.requests.removeRun(
         aggregateTarget(start.aggregateId).id,
         options.all ? 'bulk' : 'single',
         start.commit,
       ),
     );
     if (Result.isSuccess(result)) {
-      deleted.push(start.executionId);
+      deleted.push(start.runId);
     } else if (result.failure._tag === 'NotOwner') {
-      active.push(start.executionId);
+      active.push(start.runId);
     } else {
       if (!options.all) return yield* Effect.fail(result.failure);
       failed.push({
-        executionId: start.executionId,
+        runId: start.runId,
         message: toErrorMessage(result.failure),
       });
     }
@@ -493,14 +493,14 @@ export function formatCliHistoryText(
 }
 
 export function formatCliHistoryNotFoundText(
-  id: ExecutionId,
+  id: RunId,
   cwd?: string,
 ): string {
   const workspace = cwd?.trim();
   return [
     workspace
-      ? `Execution not found in workspace ${workspace}: ${id}`
-      : `Execution not found: ${id}`,
+      ? `Run not found in workspace ${workspace}: ${id}`
+      : `Run not found: ${id}`,
     'History is scoped by --cwd; use the workspace from the original run or run `texra history list --cwd <workspace>`.',
   ].join('\n');
 }
@@ -517,7 +517,7 @@ export function formatInvalidExportFormatText(raw: string): string {
 /**
  * Frozen-NDJSON status projection (proposal gate G): the public NDJSON stream
  * keeps the pre-consolidation vocabulary — terminal outcomes emit as
- * `ExecutionStatus` ('completed' | 'interrupted' | 'error') while
+ * `CliRunStatus` ('completed' | 'interrupted' | 'error') while
  * 'resumable'/'unknown' pass through unchanged. Internal and human-readable
  * output keeps `HistoryRunStatus`.
  */
@@ -528,7 +528,7 @@ function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   ) {
     return status;
   }
-  return runOutcomeToExecutionStatus(status);
+  return runOutcomeToCliRunStatus(status);
 }
 
 export function cliHistoryNdjsonRecords(
@@ -560,7 +560,7 @@ export function formatCliHistoryDetailsText(
   const teamPreset = teamPresetId(config);
   const cliOutputFile = config?.cli?.outputFile?.trim();
   const lines = [
-    `Execution: ${details.id}`,
+    `Run: ${details.id}`,
     `Status: ${HISTORY_RUN_STATUS_LABEL[details.status]}`,
     `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
     `Agent: ${config?.agent ?? 'unknown'}`,
@@ -577,7 +577,7 @@ export function formatCliHistoryDetailsText(
   }
   if (config?.agentCategory) lines.push(`Category: ${config.agentCategory}`);
   if (cliOutputFile) lines.push(`CLI output: ${cliOutputFile}`);
-  if (meta?.parentExecutionId) lines.push(`Parent: ${meta.parentExecutionId}`);
+  if (meta?.parentRunId) lines.push(`Parent: ${meta.parentRunId}`);
   if (meta?.description) lines.push(`Description: ${meta.description}`);
   if (details.result) {
     lines.push(`Result: ${JSON.stringify(details.result)}`);
@@ -604,7 +604,7 @@ export function formatCliHistoryDetailsText(
 }
 
 const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
-  entry: AgentExecutionListingEntry,
+  entry: AgentRunListingEntry,
   session: SessionHandle,
 ) {
   const config = entry.record;
@@ -614,7 +614,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     {
       id: entry.id,
       checkpointPresent: entry.checkpointPresent,
-      streamId: entry.streamId,
+      runId: entry.runId,
       agentCategory: config.agentCategory,
       outcome: entry.outcome,
     },
@@ -634,7 +634,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     category: config.agentCategory,
     description: entry.description,
     teamPresetId: teamPresetId(config),
-    parentExecutionId: entry.parentExecutionId,
+    parentRunId: entry.parentRunId,
   });
 });
 

@@ -22,7 +22,7 @@ vi.mock('@agent/trace', async (importOriginal) => {
 // the warn spy intercepts that factory for the `sessionHandle` channel
 // only; the graph's other `createLog` consumers keep the real factory, and
 // the `@agent/trace` mock above still covers the remaining
-// `createChannelTrace` singletons (e.g. `executionRegistry`).
+// `createChannelTrace` singletons (e.g. `runRegistry`).
 vi.mock('@logger/logUtils', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@logger/logUtils')>();
   return {

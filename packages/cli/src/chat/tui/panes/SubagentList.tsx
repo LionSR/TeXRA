@@ -6,16 +6,16 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
-import type { StreamView } from '@shared/session/sessionView';
-import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
+import { AgentCategory, type RunId } from '@shared/schemas';
+import type { RunView } from '@shared/session/sessionView';
+import { formatStageLabel } from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { childElapsed } from '../state/childControls';
 import {
   cumulativeUsageOf,
-  killableExecutionId,
-  streamPhaseOf,
+  killableRunId,
+  runPhaseOf,
 } from '../state/sessionView';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
@@ -24,7 +24,7 @@ import {
   CHILD_TONE_COLOR,
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
-import { expandedStreams, type SessionListRow } from '../state/cliState';
+import { expandedRuns, type SessionListRow } from '../state/cliState';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
@@ -95,9 +95,9 @@ function SessionRow({
   readonly metadataColumn: boolean;
   readonly nowMs: number;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
-  readonly stream: StreamView;
+  readonly stream: RunView;
 }): React.JSX.Element {
-  const status = streamPhaseOf(stream);
+  const status = runPhaseOf(stream);
   const statusLabel = stream.statusLabel;
   const elapsed = childElapsed(
     { status, startedAt: stream.runStartedAt ?? undefined },
@@ -179,18 +179,18 @@ function SessionRow({
 }
 
 export interface SubagentListProps {
-  readonly activeStreamId?: StreamTabId;
+  readonly activeRunId?: RunId;
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
   readonly onCancel?: () => void;
-  readonly onFocusStream?: (streamId: StreamTabId) => void;
-  readonly onKillExecution?: (executionId: string) => void;
-  readonly onSelectionChange?: (value: StreamTabId) => void;
+  readonly onFocusRun?: (runId: RunId) => void;
+  readonly onKillRun?: (runId: string) => void;
+  readonly onSelectionChange?: (value: RunId) => void;
   readonly pendingApprovals?: ReadonlyMap<
     string,
     readonly PendingApprovalKind[]
   >;
-  readonly selectedValue?: StreamTabId;
+  readonly selectedValue?: RunId;
   readonly rows: readonly SessionListRow[];
 }
 
@@ -228,18 +228,18 @@ export function SubagentList(
       const { stream, expanded } = selectedRow;
       if (key.leftArrow || key.rightArrow || input === ' ') {
         const next = key.rightArrow || (!key.leftArrow && !expanded);
-        expandedStreams.set(
-          new Map(expandedStreams.get()).set(stream.id, next),
+        expandedRuns.set(
+          new Map(expandedRuns.get()).set(stream.id, next),
         );
       } else if (
         input.toLowerCase() === 'r' &&
         stream.group === 'interrupted' &&
         stream.resumeEligible
       ) {
-        props.onFocusStream?.(stream.id);
+        props.onFocusRun?.(stream.id);
       } else if (input.toLowerCase() === 'k') {
-        const executionId = killableExecutionId(stream);
-        if (executionId) props.onKillExecution?.(executionId);
+        const runId = killableRunId(stream);
+        if (runId) props.onKillRun?.(runId);
       }
     },
     { isActive: props.keyboardActive ?? false },
@@ -258,7 +258,7 @@ export function SubagentList(
       <Select
         activeValue={rows.find(
           (row) =>
-            row.kind === 'stream' && row.stream.id === props.activeStreamId,
+            row.kind === 'stream' && row.stream.id === props.activeRunId,
         )}
         highlightedValue={selectedRow ?? null}
         hotkeys={false}
@@ -271,7 +271,7 @@ export function SubagentList(
           if (row.kind === 'stream') props.onSelectionChange?.(row.stream.id);
         }}
         onSelect={(row) => {
-          if (row.kind === 'stream') props.onFocusStream?.(row.stream.id);
+          if (row.kind === 'stream') props.onFocusRun?.(row.stream.id);
         }}
         renderItem={({ value: row }, state) =>
           row.kind === 'group' ? (

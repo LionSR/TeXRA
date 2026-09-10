@@ -9,9 +9,9 @@ import type {
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type {
-  ExecutionId,
+  RunId,
   RunOutcome,
-  StreamTabId,
+  RunId,
   OutputFileSummary,
 } from '@shared/schemas';
 
@@ -25,7 +25,7 @@ const OUTPUT: OutputFileSummary = {
   removed: 2,
 };
 
-const EXECUTION_ID = 'abcdefabcdef' as ExecutionId;
+const EXECUTION_ID = 'abcdefabcdef' as RunId;
 
 function workflowFlowResult(
   overrides: Partial<WorkflowFlowResult> = {},
@@ -33,8 +33,8 @@ function workflowFlowResult(
   return {
     category: 'workflow',
     outcome: 'completed',
-    executionId: EXECUTION_ID,
-    streamId: 'stream:workflow' as StreamTabId,
+    runId: EXECUTION_ID,
+    runId: 'stream:workflow' as RunId,
     outputs: [],
     compileFailures: [],
     ...overrides,
@@ -47,8 +47,8 @@ function toolUseFlowResult(
   return {
     category: 'toolUse',
     outcome: 'completed',
-    executionId: EXECUTION_ID,
-    streamId: 'stream:tool-use' as StreamTabId,
+    runId: EXECUTION_ID,
+    runId: 'stream:tool-use' as RunId,
     ...overrides,
   };
 }
@@ -183,7 +183,7 @@ describe('AgentFinalResult', () => {
     expectInvalidFinalResult({
       category: 'toolUse',
       outcome: 'completed',
-      executionId: 'abcdefabcdef',
+      runId: 'abcdefabcdef',
     });
   });
 

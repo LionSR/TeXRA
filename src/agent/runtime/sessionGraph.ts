@@ -48,24 +48,24 @@ export interface SessionGraph {
   readonly publishRegistration: SessionEventsShape['publish'];
   /** The run's one claim, acquired before a resume reads or mutates. Private
    *  record reads never enter display transport. */
-  readonly acquireExecutionClaims: (
-    executionId: RunId,
+  readonly acquireRunClaims: (
+    runId: RunId,
   ) => Effect.Effect<Effect.Effect<void>>;
-  readonly releaseExecutionClaims: (executionId: RunId) => Effect.Effect<void>;
-  readonly executionRecords: (
+  readonly releaseRunClaims: (runId: RunId) => Effect.Effect<void>;
+  readonly runRecords: (
     id: RunId,
   ) => Effect.Effect<readonly SessionEvent[]>;
-  readonly executionChildren: (
+  readonly runChildren: (
     id: RunId,
   ) => Effect.Effect<readonly SessionEvent[]>;
   readonly recordListing: () => Effect.Effect<readonly SessionEvent[]>;
   /** Transient text shares the existing session-input source, never the event table. */
   readonly publishText: (
-    streamId: RunId,
+    runId: RunId,
     id: string,
     text: string,
   ) => Effect.Effect<void>;
-  readonly readText: (streamId: RunId, id: string) => string | undefined;
+  readonly readText: (runId: RunId, id: string) => string | undefined;
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
@@ -91,8 +91,8 @@ export interface SessionGraph {
    *  (PRD 7.6, 8.2): answered exactly once, an outcome or a request error. */
   readonly requests: {
     /** Internal deletion policies share the same admission and transaction as user requests. */
-    readonly removeStream: (
-      streamId: RunId,
+    readonly removeRun: (
+      runId: RunId,
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<Outcome, RequestError>;

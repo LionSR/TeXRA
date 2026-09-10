@@ -68,7 +68,7 @@ import {
   importCodexClass,
   findCodexBinaryPath,
 } from './codexImport';
-import { type ChildStream } from './delegation/childStream';
+import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
   agentCliCall,
@@ -147,11 +147,11 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 // ============================================================================
 
 export function publishCodexTodos(
-  childStreamId: RunId,
+  childRunId: RunId,
   todos: TodoItem[],
   logger: AgentTrace,
 ): void {
-  emitRunFact(logger, 'updateTodos', { streamId: childStreamId, todos });
+  emitRunFact(logger, 'updateTodos', { runId: childRunId, todos });
 }
 
 function toProgressTodos(item: TodoListItem): TodoItem[] {
@@ -226,14 +226,14 @@ function updateCodexLiveToolLog(
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolUseStatus;
-  childStreamId: RunId;
+  childRunId: RunId;
   logger: AgentTrace;
   refs: Map<string, ToolUseCardRef>;
 }): boolean {
-  const { item, status, childStreamId, logger, refs } = params;
+  const { item, status, childRunId, logger, refs } = params;
 
   if (item.type === 'todo_list') {
-    publishCodexTodos(childStreamId, toProgressTodos(item), logger);
+    publishCodexTodos(childRunId, toProgressTodos(item), logger);
   }
 
   const toolLog = buildCodexLiveToolLog(item, status);
@@ -251,7 +251,7 @@ function publishCodexItemProgress(params: {
 export async function runStreamedTurn(
   thread: Thread,
   prompt: string,
-  childStreamId: RunId,
+  childRunId: RunId,
   logger: AgentTrace,
   signal?: AbortSignal,
 ): Promise<RunResult> {
@@ -297,7 +297,7 @@ export async function runStreamedTurn(
           publishCodexItemProgress({
             item: event.item,
             status: 'in_progress',
-            childStreamId,
+            childRunId,
             logger,
             refs: itemLogRefs,
           });
@@ -307,7 +307,7 @@ export async function runStreamedTurn(
           const wasRenderedAsProgress = publishCodexItemProgress({
             item,
             status: 'completed',
-            childStreamId,
+            childRunId,
             logger,
             refs: itemLogRefs,
           });
@@ -350,14 +350,14 @@ export async function runStreamedTurn(
  * Run the Codex session loop. The shared loop runner processes prompts from the
  * child's follow-up queue one at a time and delivers each turn's result to the
  * parent's follow-up queue; this strategy supplies the Codex-specific turn
- * execution, registry bookkeeping, and result formatting.
+ * run, registry bookkeeping, and result formatting.
  */
 function startCodexLoop(params: {
   session: SessionHandle;
   thread: Thread;
-  childStream: ChildStream;
-  parentStreamId: RunId;
-  executionId: RunId;
+  childRun: ChildRun;
+  parentRunId: RunId;
+  runId: RunId;
   initialPrompt: string;
   /**
    * The disk-based fallback thread id claimed synchronously in execute(). The
@@ -369,27 +369,27 @@ function startCodexLoop(params: {
 }): Effect.Effect<void, Error> {
   const {
     thread,
-    childStream,
-    parentStreamId,
-    executionId,
+    childRun,
+    parentRunId,
+    runId,
     initialPrompt,
     resumeThreadId: fallbackThreadId,
     releaseFallbackClaim,
   } = params;
-  const { childStreamId, logger } = childStream;
+  const { childRunId, logger } = childRun;
 
   return startAgentCliLoop({
     session: params.session,
-    childStream,
-    parentStreamId,
-    executionId,
+    childRun,
+    parentRunId,
+    runId,
     agentName: 'codex',
     stageLabel: 'Codex session',
     initialPrompt,
     store: codexThreadsFor,
     releaseFallbackClaim,
     runProviderTurn: (prompt, _ports, signal) =>
-      runStreamedTurn(thread, prompt, childStreamId, logger, signal),
+      runStreamedTurn(thread, prompt, childRunId, logger, signal),
     resolveSessionIds: () => [fallbackThreadId, thread.id],
     getUsage: (turn) => turn.usage,
     buildUsageStats: (turn) =>
@@ -398,7 +398,7 @@ function startCodexLoop(params: {
       formatChildRunDelivery(
         {
           tag: DELIVERY_TAG.codexResult,
-          executionId,
+          runId,
           prompt: lastPrompt,
           attributes: [{ name: 'thread-id', value: thread.id || null }],
         },
@@ -410,7 +410,7 @@ function startCodexLoop(params: {
       ),
     formatError: (_turn, err, lastPrompt) =>
       formatChildRunError(
-        { tag: DELIVERY_TAG.codexError, executionId, prompt: lastPrompt },
+        { tag: DELIVERY_TAG.codexError, runId, prompt: lastPrompt },
         { message: toErrorMessage(err) },
       ),
     loopFailedMessage: 'Codex run loop failed after launch',
@@ -471,7 +471,7 @@ export class CodexTool extends defineTool({
     'The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox. ' +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
-    'Always async: returns immediately with an execution ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
+    'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
 }) {
@@ -526,7 +526,7 @@ export class CodexTool extends defineTool({
         launchCodexSession(
           input,
           sandboxMode,
-          context.parentStreamId,
+          context.parentRunId,
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
           session,
@@ -538,7 +538,7 @@ export class CodexTool extends defineTool({
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
-  parentStreamId: RunId,
+  parentRunId: RunId,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
@@ -556,18 +556,18 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 
   return yield* launchAgentCliSession({
     session,
-    parentStreamId,
+    parentRunId,
     agentName: 'codex',
     description: input.prompt,
     config,
-    registerFailedMessage: 'Failed to register Codex execution.',
-    startLoop: ({ childStream, executionId }) =>
+    registerFailedMessage: 'Failed to register Codex run.',
+    startLoop: ({ childRun, runId }) =>
       startCodexLoop({
         session,
         thread,
-        childStream,
-        parentStreamId,
-        executionId,
+        childRun,
+        parentRunId,
+        runId,
         initialPrompt: input.prompt,
         resumeThreadId: input.thread_id ?? undefined,
         releaseFallbackClaim,

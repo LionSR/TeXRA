@@ -5,13 +5,13 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
-  STREAM_PHASE,
+  RUN_PHASE,
   type StreamLogEntry,
 } from '@shared/schemas';
 import {
   taskGroupDisplayStatus,
   upsertTaskGroupFromStreamLog,
-} from '@shared/streams/taskGroupProjection';
+} from '@shared/runs/taskGroupProjection';
 import { projectTaskGroupsFromStreamLog } from '@test/support/transcriptRowFixtures';
 
 interface GroupEntryOverrides {
@@ -42,13 +42,13 @@ describe('task-group StreamLog projection', () => {
     const taskGroups = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
         text: 'Run: auditor',
-        data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
+        data: { status: RUN_PHASE.RUNNING, kind: 'run' },
       }),
       entry('round-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
         groupId: 'run-1',
         text: 'Round 1',
         data: {
-          status: STREAM_PHASE.RUNNING,
+          status: RUN_PHASE.RUNNING,
           kind: 'round',
           index: 1,
           total: 2,
@@ -70,7 +70,7 @@ describe('task-group StreamLog projection', () => {
         id: 'run-1',
         name: 'Run: auditor',
         startTime: 100,
-        status: STREAM_PHASE.RUNNING,
+        status: RUN_PHASE.RUNNING,
         kind: 'run',
       },
       {
@@ -115,22 +115,22 @@ describe('task-group StreamLog projection', () => {
     const [group] = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
         text: 'Run: auditor',
-        data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
+        data: { status: RUN_PHASE.RUNNING, kind: 'run' },
       }),
     ]);
 
     // A run nothing can still settle: no producer is left to write GROUP_END,
     // so the group paints as the outcome the exit drain would have written.
     expect(taskGroupDisplayStatus(group!, RUN_OUTCOME.CANCELLED)).toBe(
-      STREAM_PHASE.CANCELLED,
+      RUN_PHASE.CANCELLED,
     );
     expect(taskGroupDisplayStatus(group!, RUN_OUTCOME.COMPLETED)).toBe(
-      STREAM_PHASE.COMPLETED,
+      RUN_PHASE.COMPLETED,
     );
     // Anything else — still running, unwinding from a stop, owned by another
     // process — leaves the transcript's own status standing.
     expect(taskGroupDisplayStatus(group!, undefined)).toBe(
-      STREAM_PHASE.RUNNING,
+      RUN_PHASE.RUNNING,
     );
   });
 

@@ -149,20 +149,20 @@ const responseTextProcessing = createTexraResponseTextProcessing(
 /**
  * Stop every run the project still owns and wait for their drivers to settle
  * them (CANCELLED, flow record preserved for a later resume), so the session
- * is disposed with nothing executing under it: `ExecutionRegistry.dispose`
+ * is disposed with nothing executing under it: `RunRegistry.dispose`
  * clears its handles without interrupting them, and a run left driving after
  * that would continue with no presentation and no stop control. Only roots
  * are killed; the stop cascades into their children. Unbounded on purpose: a
  * tool that ignores its kill is the same problem the process exit drain has,
  * and the project stays open, stoppable and visible in the log, until it ends.
  */
-async function stopProjectExecutions(session: SessionHandle): Promise<void> {
-  const { executions } = session;
+async function stopProjectRuns(session: SessionHandle): Promise<void> {
+  const { runs } = session;
   await runInSession(session, async () => {
-    const stops = executions.getActiveIds().flatMap((executionId) => {
-      if (executions.getHandle(executionId)?.isChildExecution) return [];
+    const stops = runs.getActiveIds().flatMap((runId) => {
+      if (runs.getHandle(runId)?.isChild) return [];
       return [
-        executions.kill(executionId, { detachActiveChildren: false })
+        runs.kill(runId, { detachActiveChildren: false })
           .settlement,
       ];
     });
@@ -170,9 +170,9 @@ async function stopProjectExecutions(session: SessionHandle): Promise<void> {
       Effect.all(stops, { concurrency: 'unbounded' }),
     );
     for (;;) {
-      const active = executions.getActiveIds();
+      const active = runs.getActiveIds();
       if (active.length === 0) return;
-      await effectRuntime().runPromise(executions.waitForAnyChange(active));
+      await effectRuntime().runPromise(runs.waitForAnyChange(active));
     }
   });
 }
@@ -294,7 +294,7 @@ export function openDesktopProjectRegistry(
           // persistence operation leaves that owner available to the host.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* hostPort(() => stopProjectExecutions(project.session));
+              yield* hostPort(() => stopProjectRuns(project.session));
               yield* Effect.gen(function* () {
                 const remembered = yield* options.records.read;
                 const next =

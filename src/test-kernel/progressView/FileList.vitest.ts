@@ -41,7 +41,7 @@ describe('file-list keyboard activation', () => {
 
   it('opens file paths on Space without hijacking native action buttons', async () => {
     const element = await mountComponent<FileList>('file-list', {
-      streamId: 'stream-a',
+      runId: 'stream-a',
       filesByRound: { '1': [outputFile()] },
     });
     const actions: HostRequest[] = [];

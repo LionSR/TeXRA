@@ -63,15 +63,15 @@ export interface DesktopSettingsUiHost extends Pick<
    */
   /** Select a stream in the shown paper's surface: `missing` when the view
    *  no longer holds it, `unavailable` when no paper is shown. */
-  revealStream(
-    streamId: string,
+  revealRun(
+    runId: string,
   ): Promise<'revealed' | 'missing' | 'unavailable'>;
   /**
    * Display label for a stream, used by the Git tab to name each subscription's
    * owning agent run. Returns undefined when no presentation is attached, in
    * which case the raw stream id is shown.
    */
-  getStreamLabel(streamId: string): string | undefined;
+  getRunLabel(runId: string): string | undefined;
   /** Prompt for a secret (masked). Used for the GitHub personal access token. */
   promptForSecret(input: {
     title: string;
@@ -358,8 +358,8 @@ export function createDesktopSettingsIpc(
   async function postGitHubSubscriptions(): Promise<void> {
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: listGitHubSubscriptionEntries((streamId) =>
-        options.ui.getStreamLabel(streamId),
+      subscriptions: listGitHubSubscriptionEntries((runId) =>
+        options.ui.getRunLabel(runId),
       ),
     });
   }
@@ -399,8 +399,8 @@ export function createDesktopSettingsIpc(
    * it. A stream deleted since the entry was written has nothing to show, so
    * say so instead of leaving the click with no visible effect.
    */
-  async function revealStream(streamId: string): Promise<void> {
-    const result = await options.ui.revealStream(streamId);
+  async function revealRun(runId: string): Promise<void> {
+    const result = await options.ui.revealRun(runId);
     if (result === 'missing') {
       await options.ui.showInfoMessage(
         'The agent stream is no longer available.',
@@ -460,7 +460,7 @@ export function createDesktopSettingsIpc(
     },
     getPRSubscriptions: postGitHubSubscriptions,
     unsubscribePR: unsubscribeGitHub,
-    openPRSubscriptionStream: (message) => revealStream(message.streamId),
+    openPRSubscriptionStream: (message) => revealRun(message.runId),
     ...options.credentialSettingsController.chatGptHandlers,
     ...options.credentialSettingsController.grokHandlers,
     getSubscriptionUsage: (message) =>
@@ -482,7 +482,7 @@ export function createDesktopSettingsIpc(
       'Inline criticism needs the VS Code editor and Problems panel.',
     ),
     getGoalList: postGoalList,
-    revealGoalStream: (message) => revealStream(message.streamId),
+    revealGoalRun: (message) => revealRun(message.runId),
   };
 
   return {

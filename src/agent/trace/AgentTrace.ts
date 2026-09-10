@@ -61,7 +61,7 @@ export interface StageHandle {
   child(label: string, options?: StageOptions): StageHandle;
 }
 
-/** Options accepted by `openStream`. */
+/** Options accepted by `openRun`. */
 export interface StreamOptions {
   /** Explicit id; otherwise a fresh one is generated. */
   readonly id?: string;
@@ -75,7 +75,7 @@ export interface StreamOptions {
   /**
    * Defer the `stream.start` emission until the first non-empty chunk (or a
    * finalize that carries text). Subscribers treat `stream.start` as "this
-   * phase began" — e.g. thinking streams drive a "model is thinking" liveness
+   * phase began" — e.g. thinking runs drive a "model is thinking" liveness
    * indicator — so a stream opened eagerly at request setup must not announce
    * a phase that may never happen. A deferred stream that ends without
    * content emits nothing at all.
@@ -92,14 +92,14 @@ export interface StreamOptions {
   readonly phaseOnly?: boolean;
 }
 
-/** Handle returned by `openStream` — append chunks then finalize. */
+/** Handle returned by `openRun` — append chunks then finalize. */
 export interface StreamHandle {
   readonly id: string;
   /** Append a chunk of text; emits `stream.chunk`. */
   append(text: string): void;
   /**
    * Close the stream and emit its complete text in `stream.end`, except for
-   * phase-only streams. Idempotent. Returns that text to the caller as well.
+   * phase-only runs. Idempotent. Returns that text to the caller as well.
    */
   finalize(finalText?: string): string;
 }
@@ -184,5 +184,5 @@ export interface AgentTrace {
    * signal — so subscribers can surface liveness ("thinking…", "responding…")
    * from the start event alone.
    */
-  openStream(kind: StreamKind, options?: StreamOptions): StreamHandle;
+  openRun(kind: StreamKind, options?: StreamOptions): StreamHandle;
 }

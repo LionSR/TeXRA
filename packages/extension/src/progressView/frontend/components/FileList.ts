@@ -24,10 +24,10 @@ import {
   roundIndexedEntries,
   type CompileFailure,
   type OutputFileInfo,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -108,7 +108,7 @@ export class FileList extends LitElement {
   static override styles = [designTokens, commonViewStyles, fileListStyles];
 
   /** The run whose files these are; every verb names it. */
-  @property({ attribute: false }) streamId: StreamTabId | null = null;
+  @property({ attribute: false }) runId: RunId | null = null;
 
   @property({ attribute: false }) filesByRound: Record<
     string,
@@ -366,8 +366,8 @@ export class FileList extends LitElement {
 
   private dispatchFileAction(actionEl: HTMLElement): void {
     const { command, file, base, prev } = actionEl.dataset;
-    const streamId = this.streamId;
-    if (!command || !file || streamId === null) return;
+    const runId = this.runId;
+    if (!command || !file || runId === null) return;
     if (command === OPEN_FILE) {
       this.dispatchEvent(
         SessionUiEvents.host({ kind: 'openFile', path: file, line: null }),
@@ -377,7 +377,7 @@ export class FileList extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.host({
         kind: 'fileAction',
-        streamId,
+        runId,
         action: command as FileVerb,
         file,
         base: base ?? null,
@@ -387,11 +387,11 @@ export class FileList extends LitElement {
   }
 
   private runLatexFixer(): void {
-    if (this.streamId === null) return;
+    if (this.runId === null) return;
     this.dispatchEvent(
       SessionUiEvents.host({
         kind: 'runCompileFixer',
-        streamId: this.streamId,
+        runId: this.runId,
       }),
     );
   }

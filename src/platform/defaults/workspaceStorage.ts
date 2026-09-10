@@ -71,11 +71,11 @@ export function resolveRunStoragePath(...segments: string[]): string {
 }
 
 export function resolveRunOriginalSnapshotPath(
-  executionId: string,
+  runId: string,
   workspaceRelativePath: string,
 ): string {
   return resolveRunStoragePath(
-    executionId,
+    runId,
     WORKSPACE_STORAGE_LAYOUT.original,
     workspaceRelativePath,
   );

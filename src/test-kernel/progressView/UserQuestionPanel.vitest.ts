@@ -25,7 +25,7 @@ function createPermission(
     data: {
       requestId: 'question-1',
       allowBypass: false,
-      streamId: 'stream-1',
+      runId: 'stream-1',
       questions,
     },
   };

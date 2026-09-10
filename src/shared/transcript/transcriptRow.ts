@@ -33,7 +33,7 @@ import {
 import {
   COMPACTION_ACTIVITY_LABEL,
   type CompactionActivityBlock,
-} from '@shared/streams/compactionActivityProjection';
+} from '@shared/runs/compactionActivityProjection';
 import { assertNever } from '@utils/core';
 
 import type { ToolRowModel } from './toolRowModel';

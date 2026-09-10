@@ -10,7 +10,7 @@ import {
   finalWorkflowOutput,
   RUN_OUTCOME,
 } from '@shared/schemas';
-import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
+import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { getRunDir } from '@utils/files/runStorageFs';
@@ -248,7 +248,7 @@ export async function resolveWorkflowOutput(
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Promise<CliWorkflowRunResult> {
-  const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
+  const runDirectory = options.runDirectory ?? getRunDir(result.runId);
   const baseResult = { ...result, workingDirectory: context.cwd, runDirectory };
   // Only completed runs may publish to user-requested destinations. Partial or
   // rejected artifacts remain inspectable in run storage through baseResult.
@@ -258,7 +258,7 @@ export async function resolveWorkflowOutput(
   if ((outputFile || outputDir) && options.tryCommitPublication?.() === false) {
     return baseResult;
   }
-  const terminalStatus = runOutcomeToExecutionStatus(result.outcome);
+  const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
   if (result.outputs.length === 0 && (outputFile || outputDir)) {
     if (outputDir) {
       throw new Error(
@@ -348,7 +348,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   return (
     finalOutput?.absolutePath ??
     result.runDirectory ??
-    runOutcomeToExecutionStatus(result.outcome)
+    runOutcomeToCliRunStatus(result.outcome)
   );
 }
 

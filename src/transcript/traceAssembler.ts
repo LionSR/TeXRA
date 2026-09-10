@@ -1,7 +1,7 @@
 /** Assemble a static trace from run metadata, transcript entries and the root's folded run state. */
 import { Effect } from 'effect';
-import { readExecutionRunRecord } from '@agent/storage/executionLifecycle';
-import { getExecutionRecords } from '@agent/storage/ExecutionKVStore';
+import { readPersistedRunRecord } from '@agent/storage/runLifecycle';
+import { getRunRecords } from '@agent/storage/RunKVStore';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { redactDisplayValue } from '@logger/redaction';
 
@@ -18,31 +18,31 @@ export type AssembleTraceResult =
  * run has no metadata or no authoritative transcript.
  */
 export const assembleTrace = Effect.fn('assembleTrace')(function* (
-  executionId: RunId,
+  runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<AssembleTraceResult, Error> {
   const [meta, config] = yield* Effect.all(
     [
-      getExecutionRecords(session, executionId).readMeta(),
-      readExecutionRunRecord(executionId, session),
+      getRunRecords(session, runId).readMeta(),
+      readPersistedRunRecord(runId, session),
     ],
     { concurrency: 2 },
   );
   if (!config) return { status: 'config_missing' };
   if (!meta) return { status: 'streamLogs_missing' };
-  if (!(yield* session.transcripts.hasAuthoritativeStream(executionId)))
+  if (!(yield* session.transcripts.hasAuthoritativeRun(runId)))
     return { status: 'streamLogs_missing' };
   const [entries, snapshot] = yield* Effect.all(
     [
-      session.transcripts.readEntries(executionId),
-      session.snapshots.read(executionId),
+      session.transcripts.readEntries(runId),
+      session.snapshots.read(runId),
     ],
     { concurrency: 2 },
   );
   return {
     status: 'ok',
     trace: redactDisplayValue({
-      executionId,
+      runId,
       config,
       meta,
       entries,

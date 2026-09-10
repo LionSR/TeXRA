@@ -1,5 +1,5 @@
 /**
- * Tool for viewing and managing execution history, generated files, and
+ * Tool for viewing and managing run history, generated files, and
  * running processes. Supports viewing past executions, waiting for status
  * changes, reading output from background processes, and killing running
  * executions.
@@ -14,37 +14,36 @@ import { Data, Deferred, Duration, Effect } from 'effect';
 // Local imports
 import {
   deriveResumability,
-  getExecutionStore,
-  getExecutionRecords,
-  readExecutionChildren,
-  listExecutionWorkspaceFiles,
+  getRunStore,
+  getRunRecords,
+  readRunChildren,
+  listRunWorkspaceFiles,
   unwrapResultMeta,
   type ChildRecord,
-  listExecutions,
-  resolveExecutionWorkspaceFilePath,
+  listRuns,
+  resolveRunWorkspaceFilePath,
 } from '@agent/storage';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
-  getRunContextExecutionId,
-  getRunContextStreamId,
+  getRunContextRunId,
 } from '@agent/runtime/RunContext';
 import type { FileStat } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
-  ExecutionIdSchema,
+  RunIdSchema,
   ToolError,
-  type ExecutionId,
+  type RunId,
   type TodoItem,
   type ToolResult,
-  type WorkflowExecutionSnapshot,
+  type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { isInFlightPhase } from '@shared/runs/runStatus';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -72,12 +71,12 @@ import {
   formatStatusInfo,
   formatTodoHeader,
   formatTodoSection,
-  getExecutionStatusInfo,
+  getRunStatusInfo,
   statusInfoFromLiveness,
-  executionDisplayCategory,
+  runDisplayCategory,
   shouldSuppressAutoDeliveredSubagentReport,
-  type ExecutionDisplayCategory,
-  type ExecutionSummaryOptions,
+  type RunDisplayCategory,
+  type RunSummaryOptions,
 } from './executionFormatters';
 import { defineTool } from './core/define';
 import {
@@ -87,7 +86,7 @@ import {
 } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
-import { resolveExecutionLiveness } from './executions/executionLiveness';
+import { resolveRunLiveness } from './executions/runLiveness';
 import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
 import {
   OUTPUT_MAX_LINES,
@@ -104,18 +103,18 @@ import {
   listenForFollowUp,
   shouldSkipWait,
 } from './executions/waitCoordination';
-import { workflowExecutionView } from './executions/workflowSummaryView';
+import { workflowRunView } from './executions/workflowSummaryView';
 
 /**
  * Bound on the durable reads one listing page or one children block fans
  * out at once: every row asks for its own metadata (and, when the row
- * recorded no outcome, its execution lease and a checkpoint stat), so the
+ * recorded no outcome, its run lease and a checkpoint stat), so the
  * fan-out is bounded rather than page-wide.
  */
 const DURABLE_READ_CONCURRENCY = 16;
 
 /**
- * One of the still-Promise collaborators this tool reads — execution
+ * One of the still-Promise collaborators this tool reads — run
  * storage, the transcript store, the two filesystems — rejected. Nothing
  * here recovers from it: `execute` re-raises `cause`, so the tool runner
  * surfaces the same error instance the collaborator raised.
@@ -124,16 +123,16 @@ class ExecutionsReadFailed extends Data.TaggedError('ExecutionsReadFailed')<{
   readonly cause: unknown;
 }> {}
 
-interface ExecutionToolContext {
+interface RunToolContext {
   readonly session: SessionHandle;
-  readonly executionId: string | undefined;
-  readonly streamId: string | undefined;
+  readonly runId: string | undefined;
+  readonly runId: string | undefined;
   readonly inRunScope: <A>(operation: () => A) => A;
 }
 
 /** The one wrap of this tool's Promise collaborators. */
 const executionsRead = <A>(
-  context: ExecutionToolContext,
+  context: RunToolContext,
   read: () => Promise<A>,
 ): Effect.Effect<A, ExecutionsReadFailed> =>
   Effect.tryPromise({
@@ -142,7 +141,7 @@ const executionsRead = <A>(
   });
 
 /**
- * Block until one of `executionIds` changes status, the caller's stream
+ * Block until one of `runIds` changes status, the caller's stream
  * receives a follow-up (the user breaking the wait), or `timeoutSeconds`
  * elapse — whichever comes first. `settled` is re-checked once the change
  * listeners are registered, closing the window between the caller's
@@ -154,9 +153,9 @@ const executionsRead = <A>(
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   function* (
-    context: ExecutionToolContext,
+    context: RunToolContext,
     timeoutSeconds: number,
-    executionIds: string[],
+    runIds: string[],
     settled: () => boolean,
   ) {
     const followUp = yield* Deferred.make<void>();
@@ -171,7 +170,7 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       (stop) => Effect.sync(stop),
     );
     const statusChange =
-      context.session.executions.waitForAnyChange(executionIds);
+      context.session.runs.waitForAnyChange(runIds);
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
     );
@@ -186,9 +185,9 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
 
 function getRunningTodos(
   session: SessionHandle,
-  handle: AgentExecutionHandle,
+  handle: RunHandle,
 ): readonly TodoItem[] {
-  return session.snapshots.getWorkPlan(handle.childStreamId).todos;
+  return session.snapshots.getWorkPlan(handle.childRunId).todos;
 }
 
 interface SizedEntry {
@@ -213,17 +212,17 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
 export class ExecutionsTool extends defineTool({
   name: 'executions',
   slow: true,
-  description: `View execution history and manage running executions.
+  description: `View run history and manage running executions.
 
 Paths:
 ${EXECUTION_PATH_LIST}
 
-Use "current" as {id} to access the active execution.
+Use "current" as {id} to access the active run.
 Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit 100).
 Use view_range: [start, end] to paginate file and background-command output content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
-Use action: "kill" on /executions/{id} to terminate a running execution.
+Use action: "kill" on /executions/{id} to terminate a running run.
 Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for executions you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,
 }) {
@@ -235,10 +234,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * `ToolError` stays a typed failure and `runPromise` rejects with it.
    */
   protected execute(input: ExecutionsToolInput): Promise<ToolResult> {
-    const context: ExecutionToolContext = {
+    const context: RunToolContext = {
       session: currentSession(),
-      executionId: getRunContextExecutionId(),
-      streamId: getRunContextStreamId(),
+      runId: getRunContextRunId(),
+      runId: getRunContextRunId(),
       inRunScope: AsyncLocalStorage.bind(<A>(operation: () => A): A =>
         operation(),
       ),
@@ -254,7 +253,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly run = Effect.fn('ExecutionsTool.run')(function* (
     this: ExecutionsTool,
-    context: ExecutionToolContext,
+    context: RunToolContext,
     input: ExecutionsToolInput,
   ): Effect.fn.Return<ToolResult, Error | ExecutionsReadFailed> {
     const segments = getPathSegments(input.path);
@@ -271,30 +270,30 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       if (input.action === 'kill') {
         return yield* Effect.fail(
           new ToolError(
-            `action='${input.action}' requires a specific execution: use /executions/{id}.`,
+            `action='${input.action}' requires a specific run: use /executions/{id}.`,
           ),
         );
       }
       if (input.action === 'wait') {
         yield* this.waitForAnyChange(context, input.timeout, input.ids);
       }
-      return yield* this.listExecutions(context, input.offset, input.limit);
+      return yield* this.listRuns(context, input.offset, input.limit);
     }
 
-    const executionId = yield* this.resolveExecutionId(context, id);
+    const runId = yield* this.resolveRunId(context, id);
 
-    // /executions/{id} - execution summary or actions
+    // /executions/{id} - run summary or actions
     if (!resource) {
       switch (input.action) {
         case 'kill':
-          return yield* this.handleKill(context, executionId);
+          return yield* this.handleKill(context, runId);
         case 'wait':
-          yield* this.waitForAnyChange(context, input.timeout, [executionId]);
-          return yield* this.showSummary(context, executionId, {
+          yield* this.waitForAnyChange(context, input.timeout, [runId]);
+          return yield* this.showSummary(context, runId, {
             suppressAutoDeliveredSubagentReport: true,
           });
         case 'view':
-          return yield* this.showSummary(context, executionId, {
+          return yield* this.showSummary(context, runId, {
             suppressAutoDeliveredSubagentReport: false,
           });
         default:
@@ -317,7 +316,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     switch (resource) {
       case 'config':
-        return yield* this.showConfig(context, executionId);
+        return yield* this.showConfig(context, runId);
       case 'conversation': {
         if (viewRange) {
           return yield* Effect.fail(
@@ -328,38 +327,38 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         }
         return yield* this.showConversation(
           context,
-          executionId,
+          runId,
           input.offset,
           input.limit,
         );
       }
       case 'todos':
-        return yield* this.showTodos(context, executionId);
+        return yield* this.showTodos(context, runId);
       case 'report':
-        return yield* this.showReport(context, executionId);
+        return yield* this.showReport(context, runId);
       case 'result':
-        return yield* this.showResultMeta(context, executionId);
+        return yield* this.showResultMeta(context, runId);
       case 'children':
-        return yield* this.showChildren(context, executionId);
+        return yield* this.showChildren(context, runId);
       case 'output':
-        return yield* this.showOutput(context, executionId, viewRange);
+        return yield* this.showOutput(context, runId, viewRange);
       case 'files':
         if (rest.length === 0) {
-          return yield* this.listFiles(context, executionId);
+          return yield* this.listFiles(context, runId);
         }
         return yield* this.readFile(
           context,
-          executionId,
+          runId,
           rest.join('/'),
           viewRange,
         );
       case 'workspace-files':
         if (rest.length === 0) {
-          return yield* this.listWorkspaceFiles(context, executionId);
+          return yield* this.listWorkspaceFiles(context, runId);
         }
         return yield* this.readWorkspaceFile(
           context,
-          executionId,
+          runId,
           rest.join('/'),
           viewRange,
         );
@@ -372,26 +371,26 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
   });
 
-  private resolveExecutionId(
-    context: ExecutionToolContext,
+  private resolveRunId(
+    context: RunToolContext,
     id: string,
-  ): Effect.Effect<ExecutionId, ToolError> {
+  ): Effect.Effect<RunId, ToolError> {
     if (id === 'current') {
-      const executionId = context.executionId;
-      if (!executionId) {
+      const runId = context.runId;
+      if (!runId) {
         return Effect.fail(
           new ToolError(
-            'No active execution. Use a specific execution ID instead of "current".',
+            'No active run. Use a specific run ID instead of "current".',
           ),
         );
       }
-      return Effect.succeed(executionId);
+      return Effect.succeed(runId);
     }
-    const result = ExecutionIdSchema.safeParse(id);
+    const result = RunIdSchema.safeParse(id);
     if (!result.success) {
       return Effect.fail(
         new ToolError(
-          `Invalid execution ID format: ${id}. Expected hex string.`,
+          `Invalid run ID format: ${id}. Expected hex string.`,
         ),
       );
     }
@@ -402,13 +401,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly waitForAnyChange = Effect.fn(
     'ExecutionsTool.waitForAnyChange',
   )(function* (
-    context: ExecutionToolContext,
+    context: RunToolContext,
     timeout: number,
     ids?: readonly string[] | null,
   ) {
     const candidateIds = ids?.length
       ? unique(ids)
-      : context.session.executions.getActiveIds();
+      : context.session.runs.getActiveIds();
     // Exclude executions that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
     const pendingIds = candidateIds.filter(
@@ -421,12 +420,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
   });
 
-  private readonly listExecutions = Effect.fn('ExecutionsTool.listExecutions')(
-    function* (context: ExecutionToolContext, offset: number, limit: number) {
-      const entries = yield* listExecutions(context.session);
+  private readonly listRuns = Effect.fn('ExecutionsTool.listRuns')(
+    function* (context: RunToolContext, offset: number, limit: number) {
+      const entries = yield* listRuns(context.session);
 
       if (entries.length === 0) {
-        return executed('No execution history found.');
+        return executed('No run history found.');
       }
 
       const { page, start, end, total } = paginateToolListing(
@@ -450,38 +449,38 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly showSummary = Effect.fn('ExecutionsTool.showSummary')(
     function* (
       this: ExecutionsTool,
-      context: ExecutionToolContext,
-      executionId: ExecutionId,
-      options: ExecutionSummaryOptions = {},
+      context: RunToolContext,
+      runId: RunId,
+      options: RunSummaryOptions = {},
     ) {
       // Check in-memory handle first (free) — running executions have everything we need
       const session = context.session;
-      const handle = session.executions.getHandle(executionId);
+      const handle = session.runs.getHandle(runId);
 
       if (handle) {
-        // Running execution: agent/status and task state are session-owned;
-        // fetch only the remaining durable details from execution storage.
-        const records = getExecutionRecords(context.session, executionId);
+        // Running run: agent/status and task state are session-owned;
+        // fetch only the remaining durable details from run storage.
+        const records = getRunRecords(context.session, runId);
         const todos = getRunningTodos(session, handle);
         const [meta, children, report] = yield* Effect.all(
           [
             records.readMeta(),
-            readExecutionChildren(context.session, executionId),
+            readRunChildren(context.session, runId),
             records.readReport(),
           ],
           { concurrency: 3 },
         );
 
-        const info = session.executions.getStatus(handle);
-        // `handle.category` is the live wire's execution mode, fabricated for a
+        const info = session.runs.getStatus(handle);
+        // `handle.category` is the live wire's run mode, fabricated for a
         // non-agent run (a background bash reports toolUse). The stamped
         // identity is what the completed branch displays, so the running branch
         // reads it too and the same run cannot change category as it settles;
         // an agent run has no identity-derived category and keeps its mode.
         const category =
-          executionDisplayCategory(meta?.identity, null) ?? handle.category;
+          runDisplayCategory(meta?.identity, null) ?? handle.category;
         const lines = buildRunningSummaryLines(
-          executionId,
+          runId,
           handle,
           category,
           info,
@@ -491,7 +490,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         yield* this.appendSummaryTail(
           context,
           lines,
-          executionId,
+          runId,
           category,
           children,
           todos,
@@ -508,14 +507,14 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         return executed(lines.join('\n'));
       }
 
-      // Completed execution: full KV fetch
-      const records = getExecutionRecords(context.session, executionId);
+      // Completed run: full KV fetch
+      const records = getRunRecords(context.session, runId);
       const [meta, record, children, todos, report] = yield* Effect.all(
         [
           records.readMeta(),
           records.readRunRecord(),
-          readExecutionChildren(context.session, executionId),
-          readCompletedRunTodos(executionId, session).pipe(
+          readRunChildren(context.session, runId),
+          readCompletedRunTodos(runId, session).pipe(
             Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
           ),
           records.readReport(),
@@ -525,30 +524,30 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
       if (!meta && !record) {
         const resumability = yield* deriveResumability(
-          executionId,
+          runId,
           context.session,
         );
         if (resumability.kind !== 'checkpoint') {
           return yield* Effect.fail(
-            new ToolError(`Execution not found: ${executionId}`),
+            new ToolError(`Run not found: ${runId}`),
           );
         }
         return executed(
-          `Execution: ${executionId}\nStatus: resumable\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
+          `Run: ${runId}\nStatus: resumable\n(No metadata available - use /executions/${runId}/conversation to view messages)`,
         );
       }
 
-      // Identity comes only from the stamped execution row, which always
-      // carries one; without a row the display falls back to the config.
+      // Identity comes only from the stamped run row; without a row the
+      // display falls back to the config.
       const identity = meta?.identity;
-      const category = executionDisplayCategory(identity, record);
-      const info = yield* getExecutionStatusInfo(
-        executionId,
+      const category = runDisplayCategory(identity, record);
+      const info = yield* getRunStatusInfo(
+        runId,
         context.session,
         meta,
       );
       const lines = buildCompletedSummaryLines(
-        executionId,
+        runId,
         record,
         identity,
         category,
@@ -559,7 +558,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       yield* this.appendSummaryTail(
         context,
         lines,
-        executionId,
+        runId,
         category,
         children,
         todos,
@@ -573,21 +572,21 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   /**
    * Append the shared summary tail (children, todos, report, available paths)
-   * common to both the running-handle and completed-execution branches.
+   * common to both the running-handle and completed-run branches.
    */
   private readonly appendSummaryTail = Effect.fn(
     'ExecutionsTool.appendSummaryTail',
   )(function* (
     this: ExecutionsTool,
-    context: ExecutionToolContext,
+    context: RunToolContext,
     lines: string[],
-    executionId: ExecutionId,
-    category: ExecutionDisplayCategory | undefined,
+    runId: RunId,
+    category: RunDisplayCategory | undefined,
     children: ChildRecord[],
     todos: readonly TodoItem[],
     report: string | null,
     options: {
-      readonly workflow?: WorkflowExecutionSnapshot;
+      readonly workflow?: WorkflowRunSnapshot;
       readonly suppressReport?: boolean;
     } = {},
   ) {
@@ -595,7 +594,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       lines.push(
         '',
         'Workflow:',
-        JSON.stringify(workflowExecutionView(options.workflow), null, 2),
+        JSON.stringify(workflowRunView(options.workflow), null, 2),
       );
     }
     if (children.length > 0) {
@@ -605,7 +604,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
     lines.push(
       ...buildSummaryTailLines(
-        executionId,
+        runId,
         category,
         children.length > 0,
         todos,
@@ -620,11 +619,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * listing page (DURABLE_READ_CONCURRENCY).
    */
   private readonly formatChildren = Effect.fn('ExecutionsTool.formatChildren')(
-    (context: ExecutionToolContext, children: ChildRecord[]) =>
+    (context: RunToolContext, children: ChildRecord[]) =>
       Effect.forEach(
         children,
         (child) =>
-          getExecutionRecords(context.session, child.id)
+          getRunRecords(context.session, child.id)
             .readMeta()
             .pipe(
               Effect.flatMap((meta) =>
@@ -636,35 +635,35 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly handleKill = Effect.fn('ExecutionsTool.handleKill')(
-    function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const callerStreamId = context.streamId;
+    function* (context: RunToolContext, runId: RunId) {
+      const callerRunId = context.runId;
 
-      if (context.executionId === executionId) {
+      if (context.runId === runId) {
         return yield* Effect.fail(
-          new ToolError(`Cannot kill your own execution (${executionId}).`),
+          new ToolError(`Cannot kill your own run (${runId}).`),
         );
       }
 
-      const target = context.session.executions.getHandle(executionId);
+      const target = context.session.runs.getHandle(runId);
       if (!target) {
         return yield* Effect.fail(
           new ToolError(
-            `Execution ${executionId} not found or already completed.`,
+            `Run ${runId} not found or already completed.`,
           ),
         );
       }
 
       // Scope: can only kill your own children. Deny if no context.
-      if (!target.isOwnedBy(callerStreamId)) {
+      if (!target.isOwnedBy(callerRunId)) {
         return yield* Effect.fail(
           new ToolError(
-            `Cannot kill execution ${executionId}: not a child of this session.`,
+            `Cannot kill run ${runId}: not a child of this session.`,
           ),
         );
       }
 
       // Only block kills when the toggle is disabled (the guard above has
-      // already narrowed `target` to an owned AgentExecutionHandle).
+      // already narrowed `target` to an owned RunHandle).
       if (
         !context.inRunScope(() =>
           readPlatformSetting<boolean>(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL),
@@ -678,7 +677,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
 
       const success = yield* Effect.suspend(() => {
-        const stop = context.session.executions.kill(executionId, {
+        const stop = context.session.runs.kill(runId, {
           detachActiveChildren: context.inRunScope(() =>
             detachSubagentsOnStop(),
           ),
@@ -686,56 +685,56 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         return stop.settlement.pipe(Effect.as(stop.accepted));
       }).pipe(Effect.uninterruptible);
       if (success) {
-        return executed(`Execution ${executionId} terminated.`);
+        return executed(`Run ${runId} terminated.`);
       }
       return yield* Effect.fail(
-        new ToolError(`Execution ${executionId} could not be terminated.`),
+        new ToolError(`Run ${runId} could not be terminated.`),
       );
     },
   );
 
   /**
    * Same source of truth as `showSummary()`'s completed-run todos branch: a
-   * running execution's task list is read from session snapshot state. Once
-   * the execution is finished this must route through
+   * running run's task list is read from session snapshot state. Once
+   * the run is finished this must route through
    * `readCompletedRunTodos()` so this endpoint never disagrees with the
    * summary about which tasks are still pending.
    */
   private readonly showTodos = Effect.fn('ExecutionsTool.showTodos')(function* (
-    context: ExecutionToolContext,
-    executionId: ExecutionId,
+    context: RunToolContext,
+    runId: RunId,
   ) {
     const session = context.session;
-    const handle = session.executions.getHandle(executionId);
+    const handle = session.runs.getHandle(runId);
     const todos = handle
       ? getRunningTodos(session, handle)
-      : yield* readCompletedRunTodos(executionId, session).pipe(
+      : yield* readCompletedRunTodos(runId, session).pipe(
           Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
         );
 
     if (todos.length === 0) {
-      return executed(`No task list found for execution ${executionId}.`);
+      return executed(`No task list found for run ${runId}.`);
     }
 
     const lines = formatTodoSection(todos);
-    const header = formatTodoHeader(executionId, todos);
+    const header = formatTodoHeader(runId, todos);
 
     return executed(`${header}\n\n${lines.join('\n')}`);
   });
 
   private readonly showReport = Effect.fn('ExecutionsTool.showReport')(
-    function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const records = getExecutionRecords(context.session, executionId);
+    function* (context: RunToolContext, runId: RunId) {
+      const records = getRunRecords(context.session, runId);
       const [report, note] = yield* Effect.all(
         [
           records.readReport(),
-          turnAttributionNote(getExecutionStore(executionId), context.session),
+          turnAttributionNote(getRunStore(runId), context.session),
         ],
         { concurrency: 2 },
       );
       if (!report) {
         return executed(
-          `No report found for execution ${executionId}. Reports are persisted when subagents or background processes complete.`,
+          `No report found for run ${runId}. Reports are persisted when subagents or background processes complete.`,
         );
       }
       return executed(note ? `${note}\n\n${report}` : report);
@@ -743,22 +742,22 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   /**
-   * Machine-readable final result for chaining a completed execution into a
+   * Machine-readable final result for chaining a completed run into a
    * later stage without parsing the prose report.
    */
   private readonly showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(
-    function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const records = getExecutionRecords(context.session, executionId);
+    function* (context: RunToolContext, runId: RunId) {
+      const records = getRunRecords(context.session, runId);
       const [resultMeta, note] = yield* Effect.all(
         [
           records.readResultMeta(),
-          turnAttributionNote(getExecutionStore(executionId), context.session),
+          turnAttributionNote(getRunStore(runId), context.session),
         ],
         { concurrency: 2 },
       );
       if (!resultMeta) {
         return executed(
-          `No structured result recorded for ${executionId} yet. It is written when the execution completes.`,
+          `No structured result recorded for ${runId} yet. It is written when the run completes.`,
         );
       }
       // The note rides INSIDE the JSON: /result is the machine-readable
@@ -774,39 +773,39 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly showChildren = Effect.fn('ExecutionsTool.showChildren')(
     function* (
       this: ExecutionsTool,
-      context: ExecutionToolContext,
-      executionId: ExecutionId,
+      context: RunToolContext,
+      runId: RunId,
     ) {
-      const children = yield* readExecutionChildren(
+      const children = yield* readRunChildren(
         context.session,
-        executionId,
+        runId,
       );
       if (children.length === 0) {
-        return executed(`No child executions found for ${executionId}.`);
+        return executed(`No child executions found for ${runId}.`);
       }
 
       const lines = yield* this.formatChildren(context, children);
       return executed(
-        `Children of ${executionId} (${children.length}):\n\n${lines.join('\n')}`,
+        `Children of ${runId} (${children.length}):\n\n${lines.join('\n')}`,
       );
     },
   );
 
   private readonly showConfig = Effect.fn('ExecutionsTool.showConfig')(
-    function* (context: ExecutionToolContext, executionId: ExecutionId) {
-      const records = getExecutionRecords(context.session, executionId);
+    function* (context: RunToolContext, runId: RunId) {
+      const records = getRunRecords(context.session, runId);
       const record = yield* records.readRunRecord();
 
       if (!record) {
         return yield* Effect.fail(
-          new ToolError(`Config not found for execution: ${executionId}.`),
+          new ToolError(`Config not found for run: ${runId}.`),
         );
       }
 
       // Filter out fields irrelevant to this agent's category. Identity comes
-      // only from the stamped execution row.
+      // only from the stamped run row.
       const meta = yield* records.readMeta();
-      const category = executionDisplayCategory(meta?.identity, record);
+      const category = runDisplayCategory(meta?.identity, record);
       return executed(serializeFilteredConfig(record, category));
     },
   );
@@ -814,25 +813,25 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly showConversation = Effect.fn(
     'ExecutionsTool.showConversation',
   )(function* (
-    context: ExecutionToolContext,
-    executionId: ExecutionId,
+    context: RunToolContext,
+    runId: RunId,
     offset: number,
     limit: number,
   ) {
-    const records = getExecutionRecords(context.session, executionId);
+    const records = getRunRecords(context.session, runId);
     const conversationResult = yield* readCompletedRunConversation(
-      executionId,
+      runId,
       context.session,
     ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
-    const { conversation, source, streamId } = conversationResult;
-    const streamDiagnostics = [`Stream: ${streamId ?? 'none'}`];
+    const { conversation, source, runId } = conversationResult;
+    const streamDiagnostics = [`Stream: ${runId ?? 'none'}`];
 
     if (!conversation) {
-      // Match the top-level execution lookup: a flow-only record is found only
+      // Match the top-level run lookup: a flow-only record is found only
       // when the shared storage decision says it is resumable.
       const meta = yield* records.readMeta();
       const resumability = yield* deriveResumability(
-        executionId,
+        runId,
         context.session,
       );
       const exists =
@@ -841,7 +840,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
         return yield* Effect.fail(
-          new ToolError(`Execution not found: ${executionId}`),
+          new ToolError(`Run not found: ${runId}`),
         );
       }
       return executed(
@@ -876,7 +875,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   /**
    * stdout/stderr of a background command, projected from the transcript log
-   * its child stream already writes (`createChildStream` in `tools/bash.ts`).
+   * its child stream already writes (`createChildRun` in `tools/bash.ts`).
    *
    * This is the only route readable *while the command runs*: `/report` and
    * `/result` are written at completion, and the completion follow-up carries
@@ -887,48 +886,48 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    */
   private readonly showOutput = Effect.fn('ExecutionsTool.showOutput')(
     function* (
-      context: ExecutionToolContext,
-      executionId: ExecutionId,
+      context: RunToolContext,
+      runId: RunId,
       viewRange?: [number, number],
     ) {
       // The handle names the live child stream; liveness itself is resolved
       // below, from facts that outlive this process.
-      const handle = context.session.executions.getHandle(executionId);
-      const meta = yield* getExecutionRecords(
+      const handle = context.session.runs.getHandle(runId);
+      const meta = yield* getRunRecords(
         context.session,
-        executionId,
+        runId,
       ).readMeta();
       if (!meta && !handle) {
         return yield* Effect.fail(
-          new ToolError(`Execution not found: ${executionId}`),
+          new ToolError(`Run not found: ${runId}`),
         );
       }
       if (meta?.identity?.kind !== 'process') {
         return executed(
-          `/executions/${executionId}/output is only available for background commands (bash with run_in_background). ` +
-            `Use /executions/${executionId}/conversation for an agent run's message history.`,
+          `/executions/${runId}/output is only available for background commands (bash with run_in_background). ` +
+            `Use /executions/${runId}/conversation for an agent run's message history.`,
         );
       }
 
       const transcripts = context.session.transcripts;
-      // The stream is the one stamped on execution metadata at registration.
-      const streamId = handle?.childStreamId ?? meta?.streamId;
-      if (!streamId || !transcripts.has(streamId)) {
+      // The stream is the one stamped on run metadata at registration.
+      const runId = handle?.childRunId ?? meta?.runId;
+      if (!runId || !transcripts.has(runId)) {
         return executed(
-          `No retained output for ${executionId}: its stream log is no longer available. ` +
-            `Use /executions/${executionId}/report for the result summary.`,
+          `No retained output for ${runId}: its stream log is no longer available. ` +
+            `Use /executions/${runId}/report for the result summary.`,
         );
       }
       const entries = yield* transcripts
-        .readEntries(streamId)
+        .readEntries(runId)
         .pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
 
       const { lines, chars } = projectProcessOutput(entries);
       // No snapshot: `meta` was read before the transcript, and a command that
       // finished during that read must not be judged against the row as it
-      // looked beforehand. One read of one execution can afford a fresh one.
-      const liveness = yield* resolveExecutionLiveness(
-        executionId,
+      // looked beforehand. One read of one run can afford a fresh one.
+      const liveness = yield* resolveRunLiveness(
+        runId,
         context.session,
       );
       const info = statusInfoFromLiveness(liveness);
@@ -936,12 +935,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // process" alone never justifies calling the command finished, and a
       // handle this process still tracks past its stream's terminal phase never
       // justifies calling it still running.
-      const retained = `this is the retained log; /executions/${executionId}/report has the result summary`;
+      const retained = `this is the retained log; /executions/${runId}/report has the result summary`;
       const footer = ((): string => {
         switch (liveness.kind) {
           case 'live':
             return isInFlightPhase(liveness.info.status)
-              ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
+              ? `[still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes]`
               : `[${liveness.info.status}; ${retained}]`;
           case 'unsettled':
             return `[not running in this process (${liveness.reason}); ${retained}]`;
@@ -952,11 +951,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             // this says only what the durable facts establish.
             return liveness.outcome
               ? `[finished: ${retained}]`
-              : `[no TeXRA process owns this execution and no result was recorded; ${retained}]`;
+              : `[no TeXRA process owns this run and no result was recorded; ${retained}]`;
         }
       })();
       const out: string[] = [
-        `Output for ${executionId} (process, ${formatStatusInfo(info)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
+        `Output for ${runId} (process, ${formatStatusInfo(info)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
       ];
 
       if (lines.length === 0) {
@@ -1002,40 +1001,40 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
       return executed(
         out.join('\n'),
-        `Read lines ${first}-${last} of /executions/${executionId}/output`,
+        `Read lines ${first}-${last} of /executions/${runId}/output`,
       );
     },
   );
 
   private readonly listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
-    context: ExecutionToolContext,
-    executionId: ExecutionId,
+    context: RunToolContext,
+    runId: RunId,
   ) {
     const files = yield* listRunGeneratedFiles(
-      executionId,
+      runId,
       context.session,
     ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
     if (files.length === 0) {
-      return executed('No files generated for this execution.');
+      return executed('No files generated for this run.');
     }
 
     const lines = formatSizedEntryLines(files);
 
     return executed(
-      `Files in /executions/${executionId}/files:\n\n${lines.join('\n')}`,
+      `Files in /executions/${runId}/files:\n\n${lines.join('\n')}`,
     );
   });
 
   private readonly readFile = Effect.fn('ExecutionsTool.readFile')(function* (
-    context: ExecutionToolContext,
-    executionId: ExecutionId,
+    context: RunToolContext,
+    runId: RunId,
     filePath: string,
     viewRange?: [number, number],
   ) {
-    const displayPath = `/executions/${executionId}/files/${filePath}`;
+    const displayPath = `/executions/${runId}/files/${filePath}`;
     assertNoParentTraversal(filePath);
     const fullPath = yield* executionsRead(context, () =>
-      findExistingRunStoragePath(executionId, filePath),
+      findExistingRunStoragePath(runId, filePath),
     );
     if (!fullPath) {
       return yield* Effect.fail(
@@ -1052,26 +1051,26 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private readonly listWorkspaceFiles = Effect.fn(
     'ExecutionsTool.listWorkspaceFiles',
-  )(function* (context: ExecutionToolContext, executionId: ExecutionId) {
-    const records = getExecutionRecords(context.session, executionId);
+  )(function* (context: RunToolContext, runId: RunId) {
+    const records = getRunRecords(context.session, runId);
     const [record, paths] = yield* Effect.all(
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
     const entries = yield* executionsRead(context, () =>
-      listExecutionWorkspaceFiles(record, paths),
+      listRunWorkspaceFiles(record, paths),
     );
 
     if (entries.length === 0) {
       return executed(
-        `No workspace files recorded for execution ${executionId}.`,
+        `No workspace files recorded for run ${runId}.`,
       );
     }
 
     const lines = formatSizedEntryLines(entries);
 
     return executed(
-      `Workspace files for /executions/${executionId}/workspace-files:\n\n` +
+      `Workspace files for /executions/${runId}/workspace-files:\n\n` +
         lines.join('\n'),
     );
   });
@@ -1079,19 +1078,19 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private readonly readWorkspaceFile = Effect.fn(
     'ExecutionsTool.readWorkspaceFile',
   )(function* (
-    context: ExecutionToolContext,
-    executionId: ExecutionId,
+    context: RunToolContext,
+    runId: RunId,
     filePath: string,
     viewRange?: [number, number],
   ) {
-    const records = getExecutionRecords(context.session, executionId);
+    const records = getRunRecords(context.session, runId);
     const [record, paths] = yield* Effect.all(
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
     const recordedPaths = new Set(
       paths.flatMap((candidate) => {
-        const resolvedCandidate = resolveExecutionWorkspaceFilePath(
+        const resolvedCandidate = resolveRunWorkspaceFilePath(
           record,
           candidate,
         );
@@ -1100,12 +1099,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
     // The listing renders recorded paths under a `workspace/` display prefix,
     // so a read in that display form retries against the stripped path.
-    const direct = resolveExecutionWorkspaceFilePath(record, filePath);
+    const direct = resolveRunWorkspaceFilePath(record, filePath);
     let resolved =
       direct && recordedPaths.has(direct.path) ? direct : undefined;
     const displayPrefix = 'workspace/';
     if (!resolved && filePath.startsWith(displayPrefix)) {
-      const stripped = resolveExecutionWorkspaceFilePath(
+      const stripped = resolveRunWorkspaceFilePath(
         record,
         filePath.slice(displayPrefix.length),
       );
@@ -1115,14 +1114,14 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     if (!resolved) {
       return yield* Effect.fail(
         new ToolError(
-          `Workspace file not found: /executions/${executionId}/workspace-files/${filePath}`,
+          `Workspace file not found: /executions/${runId}/workspace-files/${filePath}`,
         ),
       );
     }
 
     return yield* readFileContent(context, AbsoluteFS, resolved.absolutePath, {
-      directoryErrorPath: `/executions/${executionId}/workspace-files/${filePath}`,
-      resultPath: `/executions/${executionId}/workspace-files/${resolved.path}`,
+      directoryErrorPath: `/executions/${runId}/workspace-files/${filePath}`,
+      resultPath: `/executions/${runId}/workspace-files/${resolved.path}`,
       viewRange,
     });
   });
@@ -1141,7 +1140,7 @@ interface FileBackend {
 }
 
 const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
-  context: ExecutionToolContext,
+  context: RunToolContext,
   fs: FileBackend,
   fullPath: string,
   {

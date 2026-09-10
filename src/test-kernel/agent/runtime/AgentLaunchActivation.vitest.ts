@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  acquireResumedExecutionLease: vi.fn(),
+  acquireResumedRunLease: vi.fn(),
   buildVars: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
@@ -29,17 +29,17 @@ vi.mock('@transcript', async (importActual) => ({
   createRunTrace: mocks.createTrace,
 }));
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
-vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import('@agent/storage/executionLifecycle')
+    typeof import('@agent/storage/runLifecycle')
   >()),
   getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
   hasPersistedParent: mocks.hasPersistedParent,
 }));
-vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  assertOwnedExecutionLease: vi.fn(),
+vi.mock('@agent/storage/runLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
+  acquireResumedRunLease: mocks.acquireResumedRunLease,
+  assertOwnedRunLease: vi.fn(),
 }));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
@@ -47,8 +47,8 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 
 import { TraceEmitter } from '@agent/trace';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { registerExecution } from '@agent/storage/executionLifecycle';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import { registerRun } from '@agent/storage/runLifecycle';
+import { getStreamTabId } from '@agent/runtime/runTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   executeAgent,
@@ -56,10 +56,10 @@ import {
 } from '@agent/runtime/executeAgent';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
+  RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
+  type RunId,
   aggregateId as qualifyAggregateId,
   aggregateTarget,
   AgentCategory,
@@ -101,15 +101,15 @@ async function captureStartedLaunch(
   ) => Effect.Effect<unknown, Error>,
   options: {
     readonly isSubagent?: boolean;
-    readonly resumed?: { executionId: ExecutionId; streamId: StreamTabId };
+    readonly resumed?: { runId: RunId; runId: RunId };
   } = {},
 ): Promise<StartedLaunch> {
   const session = createTestSession();
   if (options.resumed) {
     publishTestRunStart(
       session,
-      options.resumed.streamId,
-      options.resumed.executionId,
+      options.resumed.runId,
+      options.resumed.runId,
     );
     await session.settlePublications();
   }
@@ -140,8 +140,8 @@ async function captureStartedLaunch(
   try {
     if (!options.resumed)
       await Effect.runPromise(
-        registerExecution(session, 'f1e501', config, 'chat', {
-          streamId: getStreamTabId(config.agent, { executionId: 'f1e501' }),
+        registerRun(session, 'f1e501', config, 'chat', {
+          runId: getStreamTabId(config.agent, { runId: 'f1e501' }),
           identity: { kind: 'agent', agent: 'chat' },
           background: options.isSubagent ?? false,
         }),
@@ -189,7 +189,7 @@ function expectStartedThenFailed(
     ),
   });
   expectActivatedThenFailed(launch, isSubagent);
-  expect(launch.result).toMatchObject({ executionId: start.executionId });
+  expect(launch.result).toMatchObject({ runId: start.runId });
 }
 
 /** Every activation, fresh or resumed, carries the activation metadata the
@@ -210,13 +210,13 @@ function expectActivatedThenFailed(
   });
   expect(
     launch.session.status.get(aggregateTarget(launch.activate.aggregateId).id),
-  ).toBe(STREAM_PHASE.FAILED);
+  ).toBe(RUN_PHASE.FAILED);
 }
 
 describe('native agent launch activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.acquireResumedRunLease.mockResolvedValue('existing');
     mocks.getPersistedUserFollowUpSupport.mockReturnValue(
       Effect.succeed(USER_FOLLOW_UP_SUPPORT.UNSUPPORTED),
     );
@@ -235,12 +235,12 @@ describe('native agent launch activation', () => {
           prepareAgentDefinition({ config, session }).pipe(
             Effect.flatMap((definition) =>
               isSubagent
-                ? executeAgent(definition, 'f1e501' as ExecutionId, {
+                ? executeAgent(definition, 'f1e501' as RunId, {
                     session,
                     isSubagent: true,
                     modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
                   })
-                : executeAgent(definition, 'f1e501' as ExecutionId, {
+                : executeAgent(definition, 'f1e501' as RunId, {
                     session,
                     modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
                   }),
@@ -250,7 +250,7 @@ describe('native agent launch activation', () => {
       );
 
       expectStartedThenFailed(launch, isSubagent === true);
-      expect(launch.start).not.toHaveProperty('parentStreamId');
+      expect(launch.start).not.toHaveProperty('parentRunId');
       expect(launch.activate.aggregateId).toBe(launch.start?.aggregateId);
     },
   );
@@ -261,12 +261,12 @@ describe('native agent launch activation', () => {
   ])(
     'starts a resumed $label launch at the commit point and fails it on the same path',
     async ({ isSubagent }) => {
-      const executionId = 'ae5010' as ExecutionId;
-      const streamId = 'resumed-stream' as StreamTabId;
+      const runId = 'ae5010' as RunId;
+      const runId = 'resumed-stream' as RunId;
       mocks.hasPersistedParent.mockReturnValueOnce(Effect.succeed(isSubagent));
       const resume = createToolUseResumeData({
-        executionId,
-        streamId,
+        runId,
+        runId,
         agentConfig: config,
         shared: { modelHandlerCompatibilityKey: MODEL_HANDLER_KEY },
       });
@@ -276,7 +276,7 @@ describe('native agent launch activation', () => {
 
       const launch = await captureStartedLaunch(
         (session) => resumeToolUseFromResumeData(resume, { session }),
-        { resumed: { executionId, streamId } },
+        { resumed: { runId, runId } },
       );
 
       // A resume activates the stream it already has: no second creation
@@ -284,7 +284,7 @@ describe('native agent launch activation', () => {
       expectActivatedThenFailed(launch, isSubagent);
       expect(launch.start).toBeUndefined();
       expect(launch.activate.aggregateId).toBe(
-        qualifyAggregateId('stream', streamId),
+        qualifyAggregateId('stream', runId),
       );
     },
   );

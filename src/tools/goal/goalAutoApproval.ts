@@ -1,5 +1,5 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 export type GoalAutoApprovalScope = 'commands' | 'allAgentWork';
 
@@ -10,7 +10,7 @@ export type GoalAutoApprovalScope = 'commands' | 'allAgentWork';
  * broader scope. Descendants inherit each bypass through session ancestry.
  */
 export async function setGoalSessionAutoApproval(
-  streamId: StreamTabId,
+  runId: RunId,
   scope: GoalAutoApprovalScope | false,
   options?: { session?: SessionHandle },
 ): Promise<void> {
@@ -20,14 +20,14 @@ export async function setGoalSessionAutoApproval(
     options?.session ??
     (await import('@agent/runtime/SessionHandle')).currentSession();
   if (scope === 'allAgentWork') {
-    session.approvals.setDelegatedWorkBypasses(streamId, true);
+    session.approvals.setDelegatedWorkBypasses(runId, true);
   } else if (scope === 'commands') {
     // Retargeting from all-agent-work must revoke the broad grants without
     // publishing a transient command revocation immediately before re-enable.
-    session.approvals.toolEdit.bypass.setBypass(streamId, false);
-    session.approvals.proposal.setBypass(streamId, false);
-    session.approvals.bash.bypass.setBypass(streamId, true);
+    session.approvals.toolEdit.bypass.setBypass(runId, false);
+    session.approvals.proposal.setBypass(runId, false);
+    session.approvals.bash.bypass.setBypass(runId, true);
   } else {
-    session.approvals.setDelegatedWorkBypasses(streamId, false);
+    session.approvals.setDelegatedWorkBypasses(runId, false);
   }
 }

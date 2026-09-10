@@ -2,7 +2,7 @@
 
 import { createLog } from '@logger/logUtils';
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -24,11 +24,11 @@ const brokenEntryIdsReported = createBoundedIdSet(BROKEN_ENTRY_REPORT_CAP);
 export function estimateLiveTranscriptEntryRows(
   entry: TranscriptRow,
   width?: number,
-  executionLabels?: ExecutionLabels,
+  runLabels?: RunLabels,
 ): number {
   try {
     return transcriptEntryLayoutRows(
-      transcriptEntryLayout(entry, { executionLabels, mode: 'live', width }),
+      transcriptEntryLayout(entry, { runLabels, mode: 'live', width }),
     );
   } catch (error) {
     if (!brokenEntryIdsReported.has(entry.id)) {
@@ -53,7 +53,7 @@ export function selectTranscriptEntriesForViewport(
   entries: readonly TranscriptRow[],
   maxRows: number,
   width?: number,
-  executionLabels?: ExecutionLabels,
+  runLabels?: RunLabels,
 ): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
     return { entries: [], rowLimits: new Map(), usedRows: 0 };
@@ -68,7 +68,7 @@ export function selectTranscriptEntriesForViewport(
     const entryRows = estimateLiveTranscriptEntryRows(
       entry,
       width,
-      executionLabels,
+      runLabels,
     );
     if (usedRows + entryRows > maxRows) {
       if (selected.length === 0) {

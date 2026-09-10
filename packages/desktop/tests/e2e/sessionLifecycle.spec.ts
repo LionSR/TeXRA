@@ -61,24 +61,24 @@ async function writeCanonicalStreamFixtures(
       const database = yield* fixture.Database;
       const fixtures = [
         {
-          streamId: WAITING_STREAM,
-          executionId: WAITING_EXECUTION,
+          runId: WAITING_STREAM,
+          runId: WAITING_EXECUTION,
           phase: 'waiting' as const,
         },
         {
-          streamId: ORPHAN_STREAM,
-          executionId: ORPHAN_EXECUTION,
+          runId: ORPHAN_STREAM,
+          runId: ORPHAN_EXECUTION,
           phase: 'running' as const,
         },
       ];
       for (const streamFixture of fixtures) {
-        const id = fixture.aggregateId('stream', streamFixture.streamId);
+        const id = fixture.aggregateId('stream', streamFixture.runId);
         yield* database.appendAll([
           {
             type: 'run.start',
             aggregateId: id,
-            executionId: streamFixture.executionId,
-            identity: { kind: 'agent', agent: streamFixture.streamId },
+            runId: streamFixture.runId,
+            identity: { kind: 'agent', agent: streamFixture.runId },
             category: 'toolUse',
             userFollowUpSupport: 'nativeInteractive',
             isRemote: false,
@@ -86,14 +86,14 @@ async function writeCanonicalStreamFixtures(
           {
             type: 'stage.start',
             aggregateId: id,
-            id: `${streamFixture.streamId}-running-group`,
+            id: `${streamFixture.runId}-running-group`,
             label: 'Persisted round',
             kind: 'round',
           },
           {
             type: 'response.finalized',
             aggregateId: id,
-            text: `Saved history for ${streamFixture.streamId}.`,
+            text: `Saved history for ${streamFixture.runId}.`,
           },
           {
             type: 'status',
@@ -107,7 +107,7 @@ async function writeCanonicalStreamFixtures(
       // interrupted presentation without rewriting the recorded phases.
       yield* database.releaseClaims(
         fixtures.map((streamFixture) =>
-          fixture.aggregateId('stream', streamFixture.streamId),
+          fixture.aggregateId('stream', streamFixture.runId),
         ),
       );
       return yield* database.readAll(0);
@@ -170,7 +170,7 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
       .poll(async () =>
         currentLaunch!.page.locator('stream-tab').evaluateAll((tabs) =>
           tabs.map((tab) => ({
-            streamId: (tab as HTMLElement & { stream: { id: string } }).stream
+            runId: (tab as HTMLElement & { stream: { id: string } }).stream
               .id,
             status: (tab as HTMLElement & { stream: { status: string } }).stream
               .status,
@@ -181,8 +181,8 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
       )
       .toEqual(
         expect.arrayContaining([
-          { streamId: WAITING_STREAM, status: 'waiting', group: 'interrupted' },
-          { streamId: ORPHAN_STREAM, status: 'running', group: 'interrupted' },
+          { runId: WAITING_STREAM, status: 'waiting', group: 'interrupted' },
+          { runId: ORPHAN_STREAM, status: 'running', group: 'interrupted' },
         ]),
       );
     const reloaded = await inEventDatabase(

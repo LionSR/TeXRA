@@ -28,7 +28,7 @@ describe('TUI no-color output', () => {
     expect(writes).toEqual(['Dim cyan\x1b[2K\x1b[1;1H']);
   });
 
-  it('strips SGR styling from byte chunks passed to write streams', () => {
+  it('strips SGR styling from byte chunks passed to write runs', () => {
     const { stream, writes } = fakeWriteStream();
 
     tuiOutputStreamForColor(stream, false).write(

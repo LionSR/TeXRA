@@ -24,7 +24,7 @@ import type {
   PermissionPayload,
   PlanApprovalAction,
   ProgressPermissionKind,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import {
   APPROVE_ALL_DELEGATED_WORK_ACTION,
@@ -105,7 +105,7 @@ export type PendingApprovalKind = ProgressPermissionKind;
 /** One request the user's attention is on: a fold fact, read once. */
 interface AttentionRequest {
   readonly requestId: string;
-  readonly streamId: StreamTabId;
+  readonly streamId: RunId;
   readonly kind: PendingApprovalKind;
   /** The fact's payload; the host payload replaces it when presented. */
   readonly payload: PermissionPayload;
@@ -133,8 +133,8 @@ const decided = signal<ReadonlySet<string>>(new Set());
 /** Jump-to-waiting: the focused stream's requests lead the order. */
 const promoted = signal<
   | {
-      readonly streamId: StreamTabId;
-      readonly includeStreamIds: ReadonlySet<StreamTabId>;
+      readonly streamId: RunId;
+      readonly includeStreamIds: ReadonlySet<RunId>;
     }
   | undefined
 >(undefined);
@@ -147,7 +147,7 @@ const INTERRUPT: ApprovalDecision = {
 /** Whether `payload` presents; a hook keys its host entry by the same id. */
 export function approvalPayloadStreamId(
   payload: Pick<ApprovalPayload, 'data'>,
-): StreamTabId | undefined {
+): RunId | undefined {
   return payload.data.streamId || undefined;
 }
 
@@ -190,7 +190,7 @@ export function attentionRequests(
     if (!entry) continue;
     requests.push({
       requestId: entry[0],
-      streamId: entry[1].payload.data.streamId as StreamTabId,
+      streamId: entry[1].payload.data.streamId as RunId,
       kind: 'externalInquiry',
       payload: entry[1].payload,
     });
@@ -280,8 +280,8 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
  * popup's direct children.
  */
 export function promoteApprovalsForStream(
-  streamId: StreamTabId,
-  options: { readonly includeStreamIds?: ReadonlySet<StreamTabId> } = {},
+  streamId: RunId,
+  options: { readonly includeStreamIds?: ReadonlySet<RunId> } = {},
 ): void {
   promoted.set({
     streamId,
@@ -333,7 +333,7 @@ function settleHost(
 }
 
 /** Issue runtime requests in order; a refusal reads in the conversation. */
-function issue(streamId: StreamTabId, ...requests: RuntimeRequest[]): void {
+function issue(streamId: RunId, ...requests: RuntimeRequest[]): void {
   const session = currentSession();
   void effectRuntime().runPromise(
     Effect.forEach(requests, (request) => session.requests.request(request), {
@@ -349,7 +349,7 @@ function issue(streamId: StreamTabId, ...requests: RuntimeRequest[]): void {
 
 /** The runtime requests `arms` names, in the order they name them. */
 function issueArms(
-  streamId: StreamTabId,
+  streamId: RunId,
   arms: readonly { readonly runtime: RuntimeRequest }[],
 ): void {
   issue(streamId, ...arms.map((arm) => arm.runtime));
@@ -568,7 +568,7 @@ export function settleHostRequestsWhere(
 
 /** Approve every delegated request pending on `streamId` once its bypass is
  *  on: the decisions the user's super-YOLO choice implied. */
-function approveQueuedDelegatedWorkForStream(streamId: StreamTabId): void {
+function approveQueuedDelegatedWorkForStream(streamId: RunId): void {
   const view = sessionView().get();
   const host = hostRequests.get();
   const done = decided.get();

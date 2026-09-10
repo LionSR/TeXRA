@@ -379,7 +379,7 @@ class ArxivSourceProcessor {
       yield* joinedStream(
         (signal) =>
           pipeline(
-            // response.body is a web ReadableStream; Readable.fromWeb bridges to Node streams.
+            // response.body is a web ReadableStream; Readable.fromWeb bridges to Node runs.
             Readable.fromWeb(response.body as NodeWebReadableStream),
             AbsoluteFS.createWriteStream(destPath),
             { signal },

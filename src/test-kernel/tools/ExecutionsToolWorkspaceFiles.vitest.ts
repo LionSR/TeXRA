@@ -15,22 +15,22 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
-  STREAM_PHASE,
+  RUN_PHASE,
   DEFAULT_TOOL_CONFIG,
   aggregateId,
 } from '@shared/schemas';
-import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
+import type { RunId, RunId, TodoItem } from '@shared/schemas';
 import {
   createFakeKv,
-  createFakeExecutionRecords,
-} from '@test/support/FakeExecutionKVStore';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+  createFakeRunRecords,
+} from '@test/support/FakeRunKVStore';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
+import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -50,20 +50,20 @@ const mocks = vi.hoisted(() => ({
   readResultMeta: vi.fn(),
   readTurnState: vi.fn(),
   readWorkspaceFiles: vi.fn(),
-  listExecutions: vi.fn(),
+  listRuns: vi.fn(),
 }));
 
-vi.mock('@agent/storage/ExecutionKVStore', async () => {
+vi.mock('@agent/storage/RunKVStore', async () => {
   const actual = await vi.importActual<
-    typeof import('@agent/storage/ExecutionKVStore')
-  >('@agent/storage/ExecutionKVStore');
+    typeof import('@agent/storage/RunKVStore')
+  >('@agent/storage/RunKVStore');
   return {
     ...actual,
-    getExecutionStore: vi.fn((id: ExecutionId) =>
+    getRunStore: vi.fn((id: RunId) =>
       createFakeKv(id, { readTurnState: mocks.readTurnState }),
     ),
-    getExecutionRecords: vi.fn(() =>
-      createFakeExecutionRecords({
+    getRunRecords: vi.fn(() =>
+      createFakeRunRecords({
         readConfig: () =>
           Effect.tryPromise({
             try: () => mocks.readConfig(),
@@ -104,12 +104,12 @@ vi.mock('@agent/storage', async () => {
     await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
   return {
     ...actual,
-    listExecutions: () =>
+    listRuns: () =>
       Effect.tryPromise({
-        try: () => mocks.listExecutions(),
+        try: () => mocks.listRuns(),
         catch: ensureError,
       }),
-    readExecutionChildren: () =>
+    readRunChildren: () =>
       Effect.tryPromise({
         try: () => mocks.readChildren(),
         catch: ensureError,
@@ -156,7 +156,7 @@ describe('ExecutionsTool', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.listExecutions.mockResolvedValue([]);
+    mocks.listRuns.mockResolvedValue([]);
     mocks.readMeta.mockResolvedValue(null);
     mocks.readTurnState.mockResolvedValue(null);
     mocks.readChildren.mockResolvedValue([]);
@@ -179,7 +179,7 @@ describe('ExecutionsTool', () => {
 
       expect(result.status).toBe('executed');
       expect(result.error).toBeUndefined();
-      expect(result.output).toBe('No execution history found.');
+      expect(result.output).toBe('No run history found.');
     },
   );
 
@@ -205,25 +205,25 @@ describe('ExecutionsTool', () => {
 
   it('does not duplicate auto-delivered live subagent reports for the parent stream', async () => {
     const session = createTestSession();
-    const executionId = 'abc123';
-    const parentStreamId = 'stream:parent-report-suppression' as StreamTabId;
-    const childStreamId = 'stream:child-report-suppression' as StreamTabId;
-    const otherStreamId = 'stream:other-report-reader' as StreamTabId;
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId,
-      childStreamId,
+    const runId = 'abc123';
+    const parentRunId = 'stream:parent-report-suppression' as RunId;
+    const childRunId = 'stream:child-report-suppression' as RunId;
+    const otherRunId = 'stream:other-report-reader' as RunId;
+    const handle = testRunHandle({
+      runId,
+      parentRunId,
+      childRunId,
       agent: 'review',
     });
 
     try {
-      session.executions.track(handle);
-      seedStreamStatusForTest(session.status, childStreamId, {
-        phase: STREAM_PHASE.WAITING,
+      session.runs.track(handle);
+      seedRunStatusForTest(session.status, childRunId, {
+        phase: RUN_PHASE.WAITING,
       });
       mocks.readMeta.mockResolvedValue({
         ...toolUseMeta,
-        parentExecutionId: 'parent123',
+        parentRunId: 'parent123',
       });
       mocks.readReport.mockResolvedValue(
         '<subagent-result>full report</subagent-result>',
@@ -231,23 +231,23 @@ describe('ExecutionsTool', () => {
 
       const parentWaitResult = await withRunContext(
         createRunContext({
-          streamId: parentStreamId,
+          runId: parentRunId,
           session,
         }),
         () =>
           new ExecutionsTool().call({
-            path: `/executions/${executionId}`,
+            path: `/executions/${runId}`,
             action: 'wait',
           }),
       );
       const crossTreeWaitResult = await withRunContext(
         createRunContext({
-          streamId: otherStreamId,
+          runId: otherRunId,
           session,
         }),
         () =>
           new ExecutionsTool().call({
-            path: `/executions/${executionId}`,
+            path: `/executions/${runId}`,
             action: 'wait',
           }),
       );
@@ -273,28 +273,28 @@ describe('ExecutionsTool', () => {
   it('reads running task lists from session snapshot state', () =>
     withTempStorage(async () => {
       const session = createTestSession();
-      const executionId = 'abc124';
-      const parentStreamId = 'stream:parent-live-todos' as StreamTabId;
-      const childStreamId = 'stream:child-live-todos' as StreamTabId;
-      const handle = testExecutionHandle({
-        executionId,
-        parentStreamId,
-        childStreamId,
+      const runId = 'abc124';
+      const parentRunId = 'stream:parent-live-todos' as RunId;
+      const childRunId = 'stream:child-live-todos' as RunId;
+      const handle = testRunHandle({
+        runId,
+        parentRunId,
+        childRunId,
         agent: 'review',
       });
 
       try {
-        publishTestRunStart(session, parentStreamId);
-        publishTestRunStart(session, childStreamId, executionId);
+        publishTestRunStart(session, parentRunId);
+        publishTestRunStart(session, childRunId, runId);
         await session.settlePublications();
-        session.executions.track(handle);
-        seedStreamStatusForTest(session.status, childStreamId, {
-          phase: STREAM_PHASE.RUNNING,
+        session.runs.track(handle);
+        seedRunStatusForTest(session.status, childRunId, {
+          phase: RUN_PHASE.RUNNING,
         });
         session.publish([
           {
             type: 'updateTodos',
-            aggregateId: aggregateId('stream', childStreamId),
+            aggregateId: aggregateId('stream', childRunId),
             todos: [
               {
                 content: 'Read live snapshot state',
@@ -308,14 +308,14 @@ describe('ExecutionsTool', () => {
         mocks.readMeta.mockResolvedValue(toolUseMeta);
 
         const [summary, todos] = await withRunContext(
-          createRunContext({ streamId: parentStreamId, session }),
+          createRunContext({ runId: parentRunId, session }),
           () =>
             Promise.all([
               new ExecutionsTool().call({
-                path: `/executions/${executionId}`,
+                path: `/executions/${runId}`,
               }),
               new ExecutionsTool().call({
-                path: `/executions/${executionId}/todos`,
+                path: `/executions/${runId}/todos`,
               }),
             ]),
         );
@@ -333,18 +333,18 @@ describe('ExecutionsTool', () => {
   it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', () =>
     withTempStorage(async () => {
       const session = createTestSession();
-      const executionId = 'abc123' as ExecutionId;
-      const childStreamId = `codex#${executionId}` as StreamTabId;
-      const callerStreamId = 'stream:unrelated-report-reader' as StreamTabId;
+      const runId = 'abc123' as RunId;
+      const childRunId = `codex#${runId}` as RunId;
+      const callerRunId = 'stream:unrelated-report-reader' as RunId;
 
       try {
-        publishTestRunStart(session, childStreamId, executionId);
+        publishTestRunStart(session, childRunId, runId);
         await session.settlePublications();
         mocks.readMeta.mockResolvedValue({
           ...toolUseMeta,
           identity: { kind: 'agent', agent: 'review' },
-          streamId: childStreamId,
-          parentExecutionId: 'parent123',
+          runId: childRunId,
+          parentRunId: 'parent123',
         });
         mocks.readConfig.mockResolvedValue(config);
         mocks.readReport.mockResolvedValue(
@@ -352,15 +352,15 @@ describe('ExecutionsTool', () => {
         );
 
         const [waitResult, reportResult] = await withRunContext(
-          createRunContext({ streamId: callerStreamId, session }),
+          createRunContext({ runId: callerRunId, session }),
           () =>
             Promise.all([
               new ExecutionsTool().call({
-                path: `/executions/${executionId}`,
+                path: `/executions/${runId}`,
                 action: 'wait',
               }),
               new ExecutionsTool().call({
-                path: `/executions/${executionId}/report`,
+                path: `/executions/${runId}/report`,
               }),
             ]),
         );
@@ -451,14 +451,14 @@ describe('ExecutionsTool', () => {
     'reads completed todos from committed stream events via the $label',
     async ({ toolPath }) => {
       await withTempStorage(async () => {
-        const executionId = 'abc123' as ExecutionId;
+        const runId = 'abc123' as RunId;
         const session = createTestSession();
-        const streamId = `codex#${executionId}` as StreamTabId;
-        publishTestRunStart(session, streamId, executionId);
+        const runId = `codex#${runId}` as RunId;
+        publishTestRunStart(session, runId, runId);
         session.publish([
           {
             type: 'updateTodos',
-            aggregateId: aggregateId('stream', streamId),
+            aggregateId: aggregateId('stream', runId),
             todos: [
               {
                 content: 'Read the committed task list',
@@ -469,10 +469,10 @@ describe('ExecutionsTool', () => {
           },
         ]);
         await session.settlePublications();
-        mocks.readMeta.mockResolvedValue({ ...toolUseMeta, streamId });
+        mocks.readMeta.mockResolvedValue({ ...toolUseMeta, runId });
         mocks.readConfig.mockResolvedValue(config);
         const result = await withRunContext(
-          createRunContext({ streamId, session }),
+          createRunContext({ runId, session }),
           () => new ExecutionsTool().call({ path: toolPath }),
         );
 
@@ -528,14 +528,14 @@ describe('ExecutionsTool', () => {
   // child- and flow_ prefixed ones — stays out of the model-facing view.
   it('filters internal KV metadata files out of /executions/{id}/files', async () => {
     await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
-      const runDir = resolveRunStoragePath(executionId);
+      const runId = 'abc123' as RunId;
+      const runDir = resolveRunStoragePath(runId);
       await StorageFS.ensureDir(runDir);
       const kvFiles = [
         'stable-subagent-attempt.json',
         'stable-subagent-sequence-abc123.json',
         'workflow-script-call-1.json',
-        `${flowKey(executionId)}.json`,
+        `${flowKey(runId)}.json`,
       ];
       for (const name of kvFiles) {
         await StorageFS.write(path.join(runDir, name), '{}');
@@ -556,7 +556,7 @@ describe('ExecutionsTool', () => {
       await StorageFS.write(path.join(runDir, 'output.tex'), 'generated');
 
       const result = await new ExecutionsTool().call({
-        path: `/executions/${executionId}/files`,
+        path: `/executions/${runId}/files`,
       });
 
       expect(result.output).toContain('output.tex');
@@ -574,8 +574,8 @@ describe('ExecutionsTool', () => {
   // reserved key name but carries no `.json` extension stays visible.
   it('keeps extensionless generated files named like reserved KV keys', async () => {
     await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
-      const runDir = resolveRunStoragePath(executionId);
+      const runId = 'abc123' as RunId;
+      const runDir = resolveRunStoragePath(runId);
       await StorageFS.ensureDir(runDir);
       const bareNames = ['meta', 'config', 'report', 'child-def456'];
       for (const name of bareNames) {
@@ -583,7 +583,7 @@ describe('ExecutionsTool', () => {
       }
 
       const result = await new ExecutionsTool().call({
-        path: `/executions/${executionId}/files`,
+        path: `/executions/${runId}/files`,
       });
 
       for (const name of bareNames) {

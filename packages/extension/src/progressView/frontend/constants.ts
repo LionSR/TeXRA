@@ -32,7 +32,7 @@ export const ELEMENT_IDS = {
   LOG_CONTENT: 'logContent',
   GENERATED_FILES: 'generatedFiles',
   GENERATED_FILES_COLLAPSIBLE: 'generatedFilesCollapsible',
-  STREAM_TABS: 'streamTabs',
+  STREAM_TABS: 'runTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
   STATUS_INDICATOR: 'statusIndicator',
   GOAL_CHIP: 'goalChip',

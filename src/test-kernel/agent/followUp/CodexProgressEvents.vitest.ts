@@ -9,8 +9,8 @@ import {
   CODEX_TURN_TOOL,
 } from '@shared/schemas';
 import type {
-  ExecutionId,
-  StreamTabId,
+  RunId,
+  RunId,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
@@ -27,8 +27,8 @@ import type {
   ThreadEvent,
 } from '@openai/codex-sdk';
 
-const streamId = 'stream:codex-child' as StreamTabId;
-const executionId = 'exec:codex-child' as ExecutionId;
+const runId = 'stream:codex-child' as RunId;
+const runId = 'exec:codex-child' as RunId;
 
 const todos: TodoItem[] = [
   {
@@ -56,7 +56,7 @@ async function createLogger(): Promise<{
 }> {
   const store = new StreamLog();
 
-  return { store, logger: createTestRunTrace(streamId, store).trace };
+  return { store, logger: createTestRunTrace(runId, store).trace };
 }
 
 function turnCompleted(inputTokens: number, outputTokens: number): ThreadEvent {
@@ -90,22 +90,22 @@ describe('codex progress events', () => {
     const trace = new TraceEmitter();
     const recorded = recordTraceEvents(trace);
 
-    publishCodexTodos(streamId, todos, trace);
-    publishAgentCliStreamUsage(streamId, executionId, usage, trace);
+    publishCodexTodos(runId, todos, trace);
+    publishAgentCliStreamUsage(runId, runId, usage, trace);
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
-        streamId,
+        runId,
         todos,
       },
     ]);
     expect(traceEventsOfType(recorded.events, 'usage')).toMatchObject([
       {
         payload: {
-          streamId,
+          runId,
           // Usage is keyed by storage key alone; an agent-CLI child's is its
-          // execution id.
-          storageKey: executionId,
+          // run id.
+          storageKey: runId,
           usage,
         },
       },
@@ -149,7 +149,7 @@ describe('codex progress events', () => {
     const result = await runStreamedTurn(
       thread,
       'Build the project',
-      streamId,
+      runId,
       logger,
     );
 
@@ -182,7 +182,7 @@ describe('codex progress events', () => {
     const result = await runStreamedTurn(
       thread,
       'Do the thing',
-      streamId,
+      runId,
       logger,
     );
 
@@ -220,7 +220,7 @@ describe('codex progress events', () => {
     ]);
 
     await expect(
-      runStreamedTurn(thread, 'Do the thing', streamId, logger),
+      runStreamedTurn(thread, 'Do the thing', runId, logger),
     ).rejects.toThrow('boom');
 
     const turnEntry = findTurnEntry(store);
@@ -237,7 +237,7 @@ describe('codex progress events', () => {
     // No turn.completed / turn.failed — the loop exits with the card open.
     const thread = threadOf([{ type: 'turn.started' }]);
 
-    await runStreamedTurn(thread, 'Do the thing', streamId, logger);
+    await runStreamedTurn(thread, 'Do the thing', runId, logger);
 
     const turnEntry = findTurnEntry(store);
     // Even without an error message the card is marked as an error so the

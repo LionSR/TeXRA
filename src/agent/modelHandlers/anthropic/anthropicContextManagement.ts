@@ -1,6 +1,6 @@
 // Type imports - agent
 import { logContextManagementEvent, type AgentTrace } from '@agent/trace';
-import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
+import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 
 // Type imports - Anthropic SDK
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';

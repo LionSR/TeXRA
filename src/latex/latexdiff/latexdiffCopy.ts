@@ -2,7 +2,7 @@
  * User-facing sentences for a latexdiff run's outcome.
  *
  * The VS Code command and the desktop stream-toolbar action drive the same
- * `runLatexdiffForExecution` and report the same outcomes; they differ only in
+ * `runLatexdiffForRun` and report the same outcomes; they differ only in
  * which dialog they route them through and how much detail they show (the
  * extension also reports partial success, which has one caller and stays
  * there). Keeping the sentences here is what stops the two hosts from

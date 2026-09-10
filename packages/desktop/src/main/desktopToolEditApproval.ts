@@ -20,10 +20,10 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 type DesktopToolEditApprovalUi = Pick<
-  DesktopAgentExecutionHost,
+  DesktopAgentRunHost,
   'openPath' | 'openBuildDisplay' | 'openDiff' | 'showErrorMessage'
 >;
 

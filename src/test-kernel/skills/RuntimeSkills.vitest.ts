@@ -229,9 +229,9 @@ describe('runtime skills', () => {
 
     const trace = new TraceEmitter();
     const store = new StreamLog();
-    const streamId = 'stream:bounded-skills';
+    const runId = 'stream:bounded-skills';
 
-    attachTestTranscriptFold(trace, streamId, store);
+    attachTestTranscriptFold(trace, runId, store);
 
     expect(() =>
       trace.emit({ type: 'skills.snapshot', skills: result.skills }),

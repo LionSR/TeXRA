@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
 
-const STREAM_ID = 'stream:goal-cont' as StreamTabId;
+const STREAM_ID = 'stream:goal-cont' as RunId;
 
 async function installPlatformWithConfig(
   config: Record<string, unknown>,
@@ -115,7 +115,7 @@ describe('maybeBuildGoalContinuation', () => {
     const out = await maybeBuildGoalContinuation(STREAM_ID);
     expect(out).toBeNull();
     // Sanity: the record still exists; only the flag stopped the loop.
-    expect(GoalStore.getForStream(STREAM_ID)?.status).toBe('active');
+    expect(GoalStore.getForRun(STREAM_ID)?.status).toBe('active');
   });
 
   it('returns null when no goal exists for the stream', async () => {
@@ -132,7 +132,7 @@ describe('maybeBuildGoalContinuation', () => {
   it('is a pure read — leaves the record untouched', async () => {
     const before = await GoalStore.start(STREAM_ID, 'objective');
     await maybeBuildGoalContinuation(STREAM_ID);
-    const after = GoalStore.getForStream(STREAM_ID);
+    const after = GoalStore.getForRun(STREAM_ID);
     // No counter, no audit log: the helper only reads. The loop runs until
     // the model completes or the user stops it.
     expect(after?.status).toBe('active');

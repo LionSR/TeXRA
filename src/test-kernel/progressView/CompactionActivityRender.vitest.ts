@@ -6,7 +6,7 @@ import type { CompactionActivity } from '@progressView/frontend/components/Compa
 import {
   COMPACTION_ACTIVITY_LABEL,
   type CompactionActivityStatus,
-} from '@shared/streams/compactionActivityProjection';
+} from '@shared/runs/compactionActivityProjection';
 
 // Local file imports
 import {

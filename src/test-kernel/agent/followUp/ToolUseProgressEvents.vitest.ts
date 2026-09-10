@@ -40,7 +40,7 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   type Plan,
-  type StreamTabId,
+  type RunId,
   type TodoItem,
 } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -127,13 +127,13 @@ async function runCyclePost(options: {
 }
 
 function createCycleNode(
-  streamId: StreamTabId,
+  runId: RunId,
   host: ReturnType<typeof createRecordingHost>['host'],
   logger: TraceEmitter,
   overrides: Record<string, unknown> = {},
 ): ToolUseCycleNode {
   return new ToolUseCycleNode().setServices({
-    runScope: testRunScope(streamId, { interactions: host }),
+    runScope: testRunScope(runId, { interactions: host }),
     logger,
     modelCell: testModelCell({ getClient: vi.fn() }),
     onRoundFinalized: vi.fn(),
@@ -156,9 +156,9 @@ describe('tool-use progress events', () => {
   it('collapses a run whose only tool is the terminal tool to one forced round', async () => {
     setRoundFlowState({ endTurn: true });
     const { host } = createRecordingHost();
-    const streamId = 'stream:single-shot-final-tool' as StreamTabId;
+    const runId = 'stream:single-shot-final-tool' as RunId;
     const node = createCycleNode(
-      streamId,
+      runId,
       host,
       new TraceEmitter(),
       forcedToolOverrides([{ name: 'submit_output' }]),
@@ -174,9 +174,9 @@ describe('tool-use progress events', () => {
   it('does not force the first round of a headless run with exploration tools', async () => {
     setRoundFlowState({ endTurn: true });
     const { host } = createRecordingHost();
-    const streamId = 'stream:headless-final-tool' as StreamTabId;
+    const runId = 'stream:headless-final-tool' as RunId;
     const node = createCycleNode(
-      streamId,
+      runId,
       host,
       new TraceEmitter(),
       forcedToolOverrides([{ name: 'read_file' }, { name: 'submit_output' }]),
@@ -195,12 +195,12 @@ describe('tool-use progress events', () => {
     const { host } = createRecordingHost();
     const logger = new TraceEmitter();
     const recorded = recordTraceEvents(logger);
-    const streamId = 'stream:tool-use-cycle' as StreamTabId;
+    const runId = 'stream:tool-use-cycle' as RunId;
     const workspaceState = AgentWorkspaceState.create();
     workspaceState.workPlan.updateTodos([todo]);
     workspaceState.workPlan.updatePlan(plan);
 
-    const node = createCycleNode(streamId, host, logger);
+    const node = createCycleNode(runId, host, logger);
 
     const result = await withTestRunContext(node.services.runScope, () =>
       node.exec(createPrepResult(workspaceState)),
@@ -208,10 +208,10 @@ describe('tool-use progress events', () => {
 
     expect(result).toEqual({ outcome: 'skipped' });
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
-      { streamId, todos: [todo] },
+      { runId, todos: [todo] },
     ]);
     expect(traceEventsOfType(recorded.events, 'updatePlan')).toMatchObject([
-      { streamId, plan },
+      { runId, plan },
     ]);
   });
 
@@ -338,11 +338,11 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
 
       const { host } = createRecordingHost();
       const logger = new TraceEmitter();
-      const streamId = `stream:tool-use-round-${name}` as StreamTabId;
+      const runId = `stream:tool-use-round-${name}` as RunId;
       const store = new StreamLog();
 
-      const recorder = attachTestTranscriptFold(logger, streamId, store);
-      const node = createCycleNode(streamId, host, logger);
+      const recorder = attachTestTranscriptFold(logger, runId, store);
+      const node = createCycleNode(runId, host, logger);
 
       try {
         const result = await withTestRunContext(node.services.runScope, () =>

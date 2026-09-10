@@ -52,7 +52,7 @@ const MAX_SERVER_TOOL_INPUT_SIZE = 65536;
  */
 interface AnthropicStreamState {
   /** Current output stream for text blocks */
-  outputStream: ReturnType<AgentTrace['openStream']> | null;
+  outputStream: ReturnType<AgentTrace['openRun']> | null;
   /** Index of most recent block (any type) */
   lastBlockIndex: number;
   /**
@@ -92,11 +92,11 @@ interface StreamHandlerConfig {
 }
 
 /**
- * Factory functions for creating streams.
+ * Factory functions for creating runs.
  */
-interface StreamFactories {
-  createThinkingStream: () => ReturnType<AgentTrace['openStream']>;
-  createOutputStream: () => ReturnType<AgentTrace['openStream']>;
+interface RunFactories {
+  createThinkingStream: () => ReturnType<AgentTrace['openRun']>;
+  createOutputStream: () => ReturnType<AgentTrace['openRun']>;
 }
 
 /**
@@ -114,7 +114,7 @@ export class AnthropicStreamHandler {
   private compactionActivity: CompactionActivityOperation | undefined;
   private readonly thinkingStreams = new Map<
     number,
-    ReturnType<AgentTrace['openStream']>
+    ReturnType<AgentTrace['openRun']>
   >();
   private readonly state: AnthropicStreamState = {
     outputStream: null,
@@ -140,7 +140,7 @@ export class AnthropicStreamHandler {
   constructor(
     private readonly logger: AgentTrace,
     private readonly config: StreamHandlerConfig,
-    private readonly factories: StreamFactories,
+    private readonly factories: RunFactories,
   ) {}
 
   /**
@@ -178,7 +178,7 @@ export class AnthropicStreamHandler {
   }
 
   /**
-   * Finalizes all remaining streams and clears state.
+   * Finalizes all remaining runs and clears state.
    * Call this with the canonical final-response compaction outcome.
    * Sets finalized flag to prevent processing any subsequent events.
    */
@@ -187,7 +187,7 @@ export class AnthropicStreamHandler {
     // Set flag first to prevent processing any events that arrive during cleanup
     this.state.finalized = true;
 
-    // Finalize any remaining thinking streams
+    // Finalize any remaining thinking runs
     for (const s of this.thinkingStreams.values()) {
       s.finalize();
     }
@@ -333,13 +333,13 @@ export class AnthropicStreamHandler {
   private handleBlockStop(
     event: Extract<BetaRawMessageStreamEvent, { type: 'content_block_stop' }>,
   ): void {
-    // Finalize thinking streams immediately on block stop
+    // Finalize thinking runs immediately on block stop
     const thinking = this.thinkingStreams.get(event.index);
     if (thinking) {
       thinking.finalize();
       this.thinkingStreams.delete(event.index);
     }
-    // Text streams: don't finalize here - wait for non-text block or end
+    // Text runs: don't finalize here - wait for non-text block or end
   }
 
   /**

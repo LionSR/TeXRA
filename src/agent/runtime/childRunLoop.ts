@@ -14,7 +14,7 @@ import { Cause, Effect, Exit, Semaphore, type Fiber } from 'effect';
 
 import {
   finalizeRun,
-  getExecutionStore,
+  getRunStore,
   type ResultMeta,
 } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -22,11 +22,11 @@ import { createChannelTrace } from '@agent/trace';
 import type {
   ChildTurnRef,
   ChildTurnState,
-} from '@agent/storage/ExecutionKVStore';
+} from '@agent/storage/RunKVStore';
 import {
-  assertOwnedExecutionLease,
-  ExecutionLeaseLostError,
-} from '@agent/storage/executionLease';
+  assertOwnedRunLease,
+  RunLeaseLostError,
+} from '@agent/storage/runLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import {
@@ -34,11 +34,11 @@ import {
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
-import { retainFlowRecordUnlessCompleted } from '@agent/storage/executionLifecycle';
+import { retainFlowRecordUnlessCompleted } from '@agent/storage/runLifecycle';
 import type {
-  AgentExecutionHandle,
-  ExecutionInterruptHandler,
-} from '@agent/runtime/ExecutionHandle';
+  RunHandle,
+  RunInterruptHandler,
+} from '@agent/runtime/RunHandle';
 import type {
   FollowUpQueue,
   FollowUpQueueBatchItem,
@@ -57,7 +57,7 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
-import { deriveRunOutcome } from '@shared/streams/streamStatus';
+import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, formatDuration, onAbort } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -109,14 +109,14 @@ export interface ChildRunPorts {
 }
 
 /**
- * Presentation/lifecycle port for agent-CLI child streams. The concrete
+ * Presentation/lifecycle port for agent-CLI child runs. The concrete
  * tool-layer stream satisfies this structurally, but the generic driver
  * declares the handful of hooks it needs here so it never imports a concrete
  * tools type. Native strategies have no stream tab of their own and omit it
  * entirely; `executeAgent`/`resumeToolUseFromResumeData` own handle creation,
  * tracking, and terminal finalization for every turn via `runFlowWithLifecycle`.
  */
-interface ChildStreamPort {
+interface ChildRunPort {
   readonly logger: AgentTrace;
   /** The child loop is idle and waiting for the next follow-up instruction. */
   waitForInput(): void;
@@ -125,7 +125,7 @@ interface ChildStreamPort {
   /** The active turn failed; preserve explicit user stops. */
   failTurn(): void;
   /**
-   * Complete the child stream lifecycle through the owning execution handle.
+   * Complete the child stream lifecycle through the owning run handle.
    * Resolves once the shared terminal finalizer has persisted, settled, and
    * untracked.
    */
@@ -140,7 +140,7 @@ interface ChildStreamPort {
     error?: unknown;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
-    /** Durable execution-state action. */
+    /** Durable run-state action. */
     persistence?: RunTerminalPersistence;
     /** Drop the child's tab once finalized (ephemeral process children). */
     autoClose?: boolean;
@@ -173,9 +173,9 @@ export interface ChildRunStrategy<TTurn> {
   /**
    * This child's turns drive a live OS process, so the loop's interrupt
    * handler tears one down. Shutdown drain reads it off the handle to reach a
-   * leaked process (`ExecutionRegistry.killBackgroundProcesses`) without
+   * leaked process (`RunRegistry.killBackgroundProcesses`) without
    * disturbing agent children that are deliberately left running for restart
-   * recovery; see `ExecutionInterruptHandler.ownsBackgroundProcess`.
+   * recovery; see `RunInterruptHandler.ownsBackgroundProcess`.
    */
   readonly ownsBackgroundProcess?: boolean;
 
@@ -185,7 +185,7 @@ export interface ChildRunStrategy<TTurn> {
    * while the process does; every other child type keeps its tab for reading
    * back.
    */
-  readonly autoCloseChildStream?: boolean;
+  readonly autoCloseChildRun?: boolean;
 
   /**
    * Deliver a settled turn to the parent even when the loop was interrupted.
@@ -297,17 +297,17 @@ export interface ChildRunStrategy<TTurn> {
 export interface ChildRunLoopParams<TTurn> {
   readonly session: SessionHandle;
   /**
-   * Presentation/lifecycle wrapper for agent-CLI child streams. Native
+   * Presentation/lifecycle wrapper for agent-CLI child runs. Native
    * strategies omit this; `executeAgent`/`resumeToolUseFromResumeData`
    * already own handle creation, tracking, and terminal finalization for
    * every turn via `runFlowWithLifecycle`, so there is no separate stream tab
    * for this loop to finalize.
    */
-  readonly childStream?: ChildStreamPort;
-  readonly parentStreamId: RunId;
+  readonly childRun?: ChildRunPort;
+  readonly parentRunId: RunId;
   /** The child's run id: what the loop acquires the follow-up queue and
    *  attaches its interrupt handler under, before the first turn runs. */
-  readonly executionId: RunId;
+  readonly runId: RunId;
   readonly agentName: string;
   readonly strategy: ChildRunStrategy<TTurn>;
   /**
@@ -352,7 +352,7 @@ export interface ChildRunLoopParams<TTurn> {
 }
 
 /**
- * Interrupt handler attached to the child's execution handle for the child's
+ * Interrupt handler attached to the child's run handle for the child's
  * whole lifetime, so the stop button always finds a live target; including
  * the inter-turn WAITING gap, when no flow-owned context is attached.
  *
@@ -365,7 +365,7 @@ export interface ChildRunLoopParams<TTurn> {
  * turn it launches to it, and a native turn's flow subscribes to its own run
  * signal downstream of that binding.
  */
-class ChildRunInterruptible implements ExecutionInterruptHandler {
+class ChildRunInterruptible implements RunInterruptHandler {
   private readonly controller = new AbortController();
   private queue: FollowUpQueue | null = null;
 
@@ -465,18 +465,18 @@ function attemptTurn<TTurn>(
  * token, from which `turnDeliveryId` derives the delivery id the turn's
  * single parent delivery is admitted under. Stable within one child-run
  * attempt and distinct across attempts, even when a workflow deliberately
- * reuses its execution ID. A producer replaying the same accepted turn
+ * reuses its run ID. A producer replaying the same accepted turn
  * therefore presents the same id, while a later workflow run cannot collide
  * with its prior delivery.
  */
 function mintChildTurnRef(
-  executionId: RunId,
+  runId: RunId,
   attemptId: string,
   turnIndex: number,
 ): ChildTurnRef {
   // The `:generation:` segment is the persisted spelling of this token and is
   // frozen: delivery ids minted by an earlier build must keep comparing equal.
-  return { token: `${executionId}:generation:${attemptId}:turn:${turnIndex}` };
+  return { token: `${runId}:generation:${attemptId}:turn:${turnIndex}` };
 }
 
 /**
@@ -495,7 +495,7 @@ function turnDeliveryId(turnRef: ChildTurnRef): string {
 type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
 
 /**
- * Structured turn-lifecycle diagnostic (#9531): ties the execution, the turn's
+ * Structured turn-lifecycle diagnostic (#9531): ties the run, the turn's
  * logical identity, the follow-up queue owner/generation, and the interruption
  * cause into one event so a resumed/interrupted child's state is auditable.
  * Emitted at turn acceptance, delivery, and loop termination.
@@ -510,16 +510,16 @@ function emitTurnDiagnostic(
   logger: AgentTrace,
   event: 'turn.accepted' | 'turn.delivered' | 'loop.terminated',
   params: {
-    executionId: RunId;
+    runId: RunId;
     turnRef?: ChildTurnRef;
     queueOwner?: FollowUpConsumerLease;
     interruptionCause?: ChildLoopTerminationCause;
   },
 ): void {
-  const { executionId, turnRef, queueOwner, interruptionCause } = params;
+  const { runId, turnRef, queueOwner, interruptionCause } = params;
   logger.debug(`childRunLoop ${event}`, {
     data: {
-      executionId,
+      runId,
       ...(turnRef ? { turnToken: turnRef.token } : {}),
       ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
       ...(interruptionCause ? { interruptionCause } : {}),
@@ -534,20 +534,20 @@ function emitTurnDiagnostic(
  */
 function persistTurnStateBestEffort(
   session: SessionHandle,
-  executionId: RunId,
+  runId: RunId,
   state: ChildTurnState,
   logger: AgentTrace,
 ): Effect.Effect<void> {
   return Effect.tryPromise({
     try: () =>
       runInSession(session, () =>
-        getExecutionStore(executionId).writeTurnState(state),
+        getRunStore(runId).writeTurnState(state),
       ),
     catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
-        logger.warn(`Failed to persist turn state for ${executionId}`, {
+        logger.warn(`Failed to persist turn state for ${runId}`, {
           data: error,
         });
       }),
@@ -563,24 +563,24 @@ function persistTurnStateBestEffort(
  */
 function resolveDeliveryTarget<TTurn>(
   strategy: ChildRunStrategy<TTurn>,
-  resolveChildStreamTarget: () => RunId | undefined,
+  resolveChildRunTarget: () => RunId | undefined,
 ): RunId | undefined {
   return strategy.resolveDeliveryTarget
     ? strategy.resolveDeliveryTarget()
-    : resolveChildStreamTarget();
+    : resolveChildRunTarget();
 }
 
 /**
  * A turn's parent-follow-up enqueue, still pending its wake step. Waking can
- * await the resumed parent's entire turn (`agentResume.tryResumeStream` → …
+ * await the resumed parent's entire turn (`agentResume.tryResumeRun` → …
  * → `resumeToolUseFromResumeData`), so callers that are about to finalize this
  * child (terminal/failed turns) must resolve the wake only AFTER that
  * finalize completes; otherwise a resumed parent that immediately waits on
- * this still-RUNNING execution self-stalls (#8093). Callers that continue to
+ * this still-RUNNING run self-stalls (#8093). Callers that continue to
  * another turn (no finalize pending) may wake immediately.
  */
 interface PendingChildDelivery {
-  readonly resolveTargetStreamId: () => RunId | undefined;
+  readonly resolveTargetRunId: () => RunId | undefined;
   readonly followUp: FollowUpQueueInput;
 }
 
@@ -592,11 +592,11 @@ interface PendingChildDelivery {
  */
 function warnDetachedChildDelivery(
   logger: AgentTrace,
-  executionId: RunId,
+  runId: RunId,
 ): void {
   logger.warn(
-    'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
-    { data: { executionId } },
+    'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
+    { data: { runId } },
   );
 }
 
@@ -613,7 +613,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
 >(params: {
   session: SessionHandle;
   strategy: ChildRunStrategy<TTurn>;
-  executionId: RunId;
+  runId: RunId;
   logger: AgentTrace;
   turn: TTurn | null;
   turnRef: ChildTurnRef;
@@ -628,7 +628,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
 }): Effect.fn.Return<PendingChildDelivery | undefined, Error> {
   const {
     strategy,
-    executionId,
+    runId,
     logger,
     turn,
     turnRef,
@@ -668,14 +668,14 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   // persistence failure is then this turn's failure, thrown once the turn
   // is settled, and the delivery never reaches the parent.
   const persisted = yield* Effect.exit(
-    persistChildRunDelivery(params.session, executionId, msg, stampedMeta),
+    persistChildRunDelivery(params.session, runId, msg, stampedMeta),
   );
   // Completion follows acceptance under the same permit. The body scope also
   // drains acceptance writes when formatting or provider work fails.
   yield* params.turnStateWrites.withPermit(
     persistTurnStateBestEffort(
       params.session,
-      executionId,
+      runId,
       { lastCompletedTurn: turnRef },
       logger,
     ),
@@ -692,15 +692,15 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
-  const resolveTargetStreamId = (): RunId | undefined =>
+  const resolveTargetRunId = (): RunId | undefined =>
     resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
-  if (!resolveTargetStreamId()) {
-    warnDetachedChildDelivery(logger, executionId);
+  if (!resolveTargetRunId()) {
+    warnDetachedChildDelivery(logger, runId);
     return undefined;
   }
   if (prepareParentDelivery?.() === false) return undefined;
   return {
-    resolveTargetStreamId,
+    resolveTargetRunId,
     followUp: {
       text: msg,
       origin: 'subagent_result',
@@ -716,27 +716,27 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
 const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   pending: PendingChildDelivery | undefined,
   session: SessionHandle,
-  executionId: RunId,
+  runId: RunId,
   logger: AgentTrace,
 ): Effect.fn.Return<void, Error> {
   if (!pending) return;
-  const targetStreamId = pending.resolveTargetStreamId();
-  if (!targetStreamId) {
-    warnDetachedChildDelivery(logger, executionId);
+  const targetRunId = pending.resolveTargetRunId();
+  if (!targetRunId) {
+    warnDetachedChildDelivery(logger, runId);
     return;
   }
   const delivery = yield* deliverChildRunFollowUp({
-    targetStreamId,
+    targetRunId,
     followUp: pending.followUp,
     session,
   });
   if (delivery.kind === 'failed') {
     logger.warn(
-      `Turn result not delivered: parent stream is unavailable (${delivery.reason}). The result remains in the execution report.`,
+      `Turn result not delivered: parent stream is unavailable (${delivery.reason}). The result remains in the run report.`,
       {
         data: {
-          executionId,
-          parentStreamId: targetStreamId,
+          runId,
+          parentRunId: targetRunId,
           reason: delivery.reason,
         },
       },
@@ -744,20 +744,20 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   } else if (delivery.wake === 'failed') {
     logger.warn(
       'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-      { data: { executionId, parentStreamId: targetStreamId } },
+      { data: { runId, parentRunId: targetRunId } },
     );
   }
 });
 
 /**
- * Own admitted execution cleanup until the child loop takes over. Failure or
+ * Own admitted run cleanup until the child loop takes over. Failure or
  * interruption records the terminal outcome and releases canonical and file
  * claims before propagating the original cause. Post-handoff work stays outside
  * this owner because the live child then owns its own settlement.
  */
-export function runWithOwnedExecutionLeaseLaunchGuard<A, E, R>(
+export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
   session: SessionHandle,
-  executionId: RunId,
+  runId: RunId,
   operation: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | Error, R> {
   return operation.pipe(
@@ -766,7 +766,7 @@ export function runWithOwnedExecutionLeaseLaunchGuard<A, E, R>(
       return Effect.gen(function* () {
         const finalized = yield* Effect.exit(
           finalizeRun(session, {
-            executionId,
+            runId,
             outcome: Cause.hasInterrupts(exit.cause)
               ? RUN_OUTCOME.CANCELLED
               : RUN_OUTCOME.FAILED,
@@ -774,7 +774,7 @@ export function runWithOwnedExecutionLeaseLaunchGuard<A, E, R>(
           }),
         );
         const released = yield* Effect.exit(
-          session.releaseExecutionLease(executionId),
+          session.releaseRunLease(runId),
         );
         const failures: unknown[] = [];
         if (Exit.isFailure(finalized))
@@ -786,7 +786,7 @@ export function runWithOwnedExecutionLeaseLaunchGuard<A, E, R>(
           return yield* Effect.fail(
             new AggregateError(
               failures,
-              `Execution ${executionId} launch cleanup failed`,
+              `Run ${runId} launch cleanup failed`,
             ),
           );
       });
@@ -811,16 +811,16 @@ export function startChildRunLoop<TTurn>(
     const budget = params.budgeted
       ? yield* childRunBudgetFor(runSession)
       : undefined;
-    const { childStream, parentStreamId, executionId, agentName, strategy } =
+    const { childRun, parentRunId, runId, agentName, strategy } =
       params;
     // Agent-CLI children log to their own presentation stream; native children
     // have no stream tab of their own here (each turn already logs through its
     // own run trace inside `runFlowWithLifecycle`), so this is a channel-only
     // fallback for the loop's own turn-summary/warning lines.
-    const logger = childStream?.logger ?? createChannelTrace('childRunLoop');
+    const logger = childRun?.logger ?? createChannelTrace('childRunLoop');
     // The code below is synchronous until the loop task is spawned, so a run
     // that does not own its lease fails before any queue, stage, or loop exists.
-    runInSession(runSession, () => assertOwnedExecutionLease(executionId));
+    runInSession(runSession, () => assertOwnedRunLease(runId));
     const loop = new ChildRunInterruptible(
       strategy.ownsBackgroundProcess === true,
     );
@@ -830,11 +830,11 @@ export function startChildRunLoop<TTurn>(
     // them would make a terminal parent look recoverable after it can no longer
     // accept either user input or the child's result.
     let activationDetached = false;
-    const releaseChildActivation = childStream
+    const releaseChildActivation = childRun
       ? () => undefined
-      : runSession.executions.reserveChildActivation({
-          executionId,
-          parentStreamId,
+      : runSession.runs.reserveChildActivation({
+          runId,
+          parentRunId,
           interrupt: () => loop.interrupt(),
           detach: () => {
             activationDetached = true;
@@ -850,10 +850,10 @@ export function startChildRunLoop<TTurn>(
 
     let queue!: FollowUpQueue;
     let queueLease: FollowUpConsumerLease | undefined;
-    let attachedHandle: AgentExecutionHandle | undefined;
+    let attachedHandle: RunHandle | undefined;
     let detachLoopInterrupt: (() => void) | undefined;
     const attachLoopInterrupt = (): void => {
-      const handle = runSession.executions.getHandle(executionId);
+      const handle = runSession.runs.getHandle(runId);
       if (!handle || handle === attachedHandle) return;
       detachLoopInterrupt?.();
       attachedHandle = handle;
@@ -884,7 +884,7 @@ export function startChildRunLoop<TTurn>(
         return ensureError(
           aggregateError(
             [error, ...cleanupErrors],
-            `Child run ${executionId} setup failed and rollback was incomplete`,
+            `Child run ${runId} setup failed and rollback was incomplete`,
           ),
         );
       });
@@ -894,17 +894,17 @@ export function startChildRunLoop<TTurn>(
         strategy.onLoopStart?.(runSession);
         // Revalidate at the state transition itself: setup hooks above may run
         // arbitrary synchronous code after the early fail-fast lease check.
-        runInSession(runSession, () => assertOwnedExecutionLease(executionId));
-        queueLease = runSession.followUps.claimChildRun(executionId);
+        runInSession(runSession, () => assertOwnedRunLease(runId));
+        queueLease = runSession.followUps.claimChildRun(runId);
         if (!queueLease) {
           throw new Error(
-            `Follow-up continuation already has an owner for child ${executionId}.`,
+            `Follow-up continuation already has an owner for child ${runId}.`,
           );
         }
         queue = runSession.followUps.queue(queueLease);
         loop.setQueue(queue);
         attachLoopInterrupt();
-        sessionStage = childStream
+        sessionStage = childRun
           ? logger.openStage(strategy.stageLabel)
           : undefined;
       }),
@@ -917,8 +917,8 @@ export function startChildRunLoop<TTurn>(
     // Keep the child-stream handle itself, not a target snapshot. Finalization
     // untracks the handle before terminal delivery, while detachment still
     // mutates this object's live delivery target.
-    const childStreamHandle = childStream
-      ? runSession.executions.getHandle(executionId)
+    const childRunHandle = childRun
+      ? runSession.runs.getHandle(runId)
       : undefined;
 
     let bestCostUsd: number | undefined;
@@ -930,13 +930,13 @@ export function startChildRunLoop<TTurn>(
         }
         if (strategy.deliveryMode === 'persistOnly' || activationDetached)
           return;
-        const targetStreamId = resolveDeliveryTarget(strategy, () =>
-          childStream ? childStreamHandle?.deliveryTarget : parentStreamId,
+        const targetRunId = resolveDeliveryTarget(strategy, () =>
+          childRun ? childRunHandle?.deliveryTarget : parentRunId,
         );
-        if (!targetStreamId) return;
-        const msg = formatSubagentProgress(executionId, agentName, update);
+        if (!targetRunId) return;
+        const msg = formatSubagentProgress(runId, agentName, update);
         enqueueLiveFollowUp(
-          targetStreamId,
+          targetRunId,
           { text: msg, origin: 'subagent_result' },
           runSession,
         );
@@ -953,7 +953,7 @@ export function startChildRunLoop<TTurn>(
     // A delivery whose wake is still pending. Set right before any `break` out
     // of the loop below (terminal/failed turn) and resolved AFTER this child's
     // own finalize in the `finally` block; never before; so a resumed parent
-    // that immediately waits on this execution always finds it terminal
+    // that immediately waits on this run always finds it terminal
     // (#8093). Interim (non-terminal) turns wake inline, immediately, since no
     // finalize is pending for them.
     let pendingDelivery: PendingChildDelivery | undefined;
@@ -997,12 +997,12 @@ export function startChildRunLoop<TTurn>(
             while (!loop.isInterrupted()) {
               turnIndex += 1;
               const turnRef = mintChildTurnRef(
-                executionId,
+                runId,
                 attemptId,
                 turnIndex,
               );
               emitTurnDiagnostic(logger, 'turn.accepted', {
-                executionId,
+                runId,
                 turnRef,
                 queueOwner: queueLease,
               });
@@ -1013,7 +1013,7 @@ export function startChildRunLoop<TTurn>(
                   .withPermit(
                     persistTurnStateBestEffort(
                       runSession,
-                      executionId,
+                      runId,
                       { activeTurn: turnRef, lastCompletedTurn },
                       logger,
                     ),
@@ -1046,11 +1046,11 @@ export function startChildRunLoop<TTurn>(
               const delivery = yield* deliverTurn({
                 session: runSession,
                 strategy,
-                executionId,
+                runId,
                 resolveDefaultDeliveryTarget: () =>
-                  childStream
-                    ? childStreamHandle?.deliveryTarget
-                    : parentStreamId,
+                  childRun
+                    ? childRunHandle?.deliveryTarget
+                    : parentRunId,
                 logger,
                 turn,
                 turnRef,
@@ -1075,7 +1075,7 @@ export function startChildRunLoop<TTurn>(
               });
               lastCompletedTurn = turnRef;
               emitTurnDiagnostic(logger, 'turn.delivered', {
-                executionId,
+                runId,
                 turnRef,
                 queueOwner: queueLease,
               });
@@ -1087,7 +1087,7 @@ export function startChildRunLoop<TTurn>(
                   new Error(
                     `${strategy.stageLabel} reported a failed turn without throwing.`,
                   );
-                childStream?.failTurn();
+                childRun?.failTurn();
                 pendingDelivery = delivery;
                 break;
               }
@@ -1110,10 +1110,10 @@ export function startChildRunLoop<TTurn>(
               yield* submitPendingDelivery(
                 delivery,
                 runSession,
-                executionId,
+                runId,
                 logger,
               );
-              childStream?.waitForInput();
+              childRun?.waitForInput();
               if (loop.isInterrupted()) break;
 
               const batch = yield* Effect.tryPromise({
@@ -1124,7 +1124,7 @@ export function startChildRunLoop<TTurn>(
 
               const nextRunTurn = strategy.runTurn;
               runner = (signal) => nextRunTurn(batch.items, ports, signal);
-              childStream?.beginTurn();
+              childRun?.beginTurn();
             }
           }),
         ),
@@ -1133,7 +1133,7 @@ export function startChildRunLoop<TTurn>(
         const error = Cause.squash(body.cause);
         sawTurnFailure = true;
         lastTurnErr ??= error;
-        if (error instanceof ExecutionLeaseLostError) loop.interrupt();
+        if (error instanceof RunLeaseLostError) loop.interrupt();
       }
 
       const terminal = yield* Effect.exit(
@@ -1143,7 +1143,7 @@ export function startChildRunLoop<TTurn>(
           if (loop.isInterrupted()) terminationCause = 'interrupted';
           else if (sawTurnFailure) terminationCause = 'turn_failed';
           emitTurnDiagnostic(logger, 'loop.terminated', {
-            executionId,
+            runId,
             queueOwner: queueLease,
             interruptionCause: terminationCause,
           });
@@ -1167,8 +1167,8 @@ export function startChildRunLoop<TTurn>(
             failed: sawTurnFailure,
             cancelled: loop.isInterrupted(),
           });
-          if (childStream) {
-            yield* childStream.finalize({
+          if (childRun) {
+            yield* childRun.finalize({
               outcome,
               error: lastTurnErr,
               stage: sessionStage,
@@ -1176,19 +1176,19 @@ export function startChildRunLoop<TTurn>(
                 kind: 'finalize',
                 flowRecord: retainFlowRecordUnlessCompleted,
               },
-              ...(strategy.autoCloseChildStream === true && {
+              ...(strategy.autoCloseChildRun === true && {
                 autoClose: true,
               }),
             });
           } else {
             // A native turn normally finalizes itself. A stopped between-turn handle remains ours.
-            const handle = runSession.executions.getHandle(executionId);
+            const handle = runSession.runs.getHandle(runId);
             if (handle) {
               yield* finalizeRunTerminal({
                 session: runSession,
                 handle,
-                executions: runSession.executions,
-                streamStatus: runSession.status,
+                runs: runSession.runs,
+                runStatus: runSession.status,
                 outcome,
                 error:
                   sawTurnFailure && lastTurnErr !== undefined
@@ -1209,20 +1209,20 @@ export function startChildRunLoop<TTurn>(
           yield* submitPendingDelivery(
             pendingDelivery,
             runSession,
-            executionId,
+            runId,
             logger,
           );
         }),
       );
       const released = yield* Effect.exit(
-        runSession.releaseExecutionLease(
-          executionId,
+        runSession.releaseRunLease(
+          runId,
           !sawTurnFailure ? params.afterArtifactsDrained : Effect.void,
         ),
       );
       if (Exit.isFailure(released)) {
         logger.warn('Failed to persist final child-run artifacts', {
-          data: { executionId, error: Cause.squash(released.cause) },
+          data: { runId, error: Cause.squash(released.cause) },
         });
       }
       const activation = yield* Effect.exit(
@@ -1238,7 +1238,7 @@ export function startChildRunLoop<TTurn>(
       }
     }).pipe(Effect.uninterruptible);
     return yield* Effect.forkDetach(
-      runSession.executions.launchExecution(executionId, run).pipe(
+      runSession.runs.launchRun(runId, run).pipe(
         Effect.catchCause((cause) =>
           Effect.gen(function* () {
             const error = runStarted

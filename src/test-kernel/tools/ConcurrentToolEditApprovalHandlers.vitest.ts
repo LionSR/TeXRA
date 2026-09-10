@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 import {
@@ -82,11 +82,11 @@ describe('Concurrent session tool edit approval handlers', () => {
     });
 
     const contextA = createRunContext({
-      streamId: 'windowA@model: test.tex' as StreamTabId,
+      runId: 'windowA@model: test.tex' as RunId,
       session: sessionA,
     });
     const contextB = createRunContext({
-      streamId: 'windowB@model: test.tex' as StreamTabId,
+      runId: 'windowB@model: test.tex' as RunId,
       session: sessionB,
     });
 

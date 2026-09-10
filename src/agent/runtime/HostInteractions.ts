@@ -11,7 +11,7 @@ import {
   type PlanApprovalPermission,
   type ProgressPermissionKind,
   type RetryPermission,
-  type StreamTabId,
+  type RunId,
   type UserQuestionAnswers,
   type ExternalInquiryPermission,
   type UserQuestionPermission,
@@ -185,7 +185,7 @@ export type HostPlanApprovalRequest = Readonly<PlanApprovalPermission>;
 export interface HostBashApprovalRequest {
   readonly command: string;
   readonly cwd?: string | null;
-  readonly streamId?: StreamTabId | null;
+  readonly runId?: RunId | null;
   /**
    * What the UI shows for this request, built once at the tool boundary
    * (`prepareBashApprovalPrompt`): the payload of the `approval.requested`
@@ -298,7 +298,7 @@ export function cancellationResultFor<K extends SettledInteractionKind>(
 }
 
 export interface HostApprovalBypassStateUpdate {
-  readonly streamId: StreamTabId;
+  readonly runId: RunId;
   readonly kind: ApprovalBypassKind;
   readonly bypassActive: boolean;
 }
@@ -308,13 +308,13 @@ export interface HostApprovalBypassStateUpdate {
  *
  * - `{}` — cancel every pending request.
  * - `{ kind }` — cancel every pending request of that kind.
- * - `{ streamId }` — cancel every pending request on that stream.
- * - `{ streamId, kind }` — cancel that kind on that stream.
- * - `streamId: null` — cancel only requests with no concrete stream
- *   (the streamless/unscoped sweep).
+ * - `{ runId }` — cancel every pending request on that stream.
+ * - `{ runId, kind }` — cancel that kind on that stream.
+ * - `runId: null` — cancel only requests with no concrete stream
+ *   (the runless/unscoped sweep).
  */
 export interface HostInteractionCancelSelector {
-  readonly streamId?: StreamTabId | null;
+  readonly runId?: RunId | null;
   readonly kind?: ProgressPermissionKind;
   readonly cause?: string;
 }
@@ -323,16 +323,16 @@ export interface HostInteractionCancelSelector {
 export function matchesCancelSelector(
   pending: {
     readonly kind: ProgressPermissionKind;
-    readonly streamId?: StreamTabId;
+    readonly runId?: RunId;
   },
   selector: HostInteractionCancelSelector,
 ): boolean {
   if (selector.kind !== undefined && pending.kind !== selector.kind) {
     return false;
   }
-  if (selector.streamId === undefined) return true;
-  if (selector.streamId === null) return !pending.streamId;
-  return pending.streamId === selector.streamId;
+  if (selector.runId === undefined) return true;
+  if (selector.runId === null) return !pending.runId;
+  return pending.runId === selector.runId;
 }
 
 /**
@@ -396,12 +396,12 @@ interface HostInteractionAttachment {
 
 interface PendingSessionInteraction {
   readonly kind: ProgressPermissionKind;
-  readonly streamId?: StreamTabId;
+  readonly runId?: RunId;
   /** The `approval.requested` fact this request published, so its
    *  `approval.resolved` names the same request; absent while no session is
    *  bound or the request names no stream. */
   readonly fact?: {
-    readonly streamId: StreamTabId;
+    readonly runId: RunId;
     readonly requestId: string;
   };
   readonly dispatch: (
@@ -586,7 +586,7 @@ export class SessionHostInteractions implements HostInteractions {
   ): Promise<ToolEditApprovalResult> {
     return this.enqueue(
       'toolEdit',
-      request.streamId,
+      request.runId,
       (interactions) => interactions.requestToolEditApproval?.(request),
       { kind: 'toolEdit', data: request.permission },
     );
@@ -597,7 +597,7 @@ export class SessionHostInteractions implements HostInteractions {
   ): Promise<BashSettlement> {
     return this.enqueue(
       'bash',
-      request.streamId,
+      request.runId,
       (interactions) => interactions.requestBashApproval?.(request),
       { kind: 'bash', data: request.permission },
     );
@@ -608,7 +608,7 @@ export class SessionHostInteractions implements HostInteractions {
   ): Promise<PlanApprovalResult> {
     return this.enqueue(
       'planApproval',
-      request.streamId,
+      request.runId,
       (interactions) => interactions.requestPlanApproval?.(request),
       { kind: 'planApproval', data: request },
     );
@@ -619,7 +619,7 @@ export class SessionHostInteractions implements HostInteractions {
   ): Promise<ProposalResult> {
     return this.enqueue(
       'proposal',
-      request.streamId,
+      request.runId,
       (interactions) => interactions.requestAgentProposal?.(request),
       { kind: 'proposal', data: request },
     );
@@ -631,7 +631,7 @@ export class SessionHostInteractions implements HostInteractions {
   ): Promise<RetryResult> {
     return this.enqueue(
       'retry',
-      request.streamId,
+      request.runId,
       (interactions) => interactions.requestRetry?.(request, options),
       { kind: 'retry', data: request },
       options?.prepareRetry,
@@ -643,7 +643,7 @@ export class SessionHostInteractions implements HostInteractions {
   ): Promise<UserQuestionSettlement> {
     return this.enqueue(
       'userQuestion',
-      request.streamId || undefined,
+      request.runId || undefined,
       (interactions) => interactions.askUserQuestion?.(request),
       { kind: 'userQuestion', data: request },
     );
@@ -724,9 +724,9 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   /** Settle a removed stream's local requests without appending to its closed aggregate. */
-  discardStream(streamId: StreamTabId): void {
+  discardRun(runId: RunId): void {
     for (const pending of this.pending) {
-      if (pending.streamId !== streamId) continue;
+      if (pending.runId !== runId) continue;
       this.pending.delete(pending);
       pending.cancellationRequested = true;
       pending.settle(pending.cancellationResult('Stream removed.'));
@@ -803,7 +803,7 @@ export class SessionHostInteractions implements HostInteractions {
    */
   private enqueue<K extends SettledInteractionKind>(
     kind: K,
-    streamId: StreamTabId | null | undefined,
+    runId: RunId | null | undefined,
     dispatch: (
       interactions: HostInteractions,
     ) => Promise<HostInteractionResultByKind[K]> | undefined,
@@ -816,10 +816,10 @@ export class SessionHostInteractions implements HostInteractions {
     }
 
     return new Promise<TResult>((resolve, reject) => {
-      const fact = this.publishRequested(streamId ?? undefined, permission);
+      const fact = this.publishRequested(runId ?? undefined, permission);
       const pending: PendingSessionInteraction = {
         kind,
-        streamId: streamId ?? undefined,
+        runId: runId ?? undefined,
         ...(fact ? { fact } : {}),
         dispatch,
         cancellationResult: (cause) => cancellationResultFor(kind, cause),
@@ -833,23 +833,23 @@ export class SessionHostInteractions implements HostInteractions {
     });
   }
 
-  /** A request naming a stream is a run fact; a streamless one (an unscoped
+  /** A request naming a stream is a run fact; a runless one (an unscoped
    *  question) has no aggregate to publish on. */
   private publishRequested(
-    streamId: StreamTabId | undefined,
+    runId: RunId | undefined,
     payload: PermissionPayload,
   ): PendingSessionInteraction['fact'] {
-    if (!streamId) return undefined;
+    if (!runId) return undefined;
     const requestId = payload.data.requestId;
     this.session.publish([
       {
         type: 'approval.requested',
-        aggregateId: qualifyAggregateId('run', streamId),
+        aggregateId: qualifyAggregateId('run', runId),
         requestId,
         payload: redactedForFact(payload),
       },
     ]);
-    return { streamId, requestId };
+    return { runId, requestId };
   }
 
   private activateCurrentAttachment(
@@ -953,7 +953,7 @@ export class SessionHostInteractions implements HostInteractions {
     try {
       logger.warn(
         `No interaction host is attached: parked the ${pending.kind} request ` +
-          `(stream ${pending.streamId ?? 'none'}) until one attaches. A ` +
+          `(stream ${pending.runId ?? 'none'}) until one attaches. A ` +
           'headless embedder must attach at least `{ cancel: () => {} }`, or ' +
           'blocking requests never settle.',
       );
@@ -979,7 +979,7 @@ export class SessionHostInteractions implements HostInteractions {
       this.session.publish([
         {
           type: 'approval.resolved',
-          aggregateId: qualifyAggregateId('run', pending.fact.streamId),
+          aggregateId: qualifyAggregateId('run', pending.fact.runId),
           requestId: pending.fact.requestId,
         },
       ]);

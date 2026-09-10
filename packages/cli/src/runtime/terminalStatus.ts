@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 
-import { getExecutionRecords } from '@agent/storage';
+import { getRunRecords } from '@agent/storage';
 import type { SessionHandle, runAgent } from '@agent/runtime';
-import { RUN_OUTCOME, type RunOutcome, STREAM_PHASE } from '@shared/schemas';
-import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
+import { RUN_OUTCOME, type RunOutcome, RUN_PHASE } from '@shared/schemas';
+import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
@@ -26,18 +26,31 @@ export type CliToolUseRunResult = Extract<
   { category: 'toolUse' }
 >;
 
+/**
+ * The 0.40 wire's result payload: the run's result with its id under the key
+ * the frozen `agent-result` / `result` records promised (`executionId`). The
+ * internal result carries `runId`; this projection is the only place the old
+ * key is spelled, until S5 versions the CLI contract.
+ */
+export function cliRunResultPayload<R extends { readonly runId: string }>(
+  result: R,
+): Omit<R, 'runId'> & { readonly executionId: string } {
+  const { runId, ...rest } = result;
+  return { ...rest, executionId: runId };
+}
+
 /** Display text for a finished tool-use run: the last response if present,
- *  otherwise a terse status/execution-id summary. */
+ *  otherwise a terse status/run-id summary. */
 export function toolUseResultText(result: CliToolUseRunResult): string {
   return (
     result.response?.trim() ||
-    `${runOutcomeToExecutionStatus(result.outcome)}\nExecution: ${result.executionId}`
+    `${runOutcomeToCliRunStatus(result.outcome)}\nExecution: ${result.runId}`
   );
 }
 
 /** Terminal state of a CLI turn: a run outcome, or a resumed subagent parked
  *  back to WAITING (a successfully completed turn, not a finished agent). */
-export type TurnOutcome = RunOutcome | typeof STREAM_PHASE.WAITING;
+export type TurnOutcome = RunOutcome | typeof RUN_PHASE.WAITING;
 
 /** Map a run outcome to the CLI process exit code. A resumed subagent that
  *  parks back to WAITING is a successfully completed turn.
@@ -58,14 +71,14 @@ export function runOutcomeExitCode(outcome: TurnOutcome): CliExitCode {
 }
 
 /** Read the terminal outcome together with the durability fact needed before
- *  advertising persisted-execution recovery. */
+ *  advertising persisted-run recovery. */
 export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
   function* (
     session: SessionHandle,
     result: ExecuteAgentResult,
     reportReadFailure?: (error: Error) => void,
   ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
-    return yield* getExecutionRecords(session, result.executionId)
+    return yield* getRunRecords(session, result.runId)
       .readMeta()
       .pipe(
         Effect.map((meta) => ({
@@ -76,7 +89,7 @@ export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
           Effect.sync(() => {
             reportReadFailure?.(
               new Error(
-                `Could not verify the persisted outcome for execution ${result.executionId}; using the current run outcome: ${toErrorMessage(error)}`,
+                `Could not verify the persisted outcome for run ${result.runId}; using the current run outcome: ${toErrorMessage(error)}`,
                 { cause: error },
               ),
             );

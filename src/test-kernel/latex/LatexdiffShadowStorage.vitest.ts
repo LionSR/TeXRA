@@ -10,7 +10,7 @@ import { setLogSink } from '@logger/logSink';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
+import type { RunId, OutputFileInfo } from '@shared/schemas';
 import { getCoreSettingDefault } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -145,9 +145,9 @@ describe('LaTeXdiffService shadow output', () => {
         makeTempDir('texra-latexdiff-rounds-', tempDirs),
       );
       const workspaceDir = path.join(tempDir, 'workspace');
-      const executionId: ExecutionId = 'abcdef';
-      const firstDir = path.join(tempDir, 'executions', executionId, 'r1');
-      const secondDir = path.join(tempDir, 'executions', executionId, 'r2');
+      const runId: RunId = 'abcdef';
+      const firstDir = path.join(tempDir, 'executions', runId, 'r1');
+      const secondDir = path.join(tempDir, 'executions', runId, 'r2');
       const basePath = path.join(workspaceDir, 'paper.tex');
       const firstPath = path.join(firstDir, 'paper.tex');
       const secondPath = path.join(secondDir, 'paper.tex');
@@ -175,12 +175,12 @@ describe('LaTeXdiffService shadow output', () => {
       const first = createRunStorageLocation(
         firstPath,
         'r1/paper.tex',
-        executionId,
+        runId,
       );
       const second = createRunStorageLocation(
         secondPath,
         'r2/paper.tex',
-        executionId,
+        runId,
       );
       const output = (
         round: number,

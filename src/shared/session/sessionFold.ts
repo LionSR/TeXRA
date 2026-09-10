@@ -473,7 +473,7 @@ function createStream(view: SessionView, event: RunStartEvent): StreamView {
   const identity = event.identity;
   const common = {
     id,
-    executionId: event.executionId,
+    runId: event.runId,
     identity,
     isRemote: event.isRemote,
     ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,

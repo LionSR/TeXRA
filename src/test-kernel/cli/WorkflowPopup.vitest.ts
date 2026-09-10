@@ -8,22 +8,22 @@ import { WorkflowPopup } from '@cli/chat/tui/panes/WorkflowPopup';
 import type { WorkflowPopupView } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
-  type StreamTabId,
+  type RunId,
   type TaskGroup,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
-import { workflowRunModel } from '@shared/streams/workflowRunModel';
+import { workflowRunModel } from '@shared/runs/workflowRunModel';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   bindTestSessionView,
-  makeStreamView,
+  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
 
-const ROOT = 'workflow-root' as StreamTabId;
+const ROOT = 'workflow-root' as RunId;
 
 const VIEW: WorkflowPopupView = {
   phaseIndex: 0,
@@ -64,13 +64,13 @@ async function renderPopup(
     taskGroups,
     rows,
     plan: undefined,
-    streamPhase: undefined,
+    runPhase: undefined,
     runDurablyFinal: false,
     childProgress: new Map(),
   });
   seedView(
     viewWith([
-      makeStreamView({
+      makeRunView({
         id: ROOT,
         category: AgentCategory.Workflow,
         identity: { kind: 'multiAgentWorkflow', workflowName: 'review' },
@@ -91,13 +91,13 @@ async function renderPopup(
       availableRows,
       model,
       onClose: vi.fn(),
-      onFocusStream: vi.fn(),
-      onKillExecution: vi.fn(),
+      onFocusRun: vi.fn(),
+      onKillRun: vi.fn(),
       onOpenTranscript: vi.fn(),
       onViewChange,
       onWorkflowControl: vi.fn(),
       pendingApprovals: new Map(),
-      streamId: ROOT,
+      runId: ROOT,
       view: VIEW,
     }),
     { columns: 100 },

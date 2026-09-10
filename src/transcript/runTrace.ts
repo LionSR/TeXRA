@@ -13,7 +13,7 @@ export interface RunTrace {
  * id here: its log events reach the durable transcript through
  * `SessionHandle.attachRunTrace`, which every host renders. A per-run output
  * channel would duplicate them into a surface keyed by an opaque stream id,
- * created and disposed once per execution.
+ * created and disposed once per run.
  */
 export function createRunTrace(residency?: {
   readonly close: () => void;

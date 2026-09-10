@@ -39,13 +39,13 @@ export function runBoardScene(
   iconButton: IconButton,
 ): TemplateResult {
   const view = fold();
-  const stream = view.streams.get(ROOT);
+  const stream = view.runs.get(ROOT);
   if (stream?.category !== 'workflow') {
     throw new Error('a board fixture must fold a workflow root');
   }
   const surface = applySurfaceAction(emptySurface(view.key), {
     kind: 'select',
-    streamId: ROOT,
+    runId: ROOT,
   });
   return html`<div class="h-bar">
       ${iconButton('list-ul', 'Sessions')}

@@ -231,10 +231,10 @@ export function installWebviewTransport(): WebviewTransport {
  *  run's own, from the seq the view retained for it. */
 export function transcriptAggregates(
   view: SessionView,
-  streamId: RunId | null,
+  runId: RunId | null,
 ): Subscribe['aggregates'] {
-  if (streamId === null) return [];
-  const stream = view.streams.get(streamId);
+  if (runId === null) return [];
+  const stream = view.runs.get(runId);
   if (!stream) return [];
   const id = qualifyAggregateId('run', stream.id);
   return [{ id, fromSeq: view.folded.get(id) ?? 0 }];

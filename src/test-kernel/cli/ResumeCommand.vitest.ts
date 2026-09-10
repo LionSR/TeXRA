@@ -11,17 +11,17 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { flowKey, PersistedFlowStateError } from '@agent/node/persistedFlow';
 import {
-  getExecutionRecords,
-  getExecutionStore,
-} from '@agent/storage/ExecutionKVStore';
+  getRunRecords,
+  getRunStore,
+} from '@agent/storage/RunKVStore';
 import {
-  acquireFreshExecutionLease,
-  releaseOwnedExecutionLease,
-} from '@agent/storage/executionLease';
+  acquireFreshRunLease,
+  releaseOwnedRunLease,
+} from '@agent/storage/runLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { aggregateId } from '@shared/schemas';
-import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
+import type { RunId, RunMeta } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -84,7 +84,7 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
   runChat: mocks.runChat,
 }));
 
-const EXECUTION_ID = 'eec001' as ExecutionId;
+const EXECUTION_ID = 'eec001' as RunId;
 const STREAM_ID = 'planner#eec001';
 
 const TOOL_USE_CONFIG = AgentConfigSchema.parse({
@@ -101,26 +101,26 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse({
 
 const STAMPED_META = {
   timestamp: '2026-07-31T00:00:00.000Z',
-  streamId: STREAM_ID,
+  runId: STREAM_ID,
   identity: { kind: 'agent', agent: 'planner' },
-} as unknown as ExecutionMeta;
+} as unknown as RunMeta;
 
-/** Reset and seed the real (fake-platform-backed) execution store. */
-async function seedExecution(seed: {
+/** Reset and seed the real (fake-platform-backed) run store. */
+async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
-  readonly meta?: ExecutionMeta;
+  readonly meta?: RunMeta;
   readonly checkpoint?: boolean;
 }): Promise<void> {
   const session = createProcessSession();
   mocks.initializeCliTranscriptSession.mockResolvedValue(session);
-  const store = getExecutionStore(EXECUTION_ID);
+  const store = getRunStore(EXECUTION_ID);
   await store.delete(flowKey(EXECUTION_ID));
   await Effect.runPromise(
     session.commit([
       {
         type: 'run.start',
         aggregateId: aggregateId('stream', STREAM_ID),
-        executionId: EXECUTION_ID,
+        runId: EXECUTION_ID,
         identity: { kind: 'agent', agent: seed.config?.agent ?? 'planner' },
         category: seed.config?.agentCategory ?? AgentCategory.ToolUse,
         userFollowUpSupport: 'unsupported',
@@ -130,7 +130,7 @@ async function seedExecution(seed: {
   );
   if (seed.config)
     await Effect.runPromise(
-      getExecutionRecords(session, EXECUTION_ID).writeRunRecord(seed.config),
+      getRunRecords(session, EXECUTION_ID).writeRunRecord(seed.config),
     );
   if (seed.checkpoint !== false) {
     await store.write(flowKey(EXECUTION_ID), {
@@ -152,25 +152,25 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
-async function run(context: CliContext, id: ExecutionId = EXECUTION_ID) {
-  const { runResumeExecution } = await import('@cli/commands/resumeExecution');
-  return runResumeExecution(context, id);
+async function run(context: CliContext, id: RunId = EXECUTION_ID) {
+  const { runResumeCommand } = await import('@cli/commands/resumeRun');
+  return runResumeCommand(context, id);
 }
 
 async function stubWorkflowResume(config: AgentConfig): Promise<void> {
-  await seedExecution({ config, meta: STAMPED_META });
+  await seedRunRecord({ config, meta: STAMPED_META });
   mocks.retrieveSessionResumeData.mockResolvedValue({
     type: 'workflow',
     agentConfig: config,
-    executionId: EXECUTION_ID,
+    runId: EXECUTION_ID,
   });
 }
 
-describe('runResumeExecution', () => {
+describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
-    await seedExecution({ config: TOOL_USE_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: TOOL_USE_CONFIG, meta: STAMPED_META });
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'correct',
       category: AgentCategory.Workflow,
@@ -204,12 +204,12 @@ describe('runResumeExecution', () => {
     );
   });
 
-  it('resumes a workflow run headless under its persisted execution id', async () => {
-    await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+  it('resumes a workflow run headless under its persisted run id', async () => {
+    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockResolvedValue({
       type: 'workflow',
       agentConfig: WORKFLOW_CONFIG,
-      executionId: EXECUTION_ID,
+      runId: EXECUTION_ID,
       modelHandlerCompatibilityKey: 'anthropic',
     });
 
@@ -221,7 +221,7 @@ describe('runResumeExecution', () => {
       WORKFLOW_CONFIG,
       expect.any(Object),
       expect.objectContaining({
-        executionId: EXECUTION_ID,
+        runId: EXECUTION_ID,
         modelHandlerCompatibilityKey: 'anthropic',
       }),
     );
@@ -307,7 +307,7 @@ describe('runResumeExecution', () => {
   });
 
   it('reports a missing workflow agent as a usage error', async () => {
-    await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.resolveCliLaunchAgent.mockRejectedValue(
       new CliUsageError('Agent not found: correct.'),
     );
@@ -355,19 +355,19 @@ describe('runResumeExecution', () => {
     );
   });
 
-  it('reports an unknown execution id as a usage error', async () => {
-    await seedExecution({ config: null, meta: STAMPED_META });
+  it('reports an unknown run id as a usage error', async () => {
+    await seedRunRecord({ config: null, meta: STAMPED_META });
 
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Execution not found: ${EXECUTION_ID}`,
+      `Run not found: ${EXECUTION_ID}`,
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
   it('reports a run with no checkpoint as finished', async () => {
-    await seedExecution({
+    await seedRunRecord({
       config: TOOL_USE_CONFIG,
       meta: STAMPED_META,
       checkpoint: false,
@@ -381,23 +381,23 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('reports a live execution instead of failing silently', async () => {
-    await acquireFreshExecutionLease(EXECUTION_ID);
+  it('reports a live run instead of failing silently', async () => {
+    await acquireFreshRunLease(EXECUTION_ID);
     try {
       await expect(run(cliContext())).resolves.toBe(2);
 
       expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-        `Execution ${EXECUTION_ID} is already running in this process.`,
+        `Run ${EXECUTION_ID} is already running in this process.`,
       );
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
-      await releaseOwnedExecutionLease(EXECUTION_ID);
+      await releaseOwnedRunLease(EXECUTION_ID);
     }
   });
 
   it('identifies lease inspection failures separately from session loading', async () => {
-    const lease = await import('@agent/storage/executionLease');
-    vi.spyOn(lease, 'inspectExecutionLease').mockRejectedValueOnce(
+    const lease = await import('@agent/storage/runLease');
+    vi.spyOn(lease, 'inspectRunLease').mockRejectedValueOnce(
       new Error('lease disk offline'),
     );
 
@@ -406,7 +406,7 @@ describe('runResumeExecution', () => {
     // An unreadable lease says nothing about the checkpoint, so it keeps the
     // operational wording rather than telling the user to delete the run.
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not read the state of execution ${EXECUTION_ID}: lease unreadable (lease disk offline)`,
+      `Could not read the state of run ${EXECUTION_ID}: lease unreadable (lease disk offline)`,
     );
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
@@ -417,7 +417,7 @@ describe('runResumeExecution', () => {
   // advertises a row from that file alone, so what the user is told is that
   // the saved state could not be loaded, never that the run finished.
   it('separates an unusable checkpoint from a run that finished', async () => {
-    await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockResolvedValue(null);
 
     await expect(run(cliContext())).resolves.toBe(2);
@@ -431,7 +431,7 @@ describe('runResumeExecution', () => {
   // A transient failure over a checkpoint that is still on disk says nothing
   // about the record, so it stays the operational error it was.
   it('reports a transient resume-state load failure as an operational error', async () => {
-    await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
 
     await expect(run(cliContext())).resolves.toBe(1);
@@ -446,7 +446,7 @@ describe('runResumeExecution', () => {
   // listing advertised from the file alone, so it earns the unusable-state
   // refusal instead of an internal retrieval message.
   it('refuses a checkpoint whose record cannot be resumed as unusable state', async () => {
-    await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockRejectedValue(
       new PersistedFlowStateError(EXECUTION_ID, 'unsupported-record'),
     );

@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
 import { proposalApprovals } from '@tools/approval';
@@ -50,14 +50,14 @@ function installTestPlatform(): Promise<void> {
 
 async function inToolContext<T>(
   interactions: ReturnType<typeof createRecordingHost>['interactions'],
-  streamId: StreamTabId,
+  runId: RunId,
   run: () => T,
 ): Promise<Awaited<T>> {
   const detach = defaultSession().interactions.use(interactions);
   try {
     return await withRunContext(
       createRunContext({
-        streamId,
+        runId,
         session: defaultSession(),
       }),
       () => withToolFileInteractionContext({ tracker: {} as never }, run),
@@ -83,9 +83,9 @@ describe('human prompt progress events', () => {
 
   it('publishes bash approval events through the tool runtime host', async () => {
     const explicit = createRecordingHost();
-    const streamId = 'stream:bash-approval' as StreamTabId;
+    const runId = 'stream:bash-approval' as RunId;
 
-    const approval = inToolContext(explicit.interactions, streamId, () =>
+    const approval = inToolContext(explicit.interactions, runId, () =>
       requestBashApproval({
         command: 'echo hello',
         cwd: '/tmp/texra-project',
@@ -113,7 +113,7 @@ describe('human prompt progress events', () => {
           command: 'echo hello',
           cwd: '/tmp/texra-project',
           allowBypass: true,
-          streamId,
+          runId,
         },
       },
       {
@@ -125,10 +125,10 @@ describe('human prompt progress events', () => {
 
   it('publishes user question events through the tool runtime host', async () => {
     const explicit = createRecordingHost();
-    const streamId = 'stream:user-question' as StreamTabId;
+    const runId = 'stream:user-question' as RunId;
     const tool = new AskUserQuestionTool();
 
-    const result = inToolContext(explicit.interactions, streamId, () =>
+    const result = inToolContext(explicit.interactions, runId, () =>
       tool.call({
         context: 'Choose the next step.',
         questions: [
@@ -173,7 +173,7 @@ describe('human prompt progress events', () => {
           ],
           context: 'Choose the next step.',
           allowBypass: false,
-          streamId,
+          runId,
         },
       },
       {
@@ -187,35 +187,35 @@ describe('human prompt progress events', () => {
     {
       label: 'tool-edit',
       kind: 'toolEdit',
-      setBypass: (streamId: StreamTabId, enabled: boolean) =>
-        currentSession().approvals.toolEdit.bypass.setBypass(streamId, enabled),
+      setBypass: (runId: RunId, enabled: boolean) =>
+        currentSession().approvals.toolEdit.bypass.setBypass(runId, enabled),
     },
     {
       label: 'bash',
       kind: 'bash',
-      setBypass: (streamId: StreamTabId, enabled: boolean) =>
-        currentSession().approvals.bash.bypass.setBypass(streamId, enabled),
+      setBypass: (runId: RunId, enabled: boolean) =>
+        currentSession().approvals.bash.bypass.setBypass(runId, enabled),
     },
     {
       label: 'proposal',
       kind: 'superYolo',
-      setBypass: (streamId: StreamTabId, enabled: boolean) =>
-        proposalApprovals().setBypass(streamId, enabled),
+      setBypass: (runId: RunId, enabled: boolean) =>
+        proposalApprovals().setBypass(runId, enabled),
     },
   ])(
     'publishes $label bypass changes through the explicit runtime host',
     ({ kind, setBypass }) => {
       const explicit = createRecordingHost();
-      const streamId = `stream:${kind}-bypass` as StreamTabId;
+      const runId = `stream:${kind}-bypass` as RunId;
       const detach = defaultSession().interactions.use(explicit.interactions);
 
       try {
-        setBypass(streamId, true);
+        setBypass(runId, true);
 
         expect(explicit.events).toEqual([
           {
             event: 'setApprovalBypassState',
-            payload: { streamId, kind, bypassActive: true },
+            payload: { runId, kind, bypassActive: true },
           },
         ]);
       } finally {
@@ -226,14 +226,14 @@ describe('human prompt progress events', () => {
 
   it('keeps bash and edit session bypasses independent', async () => {
     const explicit = createRecordingHost();
-    const streamId = 'stream:bypass-independence' as StreamTabId;
+    const runId = 'stream:bypass-independence' as RunId;
 
     try {
-      currentSession().approvals.toolEdit.bypass.setBypass(streamId, true, {
+      currentSession().approvals.toolEdit.bypass.setBypass(runId, true, {
         silent: true,
       });
 
-      const approval = inToolContext(explicit.interactions, streamId, () =>
+      const approval = inToolContext(explicit.interactions, runId, () =>
         requestBashApproval({ command: 'echo still asks' }),
       );
 
@@ -251,20 +251,20 @@ describe('human prompt progress events', () => {
       expect(show.payload.command).toBe('echo still asks');
 
       explicit.events.length = 0;
-      currentSession().approvals.bash.bypass.setBypass(streamId, true, {
+      currentSession().approvals.bash.bypass.setBypass(runId, true, {
         silent: true,
       });
 
       const bypassed = await inToolContext(
         explicit.interactions,
-        streamId,
+        runId,
         () => requestBashApproval({ command: 'echo bypassed' }),
       );
 
       expect(bypassed).toEqual({ action: 'approve' });
       expect(explicit.events).toEqual([]);
 
-      currentSession().approvals.toolEdit.bypass.setBypass(streamId, false, {
+      currentSession().approvals.toolEdit.bypass.setBypass(runId, false, {
         silent: true,
       });
 
@@ -278,7 +278,7 @@ describe('human prompt progress events', () => {
       };
 
       const editApproval = await withRunContext(
-        createRunContext({ streamId }),
+        createRunContext({ runId }),
         () =>
           requestToolEditApproval({
             path: 'draft.tex',

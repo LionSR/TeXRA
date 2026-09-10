@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import { clearStoreCache, getRunStore } from '@agent/storage';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import {
   WorkflowRunAbortError,
@@ -9,14 +9,14 @@ import {
 } from '@agent/workflowScript';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
+  type RunId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
-const executionId = '7154progress' as ExecutionId;
+const runId = '7154progress' as RunId;
 const meta = `export const meta = {
   name: 'progress-test',
   description: 'tests workflow progress projection',
@@ -70,7 +70,7 @@ function runScript(
   options: Partial<ScriptRunOptions> = {},
 ): ReturnType<typeof runPersistedWorkflowScriptWithProgress> {
   return runPersistedWorkflowScriptWithProgress(trace, {
-    store: getExecutionStore(executionId),
+    store: getRunStore(runId),
     checkpointId,
     script,
     runAgent: async () => 'done',
@@ -500,7 +500,7 @@ return await agent('Read', { phase: 'Review' })`;
     const { trace, events } = recordingTrace();
     const runner = vi.fn(() => Promise.reject(new Error('must not run')));
     await runPersistedWorkflowScriptWithProgress(trace, {
-      store: getExecutionStore(executionId),
+      store: getRunStore(runId),
       checkpointId: 'cached',
       runAgent: runner,
     });
@@ -518,7 +518,7 @@ return await agent('Read', { phase: 'Review' })`;
     const script = `${meta}
 phase('Review')
 return await agent('Read', { id: 'read' })`;
-    const store = () => getExecutionStore(executionId);
+    const store = () => getRunStore(runId);
     const first = await runScript(
       recordingTrace().trace,
       'twice-resumed',
@@ -692,7 +692,7 @@ await agent('First')
 return await agent('Second')`;
     const { trace, events } = recordingTrace();
     // The runner reports spend the way production does; the engine folds it
-    // into the execution snapshot and stamps it on the terminal event.
+    // into the run snapshot and stamps it on the terminal event.
     await runScript(trace, 'live-cost', script, {
       runAgent: async (invocation: WorkflowAgentInvocation) => {
         invocation.report?.({ costUsd: 0.05 });
@@ -734,7 +734,7 @@ return await agent('Draft')`,
         runAgent: async (invocation: WorkflowAgentInvocation) => {
           invocation.report?.({ model: 'deepseekT' });
           invocation.report?.({
-            childStreamId: 'draft@deepseekT#abcdef' as StreamTabId,
+            childRunId: 'draft@deepseekT#abcdef' as RunId,
           });
           invocation.report?.({ costUsd: 0.02 });
           return 'done';
@@ -746,7 +746,7 @@ return await agent('Draft')`,
     expect(workflowCallEvent(events, 'Draft', 'completed')?.call).toMatchObject(
       {
         model: 'deepseekT',
-        childStreamId: 'draft@deepseekT#abcdef',
+        childRunId: 'draft@deepseekT#abcdef',
         durationMs: expect.any(Number),
         totalCostUsd: 0.02,
       },
@@ -807,7 +807,7 @@ return await agent('Late skip')`,
         runAgent: async (invocation: WorkflowAgentInvocation) => {
           invocation.report?.({
             model: 'kimiK2',
-            childExecutionId: 'da7e5c1b' as ExecutionId,
+            childRunId: 'da7e5c1b' as RunId,
             costUsd: 0.04,
           });
           markStarted?.();
@@ -827,7 +827,7 @@ return await agent('Late skip')`,
     );
 
     await started;
-    control('da7e5c1b' as ExecutionId, 'skip');
+    control('da7e5c1b' as RunId, 'skip');
     await run;
 
     expect(
@@ -937,7 +937,7 @@ return await pending`,
         trace,
         'runner-abort',
         `${meta}
-return await agent('Abort', { phase: 'Execution' })`,
+return await agent('Abort', { phase: 'Run' })`,
         {
           runAgent: async (invocation: WorkflowAgentInvocation) => {
             invocation.report?.({ model: 'abort-model', costUsd: 0.06 });
@@ -948,7 +948,7 @@ return await agent('Abort', { phase: 'Execution' })`,
       ),
     ).rejects.toThrow('fatal runner error');
 
-    const phaseId = stageId(events, 'Execution');
+    const phaseId = stageId(events, 'Run');
     expect(workflowCallEvent(events, 'Abort', 'failed')).toMatchObject({
       stageId: phaseId,
       call: {
@@ -983,12 +983,12 @@ return await agent('Abort', { phase: 'Execution' })`,
         trace,
         'orphaned-runner',
         `${meta}
-agent('Orphaned', { phase: 'Execution' })
+agent('Orphaned', { phase: 'Run' })
 return 'guest success'`,
         {
           runAgent: async (invocation: WorkflowAgentInvocation) => {
             invocation.report?.({
-              childStreamId: 'orphaned@model#abcdef' as StreamTabId,
+              childRunId: 'orphaned@model#abcdef' as RunId,
               costUsd: 0.03,
             });
             markStarted?.();
@@ -1002,13 +1002,13 @@ return 'guest success'`,
       await vi.advanceTimersByTimeAsync(5_000);
       await run;
 
-      const phaseId = stageId(events, 'Execution');
+      const phaseId = stageId(events, 'Run');
       expect(workflowCallEvent(events, 'Orphaned', 'failed')).toMatchObject({
         stageId: phaseId,
         call: {
           error: 'The workflow ended before this call completed.',
           totalCostUsd: 0.03,
-          childStreamId: 'orphaned@model#abcdef',
+          childRunId: 'orphaned@model#abcdef',
         },
       });
       expect(events).toContainEqual({

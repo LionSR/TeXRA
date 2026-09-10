@@ -6,7 +6,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
-import type { ExecutionListingEntry } from '@agent/storage';
+import type { RunListingEntry } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   __resetUserConfigWarningDedupeForTests,
@@ -17,7 +17,7 @@ import {
   loadWorkspaceCliConfig,
 } from '@cli/runtime/cliConfig';
 import * as logSinks from '@cli/runtime/logSinks';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -47,7 +47,7 @@ function enoentError(): NodeJS.ErrnoException {
 }
 
 const mocks = vi.hoisted(() => ({
-  listExecutions: vi.fn(async (): Promise<ExecutionListingEntry[]> => []),
+  listRuns: vi.fn(async (): Promise<RunListingEntry[]> => []),
 }));
 const resolveChatDefaults = (
   options: Parameters<typeof nativeResolveChatDefaults>[0],
@@ -55,9 +55,9 @@ const resolveChatDefaults = (
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  listExecutions: () =>
+  listRuns: () =>
     Effect.tryPromise({
-      try: () => mocks.listExecutions(),
+      try: () => mocks.listRuns(),
       catch: ensureError,
     }),
 }));
@@ -73,7 +73,7 @@ vi.mock('@cli/runtime/cliConfig', async (importOriginal) => {
   };
 });
 
-const mockedListExecutions = mocks.listExecutions;
+const mockedListRuns = mocks.listRuns;
 const mockedLoadWorkspaceCliConfig = vi.mocked(loadWorkspaceCliConfig);
 
 function historyEntry(
@@ -83,7 +83,7 @@ function historyEntry(
 ) {
   return {
     kind: 'run',
-    id: 'abc123' as ExecutionId,
+    id: 'abc123' as RunId,
     timestamp,
     identity: { kind: 'agent', agent },
     checkpointPresent: false,
@@ -93,7 +93,7 @@ function historyEntry(
       agentCategory: AgentCategory.ToolUse,
       ...overrides,
     }),
-  } satisfies ExecutionListingEntry;
+  } satisfies RunListingEntry;
 }
 
 vi.mock('@utils/files/storageFS', () => ({
@@ -108,8 +108,8 @@ const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 
 beforeEach(() => {
   mockedLoadWorkspaceCliConfig.mockClear();
-  mockedListExecutions.mockReset();
-  mockedListExecutions.mockResolvedValue([]);
+  mockedListRuns.mockReset();
+  mockedListRuns.mockResolvedValue([]);
   mockedReadJson.mockReset();
   // A missing user config (the common case) mirrors a real ENOENT rejection.
   mockedReadJson.mockRejectedValue(enoentError());
@@ -193,7 +193,7 @@ describe('CLI chat defaults', () => {
   });
 
   it('inherits only the model from recent single-agent tool-use history', async () => {
-    mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
+    mockedListRuns.mockResolvedValueOnce([historyEntry('research')]);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE },
@@ -208,7 +208,7 @@ describe('CLI chat defaults', () => {
   });
 
   it('ignores a history model that the CLI cannot run', async () => {
-    mockedListExecutions.mockResolvedValueOnce([
+    mockedListRuns.mockResolvedValueOnce([
       historyEntry('research', { model: 'Copilot GPT-4o' }),
     ]);
 
@@ -223,10 +223,10 @@ describe('CLI chat defaults', () => {
   });
 
   it('does not inherit the model from a multi-agent team run', async () => {
-    // A `texra multi-agent run physicist` is stored as a tool-use execution
+    // A `texra multi-agent run physicist` is stored as a tool-use run
     // whose root is the team orchestrator. It must not affect plain
     // `texra chat` defaults — fall back to the built-ins instead.
-    mockedListExecutions.mockResolvedValueOnce([
+    mockedListRuns.mockResolvedValueOnce([
       historyEntry('leanOrchestrator', {
         cli: { multiAgentPresetId: 'lean-project' },
       }),
@@ -248,7 +248,7 @@ describe('CLI chat defaults', () => {
   it.each(['bash', 'simplifier'])(
     'does not inherit %s as the default single-chat agent',
     async (agent) => {
-      mockedListExecutions.mockResolvedValueOnce([
+      mockedListRuns.mockResolvedValueOnce([
         historyEntry(agent, {}, '2026-05-21T08:02:00.000Z'),
         historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
       ]);
@@ -265,7 +265,7 @@ describe('CLI chat defaults', () => {
   );
 
   it('skips a team run to reach an earlier single-agent model', async () => {
-    mockedListExecutions.mockResolvedValueOnce([
+    mockedListRuns.mockResolvedValueOnce([
       historyEntry(
         'orchestrator',
         {
@@ -355,7 +355,7 @@ describe('CLI chat defaults', () => {
     );
     expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
     expect(mockedReadJson).not.toHaveBeenCalled();
-    expect(mockedListExecutions).not.toHaveBeenCalled();
+    expect(mockedListRuns).not.toHaveBeenCalled();
   });
 
   it('keeps default-tier loading when only the model is directly resolved', async () => {
@@ -384,11 +384,11 @@ describe('CLI chat defaults', () => {
       },
     );
     expect(mockedReadJson).not.toHaveBeenCalled();
-    expect(mockedListExecutions).not.toHaveBeenCalled();
+    expect(mockedListRuns).not.toHaveBeenCalled();
   });
 
   it('still loads history when only the agent is directly resolved', async () => {
-    mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
+    mockedListRuns.mockResolvedValueOnce([historyEntry('research')]);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE, agentOverride: 'simplifier' },
@@ -398,7 +398,7 @@ describe('CLI chat defaults', () => {
         modelSource: 'history',
       },
     );
-    expect(mockedListExecutions).toHaveBeenCalledOnce();
+    expect(mockedListRuns).toHaveBeenCalledOnce();
   });
 
   it('uses prefixed command-specific workspace defaults', async () => {

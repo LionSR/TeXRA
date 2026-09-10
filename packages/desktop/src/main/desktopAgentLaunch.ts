@@ -58,7 +58,7 @@ export async function launchDesktopAgent(
           location = createRunStorageLocation(
             output.absolutePath,
             output.relativePath,
-            result.executionId,
+            result.runId,
           );
         } else {
           location = createExternalLocation(output.absolutePath);

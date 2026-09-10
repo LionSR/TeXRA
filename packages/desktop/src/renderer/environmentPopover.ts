@@ -10,7 +10,7 @@ import {
 
 interface EnvironmentPopoverDeps {
   getWorkbenchTabs(): readonly WorkbenchTab[];
-  getChildStreamCount(): number;
+  getChildRunCount(): number;
   postMessage(command: string, payload?: Record<string, unknown>): void;
 }
 
@@ -23,7 +23,7 @@ interface EnvironmentPopoverController {
 
 export function createEnvironmentPopover({
   getWorkbenchTabs,
-  getChildStreamCount,
+  getChildRunCount,
   postMessage,
 }: EnvironmentPopoverDeps): EnvironmentPopoverController {
   let environmentSummary: DesktopEnvironmentSummary | undefined;
@@ -33,7 +33,7 @@ export function createEnvironmentPopover({
   function environmentPopoverTemplate(
     workspacePath: string | undefined,
   ): TemplateResult {
-    const childCount = getChildStreamCount();
+    const childCount = getChildRunCount();
     const terminalCount = getWorkbenchTabs().filter(
       (tab) => tab.kind === 'terminal',
     ).length;

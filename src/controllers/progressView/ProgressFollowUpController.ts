@@ -1,6 +1,6 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ExecutionRequest } from '@agent/core/state/executionRequests';
+import type { RunRequest } from '@agent/core/state/runRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import { decideRunModel } from '@model/runModelDecision';
 import {
@@ -9,11 +9,11 @@ import {
   type CompileFailure,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import { pluralize } from '@utils/text/stringUtils';
-import type { StreamOutputsSource } from './streamOutputs';
+import type { RunOutputsSource } from './runOutputs';
 
 export interface ProgressFollowUpModelOption {
   value: string;
@@ -35,8 +35,8 @@ interface ProgressFollowUpControllerDeps {
   workspace: ProgressFollowUpWorkspace;
 }
 
-export interface ProgressFollowUpState extends StreamOutputsSource {
-  getCompileFailures(stream: StreamTabId): ReadonlyRoundIndexed<CompileFailure>;
+export interface ProgressFollowUpState extends RunOutputsSource {
+  getCompileFailures(stream: RunId): ReadonlyRoundIndexed<CompileFailure>;
 }
 
 interface CompileFixerTarget {
@@ -54,37 +54,37 @@ export type ProgressFollowUpPlan =
   // Produced only by planCompileFixer (latexFixer). The progress view opts every
   // 'execute' plan into the helper-model preference, so a new 'execute'-plan
   // producer would inherit it (gate the swap more narrowly if that isn't wanted).
-  | { kind: 'execute'; request: ExecutionRequest };
+  | { kind: 'execute'; request: RunRequest };
 
 interface CompileFixerInput {
-  streamId: StreamTabId;
+  runId: RunId;
   runConfig: AgentConfig | undefined;
   compileFailures: CompileFailure[];
   runOutputs: ReadonlyRoundIndexed<OutputFileInfo>;
   modelOptions: readonly ProgressFollowUpModelOption[];
-  executionId?: string;
+  runId?: string;
 }
 
 export class ProgressFollowUpController {
   constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
 
-  async planCompileFixerForStream(
-    streamId: StreamTabId,
+  async planCompileFixerForRun(
+    runId: RunId,
     runConfig: AgentConfig | undefined,
   ): Promise<ProgressFollowUpPlan> {
     const modelOptions = await this.deps.loadModelOptions();
     const compileFailures = Object.values(
-      this.deps.state.getCompileFailures(streamId),
+      this.deps.state.getCompileFailures(runId),
     ).flat();
-    const { executionId } = this.deps.state.getRunMetadata(streamId);
+    const { runId } = this.deps.state.getRunMetadata(runId);
 
     return this.planCompileFixer({
-      streamId,
+      runId,
       runConfig,
       compileFailures,
-      runOutputs: this.deps.state.getOutputFiles(streamId),
+      runOutputs: this.deps.state.getOutputFiles(runId),
       modelOptions,
-      executionId,
+      runId,
     });
   }
 
@@ -143,7 +143,7 @@ export class ProgressFollowUpController {
           this.buildCompileFixerQuestion(
             input.compileFailures,
             targets,
-            input.executionId,
+            input.runId,
           ),
         ),
       },
@@ -178,16 +178,16 @@ export class ProgressFollowUpController {
   private buildCompileFixerQuestion(
     compileFailures: CompileFailure[],
     targets: CompileFixerTarget[],
-    executionId: string | undefined,
+    runId: string | undefined,
   ): string {
-    const executionHint = executionId ? `Execution: ${executionId}` : undefined;
+    const runHint = runId ? `Run: ${runId}` : undefined;
     const editableFiles = targets.map((target) => target.path);
     const editableHint = `Editable workspace ${pluralize(editableFiles.length, 'target')}: ${editableFiles.join(', ')}`;
     const latexdiffContext = this.formatLatexdiffTargetContext(targets);
-    // Both halves of the line address the artifact through the execution that
+    // Both halves of the line address the artifact through the run that
     // owns it, which a run-storage location carries. The run asking about the
     // failure is a second, potentially disagreeing source for the same fact --
-    // and when it disagrees (a failure recorded by an earlier execution of the
+    // and when it disagrees (a failure recorded by an earlier run of the
     // stream), it is the wrong one.
     const failureLines = compileFailures.map(
       (failure) =>
@@ -196,7 +196,7 @@ export class ProgressFollowUpController {
 
     return [
       'The workflow compile check failed. Diagnose and fix the generated LaTeX output using the compile log context below.',
-      executionHint,
+      runHint,
       editableHint,
       latexdiffContext,
       ...failureLines,

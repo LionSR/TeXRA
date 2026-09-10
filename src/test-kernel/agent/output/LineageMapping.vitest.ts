@@ -5,17 +5,17 @@ import {
   createOutputState,
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
-import { fileLocationDisplayPath, type ExecutionId } from '@shared/schemas';
+import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 
 describe('workflow output lineage mapping', () => {
-  const executionId: ExecutionId = 'abc123';
+  const runId: RunId = 'abc123';
 
   function runStorageFile(relativePath: string) {
     return createRunStorageLocation(
       `/run/${relativePath}`,
       relativePath,
-      executionId,
+      runId,
     );
   }
 

@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // Local imports
 import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import {
   FakeStdin,
@@ -37,7 +37,7 @@ import {
 } from '@test/support/transcriptRowFixtures';
 import {
   bindTestSessionView,
-  makeStreamView,
+  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
@@ -112,15 +112,15 @@ async function loadTranscriptStack() {
 
 function seedTranscript(
   cliState: typeof import('@cli/chat/tui/state/cliState'),
-  streamId: StreamTabId,
+  runId: RunId,
   cwd: string,
   entries: TranscriptRow[],
 ): void {
   cliState.resetCliState({ ...TRANSCRIPT_SESSION, cwd });
   seedView(
     viewWith([
-      makeStreamView({
-        id: streamId,
+      makeRunView({
+        id: runId,
         transcript: {
           rows: entries,
           taskGroups: [],
@@ -164,7 +164,7 @@ describe('Static band resize', () => {
       StaticConversationTranscript,
     } = await loadTranscriptStack();
     const { createElement } = React;
-    const streamId = 'resize-static-stream' as StreamTabId;
+    const runId = 'resize-static-stream' as RunId;
     const prompt = 'resize geometry prompt';
     // A user row is settled on arrival; the assistant and tool rows carry no
     // settlement order, so they stay live.
@@ -184,7 +184,7 @@ describe('Static band resize', () => {
       ).join('\n'),
     });
 
-    seedTranscript(cliState, streamId, '/tmp/resize-proof', [
+    seedTranscript(cliState, runId, '/tmp/resize-proof', [
       finalizedUser,
       liveAssistant,
       tool,
@@ -195,7 +195,7 @@ describe('Static band resize', () => {
       return createElement(StaticConversationTranscript, {
         colorEnabled: true,
         ownerKey: 'resize-owner',
-        scrollbackStreamId: streamId,
+        scrollbackRunId: runId,
         width: columns,
       });
     }
@@ -239,7 +239,7 @@ describe('Static band resize', () => {
     }
   });
 
-  it('replaces finalized execution rows when subagent labels arrive', async () => {
+  it('replaces finalized run rows when subagent labels arrive', async () => {
     const {
       ink,
       React,
@@ -248,19 +248,19 @@ describe('Static band resize', () => {
       StaticConversationTranscript,
     } = await loadTranscriptStack();
     const { createElement } = React;
-    const streamId = 'execution-label-stream' as StreamTabId;
-    const executionId = 'late-subagent-id';
-    const executionPath = `/executions/${executionId}/report`;
-    const executionEntry = completedToolEntry({
-      id: 'execution-view',
+    const runId = 'run-label-stream' as RunId;
+    const runId = 'late-subagent-id';
+    const runPath = `/executions/${runId}/report`;
+    const runEntry = completedToolEntry({
+      id: 'run-view',
       toolName: 'executions',
-      input: { path: executionPath },
+      input: { path: runPath },
       outputText: 'report',
       settlementSeqNo: 1,
     });
 
-    seedTranscript(cliState, streamId, '/tmp/execution-label-proof', [
-      executionEntry,
+    seedTranscript(cliState, runId, '/tmp/run-label-proof', [
+      runEntry,
     ]);
 
     const inkRef: {
@@ -269,7 +269,7 @@ describe('Static band resize', () => {
     function App({ labels }: { labels: ReadonlyMap<string, string> }): unknown {
       // The render key is label-agnostic, as in ConversationRegion: the
       // transcript state owns the label-change repaint through its epoch.
-      const renderKey = 'execution-label-render';
+      const renderKey = 'run-label-render';
       return createElement(StaticConversationTranscript, {
         onRenderKeyChange: () => {
           inkRef.current?.repaint({
@@ -277,10 +277,10 @@ describe('Static band resize', () => {
             preserveStatic: false,
           });
         },
-        ownerKey: 'execution-label-owner',
+        ownerKey: 'run-label-owner',
         renderKey,
-        scrollbackStreamId: streamId,
-        subagentExecutionLabels: labels,
+        scrollbackRunId: runId,
+        subagentRunLabels: labels,
         width: 80,
       });
     }
@@ -294,19 +294,19 @@ describe('Static band resize', () => {
     inkRef.current = inst;
 
     try {
-      await expectEventually(() => out.output.includes(executionPath));
+      await expectEventually(() => out.output.includes(runPath));
 
       out.output = '';
       inst.rerender(
         createElement(App, {
-          labels: new Map([[executionId, 'reviewer']]),
+          labels: new Map([[runId, 'reviewer']]),
         }),
       );
 
       await expectEventually(() => out.output.includes(clearTerminal));
       const frame = stripAnsi(latestRepaintFrame(out.output, clearTerminal));
       expect(frame).toContain('executions (view: reviewer/report)');
-      expect(frame).not.toContain(executionPath);
+      expect(frame).not.toContain(runPath);
       expect(occurrences(frame, 'executions (view: reviewer/report)')).toBe(1);
     } finally {
       inst.unmount();
@@ -318,7 +318,7 @@ describe('Static band resize', () => {
     const { ink, React, cliState, StaticConversationTranscript } =
       await loadTranscriptStack();
     const { createElement } = React;
-    const streamId = 'listener-count-stream' as StreamTabId;
+    const runId = 'listener-count-stream' as RunId;
     const toolEntries: TranscriptRow[] = Array.from(
       { length: 70 },
       (_, index) =>
@@ -331,13 +331,13 @@ describe('Static band resize', () => {
         }),
     );
 
-    seedTranscript(cliState, streamId, '/tmp/listener-proof', toolEntries);
+    seedTranscript(cliState, runId, '/tmp/listener-proof', toolEntries);
 
     function App(): unknown {
       const { columns } = ink.useWindowSize();
       return createElement(StaticConversationTranscript, {
         ownerKey: 'listener-owner',
-        scrollbackStreamId: streamId,
+        scrollbackRunId: runId,
         width: columns,
       });
     }

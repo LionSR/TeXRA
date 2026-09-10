@@ -4,11 +4,11 @@ import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export';
 import { openSessionEffect } from '@agent/runtime';
-import { listExecutions } from '@agent/storage';
+import { listRuns } from '@agent/storage';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { effectRuntime } from '@platform/processRuntime';
-import { type ExecutionId } from '@shared/schemas';
-import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
+import { type RunId } from '@shared/schemas';
+import { formatCliHistoryDeletionSummary } from '@shared/copy/runHistory';
 import {
   assembleTrace,
   injectStandaloneTrace,
@@ -80,7 +80,7 @@ async function runHistoryList(
 
 async function runHistoryShow(
   context: CliContext,
-  id: ExecutionId,
+  id: RunId,
   options: { full?: boolean },
 ): Promise<number> {
   await initLocalCliPlatform(context);
@@ -106,7 +106,7 @@ async function runHistoryShow(
  * `md` mirrors the progress-view ChatExportController.buildExportInput so the
  * CLI and the GUI render the same conversation identically.
  *
- * `html` assembles the execution's trace (`assembleTrace`, shared with the
+ * `html` assembles the run's trace (`assembleTrace`, shared with the
  * progress-view "Export transcript" button) and embeds it into the
  * trace-viewer — the same faithful Progress View replay, not a separate
  * hand-written exporter. Default mode writes one self-contained page to stdout (JS/CSS/
@@ -120,7 +120,7 @@ async function runHistoryShow(
  */
 export async function runHistoryExport(
   context: CliContext,
-  id: ExecutionId,
+  id: RunId,
   format: 'html' | 'md',
   options: { assetsDir?: string },
 ): Promise<number> {
@@ -134,7 +134,7 @@ export async function runHistoryExport(
     }
     if (exportResult.status === 'incomplete') {
       writeTextStderr(
-        `Execution ${id} exists but has nothing to export yet (no stored ` +
+        `Run ${id} exists but has nothing to export yet (no stored ` +
           `config and/or conversation). Run \`texra history show ${id}\` to see what is available.`,
       );
       return CliExitCode.Usage;
@@ -154,7 +154,7 @@ export async function runHistoryExport(
         break;
       case 'streamLogs_missing':
         writeTextStderr(
-          `Execution ${id} exists but has no replayable execution-root transcript ` +
+          `Run ${id} exists but has no replayable run-root transcript ` +
             '(it may predate transcript persistence, the run may have produced ' +
             'no output, or only proven child transcripts may remain).',
         );
@@ -212,7 +212,7 @@ export async function runHistoryExport(
 
 async function runHistoryDelete(
   context: CliContext,
-  options: { id?: ExecutionId; all: boolean; yes: boolean },
+  options: { id?: RunId; all: boolean; yes: boolean },
 ): Promise<number> {
   await initLocalCliPlatform(context);
 
@@ -220,14 +220,14 @@ async function runHistoryDelete(
   // also passes `--yes`, and quote the count so the stakes are explicit.
   if (options.all && !options.yes) {
     // Unlike list, a full wipe intentionally counts (and later clears) every
-    // stored execution, including `isUserVisibleExecution`-hidden
+    // stored run, including `isUserVisibleRun`-hidden
     // process-bookkeeping entries and agent-spawned child runs — don't add the
     // visibility filter here.
     const session = await initializeCliTranscriptSession();
-    const count = (await effectRuntime().runPromise(listExecutions(session)))
+    const count = (await effectRuntime().runPromise(listRuns(session)))
       .length;
     writeTextStderr(
-      `Refusing to delete ${formatResultCount(count, 'stored execution')}. Re-run with --yes to confirm.`,
+      `Refusing to delete ${formatResultCount(count, 'stored run')}. Re-run with --yes to confirm.`,
     );
     return CliExitCode.Usage;
   }
@@ -253,7 +253,7 @@ async function runHistoryDelete(
     }
     if (result.status === 'active') {
       writeTextStderr(
-        `Execution ${result.id} is active in TeXRA and was not deleted.`,
+        `Run ${result.id} is active in TeXRA and was not deleted.`,
       );
       return CliExitCode.Usage;
     }
@@ -267,7 +267,7 @@ async function runHistoryDelete(
       failed: result.failed.length,
     });
   } else if (result.status === 'deleted') {
-    text = `Deleted execution ${result.id}.`;
+    text = `Deleted run ${result.id}.`;
   } else {
     text = '';
   }
@@ -305,13 +305,13 @@ const historyListCommand = defineCliCommand({
 });
 
 const historyShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show one stored execution' },
+  meta: { name: 'show', description: 'Show one stored run' },
   args: {
     ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
-      description: 'Execution id from `texra history list`',
+      description: 'Run id from `texra history list`',
     },
     full: {
       type: 'boolean',
@@ -322,7 +322,7 @@ const historyShowCommand = defineCliCommand({
       type: 'string',
       valueHint: 'html|md',
       description:
-        'Export the execution to stdout: html is a faithful trace-viewer replay (self-contained by default), md is the conversation as Markdown',
+        'Export the run to stdout: html is a faithful trace-viewer replay (self-contained by default), md is the conversation as Markdown',
     },
     'assets-dir': {
       type: 'string',
@@ -334,7 +334,7 @@ const historyShowCommand = defineCliCommand({
   run: async (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
-      writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
+      writeTextStderr(`Invalid run id: ${ctx.args.id}`);
       return CliExitCode.Usage;
     }
     const exportFormat = optString(ctx.args.export);
@@ -358,7 +358,7 @@ const historyDeleteCommand = defineCliCommand({
     id: {
       type: 'positional',
       required: false,
-      description: 'Execution id from `texra history list`',
+      description: 'Run id from `texra history list`',
     },
     all: {
       type: 'boolean',
@@ -375,7 +375,7 @@ const historyDeleteCommand = defineCliCommand({
     const rawId = optString(ctx.args.id);
     const id = rawId ? parseCliHistoryId(rawId) : undefined;
     if (rawId && !id) {
-      writeTextStderr(`Invalid execution id: ${rawId}`);
+      writeTextStderr(`Invalid run id: ${rawId}`);
       return CliExitCode.Usage;
     }
     return runHistoryDelete(context, {

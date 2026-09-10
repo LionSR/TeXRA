@@ -5,15 +5,15 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   TOOL_USE_STATUS,
   ToolUseLogSchema,
   type StreamLogEntry,
-  type StreamTabId,
+  type RunId,
   type TaskGroup,
 } from '@shared/schemas';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
+import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import { StreamLog } from '@shared/session/traceEntries';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -24,7 +24,7 @@ import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
 
 /** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
-function attachRecorder(streamId: StreamTabId = 'stream:test' as StreamTabId): {
+function attachRecorder(runId: RunId = 'stream:test' as RunId): {
   trace: TraceEmitter;
   handleStatus: (event: StatusEvent) => void;
   rows: () => StreamLogEntry[];
@@ -33,7 +33,7 @@ function attachRecorder(streamId: StreamTabId = 'stream:test' as StreamTabId): {
   const trace = new TraceEmitter();
   const store = new StreamLog();
 
-  const recorder = attachTestTranscriptFold(trace, streamId, store);
+  const recorder = attachTestTranscriptFold(trace, runId, store);
   const rows = (): StreamLogEntry[] => store.getRange(0);
   return {
     trace,
@@ -48,8 +48,8 @@ function dataOf(entry: StreamLogEntry | undefined): Record<string, unknown> {
   return isObject(entry?.data) ? entry.data : {};
 }
 
-describe('attachTestTranscriptFold StreamPhase-native group rows (issue #7993)', () => {
-  it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
+describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', () => {
+  it("writes GROUP_START's data.status as RunPhase.RUNNING", () => {
     const { trace, row } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
@@ -57,7 +57,7 @@ describe('attachTestTranscriptFold StreamPhase-native group rows (issue #7993)',
     const startEntry = row(stage.id);
 
     expect(startEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_START);
-    expect(dataOf(startEntry).status).toBe(STREAM_PHASE.RUNNING);
+    expect(dataOf(startEntry).status).toBe(RUN_PHASE.RUNNING);
   });
 
   it('defaults GROUP_END to the literal RunOutcome.COMPLETED', () => {
@@ -148,7 +148,7 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
     const groups: TaskGroup[] = [];
     expect(upsertTaskGroupFromStreamLog(groups, new Map(), entry)).toBe(true);
     expect(groups).toMatchObject([
-      { id: phase.id, attemptId: 'attempt-2', status: STREAM_PHASE.COMPLETED },
+      { id: phase.id, attemptId: 'attempt-2', status: RUN_PHASE.COMPLETED },
     ]);
   });
 
@@ -179,7 +179,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     const { trace, rows } = attachRecorder();
 
     // The round's own stream writes raw provider text in real time...
-    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Done ✓');
     output.finalize();
     // ...then the flow boundary emits the authoritative, replacement-clean
@@ -211,7 +211,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     const { trace, rows } = attachRecorder();
 
     const round0 = trace.openStage('r0', { kind: 'round', index: 0 });
-    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Let me check that.');
     output.finalize();
     round0.end();
@@ -238,7 +238,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     const { trace, rows } = attachRecorder();
 
     const turn0 = trace.openStage('Tool-use turn', { kind: 'session' });
-    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('I will inspect the workspace.');
     output.finalize();
     turn0.end();
@@ -263,7 +263,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.run(() => {
-      const toolRequest = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      const toolRequest = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
       toolRequest.append('I will inspect the file.');
       toolRequest.finalize();
 
@@ -299,11 +299,11 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
 
 describe('attachTestTranscriptFold workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
-    const streamId = 'stream:terminal-settlement' as StreamTabId;
-    const { trace, handleStatus, row, rows } = attachRecorder(streamId);
+    const runId = 'stream:terminal-settlement' as RunId;
+    const { trace, handleStatus, row, rows } = attachRecorder(runId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
-    const response = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     response.append('Partial answer');
     trace.toolStart({
       logId: 'tool:pending',
@@ -322,9 +322,9 @@ describe('attachTestTranscriptFold workflow task state', () => {
 
     handleStatus({
       type: 'status',
-      streamId,
-      phase: STREAM_PHASE.CANCELLED,
-      cause: STREAM_TRANSITION_CAUSE.USER_STOP,
+      runId,
+      phase: RUN_PHASE.CANCELLED,
+      cause: RUN_TRANSITION_CAUSE.USER_STOP,
     });
 
     expect(row(phase.id)).toMatchObject({
@@ -345,7 +345,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
     expect(row('task:planned')).not.toHaveProperty('settlementSeqNo');
 
     // The terminal status is the authoritative boundary for recorder-owned
-    // streams/tools. Late provider cleanup cannot mutate a row already made
+    // runs/tools. Late provider cleanup cannot mutate a row already made
     // printable in append-only Static scrollback.
     trace.emit({
       type: 'stream.end',
@@ -387,10 +387,10 @@ describe('attachTestTranscriptFold workflow task state', () => {
 
     handleStatus({
       type: 'status',
-      streamId,
-      phase: STREAM_PHASE.RUNNING,
-      previousPhase: STREAM_PHASE.CANCELLED,
-      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      runId,
+      phase: RUN_PHASE.RUNNING,
+      previousPhase: RUN_PHASE.CANCELLED,
+      cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
     });
     trace.responseFinalized('Fresh turn response');
     const responses = rows().filter(
@@ -411,10 +411,10 @@ describe('attachTestTranscriptFold workflow task state', () => {
   });
 
   it('closes source rows at waiting and accepts fresh rows after resume', () => {
-    const streamId = 'stream:waiting-settlement' as StreamTabId;
-    const { trace, handleStatus, rows } = attachRecorder(streamId);
+    const runId = 'stream:waiting-settlement' as RunId;
+    const { trace, handleStatus, rows } = attachRecorder(runId);
 
-    const waitingResponse = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    const waitingResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     waitingResponse.append('Waiting response');
     trace.toolStart({
       logId: 'tool:waiting',
@@ -423,9 +423,9 @@ describe('attachTestTranscriptFold workflow task state', () => {
     });
     handleStatus({
       type: 'status',
-      streamId,
-      phase: STREAM_PHASE.WAITING,
-      cause: STREAM_TRANSITION_CAUSE.WAIT,
+      runId,
+      phase: RUN_PHASE.WAITING,
+      cause: RUN_TRANSITION_CAUSE.WAIT,
     });
 
     expect(rows()).toMatchObject([
@@ -444,12 +444,12 @@ describe('attachTestTranscriptFold workflow task state', () => {
 
     handleStatus({
       type: 'status',
-      streamId,
-      phase: STREAM_PHASE.RUNNING,
-      previousPhase: STREAM_PHASE.WAITING,
-      cause: STREAM_TRANSITION_CAUSE.RESUME,
+      runId,
+      phase: RUN_PHASE.RUNNING,
+      previousPhase: RUN_PHASE.WAITING,
+      cause: RUN_TRANSITION_CAUSE.RESUME,
     });
-    const resumedResponse = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    const resumedResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     resumedResponse.append('Resumed response');
     resumedResponse.finalize();
     trace.toolStart({
@@ -569,7 +569,7 @@ describe('attachTestTranscriptFold record-time secret redaction', () => {
   it('redacts a secret split across streamed chunks once the stream settles', () => {
     const { trace, row } = attachRecorder();
 
-    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Use sk-live');
     output.append('1234567890abcdef now');
     output.finalize();
@@ -658,10 +658,10 @@ describe('attachTestTranscriptFold active skills', () => {
 
   it('redacts summaries before truncating the recorded projection', async () => {
     const trace = new TraceEmitter();
-    const streamId = 'stream:skill-redaction' as StreamTabId;
+    const runId = 'stream:skill-redaction' as RunId;
     const store = new StreamLog();
 
-    const recorder = attachTestTranscriptFold(trace, streamId, store);
+    const recorder = attachTestTranscriptFold(trace, runId, store);
     const descriptionPrefix = `${'Review credentials carefully. '.padEnd(168, 'a')} `;
     const providerKey = 'sk-proj-redaction-example-1234567890abcdef';
 

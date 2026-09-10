@@ -15,8 +15,8 @@ export function truncatedHexId(source: BinaryLike, length: number): string {
 }
 
 /** Derive a stable run id from named identity fields: one of the two
- *  minting sites (`generateExecutionId` is the other), so the brand is
+ *  minting sites (`generateRunId` is the other), so the brand is
  *  applied here and nowhere downstream. */
-export function deriveExecutionId(identity: RunIdFields): RunId {
+export function deriveRunId(identity: RunIdFields): RunId {
   return truncatedHexId(stableStringify(identity), 24) as RunId;
 }

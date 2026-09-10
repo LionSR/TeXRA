@@ -4,7 +4,7 @@ import { RunIdSchema } from './identifiers';
 import {
   WORKFLOW_CALL_KIND,
   WorkflowCallFilesSchema,
-} from './workflowExecutionSnapshot';
+} from './workflowRunSnapshot';
 
 export const WorkflowCallIdentitySchema = z.strictObject({
   id: z
@@ -40,7 +40,7 @@ export type WorkflowDeclaredPlan = z.infer<typeof WorkflowDeclaredPlanSchema>;
 /**
  * The declared plan of one workflow-script attempt — every `meta.phases`
  * entry and every `meta.tasks` entry, in script order — recorded once on the
- * transcript when the attempt's execution state is constructed. Phases and
+ * transcript when the attempt's run state is constructed. Phases and
  * calls the run has reached are projected as stages and cards; this marker is
  * what lets a host list the ones it has not reached yet without opening their
  * stage (a `stage.start` prints the phase divider into scrollback).
@@ -85,7 +85,7 @@ const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
    * The live child run executing this call. Absent for planned, cached, and
    * not-yet-launched calls.
    */
-  childStreamId: RunIdSchema.optional(),
+  childRunId: RunIdSchema.optional(),
 });
 
 /**

@@ -10,7 +10,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 /**
  * Abstract terminal-run outcome, independent of any one surface's status
- * union (`StreamPhase`, `WorkflowCallProgress['status']`, ...). Callers
+ * union (`RunPhase`, `WorkflowCallProgress['status']`, ...). Callers
  * classify their own domain-specific status into one of these buckets; this
  * module is the single source of truth for which icon each bucket gets.
  */

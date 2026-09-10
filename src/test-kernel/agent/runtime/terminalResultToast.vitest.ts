@@ -14,8 +14,8 @@ function result(over: Partial<ResultEvent>): ResultEvent {
   return {
     type: 'result',
     outcome: 'failed',
-    executionId: 'a00101',
-    streamId: 'stream',
+    runId: 'a00101',
+    runId: 'stream',
     agentName: 'assistant',
     category: 'toolUse',
     isSubagent: false,
@@ -42,8 +42,8 @@ async function toastsFor(
     session.onResult(() => resolve()),
   );
   try {
-    publishTestRunStart(session, event.streamId, event.executionId);
-    session.publishRunEvent(event.streamId, event);
+    publishTestRunStart(session, event.runId, event.runId);
+    session.publishRunEvent(event.runId, event);
     await committed;
   } finally {
     detachToast();

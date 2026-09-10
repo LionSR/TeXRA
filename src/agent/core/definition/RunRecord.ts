@@ -4,7 +4,7 @@ import { NonAgentRunRecordSchema } from '@shared/schemas';
 import { AgentConfigSchema, type AgentConfig } from './AgentConfig';
 
 /**
- * The canonical execution configuration: a real
+ * The canonical run configuration: a real
  * `AgentConfig` for agent runs, the honest minimal record for everything
  * else. The strict non-agent arm parses first — `AgentConfigSchema`'s
  * prefaults would otherwise fabricate an agent config out of any object.

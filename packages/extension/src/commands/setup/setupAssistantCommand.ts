@@ -14,7 +14,7 @@ import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
-import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
+import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { agentName } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
@@ -181,7 +181,7 @@ export async function launchSetupAssistant(): Promise<
     // deliberately not gated — an explicit user action wins.
     if (
       defaultSession()
-        .executions.getAgentHandles()
+        .runs.getAgentHandles()
         .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
     ) {
       void vscode.window.showInformationMessage(
@@ -250,7 +250,7 @@ export async function launchSetupAssistant(): Promise<
           { kind: 'fresh', config },
           {
             session: defaultSession(),
-            onStreamResolved: presentLaunchedProgressStream,
+            onStreamResolved: presentLaunchedProgressRun,
           },
         ),
       );

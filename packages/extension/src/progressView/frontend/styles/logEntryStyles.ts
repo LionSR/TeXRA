@@ -328,7 +328,7 @@ export const logEntryStyles = css`
   }
 
   /* Terminal-style output: monospace font, tighter spacing, no log bullets.
-     Applied to streams that proxy raw process output (e.g. bash child streams)
+     Applied to runs that proxy raw process output (e.g. bash child runs)
      so their stdout/stderr reads like a terminal instead of a logger. */
   :host([terminal]) .log-container {
     font-family: var(

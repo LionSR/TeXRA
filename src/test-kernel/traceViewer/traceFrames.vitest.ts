@@ -1,9 +1,8 @@
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { getExecutionRecords } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import { getRunRecords } from '@agent/storage';
+import { getStreamTabId } from '@agent/runtime/runTab';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -14,11 +13,11 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
-  StreamSnapshotSchema,
+  RUN_PHASE,
+  RunSnapshotSchema,
   StreamLogEntrySchema,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
+  type RunId,
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import { emptySessionView } from '@shared/session/sessionView';
@@ -52,19 +51,19 @@ function foldTrace(trace: TraceDocument) {
     generation: 1,
     cursor: 0,
     aggregates: [
-      { id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 },
+      { id: qualifyAggregateId('stream', trace.runId), fromSeq: 0 },
     ],
   });
   const view = fold(emptySessionView('trace', 0), [
     {
       _tag: 'subscriptions',
-      set: [{ id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 }],
+      set: [{ id: qualifyAggregateId('stream', trace.runId), fromSeq: 0 }],
     },
     ...frame.events,
     { _tag: 'local', local: { self: [], dead: [], unreadable: [] } },
     { _tag: 'replay.complete', existence: frame.existence! },
   ]);
-  return view.streams.get(trace.streamId);
+  return view.runs.get(trace.runId);
 }
 
 type TraceEntry = TraceDocument['entries'][number];
@@ -100,20 +99,20 @@ function legacyTrace(
   snapshotStatus: string | undefined,
   category: AgentCategory = AgentCategory.Workflow,
 ): TraceDocument {
-  const streamId = 'stream:legacy-trace' as StreamTabId;
+  const runId = 'stream:legacy-trace' as RunId;
   return {
-    executionId: 'abc123' as ExecutionId,
-    streamId,
+    runId: 'abc123' as RunId,
+    runId,
     config: parseConfig(category),
     meta: {
       schemaVersion: 1,
       timestamp: '2026-01-01T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
-      streamId: streamId,
+      runId,
     },
     entries: [],
-    snapshot: StreamSnapshotSchema.parse({
-      streamId,
+    snapshot: RunSnapshotSchema.parse({
+      runId,
       status: snapshotStatus,
     }),
   };
@@ -155,8 +154,8 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     const trace: TraceDocument = {
       ...workflow,
       config: parseConfig(AgentCategory.ToolUse),
-      snapshot: StreamSnapshotSchema.parse({
-        streamId: workflow.streamId,
+      snapshot: RunSnapshotSchema.parse({
+        runId: workflow.runId,
         todos: [
           {
             content: 'Replay the plan',
@@ -176,44 +175,40 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     expect(replayed).not.toHaveProperty('files');
   });
 
-  // `it.live`: the session's publication settling and the record writes are
-  // real I/O, so nothing here waits on a test clock.
-  it.live(
-    'derives failed status from a real exported legacy trace without snapshot.status',
-    () =>
-      Effect.gen(function* () {
-        const executionId = 'abc124' as ExecutionId;
-        const config = parseConfig(AgentCategory.Workflow);
-        const streamId = getStreamTabId(config.agent, { executionId });
-        const session = createTestSession();
-        publishTestRunStart(session, streamId, executionId);
-        yield* Effect.promise(() => session.settlePublications());
-        yield* getExecutionRecords(session, executionId).writeRunRecord(config);
-        session.publish([
-          {
-            type: 'stage.start',
-            aggregateId: qualifyAggregateId('stream', streamId),
-            id: 'terminal-stage',
-            label: 'Legacy run',
-          },
-          {
-            type: 'stage.end',
-            aggregateId: qualifyAggregateId('stream', streamId),
-            id: 'terminal-stage',
-            status: 'failed',
-          },
-        ]);
-        yield* Effect.promise(() => session.settlePublications());
-        const result = yield* assembleTrace(executionId, session);
-        session.dispose();
-        expect(result.status).toBe('ok');
-        if (result.status !== 'ok') return;
-        expect(result.trace.meta?.outcome).toBeUndefined();
-        expect(result.trace.snapshot.status).toBeUndefined();
+  it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
+    const runId = 'abc124' as RunId;
+    const config = parseConfig(AgentCategory.Workflow);
+    const runId = getStreamTabId(config.agent, { runId });
+    const session = createTestSession();
+    publishTestRunStart(session, runId, runId);
+    await session.settlePublications();
+    await Effect.runPromise(
+      getRunRecords(session, runId).writeRunRecord(config),
+    );
+    session.publish([
+      {
+        type: 'stage.start',
+        aggregateId: qualifyAggregateId('stream', runId),
+        id: 'terminal-stage',
+        label: 'Legacy run',
+      },
+      {
+        type: 'stage.end',
+        aggregateId: qualifyAggregateId('stream', runId),
+        id: 'terminal-stage',
+        status: 'failed',
+      },
+    ]);
+    await session.settlePublications();
+    const result = await Effect.runPromise(assembleTrace(runId, session));
+    session.dispose();
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.trace.meta?.outcome).toBeUndefined();
+    expect(result.trace.snapshot.status).toBeUndefined();
 
-        expect(foldTrace(result.trace)?.status).toBe('failed');
-      }),
-  );
+    expect(foldTrace(result.trace)?.status).toBe('failed');
+  });
 
   it('ignores nested group-end status when the root run stage never closed', () => {
     const trace: TraceDocument = {
@@ -243,7 +238,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           timestamp: 120,
           groupId: 'root-run',
           text: 'Round',
-          data: { status: STREAM_PHASE.COMPLETED, endTime: 120 },
+          data: { status: RUN_PHASE.COMPLETED, endTime: 120 },
         }),
       ],
     };
@@ -255,7 +250,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
 
   it('ignores a cleanly-closed tool-use round when the root run stage never closed (issue #7267)', () => {
     // Tool-use rounds (ToolUseCycleNode) are opened without an ambient
-    // parent stage — runFlowWithLifecycle never wraps flow execution in the
+    // parent stage — runFlowWithLifecycle never wraps flow run in the
     // root "Run:" stage's `within(...)` — so a round's GROUP_END row carries
     // `groupId: undefined`, the same "no parent" shape as the root run
     // stage's own GROUP_END. Only `data.kind` (preserved through the
@@ -281,7 +276,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           // No groupId — the bug: rounds have no ambient parent, so this is
           // indistinguishable from a root stage by groupId alone.
           text: 'r0',
-          data: { status: STREAM_PHASE.COMPLETED, endTime: 120, kind: 'round' },
+          data: { status: RUN_PHASE.COMPLETED, endTime: 120, kind: 'round' },
         }),
       ],
     };
@@ -332,7 +327,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
           // across the stage.end merge, so this row has only its entry
           // position (second top-level stage entry, opened after root) to
           // distinguish it from root.
-          data: { status: STREAM_PHASE.COMPLETED, endTime: 120 },
+          data: { status: RUN_PHASE.COMPLETED, endTime: 120 },
         }),
       ],
     };
@@ -373,19 +368,19 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   });
 
   it('projects a process export instruction into the fold command', () => {
-    const streamId = 'bash@stream:process-trace' as StreamTabId;
+    const runId = 'bash@stream:process-trace' as RunId;
     const trace: TraceDocument = {
-      executionId: 'abc125' as ExecutionId,
-      streamId,
+      runId: 'abc125' as RunId,
+      runId,
       config: { name: 'bash', instruction: 'ls -la' },
       meta: {
         schemaVersion: 1,
         timestamp: '2026-01-01T00:00:00.000Z',
         identity: { kind: 'process', tool: 'bash' },
-        streamId,
+        runId,
       },
       entries: [],
-      snapshot: StreamSnapshotSchema.parse({ streamId }),
+      snapshot: RunSnapshotSchema.parse({ runId }),
     };
 
     expect(foldTrace(trace)?.command).toBe('ls -la');

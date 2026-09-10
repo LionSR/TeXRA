@@ -28,7 +28,7 @@ import { createLog } from '@logger/logUtils';
 import type { DisposableStore } from '@platform/disposable';
 import type { LifecycleHost } from '@platform/interfaces';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -36,14 +36,14 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   resetCliState,
   clearTransientNotice,
-  rootStreamId as rootStreamIdSignal,
+  rootRunId as rootRunIdSignal,
   setTransientNotice,
 } from './state/cliState';
 import { currentView } from './state/sessionView';
 
 interface ResumeHintSnapshot {
   readonly view: SessionView;
-  readonly rootStreamId: StreamTabId | undefined;
+  readonly rootRunId: RunId | undefined;
 }
 import {
   collectResumeTargets,
@@ -150,18 +150,18 @@ export function createSessionExitController(
   };
   // Persist the reopen hint to native scrollback: the main session plus each
   // resumable tool-use subagent, so any route can be continued by its own id.
-  // Read the streams slice before resetCliState() clears it; the child rosters
+  // Read the runs slice before resetCliState() clears it; the child rosters
   // arrive as a snapshot taken while the session adapter was still bound.
   const printResumeHintOnExit = (snapshot: ResumeHintSnapshot): void => {
-    if (!session.executionId) return;
-    const { view, rootStreamId } = snapshot;
+    if (!session.runId) return;
+    const { view, rootRunId } = snapshot;
     const hint = formatResumeHint(
       collectResumeTargets({
         view,
-        rootStreamId,
-        rootExecutionId: session.executionId,
+        rootRunId,
+        rootRunId: session.runId,
       }),
-      collectResumeUsage(view, rootStreamId),
+      collectResumeUsage(view, rootRunId),
       ctx.commandName,
       {
         cwd: ctx.cwd,
@@ -203,7 +203,7 @@ export function createSessionExitController(
     exitConfirmationExpiresAt = Date.now() + EXIT_CONFIRMATION_TTL_MS;
     setTransientNotice('Press Ctrl-C again to exit', {
       kind: 'exit',
-      resumeId: session.executionId,
+      resumeId: session.runId,
       ttlMs: EXIT_CONFIRMATION_TTL_MS,
     });
   };
@@ -307,7 +307,7 @@ export function createSessionExitController(
     // below unbinds it, but the resume hint prints later.
     const resumeHint: ResumeHintSnapshot = {
       view: currentView(),
-      rootStreamId: rootStreamIdSignal.get(),
+      rootRunId: rootRunIdSignal.get(),
     };
     if (cause.kind === 'signal') {
       ctx.suspendTerminalTitle();
@@ -347,7 +347,7 @@ export function createSessionExitController(
     // `interruptActive()` itself before `requestInputExit()`, outside this
     // predicate. On a COMPLETED root `chatTuiRunPending` is false, so this arm
     // skips the interrupt while `clean-exit` still runs one — and
-    // `stopAgentStream`'s child sweep fires even with no root handle. So Ctrl-C
+    // `stopAgentRun`'s child sweep fires even with no root handle. So Ctrl-C
     // on a finished turn still detaches background children where `/exit` does
     // not. Converging that means changing Ctrl-C, which is outside the `/exit`
     // ruling this comment implements.

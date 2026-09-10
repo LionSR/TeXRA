@@ -77,12 +77,12 @@
       "specifier": "@agent/index"
     },
     {
-      "file": "src/test-kernel/cli/RunExecution.vitest.ts",
+      "file": "src/test-kernel/cli/ExecuteCli.vitest.ts",
       "form": "mock",
       "specifier": "@agent/runtime/runAgent"
     },
     {
-      "file": "src/test-kernel/cli/RunExecution.vitest.ts",
+      "file": "src/test-kernel/cli/ExecuteCli.vitest.ts",
       "form": "mock",
       "specifier": "@agent/storage"
     },

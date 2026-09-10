@@ -3,23 +3,23 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  activeStreamId,
+  activeRunId,
   beginWorkPlanReaderRequest,
   closeInfoPane,
   finishWorkPlanReaderRequest,
-  focusStream,
+  focusRun,
   foregroundReader,
   infoPane,
   openInfoPane,
   rootRunPending,
-  rootRunStreamId,
-  rootStreamId,
+  rootRunId,
+  rootRunId,
   resetCliState,
   setTransientNotice,
   transientNotice,
-  expandedStreams,
+  expandedRuns,
   sessionListRows,
-  sessionListStreamIds,
+  sessionListRunIds,
 } from '@cli/chat/tui/state/cliState';
 import {
   allocateConversationPanelRows,
@@ -43,56 +43,56 @@ import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
   MESSAGE_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   TODO_STATUS,
   type ActiveChildInfo,
-  type ExecutionId,
+  type RunId,
   type ExtendedTokenUsageStats,
   type Plan,
   type RunIdentity,
-  type StreamPhase,
-  type StreamTabId,
+  type RunPhase,
+  type RunId,
   type TodoItem,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import type { StreamView } from '@shared/session/sessionView';
+import type { RunView } from '@shared/session/sessionView';
 import {
   bindTestSessionView,
-  makeStreamView,
+  makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
 
-const root = 'root' as StreamTabId;
-const child1 = 'child-1' as StreamTabId;
-const child2 = 'child-2' as StreamTabId;
-const grandchild = 'grandchild-1' as StreamTabId;
+const root = 'root' as RunId;
+const child1 = 'child-1' as RunId;
+const child2 = 'child-2' as RunId;
+const grandchild = 'grandchild-1' as RunId;
 
 /** A root with two children created in name order, the second of which has
  *  one child. */
 function familyView(
-  over: Partial<Record<StreamTabId, Partial<StreamView>>> = {},
+  over: Partial<Record<RunId, Partial<RunView>>> = {},
 ) {
-  const ancestorsOf = (...ids: StreamTabId[]) =>
+  const ancestorsOf = (...ids: RunId[]) =>
     ids.map((id) => ({ id, label: id }));
   return viewWith([
-    makeStreamView({ id: root, createdAt: 1, ...over[root] }),
-    makeStreamView({
+    makeRunView({ id: root, createdAt: 1, ...over[root] }),
+    makeRunView({
       id: child1,
       createdAt: 2,
       parentId: root,
       ancestors: ancestorsOf(root),
       ...over[child1],
     }),
-    makeStreamView({
+    makeRunView({
       id: child2,
       createdAt: 3,
       parentId: root,
       ancestors: ancestorsOf(root),
       ...over[child2],
     }),
-    makeStreamView({
+    makeRunView({
       id: grandchild,
       createdAt: 4,
       parentId: child2,
@@ -108,21 +108,21 @@ describe('focus over the session view', () => {
   it('keeps keyboard order identical to the grouped, expanded tree', () => {
     resetCliState();
     seedView(familyView({ [child2]: { forceExpanded: true } }));
-    expect(sessionListStreamIds.get()).toEqual([root]);
-    expandedStreams.set(new Map([[root, true]]));
-    expect(sessionListStreamIds.get()).toEqual([
+    expect(sessionListRunIds.get()).toEqual([root]);
+    expandedRuns.set(new Map([[root, true]]));
+    expect(sessionListRunIds.get()).toEqual([
       root,
       child2,
       grandchild,
       child1,
     ]);
-    expandedStreams.set(
+    expandedRuns.set(
       new Map([
         [root, true],
         [child2, false],
       ]),
     );
-    expect(sessionListStreamIds.get()).toEqual([
+    expect(sessionListRunIds.get()).toEqual([
       root,
       child2,
       grandchild,
@@ -135,7 +135,7 @@ describe('focus over the session view', () => {
         .map((row) => row.label),
     ).toEqual(['Running']);
     resetCliState();
-    expect(sessionListStreamIds.get()).toEqual([root]);
+    expect(sessionListRunIds.get()).toEqual([root]);
   });
 
   it('resolves the child list to the nearest ancestor with children', () => {
@@ -148,11 +148,11 @@ describe('focus over the session view', () => {
 
   it('routes composer follow-ups only to in-flight plain tool-use children', () => {
     const view = familyView({
-      [child1]: { status: STREAM_PHASE.COMPLETED },
+      [child1]: { status: RUN_PHASE.COMPLETED },
       [child2]: { identity: { kind: 'process', tool: 'bash' } },
     });
-    const stream = (id: StreamTabId): StreamView => {
-      const found = view.streams.get(id);
+    const stream = (id: RunId): RunView => {
+      const found = view.runs.get(id);
       if (!found) throw new Error(`missing ${id}`);
       return found;
     };
@@ -616,35 +616,35 @@ describe('CLI TUI row allocation', () => {
       name: 'before the stream resolves',
       runCompleted: false,
       runPromise: Promise.resolve(),
-      streamId: undefined,
+      runId: undefined,
       expected: false,
     },
     {
       name: 'while startup is pending',
       runCompleted: false,
       runPromise: undefined,
-      streamId: root,
+      runId: root,
       expected: false,
     },
     {
       name: 'after the run completed',
       runCompleted: true,
       runPromise: Promise.resolve(),
-      streamId: root,
+      runId: root,
       expected: false,
     },
     {
       name: 'with the stream resolved and the run in flight',
       runCompleted: false,
       runPromise: Promise.resolve(),
-      streamId: root,
+      runId: root,
       expected: true,
     },
   ])(
     'only reports a chat run interruptible $name',
-    ({ runCompleted, runPromise, streamId, expected }) => {
+    ({ runCompleted, runPromise, runId, expected }) => {
       expect(
-        chatTuiCanInterruptActiveRun({ runCompleted, runPromise, streamId }),
+        chatTuiCanInterruptActiveRun({ runCompleted, runPromise, runId }),
       ).toBe(expected);
     },
   );
@@ -680,48 +680,48 @@ describe('CLI TUI row allocation', () => {
   it('marks a chat root run pending before async startup work resolves', () => {
     const startupPromise = new Promise<void>(() => {});
     const session = new TuiSession();
-    session.streamId = root;
-    session.executionId = 'exec-old';
+    session.runId = root;
+    session.runId = 'exec-old';
     session.runExitCode = CliExitCode.AgentError;
     session.markRunCompleted();
     session.stopRequested = true;
 
     session.markRunPending(startupPromise);
 
-    expect(session.streamId).toBeUndefined();
-    expect(session.executionId).toBe('exec-old');
+    expect(session.runId).toBeUndefined();
+    expect(session.runId).toBe('exec-old');
     expect(session.runPromise).toBe(startupPromise);
     expect(session.runExitCode).toBe(CliExitCode.Success);
     expect(session.runCompleted).toBe(false);
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
     expect(rootRunPending.get()).toBe(true);
-    expect(rootRunStreamId.get()).toBeUndefined();
+    expect(rootRunId.get()).toBeUndefined();
   });
 
   it('publishes the run-control stream id from the session itself', () => {
     const session = new TuiSession();
     session.markRunPending(new Promise<void>(() => {}));
-    expect(rootRunStreamId.get()).toBeUndefined();
+    expect(rootRunId.get()).toBeUndefined();
 
     // No publish call accompanies this write: the session owns the mirror,
     // so a caller cannot leave the Ctrl-C hint reading a stale claim (#8273).
-    session.streamId = root;
+    session.runId = root;
 
-    expect(rootRunStreamId.get()).toBe(root);
+    expect(rootRunId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(true);
 
     session.markRunCompleted();
 
-    expect(rootRunStreamId.get()).toBe(root);
+    expect(rootRunId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(false);
   });
 
   it('restores root run availability when clearing session run state', () => {
     const startupPromise = new Promise<void>(() => {});
     const session = new TuiSession();
-    session.streamId = root;
-    session.executionId = 'exec-old';
+    session.runId = root;
+    session.runId = 'exec-old';
     session.runExitCode = CliExitCode.AgentError;
     session.stopRequested = true;
     session.markRunPending(startupPromise);
@@ -730,24 +730,24 @@ describe('CLI TUI row allocation', () => {
 
     expect(chatTuiCanStartRootRun(session)).toBe(true);
     expect(rootRunPending.get()).toBe(false);
-    expect(rootRunStreamId.get()).toBeUndefined();
+    expect(rootRunId.get()).toBeUndefined();
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {
     const session = new TuiSession();
     session.markRunPending(Promise.resolve());
     session.markRunCompleted();
-    session.streamId = root;
-    session.interruptedStreamId = root;
-    session.executionId = 'old-execution';
+    session.runId = root;
+    session.interruptedRunId = root;
+    session.runId = 'old-run';
     session.runExitCode = CliExitCode.Interrupted;
     session.stopRequested = true;
 
     session.clearRunState();
 
-    expect(session.streamId).toBeUndefined();
-    expect(session.interruptedStreamId).toBeUndefined();
-    expect(session.executionId).toBeUndefined();
+    expect(session.runId).toBeUndefined();
+    expect(session.interruptedRunId).toBeUndefined();
+    expect(session.runId).toBeUndefined();
     expect(session.runPromise).toBeUndefined();
     expect(session.runExitCode).toBe(CliExitCode.Success);
     expect(session.runCompleted).toBe(false);

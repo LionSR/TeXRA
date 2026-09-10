@@ -1,14 +1,14 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
 // Local imports - shared schemas and utilities
-import { type StreamTabId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
 
 import {
-  approvalPayloadStreamId,
+  approvalPayloadRunId,
   type PendingApproval,
   type PendingApprovalKind,
 } from './state/approvalQueue';
@@ -33,12 +33,12 @@ export const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
 // `metaChordInput`.
 export function shouldDeferEscapeInterruptForMetaChord({
   shortcutModifierLabel,
-  streamFocusAvailable,
+  runFocusAvailable,
 }: {
   readonly shortcutModifierLabel: string;
-  readonly streamFocusAvailable: boolean;
+  readonly runFocusAvailable: boolean;
 }): boolean {
-  return shortcutModifierLabel === 'Esc' && streamFocusAvailable;
+  return shortcutModifierLabel === 'Esc' && runFocusAvailable;
 }
 
 export interface EscapeInterruptState {
@@ -46,8 +46,8 @@ export interface EscapeInterruptState {
    *  list, reverse search, or slash palette owns the keyboard. Bare Escape's
    *  deferred chord timer reads it through a ref so it sees that render. */
   readonly shortcutsActive: boolean;
-  readonly canInterruptStream: (streamId: StreamTabId) => boolean;
-  readonly onInterruptStream: (streamId: StreamTabId) => void;
+  readonly canInterruptRun: (runId: RunId) => boolean;
+  readonly onInterruptRun: (runId: RunId) => void;
 }
 
 export interface AppCtrlCState {
@@ -123,19 +123,19 @@ export function foregroundSurfaceKind({
  */
 export function approvalVisibleForSelection({
   pending,
-  selectedStreamId,
+  selectedRunId,
   view,
 }: {
   readonly pending: PendingApproval | undefined;
-  readonly selectedStreamId: StreamTabId | undefined;
+  readonly selectedRunId: RunId | undefined;
   readonly view: SessionView;
 }): boolean {
   if (!pending) return false;
-  const streamId = approvalPayloadStreamId(pending.payload);
-  if (streamId === undefined || streamId === selectedStreamId) return true;
-  const asking = view.streams.get(streamId);
+  const runId = approvalPayloadRunId(pending.payload);
+  if (runId === undefined || runId === selectedRunId) return true;
+  const asking = view.runs.get(runId);
   return (
-    asking?.ancestors.some((ancestor) => ancestor.id === selectedStreamId) ??
+    asking?.ancestors.some((ancestor) => ancestor.id === selectedRunId) ??
     false
   );
 }
@@ -226,7 +226,7 @@ export function groupPendingApprovalsByRow(
 ): Map<string, PendingApprovalKind[]> {
   return groupBy(
     approvals,
-    (approval) => approval.streamId,
+    (approval) => approval.runId,
     (approval) => approval.payload.kind,
   );
 }

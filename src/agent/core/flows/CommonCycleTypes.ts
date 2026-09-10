@@ -93,13 +93,13 @@ export async function saveCycleDebug(
   services: Pick<AgentCore, 'logger' | 'config' | 'runScope'>,
   fileOptions: CycleDebugFileOptions,
 ): Promise<void> {
-  const { executionId } = services.runScope;
+  const { runId } = services.runScope;
   await maybeSaveDebugObject({
     object,
     objectType,
     context: {
       logger: services.logger,
-      executionId,
+      runId,
       modelName: services.config.model,
       isRemote: isRemoteAgent(services.config.agent),
     },
@@ -110,9 +110,9 @@ export async function saveCycleDebug(
 export function defaultPostCompactionContext(
   services: Pick<WorkspaceScopedCore, 'workspace' | 'runScope'>,
 ): string | null {
-  const { session, streamId } = services.runScope;
+  const { session, runId } = services.runScope;
   return formatPostCompactionContext(
-    session.executions.getActiveChildren(streamId),
+    session.runs.getActiveChildren(runId),
     services.workspace.workPlan.toSnapshot(),
   );
 }

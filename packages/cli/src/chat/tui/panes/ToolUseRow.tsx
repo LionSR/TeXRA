@@ -8,7 +8,7 @@ import { Box, Text } from 'ink';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { clipToWidth } from '@cli/runtime/terminalText';
 import type { ToolRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import { DiffView } from '../render/DiffView';
 import {
@@ -118,17 +118,17 @@ function toolDisplayViewport(
 // re-rendering every settled tool row in the live region.
 export const ToolUseRow = memo(function ToolUseRow({
   maxRows,
-  subagentExecutionLabels,
+  subagentRunLabels,
   toolRow,
   width,
 }: {
   readonly maxRows?: number;
-  readonly subagentExecutionLabels?: ExecutionLabels;
+  readonly subagentRunLabels?: RunLabels;
   readonly toolRow: ToolRow;
   readonly width?: number;
 }): React.JSX.Element {
   const lines = toolUseStyledLines(toolRow, {
-    executionLabels: subagentExecutionLabels,
+    runLabels: subagentRunLabels,
     width,
   });
   const viewport = toolDisplayViewport(lines, maxRows);

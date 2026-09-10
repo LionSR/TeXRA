@@ -44,7 +44,7 @@ import { designTokens } from '@shared/styles';
 import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { SessionView, RunView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -54,8 +54,8 @@ import { getBasename } from '@utils/core';
 
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
-import './components/StreamTabs';
-import './components/StreamConversation';
+import './components/RunTabs';
+import './components/RunConversation';
 import './components/SessionBanners';
 import './components/SessionComposer';
 import './components/SessionDrawer';
@@ -110,13 +110,13 @@ export class ProgressApp extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'toggleDrawer' }));
   };
 
-  private stopStream(stream: StreamView): void {
+  private stopRun(stream: RunView): void {
     this.dispatchEvent(
-      SessionUiEvents.runtime({ kind: 'stream.stop', streamId: stream.id }),
+      SessionUiEvents.runtime({ kind: 'stream.stop', runId: stream.id }),
     );
   }
 
-  private handleOverflow(value: string, stream: StreamView | null): void {
+  private handleOverflow(value: string, stream: RunView | null): void {
     const item = value as OverflowItem;
     switch (item) {
       case 'popOut':
@@ -148,7 +148,7 @@ export class ProgressApp extends LitElement {
       case 'clean':
         if (!stream) return;
         this.dispatchEvent(
-          SessionUiEvents.host({ kind: item, streamId: stream.id }),
+          SessionUiEvents.host({ kind: item, runId: stream.id }),
         );
         return;
     }
@@ -159,7 +159,7 @@ export class ProgressApp extends LitElement {
     if (!view || !surface || !host) return nothing;
     const selected = resolveSelected(view, surface);
     const stream =
-      selected === null ? null : (view.streams.get(selected) ?? null);
+      selected === null ? null : (view.runs.get(selected) ?? null);
     const docked = this.placement === 'editor';
 
     return html`
@@ -261,7 +261,7 @@ export class ProgressApp extends LitElement {
   }
 
   private renderHeader(
-    stream: StreamView | null,
+    stream: RunView | null,
     host: HostSnapshot,
     surface: Surface,
   ): TemplateResult {
@@ -308,7 +308,7 @@ export class ProgressApp extends LitElement {
                   label: 'Stop',
                   tooltip: 'Stop',
                   className: 'stop-button',
-                  onClick: () => this.stopStream(stream),
+                  onClick: () => this.stopRun(stream),
                 })
               : nothing
           }
@@ -329,7 +329,7 @@ export class ProgressApp extends LitElement {
    *  have one home reachable from the New-task state; the debug section
    *  needs a stream's output. */
   private renderOverflow(
-    stream: StreamView | null,
+    stream: RunView | null,
     host: HostSnapshot,
   ): TemplateResult {
     const inEditor = this.placement === 'editor';

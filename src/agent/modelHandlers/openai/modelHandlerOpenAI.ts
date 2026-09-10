@@ -446,7 +446,7 @@ export class ModelHandlerOpenAI<
         }
       }
 
-      this.finalizeProgressStreams(
+      this.finalizeProgressRuns(
         thinking,
         output,
         finalResponse,
@@ -454,7 +454,7 @@ export class ModelHandlerOpenAI<
       );
       return finalResponse;
     } catch (streamError) {
-      this.finalizeProgressStreamsOnError(thinking, output);
+      this.finalizeProgressRunsOnError(thinking, output);
       // The SDK already owns the partial content; retain its tail for retry
       // presentation and any later continuation.
       const partialText = extractOpenAIPartialTail(

@@ -4,7 +4,7 @@ import { Effect, Result } from 'effect';
 import {
   buildCliWorkflowResultMeta,
   deriveResumability,
-  getExecutionRecords,
+  getRunRecords,
   type ResumabilityDecision,
 } from '@agent/storage';
 import {
@@ -12,7 +12,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/runtime';
 import { effectRuntime } from '@platform/processRuntime';
-import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 
@@ -51,8 +51,11 @@ import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,
   type CliConfigExecuteOptions,
-} from '../runtime/runExecution';
-import { runOutcomeExitCode } from '../runtime/terminalStatus';
+} from '../runtime/executeCli';
+import {
+  cliRunResultPayload,
+  runOutcomeExitCode,
+} from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
@@ -190,11 +193,11 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
 
 /**
  * Execute a workflow config headless and surface its outputs: run through the
- * shared CLI execution skeleton, copy `--output`/`--output-dir` artifacts,
+ * shared CLI run skeleton, copy `--output`/`--output-dir` artifacts,
  * persist the result metadata, report an output failure back to the live run
  * lifecycle, emit the result in the requested format, and map the outcome to
  * an exit code. Shared by `texra run` (fresh runs) and `texra resume`
- * (workflow continuation under the persisted execution id).
+ * (workflow continuation under the persisted run id).
  */
 export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
   function* (
@@ -203,7 +206,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     options: {
       readonly categoryMismatchMessage: string;
       readonly recoveryInputIsDurable?: boolean;
-      readonly executionId?: ExecutionId;
+      readonly runId?: RunId;
       readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
     },
   ): Effect.fn.Return<number, Error> {
@@ -221,7 +224,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const expectedOutputFiles = config.cli?.expectedOutputFiles ?? undefined;
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
-    const canAdvertiseInterruptedExecution = (
+    const canAdvertiseInterruptedRun = (
       resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
     ): boolean => {
       const shared = resumability.flowRecord.shared;
@@ -232,38 +235,38 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       return lastError == null && !isTerminalPersistedCompileRejection(shared);
     };
     const writeResumeHint = (
-      executionId: ExecutionId,
+      runId: RunId,
       waitForWrite = false,
     ): Promise<void> | undefined => {
       if (!recoveryInputIsDurable || resumeHintWritten) return;
       resumeHintWritten = true;
       const hint = formatInterruptedResumeHint(
         runContext,
-        executionId,
+        runId,
         'workflow',
         config.workingDirectory || runContext.cwd,
         recoveryProcessCwd,
       );
       return writeInterruptedResumeHint(hint, waitForWrite);
     };
-    const maybeAdvertiseRecovery = (executionId: ExecutionId) =>
+    const maybeAdvertiseRecovery = (runId: RunId) =>
       Effect.gen(function* () {
-        if (!execution.ok || !execution.outcomePersisted) return;
-        const resumability = yield* deriveResumability(executionId, session);
+        if (!run.ok || !run.outcomePersisted) return;
+        const resumability = yield* deriveResumability(runId, session);
         if (
           resumability.kind === 'checkpoint' &&
-          canAdvertiseInterruptedExecution(resumability)
+          canAdvertiseInterruptedRun(resumability)
         ) {
-          writeResumeHint(executionId);
+          writeResumeHint(runId);
         }
       });
-    const execution = yield* executeCliConfig(config, runContext, {
-      executionId: options.executionId,
+    const run = yield* executeCliConfig(config, runContext, {
+      runId: options.runId,
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-      onInterruptedExecutionFinalized: recoveryInputIsDurable
-        ? (executionId) => writeResumeHint(executionId, true)
+      onInterruptedRunFinalized: recoveryInputIsDurable
+        ? (runId) => writeResumeHint(runId, true)
         : undefined,
-      canAdvertiseInterruptedExecution,
+      canAdvertiseInterruptedRun,
       expectedCategory: AgentCategory.Workflow,
       categoryMismatchMessage: options.categoryMismatchMessage,
       openWorkflowOutput: (result, tryCommitPublication) =>
@@ -285,9 +288,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           } else {
             workflowResult = outputResult.success;
           }
-          yield* getExecutionRecords(
+          yield* getRunRecords(
             session,
-            result.executionId,
+            result.runId,
           ).writeResultMeta(
             buildCliWorkflowResultMeta(result, {
               outcome,
@@ -298,13 +301,13 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           return outcome;
         }),
     });
-    if (!execution.ok) return execution.exitCode;
+    if (!run.ok) return run.exitCode;
 
-    const { result } = execution;
+    const { result } = run;
     if (workflowOutputError !== undefined) {
       writeErrorStderr(workflowOutputError);
       if (result.outcome === RUN_OUTCOME.CANCELLED) {
-        yield* maybeAdvertiseRecovery(result.executionId);
+        yield* maybeAdvertiseRecovery(result.runId);
         return CliExitCode.Interrupted;
       }
       return CliExitCode.AgentError;
@@ -320,14 +323,15 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     // the copy cannot leave a completed presentation beside a cancelled run.
     workflowResult = { ...workflowResult, outcome: result.outcome };
 
+    const payload = cliRunResultPayload(workflowResult);
     emitCliResult(runContext, {
-      json: workflowResult,
-      ndjson: { kind: 'result', result: workflowResult },
+      json: payload,
+      ndjson: { kind: 'result', result: payload },
       text: formatWorkflowTextResult(workflowResult),
     });
 
     if (result.outcome === RUN_OUTCOME.CANCELLED) {
-      yield* maybeAdvertiseRecovery(result.executionId);
+      yield* maybeAdvertiseRecovery(result.runId);
     }
 
     return runOutcomeExitCode(result.outcome);

@@ -9,7 +9,7 @@ import {
   type DisplaySessionEvent,
   type RunId,
 } from '@shared/schemas';
-import { roundStageFromStageStart } from '@shared/streams/stage';
+import { roundStageFromStageStart } from '@shared/runs/stage';
 import { assertNever } from '@utils/core';
 import { writeNdjsonStdout } from './logSinks';
 import type {
@@ -27,16 +27,17 @@ import type {
 function projectCliActiveChildRow(
   item: ActiveChildInfo,
 ): CliNdjsonActiveChildRow {
-  const { identity, childStreamId, ...rest } = item;
+  const { identity, childRunId, runId, ...rest } = item;
   const toolName =
     identity.kind === 'multiAgentWorkflow'
       ? 'delegate_multi_agents'
       : identity.tool;
   return {
     kind: identity.kind === 'process' ? 'process' : 'subagent',
+    executionId: runId,
     ...rest,
     ...(toolName !== undefined ? { toolName } : {}),
-    ...(identity.kind === 'process' ? {} : { childStreamId }),
+    ...(identity.kind === 'process' ? {} : { childStreamId: childRunId }),
   };
 }
 
@@ -81,9 +82,13 @@ function projectCliSessionEvent(
       ownerId: _ownerId,
       at: _at,
       type: _type,
+      parentRunId,
       ...thread
     } = event;
-    return { event: 'inquiryThreadUpdated', payload: thread };
+    return {
+      event: 'inquiryThreadUpdated',
+      payload: { ...thread, parentStreamId: parentRunId },
+    };
   }
   const streamId = target.id;
   switch (event.type) {
@@ -210,12 +215,12 @@ function projectCliSessionEvent(
       return undefined;
     case 'updateQueuedFollowUps':
       return { event: 'updateQueuedFollowUps', payload: { streamId } };
-    case 'updateStreamDescription':
+    case 'updateRunDescription':
       return {
         event: 'updateStreamDescription',
         payload: { streamId, description: event.description },
       };
-    case 'stream.removed':
+    case 'run.removed':
       return { event: 'removeStream', payload: { streamId } };
   }
   assertNever(event, 'Unhandled CLI NDJSON session event');
@@ -246,7 +251,7 @@ function projectCliSessionEvent(
  */
 export function attachCliSessionProgressProjection(
   session: Pick<SessionHandle, 'events' | 'now' | 'view'> & {
-    readonly executions: Pick<SessionHandle['executions'], 'onChildActivity'>;
+    readonly runs: Pick<SessionHandle['runs'], 'onChildActivity'>;
   },
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ): () => Promise<void> {
@@ -256,7 +261,7 @@ export function attachCliSessionProgressProjection(
   const children = new Set<RunId>();
   const isChild = (runId: RunId): boolean =>
     children.has(runId) ||
-    (SubscriptionRef.getUnsafe(session.view).streams.get(runId)?.parentId ??
+    (SubscriptionRef.getUnsafe(session.view).runs.get(runId)?.parentId ??
       null) !== null;
   function emitProjected(projected: CliProjectedNdjsonProgressEvent): void {
     writeRecord({
@@ -318,7 +323,7 @@ export function attachCliSessionProgressProjection(
       Effect.sync(() => passed(commit)),
     ),
   );
-  const detachRosters = session.executions.onChildActivity(
+  const detachRosters = session.runs.onChildActivity(
     (parentStreamId, items) => {
       const projected: CliProjectedNdjsonProgressEvent = {
         event: 'updateActiveSubagents',

@@ -19,7 +19,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import type {
   AgentDelegationScope,
-  StreamTabId,
+  RunId,
   ToolResult,
   ToolUseAgentProposal,
   WorkflowAgentProposal,
@@ -37,7 +37,7 @@ import {
 } from './delegationAvailability';
 
 // Local file imports
-import { executeSubagent } from './subagentExecution';
+import { executeSubagent } from './subagentRun';
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'No feedback provided.',
@@ -167,11 +167,11 @@ interface DelegationProposalDecision {
 /** Request the shared proposal decision, honoring the stream's bypass policy. */
 export async function requestDelegationProposal(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-  streamId: StreamTabId,
+  runId: RunId,
   session: SessionHandle,
   parentContext: RunContext | undefined,
 ): Promise<DelegationProposalDecision> {
-  if (proposalApprovals(session).isBypassed(streamId)) {
+  if (proposalApprovals(session).isBypassed(runId)) {
     return { result: { action: 'approve' }, autoApproved: true };
   }
 
@@ -189,7 +189,7 @@ export async function requestDelegationProposal(
 
   const interaction = session.interactions.requestAgentProposal({
     requestId: generateShortId(),
-    streamId,
+    runId,
     ...proposal,
   });
   if (!interaction) {
@@ -210,11 +210,11 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   callContext: ToolCallContext | undefined,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
   agentName: string,
-  streamId: StreamTabId,
+  runId: RunId,
 ) {
   const decision = yield* Effect.tryPromise({
     try: () =>
-      requestDelegationProposal(proposal, streamId, session, parentContext),
+      requestDelegationProposal(proposal, runId, session, parentContext),
     catch: ensureError,
   });
   if (decision.autoApproved) {
@@ -225,7 +225,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
       callContext,
       proposal,
       agentName,
-      streamId,
+      runId,
       {
         approvalMeta: { autoApproved: true },
       },
@@ -304,7 +304,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
     callContext,
     effective,
     effectiveAgentName,
-    streamId,
+    runId,
     {
       approvalMeta: {
         autoApproved: false,

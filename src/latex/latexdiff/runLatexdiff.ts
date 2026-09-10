@@ -13,28 +13,28 @@ import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
-  ExecutionIdSchema,
+  RunIdSchema,
   OutputFileInfoSchema,
   parsePersistedRoundIndexed,
 } from '@shared/schemas';
 import type {
-  ExecutionId,
+  RunId,
   OutputFileInfo,
   ReadonlyRoundIndexed,
   RoundIndexed,
 } from '@shared/schemas';
 
-import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import type { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 import {
   runLatexdiffFromMetadata,
   runLatexdiffViaWorkspaceScan,
 } from './diffOperations';
-import { discoverLatestExecutionOutputs } from './outputDiscovery';
+import { discoverLatestRunOutputs } from './outputDiscovery';
 import {
   scanRunDirForOutputs,
   type RunOutputFilesystem,
 } from './runOutputFiles';
-import type { LatexExecutionDiscoveryPort } from './executionDiscovery';
+import type { LatexRunDiscoveryPort } from './runDiscovery';
 import type { MathMarkupOption } from './mathMarkup';
 import type {
   DiffProgressReporter,
@@ -63,16 +63,16 @@ export function normalizeRunLatexdiffOutputsByRound(
 /** How the round outputs fed to the diff engine were resolved. */
 type LatexdiffOutputsSource = 'metadata' | 'run-dir-scan' | 'workspace-scan';
 
-export interface RunLatexdiffForExecutionParams {
+export interface RunLatexdiffForRunParams {
   readonly agent: string;
   readonly model: string;
   readonly inputFile: string;
-  /** Agent-owned execution listing injected by hosts (metadata auto-discovery). */
-  readonly executionDiscovery: LatexExecutionDiscoveryPort;
-  readonly snapshots: Pick<StreamSnapshotStore, 'read'>;
+  /** Agent-owned run listing injected by hosts (metadata auto-discovery). */
+  readonly runDiscovery: LatexRunDiscoveryPort;
+  readonly snapshots: Pick<RunSnapshotStore, 'read'>;
   readonly filesystem: RunOutputFilesystem;
   readonly outputFiles?: string[];
-  /** Execution to scope output discovery to (progress-toolbar invocations). */
+  /** Run to scope output discovery to (progress-toolbar invocations). */
   readonly runId?: string | null;
   /**
    * Pre-resolved round outputs (e.g. from a progress-toolbar payload). When
@@ -88,20 +88,20 @@ export interface RunLatexdiffForExecutionParams {
 
 interface LatexdiffExecutionResult {
   readonly outcome: DiffRunOutcome;
-  /** Resolved execution, when one was identified. */
-  readonly executionId?: ExecutionId;
+  /** Resolved run, when one was identified. */
+  readonly runId?: RunId;
   readonly source: LatexdiffOutputsSource;
 }
 
-export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
+export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
   function* (
-    params: RunLatexdiffForExecutionParams,
+    params: RunLatexdiffForRunParams,
   ): Effect.fn.Return<LatexdiffExecutionResult, Error> {
     const {
       agent,
       model,
       inputFile,
-      executionDiscovery,
+      runDiscovery,
       outputFiles,
       mathMarkup,
       generateBetweenRoundDiffs,
@@ -114,14 +114,14 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
     let source: LatexdiffOutputsSource = outputsByRound
       ? 'metadata'
       : 'workspace-scan';
-    let discoveredExecutionId: ExecutionId | undefined;
+    let discoveredRunId: RunId | undefined;
 
     // When the caller pins a runId (progress-toolbar invocations do), scope
-    // output discovery to that execution first. Otherwise metadata
+    // output discovery to that run first. Otherwise metadata
     // auto-discovery can return a different, newer run with the same
     // agent/model/inputFile: silently diffing against the wrong outputs.
     if (!outputsByRound && runId) {
-      const parsedRunId = ExecutionIdSchema.safeParse(runId);
+      const parsedRunId = RunIdSchema.safeParse(runId);
       if (parsedRunId.success) {
         const scanned = yield* scanRunDirForOutputs(
           parsedRunId.data,
@@ -133,9 +133,9 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
         if (scanned) {
           outputsByRound = scanned;
           source = 'run-dir-scan';
-          discoveredExecutionId = parsedRunId.data;
+          discoveredRunId = parsedRunId.data;
           yield* Effect.logDebug(
-            `Using run-dir scan outputs from execution ${parsedRunId.data}`,
+            `Using run-dir scan outputs from run ${parsedRunId.data}`,
           );
         }
       }
@@ -145,10 +145,10 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
     // and pulling their persisted metadata. When the caller pinned a runId but
     // the run-dir scan turned up nothing, DO NOT drop to latest-matching
     // auto-discovery: that would silently diff against a different (usually
-    // newer) execution with the same agent/model/input.
+    // newer) run with the same agent/model/input.
     if (!outputsByRound && !runId) {
-      const discovered = yield* discoverLatestExecutionOutputs(
-        executionDiscovery,
+      const discovered = yield* discoverLatestRunOutputs(
+        runDiscovery,
         params.snapshots,
         {
           agent,
@@ -161,9 +161,9 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
       if (discovered) {
         outputsByRound = discovered.rounds;
         source = 'metadata';
-        discoveredExecutionId = discovered.executionId;
+        discoveredRunId = discovered.runId;
         yield* Effect.logDebug(
-          `Using metadata outputs from execution ${discovered.executionId}`,
+          `Using metadata outputs from run ${discovered.runId}`,
         );
       }
     }
@@ -188,7 +188,7 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
           progress,
         });
 
-    return { outcome, executionId: discoveredExecutionId, source };
+    return { outcome, runId: discoveredRunId, source };
   },
   // One channel for the whole run, so the discovery steps and the diff engine
   // below both land on the caller's channel.

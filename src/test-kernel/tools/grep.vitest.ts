@@ -37,7 +37,7 @@ describe('buildArguments', () => {
   );
 });
 
-describe('GrepTool execution', () => {
+describe('GrepTool run', () => {
   setupPlatform({ workspacePath: process.cwd() });
 
   afterEach(() => {

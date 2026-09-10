@@ -18,7 +18,7 @@ const failure: CompileFailure = {
     kind: 'runStorage',
     absolutePath: '/run/compile/r0_main.tex.log',
     relativePath: 'compile/r0_main.tex.log',
-    executionId: '00000000-0000-4000-8000-000000000001',
+    runId: '00000000-0000-4000-8000-000000000001',
   },
   logRelativePath: 'compile/r0_main.tex.log',
 };

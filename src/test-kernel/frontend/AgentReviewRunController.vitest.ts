@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
+import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentReviewRunController,
@@ -11,37 +11,37 @@ import {
 } from '@frontend/review/AgentReviewRunController';
 
 function createRunHarness() {
-  const stopAgentStream = vi.fn(() => Effect.void);
+  const stopAgentRun = vi.fn(() => Effect.void);
   let currentHandle: AgentRunHandle | undefined;
   const session = {
     executions: {
       getHandle: () => currentHandle,
-      stopAgentStream,
+      stopAgentRun,
     },
   } as unknown as SessionHandle;
   const bind = (
     controller: AgentReviewRunController,
     run: AgentReviewRunToken,
-    executionId: string,
+    runId: string,
   ) => {
     const handle = {
-      executionId,
-      childStreamId: `review#${executionId}`,
+      runId,
+      childRunId: `review#${runId}`,
     } as AgentRunHandle;
     currentHandle = handle;
     Effect.runSync(controller.bind(run, handle));
     return handle;
   };
-  return { bind, session, stopAgentStream };
+  return { bind, session, stopAgentRun };
 }
 
 function startBoundRun(
   controller: AgentReviewRunController,
   harness: ReturnType<typeof createRunHarness>,
-  executionId: string,
+  runId: string,
 ): AgentReviewRunToken {
   const run = controller.start(harness.session);
-  harness.bind(controller, run, executionId);
+  harness.bind(controller, run, runId);
   return run;
 }
 
@@ -59,7 +59,7 @@ function stopReview(controller: AgentReviewRunController): boolean {
 }
 
 describe('AgentReviewRunController', () => {
-  it('latches a stop requested before the execution handle arrives', () => {
+  it('latches a stop requested before the run handle arrives', () => {
     const controller = new AgentReviewRunController();
     const harness = createRunHarness();
     const run = controller.start(harness.session);
@@ -68,9 +68,9 @@ describe('AgentReviewRunController', () => {
     expect(controller.isActive).toBe(true);
     harness.bind(controller, run, 'review-a');
 
-    expect(harness.stopAgentStream).toHaveBeenCalledOnce();
+    expect(harness.stopAgentRun).toHaveBeenCalledOnce();
     expect(stopReview(controller)).toBe(false);
-    expect(harness.stopAgentStream).toHaveBeenCalledOnce();
+    expect(harness.stopAgentRun).toHaveBeenCalledOnce();
     expect(controller.isActive).toBe(true);
     expect(controller.finish(run)).toBe(true);
     expect(controller.isActive).toBe(false);
@@ -87,8 +87,8 @@ describe('AgentReviewRunController', () => {
 
     expect(controller.finish(runA)).toBe(false);
     expect(stopReview(controller)).toBe(true);
-    expect(first.stopAgentStream).not.toHaveBeenCalled();
-    expect(second.stopAgentStream).toHaveBeenCalledOnce();
+    expect(first.stopAgentRun).not.toHaveBeenCalled();
+    expect(second.stopAgentRun).toHaveBeenCalledOnce();
   });
 
   it('carries the collection only while the run is current', () => {
@@ -115,8 +115,8 @@ describe('AgentReviewRunController', () => {
 
     Effect.runSync(controller.discard());
 
-    expect(harness.stopAgentStream).toHaveBeenCalledOnce();
-    // The execution settles on its own schedule, so the slot stays claimed
+    expect(harness.stopAgentRun).toHaveBeenCalledOnce();
+    // The run settles on its own schedule, so the slot stays claimed
     // while its results and any further reports are dropped.
     expect(controller.isActive).toBe(true);
     expect(controller.isCurrent(run)).toBe(false);

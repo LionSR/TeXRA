@@ -12,7 +12,7 @@ import {
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
-import { deriveWorkflowCounts, type ExecutionId } from '@shared/schemas';
+import { deriveWorkflowCounts, type RunId } from '@shared/schemas';
 
 const META = `export const meta = {
   name: 'test-flow',
@@ -58,12 +58,12 @@ function rejectOnAbort(
 }
 
 /**
- * The child execution id one attempt runs under. Interactive control is keyed
+ * The child run id one attempt runs under. Interactive control is keyed
  * by the id the runner reports, so a fake runner announces one per attempt
  * exactly as the production runner does — and a retry announces a new one.
  */
-function childExecutionIdFor(index: number, attempt = 1): ExecutionId {
-  return `child-${index}-${attempt}` as ExecutionId;
+function childRunIdFor(index: number, attempt = 1): RunId {
+  return `child-${index}-${attempt}` as RunId;
 }
 
 const EMPTY_FILES_JSON = '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}';
@@ -104,7 +104,7 @@ return null`);
   it('validates the declarative task plan as part of workflow metadata', () => {
     const { meta } = parseWorkflowScript(`export const meta = {
   name: 'planned',
-  description: 'declares progress before execution',
+  description: 'declares progress before run',
   phases: [{ title: 'Audit' }],
   tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
 }
@@ -1025,7 +1025,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
       new Promise<string>((resolve, reject) => {
         invocations.push(invocation);
         invocation.report?.({
-          childExecutionId: childExecutionIdFor(
+          childRunId: childRunIdFor(
             invocation.index,
             invocations.length,
           ),
@@ -1047,7 +1047,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     await vi.waitFor(() => expect(invocations).toHaveLength(1));
     const firstKey = invocations[0]?.key;
     fingerprint = 'new-proof';
-    control(childExecutionIdFor(0), 'retry');
+    control(childRunIdFor(0), 'retry');
     const run = await runPromise;
 
     expect(invocations[1]?.key).not.toBe(firstKey);
@@ -2046,7 +2046,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
   });
 
-  it('aborts guest execution and the active child from a parent signal', async () => {
+  it('aborts guest run and the active child from a parent signal', async () => {
     const controller = new AbortController();
     let childSignal: AbortSignal | undefined;
     const run = runWorkflowScript({
@@ -2074,7 +2074,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     expect(childSignal?.aborted).toBe(true);
   });
 
-  it('skip(childExecutionId) skips only that call: SKIPPED result, no journal, siblings finish', async () => {
+  it('skip(childRunId) skips only that call: SKIPPED result, no journal, siblings finish', async () => {
     const started = new Set<number>();
     const release = new Map<number, () => void>();
     let control!: WorkflowScriptControl;
@@ -2083,7 +2083,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         started.add(invocation.index);
         invocation.report?.({
           model: 'skip-model',
-          childExecutionId: childExecutionIdFor(invocation.index),
+          childRunId: childRunIdFor(invocation.index),
         });
         release.set(invocation.index, () =>
           resolve(`done:${invocation.index}`),
@@ -2105,7 +2105,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
 
     await vi.waitFor(() => expect(started.size).toBe(3));
-    control(childExecutionIdFor(1), 'skip');
+    control(childRunIdFor(1), 'skip');
     // Siblings settle normally; only index 1 is cancelled.
     release.get(0)?.();
     release.get(2)?.();
@@ -2134,9 +2134,9 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         new Promise<string>((_resolve, reject) => {
           rejectOnAbort(invocation, reject);
           invocation.report?.({
-            childExecutionId: childExecutionIdFor(invocation.index),
+            childRunId: childRunIdFor(invocation.index),
           });
-          control(childExecutionIdFor(invocation.index), 'skip');
+          control(childRunIdFor(invocation.index), 'skip');
         }),
     );
     const run = await runWorkflowScript({
@@ -2152,7 +2152,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     expect(runner).toHaveBeenCalledTimes(1);
   });
 
-  it('retry(childExecutionId) re-runs a single in-flight call and yields the new result', async () => {
+  it('retry(childRunId) re-runs a single in-flight call and yields the new result', async () => {
     const attemptByIndex = new Map<number, number>();
     const releases: Array<() => void> = [];
     let control!: WorkflowScriptControl;
@@ -2161,7 +2161,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
         attemptByIndex.set(invocation.index, attempt);
         invocation.report?.({
-          childExecutionId: childExecutionIdFor(invocation.index, attempt),
+          childRunId: childRunIdFor(invocation.index, attempt),
         });
         releases.push(() => resolve(`attempt-${attempt}`));
         rejectOnAbort(invocation, reject);
@@ -2176,7 +2176,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
 
     await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(1));
-    control(childExecutionIdFor(0, 1), 'retry');
+    control(childRunIdFor(0, 1), 'retry');
     // The aborted first attempt is discarded; a fresh attempt starts.
     await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
     releases.at(-1)?.();
@@ -2203,7 +2203,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
         attemptByIndex.set(invocation.index, attempt);
         invocation.report?.({
-          childExecutionId: childExecutionIdFor(invocation.index, attempt),
+          childRunId: childRunIdFor(invocation.index, attempt),
         });
         releases.push(() => resolve(`attempt-${attempt}`));
       });
@@ -2217,11 +2217,11 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
 
     await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(1));
-    control(childExecutionIdFor(0, 1), 'retry');
+    control(childRunIdFor(0, 1), 'retry');
     await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
     // The retried attempt runs under a new id; the abandoned one is dead and
     // must not reach the fresh attempt that now owns the call.
-    control(childExecutionIdFor(0, 1), 'skip');
+    control(childRunIdFor(0, 1), 'skip');
     releases.at(-1)?.();
 
     const run = await runPromise;
@@ -2231,14 +2231,14 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
   it('never registers a recovered child id as a skip/retry target', async () => {
     let control!: WorkflowScriptControl;
     let releaseCall!: () => void;
-    const recoveredId = childExecutionIdFor(0, 1);
+    const recoveredId = childRunIdFor(0, 1);
     const runner = (invocation: WorkflowAgentInvocation) =>
       new Promise<string>((resolve, reject) => {
         rejectOnAbort(invocation, reject);
         // A durable-recovery runner re-attaches the known child id for
         // navigation, then keeps resolving asynchronously (readMeta gap).
         invocation.report?.({
-          childExecutionId: recoveredId,
+          childRunId: recoveredId,
           recovered: true,
         });
         releaseCall = () => resolve('recovered-result');
@@ -2299,7 +2299,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       attempts += 1;
       invocation.report?.({
         model: 'retry-model',
-        childExecutionId: childExecutionIdFor(invocation.index, attempts),
+        childRunId: childRunIdFor(invocation.index, attempts),
       });
       return new Promise<never>((_resolve, reject) => {
         rejectOnAbort(invocation, reject);
@@ -2318,9 +2318,9 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     });
 
     await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(1));
-    control(childExecutionIdFor(0, 1), 'retry');
+    control(childRunIdFor(0, 1), 'retry');
     await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(2));
-    control(childExecutionIdFor(0, 2), 'retry');
+    control(childRunIdFor(0, 2), 'retry');
 
     await expect(run).rejects.toThrow(/agent-call cap/);
     expect(runner).toHaveBeenCalledTimes(2);
@@ -2391,8 +2391,8 @@ return 'done'`,
         invocation.report?.({
           agent: 'writer',
           model: 'model-a',
-          childExecutionId: 'abcdef123456',
-          childStreamId: 'writer#abcdef123456',
+          childRunId: 'abcdef123456',
+          childRunId: 'writer#abcdef123456',
         });
         return 'drafted';
       },
@@ -2411,8 +2411,8 @@ return 'done'`,
           status: 'completed',
           agent: 'writer',
           model: 'model-a',
-          childExecutionId: 'abcdef123456',
-          childStreamId: 'writer#abcdef123456',
+          childRunId: 'abcdef123456',
+          childRunId: 'writer#abcdef123456',
           attempts: [{ number: 1, id: 'abcdef123456' }],
         },
         { id: 'review', status: 'skipped' },

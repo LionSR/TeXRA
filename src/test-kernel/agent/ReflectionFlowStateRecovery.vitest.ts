@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getExecutionStore } from '@agent/storage';
+import { getRunStore } from '@agent/storage';
 import { noopTrace } from '@agent/trace';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import {
@@ -27,8 +27,8 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
+  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -62,15 +62,15 @@ function createModelCell(): RunReflectionFlowInput['modelCell'] {
 }
 
 async function runPersistedReflectionFlow(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
+  runId: RunId,
+  runId: RunId,
   logger: RunReflectionFlowInput['logger'] = noopTrace,
   options: { rounds?: number; aborted?: boolean } = {},
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
   const session = createProcessSession();
   const runScope = createRunScope({
-    streamId,
-    executionId,
+    runId,
+    runId,
     agentName: CONFIG.agent,
     session,
     signal:
@@ -108,13 +108,13 @@ function recoveryCase(
   name: string,
   options: { rounds?: number; aborted?: boolean } = {},
 ) {
-  const executionId = `reflection-flow-${name}` as ExecutionId;
-  const streamId = `workflow@gpt54#reflection-flow-${name}` as StreamTabId;
+  const runId = `reflection-flow-${name}` as RunId;
+  const runId = `workflow@gpt54#reflection-flow-${name}` as RunId;
   return {
-    key: flowKey(executionId),
+    key: flowKey(runId),
     run: () =>
-      runPersistedReflectionFlow(executionId, streamId, noopTrace, options),
-    store: getExecutionStore(executionId),
+      runPersistedReflectionFlow(runId, runId, noopTrace, options),
+    store: getRunStore(runId),
   };
 }
 
@@ -169,8 +169,8 @@ describe('runReflectionFlow persisted-state recovery', () => {
 
     await expect(
       runPersistedReflectionFlow(
-        'reflection-flow-preparation-failure' as ExecutionId,
-        'workflow@gpt54#reflection-flow-preparation-failure' as StreamTabId,
+        'reflection-flow-preparation-failure' as RunId,
+        'workflow@gpt54#reflection-flow-preparation-failure' as RunId,
         logger,
       ),
     ).rejects.toMatchObject({

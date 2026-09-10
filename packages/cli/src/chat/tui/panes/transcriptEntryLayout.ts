@@ -27,8 +27,8 @@ import {
   type TranscriptRowKind,
 } from '@shared/transcript';
 import { WORKFLOW_CALL_STATUS_GLYPH } from '@shared/copy/workflowCall';
-import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {
@@ -281,7 +281,7 @@ function entryLines(
   columns: number,
   colorEnabled: boolean | undefined,
   maxRows: number | undefined,
-  executionLabels: ExecutionLabels | undefined,
+  runLabels: RunLabels | undefined,
 ): readonly string[] {
   const body = entryBodyLines(row, mode, columns);
   const headline = transcriptRowHeadline(row);
@@ -326,7 +326,7 @@ function entryLines(
         mode === 'live' || mode === 'bounded' || mode === 'scrollback-budget';
       const lines = toolUseDisplayLines(row, {
         elide: mode !== 'scrollback-budget',
-        executionLabels,
+        runLabels,
         ...(useRichDisplay ? { width: columns } : {}),
       });
       // Rich rows and their bounded fallback keep each display line on one
@@ -391,14 +391,14 @@ export function transcriptEntryLayout(
     colorEnabled,
     maxRows,
     mode = 'scrollback',
-    executionLabels,
+    runLabels,
     previousEntry,
     width,
   }: {
     readonly colorEnabled?: boolean;
     readonly maxRows?: number;
     readonly mode?: TranscriptEntryLayoutMode;
-    readonly executionLabels?: ExecutionLabels;
+    readonly runLabels?: RunLabels;
     /** The row rendered directly above this one, when the caller knows it.
      *  Yoga does not collapse adjacent margins, so without this a boundary
      *  where both sides declare a separator costs two blank rows instead of
@@ -429,7 +429,7 @@ export function transcriptEntryLayout(
       columns,
       colorEnabled,
       maxRows,
-      executionLabels,
+      runLabels,
     ),
     inset,
     marginBottomRows,
@@ -442,14 +442,14 @@ export function transcriptEntryLayout(
 export function fullTranscriptEntryLayout(
   row: TranscriptRow,
   width: number,
-  executionLabels?: ExecutionLabels,
+  runLabels?: RunLabels,
 ): TranscriptEntryLayout {
   // Ordinary Ink rows spend this inset as paddingX. Printed text has no Box
   // padding, so add it back before the shared layout subtracts it.
   const printWidth = width + ROW_GEOMETRY[row.kind].inset;
   const layout = transcriptEntryLayout(row, {
     mode: 'scrollback-budget',
-    executionLabels,
+    runLabels,
     width: printWidth,
   });
   if (row.kind !== 'tool') return layout;
@@ -458,7 +458,7 @@ export function fullTranscriptEntryLayout(
     lines: wrapDisplayLines(
       toolUseDisplayLines(row, {
         elide: false,
-        executionLabels,
+        runLabels,
         showFullOutput: true,
       }),
       layout.columns,

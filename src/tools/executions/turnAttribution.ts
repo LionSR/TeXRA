@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
-import type { ExecutionKVStore } from '@agent/storage';
+import type { RunKVStore } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { isInFlightPhase } from '@shared/runs/runStatus';
 import { ensureError } from '@utils/errors/errorMessage';
 /**
  * Turn attribution for the executions tool's single latest-value slots.
@@ -11,12 +11,12 @@ import { ensureError } from '@utils/errors/errorMessage';
 // Local imports
 
 import {
-  resolveExecutionLiveness,
-  type ExecutionLiveness,
-} from './executionLiveness';
+  resolveRunLiveness,
+  type RunLiveness,
+} from './runLiveness';
 
 /** How the accepted turn's fate reads, given what owns the run. */
-function turnFate(token: string, liveness: ExecutionLiveness): string {
+function turnFate(token: string, liveness: RunLiveness): string {
   switch (liveness.kind) {
     case 'live':
       // A handle this process still tracks past its stream's terminal phase
@@ -49,10 +49,10 @@ function turnFate(token: string, liveness: ExecutionLiveness): string {
  * this process cannot see how far such a turn got. A missing `meta.outcome` is
  * not liveness: a run whose owner crashed leaves exactly that, and it reads as
  * interrupted. Returns null when the slots reflect the latest accepted turn
- * (or the execution has no turn identity at all).
+ * (or the run has no turn identity at all).
  */
 export const turnAttributionNote = Effect.fn('turnAttributionNote')(function* (
-  store: ExecutionKVStore,
+  store: RunKVStore,
   session: SessionHandle,
 ) {
   const turnState = yield* Effect.tryPromise({
@@ -64,8 +64,8 @@ export const turnAttributionNote = Effect.fn('turnAttributionNote')(function* (
   if (!active || active.token === completed) {
     return null;
   }
-  const liveness = yield* resolveExecutionLiveness(
-    store.getExecutionId(),
+  const liveness = yield* resolveRunLiveness(
+    store.getRunId(),
     session,
   );
   const fate = turnFate(active.token, liveness);

@@ -1,4 +1,4 @@
-/** Completed-run display reads, keyed by the registered execution-to-stream link. */
+/** Completed-run display reads, keyed by the registered run-to-stream link. */
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
@@ -19,10 +19,10 @@ import { assertNever, isObject } from '@utils/core';
 /** Read completed tasks from the session's committed stream fold. */
 export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
   function* (
-    executionId: RunId,
+    runId: RunId,
     session: SessionHandle,
   ): Effect.fn.Return<readonly TodoItem[], Error> {
-    const snapshot = yield* session.snapshots.read(executionId);
+    const snapshot = yield* session.snapshots.read(runId);
     return snapshot.todos;
   },
 );
@@ -279,11 +279,11 @@ function streamLogEntriesToConversation(
 export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
-  executionId: RunId,
+  runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
   const conversation = streamLogEntriesToConversation(
-    yield* session.transcripts.readEntries(executionId),
+    yield* session.transcripts.readEntries(runId),
   );
   return conversation.length > 0
     ? { conversation, source: 'streamLog' }

@@ -6,14 +6,14 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  validateOwnedExecutionLease: vi.fn(),
-  acquireResumedExecutionLease: vi.fn(),
+  validateOwnedRunLease: vi.fn(),
+  acquireResumedRunLease: vi.fn(),
   prepareAgentDefinition: vi.fn(),
   readMeta: vi.fn(),
   executeAgent: vi.fn(),
   finalizeRun: vi.fn(),
-  registerExecution: vi.fn(),
-  releaseOwnedExecutionLease: vi.fn(),
+  registerRun: vi.fn(),
+  releaseOwnedRunLease: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -22,24 +22,24 @@ vi.mock('@agent/storage', () => ({
       try: () => mocks.finalizeRun(...args),
       catch: ensureError,
     }),
-  registerExecution: (...args: unknown[]) =>
+  registerRun: (...args: unknown[]) =>
     Effect.tryPromise({
-      try: () => mocks.registerExecution(...args),
+      try: () => mocks.registerRun(...args),
       catch: ensureError,
     }),
-  getExecutionRecords: () => ({
+  getRunRecords: () => ({
     readMeta: () => Effect.sync(() => mocks.readMeta()),
   }),
 }));
 
-vi.mock('@agent/storage/executionLease', () => ({
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
-  validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
+vi.mock('@agent/storage/runLease', () => ({
+  acquireResumedRunLease: mocks.acquireResumedRunLease,
+  releaseOwnedRunLease: mocks.releaseOwnedRunLease,
+  validateOwnedRunLease: mocks.validateOwnedRunLease,
 }));
 
-vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
+vi.mock('@agent/storage/runLifecycle', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/runLifecycle')>()),
   finalizeRun: (...args: unknown[]) =>
     Effect.tryPromise({
       try: () => mocks.finalizeRun(...args),
@@ -64,10 +64,10 @@ vi.mock('@agent/runtime/executeAgent', async () => {
 });
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { RunHandle } from '@agent/runtime/RunHandle';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import { getStreamTabId } from '@agent/runtime/runTab';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -75,50 +75,50 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-const EXECUTION_ID = 'run-agent-owner' as ExecutionId;
+const EXECUTION_ID = 'run-agent-owner' as RunId;
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
   agentCategory: 'toolUse',
   model: 'test-model',
 });
 const flushArtifacts = vi.fn();
-let trackedHandle: AgentExecutionHandle | undefined;
-const trackExecution = vi.fn((handle: AgentExecutionHandle) => {
+let trackedHandle: RunHandle | undefined;
+const trackRun = vi.fn((handle: RunHandle) => {
   trackedHandle = handle;
 });
-const untrackExecution = vi.fn((executionId: ExecutionId) => {
-  if (trackedHandle?.executionId === executionId) trackedHandle = undefined;
+const untrackRun = vi.fn((runId: RunId) => {
+  if (trackedHandle?.runId === runId) trackedHandle = undefined;
 });
 // The real exit choreography over the fake's flushArtifacts and the mocked
 // lease verbs, so the existing flush/release assertions keep
 // observing the same tree through its one owner.
 const SESSION = {
   executions: {
-    track: trackExecution,
-    getHandle: vi.fn((executionId) =>
-      trackedHandle?.executionId === executionId ? trackedHandle : undefined,
+    track: trackRun,
+    getHandle: vi.fn((runId) =>
+      trackedHandle?.runId === runId ? trackedHandle : undefined,
     ),
-    untrack: untrackExecution,
+    untrack: untrackRun,
     // No competing generation exists in this fixture; the lane is a passthrough.
-    launchExecution: vi.fn(
-      (_executionId: ExecutionId, operation: Effect.Effect<unknown, unknown>) =>
+    launchRun: vi.fn(
+      (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
         operation,
     ),
   },
   flushArtifacts,
-  acquireExecutionClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseExecutionClaims: () => Effect.void },
+  acquireRunClaims: () => Effect.succeed(Effect.void),
+  graph: { releaseRunClaims: () => Effect.void },
   settlePublications: vi.fn(async () => {}),
-  releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
+  releaseRunLease: SessionHandle.prototype.releaseRunLease,
 } as never;
 
 const EXECUTE_RESULT = {
   category: 'toolUse',
-  executionId: EXECUTION_ID,
-  streamId: EXECUTION_ID,
+  runId: EXECUTION_ID,
+  runId: EXECUTION_ID,
   outcome: 'COMPLETED',
 };
 const FINALIZE_RESULT = { ok: true };
@@ -130,35 +130,35 @@ type RunOptions = Omit<Parameters<typeof runAgent>[1], 'session'> & {
 function launch({ kind = 'resume', ...options }: RunOptions = {}) {
   return Effect.runPromise(
     runAgent(
-      { kind, config: CONFIG, executionId: EXECUTION_ID },
+      { kind, config: CONFIG, runId: EXECUTION_ID },
       { session: SESSION, ...options },
     ),
   );
 }
 
-describe('runAgent execution ownership', () => {
+describe('runAgent run ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     trackedHandle = undefined;
-    mocks.registerExecution.mockResolvedValue(undefined);
-    mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
+    mocks.registerRun.mockResolvedValue(undefined);
+    mocks.acquireResumedRunLease.mockResolvedValue('acquired');
     mocks.prepareAgentDefinition.mockImplementation(({ config }) => ({
       config,
     }));
-    mocks.readMeta.mockReturnValue({ streamId: 'assistant#run-agent-owner' });
-    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
-    mocks.validateOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.readMeta.mockReturnValue({ runId: 'assistant#run-agent-owner' });
+    mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
+    mocks.validateOwnedRunLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
 
-  it('cleans up a partially tracked launch when execution tracking throws', async () => {
+  it('cleans up a partially tracked launch when run tracking throws', async () => {
     const signal = new AbortController().signal;
     const removeEventListener = vi.spyOn(signal, 'removeEventListener');
-    const trackError = new Error('execution tracking failed');
-    let partiallyTrackedHandle: AgentExecutionHandle | undefined;
-    trackExecution.mockImplementationOnce((handle) => {
+    const trackError = new Error('run tracking failed');
+    let partiallyTrackedHandle: RunHandle | undefined;
+    trackRun.mockImplementationOnce((handle) => {
       trackedHandle = handle;
       partiallyTrackedHandle = handle;
       throw trackError;
@@ -172,8 +172,8 @@ describe('runAgent execution ownership', () => {
       'abort',
       expect.any(Function),
     );
-    expect(untrackExecution).toHaveBeenCalledOnce();
-    expect(untrackExecution).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(untrackRun).toHaveBeenCalledOnce();
+    expect(untrackRun).toHaveBeenCalledWith(EXECUTION_ID);
     expect(trackedHandle).toBeUndefined();
     expect(partiallyTrackedHandle).toBeDefined();
     expect(partiallyTrackedHandle?.interrupt()).toBe(false);
@@ -188,12 +188,12 @@ describe('runAgent execution ownership', () => {
         expect(
           yield* Effect.flip(
             runAgent(
-              { kind: 'resume', config: CONFIG, executionId: EXECUTION_ID },
+              { kind: 'resume', config: CONFIG, runId: EXECUTION_ID },
               { session: SESSION, launchSignal: signal },
             ),
           ),
         ).toMatchObject({
-          message: `Execution metadata not found for ${EXECUTION_ID}`,
+          message: `Run metadata not found for ${EXECUTION_ID}`,
         });
         expect(getEventListeners(signal, 'abort')).toEqual([]);
       }),
@@ -201,7 +201,7 @@ describe('runAgent execution ownership', () => {
 
   it('makes a fresh launch interruptible before registration settles', async () => {
     let finishRegistration!: () => void;
-    mocks.registerExecution.mockImplementationOnce(
+    mocks.registerRun.mockImplementationOnce(
       () =>
         new Promise<void>((resolve) => {
           finishRegistration = resolve;
@@ -220,50 +220,50 @@ describe('runAgent execution ownership', () => {
   it('registers and releases an explicitly identified fresh run', async () => {
     await launch({ kind: 'fresh' });
 
-    expect(mocks.registerExecution).toHaveBeenCalledOnce();
+    expect(mocks.registerRun).toHaveBeenCalledOnce();
     // #9590 obligation 1: registration carries the birth stream identity and
     // completes before the run — so before any transcript/snapshot fact.
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    expect(mocks.registerRun).toHaveBeenCalledWith(
       SESSION,
       EXECUTION_ID,
       CONFIG,
       CONFIG.agent,
       expect.objectContaining({
-        streamId: getStreamTabId(CONFIG.agent, {
-          executionId: EXECUTION_ID,
+        runId: getStreamTabId(CONFIG.agent, {
+          runId: EXECUTION_ID,
         }),
       }),
     );
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
     expect(
-      mocks.registerExecution.mock.invocationCallOrder[0] ??
+      mocks.registerRun.mock.invocationCallOrder[0] ??
         Number.POSITIVE_INFINITY,
     ).toBeLessThan(mocks.executeAgent.mock.invocationCallOrder[0] ?? 0);
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
 
-  it('acquires and releases ownership for an existing execution', async () => {
+  it('acquires and releases ownership for an existing run', async () => {
     await launch();
 
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
+    expect(mocks.registerRun).not.toHaveBeenCalled();
+    expect(mocks.acquireResumedRunLease).toHaveBeenCalledWith(
       EXECUTION_ID,
     );
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
   it.effect(
-    'registers the resolved category and passes the same definition to execution',
+    'registers the resolved category and passes the same definition to run',
     () =>
       Effect.gen(function* () {
         const definition = { config: { ...CONFIG, agentCategory: 'workflow' } };
         mocks.prepareAgentDefinition.mockReturnValueOnce(definition);
 
         yield* runAgent(
-          { kind: 'fresh', config: CONFIG, executionId: EXECUTION_ID },
+          { kind: 'fresh', config: CONFIG, runId: EXECUTION_ID },
           { session: SESSION },
         );
 
-        expect(mocks.registerExecution).toHaveBeenCalledWith(
+        expect(mocks.registerRun).toHaveBeenCalledWith(
           SESSION,
           EXECUTION_ID,
           definition.config,
@@ -286,14 +286,14 @@ describe('runAgent execution ownership', () => {
       order.push('finalize');
       return FINALIZE_RESULT;
     });
-    mocks.releaseOwnedExecutionLease.mockImplementationOnce(async () => {
+    mocks.releaseOwnedRunLease.mockImplementationOnce(async () => {
       order.push('release');
     });
     await expect(launch({ kind: 'fresh' })).rejects.toBe(launchError);
 
     expect(order).toEqual(['finalize', 'release']);
     expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
-      executionId: EXECUTION_ID,
+      runId: EXECUTION_ID,
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
@@ -309,25 +309,25 @@ describe('runAgent execution ownership', () => {
     await expect(launch({ kind: 'fresh' })).rejects.toBe(launchError);
 
     expect(mocks.finalizeRun).not.toHaveBeenCalled();
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
 
   it('restores a cancelled outcome when resume fails before lifecycle startup', async () => {
     const launchError = new Error('resume launch failed');
     mocks.readMeta.mockReturnValueOnce({
       outcome: RUN_OUTCOME.CANCELLED,
-      streamId: 'assistant#run-agent-owner',
+      runId: 'assistant#run-agent-owner',
     });
     mocks.executeAgent.mockRejectedValueOnce(launchError);
 
     await expect(launch()).rejects.toBe(launchError);
 
     expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
-      executionId: EXECUTION_ID,
+      runId: EXECUTION_ID,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
 
   it('persists final host artifacts before releasing ownership', async () => {
@@ -336,7 +336,7 @@ describe('runAgent execution ownership', () => {
       order.push('execute');
       return EXECUTE_RESULT;
     });
-    mocks.releaseOwnedExecutionLease.mockImplementationOnce(async () => {
+    mocks.releaseOwnedRunLease.mockImplementationOnce(async () => {
       order.push('release');
     });
     flushArtifacts.mockImplementationOnce(async () => {
@@ -358,7 +358,7 @@ describe('runAgent execution ownership', () => {
     ]);
   });
 
-  it('delegates workflow output finalization to the live execution lifecycle', async () => {
+  it('delegates workflow output finalization to the live run lifecycle', async () => {
     const openWorkflowOutput = vi.fn();
 
     await launch({ kind: 'fresh', openWorkflowOutput });
@@ -387,7 +387,7 @@ describe('runAgent execution ownership', () => {
 
     expect(order).toEqual(['execute', 'host-artifacts-and-release']);
     expect(flushArtifacts).not.toHaveBeenCalled();
-    expect(mocks.releaseOwnedExecutionLease).not.toHaveBeenCalled();
+    expect(mocks.releaseOwnedRunLease).not.toHaveBeenCalled();
   });
 
   it.each(['missing-api-key', 'context-window', 'unexpected'] as const)(
@@ -448,7 +448,7 @@ describe('runAgent execution ownership', () => {
       );
       // A failed host hook never changes ownership: the one drain still runs
       // and releases the lease.
-      expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
+      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(
         EXECUTION_ID,
       );
       expect(flushArtifacts).toHaveBeenCalledOnce();

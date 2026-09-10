@@ -11,7 +11,7 @@ import {
   AgentConfigFieldsSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   ToolConfigSchema,
   type ApprovalPolicySnapshot,
   type FoldInput,
@@ -19,7 +19,7 @@ import {
   type RunIdentity,
   type DisplaySessionEvent,
   type StreamLogEntry,
-  type StreamTabId,
+  type RunId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
@@ -31,10 +31,10 @@ import {
 /** A process identity, never a lease token (contract C5). */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
 export const OTHER_OWNER = '["test-host",4343,"2026-09-04T00:00:00.000Z"]';
-export const ROOT = 'review#aaaaaaaaaaaa' as StreamTabId;
-export const CHILD = 'search#bbbbbbbbbbbb' as StreamTabId;
-export const GRANDCHILD = 'lint#dddddddddddd' as StreamTabId;
-export const PROCESS = 'bash@tool#cccccccccccc' as StreamTabId;
+export const ROOT = 'review#aaaaaaaaaaaa' as RunId;
+export const CHILD = 'search#bbbbbbbbbbbb' as RunId;
+export const GRANDCHILD = 'lint#dddddddddddd' as RunId;
+export const PROCESS = 'bash@tool#cccccccccccc' as RunId;
 
 /** The board's clock: what a host passes as `nowMs` to read elapsed. Every
  *  fixture timestamp is anchored to it so the harness reads minutes. */
@@ -96,7 +96,7 @@ type DisplaySessionEventBody = DisplaySessionEvent extends infer E
 export class Log {
   readonly events: DisplaySessionEvent[] = [];
   private readonly seq = new Map<string, number>();
-  private readonly entrySeq = new Map<StreamTabId, number>();
+  private readonly entrySeq = new Map<RunId, number>();
   private commit = 0;
 
   emit(
@@ -132,7 +132,7 @@ export class Log {
     const removed = new Set<DisplaySessionEvent['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
       if (event.seq === 1) claims.set(event.aggregateId, event.ownerId);
-      if (event.type === 'stream.removed') {
+      if (event.type === 'run.removed') {
         claims.delete(event.aggregateId);
         removed.add(event.aggregateId);
       }
@@ -152,33 +152,33 @@ export class Log {
   }
 
   entry(
-    streamId: StreamTabId,
+    runId: RunId,
     at: number,
     entry: EntryFixture,
   ): StreamLogEntry {
-    const seqNo = (this.entrySeq.get(streamId) ?? 0) + 1;
-    this.entrySeq.set(streamId, seqNo);
+    const seqNo = (this.entrySeq.get(runId) ?? 0) + 1;
+    this.entrySeq.set(runId, seqNo);
     const full: StreamLogEntry = {
       ...entry,
       seqNo,
       timestamp: at,
       level: 'info',
     };
-    this.emit(streamId, at, { type: 'transcript.entry', entry: full });
+    this.emit(runId, at, { type: 'transcript.entry', entry: full });
     return full;
   }
 }
 
 function call(
   status: 'planned' | 'running' | 'completed',
-  childStreamId?: StreamTabId,
+  childRunId?: RunId,
 ): WorkflowCallProgress {
   return {
     id: 'inspect',
     label: 'inspect',
     phase: 'Map',
     attemptId: 'attempt-1',
-    ...(childStreamId ? { childStreamId } : {}),
+    ...(childRunId ? { childRunId } : {}),
     status,
   };
 }
@@ -189,7 +189,7 @@ export const tail = (event: DisplaySessionEvent): FoldInput => ({
   event,
 });
 
-export const subscribe = (...ids: StreamTabId[]): FoldInput => ({
+export const subscribe = (...ids: RunId[]): FoldInput => ({
   _tag: 'subscriptions',
   set: ids.map((id) => ({ id: qualifyAggregateId('stream', id), fromSeq: 0 })),
 });
@@ -218,7 +218,7 @@ export function buildScenario({ proposal = false } = {}) {
 
   log.emit(ROOT, T.root, {
     type: 'run.start',
-    executionId: 'aaaaaaaaaaaa',
+    runId: 'aaaaaaaaaaaa',
     identity: ROOT_IDENTITY,
     category: AgentCategory.Workflow,
     isRemote: false,
@@ -235,7 +235,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(ROOT, T.root, {
     type: 'run.config',
-    executionId: 'aaaaaaaaaaaa',
+    runId: 'aaaaaaaaaaaa',
     config: AgentConfigFieldsSchema.parse({
       agentCategory: AgentCategory.Workflow,
       model: 'claude-sonnet-4-5',
@@ -246,7 +246,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(ROOT, T.root, {
     type: 'status',
-    phase: STREAM_PHASE.RUNNING,
+    phase: RUN_PHASE.RUNNING,
     cause: 'lifecycle',
     runStartedAt: T.root,
   });
@@ -286,17 +286,17 @@ export function buildScenario({ proposal = false } = {}) {
   // confirms the edge as a session fact.
   log.emit(CHILD, T.child, {
     type: 'run.start',
-    executionId: 'bbbbbbbbbbbb',
+    runId: 'bbbbbbbbbbbb',
     identity: CHILD_IDENTITY,
     category: AgentCategory.ToolUse,
     isRemote: false,
-    parentStreamId: ROOT,
+    parentRunId: ROOT,
     userFollowUpSupport: 'nativeInteractive',
   });
-  log.emit(CHILD, T.child, { type: 'setParentStream', parentStreamId: ROOT });
+  log.emit(CHILD, T.child, { type: 'setParentStream', parentRunId: ROOT });
   log.emit(CHILD, T.child, {
     type: 'run.config',
-    executionId: 'bbbbbbbbbbbb',
+    runId: 'bbbbbbbbbbbb',
     config: AgentConfigFieldsSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       model: 'claude-sonnet-4-5',
@@ -305,7 +305,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(CHILD, T.child, {
     type: 'status',
-    phase: STREAM_PHASE.RUNNING,
+    phase: RUN_PHASE.RUNNING,
     cause: 'lifecycle',
     runStartedAt: T.child,
   });
@@ -330,7 +330,7 @@ export function buildScenario({ proposal = false } = {}) {
       data: {
         requestId: 'req-1',
         allowBypass: true,
-        streamId: CHILD,
+        runId: CHILD,
         command: 'ls',
       },
     },
@@ -352,16 +352,16 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
-    executionId: 'dddddddddddd',
+    runId: 'dddddddddddd',
     identity: GRANDCHILD_IDENTITY,
     category: AgentCategory.ToolUse,
     isRemote: false,
     userFollowUpSupport: 'unsupported',
-    parentStreamId: CHILD,
+    parentRunId: CHILD,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'status',
-    phase: STREAM_PHASE.RUNNING,
+    phase: RUN_PHASE.RUNNING,
     cause: 'lifecycle',
     runStartedAt: T.grandchild,
   });
@@ -372,15 +372,15 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'result',
     outcome: 'completed',
-    executionId: 'dddddddddddd',
+    runId: 'dddddddddddd',
     agentName: 'custom:lint',
     category: AgentCategory.ToolUse,
     isSubagent: true,
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'status',
-    phase: STREAM_PHASE.COMPLETED,
-    previousPhase: STREAM_PHASE.RUNNING,
+    phase: RUN_PHASE.COMPLETED,
+    previousPhase: RUN_PHASE.RUNNING,
     cause: 'lifecycle',
   });
   // The tool's result lands the way the recorder's `update` lands it: the
@@ -407,7 +407,7 @@ export function buildScenario({ proposal = false } = {}) {
   // A background process stream, newer than the root: leads the order.
   log.emit(PROCESS, T.process, {
     type: 'run.start',
-    executionId: 'cccccccccccc',
+    runId: 'cccccccccccc',
     identity: { kind: 'process', tool: 'bash' },
     category: AgentCategory.ToolUse,
     isRemote: false,
@@ -415,7 +415,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(PROCESS, T.process, {
     type: 'run.config',
-    executionId: 'cccccccccccc',
+    runId: 'cccccccccccc',
     config: AgentConfigFieldsSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       model: 'unused',
@@ -445,7 +445,7 @@ export function buildScenario({ proposal = false } = {}) {
         kind: 'proposal',
         data: {
           requestId: 'req-plan',
-          streamId: ROOT,
+          runId: ROOT,
           agentCategory: AgentCategory.Workflow,
           agent: 'review',
           model: 'claude-sonnet-4-5',
@@ -489,15 +489,15 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.childDone, {
     type: 'result',
     outcome: 'completed',
-    executionId: 'bbbbbbbbbbbb',
+    runId: 'bbbbbbbbbbbb',
     agentName: 'custom:search',
     category: AgentCategory.ToolUse,
     isSubagent: true,
   });
   log.emit(CHILD, T.childDone, {
     type: 'status',
-    phase: STREAM_PHASE.COMPLETED,
-    previousPhase: STREAM_PHASE.RUNNING,
+    phase: RUN_PHASE.COMPLETED,
+    previousPhase: RUN_PHASE.RUNNING,
     cause: 'lifecycle',
   });
   rootEntries.push(
@@ -520,15 +520,15 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.rootDone, {
     type: 'result',
     outcome: 'completed',
-    executionId: 'aaaaaaaaaaaa',
+    runId: 'aaaaaaaaaaaa',
     agentName: 'review',
     category: AgentCategory.Workflow,
     isSubagent: false,
   });
   log.emit(ROOT, T.rootDone, {
     type: 'status',
-    phase: STREAM_PHASE.COMPLETED,
-    previousPhase: STREAM_PHASE.RUNNING,
+    phase: RUN_PHASE.COMPLETED,
+    previousPhase: RUN_PHASE.RUNNING,
     cause: 'lifecycle',
   });
 
@@ -568,7 +568,7 @@ export function fanOutView(): SessionView {
  *  another process ran that stream. */
 function ownedBy(
   inputs: readonly FoldInput[],
-  aggregateId: StreamTabId,
+  aggregateId: RunId,
   ownerId: string,
 ): FoldInput[] {
   const key = qualifyAggregateId('stream', aggregateId);
@@ -634,7 +634,7 @@ export function withWaitingGrandchild(): SessionView {
       data: {
         requestId: 'req-lint',
         allowBypass: true,
-        streamId: GRANDCHILD,
+        runId: GRANDCHILD,
         command: 'latexmk -pdf appendixB.tex',
       },
     },
@@ -660,8 +660,8 @@ interface BoardCall {
   readonly status: WorkflowCallProgress['status'];
   /** The child stream the call opened; its label doubles as the stream's. */
   readonly child?: {
-    readonly id: StreamTabId;
-    readonly executionId: string;
+    readonly id: RunId;
+    readonly runId: string;
     readonly startedAt: number;
     readonly latest?: string;
     readonly outputTokens?: number;
@@ -680,14 +680,14 @@ const child = (
   startedAt: number,
   extra: Omit<
     NonNullable<BoardCall['child']>,
-    'id' | 'executionId' | 'startedAt'
+    'id' | 'runId' | 'startedAt'
   > = {},
 ): NonNullable<BoardCall['child']> => ({
   id: `${id}#${id
     .replaceAll(/[^a-z]/g, '')
     .padEnd(12, 'e')
-    .slice(0, 12)}` as StreamTabId,
-  executionId: id
+    .slice(0, 12)}` as RunId,
+  runId: id
     .replaceAll(/[^a-z]/g, '')
     .padEnd(12, 'e')
     .slice(0, 12),
@@ -814,7 +814,7 @@ function boardProgress(entry: BoardCall): WorkflowCallProgress {
     ...(entry.attemptNumber === undefined
       ? {}
       : { attemptNumber: entry.attemptNumber }),
-    ...(entry.child ? { childStreamId: entry.child.id } : {}),
+    ...(entry.child ? { childRunId: entry.child.id } : {}),
   };
   const terminal = {
     ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
@@ -891,7 +891,7 @@ function boardView({
   const startedAt = BOARD_NOW - min(38);
   log.emit(ROOT, startedAt, {
     type: 'run.start',
-    executionId: 'aaaaaaaaaaaa',
+    runId: 'aaaaaaaaaaaa',
     identity: { kind: 'multiAgentWorkflow', workflowName: 'review' },
     category: AgentCategory.Workflow,
     isRemote: false,
@@ -908,7 +908,7 @@ function boardView({
   });
   log.emit(ROOT, startedAt, {
     type: 'run.config',
-    executionId: 'aaaaaaaaaaaa',
+    runId: 'aaaaaaaaaaaa',
     config: AgentConfigFieldsSchema.parse({
       agentCategory: AgentCategory.Workflow,
       model: 'claude-sonnet-4-5',
@@ -919,7 +919,7 @@ function boardView({
   });
   log.emit(ROOT, startedAt, {
     type: 'status',
-    phase: STREAM_PHASE.RUNNING,
+    phase: RUN_PHASE.RUNNING,
     cause: 'lifecycle',
     runStartedAt: startedAt,
   });
@@ -1004,16 +1004,16 @@ function boardView({
       const { child: kid } = entry;
       log.emit(kid.id, kid.startedAt, {
         type: 'run.start',
-        executionId: kid.executionId,
+        runId: kid.runId,
         identity: { kind: 'agent', agent: `custom:${entry.id}` },
         category: AgentCategory.ToolUse,
         isRemote: false,
-        parentStreamId: ROOT,
+        parentRunId: ROOT,
         userFollowUpSupport: 'unsupported',
       });
       log.emit(kid.id, kid.startedAt, {
         type: 'run.config',
-        executionId: kid.executionId,
+        runId: kid.runId,
         config: AgentConfigFieldsSchema.parse({
           agentCategory: AgentCategory.ToolUse,
           model: 'claude-sonnet-4-5',
@@ -1022,7 +1022,7 @@ function boardView({
       });
       log.emit(kid.id, kid.startedAt, {
         type: 'status',
-        phase: STREAM_PHASE.RUNNING,
+        phase: RUN_PHASE.RUNNING,
         cause: 'lifecycle',
         runStartedAt: kid.startedAt,
       });
@@ -1043,7 +1043,7 @@ function boardView({
       if (kid.outputTokens !== undefined) {
         log.emit(kid.id, kid.startedAt + 3, {
           type: 'usage',
-          storageKey: kid.executionId,
+          storageKey: kid.runId,
           usage: {
             inputTokens: kid.outputTokens * 5,
             outputTokens: kid.outputTokens,
@@ -1060,7 +1060,7 @@ function boardView({
             data: {
               requestId: `req-${entry.id}`,
               allowBypass: true,
-              streamId: kid.id,
+              runId: kid.id,
               command: kid.wantsBash,
             },
           },
@@ -1074,15 +1074,15 @@ function boardView({
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'result',
           outcome: done ? 'completed' : 'failed',
-          executionId: kid.executionId,
+          runId: kid.runId,
           agentName: `custom:${entry.id}`,
           category: AgentCategory.ToolUse,
           isSubagent: true,
         });
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'status',
-          phase: done ? STREAM_PHASE.COMPLETED : STREAM_PHASE.FAILED,
-          previousPhase: STREAM_PHASE.RUNNING,
+          phase: done ? RUN_PHASE.COMPLETED : RUN_PHASE.FAILED,
+          previousPhase: RUN_PHASE.RUNNING,
           cause: 'lifecycle',
         });
       }
@@ -1106,15 +1106,15 @@ function boardView({
         log.emit(kid.id, closedAt - 1, {
           type: 'result',
           outcome: 'completed',
-          executionId: kid.executionId,
+          runId: kid.runId,
           agentName: `custom:${entry.id}`,
           category: AgentCategory.ToolUse,
           isSubagent: true,
         });
         log.emit(kid.id, closedAt - 1, {
           type: 'status',
-          phase: STREAM_PHASE.COMPLETED,
-          previousPhase: STREAM_PHASE.RUNNING,
+          phase: RUN_PHASE.COMPLETED,
+          previousPhase: RUN_PHASE.RUNNING,
           cause: 'lifecycle',
         });
         card(
@@ -1140,15 +1140,15 @@ function boardView({
     log.emit(ROOT, closedAt + 2, {
       type: 'result',
       outcome,
-      executionId: 'aaaaaaaaaaaa',
+      runId: 'aaaaaaaaaaaa',
       agentName: 'review',
       category: AgentCategory.Workflow,
       isSubagent: false,
     });
     log.emit(ROOT, closedAt + 2, {
       type: 'status',
-      phase: failed ? STREAM_PHASE.FAILED : STREAM_PHASE.COMPLETED,
-      previousPhase: STREAM_PHASE.RUNNING,
+      phase: failed ? RUN_PHASE.FAILED : RUN_PHASE.COMPLETED,
+      previousPhase: RUN_PHASE.RUNNING,
       cause: 'lifecycle',
     });
   }

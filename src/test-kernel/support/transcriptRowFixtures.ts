@@ -16,12 +16,12 @@ import {
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
+  RUN_PHASE,
   TOOL_USE_STATUS,
   type FileListEntry,
   type NormalizedToolUse,
   type StreamLogEntry,
-  type StreamPhase,
+  type RunPhase,
   type TaskGroup,
 } from '@shared/schemas';
 import {
@@ -34,9 +34,9 @@ import {
   type PhaseRow,
 } from '@shared/transcript';
 import { toolRowModel } from '@shared/transcript/toolRowModel';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
-import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
-import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
+import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
+import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
+import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';
 
 /** A normalized tool-use payload with every field a caller did not name
  *  defaulted to its empty/successful value. */
@@ -164,7 +164,7 @@ export function projectTaskGroupsFromStreamLog(
 export function splitTranscriptEntries(
   entries: readonly TranscriptRow[],
   finalizedFrontier: number,
-  status: StreamPhase | undefined,
+  status: RunPhase | undefined,
 ): {
   readonly finalized: readonly TranscriptRow[];
   readonly pending: readonly TranscriptRow[];

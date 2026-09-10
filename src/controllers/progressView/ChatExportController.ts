@@ -1,7 +1,7 @@
 /**
  * Chat export orchestration controller.
  *
- * Owns execution loading, export input construction, formatter selection,
+ * Owns run loading, export input construction, formatter selection,
  * storage writes, HTML asset staging, and LaTeX compilation. The progress-view
  * toolbar (`EXPORT_TRANSCRIPT`) is the GUI caller; the CLI's
  * `texra history --export` shares the same loaders and formatters. Hosts
@@ -31,7 +31,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   assembleTrace,
   injectStandaloneTrace,
@@ -42,7 +42,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { StorageFS } from '@utils/files/storageFS';
 
-/** Outcome of loading execution data for export. */
+/** Outcome of loading run data for export. */
 export type ExportInputStatus =
   'ok' | 'config_missing' | 'conversation_missing';
 
@@ -84,7 +84,7 @@ export class ChatExportController {
   constructor(private readonly deps: ChatExportControllerDeps) {}
 
   /**
-   * Load execution data and construct the format-agnostic {@link ChatExportInput}.
+   * Load run data and construct the format-agnostic {@link ChatExportInput}.
    *
    * Returns a discriminated status so the caller can show the right error
    * message for each missing piece without coupling to storage details.
@@ -100,7 +100,7 @@ export class ChatExportController {
     historyId: string,
   ): Effect.fn.Return<ExportInputResult, Error> {
     const { config, exportInput } = yield* loadChatExportInput(
-      historyId as ExecutionId,
+      historyId as RunId,
       this.deps.session,
     );
 
@@ -158,7 +158,7 @@ export class ChatExportController {
   }
 
   /**
-   * Assemble the execution's trace and embed it into the trace-viewer's
+   * Assemble the run's trace and embed it into the trace-viewer's
    * single-file standalone bundle: the same faithful Progress View replay
    * the CLI's `--export html` produces, not the retired hand-written
    * chat-bubble exporter. Single file, no separate `assets/` folder: it
@@ -173,7 +173,7 @@ export class ChatExportController {
       standaloneTemplatePath: string,
     ): Effect.fn.Return<HtmlExportOutcome, Error> {
       const traceResult = yield* assembleTrace(
-        historyId as ExecutionId,
+        historyId as RunId,
         this.deps.session,
       );
       if (traceResult.status !== 'ok') {
@@ -222,7 +222,7 @@ export class ChatExportController {
     },
   );
 
-  /** Write an export payload into the execution's storage directory. */
+  /** Write an export payload into the run's storage directory. */
   private async writeExport(
     historyId: string,
     filename: string,

@@ -8,7 +8,7 @@ describe('CLI ResumeListForm labels', () => {
 
   it.each([
     {
-      name: 'summarizes the execution facts needed to choose a run',
+      name: 'summarizes the run facts needed to choose a run',
       agent: 'polish',
       inputBasename: 'paper.tex',
       expected: `${TIMESTAMP}; polish; resumable; paper.tex`,

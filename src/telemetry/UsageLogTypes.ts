@@ -13,7 +13,7 @@ const UsageLogMetadataSchema = z.object({
   agentCategory: z.enum(AgentCategory).optional(),
   /** Canonical route used to account for API-key/subscription usage. */
   usageRoute: UsageRouteSchema.optional(),
-  streamId: z.string().optional(),
+  runId: z.string().optional(),
 });
 
 const UsageLogStatsSchema = z.object({

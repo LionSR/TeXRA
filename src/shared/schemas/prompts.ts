@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { AgentCategory } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
-import { StreamSelectionSchema, StreamTabIdSchema } from './identifiers';
+import { RunSelectionSchema, RunIdSchema } from './identifiers';
 import {
   InquiryTranscriptTurnSchema,
   InquirySessionLinksSchema,
@@ -20,7 +20,7 @@ import { WorkflowDeclaredPlanSchema } from './workflowCallProgress';
 const PermissionBaseSchema = z.strictObject({
   requestId: z.string(),
   allowBypass: z.boolean(),
-  streamId: StreamSelectionSchema,
+  runId: RunSelectionSchema,
 });
 
 export const ToolEditPermissionSchema = PermissionBaseSchema.extend({
@@ -41,7 +41,7 @@ export type BashPermission = z.infer<typeof BashPermissionSchema>;
 
 export const RetryPermissionSchema = z.strictObject({
   requestId: z.string(),
-  streamId: StreamTabIdSchema,
+  runId: RunIdSchema,
   operation: z.string(),
   model: z.string().optional(),
   errorMessage: z.string().optional(),
@@ -82,7 +82,7 @@ export type AgentProposal = z.infer<typeof AgentProposalSchema>;
 
 const ProposalPermissionBaseSchema = z.object({
   requestId: z.string(),
-  streamId: StreamTabIdSchema,
+  runId: RunIdSchema,
 });
 
 const WorkflowAgentProposalPermissionSchema =
@@ -196,7 +196,7 @@ export type ToolEditApprovalAction =
 
 export const PlanApprovalPermissionSchema = z.strictObject({
   requestId: z.string(),
-  streamId: StreamTabIdSchema,
+  runId: RunIdSchema,
   plan: PlanSchema,
   /**
    * True when the goal experimental feature flag is enabled at request

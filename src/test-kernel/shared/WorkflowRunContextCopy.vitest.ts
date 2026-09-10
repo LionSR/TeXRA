@@ -6,16 +6,16 @@ import {
   type WorkflowRunContextInput,
 } from '@shared/copy/workflowRunContext';
 
-type StreamFields = WorkflowRunContextInput['stream'];
+type RunFields = WorkflowRunContextInput['stream'];
 
-function baseStream(overrides: Partial<StreamFields> = {}): StreamFields {
+function baseStream(overrides: Partial<RunFields> = {}): RunFields {
   return {
     // The resolved identity display name — a producer never ships an
     // arbitrary label beside a resolved identity.
     label: 'writer',
     model: 'gemini31p',
     modelLabel: 'Gemini 3.1 Pro',
-    executionId: 'a1b2c3d4',
+    runId: 'a1b2c3d4',
     ...overrides,
   };
 }
@@ -30,7 +30,7 @@ function output(overrides: Partial<OutputFileInfo> = {}): OutputFileInfo {
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.tex',
       relativePath: 'answer.tex',
-      executionId: 'a1b2c3d4',
+      runId: 'a1b2c3d4',
     },
     ...overrides,
   };
@@ -46,13 +46,13 @@ function compileFailure(
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.tex',
       relativePath: 'answer.tex',
-      executionId: 'a1b2c3d4',
+      runId: 'a1b2c3d4',
     },
     log: {
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.log',
       relativePath: 'answer.log',
-      executionId: 'a1b2c3d4',
+      runId: 'a1b2c3d4',
     },
     logRelativePath: 'answer.log',
     ...overrides,
@@ -70,7 +70,7 @@ describe('formatWorkflowRunContext', () => {
     expect(text).toBe(
       [
         'Workflow run: writer (Gemini 3.1 Pro)',
-        'Execution: a1b2c3d4',
+        'Run: a1b2c3d4',
         'Goal: Rewrite the introduction',
         '',
         'Outputs:',
@@ -157,14 +157,14 @@ describe('formatWorkflowRunContext', () => {
     expect(text).toContain('Compile failures:');
   });
 
-  it('omits the execution and goal lines when the stream has neither', () => {
+  it('omits the run and goal lines when the stream has neither', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream({ executionId: undefined, description: undefined }),
+      stream: baseStream({ runId: undefined, description: undefined }),
       files: { 2: [output()] },
       compileFailures: {},
     });
 
-    expect(text).not.toContain('Execution:');
+    expect(text).not.toContain('Run:');
     expect(text).not.toContain('Goal:');
     expect(text.startsWith('Workflow run: writer (Gemini 3.1 Pro)')).toBe(true);
   });

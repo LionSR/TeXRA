@@ -261,7 +261,7 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
       kind: 'file',
       label: 'Path:',
       path,
-      namespace: 'execution',
+      namespace: 'run',
     });
   }
 
@@ -296,12 +296,12 @@ function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
   const sections: ToolSection[] = [];
-  const executionId = asString(input.execution_id);
-  if (executionId) {
+  const runId = asString(input.execution_id);
+  if (runId) {
     sections.push({
       kind: 'identifier',
-      label: 'Execution:',
-      value: executionId,
+      label: 'Run:',
+      value: runId,
     });
   }
 
@@ -340,9 +340,9 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   if (!isObject(input)) return [];
   const sections: ToolSection[] = [];
 
-  const executionId = asString(input.execution_id);
-  if (executionId) {
-    sections.push({ kind: 'identifier', label: 'Resume:', value: executionId });
+  const runId = asString(input.execution_id);
+  if (runId) {
+    sections.push({ kind: 'identifier', label: 'Resume:', value: runId });
   }
 
   const agent = asString(input.agent);

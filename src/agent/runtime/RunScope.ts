@@ -12,7 +12,7 @@ import type { SessionHandle } from './SessionHandle';
  * read two different fields for it.
  */
 export interface RunScope {
-  readonly executionId: RunId;
+  readonly runId: RunId;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
   readonly session: SessionHandle;

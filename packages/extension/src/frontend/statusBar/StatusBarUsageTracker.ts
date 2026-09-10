@@ -1,14 +1,14 @@
 // Local imports - stream state
 import type { SessionHandle } from '@agent/runtime';
 import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
-import { isActivePhase, isInFlightPhase } from '@shared/streams/streamStatus';
+import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
 
 /**
- * Projects the accumulated spend of the streams currently in flight for the
+ * Projects the accumulated spend of the runs currently in flight for the
  * extension status bar.
  *
  * Holds no state of its own: the session status plane is the one writer of
- * which streams are in flight, and the session's `StreamSnapshotStore` is the
+ * which runs are in flight, and the session's `RunSnapshotStore` is the
  * one accumulator of per-run usage. Both getters read those planes live, so
  * a stream leaving flight drops out of the total without any bookkeeping
  * here, and the summing rule has a single home (`sumUsageStats`).
@@ -22,7 +22,7 @@ export class StatusBarUsageTracker {
     private readonly snapshots: Pick<SessionHandle['snapshots'], 'getRunUsage'>,
   ) {}
 
-  public get activeStreamCount(): number {
+  public get activeRunCount(): number {
     let count = 0;
     for (const state of this.status.getAllStreamStates().values()) {
       if (isActivePhase(state.phase)) count += 1;
@@ -32,9 +32,9 @@ export class StatusBarUsageTracker {
 
   public get totalUsage(): TokenUsageStats {
     const usages: TokenUsageStats[] = [];
-    for (const [streamId, state] of this.status.getAllStreamStates()) {
+    for (const [runId, state] of this.status.getAllStreamStates()) {
       if (!isInFlightPhase(state.phase)) continue;
-      usages.push(...this.snapshots.getRunUsage(streamId).values());
+      usages.push(...this.snapshots.getRunUsage(runId).values());
     }
     return sumUsageStats(usages);
   }

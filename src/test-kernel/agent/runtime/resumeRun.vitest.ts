@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { resumeRun, resumeClaimedRun } from '@agent/runtime/resumeRun';
+import type { RunId, RunId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
-import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
+import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -29,12 +29,12 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
     }),
 }));
 
-const getExecutionStoreMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/ExecutionKVStore')>()),
-  getExecutionStore: getExecutionStoreMock,
-  getExecutionRecords: () => {
-    const store = getExecutionStoreMock();
+const getRunStoreMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/storage/RunKVStore', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/RunKVStore')>()),
+  getRunStore: getRunStoreMock,
+  getRunRecords: () => {
+    const store = getRunStoreMock();
     return {
       readConfig: () =>
         Effect.tryPromise({
@@ -56,26 +56,26 @@ vi.mock('@agent/runtime/runClassification', async (importActual) => ({
     Effect.promise(() => classifyRunMock(...args)),
 }));
 
-const inspectExecutionLeaseMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/storage/executionLease', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/storage/executionLease')>()),
-  inspectExecutionLease: inspectExecutionLeaseMock,
+const inspectRunLeaseMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/storage/runLease', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/runLease')>()),
+  inspectRunLease: inspectRunLeaseMock,
 }));
 
-const EXECUTION = 'aabbcc' as ExecutionId;
-const STREAM = 'stream:resume-ownership' as StreamTabId;
+const EXECUTION = 'aabbcc' as RunId;
+const STREAM = 'stream:resume-ownership' as RunId;
 const completed = {
   category: 'toolUse' as const,
   outcome: RUN_OUTCOME.COMPLETED,
-  executionId: EXECUTION,
-  streamId: STREAM,
+  runId: EXECUTION,
+  runId: STREAM,
   response: 'done',
   files: [],
   totalCostUsd: 0,
 };
 
 function snapshot() {
-  return createToolUseResumeData({ executionId: EXECUTION, streamId: STREAM });
+  return createToolUseResumeData({ runId: EXECUTION, runId: STREAM });
 }
 
 function seedRecoverable(
@@ -98,7 +98,7 @@ function createSession(): ReturnType<typeof createTestSession> {
   sessions.push(session);
   vi.spyOn(session.snapshots, 'preload').mockReturnValue(Effect.void);
   vi.spyOn(session.snapshots, 'getRunMetadata').mockReturnValue({
-    executionId: EXECUTION,
+    runId: EXECUTION,
   });
   return session;
 }
@@ -109,14 +109,14 @@ const executeWorkflow = vi.fn(async () => {
 
 describe('resumeRun tool-use queue ownership', () => {
   beforeEach(() => {
-    getExecutionStoreMock.mockReset().mockReturnValue({
+    getRunStoreMock.mockReset().mockReturnValue({
       readConfig: async () => snapshot().agentConfig,
-      readMeta: async () => ({ streamId: STREAM }),
+      readMeta: async () => ({ runId: STREAM }),
       exists: async () => false,
     });
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
     classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
-    inspectExecutionLeaseMock.mockReset().mockResolvedValue({ status: 'free' });
+    inspectRunLeaseMock.mockReset().mockResolvedValue({ status: 'free' });
     resumeToolUseFromResumeDataMock.mockReset();
     resumeToolUseFromResumeDataMock.mockImplementation(
       (_resume: unknown, options: ResumeToolUseFromResumeDataOptions) =>
@@ -166,7 +166,7 @@ describe('resumeRun tool-use queue ownership', () => {
         );
 
         const resumed = yield* Effect.forkChild(
-          resumeStream(STREAM, { session, executeWorkflow }),
+          resumeClaimedRun(STREAM, { session, executeWorkflow }),
         );
         yield* Effect.promise(() => preloadStarted.promise);
         expect(
@@ -187,7 +187,7 @@ describe('resumeRun tool-use queue ownership', () => {
       }),
   );
 
-  it.live('preserves raced input when stream lookup finds no execution', () =>
+  it.live('preserves raced input when stream lookup finds no run', () =>
     Effect.gen(function* () {
       const session = createSession();
       const preload = createDeferred<void>();
@@ -200,7 +200,7 @@ describe('resumeRun tool-use queue ownership', () => {
       );
 
       const resumed = yield* Effect.forkChild(
-        resumeStream(STREAM, { session, executeWorkflow }),
+        resumeClaimedRun(STREAM, { session, executeWorkflow }),
       );
       yield* Effect.promise(() => preloadStarted.promise);
       expect(
@@ -290,9 +290,9 @@ describe('resumeRun tool-use queue ownership', () => {
       }
       const config =
         createDeferred<ReturnType<typeof snapshot>['agentConfig']>();
-      getExecutionStoreMock.mockReturnValueOnce({
+      getRunStoreMock.mockReturnValueOnce({
         readConfig: () => config.promise,
-        readMeta: async () => ({ streamId: STREAM }),
+        readMeta: async () => ({ runId: STREAM }),
       });
 
       const resumed = yield* Effect.forkChild(
@@ -406,12 +406,12 @@ describe('resumeRun tool-use queue ownership', () => {
       if (submission.kind !== 'queued' || !submission.lease) {
         throw new Error('recovery not claimed');
       }
-      getExecutionStoreMock.mockReturnValueOnce({
+      getRunStoreMock.mockReturnValueOnce({
         readConfig: async () => ({
           ...snapshot().agentConfig,
           agentCategory: AgentCategory.Workflow,
         }),
-        readMeta: async () => ({ streamId: STREAM }),
+        readMeta: async () => ({ runId: STREAM }),
         exists: async () => false,
       });
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
@@ -483,9 +483,9 @@ describe('resumeRun tool-use queue ownership', () => {
     ([_description, arrange]) =>
       Effect.gen(function* () {
         const session = createSession();
-        getExecutionStoreMock.mockReturnValue({
+        getRunStoreMock.mockReturnValue({
           readConfig: async () => snapshot().agentConfig,
-          readMeta: async () => ({ streamId: STREAM }),
+          readMeta: async () => ({ runId: STREAM }),
           exists: async () => true,
         });
         arrange();
@@ -506,9 +506,9 @@ describe('resumeRun tool-use queue ownership', () => {
     () =>
       Effect.gen(function* () {
         const session = createSession();
-        getExecutionStoreMock.mockReturnValue({
+        getRunStoreMock.mockReturnValue({
           readConfig: async () => snapshot().agentConfig,
-          readMeta: async () => ({ streamId: STREAM }),
+          readMeta: async () => ({ runId: STREAM }),
           exists: async () => true,
         });
         retrieveSessionResumeDataMock.mockRejectedValueOnce(
@@ -523,7 +523,7 @@ describe('resumeRun tool-use queue ownership', () => {
       }),
   );
 
-  // The launch's own acquire would raise `ExecutionLeaseActiveError` only
+  // The launch's own acquire would raise `RunLeaseActiveError` only
   // after the host cleared its window and switched onto the resumed stream.
   it.live(
     'refuses a run a live foreign owner holds before the host rearranges',
@@ -531,7 +531,7 @@ describe('resumeRun tool-use queue ownership', () => {
       Effect.gen(function* () {
         const session = createSession();
         const owner = { pid: 4321, hostname: 'other-host' };
-        inspectExecutionLeaseMock.mockResolvedValue({ status: 'held', owner });
+        inspectRunLeaseMock.mockResolvedValue({ status: 'held', owner });
         const onResumeResolved = vi.fn();
 
         expect(
@@ -544,7 +544,7 @@ describe('resumeRun tool-use queue ownership', () => {
         expect(onResumeResolved).not.toHaveBeenCalled();
         expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
         expect(session.status.holdState(STREAM)).toBe(
-          streamHeldMessage(owner.pid),
+          runHeldMessage(owner.pid),
         );
       }),
   );

@@ -25,7 +25,7 @@ const DELIVERY_PROMPT_MAX = 200;
 interface ChildRunEnvelope {
   /** Root element name (`subagent-result`, `codex-result`, `claude-agent-error`, …). */
   readonly tag: string;
-  readonly executionId: string;
+  readonly runId: string;
   /** Echoed prompt attribute (agent-CLI deliveries); truncated before escaping. */
   readonly prompt?: string;
   /**
@@ -40,7 +40,7 @@ function childRunEnvelopeXml(
   bodyLines: readonly string[],
 ): string {
   const attributes: readonly DeliveryEnvelopeAttribute[] = [
-    { name: 'id', value: envelope.executionId },
+    { name: 'id', value: envelope.runId },
     ...(envelope.prompt !== undefined
       ? [
           {

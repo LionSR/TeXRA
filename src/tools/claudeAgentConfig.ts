@@ -258,7 +258,7 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
 });
 
 // ============================================================================
-// Synthetic execution metadata for child streams
+// Synthetic run metadata for child runs
 // ============================================================================
 
 export function buildClaudeAgentConfig(prompt: string): AgentConfig {

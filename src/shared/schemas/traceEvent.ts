@@ -6,7 +6,7 @@ import { ActiveSkillsSnapshotSchema } from './activeSkills';
 import { ContextStateDataSchema } from './contextManagement';
 import { RunIdSchema } from './identifiers';
 import { LogLevelSchema } from './log';
-import { RunOutcomeSchema } from './stream';
+import { RunOutcomeSchema } from './run';
 import { AgentCategorySchema } from './agent';
 import { RetryErrorInfoSchema } from './errors';
 import { StageKindSchema } from './taskGroup';

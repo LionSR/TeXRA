@@ -56,7 +56,7 @@ export const noopTrace: AgentTrace = {
   openStage(_label, options) {
     return new NoopStageHandle(options?.id ?? generateShortId());
   },
-  openStream(_kind, options) {
+  openRun(_kind, options) {
     return new NoopStreamHandle(options?.id ?? generateShortId());
   },
 };

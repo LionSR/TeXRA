@@ -351,7 +351,7 @@ export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
 /**
  * Own the stdin-temp-file lifecycle for headless runs that accept --input /
  * --context. Callers get already-expanded paths; this module creates and
- * removes the temporary stdin file whether expansion, execution, or output
+ * removes the temporary stdin file whether expansion, run, or output
  * handling fails.
  */
 export function withExpandedRunInputs<T, E>(

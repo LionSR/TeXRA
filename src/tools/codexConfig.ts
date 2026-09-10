@@ -90,7 +90,7 @@ export const getCodexSandboxMode: () => SandboxMode = createEnumStateGetter(
 );
 
 /**
- * Build synthetic execution metadata for Codex child streams.
+ * Build synthetic run metadata for Codex child runs.
  *
  * Codex runs outside the normal model-handler pipeline, so we provide an
  * explicit tool-use category and a stable Codex model label for the UI

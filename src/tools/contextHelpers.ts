@@ -8,12 +8,12 @@
 
 import {
   getRunContextInteractions,
-  getRunContextStreamId,
+  getRunContextRunId,
   tryUseRunContext,
   type RunContext,
 } from '@agent/runtime/RunContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { ToolError } from '@shared/schemas';
 
 /**
@@ -37,17 +37,17 @@ export function requireInteractions(
 /**
  * Return the active stream id, throwing a ToolError if none is active. Use
  * from tools that address a stream (e.g. a goal keyed by stream id) but,
- * unlike {@link requireRunStream}, don't need host interactions to do so.
+ * unlike {@link requireLiveRun}, don't need host interactions to do so.
  */
-export function requireStreamId(
+export function requireRunId(
   toolName: string,
   context: RunContext | undefined = tryUseRunContext(),
-): StreamTabId {
-  const streamId = getRunContextStreamId(context);
-  if (!streamId) {
+): RunId {
+  const runId = getRunContextRunId(context);
+  if (!runId) {
     throw new ToolError(`${toolName} requires an active stream context.`);
   }
-  return streamId;
+  return runId;
 }
 
 /**
@@ -55,23 +55,23 @@ export function requireStreamId(
  * ToolError if either is missing. Use from tools that need both a stream
  * to address (e.g. subscribe/approval) and interactions to emit on.
  */
-export function requireRunStream(
+export function requireLiveRun(
   toolName: string,
   context: RunContext | undefined = tryUseRunContext(),
 ): {
-  streamId: StreamTabId;
+  runId: RunId;
   interactions: SessionHostInteractions;
   context: RunContext;
 } {
-  const streamId = getRunContextStreamId(context);
+  const runId = getRunContextRunId(context);
   const interactions = getRunContextInteractions(context);
-  if (!context || !streamId || !interactions) {
+  if (!context || !runId || !interactions) {
     throw new ToolError(
       `${toolName} must be called from within an agent stream.`,
     );
   }
   return {
-    streamId,
+    runId,
     interactions,
     context,
   };

@@ -1,14 +1,13 @@
 // Unit tests for the chat-session controller's run-slot ownership, stop and
-// resume paths, and presentation-host lifecycle. Agent execution itself is
-// mocked; the session surfaces the controller reasons about (execution
+// resume paths, and presentation-host lifecycle. Agent run itself is
+// mocked; the session surfaces the controller reasons about (run
 // registry, event hub, stream status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
-import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import PQueue from 'p-queue';
 import pDefer from 'p-defer';
-import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
@@ -18,14 +17,14 @@ const mocks = vi.hoisted(() => ({
   cancelInteractions: vi.fn(),
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
-  getExecutionRecords: vi.fn(),
+  getRunRecords: vi.fn(),
   setCliHelperModel: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   presentationHostClose: vi.fn(),
   defaultSession: vi.fn(),
-  getActiveExecutionIds: vi.fn(),
-  getExecutionHandle: vi.fn(),
-  addExecutionRegistrationListener: vi.fn(),
+  getActiveRunIds: vi.fn(),
+  getRunHandle: vi.fn(),
+  addRunRegistrationListener: vi.fn(),
   detachHostInteractions: vi.fn(),
   attachTerminalResultToast: vi.fn(),
   createTuiHostInteractions: vi.fn(),
@@ -35,14 +34,14 @@ const mocks = vi.hoisted(() => ({
   appendLocalErrorTranscript: vi.fn(),
   appendLocalUserTranscript: vi.fn(),
   clearLocalTranscript: vi.fn(),
-  moveLocalTranscriptToStream: vi.fn(),
+  moveLocalTranscriptToRun: vi.fn(),
   followUpEnqueue: vi.fn(),
   followUpQueueForLease: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
-  getExecutionRecords: (...args: unknown[]) => {
-    const records = mocks.getExecutionRecords(...args);
+  getRunRecords: (...args: unknown[]) => {
+    const records = mocks.getRunRecords(...args);
     return {
       readMeta: () =>
         Effect.tryPromise({
@@ -56,7 +55,7 @@ vi.mock('@agent/storage', () => ({
         }),
     };
   },
-  ExecutionLeaseActiveError: class ExecutionLeaseActiveError extends Error {},
+  RunLeaseActiveError: class RunLeaseActiveError extends Error {},
 }));
 
 vi.mock('@agent/runtime/resumeRun', () => ({
@@ -120,7 +119,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   appendLocalErrorTranscript: mocks.appendLocalErrorTranscript,
   appendLocalUserTranscript: mocks.appendLocalUserTranscript,
   clearLocalTranscript: mocks.clearLocalTranscript,
-  moveLocalTranscriptToStream: mocks.moveLocalTranscriptToStream,
+  moveLocalTranscriptToRun: mocks.moveLocalTranscriptToRun,
 }));
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
@@ -136,8 +135,8 @@ import type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { ExecutionInteractionOwnership } from '@agent/runtime/executionInteractionOwnership';
-import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { RunInteractionOwnership } from '@agent/runtime/runInteractionOwnership';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -150,8 +149,8 @@ import { createChatSessionController } from '@cli/chat/chatSessionController';
 import {
   patchSessionMeta,
   rootRunPending,
-  rootRunStreamId,
-  rootStreamId,
+  rootRunId,
+  rootRunId,
   sessionMeta,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -165,18 +164,18 @@ import {
 import { DisposableStore } from '@platform/disposable';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
-  type ExecutionId,
-  type StreamTabId,
+  RUN_PHASE,
+  type RunId,
+  type RunId,
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { StreamSnapshotStore } from '@transcript';
+import { RunSnapshotStore } from '@transcript';
 import { ensureError } from '@utils/errors/errorMessage';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
@@ -187,9 +186,9 @@ import { bashApprovalRequest } from '../agent/progressTestUtils';
  * pending or completed claim through the same transitions production uses.
  */
 interface SessionFixture {
-  readonly streamId?: StreamTabId;
-  readonly interruptedStreamId?: StreamTabId;
-  readonly executionId?: string;
+  readonly runId?: RunId;
+  readonly interruptedRunId?: RunId;
+  readonly runId?: string;
   readonly runPromise?: Promise<void>;
   readonly runCompleted?: boolean;
   readonly stopRequested?: boolean;
@@ -199,9 +198,9 @@ function makeSession(overrides: SessionFixture = {}): TuiSession {
   const session = new TuiSession();
   if (overrides.runPromise) session.markRunPending(overrides.runPromise);
   if (overrides.runCompleted) session.markRunCompleted();
-  if (overrides.streamId) session.streamId = overrides.streamId;
-  session.interruptedStreamId = overrides.interruptedStreamId;
-  session.executionId = overrides.executionId;
+  if (overrides.runId) session.runId = overrides.runId;
+  session.interruptedRunId = overrides.interruptedRunId;
+  session.runId = overrides.runId;
   session.stopRequested = overrides.stopRequested ?? false;
   return session;
 }
@@ -232,14 +231,14 @@ function makeRunRequest(instruction: string): AgentConfigPayload {
 
 type ToolUseRunResult<Outcome> = {
   category: 'toolUse';
-  executionId: ExecutionId;
+  runId: RunId;
   outcome: Outcome;
-  streamId: StreamTabId;
+  runId: RunId;
 };
 
 /** The subset of `executeAgent`'s options every mock implementation below reads. */
 type ExecuteAgentMockOptions = {
-  readonly onStreamResolved?: (id: StreamTabId) => void;
+  readonly onStreamResolved?: (id: RunId) => void;
 };
 
 function makeInit(
@@ -275,10 +274,10 @@ function makeResumeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
 function makeResumeSnapshotStore(options: {
   readonly preload?: () => Promise<void>;
   readonly load?: () => Promise<void>;
-  readonly executionId?: string | undefined;
+  readonly runId?: string | undefined;
   readonly config?: AgentConfig | undefined;
-  readonly parentStreamId?: StreamTabId | undefined;
-}): StreamSnapshotStore {
+  readonly parentRunId?: RunId | undefined;
+}): RunSnapshotStore {
   return {
     preload: vi.fn(() =>
       options.preload
@@ -306,24 +305,24 @@ function makeResumeSnapshotStore(options: {
       }),
     ),
     getRunMetadata: vi.fn(() => ({
-      executionId: options.executionId,
+      runId: options.runId,
       config: options.config,
       identity: options.config
         ? { kind: 'agent' as const, agent: options.config.agent }
         : undefined,
     })),
-    getParentStreamId: vi.fn(() => options.parentStreamId),
-  } as unknown as StreamSnapshotStore;
+    getParentRunId: vi.fn(() => options.parentRunId),
+  } as unknown as RunSnapshotStore;
 }
 
 /** Durable run record `resume()` resolves before adopting the stream. */
-function installResumeExecutionStore(
+function installResumeRunStore(
   config: AgentConfig = makeResumeConfig(),
-  streamId: StreamTabId | undefined = 'stream-resume' as StreamTabId,
+  runId: RunId | undefined = 'stream-resume' as RunId,
 ): void {
-  mocks.getExecutionRecords.mockReturnValue({
+  mocks.getRunRecords.mockReturnValue({
     readConfig: async () => config,
-    readMeta: async () => (streamId ? { streamId } : null),
+    readMeta: async () => (runId ? { runId } : null),
   });
 }
 
@@ -335,9 +334,9 @@ function installResumeExecutionStore(
  */
 function installSession(overrides: Record<string, unknown> = {}): void {
   const executions = {
-    getActiveIds: mocks.getActiveExecutionIds,
-    getHandle: mocks.getExecutionHandle,
-    addRegistrationListener: mocks.addExecutionRegistrationListener,
+    getActiveIds: mocks.getActiveRunIds,
+    getHandle: mocks.getRunHandle,
+    addRegistrationListener: mocks.addRunRegistrationListener,
   };
   mocks.defaultSession.mockReturnValue({
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -348,8 +347,8 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     requests: { request: mocks.request },
     followUps: {
       notifySent: mocks.notifyFollowUpSent,
-      claimRecovery: vi.fn((streamId: StreamTabId) => ({
-        streamId,
+      claimRecovery: vi.fn((runId: RunId) => ({
+        runId,
         kind: 'recovery' as const,
       })),
       useRecovery: vi.fn((recovery: FollowUpRecoveryLease) => recovery),
@@ -358,13 +357,13 @@ function installSession(overrides: Record<string, unknown> = {}): void {
         restore: mocks.followUpEnqueue,
       }),
     },
-    approvals: { registerStreamParent: vi.fn() },
+    approvals: { registerRunParent: vi.fn() },
     executions: {
-      ...executions,
+      ...runs,
       // The stubbed registry still answers the surfaces the real ownership
       // index reads, so the controller runs against real ownership.
-      interactionOwnership: new ExecutionInteractionOwnership(
-        executions as unknown as ExecutionRegistry,
+      interactionOwnership: new RunInteractionOwnership(
+        executions as unknown as RunRegistry,
       ),
     },
     transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
@@ -373,16 +372,16 @@ function installSession(overrides: Record<string, unknown> = {}): void {
 }
 
 /**
- * Installs a session whose interaction, event, status, and execution surfaces
+ * Installs a session whose interaction, event, status, and run surfaces
  * are the real runtime objects rather than per-mock stubs.
  */
 function installOwnerSession(): {
   readonly session: SessionHandle;
-  readonly executions: ExecutionRegistry;
+  readonly runs: RunRegistry;
   readonly interactions: SessionHostInteractions;
 } {
   const session = createTestSession();
-  // The real session's request handler admits only streams the fold holds;
+  // The real session's request handler admits only runs the fold holds;
   // these cases track executions directly, so the stop request lands on the
   // registry the way the handler would land it.
   const owner = Object.create(session) as SessionHandle;
@@ -391,7 +390,7 @@ function installOwnerSession(): {
       request: (req: RuntimeRequest) =>
         Effect.gen(function* (): Effect.fn.Return<Outcome> {
           if (req.kind === 'stream.stop') {
-            yield* session.executions.stopAgentStream(req.streamId, {
+            yield* session.runs.stopAgentRun(req.runId, {
               detachActiveChildren: req.detachActiveChildren ?? undefined,
             });
           }
@@ -402,25 +401,25 @@ function installOwnerSession(): {
   mocks.defaultSession.mockReturnValue(owner);
   return {
     session,
-    executions: session.executions,
+    executions: session.runs,
     interactions: session.interactions,
   };
 }
-function trackRunningExecution(
-  executions: ExecutionRegistry,
-  executionId: string,
-  parentStreamId: StreamTabId,
-  streamId: StreamTabId,
+function trackLiveRun(
+  runs: RunRegistry,
+  runId: string,
+  parentRunId: RunId,
+  runId: RunId,
   agent: string,
 ): void {
-  executions.trackAgentExecution(
-    testExecutionHandle({
-      executionId,
-      parentStreamId,
-      childStreamId: streamId,
+  runs.trackAgentRun(
+    testRunHandle({
+      runId,
+      parentRunId,
+      childRunId: runId,
       agent,
     }),
-    { status: STREAM_PHASE.RUNNING },
+    { status: RUN_PHASE.RUNNING },
   );
 }
 
@@ -428,7 +427,7 @@ function trackRunningExecution(
 const STARTED = { started: true, delivered: true } as const;
 
 const defaultResumeRun = (
-  _executionId: ExecutionId,
+  _runId: RunId,
   options: ResumeRunOptions,
 ) =>
   Effect.tryPromise({
@@ -438,7 +437,7 @@ const defaultResumeRun = (
       // must run the hook or the caller never adopts the stream.
       if (options.onResumeResolved) await options.onResumeResolved();
       options.onFollowUpQueueReady?.({
-        streamId: 'stream:test' as StreamTabId,
+        runId: 'stream:test' as RunId,
         kind: 'recovery',
       });
       return STARTED;
@@ -454,14 +453,14 @@ function makeInterruptedController(
   runPromise: Promise<void>,
   runCompleted: boolean,
   snapshotStore = makeResumeSnapshotStore({
-    executionId: 'exec-1',
+    runId: 'exec-1',
     config: makeResumeConfig(),
   }),
 ) {
   const session = makeSession({
-    streamId: 'stream-1' as StreamTabId,
-    interruptedStreamId: 'stream-1' as StreamTabId,
-    executionId: 'exec-1',
+    runId: 'stream-1' as RunId,
+    interruptedRunId: 'stream-1' as RunId,
+    runId: 'exec-1',
     runPromise,
     runCompleted,
     stopRequested: true,
@@ -506,66 +505,62 @@ async function expectInterruptedRetry(
 
 describe('CLI terminal outcome resolution', () => {
   beforeEach(() => {
-    mocks.getExecutionRecords.mockReset();
+    mocks.getRunRecords.mockReset();
   });
 
-  it.effect('prefers the persisted post-shutdown outcome', () =>
-    Effect.gen(function* () {
-      mocks.getExecutionRecords.mockReturnValue({
-        readMeta: vi.fn().mockResolvedValue({
-          outcome: RUN_OUTCOME.CANCELLED,
-        }),
-      });
-
-      expect(
-        yield* readCliRunOutcomeState(mocks.defaultSession(), {
-          category: 'toolUse',
-          executionId: 'shutdown-race',
-          outcome: RUN_OUTCOME.COMPLETED,
-          streamId: 'shutdown-race',
-        } as Parameters<typeof readCliRunOutcomeState>[1]),
-      ).toEqual({
+  it('prefers the persisted post-shutdown outcome', async () => {
+    mocks.getRunRecords.mockReturnValue({
+      readMeta: vi.fn().mockResolvedValue({
         outcome: RUN_OUTCOME.CANCELLED,
-        outcomePersisted: true,
-      });
-    }),
-  );
-
-  it.effect(
-    'reports an outcome read failure and retains the completed run',
-    () =>
-      Effect.gen(function* () {
-        const reportReadFailure = vi.fn();
-        mocks.getExecutionRecords.mockReturnValue({
-          readMeta: vi
-            .fn()
-            .mockRejectedValue(new Error('metadata read failed')),
-        });
-
-        expect(
-          yield* readCliRunOutcomeState(
-            mocks.defaultSession(),
-            {
-              category: 'toolUse',
-              executionId: 'broken-storage',
-              outcome: RUN_OUTCOME.COMPLETED,
-              streamId: 'broken-storage',
-            } as Parameters<typeof readCliRunOutcomeState>[1],
-            reportReadFailure,
-          ),
-        ).toEqual({
-          outcome: RUN_OUTCOME.COMPLETED,
-          outcomePersisted: false,
-        });
-        expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
-          expect.objectContaining({
-            message:
-              'Could not verify the persisted outcome for execution broken-storage; using the current run outcome: metadata read failed',
-            cause: expect.any(Error),
-          }),
-        );
       }),
-  );
+    });
+
+    await expect(
+      Effect.runPromise(
+        readCliRunOutcomeState(mocks.defaultSession(), {
+          category: 'toolUse',
+          runId: 'shutdown-race',
+          outcome: RUN_OUTCOME.COMPLETED,
+          runId: 'shutdown-race',
+        } as Parameters<typeof readCliRunOutcomeState>[1]),
+      ),
+    ).resolves.toEqual({
+      outcome: RUN_OUTCOME.CANCELLED,
+      outcomePersisted: true,
+    });
+  });
+
+  it('reports an outcome read failure and retains the completed run', async () => {
+    const reportReadFailure = vi.fn();
+    mocks.getRunRecords.mockReturnValue({
+      readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
+    });
+
+    await expect(
+      Effect.runPromise(
+        readCliRunOutcomeState(
+          mocks.defaultSession(),
+          {
+            category: 'toolUse',
+            runId: 'broken-storage',
+            outcome: RUN_OUTCOME.COMPLETED,
+            runId: 'broken-storage',
+          } as Parameters<typeof readCliRunOutcomeState>[1],
+          reportReadFailure,
+        ),
+      ),
+    ).resolves.toEqual({
+      outcome: RUN_OUTCOME.COMPLETED,
+      outcomePersisted: false,
+    });
+    expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Could not verify the persisted outcome for run broken-storage; using the current run outcome: metadata read failed',
+        cause: expect.any(Error),
+      }),
+    );
+  });
 });
 
 describe('createChatSessionController', () => {
@@ -575,18 +570,18 @@ describe('createChatSessionController', () => {
 
     mocks.executeAgent.mockResolvedValue({
       category: 'toolUse',
-      executionId: 'exec-start',
+      runId: 'exec-start',
       outcome: RUN_OUTCOME.COMPLETED,
-      streamId: 'stream-start',
+      runId: 'stream-start',
     });
     mocks.runAgent.mockImplementation(
       (
-        request: { config: unknown; executionId: ExecutionId },
+        request: { config: unknown; runId: RunId },
         options: object,
       ) =>
         Effect.tryPromise({
           try: () =>
-            mocks.executeAgent(request.config, request.executionId, options),
+            mocks.executeAgent(request.config, request.runId, options),
           catch: ensureError,
         }),
     );
@@ -605,8 +600,8 @@ describe('createChatSessionController', () => {
       close: mocks.presentationHostClose,
       emit: vi.fn(),
     });
-    mocks.getActiveExecutionIds.mockReturnValue([]);
-    mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
+    mocks.getActiveRunIds.mockReturnValue([]);
+    mocks.addRunRegistrationListener.mockReturnValue(vi.fn());
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});
     mocks.request.mockImplementation(() =>
@@ -614,10 +609,10 @@ describe('createChatSessionController', () => {
     );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
-    installResumeExecutionStore();
-    rootStreamId.set(undefined);
+    installResumeRunStore();
+    rootRunId.set(undefined);
     rootRunPending.set(false);
-    rootRunStreamId.set(undefined);
+    rootRunId.set(undefined);
   });
 
   it('does not surface an intentional stop as an error', async () => {
@@ -641,7 +636,7 @@ describe('createChatSessionController', () => {
     mocks.executeAgent.mockImplementationOnce(
       async (
         _config: unknown,
-        _executionId: unknown,
+        _runId: unknown,
         options: { readonly onRun?: () => void },
       ) => {
         options.onRun?.();
@@ -676,7 +671,7 @@ describe('createChatSessionController', () => {
 
   it('reads the shared detach-subagents setting key when stopping an active stream', () => {
     const session = makeSession({
-      streamId: 'stream-1',
+      runId: 'stream-1',
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -688,28 +683,28 @@ describe('createChatSessionController', () => {
     );
     expect(mocks.request).toHaveBeenCalledWith({
       kind: 'stream.stop',
-      streamId: 'stream-1',
+      runId: 'stream-1',
       detachActiveChildren: true,
     });
   });
 
   it('stops the focused root while preserving its agent children', () => {
     const session = makeSession({
-      streamId: 'root-stream',
+      runId: 'root-stream',
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    ctrl.stopStream('root-stream');
+    ctrl.stopRun('root-stream');
 
     expect(session.stopRequested).toBe(true);
-    expect(session.interruptedStreamId).toBe('root-stream');
+    expect(session.interruptedRunId).toBe('root-stream');
     expect(mocks.cancelInteractions).toHaveBeenCalledWith({
-      streamId: 'root-stream',
+      runId: 'root-stream',
       cause: 'Run interrupted.',
     });
     expect(mocks.request).toHaveBeenCalledWith({
       kind: 'stream.stop',
-      streamId: 'root-stream',
+      runId: 'root-stream',
       detachActiveChildren: true,
     });
     expect(mocks.workspaceGet).not.toHaveBeenCalled();
@@ -717,21 +712,21 @@ describe('createChatSessionController', () => {
 
   it('stops one focused child without stopping the root session', () => {
     const session = makeSession({
-      streamId: 'root-stream',
+      runId: 'root-stream',
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    ctrl.stopStream('child-a');
+    ctrl.stopRun('child-a');
 
     expect(session.stopRequested).toBe(false);
-    expect(session.interruptedStreamId).toBeUndefined();
+    expect(session.interruptedRunId).toBeUndefined();
     expect(mocks.cancelInteractions).toHaveBeenCalledWith({
-      streamId: 'child-a',
+      runId: 'child-a',
       cause: 'Run interrupted.',
     });
     expect(mocks.request).toHaveBeenCalledWith({
       kind: 'stream.stop',
-      streamId: 'child-a',
+      runId: 'child-a',
       detachActiveChildren: true,
     });
   });
@@ -759,7 +754,7 @@ describe('createChatSessionController', () => {
         runtimeSession: {
           ...runtimeSession,
           executions: {
-            ...runtimeSession.executions,
+            ...runtimeSession.runs,
             interactionOwnership: { open },
           },
         } as SessionHandle,
@@ -777,8 +772,8 @@ describe('createChatSessionController', () => {
   });
 
   it('keeps detached-child approvals answerable after the stopped root finalizes', async () => {
-    const rootStream = 'root-stream' as StreamTabId;
-    const childStream = 'child-stream' as StreamTabId;
+    const rootRun = 'root-stream' as RunId;
+    const childRun = 'child-stream' as RunId;
     const { executions, interactions } = installOwnerSession();
     const adapterDecision = pDefer<{ action: 'approve' | 'reject' }>();
     const requestBashApproval = vi.fn(() => adapterDecision.promise);
@@ -801,38 +796,38 @@ describe('createChatSessionController', () => {
     mocks.executeAgent.mockImplementationOnce(
       async (
         _config: unknown,
-        executionId: ExecutionId,
+        runId: RunId,
         options: ExecuteAgentMockOptions,
       ) => {
-        const rootHandle = testExecutionHandle({
-          executionId,
-          parentStreamId: rootStream,
+        const rootHandle = testRunHandle({
+          runId,
+          parentRunId: rootRun,
           agent: 'root',
         });
-        const childHandle = testExecutionHandle({
-          executionId: 'child-exec',
-          parentStreamId: rootStream,
-          childStreamId: childStream,
+        const childHandle = testRunHandle({
+          runId: 'child-exec',
+          parentRunId: rootRun,
+          childRunId: childRun,
           agent: 'child',
         });
         rootHandle.attachInterruptHandler({
           interrupt: () => {
-            executions.untrack(rootHandle.executionId);
+            runs.untrack(rootHandle.runId);
             rootRun.resolve({
               category: 'toolUse',
-              executionId: rootHandle.executionId as ExecutionId,
+              runId: rootHandle.runId as RunId,
               outcome: RUN_OUTCOME.CANCELLED,
-              streamId: rootStream,
+              runId: rootRun,
             });
           },
         });
-        executions.trackAgentExecution(rootHandle, {
-          status: STREAM_PHASE.RUNNING,
+        runs.trackAgentRun(rootHandle, {
+          status: RUN_PHASE.RUNNING,
         });
-        executions.trackAgentExecution(childHandle, {
-          status: STREAM_PHASE.RUNNING,
+        runs.trackAgentRun(childHandle, {
+          status: RUN_PHASE.RUNNING,
         });
-        options.onStreamResolved?.(rootStream);
+        options.onStreamResolved?.(rootRun);
         return rootRun.promise;
       },
     );
@@ -843,14 +838,14 @@ describe('createChatSessionController', () => {
       makeInit({ session, disposables }),
     );
     ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
-    await vi.waitFor(() => expect(session.streamId).toBe(rootStream));
+    await vi.waitFor(() => expect(session.runId).toBe(rootRun));
 
-    ctrl.stopStream(rootStream);
+    ctrl.stopRun(rootRun);
     await session.runPromise;
 
     expect(session.runCompleted).toBe(true);
     expect(
-      executions.getAgentHandleByStream(childStream)?.isChildExecution,
+      runs.getAgentHandleByStream(childRun)?.isChild,
     ).toBe(false);
     expect(disposeAdapter).not.toHaveBeenCalled();
     expect(detachResultToast).toHaveBeenCalledOnce();
@@ -859,14 +854,14 @@ describe('createChatSessionController', () => {
     const approval = interactions.requestBashApproval(
       bashApprovalRequest({
         command: 'printf child',
-        streamId: childStream,
+        runId: childRun,
       }),
     );
     await vi.waitFor(() => expect(requestBashApproval).toHaveBeenCalledOnce());
     adapterDecision.resolve({ action: 'approve' });
     await expect(approval).resolves.toEqual({ action: 'approve' });
 
-    executions.untrack('child-exec');
+    runs.untrack('child-exec');
     await vi.waitFor(() => {
       expect(disposeAdapter).toHaveBeenCalledOnce();
       expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
@@ -875,7 +870,7 @@ describe('createChatSessionController', () => {
 
     disposables.dispose();
     expect(disposeAdapter).toHaveBeenCalledOnce();
-    executions.dispose();
+    runs.dispose();
   });
 
   it('releases a later root host while an earlier detached child remains active', async () => {
@@ -886,12 +881,12 @@ describe('createChatSessionController', () => {
     const disposeAdapterB = vi.fn();
     const runA = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.COMPLETED>>();
     const runB = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.COMPLETED>>();
-    const rootAStream = 'root-a' as StreamTabId;
-    const childAStream = 'child-a' as StreamTabId;
-    const rootBStream = 'root-b' as StreamTabId;
-    let childAExecutionId: ExecutionId | undefined;
-    let rootAExecutionId: ExecutionId | undefined;
-    let rootBExecutionId: ExecutionId | undefined;
+    const rootARun = 'root-a' as RunId;
+    const childARun = 'child-a' as RunId;
+    const rootBRun = 'root-b' as RunId;
+    let childARunId: RunId | undefined;
+    let rootARunId: RunId | undefined;
+    let rootBRunId: RunId | undefined;
 
     mocks.createCliRuntimeHost
       .mockReturnValueOnce(hostA)
@@ -909,44 +904,44 @@ describe('createChatSessionController', () => {
       .mockImplementationOnce(
         async (
           _config: unknown,
-          executionId: ExecutionId,
+          runId: RunId,
           options: ExecuteAgentMockOptions,
         ) => {
-          rootAExecutionId = executionId;
-          childAExecutionId = 'child-a-exec' as ExecutionId;
-          trackRunningExecution(
+          rootARunId = runId;
+          childARunId = 'child-a-exec' as RunId;
+          trackLiveRun(
             executions,
-            executionId,
-            rootAStream,
-            rootAStream,
+            runId,
+            rootARun,
+            rootARun,
             'root-a',
           );
-          trackRunningExecution(
+          trackLiveRun(
             executions,
-            childAExecutionId,
-            rootAStream,
-            childAStream,
+            childARunId,
+            rootARun,
+            childARun,
             'child-a',
           );
-          options.onStreamResolved?.(rootAStream);
+          options.onStreamResolved?.(rootARun);
           return runA.promise;
         },
       )
       .mockImplementationOnce(
         async (
           _config: unknown,
-          executionId: ExecutionId,
+          runId: RunId,
           options: ExecuteAgentMockOptions,
         ) => {
-          rootBExecutionId = executionId;
-          trackRunningExecution(
+          rootBRunId = runId;
+          trackLiveRun(
             executions,
-            executionId,
-            rootBStream,
-            rootBStream,
+            runId,
+            rootBRun,
+            rootBRun,
             'root-b',
           );
-          options.onStreamResolved?.(rootBStream);
+          options.onStreamResolved?.(rootBRun);
           return runB.promise;
         },
       );
@@ -956,25 +951,25 @@ describe('createChatSessionController', () => {
     const config = makeRunRequest('Check interaction ownership.');
 
     ctrl.startRootRun(config);
-    await vi.waitFor(() => expect(rootAExecutionId).toBeDefined());
-    executions.untrack(rootAExecutionId!);
+    await vi.waitFor(() => expect(rootARunId).toBeDefined());
+    runs.untrack(rootARunId!);
     runA.resolve({
       category: 'toolUse',
-      executionId: rootAExecutionId!,
+      runId: rootARunId!,
       outcome: RUN_OUTCOME.COMPLETED,
-      streamId: rootAStream,
+      runId: rootARun,
     });
     await session.runPromise;
     expect(hostA.close).not.toHaveBeenCalled();
 
     ctrl.startRootRun(config);
-    await vi.waitFor(() => expect(rootBExecutionId).toBeDefined());
-    executions.untrack(rootBExecutionId!);
+    await vi.waitFor(() => expect(rootBRunId).toBeDefined());
+    runs.untrack(rootBRunId!);
     runB.resolve({
       category: 'toolUse',
-      executionId: rootBExecutionId!,
+      runId: rootBRunId!,
       outcome: RUN_OUTCOME.COMPLETED,
-      streamId: rootBStream,
+      runId: rootBRun,
     });
     await session.runPromise;
 
@@ -983,21 +978,21 @@ describe('createChatSessionController', () => {
     expect(hostA.close).not.toHaveBeenCalled();
     expect(disposeAdapterA).not.toHaveBeenCalled();
 
-    executions.untrack(childAExecutionId!);
+    runs.untrack(childARunId!);
     await vi.waitFor(() => {
       expect(hostA.close).toHaveBeenCalledOnce();
       expect(disposeAdapterA).toHaveBeenCalledOnce();
     });
-    executions.dispose();
+    runs.dispose();
   });
 
   it('retains a root host while a child is activating', async () => {
     const { executions } = installOwnerSession();
     const presentationHost = { emit: vi.fn(), close: vi.fn() };
     const disposeAdapter = vi.fn();
-    const rootStream = 'activation-root' as StreamTabId;
-    const childStream = 'activation-child' as StreamTabId;
-    const childExecutionId = 'activation-child-exec' as ExecutionId;
+    const rootRun = 'activation-root' as RunId;
+    const childRun = 'activation-child' as RunId;
+    const childRunId = 'activation-child-exec' as RunId;
     let releaseChildActivation = (): void => undefined;
 
     mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
@@ -1008,31 +1003,31 @@ describe('createChatSessionController', () => {
     mocks.executeAgent.mockImplementationOnce(
       async (
         _config: unknown,
-        executionId: ExecutionId,
+        runId: RunId,
         options: ExecuteAgentMockOptions,
       ) => {
-        trackRunningExecution(
+        trackLiveRun(
           executions,
-          executionId,
-          rootStream,
-          rootStream,
+          runId,
+          rootRun,
+          rootRun,
           'root',
         );
-        options.onStreamResolved?.(rootStream);
-        releaseChildActivation = executions.reserveChildActivation({
-          executionId: childExecutionId,
-          parentStreamId: rootStream,
-          childStreamId: childStream,
+        options.onStreamResolved?.(rootRun);
+        releaseChildActivation = runs.reserveChildActivation({
+          runId: childRunId,
+          parentRunId: rootRun,
+          childRunId: childRun,
           interrupt: vi.fn(),
           detach: vi.fn(),
           isDetached: () => false,
         });
-        executions.untrack(executionId);
+        runs.untrack(runId);
         return {
           category: 'toolUse',
-          executionId,
+          runId,
           outcome: RUN_OUTCOME.COMPLETED,
-          streamId: rootStream,
+          runId: rootRun,
         };
       },
     );
@@ -1045,25 +1040,25 @@ describe('createChatSessionController', () => {
     expect(presentationHost.close).not.toHaveBeenCalled();
     expect(disposeAdapter).not.toHaveBeenCalled();
 
-    trackRunningExecution(
+    trackLiveRun(
       executions,
-      childExecutionId,
-      rootStream,
-      childStream,
+      childRunId,
+      rootRun,
+      childRun,
       'child',
     );
     expect(presentationHost.close).not.toHaveBeenCalled();
 
     // The activation outlives the child's turn handles; the host is held
     // until the loop's own disposer runs.
-    executions.untrack(childExecutionId);
+    runs.untrack(childRunId);
     expect(presentationHost.close).not.toHaveBeenCalled();
     releaseChildActivation();
     await vi.waitFor(() => {
       expect(presentationHost.close).toHaveBeenCalledOnce();
       expect(disposeAdapter).toHaveBeenCalledOnce();
     });
-    executions.dispose();
+    runs.dispose();
   });
 
   it('does not overlap terminal-result presenters across surviving host generations', async () => {
@@ -1095,14 +1090,14 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(makeInit({ session }));
     const config = makeRunRequest('Check presenter ownership.');
     ctrl.startRootRun(config);
-    session.streamId = 'root-a' as StreamTabId;
-    ctrl.stopStream('root-a' as StreamTabId);
+    session.runId = 'root-a' as RunId;
+    ctrl.stopRun('root-a' as RunId);
     for (const present of resultPresenters) present('Failure A');
     runA.resolve({
       category: 'toolUse',
-      executionId: 'exec-a' as ExecutionId,
+      runId: 'exec-a' as RunId,
       outcome: RUN_OUTCOME.CANCELLED,
-      streamId: 'root-a' as StreamTabId,
+      runId: 'root-a' as RunId,
     });
     await session.runPromise;
 
@@ -1117,9 +1112,9 @@ describe('createChatSessionController', () => {
     for (const present of resultPresenters) present('Failure B');
     runB.resolve({
       category: 'toolUse',
-      executionId: 'exec-b' as ExecutionId,
+      runId: 'exec-b' as RunId,
       outcome: RUN_OUTCOME.FAILED,
-      streamId: 'root-b' as StreamTabId,
+      runId: 'root-b' as RunId,
     });
     await session.runPromise;
 
@@ -1157,13 +1152,13 @@ describe('createChatSessionController', () => {
     const detachRegistrationListener = vi.fn();
     let childActive = true;
     mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
-    mocks.getActiveExecutionIds.mockImplementation(() =>
+    mocks.getActiveRunIds.mockImplementation(() =>
       childActive ? ['child-exec'] : [],
     );
-    mocks.getExecutionHandle.mockImplementation(() =>
+    mocks.getRunHandle.mockImplementation(() =>
       childActive ? { presentationHost } : undefined,
     );
-    mocks.addExecutionRegistrationListener.mockImplementation(
+    mocks.addRunRegistrationListener.mockImplementation(
       (listener: () => void) => {
         // Adversarial boundary: the final survivor disappears while the
         // listener is being installed, before the initial liveness check.
@@ -1179,24 +1174,24 @@ describe('createChatSessionController', () => {
     await session.runPromise;
 
     expect(session.runCompleted).toBe(true);
-    expect(mocks.addExecutionRegistrationListener).toHaveBeenCalledOnce();
+    expect(mocks.addRunRegistrationListener).toHaveBeenCalledOnce();
     expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
     expect(mocks.detachHostInteractions).toHaveBeenCalledOnce();
     expect(detachRegistrationListener).toHaveBeenCalledOnce();
   });
 
-  it('reserves the root-run slot before tryResumeStream awaits persisted state', async () => {
+  it('reserves the root-run slot before tryResumeRun awaits persisted state', async () => {
     const preload = pDefer<void>();
     const session = makeSession({ runCompleted: true });
     const snapshotStore = makeResumeSnapshotStore({
       preload: () => preload.promise,
-      executionId: undefined,
+      runId: undefined,
     });
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
 
-    const resumed = ctrl.tryResumeStream('stream-1');
+    const resumed = ctrl.tryResumeRun('stream-1');
 
     expect(session.runPromise).toBeDefined();
     expect(session.runCompleted).toBe(false);
@@ -1209,18 +1204,18 @@ describe('createChatSessionController', () => {
 
   it('reserves the root-run slot before resume() awaits the resolution', async () => {
     const configRead = pDefer<null>();
-    mocks.getExecutionRecords.mockReturnValue({
+    mocks.getRunRecords.mockReturnValue({
       readConfig: () => configRead.promise,
       readMeta: async () => null,
     });
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    const resumed = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumed = ctrl.resume('aaaaaa' as RunId);
 
     // The claim (tryClaimRootRunSlot) must land synchronously, before
     // resume() ever reaches its first await — same contract as
-    // tryResumeStream above.
+    // tryResumeRun above.
     expect(session.runPromise).toBeDefined();
     expect(session.runCompleted).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
@@ -1238,13 +1233,13 @@ describe('createChatSessionController', () => {
         toolUse: ['builtInToolUse:orchestrator'],
       },
     });
-    installResumeExecutionStore(config);
+    installResumeRunStore(config);
     const session = makeSession();
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore: makeResumeSnapshotStore({ config }) }),
     );
 
-    await ctrl.resume('exec-resume' as ExecutionId);
+    await ctrl.resume('exec-resume' as RunId);
     await session.runPromise;
 
     expect(sessionMeta.get()).toMatchObject({
@@ -1270,14 +1265,14 @@ describe('createChatSessionController', () => {
         },
       });
       const previousMetadata = sessionMeta.get();
-      installResumeExecutionStore(
+      installResumeRunStore(
         makeResumeConfig({ cli: { multiAgentPresetId: 'physicist' } }),
       );
       // Both runtime refusals precede the hook that adopts the target run.
       mocks.resumeRun.mockReturnValueOnce(Effect.succeed({ failed: failure }));
       const ctrl = createChatSessionController(makeInit({ session }));
 
-      await ctrl.resume('exec-resume' as ExecutionId);
+      await ctrl.resume('exec-resume' as RunId);
       await session.runPromise;
 
       expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
@@ -1286,9 +1281,9 @@ describe('createChatSessionController', () => {
       expect(sessionMeta.get()).toEqual(previousMetadata);
       expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
       expect(mocks.clearLocalTranscript).not.toHaveBeenCalled();
-      expect(session.streamId).toBeUndefined();
-      expect(session.executionId).toBeUndefined();
-      expect(rootStreamId.get()).toBeUndefined();
+      expect(session.runId).toBeUndefined();
+      expect(session.runId).toBeUndefined();
+      expect(rootRunId.get()).toBeUndefined();
       expect(session.runCompleted).toBe(true);
     },
   );
@@ -1296,11 +1291,11 @@ describe('createChatSessionController', () => {
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
     const session = makeSession({ runCompleted: true });
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             await options.onResumeResolved?.();
-            return { ...STARTED, outcome: STREAM_PHASE.WAITING };
+            return { ...STARTED, outcome: RUN_PHASE.WAITING };
           },
           catch: ensureError,
         }),
@@ -1315,7 +1310,7 @@ describe('createChatSessionController', () => {
     });
     const ctrl = createChatSessionController(init);
 
-    await ctrl.resume('exec-resume' as ExecutionId);
+    await ctrl.resume('exec-resume' as RunId);
     await session.runPromise;
 
     expect(session.runExitCode).toBe(CliExitCode.Success);
@@ -1324,7 +1319,7 @@ describe('createChatSessionController', () => {
 
   it('manual resume supersedes stale interrupted recovery state', async () => {
     const session = makeSession({
-      interruptedStreamId: 'stream-interrupted' as StreamTabId,
+      interruptedRunId: 'stream-interrupted' as RunId,
       runCompleted: true,
       stopRequested: true,
     });
@@ -1332,11 +1327,11 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
     );
 
-    await ctrl.resume('aaaaaa' as ExecutionId);
+    await ctrl.resume('aaaaaa' as RunId);
     await session.runPromise;
 
-    expect(session.streamId).toBe('stream-resume');
-    expect(session.interruptedStreamId).toBeUndefined();
+    expect(session.runId).toBe('stream-resume');
+    expect(session.interruptedRunId).toBeUndefined();
     expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
       kind: 'not_interrupted',
     });
@@ -1351,7 +1346,7 @@ describe('createChatSessionController', () => {
     expect(admission.kind).toBe('accepted');
     if (admission.kind !== 'accepted') return;
 
-    const manualResume = ctrl.resume('aaaaaa' as ExecutionId);
+    const manualResume = ctrl.resume('aaaaaa' as RunId);
     teardown.resolve();
 
     await manualResume;
@@ -1368,24 +1363,24 @@ describe('createChatSessionController', () => {
 
   it('resume() suspended on the resolution keeps a concurrent follow-up wake from also claiming the root-run slot', async () => {
     // resume(A) suspends on the config read (an await-suspension point)
-    // with the slot already claimed; a follow-up wake (tryResumeStream for a
+    // with the slot already claimed; a follow-up wake (tryResumeRun for a
     // different stream) fires while A is still suspended. Exactly one caller
     // (A) holds the slot end to end, so B must bail out rather than claim it
     // and start work that A would clobber on waking.
     const configRead = pDefer<null>();
-    mocks.getExecutionRecords.mockReturnValue({
+    mocks.getRunRecords.mockReturnValue({
       readConfig: () => configRead.promise,
       readMeta: async () => null,
     });
     const session = makeSession({ runCompleted: true });
     const snapshotStoreForB = makeResumeSnapshotStore({
-      executionId: undefined,
+      runId: undefined,
     });
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore: snapshotStoreForB }),
     );
 
-    const resumeA = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumeA = ctrl.resume('aaaaaa' as RunId);
     // A is now suspended inside the config read; the slot is
     // already claimed.
     expect(session.runPromise).toBeDefined();
@@ -1394,7 +1389,7 @@ describe('createChatSessionController', () => {
     // The follow-up wake for a different stream fires while A is still
     // suspended. It must bail out synchronously, before touching the
     // snapshot store, because the slot is already held.
-    const resumedB = ctrl.tryResumeStream('stream-b');
+    const resumedB = ctrl.tryResumeRun('stream-b');
     expect(snapshotStoreForB.preload).not.toHaveBeenCalled();
     await expect(resumedB).resolves.toBe(false);
 
@@ -1418,12 +1413,12 @@ describe('createChatSessionController', () => {
     });
 
     const session = makeSession({
-      interruptedStreamId: 'stream-interrupted' as StreamTabId,
+      interruptedRunId: 'stream-interrupted' as RunId,
       runCompleted: true,
     });
     const snapshotStore = makeResumeSnapshotStore({});
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             await options.onResumeResolved?.();
@@ -1438,23 +1433,23 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    const resumed = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumed = ctrl.resume('aaaaaa' as RunId);
     // resume() has claimed the slot synchronously; once the durable record
     // resolves it suspends inside defaultSession().transcripts.ensureLoaded()
-    // with session.streamId already set to the resumed stream.
+    // with session.runId already set to the resumed stream.
     expect(session.runPromise).toBeDefined();
-    await vi.waitFor(() => expect(session.streamId).toBe('stream-resume'));
+    await vi.waitFor(() => expect(session.runId).toBe('stream-resume'));
     // #8273 regression: the controller must publish the run facts so status
     // rendering can derive the Ctrl-C hint from signals instead of calling
     // impure session closures that memoized renders cache stale.
     expect(rootRunPending.get()).toBe(true);
-    expect(rootRunStreamId.get()).toBe('stream-resume');
+    expect(rootRunId.get()).toBe('stream-resume');
 
     const canInterruptActiveRun = chatTuiCanInterruptActiveRun(session);
     const canStopActiveRun = chatTuiCanStopActiveRun({
       runPending: Boolean(session.runPromise && !session.runCompleted),
-      streamId: session.streamId,
-      status: STREAM_PHASE.WAITING,
+      runId: session.runId,
+      status: RUN_PHASE.WAITING,
     });
     const resumableIdle = chatTuiIsResumableIdleOnExit({
       canInterruptActiveRun,
@@ -1479,7 +1474,7 @@ describe('createChatSessionController', () => {
 
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
     expect(session.runCompleted).toBe(true);
-    expect(session.interruptedStreamId).toBe('stream-resume');
+    expect(session.interruptedRunId).toBe('stream-resume');
   });
 
   it('marks the resumed stream, not the previous one, for a Ctrl-C issued before adoption', async () => {
@@ -1489,11 +1484,11 @@ describe('createChatSessionController', () => {
     // conversation, and any stale stream it did find would be the wrong one.
     const resumeReached = pDefer<void>();
     const session = makeSession({
-      streamId: 'stream-previous' as StreamTabId,
+      runId: 'stream-previous' as RunId,
       runCompleted: true,
     });
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             await resumeReached.promise;
@@ -1509,20 +1504,20 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
     );
 
-    const resumed = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumed = ctrl.resume('aaaaaa' as RunId);
     await vi.waitFor(() => expect(mocks.resumeRun).toHaveBeenCalledOnce());
     ctrl.stop();
-    expect(session.interruptedStreamId).toBeUndefined();
+    expect(session.interruptedRunId).toBeUndefined();
 
     resumeReached.resolve();
     await resumed;
     await session.runPromise;
 
-    expect(session.interruptedStreamId).toBe('stream-resume');
+    expect(session.interruptedRunId).toBe('stream-resume');
     expect(mocks.request).not.toHaveBeenCalledWith(
       expect.objectContaining({
         kind: 'stream.stop',
-        streamId: 'stream-previous',
+        runId: 'stream-previous',
       }),
     );
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
@@ -1530,7 +1525,7 @@ describe('createChatSessionController', () => {
 
   it('reports resume rehydration failures without rejecting the TUI submit path', async () => {
     const session = makeSession({
-      interruptedStreamId: 'stream-interrupted' as StreamTabId,
+      interruptedRunId: 'stream-interrupted' as RunId,
       runCompleted: true,
     });
     const snapshotStore = makeResumeSnapshotStore({
@@ -1542,7 +1537,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    await expect(ctrl.resume('aaaaaa' as ExecutionId)).resolves.toBeUndefined();
+    await expect(ctrl.resume('aaaaaa' as RunId)).resolves.toBeUndefined();
     await session.runPromise;
 
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
@@ -1550,7 +1545,7 @@ describe('createChatSessionController', () => {
     );
     expect(session.runExitCode).toBe(CliExitCode.AgentError);
     expect(session.runCompleted).toBe(true);
-    expect(session.interruptedStreamId).toBe('stream-interrupted');
+    expect(session.interruptedRunId).toBe('stream-interrupted');
     expect(chatTuiCanStartRootRun(session)).toBe(true);
   });
 
@@ -1569,12 +1564,12 @@ describe('createChatSessionController', () => {
         }),
       ),
       getRunMetadata: vi.fn(() => ({})),
-    } as unknown as StreamSnapshotStore;
+    } as unknown as RunSnapshotStore;
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             await options.onResumeResolved?.();
@@ -1589,7 +1584,7 @@ describe('createChatSessionController', () => {
         }),
     );
 
-    const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId);
+    const resumeStarted = ctrl.resume('aaaaaa' as RunId);
     await vi.waitFor(() =>
       expect(mocks.setCliHelperModel).toHaveBeenCalledWith('demo-model'),
     );
@@ -1623,7 +1618,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    await expect(ctrl.tryResumeStream('child-stream')).resolves.toBe(false);
+    await expect(ctrl.tryResumeRun('child-stream')).resolves.toBe(false);
 
     expect(snapshotStore.preload).not.toHaveBeenCalled();
   });
@@ -1639,14 +1634,14 @@ describe('createChatSessionController', () => {
       },
     });
     const snapshotStore = makeResumeSnapshotStore({
-      executionId: 'exec-1',
+      runId: 'exec-1',
       config,
     });
     mocks.resumeRun.mockImplementationOnce(() =>
       Effect.tryPromise({
         try: async () => ({
           ...STARTED,
-          outcome: STREAM_PHASE.WAITING,
+          outcome: RUN_PHASE.WAITING,
         }),
         catch: ensureError,
       }),
@@ -1654,7 +1649,7 @@ describe('createChatSessionController', () => {
     const init = makeInit({ session, snapshotStore });
     const ctrl = createChatSessionController(init);
 
-    await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(true);
+    await expect(ctrl.tryResumeRun('stream-1')).resolves.toBe(true);
 
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'exec-1',
@@ -1667,7 +1662,7 @@ describe('createChatSessionController', () => {
     expect(resumeOptions?.isCancellationRequested?.()).toBe(false);
     session.stopRequested = true;
     expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
-    expect(rootStreamId.get()).toBe('stream-1');
+    expect(rootRunId.get()).toBe('stream-1');
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
@@ -1677,13 +1672,13 @@ describe('createChatSessionController', () => {
     const leaseCheckStarted = pDefer<void>();
     const releaseLeaseCheck = pDefer<void>();
     const snapshotStore = makeResumeSnapshotStore({
-      executionId: 'exec-1',
+      runId: 'exec-1',
       config: makeResumeConfig(),
     });
     const session = makeSession({ runCompleted: true });
     let resumeOptions: ResumeRunOptions | undefined;
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             resumeOptions = options;
@@ -1700,8 +1695,8 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    const resume = ctrl.tryResumeStream('stream-1', {
-      streamId: 'stream-1' as StreamTabId,
+    const resume = ctrl.tryResumeRun('stream-1', {
+      runId: 'stream-1' as RunId,
       kind: 'recovery',
     });
     await leaseCheckStarted.promise;
@@ -1722,9 +1717,9 @@ describe('createChatSessionController', () => {
       true,
     );
 
-    await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(true);
+    await expect(ctrl.tryResumeRun('stream-1')).resolves.toBe(true);
 
-    expect(session.interruptedStreamId).toBeUndefined();
+    expect(session.interruptedRunId).toBeUndefined();
     expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
       kind: 'not_interrupted',
     });
@@ -1733,11 +1728,11 @@ describe('createChatSessionController', () => {
   it('rejects recovery only until the interrupted run promise settles', async () => {
     const teardown = pDefer<void>();
     const snapshotStore = makeResumeSnapshotStore({
-      executionId: 'exec-1',
+      runId: 'exec-1',
       config: makeResumeConfig(),
     });
     const session = makeSession({
-      streamId: 'stream-1',
+      runId: 'stream-1',
       runPromise: teardown.promise,
     });
     const ctrl = createChatSessionController(
@@ -1753,8 +1748,8 @@ describe('createChatSessionController', () => {
     session.clearRunState();
 
     await expect(
-      ctrl.tryResumeStream('stream-1', {
-        streamId: 'stream-1' as StreamTabId,
+      ctrl.tryResumeRun('stream-1', {
+        runId: 'stream-1' as RunId,
         kind: 'recovery',
       }),
     ).resolves.toBe(false);
@@ -1768,8 +1763,8 @@ describe('createChatSessionController', () => {
     resumeWithAutoResumeData();
 
     await expect(
-      ctrl.tryResumeStream('stream-1', {
-        streamId: 'stream-1' as StreamTabId,
+      ctrl.tryResumeRun('stream-1', {
+        runId: 'stream-1' as RunId,
         kind: 'recovery',
       }),
     ).resolves.toBe(true);
@@ -1782,11 +1777,11 @@ describe('createChatSessionController', () => {
     const firstTeardown = pDefer<void>();
     const secondTeardown = pDefer<void>();
     const snapshotStore = makeResumeSnapshotStore({
-      executionId: 'exec-1',
+      runId: 'exec-1',
       config: makeResumeConfig(),
     });
     const session = makeSession({
-      streamId: 'stream-1',
+      runId: 'stream-1',
       runPromise: firstTeardown.promise,
     });
     const ctrl = createChatSessionController(
@@ -1798,7 +1793,7 @@ describe('createChatSessionController', () => {
     session.clearRunState();
 
     session.markRunPending(secondTeardown.promise);
-    session.streamId = 'stream-2' as StreamTabId;
+    session.runId = 'stream-2' as RunId;
     ctrl.stop();
     session.markRunCompleted();
     session.clearRunState();
@@ -1806,8 +1801,8 @@ describe('createChatSessionController', () => {
     secondTeardown.resolve();
     await secondTeardown.promise;
     await expect(
-      ctrl.tryResumeStream('stream-1', {
-        streamId: 'stream-1' as StreamTabId,
+      ctrl.tryResumeRun('stream-1', {
+        runId: 'stream-1' as RunId,
         kind: 'recovery',
       }),
     ).resolves.toBe(false);
@@ -1816,8 +1811,8 @@ describe('createChatSessionController', () => {
     await firstTeardown.promise;
     resumeWithAutoResumeData();
     await expect(
-      ctrl.tryResumeStream('stream-1', {
-        streamId: 'stream-1' as StreamTabId,
+      ctrl.tryResumeRun('stream-1', {
+        runId: 'stream-1' as RunId,
         kind: 'recovery',
       }),
     ).resolves.toBe(true);
@@ -1835,7 +1830,7 @@ describe('createChatSessionController', () => {
     expect(admission.kind).toBe('accepted');
     if (admission.kind !== 'accepted') return;
 
-    const launcherResume = ctrl.tryResumeStream('stream-1');
+    const launcherResume = ctrl.tryResumeRun('stream-1');
     teardown.resolve();
 
     await expect(launcherResume).resolves.toBe(true);
@@ -1907,11 +1902,11 @@ describe('createChatSessionController', () => {
     const resume = pDefer<typeof STARTED>();
     const { ctrl } = makeInterruptedController(Promise.resolve(), true);
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () => {
             options.onFollowUpQueueReady?.({
-              streamId: 'stream:test' as StreamTabId,
+              runId: 'stream:test' as RunId,
               kind: 'recovery',
             });
             return resume.promise;
@@ -1938,9 +1933,9 @@ describe('createChatSessionController', () => {
       true,
     );
     await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    expect(session.interruptedStreamId).toBe('stream-1');
+    expect(session.interruptedRunId).toBe('stream-1');
     await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
-    expect(session.interruptedStreamId).toBeUndefined();
+    expect(session.interruptedRunId).toBeUndefined();
   });
 
   it('discards retained interrupted follow-ups when the chat is cleared', async () => {
@@ -1955,7 +1950,7 @@ describe('createChatSessionController', () => {
 
   it('keeps retained follow-ups ahead of a retry after manual resume rollback', async () => {
     const snapshotStore = makeResumeSnapshotStore({
-      executionId: 'exec-1',
+      runId: 'exec-1',
       config: makeResumeConfig(),
       load: vi
         .fn<() => Promise<void>>()
@@ -1967,7 +1962,7 @@ describe('createChatSessionController', () => {
       snapshotStore,
     );
     await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    await ctrl.resume('aaaaaa' as ExecutionId);
+    await ctrl.resume('aaaaaa' as RunId);
     // The rollback rides the run chain now that the rehydration runs inside
     // `resumeRun`'s adoption hook, so the retry follows the settled resume.
     await session.runPromise;
@@ -1988,7 +1983,7 @@ describe('createChatSessionController', () => {
       .mockReset()
       .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
 
-    await ctrl.resume('aaaaaa' as ExecutionId);
+    await ctrl.resume('aaaaaa' as RunId);
 
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'aaaaaa',
@@ -1997,25 +1992,25 @@ describe('createChatSessionController', () => {
       }),
     );
     await vi.waitFor(() =>
-      expect(session.interruptedStreamId).toBe('stream-1'),
+      expect(session.interruptedRunId).toBe('stream-1'),
     );
     await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
   });
 
   it('preserves root ownership when auto-resuming a child stream', async () => {
-    const root = 'root-stream' as StreamTabId;
-    const child = 'child-stream' as StreamTabId;
-    rootStreamId.set(root);
+    const root = 'root-stream' as RunId;
+    const child = 'child-stream' as RunId;
+    rootRunId.set(root);
     const snapshotStore = makeResumeSnapshotStore({
-      executionId: 'exec-1',
+      runId: 'exec-1',
       config: makeResumeConfig(),
-      parentStreamId: root,
+      parentRunId: root,
     });
     const ctrl = createChatSessionController(makeInit({ snapshotStore }));
 
-    await expect(ctrl.tryResumeStream(child)).resolves.toBe(true);
+    await expect(ctrl.tryResumeRun(child)).resolves.toBe(true);
 
-    expect(rootStreamId.get()).toBe(root);
+    expect(rootRunId.get()).toBe(root);
     expect(mocks.notify).toHaveBeenCalledWith('agentFinished');
   });
 
@@ -2024,12 +2019,12 @@ describe('createChatSessionController', () => {
     const session = makeSession({ runCompleted: true });
     const config = makeResumeConfig();
     const snapshotStore = makeResumeSnapshotStore({
-      executionId: 'exec-1',
+      runId: 'exec-1',
       config,
     });
     mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
     mocks.resumeRun.mockImplementationOnce(
-      (_id: ExecutionId, options: ResumeRunOptions) =>
+      (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
           try: async () =>
             options.isCancellationRequested?.() === true
@@ -2042,7 +2037,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    const resumed = ctrl.tryResumeStream('stream-1');
+    const resumed = ctrl.tryResumeRun('stream-1');
     await vi.waitFor(() =>
       expect(mocks.setCliHelperModel).toHaveBeenCalledWith(config.model),
     );

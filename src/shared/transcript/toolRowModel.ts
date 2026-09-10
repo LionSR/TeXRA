@@ -19,7 +19,7 @@ import {
 } from '@shared/schemas';
 import {
   executionsSubagentSummary,
-  type ExecutionLabels,
+  type RunLabels,
 } from '@shared/tools/executionsDisplay';
 import {
   displayToolName,
@@ -52,7 +52,7 @@ export interface ToolSectionFile {
 }
 
 /** Which path vocabulary a {@link ToolFileSection} names. */
-type ToolFileNamespace = 'workspace' | 'memory' | 'execution';
+type ToolFileNamespace = 'workspace' | 'memory' | 'run';
 
 interface ToolSectionBase {
   /** Display prefix (`Files:`, `Instruction:`); empty for an unlabeled body. */
@@ -178,8 +178,8 @@ export interface ToolRowModel {
 }
 
 export interface ToolRowModelContext {
-  /** Subagent execution id -> label, for the `executions` header summary. */
-  readonly executionLabels?: ExecutionLabels;
+  /** Subagent run id -> label, for the `executions` header summary. */
+  readonly runLabels?: RunLabels;
   /** The raw `data.output` of the tool-use payload. Structured sections read
    *  it directly (MCP content blocks, edit start lines, per-file line
    *  changes); `NormalizedToolUse.outputText` is its flattened text. */
@@ -208,7 +208,7 @@ function headerSummaryText(summary: string): string {
  * prefer the input preview; every other tool reports its own summary first and
  * falls back to the input preview while it is still in flight.
  *
- * Exported because subagent execution labels exist only at paint time in the
+ * Exported because subagent run labels exist only at paint time in the
  * terminal (they name live executions), so the CLI re-derives the preview once
  * the labels are known rather than restating the precedence over the model's
  * already-computed value.
@@ -219,8 +219,8 @@ export function toolHeaderPreview(
 ): string {
   const { toolName, input, headerSummary } = normalized;
   const labeled =
-    normalizeToolName(toolName) === 'executions' && ctx.executionLabels
-      ? executionsSubagentSummary(input, ctx.executionLabels)
+    normalizeToolName(toolName) === 'executions' && ctx.runLabels
+      ? executionsSubagentSummary(input, ctx.runLabels)
       : undefined;
   const inputPreview =
     labeled ?? collapseWhitespace(deriveToolInputPreview(toolName, input));

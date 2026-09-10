@@ -85,7 +85,7 @@ export function installCliPipeErrorHandlers(): void {
   }
 }
 
-function openStream(key: StreamKey): (typeof process)[StreamKey] | undefined {
+function openRun(key: StreamKey): (typeof process)[StreamKey] | undefined {
   if (closed[key]) return undefined;
   const stream = process[key];
   return stream.destroyed ? undefined : stream;
@@ -127,7 +127,7 @@ function guardedStreamWrite(
 // closed and settle, not crash: this path is production, not a debug
 // fallback.
 function writeRaw(key: StreamKey, text: string): void {
-  const stream = openStream(key);
+  const stream = openRun(key);
   if (!stream) return;
   const runtime = tryProcessRuntime();
   if (!runtime) {
@@ -146,7 +146,7 @@ function writeRaw(key: StreamKey, text: string): void {
 }
 
 function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
-  const stream = openStream(key);
+  const stream = openRun(key);
   if (!stream) return Promise.resolve();
   const runtime = tryProcessRuntime();
   if (!runtime) {

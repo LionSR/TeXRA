@@ -8,16 +8,16 @@ import type {
   AcceptCopyMeta,
   OutputFileInfo,
   ReadonlyRoundIndexed,
-  StreamTabId,
+  RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { StreamOutputsSource } from './streamOutputs';
+import type { RunOutputsSource } from './runOutputs';
 
 const log = createLog('ProgressWorkflowFileActions');
 
-type ProgressWorkflowFileActionsState = StreamOutputsSource;
+type ProgressWorkflowFileActionsState = RunOutputsSource;
 
 interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): Promise<void>;
@@ -39,13 +39,13 @@ interface ProgressWorkflowFileActionsHost {
 export interface ProgressWorkflowFileActionsControllerDeps {
   state: ProgressWorkflowFileActionsState;
   host: ProgressWorkflowFileActionsHost;
-  sendFollowUp(stream: StreamTabId, text: string): Promise<void>;
+  sendFollowUp(stream: RunId, text: string): Promise<void>;
 }
 
 export class ProgressWorkflowFileActionsController {
   /** Per-stream snapshot of each output file's content at compare time. */
   private readonly modelOutputBackups = new Map<
-    StreamTabId,
+    RunId,
     Map<string, string>
   >();
 
@@ -61,11 +61,11 @@ export class ProgressWorkflowFileActionsController {
     const base = request.base ?? undefined;
     switch (request.action) {
       case 'compareOriginal':
-        return this.compareOriginal(request.file, base, request.streamId);
+        return this.compareOriginal(request.file, base, request.runId);
       case 'comparePrevious':
         return this.comparePrevious(request.file, request.prev ?? undefined);
       case 'accept':
-        return this.acceptFile(request.file, base, request.streamId, config);
+        return this.acceptFile(request.file, base, request.runId, config);
       case 'merge':
         return this.mergeFile(request.file, base);
       case 'latexdiff':
@@ -73,17 +73,17 @@ export class ProgressWorkflowFileActionsController {
     }
   }
 
-  async openTaskStorage(stream: StreamTabId): Promise<void> {
+  async openTaskStorage(stream: RunId): Promise<void> {
     try {
-      const { executionId } = this.deps.state.getRunMetadata(stream);
+      const { runId } = this.deps.state.getRunMetadata(stream);
       const runOutputs = this.deps.state.getOutputFiles(stream);
       let directoryToReveal: string | undefined;
 
-      if (executionId) {
-        directoryToReveal = await findRunDir(executionId);
+      if (runId) {
+        directoryToReveal = await findRunDir(runId);
         if (!directoryToReveal) {
-          await ensureRunDir(executionId);
-          directoryToReveal = getRunDir(executionId);
+          await ensureRunDir(runId);
+          directoryToReveal = getRunDir(runId);
         }
       } else if (Object.keys(runOutputs).length > 0) {
         directoryToReveal = this.findOutputDirectory(runOutputs);
@@ -110,7 +110,7 @@ export class ProgressWorkflowFileActionsController {
   async compareOriginal(
     file: string,
     base?: string,
-    stream?: StreamTabId,
+    stream?: RunId,
   ): Promise<void> {
     await this.executeWithBaseFile(
       file,
@@ -140,12 +140,12 @@ export class ProgressWorkflowFileActionsController {
   async acceptFile(
     file: string,
     base?: string,
-    activeStream?: StreamTabId,
+    activeRun?: RunId,
     config?: AgentConfig,
   ): Promise<void> {
     const backup =
-      file && activeStream
-        ? this.modelOutputBackups.get(activeStream)?.get(file)
+      file && activeRun
+        ? this.modelOutputBackups.get(activeRun)?.get(file)
         : undefined;
     let currentContent: string | undefined;
 
@@ -160,8 +160,8 @@ export class ProgressWorkflowFileActionsController {
     }
 
     let copyMeta: AcceptCopyMeta | undefined;
-    if (activeStream && file) {
-      copyMeta = this.buildCopyMeta(activeStream, file, config);
+    if (activeRun && file) {
+      copyMeta = this.buildCopyMeta(activeRun, file, config);
     }
 
     const accepted = await this.executeWithBaseFile(
@@ -175,23 +175,23 @@ export class ProgressWorkflowFileActionsController {
     if (!accepted) return;
 
     if (
-      activeStream !== undefined &&
+      activeRun !== undefined &&
       backup !== undefined &&
       currentContent !== undefined &&
       currentContent !== backup
     ) {
       const fileName = path.basename(file);
       await this.deps.sendFollowUp(
-        activeStream,
+        activeRun,
         `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
       );
     }
 
-    if (backup !== undefined && activeStream) {
-      const streamBackups = this.modelOutputBackups.get(activeStream);
-      streamBackups?.delete(file);
-      if (streamBackups?.size === 0) {
-        this.modelOutputBackups.delete(activeStream);
+    if (backup !== undefined && activeRun) {
+      const runBackups = this.modelOutputBackups.get(activeRun);
+      runBackups?.delete(file);
+      if (runBackups?.size === 0) {
+        this.modelOutputBackups.delete(activeRun);
       }
     }
   }
@@ -225,7 +225,7 @@ export class ProgressWorkflowFileActionsController {
     }
   }
 
-  clearStreamBackups(stream: StreamTabId): void {
+  clearRunBackups(stream: RunId): void {
     this.modelOutputBackups.delete(stream);
   }
 
@@ -247,16 +247,16 @@ export class ProgressWorkflowFileActionsController {
   }
 
   private async backupModelOutput(
-    streamId: StreamTabId,
+    runId: RunId,
     file: string,
   ): Promise<void> {
     if (!file) return;
 
     try {
       const content = await this.deps.host.readFile(file);
-      const streamBackups = this.modelOutputBackups.get(streamId) ?? new Map();
-      streamBackups.set(file, content);
-      this.modelOutputBackups.set(streamId, streamBackups);
+      const runBackups = this.modelOutputBackups.get(runId) ?? new Map();
+      runBackups.set(file, content);
+      this.modelOutputBackups.set(runId, runBackups);
     } catch {
       // Best-effort: backup only informs the accepted-edit follow-up.
     }
@@ -266,7 +266,7 @@ export class ProgressWorkflowFileActionsController {
    *  a postfixed copy. Returns undefined when the run's agent/model or the
    *  file's round can't be determined (the quick-pick then just replaces). */
   private buildCopyMeta(
-    stream: StreamTabId,
+    stream: RunId,
     file: string,
     config: AgentConfig | undefined,
   ): AcceptCopyMeta | undefined {

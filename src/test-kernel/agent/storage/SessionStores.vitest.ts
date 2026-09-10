@@ -9,17 +9,17 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
-import { sweepLeftoverStreams } from '@controllers/session/sweepLeftoverStreams';
+import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverRuns';
 import {
   aggregateId,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
+  type RunId,
 } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { GoalStore } from '@tools/goal';
 
 // One restore after each test covers every vi.spyOn in this file.
@@ -44,19 +44,19 @@ describe('committed stream removal', () => {
     () =>
       withSession((session) =>
         Effect.gen(function* () {
-          const parent = 'removed-parent' as StreamTabId;
-          const child = 'retained-child' as StreamTabId;
-          const executionId = 'aabb1234' as ExecutionId;
+          const parent = 'removed-parent' as RunId;
+          const child = 'retained-child' as RunId;
+          const runId = 'aabb1234' as RunId;
           publishTestRunStart(session, parent);
-          publishTestRunStart(session, child, executionId);
+          publishTestRunStart(session, child, runId);
           yield* Effect.promise(() => session.settlePublications());
-          const handle = testExecutionHandle({
-            executionId,
-            parentStreamId: parent,
-            childStreamId: child,
+          const handle = testRunHandle({
+            runId,
+            parentRunId: parent,
+            childRunId: child,
             agent: 'chat',
           });
-          session.executions.track(handle);
+          session.runs.track(handle);
           yield* Effect.promise(() => session.settlePublications());
           yield* Effect.promise(async () =>
             runInSession(session, () =>
@@ -65,7 +65,7 @@ describe('committed stream removal', () => {
           );
           const question = session.interactions.askUserQuestion({
             requestId: 'question:removed-parent',
-            streamId: parent,
+            runId: parent,
             questions: [
               {
                 question: 'Which normalization should be used?',
@@ -78,7 +78,7 @@ describe('committed stream removal', () => {
           const before = session.now();
           session.publish([
             {
-              type: 'stream.removed',
+              type: 'run.removed',
               aggregateId: aggregateId('stream', parent),
             },
           ]);
@@ -91,7 +91,7 @@ describe('committed stream removal', () => {
           expect(session.now()).toBe(before + 1);
           expect(
             yield* Effect.sync(() =>
-              runInSession(session, () => GoalStore.getForStream(parent)),
+              runInSession(session, () => GoalStore.getForRun(parent)),
             ),
           ).toBeNull();
         }),
@@ -99,7 +99,7 @@ describe('committed stream removal', () => {
   );
 
   it.live(
-    'holds an execution deletion through interrupted cleanup before admitting a launch',
+    'holds a run deletion through interrupted cleanup before admitting a launch',
     () =>
       withSession((session) =>
         Effect.scoped(
@@ -119,7 +119,7 @@ describe('committed stream removal', () => {
                 ),
             );
             const deletion = yield* Effect.forkScoped(
-              session.executions.withInactiveExecutionStep(
+              session.runs.withInactiveRunStep(
                 'aabbccdd',
                 operation,
               ),
@@ -131,7 +131,7 @@ describe('committed stream removal', () => {
             yield* Deferred.await(cleaning);
             let launched = false;
             const launch = yield* Effect.forkScoped(
-              session.executions.launchExecution(
+              session.runs.launchRun(
                 'aabbccdd',
                 Effect.sync(() => {
                   launched = true;
@@ -139,7 +139,7 @@ describe('committed stream removal', () => {
               ),
               { startImmediately: true },
             );
-            yield* session.executions.launchExecution('11223344', Effect.void);
+            yield* session.runs.launchRun('11223344', Effect.void);
             expect(launched).toBe(false);
             yield* Deferred.succeed(releaseCleanup, undefined);
             yield* Fiber.join(interruption);
@@ -157,15 +157,15 @@ describe('indexed background-shell cleanup', () => {
     () =>
       withSession((session) =>
         Effect.gen(function* () {
-          const shell = 'leftover-shell' as StreamTabId;
-          const active = 'active-shell' as StreamTabId;
+          const shell = 'leftover-shell' as RunId;
+          const active = 'active-shell' as RunId;
           // Not a background shell: the sweep only removes `process` runs.
-          const notAShell = 'agent@not-a-shell' as StreamTabId;
-          const agent = 'saved-agent' as StreamTabId;
-          session.executions.track(
-            testExecutionHandle({
-              executionId: 'bb2233',
-              parentStreamId: active,
+          const notAShell = 'agent@not-a-shell' as RunId;
+          const agent = 'saved-agent' as RunId;
+          session.runs.track(
+            testRunHandle({
+              runId: 'bb2233',
+              parentRunId: active,
               agent: 'bash',
             }),
           );
@@ -173,7 +173,7 @@ describe('indexed background-shell cleanup', () => {
             {
               type: 'run.start',
               aggregateId: aggregateId('stream', shell),
-              executionId: 'aa1122',
+              runId: 'aa1122',
               identity: { kind: 'process', tool: 'bash' },
               category: 'toolUse',
               isRemote: false,
@@ -182,7 +182,7 @@ describe('indexed background-shell cleanup', () => {
             {
               type: 'run.start',
               aggregateId: aggregateId('stream', active),
-              executionId: 'bb2233',
+              runId: 'bb2233',
               identity: { kind: 'process', tool: 'bash' },
               category: 'toolUse',
               isRemote: false,
@@ -191,7 +191,7 @@ describe('indexed background-shell cleanup', () => {
             {
               type: 'run.start',
               aggregateId: aggregateId('stream', notAShell),
-              executionId: 'cc3344',
+              runId: 'cc3344',
               identity: { kind: 'agent', agent: 'assistant' },
               category: 'toolUse',
               isRemote: false,
@@ -207,14 +207,14 @@ describe('indexed background-shell cleanup', () => {
               ),
             ),
           );
-          yield* sweepLeftoverStreams(session, rows.flat());
+          yield* sweepLeftoverRuns(session, rows.flat());
           const swept = yield* Stream.runHead(
             session.viewChanges.pipe(
-              Stream.filter((view) => !view.streams.has(shell)),
+              Stream.filter((view) => !view.runs.has(shell)),
             ),
           );
-          const streams = Option.getOrThrow(swept).streams;
-          expect([...streams.keys()].toSorted()).toEqual(
+          const runs = Option.getOrThrow(swept).runs;
+          expect([...runs.keys()].toSorted()).toEqual(
             [active, notAShell, agent].toSorted(),
           );
         }),

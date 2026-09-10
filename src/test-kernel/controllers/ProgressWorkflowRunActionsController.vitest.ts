@@ -11,7 +11,7 @@ import {
 } from '../support/ProgressControllerHarnesses';
 
 describe('ProgressWorkflowRunActionsController', () => {
-  it('ignores toolbar actions for non-workflow streams', async () => {
+  it('ignores toolbar actions for non-workflow runs', async () => {
     const toolUseConfig = createAgentConfig({
       agentCategory: AgentCategory.ToolUse,
       outputFiles: [],
@@ -31,7 +31,7 @@ describe('ProgressWorkflowRunActionsController', () => {
     const config = createWorkflowConfig({ outputFiles: ['declared.tex'] });
     const { controller, diffs, metadataReads } =
       createProgressWorkflowRunActionsHarness({
-        executionIds: new Map([['stream-a', 'exec-123']]),
+        runIds: new Map([['stream-a', 'exec-123']]),
         outputs: new Map([['stream-a', { 1: [output] }]]),
       });
 
@@ -45,7 +45,7 @@ describe('ProgressWorkflowRunActionsController', () => {
         inputFile: 'input.tex',
         outputFiles: ['declared.tex'],
         outputFilesActive: true,
-        streamId: 'stream-a',
+        runId: 'stream-a',
         runId: 'exec-123',
         outputsByRound: { 1: [output] },
       },
@@ -62,14 +62,14 @@ describe('ProgressWorkflowRunActionsController', () => {
     assert.deepEqual(diffs[0]?.outputFiles, []);
   });
 
-  it('deduplicates generated outputs for pack and includes execution context', async () => {
+  it('deduplicates generated outputs for pack and includes run context', async () => {
     const config = createWorkflowConfig({
       inputFiles: ['extra-input.tex', 'second-input.tex'],
       outputFiles: ['declared.tex', '/workspace/generated.tex'],
     });
     const { controller, fileOperations, metadataReads } =
       createProgressWorkflowRunActionsHarness({
-        executionIds: new Map([['stream-a', 'exec-123']]),
+        runIds: new Map([['stream-a', 'exec-123']]),
         knownWorkspaceOutputs: new Map([
           ['stream-a', new Set(['/workspace/generated.tex', 'extra.tex'])],
         ]),
@@ -90,7 +90,7 @@ describe('ProgressWorkflowRunActionsController', () => {
             '/workspace/generated.tex',
             'extra.tex',
           ],
-          executionId: 'exec-123',
+          runId: 'exec-123',
         },
       },
     ]);

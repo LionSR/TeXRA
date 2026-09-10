@@ -11,16 +11,16 @@ import type {
   HostBashApprovalRequest,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { BashPermissionSchema, type StreamTabId } from '@shared/schemas';
+import { BashPermissionSchema, type RunId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 
-const sid = (s: string): StreamTabId => s as StreamTabId;
+const sid = (s: string): RunId => s as RunId;
 
 describe('requestBashApproval queueing', () => {
   it('hands the host a schema-valid permission with a prefixed request id and a trimmed cwd', async () => {
     const session = createTestSession();
-    const streamId = sid('s:bash-prompt');
+    const runId = sid('s:bash-prompt');
     const prompted: HostBashApprovalRequest[] = [];
     session.interactions.use({
       requestBashApproval: async (request) => {
@@ -30,7 +30,7 @@ describe('requestBashApproval queueing', () => {
       cancel: () => undefined,
     });
     const request = (command: string, cwd?: string) =>
-      withRunContext(createRunContext({ streamId, session }), () =>
+      withRunContext(createRunContext({ runId, session }), () =>
         requestBashApproval({ command, ...(cwd ? { cwd } : {}) }),
       );
 
@@ -43,7 +43,7 @@ describe('requestBashApproval queueing', () => {
         command: 'lake build',
         cwd: '/work',
         allowBypass: true,
-        streamId,
+        runId,
       });
       expect(first.requestId).toMatch(/^bash-.+/);
       expect(second.requestId).not.toBe(first.requestId);
@@ -55,11 +55,11 @@ describe('requestBashApproval queueing', () => {
 
   it('lets never override a stream bypass at the shared boundary', async () => {
     const session = createTestSession();
-    const streamId = sid('s:bash-policy-denial');
+    const runId = sid('s:bash-policy-denial');
     let policyDenials = 0;
     let prompts = 0;
     session.setApprovalPolicy('never');
-    session.approvals.bash.bypass.setBypass(streamId, true, { silent: true });
+    session.approvals.bash.bypass.setBypass(runId, true, { silent: true });
     session.interactions.use({
       requestBashApproval: async () => {
         prompts += 1;
@@ -71,7 +71,7 @@ describe('requestBashApproval queueing', () => {
     try {
       const result = await withRunContext(
         createRunContext({
-          streamId,
+          runId,
           session,
           onApprovalPolicyDenial: () => {
             policyDenials += 1;
@@ -93,7 +93,7 @@ describe('requestBashApproval queueing', () => {
 
   it('auto-approves a queued request once the stream is bypassed while it waits', async () => {
     const session = createTestSession();
-    const streamId = sid('s:bash-queued-bypass');
+    const runId = sid('s:bash-queued-bypass');
     const firstPrompted = pDefer<void>();
     const firstAnswer = pDefer<BashSettlement>();
     let prompts = 0;
@@ -108,7 +108,7 @@ describe('requestBashApproval queueing', () => {
     });
 
     const request = (command: string) =>
-      withRunContext(createRunContext({ streamId, session }), () =>
+      withRunContext(createRunContext({ runId, session }), () =>
         requestBashApproval({ command }),
       );
 
@@ -120,7 +120,7 @@ describe('requestBashApproval queueing', () => {
 
       // The user answers the first prompt with "approve and stop asking";
       // the second must honor that instead of prompting again.
-      session.approvals.bash.bypass.setBypass(streamId, true, { silent: true });
+      session.approvals.bash.bypass.setBypass(runId, true, { silent: true });
       firstAnswer.resolve({ action: 'approve' });
 
       expect(await first).toEqual({ action: 'approve' });

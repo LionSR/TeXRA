@@ -274,7 +274,7 @@ export class ToolUseDispatchNode extends BaseNode<
     call: SdkToolCall,
     tool: ITool | undefined,
     parsedInput: unknown,
-    onExecutionReady: (() => void) | undefined,
+    onRunReady: (() => void) | undefined,
     onToolOutput: ((chunk: string) => void) | undefined,
     signal: AbortSignal,
   ): Promise<SafeToolInvocation> {
@@ -299,7 +299,7 @@ export class ToolUseDispatchNode extends BaseNode<
           toolCallId: call.callId,
           signal,
           hooks: {
-            onExecutionReady,
+            onRunReady,
             onToolOutput,
             // Subagent cost lands in the parent's totals only (no normalized
             // snapshot), so per-round usage reporting doesn't double-count it —
@@ -317,7 +317,7 @@ export class ToolUseDispatchNode extends BaseNode<
       const { message, diagnostics } = normalizeToolCallError(call.name, err);
       result = {
         status: 'error',
-        error: message.trim() || 'Tool execution failed.',
+        error: message.trim() || 'Tool run failed.',
         ...(diagnostics ? { diagnostics } : {}),
       };
     }
@@ -342,13 +342,13 @@ export class ToolUseDispatchNode extends BaseNode<
     const tool = options.toolRegistry.get(call.name);
     const isDeferred = tool?.deferLogUntilApproval === true;
 
-    // Capture groupId at start. For deferred tools, delay logging until onExecutionReady.
+    // Capture groupId at start. For deferred tools, delay logging until onRunReady.
     const logRef: ToolExecutionResult['logRef'] =
       tool?.slow === true && !isDeferred
         ? startToolUseCard(options.logger, call.name, parsedInput ?? call.raw)
         : { logId: undefined, groupId: options.logger.activeStageId() };
 
-    const onExecutionReady = isDeferred
+    const onRunReady = isDeferred
       ? () => {
           if (!logRef.logId) {
             const ref = startToolUseCard(
@@ -393,7 +393,7 @@ export class ToolUseDispatchNode extends BaseNode<
       call,
       tool,
       parsedInput,
-      onExecutionReady,
+      onRunReady,
       onToolOutput,
       options.runScope.signal,
     );
@@ -409,7 +409,7 @@ export class ToolUseDispatchNode extends BaseNode<
             output:
               result.status === 'error'
                 ? result.error
-                : (result.output ?? 'Tool execution cancelled.'),
+                : (result.output ?? 'Tool run cancelled.'),
             isError: true,
           },
           'failed',
@@ -463,7 +463,7 @@ export class ToolUseDispatchNode extends BaseNode<
     };
 
     // Update in-progress log (slow tools) or create new log (fast tools)
-    // Both use the groupId captured at execution start for consistency
+    // Both use the groupId captured at run start for consistency
     if (logRef.logId) {
       endToolUseCard(
         options.logger,
@@ -503,7 +503,7 @@ export class ToolUseDispatchNode extends BaseNode<
     }
   }
 
-  /** Process tool execution results and create follow-up messages. */
+  /** Process tool run results and create follow-up messages. */
   override async post(
     shared: ToolUseRoundShared,
     dispatchedCalls: SdkToolCall[],
