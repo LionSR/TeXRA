@@ -290,10 +290,13 @@ export function descendantStreams(
 ): readonly StreamTabId[] {
   if (rootStreamId === undefined) return [];
   const out: StreamTabId[] = [];
+  // An index cursor over an append-only queue keeps this linear in the
+  // topology's size; `Array.shift()` would re-index the remainder on every
+  // pop and make a large fan-out's walk quadratic.
   const pending = [rootStreamId];
   const seen = new Set<StreamTabId>();
-  while (pending.length > 0) {
-    const id = pending.shift()!;
+  for (let cursor = 0; cursor < pending.length; cursor++) {
+    const id = pending[cursor]!;
     const stream = view.streams.get(id);
     if (!stream || seen.has(id)) continue;
     seen.add(id);
