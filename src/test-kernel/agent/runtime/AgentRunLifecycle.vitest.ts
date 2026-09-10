@@ -252,7 +252,7 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      await expect(terminalResult).resolves.toMatchObject({
+      await expect(Effect.runPromise(terminalResult!)).resolves.toMatchObject({
         category: 'workflow',
         agentName: 'polish',
       });
@@ -769,7 +769,7 @@ describe('runFlowWithLifecycle', () => {
           flowRecord: 'preserve',
         }),
       );
-      await expect(terminalResult).resolves.toMatchObject({
+      await expect(Effect.runPromise(terminalResult!)).resolves.toMatchObject({
         outcome: RUN_OUTCOME.CANCELLED,
         error: { kind: 'abort' },
       });
@@ -933,7 +933,7 @@ describe('runFlowWithLifecycle', () => {
       const stop = defaultSession().executions.kill(executionId);
       expect(stop.accepted).toBe(true);
       await Effect.runPromise(stop.settlement);
-      await waitingHandle.result;
+      await Effect.runPromise(waitingHandle.result);
 
       // The bypassed runFlowWithLifecycle can't emit the terminal result, so
       // terminateWaitingHandle must — trace subscribers would otherwise miss
@@ -1008,7 +1008,7 @@ describe('runFlowWithLifecycle', () => {
       expect(stop.accepted).toBe(true);
 
       await Effect.runPromise(stop.settlement);
-      await waitingHandle.result;
+      await Effect.runPromise(waitingHandle.result);
 
       expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
     } finally {
@@ -1398,7 +1398,9 @@ describe('finalizeRunTerminal', () => {
         ),
       ).toHaveLength(1);
       expect(untrack).toHaveBeenCalledTimes(1);
-      await expect(handle.result).resolves.toBe(event?.event);
+      await expect(Effect.runPromise(handle.result)).resolves.toBe(
+        event?.event,
+      );
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
       traceEmit.mockRestore();
@@ -1417,7 +1419,7 @@ describe('finalizeRunTerminal', () => {
         }),
     );
     let resultSettled = false;
-    void handle.result.then(() => {
+    void Effect.runPromise(handle.result).then(() => {
       resultSettled = true;
     });
 
@@ -1491,7 +1493,9 @@ describe('finalizeRunTerminal', () => {
           executionId,
         },
       });
-      await expect(handle.result).resolves.toBe(event?.event);
+      await expect(Effect.runPromise(handle.result)).resolves.toBe(
+        event?.event,
+      );
       expect(untrack).toHaveBeenCalledExactlyOnceWith(executionId);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
       expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
@@ -1548,7 +1552,9 @@ describe('finalizeRunTerminal', () => {
       // Error facts classified for a failure that the phase says never
       // happened must not ride the cancelled result.
       expect(finalized?.event.error).toBeUndefined();
-      await expect(handle.result).resolves.toBe(finalized?.event);
+      await expect(Effect.runPromise(handle.result)).resolves.toBe(
+        finalized?.event,
+      );
       expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
         defaultSession(),

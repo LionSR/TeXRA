@@ -593,18 +593,32 @@ const heldSession = (root: string) =>
       : { key, session: Context.get(held.value, Session) };
   });
 
-/** Resolve once every execution the registry holds has left it. Detaches
- *  on `signal`, so a bounded wait leaves no listener behind. */
-async function untilSettled(
-  executions: ExecutionRegistry,
-  signal: AbortSignal,
-): Promise<void> {
-  for (;;) {
-    const active = executions.getActiveIds();
-    if (active.length === 0 || signal.aborted) return;
-    await executions.waitForAnyChange(active, signal);
-  }
-}
+/**
+ * Resolve once every execution the registry holds has left it. Interrupting
+ * this fiber — which is what the close budget below does — detaches the
+ * registry listeners with it, so a bounded wait leaves none behind. The
+ * registry state is re-read once those listeners are attached, closing the
+ * window between the read below and a registration the fiber only reaches a
+ * scheduler step later: `raceAllFirst` starts its arms immediately and in
+ * order, so the wait registers first and the re-check then sees a last
+ * execution that left inside the window, instead of waiting out the whole
+ * close budget for a notification that can no longer come. The loop reads
+ * registry state only, so it needs no session scope of its own.
+ */
+const untilSettled = (executions: ExecutionRegistry): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    for (;;) {
+      const active = executions.getActiveIds();
+      if (active.length === 0) return;
+      const alreadySettled = Effect.suspend(() =>
+        executions.getActiveIds().length === 0 ? Effect.void : Effect.never,
+      );
+      yield* Effect.raceAllFirst([
+        executions.waitForAnyChange(active).pipe(Effect.asVoid),
+        alreadySettled,
+      ]);
+    }
+  });
 
 /** A root with nothing open: nothing to settle, nothing abandoned. */
 const NOTHING_TO_CLOSE: SessionCloseReport = { settled: true, abandoned: [] };
@@ -673,14 +687,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // The entry remains owned until waiting metadata finalization, not merely
     // handle removal, has completed as well as every live driver.
     const settled = Fiber.join(termination).pipe(
-      Effect.andThen(
-        Effect.promise(
-          (interrupt) =>
-            runInSession(session, () =>
-              untilSettled(executions, interrupt),
-            ) as Promise<void>,
-        ),
-      ),
+      Effect.andThen(untilSettled(executions)),
     );
     // One budget for the whole close: the caller's signal, else the phase
     // deadline, forked once so the flush below shares what settlement left.

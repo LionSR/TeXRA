@@ -6,7 +6,7 @@
  * Termination policy lives with the owning registry.
  */
 
-import pDefer from 'p-defer';
+import { Deferred, Effect } from 'effect';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
@@ -18,7 +18,6 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
-import type { Effect } from 'effect';
 
 export interface ExecutionStatusInfo {
   status: StreamPhase | 'unknown';
@@ -146,12 +145,16 @@ export class AgentExecutionHandle<
   /**
    * The run's terminal outcome, settled exactly once (by the run lifecycle, or
    * by `finalizeChildStream` for non-lifecycle child streams) BEFORE the
-   * execution is untracked. Always resolves — never rejects — so a consumer-less
-   * failed run cannot produce an unhandled rejection. SDK consumers awaiting a
-   * specific run's outcome use this; the host-wide stream is `session.onResult`.
+   * execution is untracked. It always succeeds — it has no error channel — so
+   * a failed run reports through the `ResultEvent`'s own outcome rather than
+   * through a rejection nobody is required to observe, and a consumer that
+   * never awaits it costs nothing. Awaiting it is a fiber parked on the
+   * `Deferred`, so an interrupted consumer detaches with its fiber. SDK
+   * consumers awaiting a specific run's outcome use this; the host-wide
+   * stream is `session.onResult`.
    */
-  private readonly _deferred = pDefer<ResultEvent>();
-  readonly result = this._deferred.promise;
+  private readonly _terminal = Deferred.makeUnsafe<ResultEvent>();
+  readonly result: Effect.Effect<ResultEvent> = Deferred.await(this._terminal);
   private terminalState: TerminalState = 'open';
 
   constructor(
@@ -193,7 +196,7 @@ export class AgentExecutionHandle<
   /** Settle {@link result} with the terminal outcome (idempotent). */
   settleResult(event: ResultEvent): void {
     this.terminalState = 'settled';
-    this._deferred.resolve(event);
+    Deferred.doneUnsafe(this._terminal, Effect.succeed(event));
   }
 
   /**

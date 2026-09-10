@@ -938,7 +938,7 @@ describe('childRunLoop E2E fixtures', () => {
     await waitForLoopEnd(childStreamId);
 
     // Settled: handle.result resolves instead of hanging forever.
-    await expect(handle.result).resolves.toMatchObject({
+    await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
       outcome: 'cancelled',
       executionId,
     });
@@ -1108,7 +1108,7 @@ describe('childRunLoop E2E fixtures', () => {
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
     await waitForLoopEnd(childStreamId);
-    await expect(handle.result).resolves.toMatchObject({
+    await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
       outcome: 'failed',
       executionId,
       error: expect.objectContaining({
@@ -1161,7 +1161,7 @@ describe('childRunLoop E2E fixtures', () => {
     await Promise.all(stopSettlements);
     expect(interruptAfterFailure).toHaveBeenCalledOnce();
     expect(session.status.get(childStreamId)).toBe(STREAM_PHASE.FAILED);
-    await expect(handle?.result).resolves.toMatchObject({
+    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
       outcome: 'failed',
       executionId,
       error: expect.objectContaining({

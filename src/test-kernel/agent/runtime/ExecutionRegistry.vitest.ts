@@ -461,7 +461,7 @@ describe('executionRegistry', () => {
       });
 
       expect(killRegistry(registry, executionId)).toBe(true);
-      await handle.result;
+      await Effect.runPromise(handle.result);
 
       expect(cleanup).toHaveBeenCalledOnce();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
@@ -499,7 +499,7 @@ describe('executionRegistry', () => {
       });
 
       expect(killRegistry(registry, executionId)).toBe(true);
-      await handle.result;
+      await Effect.runPromise(handle.result);
 
       expect(publishResult).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
@@ -520,7 +520,7 @@ describe('executionRegistry', () => {
           outcome: RUN_OUTCOME.CANCELLED,
         }),
       );
-      await expect(handle.result).resolves.toMatchObject({
+      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
         type: 'result',
         outcome: RUN_OUTCOME.CANCELLED,
         executionId,
@@ -559,7 +559,7 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
 
       finishCleanup();
-      await expect(handle.result).resolves.toMatchObject({
+      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
         type: 'result',
         outcome: RUN_OUTCOME.CANCELLED,
       });
@@ -602,7 +602,7 @@ describe('executionRegistry', () => {
 
       expect(successorInterrupt).toHaveBeenCalledOnce();
       finishCleanup();
-      await expect(previous.result).resolves.toMatchObject({
+      await expect(Effect.runPromise(previous.result)).resolves.toMatchObject({
         type: 'result',
         outcome: RUN_OUTCOME.CANCELLED,
       });
@@ -634,7 +634,7 @@ describe('executionRegistry', () => {
       });
 
       expect(killRegistry(registry, executionId)).toBe(true);
-      await expect(handle.result).resolves.toMatchObject({
+      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
         type: 'result',
         outcome: RUN_OUTCOME.CANCELLED,
       });
@@ -670,7 +670,7 @@ describe('executionRegistry', () => {
 
       expect(killRegistry(registry, executionId)).toBe(true);
 
-      await expect(handle.result).resolves.toMatchObject({
+      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
         type: 'result',
         outcome: RUN_OUTCOME.CANCELLED,
         executionId,
@@ -882,7 +882,7 @@ describe('executionRegistry', () => {
       releasePersist?.();
       await finalized;
       expect(teardown).not.toHaveBeenCalled();
-      await expect(handle.result).resolves.toMatchObject({
+      await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
       });
       expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
@@ -941,7 +941,7 @@ describe('executionRegistry', () => {
       });
 
       expect(killRegistry(registry, executionId)).toBe(true);
-      await handle.result;
+      await Effect.runPromise(handle.result);
 
       expect(cleanup).toHaveBeenCalledOnce();
       expect(registry.getHandle(executionId)).toBeUndefined();

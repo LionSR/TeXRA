@@ -638,9 +638,11 @@ HARNESS_DISPOSERS.push(bindSessionView(session().view));
     const key = ids.join('\0');
     if (key === subscribed) return;
     subscribed = key;
-    session().setTranscriptSubscriptions(
-      'tui-harness',
-      ids.map((id) => ({ id, fromSeq: 0 })),
+    effectRuntime().runFork(
+      session().setTranscriptSubscriptions(
+        'tui-harness',
+        ids.map((id) => ({ id, fromSeq: 0 })),
+      ),
     );
   };
   HARNESS_DISPOSERS.push(

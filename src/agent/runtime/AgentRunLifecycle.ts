@@ -526,7 +526,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     if (options?.onRun) {
       const onRun = options.onRun;
       // Start observation at the same time as invocation. The callback may
-      // await handle.result, so its observer must not hold up the flow.
+      // run handle.result to completion, so its observer must not hold up
+      // the flow that settles it.
       yield* Effect.tryPromise({
         try: async () => onRun(handle),
         catch: ensureError,
