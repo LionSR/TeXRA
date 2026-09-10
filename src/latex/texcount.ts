@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -8,8 +8,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
-
-const log = createLog(CHANNEL);
 
 const CHINESE_PACKAGES = [
   'xeCJK',
@@ -38,10 +36,9 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
       ),
     ),
     Effect.catch((err) =>
-      Effect.sync(() => {
-        log.error(`Error checking Chinese packages: ${toErrorMessage(err)}`);
-        return false;
-      }),
+      Effect.logError(
+        `Error checking Chinese packages: ${toErrorMessage(err)}`,
+      ).pipe(Effect.as(false)),
     ),
   );
 });
@@ -61,22 +58,20 @@ interface TexcountResult {
 /** Returns why the file cannot be counted, or null when it is countable. */
 const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
-  channel: string,
 ) {
-  const log = createLog(channel);
   const exists = yield* Effect.tryPromise({
     try: () => AbsoluteFS.exists(filePath),
     catch: ensureError,
   });
   if (!exists) {
     const reason = `File ${filePath} does not exist.`;
-    log.warn(reason);
+    yield* Effect.logWarning(reason);
     return reason;
   }
 
   if (!hasExtension(filePath, '.tex')) {
     const reason = `Error: File ${filePath} is not a LaTeX file. Skipping.`;
-    log.warn(reason);
+    yield* Effect.logWarning(reason);
     return reason;
   }
 
@@ -87,13 +82,16 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
  * Invoke `texcount`. The subprocess is cancelled by the fiber's own
  * interruption: `Effect.tryPromise` hands the thunk an `AbortSignal` that
  * aborts when the fiber is interrupted, so no caller threads a signal in.
+ *
+ * `channel` is still a parameter because `runToolWithCheck` logs the command
+ * itself through the Promise-shaped writers; this function's own entries take
+ * the channel the whole count was annotated with.
  */
 const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   args: string[],
   channel: string,
   context: string,
 ): Effect.fn.Return<{ stdout: string | null; error?: string }, Error> {
-  const log = createLog(channel);
   const result = yield* Effect.tryPromise({
     try: (signal) =>
       runToolWithCheck('texcount', args, {
@@ -113,16 +111,16 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   }
 
   if (result.success && result.stdout) {
-    log.debug(`Successfully counted ${context}`);
+    yield* Effect.logDebug(`Successfully counted ${context}`);
     return { stdout: result.stdout };
   }
 
-  log.error(`Error getting tex count for ${context}`);
+  yield* Effect.logError(`Error getting tex count for ${context}`);
   if (result.stdout) {
-    log.error(`Stdout: ${result.stdout}`);
+    yield* Effect.logError(`Stdout: ${result.stdout}`);
   }
   if (result.stderr) {
-    log.error(`Stderr: ${result.stderr}`);
+    yield* Effect.logError(`Stderr: ${result.stderr}`);
   }
 
   return {
@@ -144,7 +142,7 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
       (filePath) =>
         Effect.gen(function* () {
           const absolutePath = pathToLocation(filePath).absolutePath;
-          const reason = yield* rejectionReason(absolutePath, channel);
+          const reason = yield* rejectionReason(absolutePath);
           if (reason) {
             return { output: null, error: reason };
           }
@@ -180,7 +178,6 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
   paths: readonly string[],
   channel: string,
 ) {
-  const log = createLog(channel);
   const errors: string[] = [];
 
   // The per-file probes fan out; the sum itself is a single texcount call
@@ -190,7 +187,7 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
     (filePath) =>
       Effect.gen(function* () {
         const absolutePath = pathToLocation(filePath).absolutePath;
-        const reason = yield* rejectionReason(absolutePath, channel);
+        const reason = yield* rejectionReason(absolutePath);
         if (reason) return { filePath, reason, chinese: false };
         return {
           filePath,
@@ -211,7 +208,7 @@ const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
     validPaths.push(entry.filePath);
     if (!enableChineseMode && entry.chinese) {
       enableChineseMode = true;
-      log.debug(
+      yield* Effect.logDebug(
         `Chinese packages detected in ${entry.filePath}, enabling Chinese character counting`,
       );
     }
@@ -256,7 +253,6 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   { mode = 'separate', channel }: TexcountOptions = {},
 ): Effect.fn.Return<TexcountResult, never> {
   const resolvedChannel = channel ?? CHANNEL;
-  const log = createLog(resolvedChannel);
 
   const counted = Effect.gen(function* () {
     const trimmedPaths = ensureArray(filePaths)
@@ -265,7 +261,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
 
     if (trimmedPaths.length === 0) {
       const message = 'No LaTeX files provided for texcount.';
-      log.warn(message);
+      yield* Effect.logWarning(message);
       return { output: null, errors: [message] };
     }
 
@@ -275,7 +271,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
         resolvedChannel,
       );
       if (output) {
-        log.info(`Combined TeX Count Results:\n${output}`);
+        yield* Effect.logInfo(`Combined TeX Count Results:\n${output}`);
       }
       return { output, errors };
     }
@@ -293,7 +289,7 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
     }
 
     const combinedOutput = outputs.join('\n\n');
-    log.info(`Combined TeX Count Results:\n${combinedOutput}`);
+    yield* Effect.logInfo(`Combined TeX Count Results:\n${combinedOutput}`);
     return { output: combinedOutput, errors };
   });
 
@@ -302,12 +298,16 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   // and the reason, not a thrown run.
   return yield* counted.pipe(
     Effect.catch((err) =>
-      Effect.sync((): TexcountResult => {
+      Effect.suspend(() => {
         const errorMessage = `Error in getTeXCount: ${toErrorMessage(err)}`;
-        log.error(errorMessage);
-        return { output: null, errors: [errorMessage] };
+        return Effect.logError(errorMessage).pipe(
+          Effect.as<TexcountResult>({ output: null, errors: [errorMessage] }),
+        );
       }),
     ),
+    // One channel for the whole count: every helper below logs into it
+    // instead of taking the channel as a parameter of its own.
+    withLogChannel(resolvedChannel),
   );
 });
 

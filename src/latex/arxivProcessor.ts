@@ -8,7 +8,7 @@ import { Cause, Clock, Data, Duration, Effect, Random, Schedule } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
@@ -198,15 +198,16 @@ function getExtensionFromContentType(contentType: string): string {
   return '';
 }
 
-class ArxivSourceProcessor {
-  // NOTE: The channel string stays 'arxivProcessor' (lowercase) even
-  // though the exported singleton was renamed to PascalCase in #7347. It is used
-  // directly as the logger channel and prefixes every log line as
-  // `[arxivProcessor] ...`, so keep it stable for anything filtering on the
-  // channel name — a class-identifier rename must not change this value.
-  private readonly channel = 'arxivProcessor';
-  private readonly log = createLog(this.channel);
+/**
+ * NOTE: The channel string stays 'arxivProcessor' (lowercase) even though the
+ * exported singleton was renamed to PascalCase in #7347. It is used directly as
+ * the logger channel and prefixes every log line as `[arxivProcessor] ...`, so
+ * keep it stable for anything filtering on the channel name — a class-identifier
+ * rename must not change this value.
+ */
+const ARXIV_CHANNEL = 'arxivProcessor';
 
+class ArxivSourceProcessor {
   /** Best-effort delete that logs failures at debug level instead of failing. */
   private cleanUpBestEffort(
     target: string,
@@ -218,12 +219,11 @@ class ArxivSourceProcessor {
       catch: (error) => error,
     }).pipe(
       Effect.catch((error) =>
-        Effect.sync(() => {
-          this.log.debug(`Failed to clean up ${description} ${target}`, {
-            data: error,
-          });
-        }),
+        Effect.logDebug(`Failed to clean up ${description} ${target}`).pipe(
+          withLogData(error),
+        ),
       ),
+      withLogChannel(ARXIV_CHANNEL),
     );
   }
 
@@ -252,7 +252,6 @@ class ArxivSourceProcessor {
     destBasePath: string,
     timeout = 30000,
   ): Effect.Effect<string, ArxivSourceError> {
-    const log = this.log;
     return this.downloadFileOnce(url, destBasePath, timeout).pipe(
       // Retry the whole ordinary failure, never a mixed cleanup cause. Effect's
       // typed-error retry otherwise selects one failure and drops its siblings.
@@ -269,7 +268,7 @@ class ArxivSourceProcessor {
           )
             return;
           const { attempt } = yield* Schedule.CurrentMetadata;
-          log.debug(
+          yield* Effect.logDebug(
             `Download attempt failed (${DOWNLOAD_RETRIES - attempt} retries left): ${reason.error.message}`,
           );
         }),
@@ -283,6 +282,7 @@ class ArxivSourceProcessor {
           cause.reasons[0].error._tag === 'ArxivSourceTransientError',
       }),
       Effect.catch((cause) => Effect.failCause(cause)),
+      withLogChannel(ARXIV_CHANNEL),
     );
   }
 
@@ -291,7 +291,6 @@ class ArxivSourceProcessor {
     destBasePath: string,
     timeout: number,
   ): Effect.Effect<string, ArxivSourceError> {
-    const log = this.log;
     let destPath = destBasePath;
     return Effect.gen(function* () {
       const deadline = (yield* Clock.currentTimeMillis) + timeout;
@@ -340,19 +339,16 @@ class ArxivSourceProcessor {
           catch: (error) => error,
         }).pipe(
           Effect.catch((error) =>
-            Effect.sync(() => {
-              // Malformed header; the content-type fallback below handles it.
-              log.debug(
-                'Ignoring malformed Content-Disposition header from arXiv source download',
-                {
-                  data: {
-                    header: disposition,
-                    error: toErrorMessage(error),
-                  },
-                },
-              );
-              return undefined;
-            }),
+            // Malformed header; the content-type fallback below handles it.
+            Effect.logDebug(
+              'Ignoring malformed Content-Disposition header from arXiv source download',
+            ).pipe(
+              withLogData({
+                header: disposition,
+                error: toErrorMessage(error),
+              }),
+              Effect.as(undefined),
+            ),
           ),
         );
       }
@@ -410,24 +406,27 @@ class ArxivSourceProcessor {
     destDir: string,
     options: ExtractOptions = {},
   ): Effect.Effect<ExtractResult> {
-    const log = this.log;
-    log.debug(`Extracting tar file: ${tarPath} to ${destDir}`);
-
-    return joinedStream(
-      (signal) =>
-        // tar has no abort option. Stop admitting entries and join its public
-        // promise. This is unbounded; rejection need not mean all writes closed.
-        tar.x({ file: tarPath, cwd: destDir, filter: () => !signal.aborted }),
-      (cause) =>
-        Effect.sync((): ExtractResult => {
-          const error = Cause.isTimeoutError(cause)
-            ? 'Extraction timed out'
-            : toErrorMessage(cause);
-          log.error(`Failed to extract tar file: ${error}`);
-          return { success: false, error };
-        }),
-      options.timeout,
-    ).pipe(Effect.map((result) => result ?? { success: true }));
+    return Effect.gen(function* () {
+      yield* Effect.logDebug(`Extracting tar file: ${tarPath} to ${destDir}`);
+      const result = yield* joinedStream(
+        (signal) =>
+          // tar has no abort option. Stop admitting entries and join its
+          // public promise. This is unbounded; rejection need not mean all
+          // writes closed.
+          tar.x({ file: tarPath, cwd: destDir, filter: () => !signal.aborted }),
+        (cause) =>
+          Effect.suspend((): Effect.Effect<ExtractResult> => {
+            const error = Cause.isTimeoutError(cause)
+              ? 'Extraction timed out'
+              : toErrorMessage(cause);
+            return Effect.logError(`Failed to extract tar file: ${error}`).pipe(
+              Effect.as({ success: false, error }),
+            );
+          }),
+        options.timeout,
+      );
+      return result ?? { success: true };
+    }).pipe(withLogChannel(ARXIV_CHANNEL));
   }
 
   public readonly downloadSource = Effect.fn('arxivProcessor.downloadSource')(
@@ -442,7 +441,6 @@ class ArxivSourceProcessor {
         autoIndent = true,
         destination = 'references',
       } = options;
-      const log = this.log;
       // Normalize input (URL or ID) to plain arXiv ID
       const id = normalizeArxivInput(input);
       if (!id) {
@@ -451,7 +449,7 @@ class ArxivSourceProcessor {
         );
       }
 
-      log.info(`Downloading arXiv source for ID: ${id}`);
+      yield* Effect.logInfo(`Downloading arXiv source for ID: ${id}`);
 
       if (!WorkspaceFS.getPath()) {
         return yield* Effect.fail(
@@ -499,10 +497,11 @@ class ArxivSourceProcessor {
 
       progressCallback?.('arXiv source downloaded successfully!', 100);
 
-      log.info(`arXiv source downloaded to: ${paperDirFull}`);
+      yield* Effect.logInfo(`arXiv source downloaded to: ${paperDirFull}`);
 
       return { path: paperDirFull, alreadyExisted: !needsDownload };
     },
+    withLogChannel(ARXIV_CHANNEL),
   );
 
   /**
@@ -515,7 +514,6 @@ class ArxivSourceProcessor {
     isRoot: boolean,
     paperDirFull: string,
   ): Effect.Effect<boolean, ArxivSourceError> {
-    const log = this.log;
     return Effect.gen(function* () {
       if (isRoot) {
         return false;
@@ -528,10 +526,12 @@ class ArxivSourceProcessor {
       );
       const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
       if (hasTexFiles) {
-        log.info(`arXiv source already exists at: ${paperDirFull}`);
+        yield* Effect.logInfo(
+          `arXiv source already exists at: ${paperDirFull}`,
+        );
       }
       return hasTexFiles;
-    });
+    }).pipe(withLogChannel(ARXIV_CHANNEL));
   }
 
   /**

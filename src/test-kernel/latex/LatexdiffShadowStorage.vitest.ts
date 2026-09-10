@@ -4,12 +4,14 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { getCoreSettingDefault } from '@shared/schemas';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
@@ -336,27 +338,33 @@ describe('LaTeXdiffService shadow output', () => {
 
 describe('LaTeXdiffService logger channel', () => {
   afterEach(() => {
+    setLogSink(null);
     vi.restoreAllMocks();
   });
 
-  // Spy seam (#10635): the owner getter binds the constructor channel through
-  // createLog per call, so a logger-namespace spy must observe that channel.
+  // #10635: every entry a diff writes carries the channel the service was
+  // constructed with, whichever helper below it wrote the line.
   it('binds log lines to the constructor channel', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const logs = captureLogEntries();
     const { LaTeXdiffService } = await import('@latex/latexdiff');
     const service = new LaTeXdiffService('pinnedLatexdiffChannel');
 
     const result = await Effect.runPromise(
-      service.runDiff(
-        createExternalLocation('/missing/base.tex'),
-        createExternalLocation('/missing/revised.tex'),
-      ),
+      service
+        .runDiff(
+          createExternalLocation('/missing/base.tex'),
+          createExternalLocation('/missing/revised.tex'),
+        )
+        .pipe(Effect.provide(effectDiagnosticsLayer)),
     );
 
     expect(result.success).toBe(false);
-    expect(warn).toHaveBeenCalledWith(
-      'pinnedLatexdiffChannel',
-      expect.stringContaining('One or both files do not exist'),
-    );
+    expect(
+      logs.has(
+        'WARN',
+        'pinnedLatexdiffChannel',
+        'One or both files do not exist',
+      ),
+    ).toBe(true);
   });
 });

@@ -8,13 +8,15 @@ import {
   runLatexdiffViaWorkspaceScan,
 } from '@latex/latexdiff/diffOperations';
 import type { LatexdiffRuntime } from '@latex/latexdiff/types';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import type { OutputFileInfo } from '@shared/schemas';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 
-// #10635: diffOperations resolves its logger per function from the latexdiff
-// runtime channel — a logger-namespace spy must observe that channel.
+// #10635: diffOperations names the latexdiff runtime channel once for the
+// whole run, so every entry its helpers write lands on that channel.
 const CHANNEL = 'pinnedDiffChannel';
 
 const progress = { report: () => undefined };
@@ -23,8 +25,9 @@ function runtimeWith(service: Partial<LaTeXdiffService>): LatexdiffRuntime {
   return { channel: CHANNEL, service: service as LaTeXdiffService };
 }
 
-describe('diffOperations logger seam', () => {
+describe('diffOperations diagnostics', () => {
   afterEach(() => {
+    setLogSink(null);
     vi.restoreAllMocks();
   });
 
@@ -33,6 +36,7 @@ describe('diffOperations logger seam', () => {
       yield* Effect.promise(() =>
         installPlatform({
           workspacePath: '/workspace',
+          config: { 'texra.logger.debugMode': true },
           files: {
             '/workspace/paper.tex': '\\documentclass{article}\n',
             '/workspace/r1/paper.tex': '\\documentclass{article}\n',
@@ -58,7 +62,7 @@ describe('diffOperations logger seam', () => {
         lineage: { original: base, diffBase: null },
         diff: null,
       };
-      const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+      const logs = captureLogEntries();
 
       const outcome = yield* runLatexdiffFromMetadata({
         rounds: { 1: [output] },
@@ -74,11 +78,10 @@ describe('diffOperations logger seam', () => {
         }),
       ]);
       expect(runDiffForRound).toHaveBeenCalledOnce();
-      expect(debug).toHaveBeenCalledWith(
-        CHANNEL,
-        expect.stringContaining('Running round diff: paper.tex (r1)'),
-      );
-    }),
+      expect(
+        logs.has('DEBUG', CHANNEL, 'Running round diff: paper.tex (r1)'),
+      ).toBe(true);
+    }).pipe(Effect.provide(effectDiagnosticsLayer)),
   );
 
   it.effect(
@@ -88,10 +91,11 @@ describe('diffOperations logger seam', () => {
         yield* Effect.promise(() =>
           installPlatform({
             workspacePath: '/workspace',
+            config: { 'texra.logger.debugMode': true },
             files: { '/workspace/paper.tex': '\\documentclass{article}\n' },
           }),
         );
-        const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+        const logs = captureLogEntries();
 
         const outcome = yield* runLatexdiffViaWorkspaceScan({
           agent: 'revise',
@@ -105,14 +109,10 @@ describe('diffOperations logger seam', () => {
         // A bare source name matches no legacy/mid-era round layout, so the scan
         // reports the empty outcome instead of dispatching diff operations.
         expect(outcome).toEqual({ results: [] });
-        expect(debug).toHaveBeenCalledWith(
-          CHANNEL,
-          expect.stringContaining('Input files: paper.tex'),
-        );
-        expect(debug).toHaveBeenCalledWith(
-          CHANNEL,
-          expect.stringContaining('No matching outputs found for paper.tex'),
-        );
-      }),
+        expect(logs.has('DEBUG', CHANNEL, 'Input files: paper.tex')).toBe(true);
+        expect(
+          logs.has('DEBUG', CHANNEL, 'No matching outputs found for paper.tex'),
+        ).toBe(true);
+      }).pipe(Effect.provide(effectDiagnosticsLayer)),
   );
 });

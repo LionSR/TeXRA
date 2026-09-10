@@ -8,13 +8,13 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel, withLogData } from '@logger/effectLog';
 import { platform } from '@platform/platform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
-const log = createLog('LatexParsing');
+const CHANNEL = 'LatexParsing';
 
 /**
  * Every citation macro TeXRA recognizes, natbib and biblatex alike, in both
@@ -82,13 +82,13 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
     catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
-      Effect.sync(() => {
-        log.debug(
-          `realPath failed for ${absolutePath}; falling back to literal dirname`,
-          { data: error },
-        );
-        return absolutePath;
-      }),
+      Effect.logDebug(
+        `realPath failed for ${absolutePath}; falling back to literal dirname`,
+      ).pipe(
+        withLogData(error),
+        withLogChannel(CHANNEL),
+        Effect.as(absolutePath),
+      ),
     ),
   );
   return path.dirname(resolved);

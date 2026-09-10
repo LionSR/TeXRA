@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 // Internal imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ExecResult } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -56,8 +56,6 @@ interface DiffExecutionOptions {
 type CommandExecOptions = { channel: string; timeout: number; cwd?: string };
 
 export class DiffCommandExecutor {
-  private readonly log = createLog(this.channel);
-
   constructor(private readonly channel: string) {}
 
   executeDiff(
@@ -70,7 +68,7 @@ export class DiffCommandExecutor {
         this.buildLatexdiffCommand(inputFile, editedFile, useFlatten, options),
       'latexdiff',
       options?.cwd,
-    );
+    ).pipe(withLogChannel(this.channel));
   }
 
   executeDiffVc(
@@ -88,7 +86,7 @@ export class DiffCommandExecutor {
         ),
       'latexdiff-vc',
       options?.cwd,
-    );
+    ).pipe(withLogChannel(this.channel));
   }
 
   /** Markup-related flags shared by the latexdiff and latexdiff-vc commands. */
@@ -174,11 +172,11 @@ export class DiffCommandExecutor {
         cwd,
       };
 
-      this.log.debug(`Attempting ${commandType} with --flatten flag`);
+      yield* Effect.logDebug(`Attempting ${commandType} with --flatten flag`);
       const result = yield* this.exec(commandBuilder(true), execOptions);
 
       if (result.success) {
-        this.log.debug(
+        yield* Effect.logDebug(
           `${commandType} completed successfully (with --flatten)`,
         );
         return result;
@@ -225,10 +223,10 @@ export class DiffCommandExecutor {
     execOptions: CommandExecOptions,
   ): Effect.Effect<ExecResult, Error> {
     return Effect.gen({ self: this }, function* () {
-      this.log.warn(
+      yield* Effect.logWarning(
         'Bibliography compilation failed with --flatten, retrying without --flatten',
       );
-      this.log.debug(`Retrying ${commandType} without --flatten flag`);
+      yield* Effect.logDebug(`Retrying ${commandType} without --flatten flag`);
 
       const result = yield* this.exec(commandBuilder(false), execOptions);
 
@@ -248,7 +246,7 @@ export class DiffCommandExecutor {
         );
       }
 
-      this.log.debug(
+      yield* Effect.logDebug(
         `${commandType} completed successfully (without --flatten)`,
       );
       return result;

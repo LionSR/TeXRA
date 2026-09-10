@@ -3,8 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaTeXdiffService } from '@latex/latexdiff';
 import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
+import { captureLogEntries } from '@test/support/logSinkCapture';
+import { installPlatform } from '@test/support/setupPlatform';
+
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
 
 const mocks = vi.hoisted(() => ({
@@ -187,11 +191,24 @@ describe('runLatexdiffForExecution', () => {
   });
 });
 
-// #10635: runLatexdiffForExecution resolves its logger per call from the
-// latexdiff runtime channel — a logger-namespace spy must observe that channel.
-describe('runLatexdiffForExecution logger seam', () => {
-  beforeEach(() => {
+// #10635: runLatexdiffForExecution names the latexdiff runtime channel once
+// for the whole run, so its discovery lines land on that channel.
+describe('runLatexdiffForExecution diagnostics', () => {
+  /** The run under the logger production installs, so entries reach the sink. */
+  const run = (
+    params: Parameters<typeof runLatexdiffForExecution>[0],
+  ): Promise<{ source: string }> =>
+    Effect.runPromise(
+      runLatexdiffForExecution(params).pipe(
+        Effect.provide(effectDiagnosticsLayer),
+      ),
+    );
+
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Debug mode on: the Effect logger drops `Debug` entries otherwise, and
+    // these assertions are about the channel, not that gate.
+    await installPlatform({ config: { 'texra.logger.debugMode': true } });
     mocks.runLatexdiffFromMetadata.mockReturnValue(
       Effect.succeed(METADATA_OUTCOME),
     );
@@ -201,27 +218,24 @@ describe('runLatexdiffForExecution logger seam', () => {
   });
 
   afterEach(() => {
+    setLogSink(null);
     vi.restoreAllMocks();
   });
 
   it('logs the run-dir scan resolution on the latexdiff runtime channel', async () => {
     mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
-    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const logs = captureLogEntries();
 
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({
-        ...baseRequest,
-        runId: 'abc123',
-      }),
-    );
+    const result = await run({ ...baseRequest, runId: 'abc123' });
 
     expect(result.source).toBe('run-dir-scan');
-    expect(debug).toHaveBeenCalledWith(
-      'test',
-      expect.stringContaining(
+    expect(
+      logs.has(
+        'DEBUG',
+        'test',
         'Using run-dir scan outputs from execution abc123',
       ),
-    );
+    ).toBe(true);
   });
 
   it('logs the metadata discovery resolution on the latexdiff runtime channel', async () => {
@@ -231,17 +245,14 @@ describe('runLatexdiffForExecution logger seam', () => {
         rounds: roundMap(),
       }),
     );
-    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const logs = captureLogEntries();
 
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({ ...baseRequest }),
-    );
+    const result = await run({ ...baseRequest });
 
     expect(result.source).toBe('metadata');
-    expect(debug).toHaveBeenCalledWith(
-      'test',
-      expect.stringContaining('Using metadata outputs from execution def456'),
-    );
+    expect(
+      logs.has('DEBUG', 'test', 'Using metadata outputs from execution def456'),
+    ).toBe(true);
   });
 });
 

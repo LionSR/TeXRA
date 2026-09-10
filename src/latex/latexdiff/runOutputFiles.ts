@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { FileSystemProvider } from '@platform/interfaces';
 import {
   type ExecutionId,
@@ -36,8 +36,6 @@ import { isDirectory, isFile } from '@utils/files/fsEntryType';
 // Local file imports
 import { hasBetweenRoundDiffSuffix } from './diffFileNameManager';
 
-/** Logger handle shared by the discovery scan (created once per scan). */
-type Log = ReturnType<typeof createLog>;
 export type RunOutputFilesystem = Pick<
   FileSystemProvider,
   'readDirectory' | 'isSymlink'
@@ -59,7 +57,6 @@ const isSymlink = (
  */
 const collectTexFiles = Effect.fn('latexdiff.collectTexFiles')(function* (
   dir: string,
-  log: Log,
   fs: RunOutputFilesystem,
   prefix = '',
 ): Effect.fn.Return<string[], never> {
@@ -70,12 +67,11 @@ const collectTexFiles = Effect.fn('latexdiff.collectTexFiles')(function* (
     catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
-      Effect.sync((): [string, number][] => {
-        if (!isFileNotFoundError(error)) {
-          log.warn(`Skipping unreadable directory '${dir}': ${error}`);
-        }
-        return [];
-      }),
+      isFileNotFoundError(error)
+        ? Effect.succeed<[string, number][]>([])
+        : Effect.logWarning(
+            `Skipping unreadable directory '${dir}': ${error}`,
+          ).pipe(Effect.as<[string, number][]>([])),
     ),
   );
   const results: string[] = [];
@@ -88,7 +84,7 @@ const collectTexFiles = Effect.fn('latexdiff.collectTexFiles')(function* (
     if (isFile(type) && hasExtension(name, '.tex')) {
       results.push(relative);
     } else if (isDirectory(type)) {
-      results.push(...(yield* collectTexFiles(absPath, log, fs, relative)));
+      results.push(...(yield* collectTexFiles(absPath, fs, relative)));
     }
   }
   return results;
@@ -112,7 +108,6 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
     channel: string,
     fs: RunOutputFilesystem,
   ): Effect.fn.Return<RoundIndexed<OutputFileInfo> | null, never> {
-    const log = createLog(channel);
     const scan = Effect.gen(function* () {
       const runDirAbsolute = yield* Effect.tryPromise({
         try: () => findRunDir(executionId),
@@ -162,7 +157,7 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
         const outputs: OutputFileInfo[] = [];
         // Collect .tex files recursively: extracted docs may live in subdirs
         // (e.g. r0/chapters/main.tex) when source names include path segments.
-        const allTexFiles = yield* collectTexFiles(roundDirAbsolute, log, fs);
+        const allTexFiles = yield* collectTexFiles(roundDirAbsolute, fs);
         // Between-round artifacts written to run storage always carry both round
         // numbers (e.g. output_diffr1r0.tex). The bare _diff suffix only appears
         // in workspace-side diffs, never here, so a legitimately-named source
@@ -217,13 +212,11 @@ export const scanRunDirForOutputs = Effect.fn('latexdiff.scanRunDir')(
     // discipline (review checklist §15) forbids logging it below warn.
     return yield* scan.pipe(
       Effect.catch((error) =>
-        Effect.sync((): RoundIndexed<OutputFileInfo> | null => {
-          log.warn(
-            `RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`,
-          );
-          return null;
-        }),
+        Effect.logWarning(
+          `RunDir scan for ${executionId} failed: ${toErrorMessage(error)}`,
+        ).pipe(Effect.as<RoundIndexed<OutputFileInfo> | null>(null)),
       ),
+      withLogChannel(channel),
     );
   },
 );

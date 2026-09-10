@@ -11,7 +11,7 @@
 
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   ExecutionIdSchema,
   OutputFileInfoSchema,
@@ -109,7 +109,6 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
       progress,
     } = params;
     const runId = params.runId ?? undefined;
-    const log = createLog(latexdiff.channel);
 
     let outputsByRound = params.outputsByRound ?? null;
     let source: LatexdiffOutputsSource = outputsByRound
@@ -135,7 +134,7 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
           outputsByRound = scanned;
           source = 'run-dir-scan';
           discoveredExecutionId = parsedRunId.data;
-          log.debug(
+          yield* Effect.logDebug(
             `Using run-dir scan outputs from execution ${parsedRunId.data}`,
           );
         }
@@ -163,7 +162,7 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
         outputsByRound = discovered.rounds;
         source = 'metadata';
         discoveredExecutionId = discovered.executionId;
-        log.debug(
+        yield* Effect.logDebug(
           `Using metadata outputs from execution ${discovered.executionId}`,
         );
       }
@@ -191,4 +190,7 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
 
     return { outcome, executionId: discoveredExecutionId, source };
   },
+  // One channel for the whole run, so the discovery steps and the diff engine
+  // below both land on the caller's channel.
+  (effect, params) => withLogChannel(params.latexdiff.channel)(effect),
 );

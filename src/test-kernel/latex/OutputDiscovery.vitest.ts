@@ -5,9 +5,11 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -156,8 +158,20 @@ describe('discoverLatestExecutionOutputs', () => {
   });
 });
 
-describe('outputDiscovery logger seam', () => {
+describe('outputDiscovery diagnostics', () => {
   const tempDirs = useTempDirs();
+
+  /** The scan under the logger production installs, so entries reach the sink. */
+  const runScan = (): Promise<unknown> =>
+    Effect.runPromise(
+      scanRunDirForOutputs(
+        'abc123',
+        'paper.tex',
+        undefined,
+        'test',
+        platform().fs,
+      ).pipe(Effect.provide(effectDiagnosticsLayer)),
+    );
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -168,6 +182,7 @@ describe('outputDiscovery logger seam', () => {
   });
 
   afterEach(async () => {
+    setLogSink(null);
     vi.restoreAllMocks();
   });
 
@@ -175,27 +190,19 @@ describe('outputDiscovery logger seam', () => {
   // workspace scan — fallback discipline requires warn, not debug.
   it('warns on the pinned channel when the run-dir scan cannot read run storage', async () => {
     mocks.findRunDir.mockRejectedValue(new Error('storage index corrupt'));
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const logs = captureLogEntries();
 
-    const result = await Effect.runPromise(
-      scanRunDirForOutputs(
-        'abc123',
-        'paper.tex',
-        undefined,
-        'test',
-        platform().fs,
-      ),
-    );
+    const result = await runScan();
 
     expect(result).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      'test',
-      expect.stringContaining(
+    expect(
+      logs.has(
+        'WARN',
+        'test',
         'RunDir scan for abc123 failed: storage index corrupt',
       ),
-    );
-    expect(debug).not.toHaveBeenCalled();
+    ).toBe(true);
+    expect(logs.at('DEBUG')).toHaveLength(0);
   });
 
   it('propagates an unreadable execution index instead of choosing different outputs', async () => {
@@ -244,22 +251,13 @@ describe('outputDiscovery logger seam', () => {
       },
     );
     mocks.findRunDir.mockResolvedValue(runDir);
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const logs = captureLogEntries();
 
-    const result = await Effect.runPromise(
-      scanRunDirForOutputs(
-        'abc123',
-        'paper.tex',
-        undefined,
-        'test',
-        platform().fs,
-      ),
-    );
+    const result = await runScan();
 
-    expect(Object.keys(result ?? {}).map(Number)).toEqual([1]);
-    expect(warn).toHaveBeenCalledWith(
-      'test',
-      expect.stringContaining(`Skipping unreadable directory '${unreadable}'`),
-    );
+    expect(Object.keys((result as object) ?? {}).map(Number)).toEqual([1]);
+    expect(
+      logs.has('WARN', 'test', `Skipping unreadable directory '${unreadable}'`),
+    ).toBe(true);
   });
 });

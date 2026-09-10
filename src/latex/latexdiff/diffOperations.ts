@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   getEffectiveDiffBase,
   roundIndexedEntries,
@@ -51,7 +51,6 @@ const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
     const results: DiffRunResult[] = [...immediateResults];
     // Zero operations never enter the loop, so the bare division is safe.
     const incrementPct = 100 / operations.length;
-    const log = createLog(latexdiff.channel);
 
     // Sequential by design: each latexdiff is a whole TeX run, and the
     // progress reporter narrates them one at a time.
@@ -78,7 +77,9 @@ const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
         continue;
       }
 
-      log.debug(`Running ${operation.type} diff: ${operation.description}`);
+      yield* Effect.logDebug(
+        `Running ${operation.type} diff: ${operation.description}`,
+      );
 
       const diffResult =
         operation.type === 'round'
@@ -203,193 +204,202 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
       immediateResults,
     );
   },
+  // One channel for the whole run, named once here instead of threaded
+  // through each helper below.
+  (effect, params) => withLogChannel(params.latexdiff.channel)(effect),
 );
 
 export const runLatexdiffViaWorkspaceScan = Effect.fn(
   'latexdiff.runViaWorkspaceScan',
-)(function* (params: {
-  agent: string;
-  model: string;
-  inputFile: string;
-  outputFiles?: string[];
-  mathMarkup?: MathMarkupOption;
-  generateBetweenRoundDiffs: boolean;
-  latexdiff: LatexdiffRuntime;
-  progress: DiffProgressReporter;
-}): Effect.fn.Return<DiffRunOutcome, Error> {
-  const {
-    agent,
-    model,
-    inputFile,
-    outputFiles,
-    mathMarkup,
-    generateBetweenRoundDiffs,
-    latexdiff,
-    progress,
-  } = params;
-  const log = createLog(latexdiff.channel);
-
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    return yield* Effect.fail(new Error('No workspace path found'));
-  }
-
-  const toAbsolute = (file: string): string =>
-    path.isAbsolute(file) ? file : path.join(workspacePath, file);
-
-  const configuredInputFiles =
-    outputFiles && outputFiles.length > 0 ? outputFiles : [inputFile];
-
-  log.debug(`Input files: ${configuredInputFiles.join(', ')}`);
-
-  // Per input file: round number → workspace-relative output path. A round
-  // matched more than once (e.g. two legacy files matching the same round
-  // regex) keeps a single entry, last match wins.
-  const inputToOutputsMap = new Map<
-    string,
-    Array<{ round: number; outputPath: string }>
-  >();
-
-  for (const candidateInput of configuredInputFiles) {
-    const outputDirPath = path.dirname(candidateInput);
-    const baseInputName = path.basename(
-      candidateInput,
-      path.extname(candidateInput),
-    );
-
-    const absoluteDir = path.join(workspacePath, outputDirPath);
-    const dirEntries = yield* readDir(absoluteDir);
-
-    const roundOutputs = new Map<number, string>();
-
-    // Legacy flat layout: files sit directly under outputDirPath as
-    // `<base>_<chunk>_r{round}_<model>.tex`.
-    const legacyPattern = legacyWorkflowOutputRoundRegex(
-      baseInputName,
+)(
+  function* (params: {
+    agent: string;
+    model: string;
+    inputFile: string;
+    outputFiles?: string[];
+    mathMarkup?: MathMarkupOption;
+    generateBetweenRoundDiffs: boolean;
+    latexdiff: LatexdiffRuntime;
+    progress: DiffProgressReporter;
+  }): Effect.fn.Return<DiffRunOutcome, Error> {
+    const {
       agent,
       model,
-    );
-    for (const [fileName, fileType] of dirEntries) {
-      // Skip symlinks (mirrored dependency copies, not revised outputs) so
-      // behavior matches the prior strict `=== FileType.File` check; the
-      // platform FS reports a symlink as `SymbolicLink | targetType`.
-      if (
-        !isFile(fileType) ||
-        isSymlink(fileType) ||
-        !hasExtension(fileName, '.tex') ||
-        fileName.includes('_diff')
-      ) {
-        continue;
-      }
-      const match = fileName.match(legacyPattern);
-      if (!match) continue;
-      const round = RoundKeySchema.safeParse(match[1]);
-      if (!round.success) continue;
-      roundOutputs.set(round.data, path.join(outputDirPath, fileName));
+      inputFile,
+      outputFiles,
+      mathMarkup,
+      generateBetweenRoundDiffs,
+      latexdiff,
+      progress,
+    } = params;
+
+    const workspacePath = WorkspaceFS.getPath();
+    if (!workspacePath) {
+      return yield* Effect.fail(new Error('No workspace path found'));
     }
 
-    // Mid-era layout: outputs under `r{round}/<base>_<cleanAgent>_<model>.tex`.
-    // Some upgraded workspaces may still hold these files. Only look in
-    // known `r{round}/` subdirectories so we don't descend the whole tree.
-    const midEraFilename = `${midEraWorkflowOutputStem({
-      base: baseInputName,
-      agent,
-      model,
-    })}.tex`;
-    for (const [entryName, entryType] of dirEntries) {
-      if (!isDirectory(entryType) || isSymlink(entryType)) continue;
-      const round = parseWorkflowOutputRoundDir(entryName);
-      if (round == null) continue;
-      if (roundOutputs.has(round)) continue;
+    const toAbsolute = (file: string): string =>
+      path.isAbsolute(file) ? file : path.join(workspacePath, file);
 
-      const roundAbsoluteDir = path.join(absoluteDir, entryName);
-      // Skip unreadable round dirs but record which one so a missing round
-      // output isn't silently invisible during diagnosis.
-      const roundEntries = yield* readDir(roundAbsoluteDir).pipe(
-        Effect.catch((error) =>
-          Effect.sync((): [string, number][] | null => {
-            log.debug(`Skipping round dir '${roundAbsoluteDir}': ${error}`);
-            return null;
-          }),
-        ),
-      );
-      if (roundEntries === null) continue;
-      const match = roundEntries.find(
-        ([fileName, nestedType]) =>
-          isFile(nestedType) &&
-          !isSymlink(nestedType) &&
-          fileName === midEraFilename,
-      );
-      if (!match) continue;
-      roundOutputs.set(
-        round,
-        path.join(outputDirPath, entryName, midEraFilename),
-      );
-    }
+    const configuredInputFiles =
+      outputFiles && outputFiles.length > 0 ? outputFiles : [inputFile];
 
-    // New-layout workflow outputs live inside task-run storage
-    // (`executions/{id}/r{round}/output.tex`), not in the workspace. That
-    // path is driven by execution metadata (`OutputFileInfo.outputsByRound`)
-    // via `runLatexdiffFromMetadata`; the workspace scan here only covers
-    // pre-refactor files.
+    yield* Effect.logDebug(`Input files: ${configuredInputFiles.join(', ')}`);
 
-    if (roundOutputs.size > 0) {
-      inputToOutputsMap.set(
+    // Per input file: round number → workspace-relative output path. A round
+    // matched more than once (e.g. two legacy files matching the same round
+    // regex) keeps a single entry, last match wins.
+    const inputToOutputsMap = new Map<
+      string,
+      Array<{ round: number; outputPath: string }>
+    >();
+
+    for (const candidateInput of configuredInputFiles) {
+      const outputDirPath = path.dirname(candidateInput);
+      const baseInputName = path.basename(
         candidateInput,
-        [...roundOutputs].map(([round, outputPath]) => ({ round, outputPath })),
+        path.extname(candidateInput),
       );
-      log.debug(
-        `Found ${roundOutputs.size} matching outputs for ${candidateInput}`,
+
+      const absoluteDir = path.join(workspacePath, outputDirPath);
+      const dirEntries = yield* readDir(absoluteDir);
+
+      const roundOutputs = new Map<number, string>();
+
+      // Legacy flat layout: files sit directly under outputDirPath as
+      // `<base>_<chunk>_r{round}_<model>.tex`.
+      const legacyPattern = legacyWorkflowOutputRoundRegex(
+        baseInputName,
+        agent,
+        model,
       );
-    } else {
-      log.debug(`No matching outputs found for ${candidateInput}`);
+      for (const [fileName, fileType] of dirEntries) {
+        // Skip symlinks (mirrored dependency copies, not revised outputs) so
+        // behavior matches the prior strict `=== FileType.File` check; the
+        // platform FS reports a symlink as `SymbolicLink | targetType`.
+        if (
+          !isFile(fileType) ||
+          isSymlink(fileType) ||
+          !hasExtension(fileName, '.tex') ||
+          fileName.includes('_diff')
+        ) {
+          continue;
+        }
+        const match = fileName.match(legacyPattern);
+        if (!match) continue;
+        const round = RoundKeySchema.safeParse(match[1]);
+        if (!round.success) continue;
+        roundOutputs.set(round.data, path.join(outputDirPath, fileName));
+      }
+
+      // Mid-era layout: outputs under `r{round}/<base>_<cleanAgent>_<model>.tex`.
+      // Some upgraded workspaces may still hold these files. Only look in
+      // known `r{round}/` subdirectories so we don't descend the whole tree.
+      const midEraFilename = `${midEraWorkflowOutputStem({
+        base: baseInputName,
+        agent,
+        model,
+      })}.tex`;
+      for (const [entryName, entryType] of dirEntries) {
+        if (!isDirectory(entryType) || isSymlink(entryType)) continue;
+        const round = parseWorkflowOutputRoundDir(entryName);
+        if (round == null) continue;
+        if (roundOutputs.has(round)) continue;
+
+        const roundAbsoluteDir = path.join(absoluteDir, entryName);
+        // Skip unreadable round dirs but record which one so a missing round
+        // output isn't silently invisible during diagnosis.
+        const roundEntries = yield* readDir(roundAbsoluteDir).pipe(
+          Effect.catch((error) =>
+            Effect.logDebug(
+              `Skipping round dir '${roundAbsoluteDir}': ${error}`,
+            ).pipe(Effect.as<[string, number][] | null>(null)),
+          ),
+        );
+        if (roundEntries === null) continue;
+        const match = roundEntries.find(
+          ([fileName, nestedType]) =>
+            isFile(nestedType) &&
+            !isSymlink(nestedType) &&
+            fileName === midEraFilename,
+        );
+        if (!match) continue;
+        roundOutputs.set(
+          round,
+          path.join(outputDirPath, entryName, midEraFilename),
+        );
+      }
+
+      // New-layout workflow outputs live inside task-run storage
+      // (`executions/{id}/r{round}/output.tex`), not in the workspace. That
+      // path is driven by execution metadata (`OutputFileInfo.outputsByRound`)
+      // via `runLatexdiffFromMetadata`; the workspace scan here only covers
+      // pre-refactor files.
+
+      if (roundOutputs.size > 0) {
+        inputToOutputsMap.set(
+          candidateInput,
+          [...roundOutputs].map(([round, outputPath]) => ({
+            round,
+            outputPath,
+          })),
+        );
+        yield* Effect.logDebug(
+          `Found ${roundOutputs.size} matching outputs for ${candidateInput}`,
+        );
+      } else {
+        yield* Effect.logDebug(
+          `No matching outputs found for ${candidateInput}`,
+        );
+      }
     }
-  }
 
-  if (inputToOutputsMap.size === 0) {
-    return { results: [] };
-  }
-
-  const operations: DiffOperation[] = [];
-
-  for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {
-    const sorted = roundOutputs.toSorted((a, b) => a.round - b.round);
-
-    for (const { round, outputPath } of sorted) {
-      const resolvedOutput = toAbsolute(outputPath);
-
-      operations.push({
-        type: 'round',
-        base: pathToLocation(toAbsolute(baseFile)),
-        revised: pathToLocation(resolvedOutput),
-        description: `${path.basename(baseFile)} (r${round})`,
-        cwd: path.dirname(resolvedOutput),
-        round,
-      });
+    if (inputToOutputsMap.size === 0) {
+      return { results: [] };
     }
 
-    if (generateBetweenRoundDiffs) {
-      for (const [index, current] of sorted.slice(1).entries()) {
-        const previous = sorted[index];
-        const resolvedPrevious = toAbsolute(previous.outputPath);
+    const operations: DiffOperation[] = [];
+
+    for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {
+      const sorted = roundOutputs.toSorted((a, b) => a.round - b.round);
+
+      for (const { round, outputPath } of sorted) {
+        const resolvedOutput = toAbsolute(outputPath);
 
         operations.push({
-          type: 'between-rounds',
-          base: pathToLocation(resolvedPrevious),
-          revised: pathToLocation(toAbsolute(current.outputPath)),
-          description: `${path.basename(previous.outputPath)} (r${previous.round}→r${current.round})`,
-          cwd: path.dirname(resolvedPrevious),
-          fromRound: previous.round,
-          toRound: current.round,
+          type: 'round',
+          base: pathToLocation(toAbsolute(baseFile)),
+          revised: pathToLocation(resolvedOutput),
+          description: `${path.basename(baseFile)} (r${round})`,
+          cwd: path.dirname(resolvedOutput),
+          round,
         });
       }
-    }
-  }
 
-  return yield* executeDiffOperations(
-    operations,
-    mathMarkup,
-    latexdiff,
-    progress,
-  );
-});
+      if (generateBetweenRoundDiffs) {
+        for (const [index, current] of sorted.slice(1).entries()) {
+          const previous = sorted[index];
+          const resolvedPrevious = toAbsolute(previous.outputPath);
+
+          operations.push({
+            type: 'between-rounds',
+            base: pathToLocation(resolvedPrevious),
+            revised: pathToLocation(toAbsolute(current.outputPath)),
+            description: `${path.basename(previous.outputPath)} (r${previous.round}→r${current.round})`,
+            cwd: path.dirname(resolvedPrevious),
+            fromRound: previous.round,
+            toRound: current.round,
+          });
+        }
+      }
+    }
+
+    return yield* executeDiffOperations(
+      operations,
+      mathMarkup,
+      latexdiff,
+      progress,
+    );
+  },
+  (effect, params) => withLogChannel(params.latexdiff.channel)(effect),
+);

@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { formatError, isFileNotFoundError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -54,8 +54,6 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
-  private readonly log = createLog(this.channel);
-
   constructor(private readonly channel: string) {
     this.fileProcessor = new DiffFileProcessor();
     this.commandExecutor = new DiffCommandExecutor(channel);
@@ -70,10 +68,9 @@ export class LaTeXdiffService {
     context: string,
   ): (err: unknown) => Effect.Effect<LaTeXdiffResult> {
     return (err) =>
-      Effect.sync(() => {
+      Effect.suspend(() => {
         const message = formatError(context, err);
-        this.log.error(message);
-        return failed(message);
+        return Effect.logError(message).pipe(Effect.as(failed(message)));
       });
   }
 
@@ -114,7 +111,7 @@ export class LaTeXdiffService {
       const editedFile = editedLocation.absolutePath;
 
       if (!inputFile) {
-        this.log.warn('Input file is empty or undefined');
+        yield* Effect.logWarning('Input file is empty or undefined');
         return failed('Input file is empty or undefined');
       }
 
@@ -127,7 +124,7 @@ export class LaTeXdiffService {
       );
       if (!contents) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
-        this.log.warn(message);
+        yield* Effect.logWarning(message);
         return failed(message);
       }
       if (!contents.every(hasDocumentEnvironment)) {
@@ -139,7 +136,7 @@ export class LaTeXdiffService {
         options?.outputDirectory ?? path.dirname(inputFile);
       const outputPath = path.join(outputDirectory, diffFileName);
 
-      this.log.debug(
+      yield* Effect.logDebug(
         `Running latexdiff for ${inputLocation.absolutePath} and ${editedLocation.absolutePath}`,
       );
 
@@ -163,7 +160,7 @@ export class LaTeXdiffService {
       });
       yield* this.fileProcessor.processDiffFile(outputLocation, editedLocation);
 
-      this.log.debug(
+      yield* Effect.logDebug(
         `Latexdiff succeeded: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
       );
 
@@ -173,13 +170,12 @@ export class LaTeXdiffService {
       );
     }).pipe(
       Effect.tapError(() =>
-        Effect.sync(() => {
-          this.log.debug(
-            `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
-          );
-        }),
+        Effect.logDebug(
+          `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
+        ),
       ),
       Effect.catch(this.failure('Error running LaTeX diff')),
+      withLogChannel(this.channel),
     );
   }
 
@@ -193,7 +189,7 @@ export class LaTeXdiffService {
       if (!hasDocumentEnvironment(yield* this.read(inputFile))) {
         const message =
           'File missing document environment (must contain \\begin{document} and \\end{document})';
-        this.log.error(message);
+        yield* Effect.logError(message);
         return failed(message);
       }
 
@@ -234,7 +230,10 @@ export class LaTeXdiffService {
         outputPath,
         `LaTeXdiff VC completed successfully: ${diffFileName}`,
       );
-    }).pipe(Effect.catch(this.failure('Error running LaTeX diff VC')));
+    }).pipe(
+      Effect.catch(this.failure('Error running LaTeX diff VC')),
+      withLogChannel(this.channel),
+    );
   }
 
   runDiffForRound(
@@ -247,7 +246,7 @@ export class LaTeXdiffService {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(baseLocation, outputLocation))) {
         const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
-        this.log.warn(message);
+        yield* Effect.logWarning(message);
         return failed(message);
       }
 
@@ -258,7 +257,10 @@ export class LaTeXdiffService {
         mathMarkup,
         options,
       );
-    }).pipe(Effect.catch(this.failure('Error in runDiffForRound')));
+    }).pipe(
+      Effect.catch(this.failure('Error in runDiffForRound')),
+      withLogChannel(this.channel),
+    );
   }
 
   runDiffBetweenRounds(
@@ -272,7 +274,7 @@ export class LaTeXdiffService {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(firstLocation, secondLocation))) {
         const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
-        this.log.warn(message);
+        yield* Effect.logWarning(message);
         return failed(message);
       }
 
@@ -284,7 +286,10 @@ export class LaTeXdiffService {
         mathMarkup,
         options,
       );
-    }).pipe(Effect.catch(this.failure('Error in runDiffBetweenRounds')));
+    }).pipe(
+      Effect.catch(this.failure('Error in runDiffBetweenRounds')),
+      withLogChannel(this.channel),
+    );
   }
 
   private bothFilesExist(

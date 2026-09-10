@@ -25,6 +25,17 @@ consequences worth knowing before you touch a file here:
   running fiber is interrupted. Do not add a `signal` parameter to a function
   here so a caller can pass one down.
 
+- **Diagnostics are `Effect.log*`, not `createLog`.** A program names its
+  channel once with `withLogChannel` from `@logger/effectLog` and every entry
+  below it inherits that channel, so no helper takes a channel parameter just
+  to log. Both producers end at the same host sink, so a test asserts on the
+  entries the sink received (`@test/support/logSinkCapture`) rather than on a
+  logger-namespace spy. One consequence to know: the Effect logger drops
+  `Debug` entries unless `texra.logger.debugMode` is on, where `createLog`
+  emitted them and let the host's level filter decide. `LatexMediaManager`'s
+  injected `LatexTrace` is not this — that is the run's product trace and
+  stays as it is (migration PRD, R9).
+
 A new function in this directory converts together with its callers up to one
 of those boundaries, or it waits — a Promise → Effect → Promise sandwich is
 rejected in review (migration PRD, execution rule 1).
