@@ -207,8 +207,11 @@ export class PersistedFlow<
    * steps served from the self-cache skip the per-transition re-parse.
    */
   private cachedSharedTrusted = false;
-  private nodeIds: Map<BaseNode, string> | null = null;
-  private nodesById: Map<string, BaseNode> | null = null;
+  /** Lazily built graph index; both halves are built and cached together. */
+  private nodeIndexCache: {
+    readonly ids: Map<BaseNode, string>;
+    readonly byId: Map<string, BaseNode>;
+  } | null = null;
 
   /**
    * Optional write-through projection callback.
@@ -431,9 +434,7 @@ export class PersistedFlow<
     readonly ids: Map<BaseNode, string>;
     readonly byId: Map<string, BaseNode>;
   } {
-    if (this.nodeIds && this.nodesById) {
-      return { ids: this.nodeIds, byId: this.nodesById };
-    }
+    if (this.nodeIndexCache) return this.nodeIndexCache;
 
     const ids = new Map<BaseNode, string>();
     const byId = new Map<string, BaseNode>();
@@ -459,9 +460,9 @@ export class PersistedFlow<
       }
     }
 
-    this.nodeIds = ids;
-    this.nodesById = byId;
-    return { ids, byId };
+    const built = { ids, byId };
+    this.nodeIndexCache = built;
+    return built;
   }
 
   /**

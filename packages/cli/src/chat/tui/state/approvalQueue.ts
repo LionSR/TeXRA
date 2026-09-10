@@ -96,7 +96,7 @@ export interface PendingApproval {
 export type PendingApprovalKind = ProgressPermissionKind;
 
 /** One request the user's attention is on: a fold fact, read once. */
-export interface AttentionRequest {
+interface AttentionRequest {
   readonly requestId: string;
   readonly streamId: StreamTabId;
   readonly kind: PendingApprovalKind;
@@ -569,11 +569,10 @@ export function settleHostRequestsWhere(
 
 /** Approve every delegated request pending on `streamId` once its bypass is
  *  on: the decisions the user's super-YOLO choice implied. */
-function approveQueuedDelegatedWorkForStream(streamId: StreamTabId): number {
+function approveQueuedDelegatedWorkForStream(streamId: StreamTabId): void {
   const view = sessionView().get();
   const host = hostRequests.get();
   const done = decided.get();
-  let count = 0;
   for (const request of attentionRequests(view, host, undefined)) {
     if (request.streamId !== streamId || done.has(request.requestId)) continue;
     if (
@@ -586,9 +585,7 @@ function approveQueuedDelegatedWorkForStream(streamId: StreamTabId): number {
     const payload = presentedPayload(request, host);
     if (!payload) continue;
     decideRequest(request, payload, { accepted: true });
-    count += 1;
   }
-  return count;
 }
 
 /** Forget every host entry and decision latch: the Surface reset (`/clear`). */

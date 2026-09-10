@@ -292,7 +292,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         case 'kill':
           return yield* this.handleKill(context, executionId);
         case 'wait':
-          yield* this.waitForChange(context, executionId, input.timeout);
+          yield* this.waitForAnyChange(context, input.timeout, [executionId]);
           return yield* this.showSummary(context, executionId, {
             suppressAutoDeliveredSubagentReport: true,
           });
@@ -423,20 +423,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       pendingIds.every((id) => context.inRunScope(() => shouldSkipWait(id))),
     );
   });
-
-  /** Wait for a specific execution to change status, with timeout. */
-  private readonly waitForChange = Effect.fn('ExecutionsTool.waitForChange')(
-    function* (
-      context: ExecutionToolContext,
-      executionId: ExecutionId,
-      timeout: number,
-    ) {
-      if (context.inRunScope(() => shouldSkipWait(executionId))) return;
-      yield* awaitStatusChange(context, timeout, [executionId], () =>
-        context.inRunScope(() => shouldSkipWait(executionId)),
-      );
-    },
-  );
 
   private readonly listExecutions = Effect.fn('ExecutionsTool.listExecutions')(
     function* (context: ExecutionToolContext, offset: number, limit: number) {

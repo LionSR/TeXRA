@@ -212,17 +212,6 @@ export function writeErrorStderr(error: unknown): void {
   writeTextStderr(toErrorMessage(error));
 }
 
-/** Swallows readline's echo so a typed secret never reaches the terminal. */
-class SilentWritable extends Writable {
-  override _write(
-    _chunk: unknown,
-    _encoding: BufferEncoding,
-    callback: (error?: Error | null) => void,
-  ): void {
-    callback();
-  }
-}
-
 export async function askCliQuestion(
   question: string,
   options: {
@@ -242,7 +231,8 @@ export async function askCliQuestion(
   const prompt = createInterface({
     input,
     output: options.hidden
-      ? new SilentWritable()
+      ? // Swallow readline's echo so the typed secret never reaches the terminal.
+        new Writable({ write: (_chunk, _encoding, callback) => callback() })
       : (options.output ?? process.stderr),
     // A swallowing non-TTY output would otherwise leave stdin in canonical
     // mode, where the TTY driver echoes the secret itself.

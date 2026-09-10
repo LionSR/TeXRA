@@ -342,7 +342,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
-  public async refreshAfterCredentialChange(): Promise<void> {
+  private async refreshAfterCredentialChange(): Promise<void> {
     await effectRuntime().runPromise(refresh());
     await Promise.all([
       effectRuntime().runPromise(this.snapshot.refreshCatalogs),

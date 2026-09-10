@@ -112,7 +112,6 @@ import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
-import { StreamLogStore } from '@transcript';
 import {
   initProcessSettingHost,
   readPlatformSetting,

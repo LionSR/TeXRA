@@ -180,7 +180,7 @@ const HomebrewInfoSchema = z.object({
 
 function parseHomebrewFormulaVersion(
   stdout: string,
-  formula = CLI_HOMEBREW_FORMULA,
+  formula: string,
 ): string | undefined {
   const parsed = parseJsonWith(stdout, HomebrewInfoSchema);
   if (Result.isFailure(parsed)) return undefined;

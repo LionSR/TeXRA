@@ -348,6 +348,10 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
           'image/heif',
         ]
       : ['image/jpeg', 'image/png'];
+  const textJoinSeparator =
+    origin.protocol === 'dashscope-chat' || origin.protocol === 'minimax-chat'
+      ? '\n'
+      : '';
   let calls: Array<
     OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall & {
       index?: number;
@@ -415,14 +419,7 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
       messages.push({
         role: 'user',
         content: content.every((part) => part.type === 'text')
-          ? content
-              .map((part) => part.text)
-              .join(
-                origin.protocol === 'dashscope-chat' ||
-                  origin.protocol === 'minimax-chat'
-                  ? '\n'
-                  : '',
-              )
+          ? content.map((part) => part.text).join(textJoinSeparator)
           : content,
       });
       continue;
@@ -523,14 +520,7 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
                     ? { type: 'text', text: child.text }
                     : { type: 'refusal', refusal: child.text },
                 )
-              : part.content
-                  .map((child) => child.text)
-                  .join(
-                    origin.protocol === 'dashscope-chat' ||
-                      origin.protocol === 'minimax-chat'
-                      ? '\n'
-                      : '',
-                  ),
+              : part.content.map((child) => child.text).join(textJoinSeparator),
         };
         messages.push(assistant);
       } else {
@@ -1430,14 +1420,10 @@ export function openaiChatModel(
                       cause,
                     }),
                 });
-                if (
-                  event.event === 'error' ||
-                  (typeof raw === 'object' && raw !== null && 'error' in raw)
-                ) {
-                  const payload =
-                    typeof raw === 'object' && raw !== null && 'error' in raw
-                      ? raw.error
-                      : raw;
+                const embedsError =
+                  typeof raw === 'object' && raw !== null && 'error' in raw;
+                if (event.event === 'error' || embedsError) {
+                  const payload = embedsError ? raw.error : raw;
                   return yield* openaiFailure(
                     new OpenAI.APIError(
                       undefined,

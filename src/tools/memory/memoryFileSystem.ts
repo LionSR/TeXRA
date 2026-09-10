@@ -16,7 +16,7 @@ import { Data, Effect, Semaphore, Stream } from 'effect';
 
 import { debug } from '@logger/logUtils';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/schemas';
 import {
   MAX_PINNED_MEMORIES,
   MAX_PREVIEW_LINES,
@@ -241,13 +241,12 @@ function walkLevel(
   options: MemoryWalkOptions,
   permits: Semaphore.Semaphore,
 ): Stream.Stream<MemoryWalkEntry, MemoryEntryUnreadable> {
-  return Stream.fromEffect(
+  return Stream.fromIterableEffect(
     Effect.tryPromise({
       try: () => StorageFS.readDir(storagePath),
       catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
     }),
   ).pipe(
-    Stream.flatMap(Stream.fromIterable),
     // Skip symlinks to avoid cycles; we have no realpath/visited guard.
     Stream.filter(([name, type]) => !shouldSkipEntry(name) && !isSymlink(type)),
     Stream.mapEffect(

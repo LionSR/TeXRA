@@ -68,6 +68,7 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  interruptedWorkflowCall,
   isTranscriptEvent,
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -80,7 +81,6 @@ import {
   type StreamPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import { interruptedWorkflowCall } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import {
@@ -256,8 +256,7 @@ export class SessionHandle {
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    const transcripts = init.transcripts;
-    this.transcripts = transcripts;
+    this.transcripts = init.transcripts;
     this.roots = init.roots;
     const graph = init.graph(this);
     this.graph = graph;
@@ -272,7 +271,7 @@ export class SessionHandle {
       (event) => this.publishStatus(event),
       (streamId, detail) => this.setUnreadable(streamId, detail),
     );
-    const followUps = new ToolUseFollowUpQueue();
+    this.followUps = new ToolUseFollowUpQueue();
     const interactions = new SessionHostInteractions(this);
     // The approval authority publishes a stream's full policy snapshot on
     // every effective bypass change; `setApprovalPolicy` below publishes the
@@ -280,7 +279,7 @@ export class SessionHandle {
     const approvals = createSessionApprovals(interactions, (streamId) =>
       this.publishApprovalPolicy(streamId),
     );
-    const executions = new ExecutionRegistry({
+    this.executions = new ExecutionRegistry({
       streamStatus: status,
       publish: (events) => this.publish(events),
       approvals,
@@ -290,9 +289,7 @@ export class SessionHandle {
         this.releaseExecutionLease(executionId),
     });
 
-    this.executions = executions;
     this.status = status;
-    this.followUps = followUps;
     // The sidecar store is a session artifact exactly like `transcripts`: the
     // session projects its own run events into it and flushes it below, so no
     // host has to construct, attach, and flush one of its own.
@@ -494,10 +491,11 @@ export class SessionHandle {
   }
 
   private async flushArtifactsOnce(): Promise<void> {
-    const writers = this.artifactFlushers;
     const results = await Promise.allSettled([
       this.settlePublications(),
-      ...[...writers].map((flush) => Promise.resolve().then(flush)),
+      ...[...this.artifactFlushers].map((flush) =>
+        Promise.resolve().then(flush),
+      ),
     ]);
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],

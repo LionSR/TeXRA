@@ -62,7 +62,6 @@ import {
   type OwnerId,
   type SessionCloseReport,
   type SessionEvent,
-  type StreamTabId,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';

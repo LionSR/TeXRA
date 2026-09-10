@@ -60,7 +60,7 @@ import type {
 
 /** Session-keyed registry accessor (`codexThreadsFor`/`claudeAgentSessionsFor`);
  * dispatch and loop resolve it once against the ambient session. */
-export type AgentCliSessionStoreAccessor = (
+type AgentCliSessionStoreAccessor = (
   session: SessionHandle,
 ) => AgentCliSessionRegistry;
 
@@ -71,7 +71,7 @@ export type AgentCliSessionStoreAccessor = (
  * the cause itself, so the tool runner surfaces the same error instance the
  * collaborator raised, exactly as the previous `await` chain did.
  */
-export class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
+class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
   readonly cause: unknown;
 }> {}
 

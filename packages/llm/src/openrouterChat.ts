@@ -664,9 +664,7 @@ export function openrouterChatModel(
     },
   );
 
-  const streamTurn = (
-    input: ResolvedTurn,
-  ): Stream.Stream<TurnEvent, ModelError> =>
+  const streamTurn: Model['streamTurn'] = (input) =>
     Stream.suspend(() => {
       let responseId: string | undefined;
       let returnedModel: string | undefined;

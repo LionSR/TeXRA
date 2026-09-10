@@ -218,7 +218,7 @@ export function formatTodoSection(todos: readonly TodoItem[]): string[] {
 
 /** Format a todo header with counts. */
 export function formatTodoHeader(
-  executionId: string,
+  executionId: ExecutionId,
   todos: readonly TodoItem[],
 ): string {
   const { completed, inProgress, pending } = countByStatus(todos);
@@ -257,14 +257,10 @@ export function shouldSuppressAutoDeliveredSubagentReport(
 /** Format a single child execution as a summary line. */
 export const formatChildLine = Effect.fn('formatChildLine')(function* (
   child: ChildRecord,
-  childMeta: ExecutionMeta | null | undefined,
+  childMeta: ExecutionMeta | null,
   session: SessionHandle,
 ) {
-  const info = yield* getExecutionStatusInfo(
-    child.id,
-    session,
-    childMeta ?? null,
-  );
+  const info = yield* getExecutionStatusInfo(child.id, session, childMeta);
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `: ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;

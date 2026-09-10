@@ -99,9 +99,9 @@ function prependUserText(
 }
 
 function appendText(
-  message: LanguageModelMessage,
+  message: Extract<LanguageModelMessage, { role: 'assistant' }>,
   text: string,
-): LanguageModelMessage {
+): Extract<LanguageModelMessage, { role: 'assistant' }> {
   const content = [...message.content];
   const last = content.at(-1);
   if (last?.kind === 'text') {
@@ -109,7 +109,7 @@ function appendText(
   } else {
     content.push(textPart(text));
   }
-  return { role: message.role, content } as LanguageModelMessage;
+  return { role: 'assistant', content };
 }
 
 /** Fold a system prompt into the first user turn because VS Code has no system role. */

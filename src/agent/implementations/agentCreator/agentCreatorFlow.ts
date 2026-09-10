@@ -30,10 +30,9 @@ const log = createLog('AgentCreator');
 
 // ── Types ───────────────────────────────────────────────────
 
-interface AgentPromptPair {
-  systemPrompt: string;
-  userRequest: string;
-}
+// Derived from the prompts block the template parser validates — the schema
+// is the SSOT for this shape.
+type AgentPromptPair = z.infer<typeof ParsedCreatorYamlSchema>['prompts'];
 
 export interface CreatorConfig {
   workflow: AgentPromptPair;

@@ -136,14 +136,12 @@ const materializeStdinWorkflowInput = Effect.fn(
  *
  * `flagLabel` is the CLI flag name (e.g. `--input`, `--context`) used in
  * Usage-error messages so a missing file is attributed to the right flag.
- * Defaults to `--input` for the common case; callers that pass context paths
- * (multi-agent `--context`) should override.
  */
 const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
   inputSpec: string,
   cwd: string,
-  flagLabel: string = '--input',
-  options: WorkflowInputExpansionOptions = {},
+  flagLabel: string,
+  options: WorkflowInputExpansionOptions,
 ): Effect.fn.Return<string[], Error> {
   const trimmed = inputSpec.trim();
   if (!trimmed) return [];

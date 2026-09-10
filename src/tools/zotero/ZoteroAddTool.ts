@@ -265,7 +265,7 @@ function workToZoteroItem(doi: string, work: Work): ZoteroConnectorItem {
     DOI: doi,
   };
   if (work.title?.[0]) item.title = work.title[0];
-  if (creators?.length) item.creators = creators;
+  if (creators) item.creators = creators;
   if (year != null) item.date = String(year);
   if (containerTitle) item.publicationTitle = containerTitle;
   if (work.volume) item.volume = String(work.volume);

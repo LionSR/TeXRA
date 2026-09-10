@@ -36,10 +36,6 @@ interface ProgressApiKeyRetryRequest {
   chatGptSubscriptionEligible?: boolean;
 }
 
-interface ProgressApiRoutingSnapshot {
-  readonly quotaRoutes: ReadonlyMap<ExhaustionReason, boolean>;
-}
-
 export interface ProgressApiKeyRetryControllerDeps {
   providers: readonly ApiProvider[];
   readKey(
@@ -203,7 +199,12 @@ export class ProgressApiKeyRetryController {
     if (!this.deps.isRetryPending(request.stream, request.requestId)) {
       return false;
     }
-    const before = this.routingSnapshot();
+    const before = new Map(
+      this.fallbackRuntimes.map(
+        (runtime) =>
+          [runtime.descriptor.exhaustionReason, runtime.getEnabled()] as const,
+      ),
+    );
     // One chain: turn off every matching quota-fallback preference so the
     // retry rebuilds onto the fallback credential. Remark: prefer-off sticks
     // after the quota resets — users may forget to re-enable it.
@@ -230,7 +231,7 @@ export class ProgressApiKeyRetryController {
         Exit.isSuccess(exit) && exit.value === true
           ? Effect.void
           : hostPort(() =>
-              runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
+              runtime.restoreEnabled(before.get(reason) ?? false),
             ).pipe(
               Effect.tapError((error) =>
                 Effect.sync(() => {
@@ -311,17 +312,6 @@ export class ProgressApiKeyRetryController {
     // override travels only with the replacement launch; the standing
     // preference remains visible to concurrent and future runs.
     return this.commitOwnApiKeyRouting(request, () => start('direct'));
-  }
-
-  private routingSnapshot(): ProgressApiRoutingSnapshot {
-    return {
-      quotaRoutes: new Map(
-        this.fallbackRuntimes.map((runtime) => [
-          runtime.descriptor.exhaustionReason,
-          runtime.getEnabled(),
-        ]),
-      ),
-    };
   }
 
   private hasAnyUsableKey(

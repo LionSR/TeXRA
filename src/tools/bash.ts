@@ -17,7 +17,6 @@ import {
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import {
   getRunContextExecutionId,
-  runInSession,
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
 import {

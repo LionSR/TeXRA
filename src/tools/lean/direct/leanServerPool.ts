@@ -30,7 +30,6 @@ import {
   RcMap,
   Ref,
   Result,
-  type Scope,
 } from 'effect';
 
 import { warn } from '@logger/logUtils';

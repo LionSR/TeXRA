@@ -33,7 +33,6 @@ import type {
 import {
   agentName as baseAgentName,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   toRetryErrorInfo,
 } from '@shared/schemas';

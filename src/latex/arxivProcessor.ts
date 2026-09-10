@@ -174,10 +174,6 @@ export function resolveArxivPaperDirectoryRelative(
  * @returns The normalized arXiv ID, or null if extraction fails
  */
 function normalizeArxivInput(input: string): string | null {
-  if (!input) {
-    return null;
-  }
-
   return normaliseArxivIdentifier(input.trim());
 }
 

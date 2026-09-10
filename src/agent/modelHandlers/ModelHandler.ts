@@ -1228,27 +1228,10 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Shared threshold check for input-token-based compaction, used by handlers
-   * that track a single last-known input-token count. Compaction triggers only
-   * in tool-use mode, on a manual request, or when `inputTokens` exceeds the
-   * configured percentage of the context window.
-   */
-  protected shouldCompactByInputTokens(inputTokens: number): boolean {
-    if (!this.isToolUseMode()) return false;
-    if (this.isCompactionRequested()) return true;
-
-    const thresholdPercent = this.getCompactionThresholdPercent();
-    if (thresholdPercent <= 0) return false;
-
-    const threshold = Math.floor(
-      (thresholdPercent / 100) * this.getEffectiveContextWindow(),
-    );
-    return inputTokens > threshold;
-  }
-
-  /**
    * Runs input-token-driven compaction when the shared threshold policy selects
-   * the current conversation. The trigger, request consumption, and diagnostic
+   * the current conversation. Compaction triggers only in tool-use mode, on a
+   * manual request, or when `inputTokens` exceeds the configured percentage of
+   * the context window. The trigger, request consumption, and diagnostic
    * context stay uniform while each provider retains its SDK-specific summary
    * request and message representation.
    */
@@ -1266,14 +1249,19 @@ export abstract class ModelHandler<
     }
     this.pendingClientCompaction = undefined;
 
-    if (!this.shouldCompactByInputTokens(inputTokens)) {
+    if (!this.isToolUseMode()) {
+      return { compactedMessages: messages, didCompact: false };
+    }
+    const manuallyRequested = this.consumeCompactionRequest();
+    const thresholdPercent = this.getCompactionThresholdPercent();
+    const contextWindow = this.getEffectiveContextWindow();
+    const exceedsThreshold =
+      thresholdPercent > 0 &&
+      inputTokens > Math.floor((thresholdPercent / 100) * contextWindow);
+    if (!manuallyRequested && !exceedsThreshold) {
       return { compactedMessages: messages, didCompact: false };
     }
 
-    const manuallyRequested = this.consumeCompactionRequest();
-
-    const thresholdPercent = this.getCompactionThresholdPercent();
-    const contextWindow = this.getEffectiveContextWindow();
     this.logger.debug(
       manuallyRequested
         ? 'Compacting conversation (manually requested)'
@@ -1728,18 +1716,10 @@ export abstract class ModelHandler<
     );
     const availableTokens = contextWindow - inputTokens;
 
-    if (availableTokens >= maxTokens) {
-      return {
-        adjustedMaxTokens: maxTokens,
-        inputTokens,
-        utilizationPercent,
-      };
-    }
-
-    const adjustedMaxTokens = computeReducedMaxTokens(
-      availableTokens,
-      tokenBuffer,
-    );
+    const adjustedMaxTokens =
+      availableTokens >= maxTokens
+        ? maxTokens
+        : computeReducedMaxTokens(availableTokens, tokenBuffer);
 
     return {
       adjustedMaxTokens,
