@@ -4,20 +4,24 @@
 // the width-qualified Static identity remounts these same items so patched Ink
 // can replace its accumulated static output with the new geometry.
 
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { createLog } from '@logger/logUtils';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { SessionView } from '@shared/session/sessionView';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
+  registerCliStateResetHook,
   rootStreamId as rootStreamIdSignal,
   sessionMeta as sessionMetaSignal,
   type SessionMeta,
@@ -717,6 +721,106 @@ interface StaticTranscriptBuildResult {
   readonly trimmed: boolean;
 }
 
+const log = createLog('StaticConversationTranscript');
+const DUPLICATE_ROW_LOG_CAP = 1000;
+/** Row ids already logged as duplicates, so a persistently-colliding id is
+ *  logged once instead of once per rebuild. `upsertRow` (sessionFold) and
+ *  the local-notice counter (`transcript.ts`) both guarantee unique ids; a
+ *  collision here means one of those invariants broke upstream. This gates
+ *  only the log call — the inline marker is re-derived on every pass that
+ *  still finds the collision (see {@link duplicateRowIdWarningRow}), so a
+ *  later repaint (which replaces all of `<Static>`'s printed output from
+ *  the current `items`) never silently drops a marker it already showed. */
+const duplicateRowIdsLogged = createBoundedIdSet(DUPLICATE_ROW_LOG_CAP);
+// `/clear` resets `localEntrySeq` (`transcript.ts`) back to 0 without
+// terminating the TUI, so a local-notice id like `local:0:cli-local` is
+// reusable across the reset. Without this hook, a genuinely new collision
+// after `/clear` that happens to reuse an already-logged id would be
+// mistaken for the old one and suppressed.
+registerCliStateResetHook(() => duplicateRowIdsLogged.clear());
+
+/**
+ * A fresh, unguessable per-process token, not a fixed string: entry ids are
+ * wire content (`z.string().min(1)`, no format constraint), so a marker id
+ * built only from a literal prefix and a counter is a string an upstream
+ * producer could — in principle, however unlikely — happen to reproduce.
+ * Nothing outside this module ever sees or influences `randomUUID()`'s
+ * output, so no entry id can be engineered (accidentally or otherwise) to
+ * collide with `${DUPLICATE_ROW_WARNING_NAMESPACE}:`.
+ */
+const DUPLICATE_ROW_WARNING_NAMESPACE = `duplicate-row-warning:${randomUUID()}`;
+let duplicateRowWarningSeq = 0;
+
+function nextDuplicateRowWarningId(entryId: string): string {
+  return `${DUPLICATE_ROW_WARNING_NAMESPACE}:${duplicateRowWarningSeq++}:${entryId}`;
+}
+
+/** The source row id a marker's own item id represents, or `undefined` for
+ *  anything that isn't one of this module's markers (namespaced above). */
+function duplicateRowWarningSourceId(itemId: string): string | undefined {
+  const prefix = `${DUPLICATE_ROW_WARNING_NAMESPACE}:`;
+  if (!itemId.startsWith(prefix)) return undefined;
+  const rest = itemId.slice(prefix.length);
+  const counterEnd = rest.indexOf(':');
+  return counterEnd === -1 ? undefined : rest.slice(counterEnd + 1);
+}
+
+interface PendingDuplicateRow {
+  readonly entry: TranscriptRow;
+  readonly markerId: string;
+}
+
+/**
+ * A visible marker for a dropped duplicate-id row, shaped like the local
+ * notices `transcript.ts` synthesizes (`origin: 'local'`, host-assigned id).
+ * `log.warn` alone is not enough here: while the TUI owns the terminal,
+ * `initCliPlatform` installs a no-op log sink (every interactive launch sets
+ * `quietLogs: true`), so logging is a best-effort record for non-interactive
+ * hosts and this inline row — matching `EntryErrorBoundary`'s convention of
+ * surfacing a render-time defect in the transcript itself — is what an
+ * interactive user actually sees.
+ */
+function duplicateRowIdWarningRow(pending: PendingDuplicateRow): TranscriptRow {
+  return {
+    id: pending.markerId,
+    origin: 'local',
+    timestamp: Date.now(),
+    level: 'error',
+    kind: 'error',
+    summary: transcriptText(
+      `Duplicate transcript row id (kind ${pending.entry.kind}); dropped a repeat. This points at an upsert or local-notice bug upstream.`,
+    ),
+    details: [],
+    detailText: transcriptText(''),
+  };
+}
+
+/**
+ * Log each pending duplicate once — never more, and only for the ones whose
+ * marker row is still present after ring-budget trimming. A marker trimmed
+ * away in the same pass it was inserted never reached the reader, so logging
+ * it here would suppress every future retry and the collision would go
+ * unlogged for the rest of a long session (the bug this whole warning path
+ * exists to avoid, just moved one step later). The marker itself already
+ * rendered regardless of this gate — see {@link duplicateRowIdWarningRow}.
+ */
+function logSurvivingDuplicates(
+  pending: readonly PendingDuplicateRow[],
+  survivingItems: readonly StaticTranscriptItem[],
+  context: string,
+): void {
+  if (pending.length === 0) return;
+  const survivingIds = new Set(survivingItems.map((item) => item.id));
+  for (const { entry, markerId } of pending) {
+    if (!survivingIds.has(markerId)) continue;
+    if (duplicateRowIdsLogged.has(entry.id)) continue;
+    duplicateRowIdsLogged.add(entry.id);
+    log.warn(
+      `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in ${context}; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
+    );
+  }
+}
+
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): StaticTranscriptBuildResult {
@@ -748,10 +852,36 @@ export function buildStaticTranscriptItems(
     source.status,
   );
   const seen = new Set<string>();
+  const markedThisPass = new Set<string>();
+  const pendingDuplicates: PendingDuplicateRow[] = [];
   for (const entry of orderedStaticEntries) {
-    if (seen.has(entry.id)) continue;
+    if (seen.has(entry.id)) {
+      if (!markedThisPass.has(entry.id)) {
+        markedThisPass.add(entry.id);
+        pendingDuplicates.push({
+          entry,
+          markerId: nextDuplicateRowWarningId(entry.id),
+        });
+      }
+      continue;
+    }
     seen.add(entry.id);
     items.push({ id: entry.id, kind: 'entry', entry });
+  }
+  // Appended at the true tail rather than beside the historical duplicate:
+  // retention trims from the front, so a marker here is the last thing a long
+  // session's ring budget would ever drop, and a diagnostic surfacing "now"
+  // for an old collision is at least as legible as one backdated into
+  // scrollback that may already be gone. Derived on every pass that still
+  // finds the collision (not gated by whether it was logged before), so a
+  // later repaint — which replaces all printed output from the current
+  // `items` — doesn't drop a marker it already showed.
+  for (const pending of pendingDuplicates) {
+    items.push({
+      id: pending.markerId,
+      kind: 'entry',
+      entry: duplicateRowIdWarningRow(pending),
+    });
   }
 
   const retained = retainedStaticTranscriptTail(items, {
@@ -759,6 +889,7 @@ export function buildStaticTranscriptItems(
     executionLabels,
     width,
   });
+  logSurvivingDuplicates(pendingDuplicates, retained.items, 'a static rebuild');
   return {
     items: retained.items,
     rowCount: retained.totals.rows,
@@ -1014,28 +1145,62 @@ export function advanceStaticTranscriptState(
   }
 
   let previousItem = nextItems.at(-1);
+  const appendItem = (item: StaticTranscriptItem): void => {
+    const metrics = staticTranscriptItemMetrics(
+      item,
+      width,
+      executionLabels,
+      previousItem,
+    );
+    nextRowCount += metrics.rows;
+    nextByteCount += metrics.bytes;
+    nextItems = [...nextItems, item];
+    previousItem = item;
+    changed = true;
+  };
+  const pendingDuplicates: PendingDuplicateRow[] = [];
   if (plan.appended.length > 0) {
     const seenIds = new Set(nextItems.map((item) => item.id));
+    const markedThisPass = new Set<string>();
+    // A collision spread across ticks (one occurrence appends now, another
+    // arrived several ticks ago and already got its marker) must not grow a
+    // second marker for the same id: scan the *current* items for one,
+    // rather than a cache, so a marker that was later trimmed away is free
+    // to reappear (the same requirement as the tail-placement fix above).
+    const alreadyMarked = new Set(
+      nextItems.flatMap((item) => {
+        const sourceId = duplicateRowWarningSourceId(item.id);
+        return sourceId === undefined ? [] : [sourceId];
+      }),
+    );
     for (const entry of plan.appended) {
-      if (seenIds.has(entry.id)) continue;
+      if (seenIds.has(entry.id)) {
+        if (!markedThisPass.has(entry.id) && !alreadyMarked.has(entry.id)) {
+          markedThisPass.add(entry.id);
+          pendingDuplicates.push({
+            entry,
+            markerId: nextDuplicateRowWarningId(entry.id),
+          });
+        }
+        continue;
+      }
       const item: StaticTranscriptItem = {
         id: entry.id,
         kind: 'entry',
         entry,
       };
-      const metrics = staticTranscriptItemMetrics(
-        item,
-        width,
-        executionLabels,
-        previousItem,
-      );
-      nextRowCount += metrics.rows;
-      nextByteCount += metrics.bytes;
-      nextItems = [...nextItems, item];
-      previousItem = item;
+      appendItem(item);
       seenIds.add(entry.id);
-      changed = true;
     }
+  }
+  // Appended after every real row from this tick, at the true tail — see the
+  // matching comment in buildStaticTranscriptItems.
+  for (const pending of pendingDuplicates) {
+    appendItem({
+      id: pending.markerId,
+      kind: 'entry',
+      entry: duplicateRowIdWarningRow(pending),
+    });
   }
 
   const trimmed = trimStaticTranscriptItems(nextItems, {
@@ -1051,6 +1216,7 @@ export function advanceStaticTranscriptState(
     nextRepaintEpoch += 1;
     changed = true;
   }
+  logSurvivingDuplicates(pendingDuplicates, nextItems, 'an incremental append');
 
   const cursor = plan.cursor;
   const cursorChanged =
