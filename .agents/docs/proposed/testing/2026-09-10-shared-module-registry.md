@@ -135,6 +135,22 @@ done in this order:
 Converting a suite to `it.effect` without moving what it reaches into a layer
 changes nothing — the 24 leaking Effect suites are the measurement of that.
 
+Tried and measured on the way here, so nobody repeats them: `vmThreads` /
+`vmForks` (33% faster, break cross-realm `instanceof Error`);
+`vi.resetModules()` in a first setup file under `isolate: false` (6.2s on
+`latex`, but on the full suite it re-evaluates the heavy graphs like isolation
+and retains the invalidated ones — three workers at 5.2 / 3.7 / 3.7 GB, the
+machine swapping at 28 min); and moving the process-runtime install from a
+module-scope flag to `tryProcessRuntime()` with a per-file dispose in
+`setupFakePlatform.ts` (217 failing files against the 136 baseline). The last
+one fails for the reason that sizes the whole job: the kernel's per-file setup
+is import-time side effects — `import '@test/support/sessionGraphTestSetup'`,
+`defaultSessionTestSetup.ts` calling `initializeDefaultSession()` at import —
+and a shared registry evaluates each of those once per worker, for the first
+file only. The only per-file points are `setupFiles` (before a file's
+`vi.mock`s, which the seam's own comment rules out) or explicit calls in each
+file's body. So the migration is per suite, by design of the current kernel.
+
 Once 2 and 3 are done, re-run `--no-isolate` on the non-DOM tree. The target
 is the measured floor: the shared project ran 567 suites in 81s here, against
 a full run that does not finish in 45 minutes.
