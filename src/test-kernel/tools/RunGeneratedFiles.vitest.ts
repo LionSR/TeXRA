@@ -1,9 +1,12 @@
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
+import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
 
@@ -38,6 +41,10 @@ describe('listRunGeneratedFiles', () => {
       [path.join(RUN_PATH, 'turn-state.json', 'buried.tex')]: 'buried',
     },
   });
+  let session: SessionHandle;
+  beforeEach(() => {
+    session = createProcessSession();
+  });
   afterEach(() => vi.restoreAllMocks());
 
   it('lists in path order, skipping KV-named subtrees and concurrent disappearance', async () => {
@@ -46,7 +53,9 @@ describe('listRunGeneratedFiles', () => {
       fsError('ENOENT', 'entry disappeared after readDir'),
     );
 
-    await expect(listRunGeneratedFiles(EXECUTION_ID)).resolves.toEqual([
+    await expect(
+      Effect.runPromise(listRunGeneratedFiles(EXECUTION_ID, session)),
+    ).resolves.toEqual([
       { path: 'blocked.tex', size: 7, isDirectory: false },
       { path: 'sub', size: 0, isDirectory: true },
       { path: 'sub/nested.tex', size: 6, isDirectory: false },
@@ -61,7 +70,9 @@ describe('listRunGeneratedFiles', () => {
       fsError('ENOTDIR', 'parent path is no longer a directory'),
     );
 
-    const files = await listRunGeneratedFiles(EXECUTION_ID);
+    const files = await Effect.runPromise(
+      listRunGeneratedFiles(EXECUTION_ID, session),
+    );
 
     expect(files.map((file) => file.path)).not.toContain('blocked.tex');
   });
@@ -70,6 +81,8 @@ describe('listRunGeneratedFiles', () => {
     const error = fsError('EACCES', 'generated file is unreadable');
     failStatFor(path.join(RUN_PATH, 'unreadable.tex'), error);
 
-    await expect(listRunGeneratedFiles(EXECUTION_ID)).rejects.toBe(error);
+    await expect(
+      Effect.runPromise(listRunGeneratedFiles(EXECUTION_ID, session)),
+    ).rejects.toBe(error);
   });
 });

@@ -201,7 +201,7 @@ export async function readCliHistoryDetails(
           store.readReport(),
           readCompletedRunConversation(id, session),
           store.readWorkspaceFiles(),
-          Effect.tryPromise(() => listRunGeneratedFiles(id)),
+          listRunGeneratedFiles(id, session),
           checkpointExists(id, session),
         ],
         { concurrency: 8 },

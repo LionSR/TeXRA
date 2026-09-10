@@ -1044,9 +1044,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     context: ExecutionToolContext,
     executionId: ExecutionId,
   ) {
-    const files = yield* executionsRead(context, () =>
-      listRunGeneratedFiles(executionId),
-    );
+    const files = yield* listRunGeneratedFiles(
+      executionId,
+      context.session,
+    ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
     if (files.length === 0) {
       return executed('No files generated for this execution.');
     }

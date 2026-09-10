@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { classifyRejection } from '@agent/runtime/HostInteractions';
@@ -6,7 +7,9 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
@@ -40,6 +43,65 @@ const AskUserQuestionInputSchema = z.strictObject({
 
 type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
 
+const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
+  input: AskUserQuestionInput,
+) {
+  const context = tryUseRunContext();
+  requireInteractions('ask_user_question', context);
+  const streamId = getRunContextStreamId(context);
+  const requestId = `user-question-${generateShortId()}`;
+
+  logger.info('User question requested', {
+    data: input.questions[0]?.question.slice(0, 100) ?? '',
+  });
+
+  const permission = {
+    requestId,
+    questions: input.questions,
+    context: input.context ?? undefined,
+    allowBypass: false,
+    streamId: streamId ?? '',
+  };
+  const session = currentSession();
+  const result = yield* hostPort(() =>
+    session.interactions.askUserQuestion(permission),
+  );
+
+  if (result.action !== 'submit') {
+    const classification = classifyRejection(result);
+    switch (classification.kind) {
+      case 'cancelled':
+        return executed(
+          withDetail('The user question was cancelled', classification.cause),
+        );
+      case 'policy':
+        return executed(
+          withDetail('The user question was denied', classification.reason),
+        );
+      case 'feedback':
+        return executed(
+          withDetail('The user declined to answer', classification.feedback),
+        );
+      default:
+        return assertNever(
+          classification,
+          'Unhandled rejection classification',
+        );
+    }
+  }
+
+  const answers = UserQuestionAnswersSchema.parse(result.answers);
+  const answerCount = Object.keys(answers).length;
+  if (answerCount === 0) {
+    return executed('The user submitted no answers.');
+  }
+
+  return executed(
+    JSON.stringify({ answers }, null, 2),
+    `Answered ${answerCount} user question(s).`,
+  );
+});
+
 export class AskUserQuestionTool extends defineTool({
   name: 'ask_user_question',
   requiresApproval: true,
@@ -50,58 +112,7 @@ Use this when the task has several reasonable paths and continuing without the u
 The tool returns a JSON object whose keys are the original question texts and whose values are the selected option labels, arrays of labels for multi-select questions, or free-text answers.`,
   schema: AskUserQuestionInputSchema,
 }) {
-  protected async execute(input: AskUserQuestionInput): Promise<ToolResult> {
-    const context = tryUseRunContext();
-    requireInteractions('ask_user_question', context);
-    const streamId = getRunContextStreamId(context);
-    const requestId = `user-question-${generateShortId()}`;
-
-    logger.info('User question requested', {
-      data: input.questions[0]?.question.slice(0, 100) ?? '',
-    });
-
-    const permission = {
-      requestId,
-      questions: input.questions,
-      context: input.context ?? undefined,
-      allowBypass: false,
-      streamId: streamId ?? '',
-    };
-    const session = currentSession();
-    const result = await session.interactions.askUserQuestion(permission);
-
-    if (result.action !== 'submit') {
-      const classification = classifyRejection(result);
-      switch (classification.kind) {
-        case 'cancelled':
-          return executed(
-            withDetail('The user question was cancelled', classification.cause),
-          );
-        case 'policy':
-          return executed(
-            withDetail('The user question was denied', classification.reason),
-          );
-        case 'feedback':
-          return executed(
-            withDetail('The user declined to answer', classification.feedback),
-          );
-        default:
-          return assertNever(
-            classification,
-            'Unhandled rejection classification',
-          );
-      }
-    }
-
-    const answers = UserQuestionAnswersSchema.parse(result.answers);
-    const answerCount = Object.keys(answers).length;
-    if (answerCount === 0) {
-      return executed('The user submitted no answers.');
-    }
-
-    return executed(
-      JSON.stringify({ answers }, null, 2),
-      `Answered ${answerCount} user question(s).`,
-    );
+  protected execute(input: AskUserQuestionInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(askUserQuestion(input));
   }
 }
