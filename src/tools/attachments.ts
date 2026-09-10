@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { imageSize } from 'image-size';
 
 // Local imports
-import { hostPort } from '@common/hostPort';
 import { ToolError, type ToolFileAttachment } from '@shared/schemas';
 import {
   resolveAndFormat,
@@ -118,7 +117,10 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   description,
   mimeType,
   resolved,
-}: BuildFileAttachmentOptions): Effect.fn.Return<ToolFileAttachment, unknown> {
+}: BuildFileAttachmentOptions): Effect.fn.Return<
+  ToolFileAttachment,
+  ToolError
+> {
   if (!isNonEmptyString(filePath)) {
     return yield* Effect.fail(
       new ToolError('Attachment path must be provided.'),
@@ -131,9 +133,13 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
     ? { path: resolved, display: toPosixPath(resolved.relative) }
     : yield* Effect.try({
         try: () => resolveAndFormat(filePath),
-        catch: (error) => error,
+        catch: attachmentFailure(`Failed to resolve attachment ${filePath}`),
       });
-  if (!(yield* hostPort(() => WorkspaceFS.exists(path.fsPath)))) {
+  const present = yield* Effect.tryPromise({
+    try: () => WorkspaceFS.exists(path.fsPath),
+    catch: attachmentFailure(`Failed to inspect attachment ${display}`),
+  });
+  if (!present) {
     return yield* Effect.fail(
       new ToolError(`Attachment not found: ${display}`),
     );

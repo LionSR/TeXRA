@@ -74,7 +74,7 @@ export const buildLimitedAttachments = Effect.fn(
 )(function* (
   paths: readonly string[],
   { limit, describe, mimeType }: AttachmentLimitOptions,
-): Effect.fn.Return<AttachmentLimitResult, unknown> {
+): Effect.fn.Return<AttachmentLimitResult, ToolError> {
   if (paths.length === 0 || limit <= 0) {
     return { attachments: [], limitedPaths: [], limitReached: false };
   }
