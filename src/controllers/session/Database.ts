@@ -53,7 +53,6 @@ import {
   listingTypeOf,
   referencedAggregates,
   type AggregateId,
-  type CommitOrdinal,
   type ExecutionId,
   type SessionEvent,
   type SessionEventDraft,
@@ -264,8 +263,6 @@ export const databaseLayer = (
         observedCommit,
         yield* currentCommit.pipe(mapDatabaseFailure(openFailed)),
       );
-      const listing = READ_LISTING;
-      const state = READ_STATE;
       const dependents = `WITH RECURSIVE dependents(aggregate_id) AS (
         SELECT aggregate_id FROM event_sequence WHERE aggregate_id = ?
         UNION ALL
@@ -480,7 +477,7 @@ export const databaseLayer = (
           AND closed = 0 LIMIT 1`;
       const readState = (ids: readonly AggregateId[]) =>
         Effect.gen(function* () {
-          return (yield* sql.unsafe<Record<string, unknown>>(state, [
+          return (yield* sql.unsafe<Record<string, unknown>>(READ_STATE, [
             JSON.stringify(ids),
           ])).map((row) => AggregateStateSchema.parse(row));
         });
@@ -811,7 +808,7 @@ export const databaseLayer = (
         readListing: () =>
           query(
             Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(listing, [
+              return (yield* sql.unsafe<Record<string, unknown>>(READ_LISTING, [
                 JSON.stringify(LISTING_TYPES),
               ])).map(decodeEvent);
             }),
@@ -933,12 +930,7 @@ export const databaseLayer = (
               ])).map(decodeEvent);
             }),
           ),
-        aggregateState: (ids) =>
-          query(
-            Effect.gen(function* () {
-              return yield* readState(ids);
-            }),
-          ),
+        aggregateState: (ids) => query(readState(ids)),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
           transaction(
             'read',
@@ -973,11 +965,7 @@ export const databaseLayer = (
         acquireClaims: (ids) =>
           Effect.gen(function* () {
             if (ids.length === 0) return [];
-            const observed = yield* query(
-              Effect.gen(function* () {
-                return yield* readState(ids);
-              }),
-            );
+            const observed = yield* query(readState(ids));
             if (
               observed.length !== new Set(ids).size ||
               observed.some((row) => row.closed)
@@ -1016,9 +1004,7 @@ export const databaseLayer = (
             });
             const observed = yield* transaction(
               'read',
-              Effect.gen(function* () {
-                return yield* readDependents(id);
-              }),
+              readDependents(id),
               readFailed,
             );
             if (observed.length === 0 || observed.some((row) => row.closed)) {
@@ -1202,11 +1188,7 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            return yield* transact(
-              Effect.gen(function* () {
-                return yield* appendPrepared(prepared, at);
-              }),
-            );
+            return yield* transact(appendPrepared(prepared, at));
           }),
       };
     }),

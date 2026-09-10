@@ -11,7 +11,6 @@ import {
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { runInSession } from '@agent/runtime/RunContext';
 import { classifyAgentError } from '@common/errors';
 import {
   aggregateId as qualifyAggregateId,

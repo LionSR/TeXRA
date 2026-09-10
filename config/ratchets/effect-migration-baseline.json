@@ -14,7 +14,7 @@
       "packages/extension/src/frontend/secretManager.ts": 1,
       "packages/extension/src/frontend/ui/instruction.ts": 2,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 2,
-      "packages/extension/src/settingsView/SettingsViewMessageHandler.ts": 3,
+      "packages/extension/src/settingsView/SettingsViewMessageHandler.ts": 2,
       "packages/extension/src/settingsView/handlers/agentHandlers.ts": 1,
       "packages/extension/src/settingsView/handlers/githubSubscriptionHandlers.ts": 2,
       "src/agent/followUp/ToolUseFollowUp.ts": 1,

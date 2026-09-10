@@ -128,16 +128,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // Must build inside the constructor: the platform is initialized by
     // extension.ts during activation, so destructuring its stores at module
     // load would throw before that happens.
+    const { globalState } = platform();
     this.settingsHost = new SettingsViewHost({
       state: {
         workspaceState: workspaceRoots().workspaceState,
-        globalState: platform().globalState,
+        globalState,
       },
       memoryPrompt: new VscodePromptHost(),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
-      globalState: platform().globalState,
+      globalState,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
       getConfig,
@@ -560,21 +561,22 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
     });
     if (result.kind === 'ignored') return;
+    const label = result.entry.title ?? result.entry.key;
     if (result.kind === 'rejected') {
       await showLoggedErrorMessage(
         this.channel,
-        `Invalid value for “${result.entry.title ?? result.entry.key}”`,
+        `Invalid value for “${label}”`,
         result.error,
       );
     } else if (result.kind === 'workspace-required') {
       void showLoggedInfoMessage(
         this.channel,
-        `Open a workspace folder before changing the “${result.entry.title ?? result.entry.key}” setting.`,
+        `Open a workspace folder before changing the “${label}” setting.`,
       );
     } else if (result.kind === 'failed') {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to update “${result.entry.title ?? result.entry.key}”`,
+        `Failed to update “${label}”`,
         result.error,
       );
     }

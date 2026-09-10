@@ -246,32 +246,31 @@ export class ExternalInquiryTool extends defineTool({
     switch (input.command) {
       case 'ask':
         requireInteractions('inquiry', context);
-        operation = this.executeAsk({
+        operation = this.executeAsk(
           input,
           streamId,
           executionId,
-          session: currentSession(),
-        });
+          currentSession(),
+        );
         break;
       case 'read':
         operation = this.executeRead(input);
         break;
       case 'list':
-        operation = this.executeList({ input, streamId });
+        operation = this.executeList(input, streamId);
         break;
     }
     return effectRuntime().runPromise(operation, { signal });
   }
 
-  private executeAsk(args: {
-    input: Extract<InquiryInput, { command: 'ask' }>;
-    streamId: StreamTabId | undefined;
-    executionId?: ExecutionId;
-    session: SessionHandle;
-  }): Effect.Effect<ToolResult, Error, InquiryRecords> {
+  private executeAsk(
+    input: Extract<InquiryInput, { command: 'ask' }>,
+    streamId: StreamTabId | undefined,
+    executionId: ExecutionId | undefined,
+    session: SessionHandle,
+  ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {
       const records = yield* InquiryRecords;
-      const { input, streamId, executionId, session } = args;
       if (!streamId) {
         return yield* Effect.fail(
           new ToolError(
@@ -365,13 +364,12 @@ export class ExternalInquiryTool extends defineTool({
     });
   }
 
-  private executeList(args: {
-    input: Extract<InquiryInput, { command: 'list' }>;
-    streamId: StreamTabId | undefined;
-  }): Effect.Effect<ToolResult, Error, InquiryRecords> {
+  private executeList(
+    input: Extract<InquiryInput, { command: 'list' }>,
+    streamId: StreamTabId | undefined,
+  ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {
       const records = yield* InquiryRecords;
-      const { input, streamId } = args;
       if (input.scope === 'stream' && !streamId) {
         return yield* Effect.fail(
           new ToolError(

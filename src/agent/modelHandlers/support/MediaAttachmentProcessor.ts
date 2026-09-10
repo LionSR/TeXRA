@@ -78,10 +78,6 @@ export class MediaAttachmentProcessor {
     return this.options.getCapabilities();
   }
 
-  private get isOpenAIProvider(): boolean {
-    return this.options.isOpenAIProvider();
-  }
-
   private async processImage(
     mediaFile: string,
     ext: string,
@@ -254,7 +250,8 @@ export class MediaAttachmentProcessor {
 
     try {
       // Process as audio or image based on mime type
-      const processed = this.isAudio(fileExtension)
+      const isAudio = getMimeType(fileExtension)?.startsWith('audio/') ?? false;
+      const processed = isAudio
         ? await this.processAudio(absolutePath, fileExtension)
         : await this.processImage(absolutePath, fileExtension);
       this.logger.debug('Processed media', {
@@ -310,7 +307,7 @@ export class MediaAttachmentProcessor {
     if (
       isPdf &&
       processed.mediaType === 'application/pdf' &&
-      this.isOpenAIProvider &&
+      this.options.isOpenAIProvider() &&
       this.capabilities.supportsVision &&
       this.capabilities.supportsNativePdf
     ) {
@@ -378,9 +375,5 @@ export class MediaAttachmentProcessor {
     }
 
     return entry;
-  }
-
-  private isAudio(ext: string): boolean {
-    return getMimeType(ext)?.startsWith('audio/') ?? false;
   }
 }

@@ -138,13 +138,13 @@ function ownershipKey(root: string, executionId: ExecutionId): string {
   return `${root}\0${executionId}`;
 }
 
-function leaseDir(root: string): string {
-  return path.join(root, WORKSPACE_STORAGE_LAYOUT.executionLeases);
-}
-
 function claimDir(root: string, executionId: ExecutionId): string {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
-  return path.join(leaseDir(root), safeExecutionId);
+  return path.join(
+    root,
+    WORKSPACE_STORAGE_LAYOUT.executionLeases,
+    safeExecutionId,
+  );
 }
 
 function claimPath(root: string, executionId: ExecutionId, ownerToken: string) {

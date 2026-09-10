@@ -138,10 +138,9 @@ export function createDesktopHostRequests(
     options.snapshot.setRecording(recording),
   );
   const snapshots = session.snapshots;
-  const view = () => SubscriptionRef.getUnsafe(session.view);
 
   const stream = (streamId: StreamTabId) => {
-    const found = view().streams.get(streamId);
+    const found = SubscriptionRef.getUnsafe(session.view).streams.get(streamId);
     if (!found) {
       throw new Unavailable({
         streamId,
@@ -159,10 +158,7 @@ export function createDesktopHostRequests(
     // desktop that means opening the Models tab rather than a modal prompt.
     // The controller re-reads the secret store after this returns.
     promptForApiKey: async () => {
-      postDesktopSettingsView(
-        (message) => options.postToRenderer(message),
-        'models',
-      );
+      postDesktopSettingsView(options.postToRenderer, 'models');
       await host.showInfoMessage(
         'Add a provider API key in Models, then use "Retry" on the request.',
       );
@@ -531,7 +527,7 @@ export function createDesktopHostRequests(
     switch (request.action) {
       case 'edit':
         postDesktopSettingsView(
-          (message) => options.postToRenderer(message),
+          options.postToRenderer,
           'agents',
           request.sessionType === 'toolUse' ? 'toolUse' : 'workflow',
         );
@@ -540,10 +536,7 @@ export function createDesktopHostRequests(
         if (request.customDirSet === true) {
           await host.openPath(await options.getCustomAgentDirectory());
         } else {
-          postDesktopSettingsView(
-            (message) => options.postToRenderer(message),
-            'agents',
-          );
+          postDesktopSettingsView(options.postToRenderer, 'agents');
         }
         return;
       case 'docs':
@@ -560,10 +553,7 @@ export function createDesktopHostRequests(
         await options.onboarding.signInWithChatGpt();
         return;
       case 'setApiKey':
-        postDesktopSettingsView(
-          (message) => options.postToRenderer(message),
-          'models',
-        );
+        postDesktopSettingsView(options.postToRenderer, 'models');
         return;
       case 'skip':
         await options.onboarding.skipOnboarding();
@@ -664,7 +654,7 @@ export function createDesktopHostRequests(
       case 'popBack':
         throw notOnDesktop('Pop-out to editor');
       case 'openDashboard':
-        postDesktopSettingsView((message) => options.postToRenderer(message));
+        postDesktopSettingsView(options.postToRenderer);
         return done;
       case 'refreshCommits':
         await effectRuntime().runPromise(options.snapshot.refreshCommits);
@@ -674,7 +664,7 @@ export function createDesktopHostRequests(
         return done;
       case 'openSettings':
         postDesktopSettingsView(
-          (message) => options.postToRenderer(message),
+          options.postToRenderer,
           request.section === 'teams' ? 'multi-agent' : request.section,
           request.sessionType === 'toolUse' ? 'toolUse' : undefined,
         );
@@ -726,10 +716,7 @@ export function createDesktopHostRequests(
         return done;
       case 'apiKeyBanner':
         if (request.action === 'set') {
-          postDesktopSettingsView(
-            (message) => options.postToRenderer(message),
-            'models',
-          );
+          postDesktopSettingsView(options.postToRenderer, 'models');
         } else {
           await options.openExternalUrl(
             'https://texra.ai/guide/configuration.html',
@@ -743,10 +730,7 @@ export function createDesktopHostRequests(
         await options.recheckTools();
         return done;
       case 'openInstallGuide':
-        postDesktopSettingsView(
-          (message) => options.postToRenderer(message),
-          'tools',
-        );
+        postDesktopSettingsView(options.postToRenderer, 'tools');
         return done;
       case 'signIn':
         await options.signIn();

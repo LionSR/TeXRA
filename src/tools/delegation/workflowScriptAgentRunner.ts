@@ -6,7 +6,6 @@ import { getExecutionRecords } from '@agent/storage';
 import {
   WorkflowRunAbortError,
   type WorkflowAgentInvocation,
-  type WorkflowScriptRunOptions,
 } from '@agent/workflowScript';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { runInSession, type LaunchRunContext } from '@agent/runtime/RunContext';
@@ -73,9 +72,7 @@ interface WorkflowRunIdentity {
 
 /**
  * Resolve what one issued `agent()` call actually runs; agent, model, result
- * contract, and files; from the options the script declared. One owner for
- * both the launch (`prepare`) and the per-call review a host shows before
- * admitting the call, so the card the user approves is the config that runs.
+ * contract, and files; from the options the script declared.
  */
 const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   function* (

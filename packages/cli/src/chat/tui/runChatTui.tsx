@@ -410,10 +410,6 @@ export async function runChat(
   });
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeStream));
 
-  const interruptActive = (): void => {
-    chatController.stop();
-  };
-
   const resetSessionForClear = (): void => {
     const currentStreamId = session.streamId ?? activeStreamIdSignal.get();
     const activeStatus = streamPhaseOf(
@@ -567,7 +563,7 @@ export async function runChat(
     resumeTerminalTitle: terminalTitleUpdates.resume,
     canStopActiveRun,
     isResumableIdle,
-    interruptActive,
+    interruptActive: () => chatController.stop(),
   });
   // Transfer signal ownership from the platform handler and arm this session's
   // handlers, not any earlier: everything above (initInteractiveCliPlatform,

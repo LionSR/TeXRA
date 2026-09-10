@@ -106,18 +106,6 @@ export async function writeStableSubagentAttempt(
   );
 }
 
-function reservedStableSubagentAttempt(
-  logicalExecutionId: ExecutionId,
-  parentExecutionId: ExecutionId,
-): StableSubagentAttempt {
-  return {
-    schemaVersion: STABLE_SUBAGENT_STATE_SCHEMA_VERSION,
-    logicalExecutionId,
-    parentExecutionId,
-    phase: 'reserved',
-  };
-}
-
 /**
  * The existing physical-attempt protocol, including its recovery restrictions.
  * Reservation, reconciliation and commit operate on the same persisted keys;
@@ -482,10 +470,12 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
         ),
       );
     }
-    const attempt = reservedStableSubagentAttempt(
-      options.executionId,
-      options.parentExecutionId,
-    );
+    const attempt: StableSubagentAttempt = {
+      schemaVersion: STABLE_SUBAGENT_STATE_SCHEMA_VERSION,
+      logicalExecutionId: options.executionId,
+      parentExecutionId: options.parentExecutionId,
+      phase: 'reserved',
+    };
     if (candidateInspection.kind === 'absent')
       yield* stableStorageOperation(session, () =>
         writeStableSubagentAttempt(getExecutionStore(executionId), attempt),

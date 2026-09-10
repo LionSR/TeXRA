@@ -521,16 +521,14 @@ export function makeSessions(
   return {
     open: (roots?: WorkspaceRoots) =>
       Effect.map(
-        Effect.suspend(() =>
-          openSessionEffect({
-            roots: roots ?? runtime.roots,
-            transcriptMode: {
-              kind: 'ephemeral',
-              reason: 'npm package consumer',
-            },
-            interactions: HEADLESS_HOST,
-          }),
-        ),
+        openSessionEffect({
+          roots: roots ?? runtime.roots,
+          transcriptMode: {
+            kind: 'ephemeral',
+            reason: 'npm package consumer',
+          },
+          interactions: HEADLESS_HOST,
+        }),
         sessionOf,
       ),
     close: (roots?: WorkspaceRoots, signal?: AbortSignal) =>

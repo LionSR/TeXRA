@@ -1261,7 +1261,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
   it('B10: background (workflow) and input-token compaction (tool-use) are mutually exclusive', async () => {
     // Background eligibility is workflow-only (isBackgroundModeEligible ===
-    // isWorkflowMode), while input-token compaction (shouldCompactByInputTokens)
+    // isWorkflowMode), while input-token compaction (maybeCompactByInputTokens)
     // fires only in tool-use mode. So a TOOL-USE handler with both toggles on
     // does NOT use background: it takes the non-background path and compaction
     // composes there exactly as in the chaining suite. This documents that

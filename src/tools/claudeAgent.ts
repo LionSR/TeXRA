@@ -49,7 +49,6 @@ import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
   MESSAGE_TYPES,
-  ToolError,
 } from '@shared/schemas';
 import type {
   ClaudeAgentEffort,

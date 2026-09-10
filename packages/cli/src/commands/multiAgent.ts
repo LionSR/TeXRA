@@ -248,7 +248,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
             name: plan.preset.name,
             source: plan.preset.source,
           },
-          rootAgent: plan.rootAgent?.name,
+          rootAgent: rootAgent.name,
           result: execution.result,
         };
         emitCliResult(runContext, {

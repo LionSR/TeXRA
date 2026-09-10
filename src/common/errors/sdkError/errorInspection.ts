@@ -23,14 +23,14 @@ export function errorBodyCandidates(
  *  loosely-typed provider JSON. */
 export function pickStringField(v: unknown, key: string): string | undefined {
   if (!isObject(v)) return undefined;
-  const value = (v as Record<string, unknown>)[key];
+  const value = v[key];
   return isNonEmptyString(value) ? value : undefined;
 }
 
 /** Pick a finite-number field off an error-body object. See {@link pickStringField}. */
 export function pickNumberField(v: unknown, key: string): number | undefined {
   if (!isObject(v)) return undefined;
-  const value = (v as Record<string, unknown>)[key];
+  const value = v[key];
   return typeof value === 'number' && Number.isFinite(value)
     ? value
     : undefined;

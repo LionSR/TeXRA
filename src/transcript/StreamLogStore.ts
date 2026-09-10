@@ -39,7 +39,22 @@ interface StreamState {
   runOwner?: StreamRunOwnership;
 }
 
-/** Every entry is derived with the same projection used by the live recorder. */
+/** Apply one event with the same projection used by the live recorder. */
+function applyEvent(
+  log: StreamLog,
+  fold: ReturnType<typeof createTranscriptFold>,
+  event: SessionEvent,
+): void {
+  if (event.type === 'transcript.entry') log.record(event.entry);
+  else if (event.type === 'status') fold.status(event.phase);
+  else if (isTranscriptEvent(event))
+    fold.record(event, {
+      at: event.at,
+      id: JSON.stringify([event.aggregateId, event.seq]),
+      debug: event.transcriptDebug ?? false,
+    });
+}
+
 function foldEntries(events: readonly SessionEvent[]): StreamState | undefined {
   if (events.length === 0 || events.at(-1)?.type === 'stream.removed') return;
   if (events[0]?.type !== 'run.start' || events[0].seq !== 1) {
@@ -47,17 +62,7 @@ function foldEntries(events: readonly SessionEvent[]): StreamState | undefined {
   }
   const entries = new StreamLog();
   const fold = createTranscriptFold(entries);
-  for (const event of events) {
-    if (event.type === 'transcript.entry') entries.record(event.entry);
-    else if (event.type === 'status') fold.status(event.phase);
-    else if (isTranscriptEvent(event)) {
-      fold.record(event, {
-        at: event.at,
-        id: JSON.stringify([event.aggregateId, event.seq]),
-        debug: event.transcriptDebug ?? false,
-      });
-    }
-  }
+  for (const event of events) applyEvent(entries, fold, event);
   entries.drainEmission();
   return { log: entries, fold, seq: events.at(-1)!.seq };
 }
@@ -239,14 +244,7 @@ export class StreamLogStore {
         if (event.seq <= (state.seq ?? 0)) return;
         state.log ??= new StreamLog();
         state.fold ??= createTranscriptFold(state.log);
-        if (event.type === 'transcript.entry') state.log.record(event.entry);
-        else if (event.type === 'status') state.fold.status(event.phase);
-        else if (isTranscriptEvent(event))
-          state.fold.record(event, {
-            at: event.at,
-            id: JSON.stringify([event.aggregateId, event.seq]),
-            debug: event.transcriptDebug ?? false,
-          });
+        applyEvent(state.log, state.fold, event);
         state.seq = event.seq;
         this.notify(streamId);
       }),
@@ -314,14 +312,6 @@ export class StreamLogStore {
     };
   }
 
-  private ensureStreamState(streamId: StreamTabId): StreamState {
-    let state = this.streams.get(streamId);
-    if (!state) {
-      state = {};
-      this.streams.set(streamId, state);
-    }
-    return state;
-  }
   private pruneStreamState(streamId: StreamTabId): void {
     const state = this.streams.get(streamId);
     if (
@@ -372,6 +362,15 @@ export class StreamLogStore {
     state.seq = undefined;
     this.pruneStreamState(streamId);
   }
+  private ensureStreamState(streamId: StreamTabId): StreamState {
+    let state = this.streams.get(streamId);
+    if (!state) {
+      state = {};
+      this.streams.set(streamId, state);
+    }
+    return state;
+  }
+
   private notify(streamId: StreamTabId, reset = false): void {
     const log = this.get(streamId);
     if (log === undefined) return;
