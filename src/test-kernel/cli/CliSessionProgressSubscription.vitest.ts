@@ -473,6 +473,9 @@ describe('attachCliSessionProgressProjection', () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
     publishTestRunStart(session, childRunId, { parent: runId });
+    // The projection attaches at the current ordinal: settle the seeded
+    // existence facts first so only what the test publishes is projected.
+    await session.settlePublications();
     const { writeRecord, publish, detach } = projectionOver(session);
     try {
       for (const [, projection] of cases) {
@@ -496,31 +499,28 @@ describe('attachCliSessionProgressProjection', () => {
   it('projects updateActiveSubagents rows byte-for-byte onto the frozen public shape', async () => {
     // One row per identity kind; `toEqual` (not objectContaining) pins the
     // exact pre-consolidation wire shape: `kind` discriminant, `toolName`
-    // encoding, `childStreamId` only on subagent rows, and NO `identity`.
+    // encoding, `childStreamId` only on subagent rows, and NO `identity`. The
+    // one run id projects onto both `executionId` and `childStreamId`.
     const items: ActiveChildInfo[] = [
       {
-        runId: 'a101' as RunId,
         childRunId: 'run:native' as RunId,
         agentName: 'review',
         identity: { kind: 'agent', agent: 'review' },
         status: RUN_PHASE.RUNNING,
       },
       {
-        runId: 'a102' as RunId,
         childRunId: 'run:tool' as RunId,
         agentName: 'polish',
         identity: { kind: 'agent', agent: 'polish', tool: 'delegate' },
         status: RUN_PHASE.RUNNING,
       },
       {
-        runId: 'a103' as RunId,
         childRunId: 'run:workflow' as RunId,
         agentName: 'plan',
         identity: { kind: 'multiAgentWorkflow', workflowName: 'delegate' },
         status: RUN_PHASE.RUNNING,
       },
       {
-        runId: 'a104' as RunId,
         childRunId: 'run:process' as RunId,
         agentName: 'bash',
         identity: { kind: 'process', tool: 'bash' },
@@ -530,6 +530,9 @@ describe('attachCliSessionProgressProjection', () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
     publishTestRunStart(session, childRunId, { parent: runId });
+    // The projection attaches at the current ordinal: settle the seeded
+    // existence facts first so only what the test publishes is projected.
+    await session.settlePublications();
     const { writeRecord, emitRoster, detach } = projectionOver(session);
     try {
       emitRoster(runId, items);
@@ -541,14 +544,14 @@ describe('attachCliSessionProgressProjection', () => {
         children: [
           {
             kind: 'subagent',
-            executionId: 'a101',
+            executionId: 'run:native',
             agentName: 'review',
             status: RUN_PHASE.RUNNING,
             childStreamId: 'run:native',
           },
           {
             kind: 'subagent',
-            executionId: 'a102',
+            executionId: 'run:tool',
             agentName: 'polish',
             status: RUN_PHASE.RUNNING,
             toolName: 'delegate',
@@ -556,7 +559,7 @@ describe('attachCliSessionProgressProjection', () => {
           },
           {
             kind: 'subagent',
-            executionId: 'a103',
+            executionId: 'run:workflow',
             agentName: 'plan',
             status: RUN_PHASE.RUNNING,
             toolName: 'delegate_multi_agents',
@@ -564,7 +567,7 @@ describe('attachCliSessionProgressProjection', () => {
           },
           {
             kind: 'process',
-            executionId: 'a104',
+            executionId: 'run:process',
             agentName: 'bash',
             status: RUN_PHASE.RUNNING,
             toolName: 'bash',
@@ -581,6 +584,9 @@ describe('attachCliSessionProgressProjection', () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
     publishTestRunStart(session, childRunId, { parent: runId });
+    // The projection attaches at the current ordinal: settle the seeded
+    // existence facts first so only what the test publishes is projected.
+    await session.settlePublications();
     const { writeRecord, publish, detach } = projectionOver(session);
     await publish(
       draft({
@@ -590,8 +596,8 @@ describe('attachCliSessionProgressProjection', () => {
       }),
     );
     expect(writeRecord).toHaveBeenCalledWith(
-      progressRecord('updateRunDescription', {
-        runId,
+      progressRecord('updateStreamDescription', {
+        streamId: runId,
         description: 'Proofread the introduction',
       }),
     );
@@ -616,6 +622,9 @@ describe('attachCliSessionProgressProjection', () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
     publishTestRunStart(session, childRunId, { parent: runId });
+    // The projection attaches at the current ordinal: settle the seeded
+    // existence facts first so only what the test publishes is projected.
+    await session.settlePublications();
     const { writeRecord, publish, detach } = projectionOver(session);
     try {
       await publish(statusDraft(resumingStatusPayload));

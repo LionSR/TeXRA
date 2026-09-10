@@ -13,9 +13,7 @@ import { Effect } from 'effect';
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
 
-import {
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
@@ -195,7 +193,7 @@ const injectContinuation = Effect.fn('injectContinuation')(function* (
   const parentRunId = manifest.parentRunId;
   const stillOpen = yield* records.listThreadsByStatus({
     status: 'open',
-    scope: 'stream',
+    scope: 'run',
     runId: parentRunId,
   });
   const text = buildContinuationText({

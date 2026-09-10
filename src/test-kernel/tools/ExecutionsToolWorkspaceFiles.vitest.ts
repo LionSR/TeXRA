@@ -247,7 +247,7 @@ describe('ExecutionsTool', () => {
       );
 
       expect(parentWaitResult.output).toContain(
-        'Result: delivered automatically to this parent stream as a follow-up message.',
+        'Result: delivered automatically to this parent run as a follow-up message.',
       );
       expect(parentWaitResult.output).toContain(
         `/executions/${childRunId}/report`,
@@ -322,7 +322,7 @@ describe('ExecutionsTool', () => {
     }));
 
   // A completed run has no live handle, so nothing proves the caller is the
-  // parent stream that already received the report as a follow-up. The wait
+  // parent run that already received the report as a follow-up. The wait
   // summary must therefore keep the report inline rather than eliding it.
   it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', () =>
     withTempStorage(async () => {

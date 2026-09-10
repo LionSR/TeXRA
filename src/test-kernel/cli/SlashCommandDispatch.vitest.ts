@@ -115,7 +115,7 @@ function seedChildRoster(
   ensureRun(parentRunId);
   const parent = seeded.get(parentRunId);
   for (const row of rows) {
-    ensureRun(row.childRunId as RunId, {
+    ensureRun(row.childRunId, {
       parentId: parentRunId,
       ancestors: [
         ...(parent?.ancestors ?? []),
@@ -928,7 +928,6 @@ describe('handleTuiSlashCommand', () => {
     ensureRun(childRunId, { status: RUN_PHASE.RUNNING });
     seedChildRoster(rootRunId, [
       {
-        runId: 'child-exec',
         identity: { kind: 'agent', agent: 'critic' },
         agentName: 'critic',
         status: RUN_PHASE.RUNNING,
@@ -963,7 +962,6 @@ describe('handleTuiSlashCommand', () => {
     ensureRun(runningChildId, { status: RUN_PHASE.RUNNING });
     ensureRun(waitingChildId, { status: RUN_PHASE.WAITING });
     const rosterRow = (childRunId: RunId, index: number, status: RunPhase) => ({
-      runId: `child-exec-${index}`,
       identity: { kind: 'agent' as const, agent: `critic-${index}` },
       agentName: `critic-${index}`,
       status,
@@ -1003,7 +1001,6 @@ describe('handleTuiSlashCommand', () => {
     seedChildRoster(
       rootRunId,
       childRunIds.map((childRunId, index) => ({
-        runId: `child-exec-${index}`,
         identity: { kind: 'agent' as const, agent: `critic-${index}` },
         agentName: `critic-${index}`,
         status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
@@ -1030,7 +1027,6 @@ describe('handleTuiSlashCommand', () => {
     seedChildRoster(
       rootRunId,
       [focusedChildId, siblingChildId].map((childRunId, index) => ({
-        runId: `child-exec-${index}`,
         identity: { kind: 'agent' as const, agent: `critic-${index}` },
         agentName: `critic-${index}`,
         status: RUN_PHASE.RUNNING,
@@ -1061,7 +1057,6 @@ describe('handleTuiSlashCommand', () => {
       rootRunId,
       [focusedChildId, runningSiblingId, idleSiblingId].map(
         (childRunId, index) => ({
-          runId: `child-exec-${index}`,
           identity: { kind: 'agent' as const, agent: `critic-${index}` },
           agentName: `critic-${index}`,
           status:
@@ -1096,7 +1091,6 @@ describe('handleTuiSlashCommand', () => {
       ensureRun(runId, { status: RUN_PHASE.RUNNING });
     }
     const rosterRow = (childRunId: RunId, index: number) => ({
-      runId: `nested-exec-${index}`,
       identity: { kind: 'agent' as const, agent: `reviewer-${index}` },
       agentName: `reviewer-${index}`,
       status: RUN_PHASE.RUNNING,

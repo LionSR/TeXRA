@@ -25,7 +25,7 @@ export interface RunPhaseState {
   readonly phase: RunPhase;
   readonly substate?: RunSubstate;
   /**
-   * Epoch ms when the stream entered its current active phase. Held across
+   * Epoch ms when the run entered its current active phase. Held across
    * substate changes, cleared when the phase stops being active, and stamped
    * again on a later WAITING→RUNNING transition. Hosts render
    * elapsed-while-active time from this value. This is not durable run
@@ -37,7 +37,7 @@ export interface RunPhaseState {
 }
 
 /**
- * One entry per stream, in one of its two forms. A hold is not a second
+ * One entry per run, in one of its two forms. A hold is not a second
  * structure overlaying the phase: it is the entry itself, carrying its detail
  * and any phase already known, so every reader sees the same state without
  * merging two collections.
@@ -76,36 +76,36 @@ export class RunStatusMachine {
   constructor(
     private readonly publishStatus: (event: StatusEvent) => void,
     private readonly setUnreadable: (
-      stream: RunId,
+      runId: RunId,
       detail: string | null,
     ) => void,
   ) {}
 
-  get(stream: RunId): RunPhase | undefined {
-    return this.getStreamState(stream)?.phase;
+  get(runId: RunId): RunPhase | undefined {
+    return this.getRunState(runId)?.phase;
   }
 
   /**
-   * This stream's combined phase + substate + run-window start. The entry is
+   * This run's combined phase + substate + run-window start. The entry is
    * written before the matching `status` fact is published, so a consumer
    * reacting to that fact reads the phase the fact announced without mirroring
    * it, and `getAllStreamStates()` stays for the whole-map cases.
    */
-  getStreamState(stream: RunId): RunPhaseState | undefined {
-    return this.runs.get(stream)?.state;
+  getRunState(runId: RunId): RunPhaseState | undefined {
+    return this.runs.get(runId)?.state;
   }
 
-  getSubstate(stream: RunId): RunSubstate | undefined {
-    return this.getStreamState(stream)?.substate;
+  getSubstate(runId: RunId): RunSubstate | undefined {
+    return this.getRunState(runId)?.substate;
   }
 
   transition(
-    stream: RunId,
+    runId: RunId,
     to: RunPhase,
     cause: RunTransitionCause,
     options: RunStatusEmitOptions = {},
   ): boolean {
-    const entry = this.runs.get(stream);
+    const entry = this.runs.get(runId);
     const overwritesHold = entry?.kind === 'hold';
     const previousState = entry?.state;
     const from = previousState?.phase;
@@ -117,7 +117,7 @@ export class RunStatusMachine {
     // writes and publishes from this single status owner. A hold is never
     // such a no-op: even when the phase it retained equals `to`, the entry is
     // still a hold, so it has to convert through the write-and-publish path
-    // below or the stream stays read-only while this reports success.
+    // below or the run stays read-only while this reports success.
     if (
       !overwritesHold &&
       from === to &&
@@ -132,7 +132,7 @@ export class RunStatusMachine {
     const runStartedAt = isActivePhase(to)
       ? (previousState?.runStartedAt ?? Date.now())
       : undefined;
-    this.runs.set(stream, {
+    this.runs.set(runId, {
       kind: 'phase',
       state: {
         phase: to,
@@ -140,7 +140,7 @@ export class RunStatusMachine {
         ...(runStartedAt !== undefined ? { runStartedAt } : {}),
       },
     });
-    this.publishTransition(stream, to, {
+    this.publishTransition(runId, to, {
       ...options,
       cause,
       ...(from ? { previousPhase: from } : {}),
@@ -148,21 +148,21 @@ export class RunStatusMachine {
     });
     // A phase that replaces a hold also drops that hold's detail, and the
     // status fact above carries no detail of its own.
-    if (overwritesHold) this.publishHoldChanged(stream);
+    if (overwritesHold) this.publishHoldChanged(runId);
     return true;
   }
 
   transitionToWaiting(
-    stream: RunId,
+    runId: RunId,
     cause: WaitingTransitionCause,
     options: RunStatusEmitOptions = {},
   ): boolean {
-    if (this.transition(stream, RUN_PHASE.WAITING, cause, options)) {
+    if (this.transition(runId, RUN_PHASE.WAITING, cause, options)) {
       return true;
     }
     if (
       !this.transition(
-        stream,
+        runId,
         RUN_PHASE.RUNNING,
         RUN_TRANSITION_CAUSE.RESUME,
         options,
@@ -170,26 +170,26 @@ export class RunStatusMachine {
     ) {
       return false;
     }
-    return this.transition(stream, RUN_PHASE.WAITING, cause, options);
+    return this.transition(runId, RUN_PHASE.WAITING, cause, options);
   }
 
   /**
-   * Drive a stream to a terminal phase, escalating through the RUNNING
+   * Drive a run to a terminal phase, escalating through the RUNNING
    * choreography the table requires. `cause` is the caller's own reason, so
    * every terminal writer shares this single ladder rather than carrying a
    * copy of it.
    */
   transitionToTerminal(
-    stream: RunId,
+    runId: RunId,
     to: RunPhase,
     cause: TerminalTransitionCause,
     options: RunStatusEmitOptions = {},
   ): boolean {
-    const current = this.get(stream);
+    const current = this.get(runId);
     if (current === to) {
       return true;
     }
-    if (this.transition(stream, to, cause, options)) {
+    if (this.transition(runId, to, cause, options)) {
       return true;
     }
     if (current === undefined || current === RUN_PHASE.WAITING) {
@@ -198,15 +198,15 @@ export class RunStatusMachine {
           ? RUN_TRANSITION_CAUSE.LIFECYCLE
           : RUN_TRANSITION_CAUSE.RESUME;
       return (
-        this.transition(stream, RUN_PHASE.RUNNING, resumeCause, options) &&
-        this.transition(stream, to, cause, options)
+        this.transition(runId, RUN_PHASE.RUNNING, resumeCause, options) &&
+        this.transition(runId, to, cause, options)
       );
     }
     return false;
   }
 
   /**
-   * Record why this stream cannot be settled. A hold already carrying this
+   * Record why this run cannot be settled. A hold already carrying this
    * detail is left as it is, so a repeated report neither rewrites the entry
    * nor republishes the same hold.
    *
@@ -214,16 +214,16 @@ export class RunStatusMachine {
    * user action can produce while hosts are attached, so nothing may wait for
    * an unrelated metadata sync to repaint the tab.
    */
-  markUnavailable(stream: RunId, detail: string): void {
-    const entry = this.runs.get(stream);
+  markUnavailable(runId: RunId, detail: string): void {
+    const entry = this.runs.get(runId);
     if (entry?.kind === 'hold' && entry.detail === detail) return;
     const state = entry?.state;
-    this.runs.set(stream, {
+    this.runs.set(runId, {
       kind: 'hold',
       detail,
       ...(state ? { state } : {}),
     });
-    this.publishHoldChanged(stream);
+    this.publishHoldChanged(runId);
   }
 
   /**
@@ -240,57 +240,57 @@ export class RunStatusMachine {
    * the phase keeps the default.
    */
   clearHold(
-    stream: RunId,
+    runId: RunId,
     options: { discardRetainedPhase?: boolean } = {},
   ): void {
-    const entry = this.runs.get(stream);
+    const entry = this.runs.get(runId);
     if (entry?.kind !== 'hold') return;
     if (entry.state && !options.discardRetainedPhase) {
-      this.runs.set(stream, { kind: 'phase', state: entry.state });
+      this.runs.set(runId, { kind: 'phase', state: entry.state });
     } else {
-      this.runs.delete(stream);
+      this.runs.delete(runId);
     }
-    this.publishHoldChanged(stream);
+    this.publishHoldChanged(runId);
   }
 
-  /** The detail recorded by `markUnavailable`, if the stream has no phase here. */
-  holdState(stream: RunId): string | undefined {
-    const entry = this.runs.get(stream);
+  /** The detail recorded by `markUnavailable`, if the run has no phase here. */
+  holdState(runId: RunId): string | undefined {
+    const entry = this.runs.get(runId);
     return entry?.kind === 'hold' ? entry.detail : undefined;
   }
 
-  clearRun(stream: RunId): void {
-    this.runs.delete(stream);
+  clearRun(runId: RunId): void {
+    this.runs.delete(runId);
   }
 
   clearAll(): void {
     this.runs.clear();
   }
 
-  /** Combined per-stream phase + substate for every known stream. */
+  /** Combined per-run phase + substate for every known run. */
   getAllStreamStates(): Map<RunId, RunPhaseState> {
     const values = new Map<RunId, RunPhaseState>();
-    for (const [stream, entry] of this.runs) {
-      if (entry.state) values.set(stream, entry.state);
+    for (const [runId, entry] of this.runs) {
+      if (entry.state) values.set(runId, entry.state);
     }
     return values;
   }
 
-  isInFlight(stream: RunId): boolean {
-    return isInFlightPhase(this.get(stream));
+  isInFlight(runId: RunId): boolean {
+    return isInFlightPhase(this.get(runId));
   }
 
   /**
-   * Write this stream's hold, or its release, to the session's local runtime
+   * Write this run's hold, or its release, to the session's local runtime
    * snapshot. A hold has no phase, so it cannot ride the `status` fact; the
    * fold reads it as `readOnly` with the detail as `statusDetail` (PRD 5.1).
    */
-  private publishHoldChanged(stream: RunId): void {
-    this.setUnreadable(stream, this.holdState(stream) ?? null);
+  private publishHoldChanged(runId: RunId): void {
+    this.setUnreadable(runId, this.holdState(runId) ?? null);
   }
 
   private publishTransition(
-    stream: RunId,
+    runId: RunId,
     phase: RunPhase,
     options: RunStatusEmitOptions & {
       cause: RunTransitionCause;
@@ -300,7 +300,7 @@ export class RunStatusMachine {
   ): void {
     this.publishStatus({
       type: 'status',
-      runId: stream,
+      runId,
       phase,
       cause: options.cause,
       ...(options.previousPhase

@@ -1,7 +1,7 @@
 /**
- * Handle-based execution registry.
+ * Handle-based run registry.
  *
- * Manages agent execution handles and provides registration, lookup, change
+ * Manages agent run handles and provides registration, lookup, change
  * notification, and subagent lineage tracking in a single module.
  */
 
@@ -9,50 +9,50 @@ import { Effect } from 'effect';
 
 import type { ResultEvent } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
+import type { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import {
   aggregateId as qualifyAggregateId,
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
+  RUN_PHASE,
+  RUN_SUBSTATE,
   type ActiveChildInfo,
   type RunId,
   type SessionEventDraft,
-  type StreamPhase,
+  type RunPhase,
 } from '@shared/schemas';
 import {
   isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
-} from '@shared/streams/streamStatus';
+} from '@shared/runs/runStatus';
 import { formatDuration } from '@utils/core';
 import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import {
-  type AgentExecutionHandle,
-  type ExecutionStatusInfo,
+  type RunHandle,
+  type RunStatusInfo,
   type LiveToolUseFlowContext,
-} from './ExecutionHandle';
-import { ExecutionInteractionOwnership } from './executionInteractionOwnership';
-import { ExecutionLanes } from './executionLanes';
+} from './RunHandle';
+import { RunInteractionOwnership } from './runInteractionOwnership';
+import { RunLanes } from './runLanes';
 import {
   WaitingTermination,
   type WaitingTerminationContext,
 } from './waitingTermination';
 
 /**
- * Child policy shared by `kill()` and `stopAgentStream()`. The caller owns the
+ * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
  * decision because only it knows which gesture it is serving: the configured
  * stop surfaces resolve it through `detachSubagentsOnStop()`, the CLI's
  * focus-scoped bare-Escape stop always detaches, and process shutdown always
  * cascades. Omitting the field means cascade — the conservative reading, since
  * a child left running has no owner to report to.
  */
-export interface ExecutionStop {
+export interface RunStop {
   readonly accepted: boolean;
   readonly settlement: Effect.Effect<void>;
 }
 
-interface ExecutionStopOptions {
+interface RunStopOptions {
   readonly detachActiveChildren?: boolean;
 }
 
@@ -62,11 +62,11 @@ interface ExecutionStopOptions {
  * untracks, until its final result has been delivered to the parent. The
  * parent counts it as an active child throughout, so the parent's continuation
  * stays recoverable until the last delivery has landed. Child-stream loops use
- * their persistent execution handle for lineage instead.
+ * their persistent run handle for lineage instead.
  */
-export interface ChildExecutionActivation {
+export interface ChildRunActivation {
   readonly runId: RunId;
-  readonly parentStreamId: RunId;
+  readonly parentRunId: RunId;
   readonly interrupt: () => void;
   readonly detach: () => void;
   readonly isDetached: () => boolean;
@@ -85,22 +85,22 @@ export type ToolUseFollowUpTarget =
   | { readonly kind: 'queue' }
   | {
       readonly kind: 'no_session';
-      readonly streamStatus: StreamPhase | undefined;
+      readonly runStatus: RunPhase | undefined;
     };
 
 type ManualCompactionRequestResult =
   | {
       readonly kind: 'requested';
-      readonly streamId: RunId;
+      readonly runId: RunId;
       readonly session: SessionHandle;
     }
   | {
       readonly kind: 'unsupported';
-      readonly streamId: RunId;
+      readonly runId: RunId;
     }
   | {
       readonly kind: 'no_active_tool_use';
-      readonly streamId?: RunId;
+      readonly runId?: RunId;
     };
 
 /**
@@ -109,20 +109,20 @@ type ManualCompactionRequestResult =
  * canonical status rail, and a machine publishing elsewhere would leave them
  * listening where nothing is ever published.
  */
-interface ExecutionRegistryInit {
-  readonly streamStatus: StreamStatusMachine;
+interface RunRegistryInit {
+  readonly runStatus: RunStatusMachine;
   /** The session's publisher (`SessionHandle.publish`) for the registry's
    *  own durable fact, a severed parent edge (`run.detach`). */
   readonly publish: (events: readonly SessionEventDraft[]) => void;
   readonly approvals: SessionApprovals;
-  readonly publishResult: (event: ResultEvent, streamId: RunId) => void;
+  readonly publishResult: (event: ResultEvent, runId: RunId) => void;
   /**
-   * The session's one exit choreography (`SessionHandle.releaseExecutionLease`),
+   * The session's one exit choreography (`SessionHandle.releaseRunLease`),
    * required so no construction path can silently release a lease without
    * settling the session's queued publications first.
    */
-  readonly releaseRootExecutionLease: WaitingTerminationContext['releaseRootExecutionLease'];
-  readonly finalizeExecution: WaitingTerminationContext['finalizeExecution'];
+  readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
+  readonly finalizeRun: WaitingTerminationContext['finalizeRun'];
 }
 
 /**
@@ -131,21 +131,21 @@ interface ExecutionRegistryInit {
  * One instance belongs to each {@link SessionHandle}, which binds it to that
  * session's event hub, approvals, and lease-release boundary.
  */
-export class ExecutionRegistry {
+export class RunRegistry {
   /**
-   * Which host-interaction generation owns each live execution. Session-wide so
+   * Which host-interaction generation owns each live run. Session-wide so
    * generations of one host hand ownership over without inheriting each
    * other's runs; the CLI chat controller is its only writer.
    */
-  readonly interactionOwnership = new ExecutionInteractionOwnership(this);
-  private readonly handles = new Map<RunId, AgentExecutionHandle>();
+  readonly interactionOwnership = new RunInteractionOwnership(this);
+  private readonly handles = new Map<RunId, RunHandle>();
   private disposed = false;
   /** Set by {@link closeAdmissions}: the session is closing. */
   private closing = false;
-  private readonly streamStatus: StreamStatusMachine;
+  private readonly runStatus: RunStatusMachine;
   private readonly publish: (events: readonly SessionEventDraft[]) => void;
   private readonly childActivityListeners = new Set<
-    (parentStreamId: RunId, items: readonly ActiveChildInfo[]) => void
+    (parentRunId: RunId, items: readonly ActiveChildInfo[]) => void
   >();
   private readonly approvals: SessionApprovals;
   /**
@@ -155,39 +155,34 @@ export class ExecutionRegistry {
    * `terminateWaitingHandle` produces its `result` event *after* the
    * suspended run's own trace has already been disposed (see there).
    */
-  private readonly publishResult: (
-    event: ResultEvent,
-    streamId: RunId,
-  ) => void;
-  private readonly releaseRootExecutionLease: WaitingTerminationContext['releaseRootExecutionLease'];
-  private readonly listeners = new Map<    string,
-    Set<(handle: AgentExecutionHandle | undefined) => void>
+  private readonly publishResult: (event: ResultEvent, runId: RunId) => void;
+  private readonly releaseRootRunLease: WaitingTerminationContext['releaseRootRunLease'];
+  private readonly listeners = new Map<
+    string,
+    Set<(handle: RunHandle | undefined) => void>
   >();
   private readonly registrationListeners: ListenerSet<
-    (runId: RunId, handle: AgentExecutionHandle | undefined) => void
+    (runId: RunId, handle: RunHandle | undefined) => void
   > = createListenerSet();
-  private readonly childActivations = new Map<
-    RunId,
-    ChildExecutionActivation
-  >();
-  private readonly lanes = new ExecutionLanes();
+  private readonly childActivations = new Map<RunId, ChildRunActivation>();
+  private readonly lanes = new RunLanes();
   private readonly waitingTermination: WaitingTermination;
 
-  constructor(options: ExecutionRegistryInit) {
+  constructor(options: RunRegistryInit) {
     this.publish = options.publish;
-    this.streamStatus = options.streamStatus;
+    this.runStatus = options.runStatus;
     this.approvals = options.approvals;
     this.publishResult = options.publishResult;
-    this.releaseRootExecutionLease = options.releaseRootExecutionLease;
+    this.releaseRootRunLease = options.releaseRootRunLease;
     this.waitingTermination = new WaitingTermination({
       publishResult: this.publishResult,
-      releaseRootExecutionLease: this.releaseRootExecutionLease,
-      finalizeExecution: options.finalizeExecution,
+      releaseRootRunLease: this.releaseRootRunLease,
+      finalizeRun: options.finalizeRun,
       lanes: this.lanes,
       getHandle: (runId) => this.handles.get(runId),
       untrackIfCurrent: (handle) => this.untrackIfCurrent(handle),
       untrackHandle: (handle) => this.untrackHandle(handle),
-      cancelStreamStatus: (streamId) => this.cancelStreamStatus(streamId),
+      cancelRunStatus: (runId) => this.cancelRunStatus(runId),
     });
   }
 
@@ -199,10 +194,7 @@ export class ExecutionRegistry {
    * tracked, untracked, detached, or moved by a canonical `status` fact.
    */
   onChildActivity(
-    listener: (
-      parentStreamId: RunId,
-      items: readonly ActiveChildInfo[],
-    ) => void,
+    listener: (parentRunId: RunId, items: readonly ActiveChildInfo[]) => void,
   ): () => void {
     this.childActivityListeners.add(listener);
     return () => {
@@ -228,7 +220,7 @@ export class ExecutionRegistry {
     this.disposed = true;
     this.childActivityListeners.clear();
     const disposal = new Error(
-      'Cannot register execution work after session disposal.',
+      'Cannot register run work after session disposal.',
     );
     this.lanes.disposeAll(disposal);
     const runIds = [...this.handles.keys()];
@@ -247,21 +239,21 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Whether `streamId` is running, resuming, or parked with a live flow in this
+   * Whether `runId` is running, resuming, or parked with a live flow in this
    * process: the states in which a resume must be refused outright rather than
-   * queued on the execution lane, since it would otherwise start a fresh
+   * queued on the run lane, since it would otherwise start a fresh
    * generation of a run that just finished.
    */
-  isActiveOrResuming(streamId: RunId): boolean {
+  isActiveOrResuming(runId: RunId): boolean {
     return (
-      isActivePhase(this.streamStatus.get(streamId)) ||
-      this.streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING ||
-      this.getToolUseFlowContext(streamId) !== undefined
+      isActivePhase(this.runStatus.get(runId)) ||
+      this.runStatus.getSubstate(runId) === RUN_SUBSTATE.RESUMING ||
+      this.getToolUseFlowContext(runId) !== undefined
     );
   }
 
-  /** Reserve an inactive execution for deletion; never wait for a live owner. */
-  withInactiveExecutionStep<A, E, R>(
+  /** Reserve an inactive run for deletion; never wait for a live owner. */
+  withInactiveRunStep<A, E, R>(
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
@@ -269,16 +261,14 @@ export class ExecutionRegistry {
       this.assertActive();
       return this.lanes.withInactiveStep(
         runId,
-        () =>
-          this.handles.has(runId) ||
-          this.childActivations.has(runId),
+        () => this.handles.has(runId) || this.childActivations.has(runId),
         operation,
       );
     });
   }
 
   /** Run a generation after earlier work and retain its lane through cleanup. */
-  launchExecution<A, E, R>(
+  launchRun<A, E, R>(
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
@@ -288,8 +278,8 @@ export class ExecutionRegistry {
     });
   }
 
-  /** Register an execution handle. */
-  track(handle: AgentExecutionHandle): void {
+  /** Register a run handle. */
+  track(handle: RunHandle): void {
     this.assertActive();
     const previous = this.handles.get(handle.runId);
     const activation = this.childActivations.get(handle.runId);
@@ -297,7 +287,7 @@ export class ExecutionRegistry {
     if (previous && previous.suspendedTerminationStarted) {
       // A resumed lifecycle can replace its suspended predecessor while the
       // predecessor's asynchronous teardown is still in progress. The
-      // stop already claimed that execution, so carry it across the ownership
+      // stop already claimed that run, so carry it across the ownership
       // handoff instead of allowing the successor to revive the run.
       handle.interrupt();
     }
@@ -310,26 +300,26 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Register an agent execution and, when requested, publish its initial
+   * Register an agent run and, when requested, publish its initial
    * stream status through the registry-owned status store.
    */
-  trackAgentExecution(
-    handle: AgentExecutionHandle,
-    options: { readonly status: StreamPhase },
+  trackAgentRun(
+    handle: RunHandle,
+    options: { readonly status: RunPhase },
   ): void {
     this.assertActive();
-    const previousStatus = this.streamStatus.get(handle.runId);
+    const previousStatus = this.runStatus.get(handle.runId);
     const cause =
-      options.status === STREAM_PHASE.RUNNING &&
+      options.status === RUN_PHASE.RUNNING &&
       isTerminalOutcomePhase(previousStatus)
         ? 'resume'
         : 'lifecycle';
-    this.streamStatus.transition(handle.runId, options.status, cause);
+    this.runStatus.transition(handle.runId, options.status, cause);
     this.track(handle);
   }
 
   /**
-   * Refuse every execution registered from here on: the session is closing
+   * Refuse every run registered from here on: the session is closing
    * (`Sessions.close`). The executions already tracked keep their handles,
    * waiters, and status until they settle, and a native child loop keeps
    * its activation until its final delivery, which is what the close waits
@@ -341,41 +331,33 @@ export class ExecutionRegistry {
 
   private assertActive(): void {
     if (this.disposed) {
-      throw new Error('Cannot register execution work after session disposal.');
+      throw new Error('Cannot register run work after session disposal.');
     }
     if (this.closing) {
-      throw new Error(
-        'Cannot register execution work while the session is closing.',
-      );
+      throw new Error('Cannot register run work while the session is closing.');
     }
   }
 
   /**
    * Publish an in-flight agent status through the registry-owned status store.
    * Explicit user stops win over loop transitions, and stale handles cannot
-   * revive an execution that has already been untracked.
+   * revive a run that has already been untracked.
    */
-  updateAgentExecutionStatus(
-    handle: AgentExecutionHandle,
-    status: StreamPhase,
-  ): boolean {
+  updateAgentRunStatus(handle: RunHandle, status: RunPhase): boolean {
     if (this.handles.get(handle.runId) !== handle) return false;
-    const previous = this.streamStatus.get(handle.runId);
+    const previous = this.runStatus.get(handle.runId);
     let cause: 'wait' | 'resume' | 'lifecycle';
-    if (status === STREAM_PHASE.WAITING) {
+    if (status === RUN_PHASE.WAITING) {
       cause = 'wait';
-    } else if (
-      status === STREAM_PHASE.RUNNING &&
-      previous === STREAM_PHASE.WAITING
-    ) {
+    } else if (status === RUN_PHASE.RUNNING && previous === RUN_PHASE.WAITING) {
       cause = 'resume';
     } else {
       cause = 'lifecycle';
     }
-    return this.streamStatus.transition(handle.runId, status, cause);
+    return this.runStatus.transition(handle.runId, status, cause);
   }
 
-  /** Remove an execution handle and notify waiters. */
+  /** Remove a run handle and notify waiters. */
   untrack(runId: RunId): void {
     const handle = this.handles.get(runId);
     if (!handle) {
@@ -387,28 +369,26 @@ export class ExecutionRegistry {
   }
 
   /** Remove `handle` only if it is still the current registration. */
-  untrackIfCurrent(handle: AgentExecutionHandle): boolean {
+  untrackIfCurrent(handle: RunHandle): boolean {
     if (this.handles.get(handle.runId) !== handle) return false;
     this.untrackHandle(handle);
     return true;
   }
 
-  private untrackHandle(handle: AgentExecutionHandle): void {
+  private untrackHandle(handle: RunHandle): void {
     this.handles.delete(handle.runId);
     this.notifyRegistrationListeners(handle.runId, undefined);
     this.notifyWaiters(handle.runId);
     if (handle.parent !== null) this.emitChildActivity(handle.parent);
   }
 
-  getHandle(runId: RunId): AgentExecutionHandle | undefined {
+  getHandle(runId: RunId): RunHandle | undefined {
     return this.handles.get(runId);
   }
 
-  getStatus(
-    handle: AgentExecutionHandle,
-  ): ExecutionStatusInfo & { status: StreamPhase } {
-    const phaseState = this.streamStatus.getStreamState(handle.runId);
-    const status = phaseState?.phase ?? STREAM_PHASE.RUNNING;
+  getStatus(handle: RunHandle): RunStatusInfo & { status: RunPhase } {
+    const phaseState = this.runStatus.getRunState(handle.runId);
+    const status = phaseState?.phase ?? RUN_PHASE.RUNNING;
     const runStartedAt = phaseState?.runStartedAt;
 
     if (!isActivePhase(status) || runStartedAt === undefined) {
@@ -421,7 +401,7 @@ export class ExecutionRegistry {
     };
   }
 
-  getAgentHandles(): AgentExecutionHandle[] {
+  getAgentHandles(): RunHandle[] {
     return [...this.handles.values()];
   }
 
@@ -437,20 +417,20 @@ export class ExecutionRegistry {
    * same runtime facts.
    */
   requestManualCompaction(
-    streamId: RunId | undefined,
+    runId: RunId | undefined,
   ): ManualCompactionRequestResult {
-    if (!streamId) return { kind: 'no_active_tool_use' };
-    const context = this.getToolUseFlowContext(streamId);
-    if (!context) return { kind: 'no_active_tool_use', streamId };
+    if (!runId) return { kind: 'no_active_tool_use' };
+    const context = this.getToolUseFlowContext(runId);
+    if (!context) return { kind: 'no_active_tool_use', runId };
 
     if (!context.modelHandler.supportsManualCompaction) {
-      return { kind: 'unsupported', streamId };
+      return { kind: 'unsupported', runId };
     }
 
     context.requestImmediateCompaction();
     return {
       kind: 'requested',
-      streamId,
+      runId,
       session: context.ownerSession,
     };
   }
@@ -459,40 +439,40 @@ export class ExecutionRegistry {
    * Decide how a tool-use follow-up should be admitted from one registry-owned
    * snapshot of stream status, active flow context, and child executions.
    */
-  getToolUseFollowUpTarget(streamId: RunId): ToolUseFollowUpTarget {
-    const status = this.streamStatus.get(streamId);
+  getToolUseFollowUpTarget(runId: RunId): ToolUseFollowUpTarget {
+    const status = this.runStatus.get(runId);
 
     if (status !== undefined && !isInFlightPhase(status)) {
       // Only a native child's explicit delivery reservation can retain a
       // terminal parent's continuation. A child-stream handle is lifecycle
       // ownership, not authority to revive a parent that already finished.
-      for (const activation of this.activeChildActivations(streamId)) {
+      for (const activation of this.activeChildActivations(runId)) {
         return { kind: 'queue' };
       }
-      return { kind: 'no_session', streamStatus: status };
+      return { kind: 'no_session', runStatus: status };
     }
 
-    const hasActiveChildren = this.hasActiveChildren(streamId);
-    const context = this.getToolUseFlowContext(streamId);
+    const hasActiveChildren = this.hasActiveChildren(runId);
+    const context = this.getToolUseFlowContext(runId);
     if (context) return { kind: 'active', context };
 
     if (
-      this.streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING ||
-      status === STREAM_PHASE.WAITING ||
+      this.runStatus.getSubstate(runId) === RUN_SUBSTATE.RESUMING ||
+      status === RUN_PHASE.WAITING ||
       hasActiveChildren
     ) {
       return { kind: 'queue' };
     }
-    return { kind: 'no_session', streamStatus: status };
+    return { kind: 'no_session', runStatus: status };
   }
 
   /**
-   * Terminate an execution via its handle, or, for a native child loop
+   * Terminate a run via its handle, or, for a native child loop
    * between turns (an activation with no turn handle), interrupt the loop
    * itself. Admission is synchronous; the caller executes the returned
    * settlement at its Effect boundary before releasing ownership.
    */
-  kill(runId: RunId, options: ExecutionStopOptions = {}): ExecutionStop {
+  kill(runId: RunId, options: RunStopOptions = {}): RunStop {
     const handle = this.handles.get(runId);
     if (!handle) {
       const activation = this.childActivations.get(runId);
@@ -512,7 +492,7 @@ export class ExecutionRegistry {
       settlements,
     );
     // Always notify waiters — even if terminate() returned false (e.g. PID not
-    // yet assigned), callers blocking on this execution should be unblocked.
+    // yet assigned), callers blocking on this run should be unblocked.
     this.notifyWaiters(runId);
     return {
       accepted: result,
@@ -524,7 +504,7 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Every execution live in this session: the tracked handles and the
+   * Every run live in this session: the tracked handles and the
    * native child loops retained between turns, whose activation is the
    * only record of them. This is what a close stops and waits on, so a
    * child with final delivery still to do is never left running under a
@@ -545,7 +525,7 @@ export class ExecutionRegistry {
    * Killing a background run's underlying OS process requires
    * `interruptBackgroundProcess()`, which only fires for a handle whose
    * attached interrupt handler declares itself as owning a live background
-   * process, leaving every other `AgentExecutionHandle` (root/native-subagent
+   * process, leaving every other `RunHandle` (root/native-subagent
    * runs, loop-level interrupts) untouched (#8155).
    */
   killBackgroundProcesses(): void {
@@ -556,14 +536,14 @@ export class ExecutionRegistry {
 
   /**
    * Wait for any of the given executions to change — see {@link addListener}
-   * for the full wake set — and succeed with the execution id that changed
+   * for the full wake set — and succeed with the run id that changed
    * first.
    *
    * A caller that wants a bounded wait races or times out this effect instead
    * of passing a deadline in: interrupting the waiting fiber is what detaches
    * the listeners, so an abandoned wait leaves nothing registered and no
    * caller has to read a sentinel to learn that its deadline, rather than an
-   * execution, ended the wait.
+   * run, ended the wait.
    */
   waitForAnyChange(runIds: readonly RunId[]): Effect.Effect<RunId> {
     return Effect.callback<RunId>((resume) => {
@@ -589,13 +569,10 @@ export class ExecutionRegistry {
   }
 
   private *activeChildActivations(
-    parentStreamId: RunId,
-  ): Generator<ChildExecutionActivation> {
+    parentRunId: RunId,
+  ): Generator<ChildRunActivation> {
     for (const activation of this.childActivations.values()) {
-      if (
-        activation.parentStreamId === parentStreamId &&
-        !activation.isDetached()
-      ) {
+      if (activation.parentRunId === parentRunId && !activation.isDetached()) {
         yield activation;
       }
     }
@@ -603,7 +580,7 @@ export class ExecutionRegistry {
 
   /** Interrupt all active subagents of a parent stream, including descendants. */
   private interruptActiveChildren(
-    parentStreamId: RunId,
+    parentRunId: RunId,
     visited: Set<string>,
     cascadeChildren: boolean,
     settlements: Effect.Effect<void>[],
@@ -611,14 +588,14 @@ export class ExecutionRegistry {
     // A loop between turns has no handle to interrupt; a loop inside a turn
     // also gets its turn handle terminated below. The activation is keyed
     // apart from the handle so each is interrupted once per stop.
-    for (const activation of this.activeChildActivations(parentStreamId)) {
+    for (const activation of this.activeChildActivations(parentRunId)) {
       const key = `activation:${activation.runId}`;
       if (visited.has(key)) continue;
       visited.add(key);
       activation.interrupt();
     }
     for (const handle of this.handles.values()) {
-      if (handle.isOwnedBy(parentStreamId)) {
+      if (handle.isOwnedBy(parentRunId)) {
         this.terminate(handle, visited, cascadeChildren, settlements);
       }
     }
@@ -636,37 +613,37 @@ export class ExecutionRegistry {
    * `run.detach` for the difference: a native child between turns would be
    * published twice.
    */
-  detachActiveChildren(parentStreamId: RunId): readonly RunId[] {
-    const detachedChildStreamIds = this.detachChildren(parentStreamId);
+  detachActiveChildren(parentRunId: RunId): readonly RunId[] {
+    const detachedChildRunIds = this.detachChildren(parentRunId);
     this.publish(
-      detachedChildStreamIds.map((childStreamId) => ({
+      detachedChildRunIds.map((childRunId) => ({
         type: 'run.detach',
-        aggregateId: qualifyAggregateId('run', childStreamId),
+        aggregateId: qualifyAggregateId('run', childRunId),
       })),
     );
-    return detachedChildStreamIds;
+    return detachedChildRunIds;
   }
 
   /** Apply parent removal to local handles and approval ancestry without publishing. */
-  detachChildren(parentStreamId: RunId): readonly RunId[] {
+  detachChildren(parentRunId: RunId): readonly RunId[] {
     // A Set, not an array: a child detached mid-turn has both a per-turn
-    // handle and a ChildExecutionActivation under one runId, so both
+    // handle and a ChildRunActivation under one runId, so both
     // loops below reach the same child and it must still be published (and
     // reported) exactly once.
-    const detachedChildStreamIds = new Set<RunId>();
-    for (const activation of this.activeChildActivations(parentStreamId)) {
+    const detachedChildRunIds = new Set<RunId>();
+    for (const activation of this.activeChildActivations(parentRunId)) {
       activation.detach();
-      this.approvals.detachStreamFromParent(activation.runId);
-      detachedChildStreamIds.add(activation.runId);
+      this.approvals.detachRunFromParent(activation.runId);
+      detachedChildRunIds.add(activation.runId);
     }
     for (const handle of this.handles.values()) {
-      if (!handle.isOwnedBy(parentStreamId)) continue;
-      this.approvals.detachStreamFromParent(handle.runId);
+      if (!handle.isOwnedBy(parentRunId)) continue;
+      this.approvals.detachRunFromParent(handle.runId);
       handle.detach();
-      detachedChildStreamIds.add(handle.runId);
+      detachedChildRunIds.add(handle.runId);
     }
-    this.emitChildActivity(parentStreamId);
-    return [...detachedChildStreamIds];
+    this.emitChildActivity(parentRunId);
+    return [...detachedChildRunIds];
   }
 
   /**
@@ -675,20 +652,20 @@ export class ExecutionRegistry {
    * Hosts should call this instead of reconstructing stop behavior from
    * child-interrupts, root interrupts, and stream-status writes.
    */
-  stopAgentStream(
-    streamId: RunId,
-    options: ExecutionStopOptions = {},
+  stopAgentRun(
+    runId: RunId,
+    options: RunStopOptions = {},
   ): Effect.Effect<void> {
-    const rootHandle = this.handles.get(streamId);
-    // Shared across the child sweep and the root cascade so each execution in
+    const rootHandle = this.handles.get(runId);
+    // Shared across the child sweep and the root cascade so each run in
     // the chain is interrupted exactly once.
     const visited = new Set<string>();
     const settlements: Effect.Effect<void>[] = [];
 
     if (options.detachActiveChildren === true) {
-      this.detachActiveChildren(streamId);
+      this.detachActiveChildren(runId);
     } else {
-      this.interruptActiveChildren(streamId, visited, true, settlements);
+      this.interruptActiveChildren(runId, visited, true, settlements);
     }
 
     const stopped = rootHandle
@@ -703,7 +680,7 @@ export class ExecutionRegistry {
     // ownerless (or already-untracked) stream still needs the write. The
     // stream-status machine rejects the transition out of a terminal phase,
     // so a finished stream keeps its outcome.
-    if (!stopped) this.cancelStreamStatus(streamId);
+    if (!stopped) this.cancelRunStatus(runId);
     return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
   }
 
@@ -712,25 +689,25 @@ export class ExecutionRegistry {
    *
    * The full wake set, which is what an `executions wait` observes:
    *
-   * - a status transition on this execution's child stream;
+   * - a status transition on this run's child stream;
    * - {@link track}, including a *replacement* handle for the same id (a
    *   resumed generation taking over from its predecessor) — a `track` that
    *   skipped this would strand a waiter across a resume;
    * - {@link untrack}, including for an id that holds no handle;
    * - {@link kill}, unconditionally, even when no live interrupt target was
    *   reached;
-   * - {@link dispose}, for every execution still tracked at session teardown.
+   * - {@link dispose}, for every run still tracked at session teardown.
    *
    * Private: the only caller is {@link waitForAnyChange}, which detaches
    * inside the callback, so nothing observes a second wake through the same
    * callback.
    *
    * The callback receives the current handle, or `undefined` once the
-   * execution has been untracked (terminal event) or the session disposed.
+   * run has been untracked (terminal event) or the session disposed.
    */
   private addListener(
     runId: RunId,
-    cb: (handle: AgentExecutionHandle | undefined) => void,
+    cb: (handle: RunHandle | undefined) => void,
   ): () => void {
     let set = this.listeners.get(runId);
     if (!set) {
@@ -748,7 +725,7 @@ export class ExecutionRegistry {
 
   /** Observe handle registrations, replacements, and removals across all ids. */
   addRegistrationListener(
-    cb: (runId: RunId, handle: AgentExecutionHandle | undefined) => void,
+    cb: (runId: RunId, handle: RunHandle | undefined) => void,
   ): () => void {
     return this.registrationListeners.add(cb);
   }
@@ -757,37 +734,35 @@ export class ExecutionRegistry {
    * Retain a native child loop's lineage until the returned disposer runs,
    * which the loop does only after its final delivery to the parent.
    */
-  reserveChildActivation(activation: ChildExecutionActivation): () => void {
+  reserveChildActivation(activation: ChildRunActivation): () => void {
     this.assertActive();
     if (this.childActivations.has(activation.runId)) {
       return () => {};
     }
     this.childActivations.set(activation.runId, activation);
     this.interactionOwnership.observeChildActivation(activation, true);
-    return () =>
-      this.releaseChildActivation(activation.runId, activation);
+    return () => this.releaseChildActivation(activation.runId, activation);
   }
 
-  private emitChildActivity(parentStreamId: RunId): void {
-    const items = this.getActiveChildren(parentStreamId);
+  private emitChildActivity(parentRunId: RunId): void {
+    const items = this.getActiveChildren(parentRunId);
     for (const listener of [...this.childActivityListeners]) {
-      listener(parentStreamId, items);
+      listener(parentRunId, items);
     }
   }
 
   /** Get active subagent children for a parent run. */
-  getActiveChildren(parentStreamId: RunId): ActiveChildInfo[] {
+  getActiveChildren(parentRunId: RunId): ActiveChildInfo[] {
     const result: ActiveChildInfo[] = [];
     for (const handle of this.handles.values()) {
-      if (!handle.isOwnedBy(parentStreamId)) continue;
+      if (!handle.isOwnedBy(parentRunId)) continue;
       const { status } = this.getStatus(handle);
       result.push({
-        runId: handle.runId,
         identity: handle.identity,
         agentName: handle.agentName,
         status,
         startedAt: handle.startedAt,
-        childStreamId: handle.runId,
+        childRunId: handle.runId,
         ...(handle.workflowPhase
           ? { workflowPhase: handle.workflowPhase }
           : {}),
@@ -796,18 +771,18 @@ export class ExecutionRegistry {
     return result;
   }
 
-  hasActiveChildren(parentStreamId: RunId): boolean {
-    for (const activation of this.activeChildActivations(parentStreamId)) {
+  hasActiveChildren(parentRunId: RunId): boolean {
+    for (const activation of this.activeChildActivations(parentRunId)) {
       return true;
     }
     for (const handle of this.handles.values()) {
-      if (handle.isOwnedBy(parentStreamId)) return true;
+      if (handle.isOwnedBy(parentRunId)) return true;
     }
     return false;
   }
 
   private terminate(
-    handle: AgentExecutionHandle,
+    handle: RunHandle,
     visited: Set<string>,
     cascadeChildren: boolean,
     settlements: Effect.Effect<void>[],
@@ -815,14 +790,9 @@ export class ExecutionRegistry {
     if (visited.has(handle.runId)) return false;
     visited.add(handle.runId);
     if (cascadeChildren) {
-      this.interruptActiveChildren(
-        handle.runId,
-        visited,
-        true,
-        settlements,
-      );
+      this.interruptActiveChildren(handle.runId, visited, true, settlements);
     }
-    // A child execution is its loop, not only the turn this handle runs:
+    // A child run is its loop, not only the turn this handle runs:
     // stopping it ends the loop too, so the interrupted turn is not delivered
     // to the parent as a completed one.
     const activation = this.childActivations.get(handle.runId);
@@ -834,7 +804,7 @@ export class ExecutionRegistry {
       }
     }
     if (handle.interrupt()) {
-      this.cancelStreamStatus(handle.runId);
+      this.cancelRunStatus(handle.runId);
       return true;
     }
     // No live interrupt context: a native subagent suspended at WAITING has
@@ -853,8 +823,8 @@ export class ExecutionRegistry {
    * canonical session fact itself — the single status rail every consumer,
    * including the transcript recorder, subscribes to — so no caller routes it.
    */
-  private cancelStreamStatus(streamId: RunId): void {
-    this.streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
+  private cancelRunStatus(runId: RunId): void {
+    this.runStatus.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
   }
 
   private notifyWaiters(runId: RunId): void {
@@ -868,7 +838,7 @@ export class ExecutionRegistry {
 
   private notifyRegistrationListeners(
     runId: RunId,
-    handle: AgentExecutionHandle | undefined,
+    handle: RunHandle | undefined,
   ): void {
     for (const listener of [...this.registrationListeners]) {
       listener(runId, handle);
@@ -877,7 +847,7 @@ export class ExecutionRegistry {
 
   private releaseChildActivation(
     runId: RunId,
-    expected: ChildExecutionActivation,
+    expected: ChildRunActivation,
   ): void {
     if (this.childActivations.get(runId) !== expected) return;
     this.childActivations.delete(runId);

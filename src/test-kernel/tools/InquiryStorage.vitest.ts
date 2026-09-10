@@ -184,12 +184,12 @@ describe('InquiryStorage', () => {
 
       const openOnA = yield* records.listThreadsByStatus({
         status: 'open',
-        scope: 'stream',
+        scope: 'run',
         runId: RUN_A,
       });
       const openOnB = yield* records.listThreadsByStatus({
         status: 'open',
-        scope: 'stream',
+        scope: 'run',
         runId: RUN_B,
       });
       expect(openOnA).toHaveLength(0);
@@ -223,7 +223,7 @@ describe('InquiryStorage', () => {
 
       const openOnA = yield* records.listThreadsByStatus({
         status: 'open',
-        scope: 'stream',
+        scope: 'run',
         runId: RUN_A,
       });
       expect(openOnA.map((t) => t.threadId)).toEqual([t2.threadId]);

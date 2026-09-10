@@ -79,7 +79,7 @@ describe('committed run removal', () => {
           yield* Effect.promise(() => session.settlePublications());
           expect(yield* Effect.promise(() => question)).toEqual({
             action: 'reject',
-            cause: 'Stream removed.',
+            cause: 'Run removed.',
           });
           expect(handle.isOwnedBy(parent)).toBe(false);
           expect(session.now()).toBe(before + 1);

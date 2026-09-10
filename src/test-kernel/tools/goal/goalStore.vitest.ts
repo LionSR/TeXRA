@@ -216,7 +216,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     const state = workspaceRoots().workspaceState;
     await state.update(`goals:byRun:${RUN_A}`, { goalId: 'not-valid' });
     expect(() => GoalStore.getForRun(RUN_A)).toThrow(
-      `Failed to parse persisted goal for stream "${RUN_A}"`,
+      `Failed to parse persisted goal for run "${RUN_A}"`,
     );
 
     await GoalStore.forget(RUN_A);
@@ -241,7 +241,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     await state.update(`goals:byRun:${RUN_A}`, { goalId: 'not-valid' });
 
     expect(() => GoalStore.list()).toThrow(
-      `Failed to parse persisted goal for stream "${RUN_A}"`,
+      `Failed to parse persisted goal for run "${RUN_A}"`,
     );
   });
 

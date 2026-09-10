@@ -616,7 +616,7 @@ describe('child run progress events', () => {
       outcome: 'failed',
       error: {
         kind: 'unexpected',
-        message: 'Child stream failed',
+        message: 'Child run failed',
       },
     });
   });

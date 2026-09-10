@@ -64,7 +64,7 @@ export function formatPostCompactionContext(
           ? ''
           : ` elapsed="${escapeAttr(formatDuration(elapsedMs))}"`;
       lines.push(
-        `  <subagent id="${escapeAttr(sa.runId)}" agent="${escapeAttr(sa.agentName)}"${statusAttr}${elapsedAttr} />`,
+        `  <subagent id="${escapeAttr(sa.childRunId)}" agent="${escapeAttr(sa.agentName)}"${statusAttr}${elapsedAttr} />`,
       );
     }
     lines.push('</active-subagents>');

@@ -10,9 +10,9 @@ import {
   type WorkflowRunContextInput,
 } from '@shared/copy/workflowRunContext';
 
-type RunFields = WorkflowRunContextInput['stream'];
+type RunFields = WorkflowRunContextInput['run'];
 
-function baseStream(overrides: Partial<RunFields> = {}): RunFields {
+function baseRun(overrides: Partial<RunFields> = {}): RunFields {
   return {
     // The resolved identity display name — a producer never ships an
     // arbitrary label beside a resolved identity.
@@ -66,7 +66,7 @@ function compileFailure(
 describe('formatWorkflowRunContext', () => {
   it('addresses run-storage outputs the way an agent reads them', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream({ description: 'Rewrite the introduction' }),
+      run: baseRun({ description: 'Rewrite the introduction' }),
       files: { 2: [output()] },
       compileFailures: {},
     });
@@ -85,7 +85,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('renders workspace outputs relative and external outputs absolute', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream(),
+      run: baseRun(),
       files: {
         1: [
           output({
@@ -118,7 +118,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('orders rounds numerically rather than by key string', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream(),
+      run: baseRun(),
       files: {
         10: [
           output({
@@ -140,7 +140,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('lists compile failures with their log paths', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream(),
+      run: baseRun(),
       files: { 2: [output()] },
       compileFailures: { 2: [compileFailure()] },
     });
@@ -152,7 +152,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('copies a failed run that produced no outputs', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream(),
+      run: baseRun(),
       files: {},
       compileFailures: { 2: [compileFailure()] },
     });
@@ -161,9 +161,9 @@ describe('formatWorkflowRunContext', () => {
     expect(text).toContain('Compile failures:');
   });
 
-  it('omits the run and goal lines when the stream has neither', () => {
+  it('omits the run and goal lines when the run has neither', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream({ runId: undefined, description: undefined }),
+      run: baseRun({ runId: undefined, description: undefined }),
       files: { 2: [output()] },
       compileFailures: {},
     });
@@ -175,7 +175,7 @@ describe('formatWorkflowRunContext', () => {
 
   it('drops the model parenthetical when the run has no model', () => {
     const text = formatWorkflowRunContext({
-      stream: baseStream({ model: undefined, modelLabel: undefined }),
+      run: baseRun({ model: undefined, modelLabel: undefined }),
       files: { 2: [output()] },
       compileFailures: {},
     });
@@ -186,7 +186,7 @@ describe('formatWorkflowRunContext', () => {
   it('returns empty when the run has no outputs and no failures', () => {
     expect(
       formatWorkflowRunContext({
-        stream: baseStream(),
+        run: baseRun(),
         files: {},
         compileFailures: {},
       }),
@@ -195,7 +195,7 @@ describe('formatWorkflowRunContext', () => {
     // An empty per-round bucket is still nothing to copy.
     expect(
       formatWorkflowRunContext({
-        stream: baseStream(),
+        run: baseRun(),
         files: { 2: [] },
         compileFailures: {},
       }),

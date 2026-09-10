@@ -189,8 +189,7 @@ function subagentChild(
   overrides: Partial<ActiveChildInfo> = {},
 ): ActiveChildInfo {
   return {
-    runId: 'child-1',
-    childRunId: 'child-stream',
+    childRunId: 'child-stream' as RunId,
     agentName: 'review',
     identity: { kind: 'agent', agent: 'review' },
     status: 'running',
@@ -618,13 +617,11 @@ describe('CLI run progress renderer', () => {
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({ agentName: 'reviewer' }),
       subagentChild({
-        runId: 'child-2',
-        childRunId: 'child-stream-2',
+        childRunId: 'child-stream-2' as RunId,
         agentName: 'compiler',
       }),
       subagentChild({
-        runId: 'child-3',
-        childRunId: 'child-stream-3',
+        childRunId: 'child-stream-3' as RunId,
         agentName: 'proofreader',
       }),
     ]);
@@ -706,10 +703,9 @@ describe('CLI run progress renderer', () => {
 
     await handleRunConfig(renderer);
     await handleActiveSubagents(renderer, 'stream-1', [
-      subagentChild({ childRunId: 'child-stream-1', agentName: '' }),
+      subagentChild({ childRunId: 'child-stream-1' as RunId, agentName: '' }),
       subagentChild({
-        runId: 'child-2',
-        childRunId: 'child-stream-2',
+        childRunId: 'child-stream-2' as RunId,
       }),
     ]);
 
@@ -798,12 +794,11 @@ describe('CLI run progress renderer', () => {
     await handleRunDescription(renderer, 'running-child', 'Active review task');
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({
-        childRunId: 'waiting-child',
+        childRunId: 'waiting-child' as RunId,
         status: RUN_PHASE.WAITING,
       }),
       subagentChild({
-        runId: 'child-2',
-        childRunId: 'running-child',
+        childRunId: 'running-child' as RunId,
         status: RUN_PHASE.RUNNING,
       }),
     ]);
@@ -891,8 +886,7 @@ describe('CLI run progress renderer', () => {
     });
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({
-        runId: 'child-2',
-        childRunId: 'late-child-stream',
+        childRunId: 'late-child-stream' as RunId,
         agentName: 'late-review',
       }),
     ]);
@@ -946,8 +940,7 @@ describe('CLI run progress renderer', () => {
     });
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({
-        runId: 'child-2',
-        childRunId: 'late-child-stream',
+        childRunId: 'late-child-stream' as RunId,
         agentName: 'late-review',
       }),
     ]);
@@ -1179,8 +1172,7 @@ describe('CLI run progress renderer', () => {
       });
       roster?.('parent-stream' as RunId, [
         {
-          runId: 'child-run',
-          childRunId: 'child-stream',
+          childRunId: 'child-stream' as RunId,
           agentName: 'review',
           identity: { kind: 'agent' as const, agent: 'review' },
           status: 'running',
@@ -1204,7 +1196,7 @@ describe('CLI run progress renderer', () => {
           children: [
             {
               kind: 'subagent',
-              executionId: 'child-run',
+              executionId: 'child-stream',
               agentName: 'review',
               status: 'running',
               childStreamId: 'child-stream',

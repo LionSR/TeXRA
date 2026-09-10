@@ -334,7 +334,7 @@ describe('childRunLoop E2E fixtures', () => {
           {
             ...strategy,
             onLoopStart: () => {
-              registry.trackInFlight({ childRunId: runId, runId });
+              registry.trackInFlight({ runId });
             },
             releaseSessionOwnership,
           },
@@ -360,20 +360,14 @@ describe('childRunLoop E2E fixtures', () => {
     {
       name: 'CodexThreads',
       track: (runId: RunId, runSession: SessionHandle) =>
-        codexThreadsFor(runSession).trackInFlight({
-          childRunId: runId,
-          runId,
-        }),
+        codexThreadsFor(runSession).trackInFlight({ runId }),
       interruptAll: () => codexThreadsFor(session).interruptAll(),
       release: (runId: RunId) => codexThreadsFor(session).releaseByRunId(runId),
     },
     {
       name: 'ClaudeAgentSessions',
       track: (runId: RunId, runSession: SessionHandle) =>
-        claudeAgentSessionsFor(runSession).trackInFlight({
-          childRunId: runId,
-          runId,
-        }),
+        claudeAgentSessionsFor(runSession).trackInFlight({ runId }),
       interruptAll: () => claudeAgentSessionsFor(session).interruptAll(),
       release: (runId: RunId) =>
         claudeAgentSessionsFor(session).releaseByRunId(runId),

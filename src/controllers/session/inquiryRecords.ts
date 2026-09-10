@@ -285,7 +285,7 @@ function inquiryOperations(
         const filtered = all.filter((m) => {
           if (params.status !== 'any' && m.status !== params.status)
             return false;
-          if (params.scope === 'stream') {
+          if (params.scope === 'run') {
             if (!params.runId) return false;
             if (m.parentRunId !== params.runId) return false;
           }

@@ -381,7 +381,7 @@ export class RunHeader extends LitElement {
   private runContextText(stream: RunView): string {
     if (stream.category !== 'workflow') return '';
     return formatWorkflowRunContext({
-      stream: {
+      run: {
         label: stream.label,
         model: stream.model ?? undefined,
         modelLabel: stream.modelLabel ?? undefined,

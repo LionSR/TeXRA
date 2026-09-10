@@ -27,14 +27,14 @@ import type {
 function projectCliActiveChildRow(
   item: ActiveChildInfo,
 ): CliNdjsonActiveChildRow {
-  const { identity, childRunId, runId, ...rest } = item;
+  const { identity, childRunId, ...rest } = item;
   const toolName =
     identity.kind === 'multiAgentWorkflow'
       ? 'delegate_multi_agents'
       : identity.tool;
   return {
     kind: identity.kind === 'process' ? 'process' : 'subagent',
-    executionId: runId,
+    executionId: childRunId,
     ...rest,
     ...(toolName !== undefined ? { toolName } : {}),
     ...(identity.kind === 'process' ? {} : { childStreamId: childRunId }),

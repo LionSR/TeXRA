@@ -624,8 +624,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
             }),
           );
           if ('status' in launched) return launched;
-          const { childRunId: childRunId, completion: runCompletion } =
-            launched;
+          const { completion: runCompletion } = launched;
 
           if (parent.stopAfterCycle) {
             yield* Fiber.join(runCompletion);
@@ -652,7 +651,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                 `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
                 `Run ID: ${runId}`,
                 `Agent: ${defaultAgent.name} (part of the checkpoint identity with meta.name)`,
-                `Stream tab: ${childRunId}`,
                 `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
                 `To resume after a timeout or interruption: call this tool again with the same meta.name and agent.`,
               ].join('\n'),

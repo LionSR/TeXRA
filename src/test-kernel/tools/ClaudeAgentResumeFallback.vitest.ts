@@ -395,6 +395,16 @@ describe('claude_agent tool launch and resume fallback', () => {
     const envReady = pDefer<NodeJS.ProcessEnv>();
     const runs = stubRuns();
     const captured = captureStrategy();
+    // The launch path generates the child's run id, and that id is both the
+    // registry entry and the follow-up address, so the case reads it from the
+    // child the launch created.
+    let launchedRunId: RunId | undefined;
+    mocks.createChildRun.mockImplementation(
+      (_session: unknown, runId: RunId) => {
+        launchedRunId = runId;
+        return Effect.succeed(createFakeAgentCliChildRun(runId));
+      },
+    );
     mocks.buildClaudeAgentEnv.mockImplementation(() => {
       envStarted.resolve(undefined);
       return Effect.promise(() => envReady.promise);
@@ -428,7 +438,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
     expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
     expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-      childRunId,
+      launchedRunId,
       'also update the tests',
       expect.objectContaining({ session: expect.anything() }),
     );
@@ -494,10 +504,7 @@ describe('claude_agent tool launch and resume fallback', () => {
   });
 
   it('still enqueues a follow-up (no fresh launch) when session_id IS active in the registry', async () => {
-    ClaudeAgentSessions.register('sess-resumed', {
-      childRunId,
-      runId: parentRunId,
-    });
+    ClaudeAgentSessions.register('sess-resumed', { runId: childRunId });
 
     const result = await new ClaudeAgentTool().call({
       prompt: 'one more follow-up',
@@ -510,10 +517,7 @@ describe('claude_agent tool launch and resume fallback', () => {
   });
 
   it('forks an active session into a distinct child and only forks its first turn', async () => {
-    ClaudeAgentSessions.register('source-session', {
-      childRunId,
-      runId: parentRunId,
-    });
+    ClaudeAgentSessions.register('source-session', { runId: childRunId });
     let queryIndex = 0;
     mocks.query.mockImplementation(() => {
       queryIndex += 1;
@@ -568,7 +572,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(mocks.query.mock.calls[1]?.[0].options).not.toHaveProperty(
       'forkSession',
     );
-    expect(ClaudeAgentSessions.lookup('source-session')?.childRunId).toBe(
+    expect(ClaudeAgentSessions.lookup('source-session')?.runId).toBe(
       childRunId,
     );
     expect(ClaudeAgentSessions.lookup('forked-session')).toBeDefined();
@@ -588,10 +592,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       subtype: 'error_during_execution',
     },
   ])('fails a fork that $caseName', async ({ subtype, sessionId }) => {
-    ClaudeAgentSessions.register('source-session', {
-      childRunId,
-      runId: parentRunId,
-    });
+    ClaudeAgentSessions.register('source-session', { runId: childRunId });
     mocks.query.mockImplementation(() =>
       (async function* () {
         yield {
@@ -661,10 +662,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       parent: sourceOwner,
       agent: 'claude_code',
     });
-    ClaudeAgentSessions.register('foreign-session', {
-      childRunId,
-      runId: sourceRunId,
-    });
+    ClaudeAgentSessions.register('foreign-session', { runId: sourceRunId });
     sessionHandles.byRunId = handle;
 
     const result = await new ClaudeAgentTool().call({

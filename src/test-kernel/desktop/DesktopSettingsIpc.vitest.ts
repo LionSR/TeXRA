@@ -430,7 +430,7 @@ describe('desktop settings IPC', () => {
   describe('goal-list failures', () => {
     setupPlatform();
 
-    const runId = 'stream:desktop-settings-goal-list' as RunId;
+    const runId = 'd5e77105' as RunId;
     const goalKey = `goals:byRun:${runId}`;
     const malformed = { goalId: 'not-valid' };
 
@@ -457,7 +457,7 @@ describe('desktop settings IPC', () => {
       expect(onError).toHaveBeenCalledOnce();
       expect(showErrorMessage).toHaveBeenCalledWith(
         expect.stringContaining(
-          `Failed to load goals: Failed to parse persisted goal for stream "${runId}"`,
+          `Failed to load goals: Failed to parse persisted goal for run "${runId}"`,
         ),
       );
       expect(posted).not.toContainEqual(
@@ -491,7 +491,7 @@ describe('desktop settings IPC', () => {
     setupPlatform();
 
     it('reposts the goal list when a run mutates a goal', async () => {
-      const runId = 'stream:desktop-settings-goal-push' as RunId;
+      const runId = 'd5e77190' as RunId;
       const { posted, session } = createCapturedSettingsFixture();
       publishTestRunStart(session, runId);
 
@@ -523,12 +523,12 @@ describe('desktop settings IPC', () => {
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM,
-        runId: 'goal-owning-stream',
+        runId: 'a0a1b2c3',
       }),
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(revealed).toEqual(['goal-owning-stream']);
+    expect(revealed).toEqual(['a0a1b2c3']);
   });
 
   it('shows unsupported-command reasons without reporting an error', async () => {

@@ -198,15 +198,11 @@ function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
   };
 }
 
-function runningChild(
-  runId: RunId,
-  agentName: string,
-): ActiveChildInfo & { readonly childRunId: RunId } {
+function runningChild(childRunId: RunId, agentName: string): ActiveChildInfo {
   return {
-    runId,
+    childRunId,
     agentName,
     identity: { kind: 'agent' as const, agent: agentName },
-    childRunId: runId,
     status: RUN_PHASE.RUNNING,
   };
 }
@@ -214,7 +210,7 @@ function runningChild(
 // Seed the child rosters and parent edges through the session event fold.
 function seedChildRoster(
   parentRunId: RunId,
-  rows: readonly (ActiveChildInfo & { readonly childRunId: RunId })[],
+  rows: readonly ActiveChildInfo[],
 ): void {
   seedRun(parentRunId);
   for (const row of rows) {

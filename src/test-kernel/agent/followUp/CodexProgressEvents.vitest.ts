@@ -11,7 +11,7 @@ import {
 import type { RunId, TodoItem, TokenUsageStats } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
+import { publishAgentCliUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 
 // Local file imports
@@ -85,7 +85,7 @@ describe('codex progress events', () => {
     const recorded = recordTraceEvents(trace);
 
     publishCodexTodos(runId, todos, trace);
-    publishAgentCliStreamUsage(runId, usage, trace);
+    publishAgentCliUsage(runId, usage, trace);
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
