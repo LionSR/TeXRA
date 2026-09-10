@@ -16,24 +16,18 @@ import {
 import type { RunView } from '@shared/session/sessionView';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
-const ROOT = 'main@m#root' as RunId;
+const ROOT = 'root' as RunId;
 
 function root(usage?: TokenUsageStats): RunView {
   return makeRunView({
     id: ROOT,
-    runId: 'root',
     label: 'main',
     usage: usage ? { 'root-usage': usage } : {},
   });
 }
 
 /** A child of the root, as the fold states it. */
-function child(
-  over: Partial<RunView> & {
-    readonly id: string;
-    readonly runId: string;
-  },
-): RunView {
+function child(over: Partial<RunView> & { readonly id: string }): RunView {
   return makeRunView({
     parentId: ROOT,
     ancestors: [{ id: ROOT, label: 'main' }],
@@ -53,7 +47,6 @@ describe('collectResumeTargets', () => {
       collectResumeTargets({
         view: viewWith([root()]),
         rootRunId: ROOT,
-        rootRunId: 'root',
       }),
     ).toEqual([{ runId: 'root', label: 'main', isRoot: true }]);
   });
@@ -61,10 +54,9 @@ describe('collectResumeTargets', () => {
   it('lists running and finished plain tool-use subagents', () => {
     const view = viewWith([
       root(),
-      child({ id: 'reviewer@m#rev', runId: 'rev', label: 'reviewer' }),
+      child({ id: 'rev', label: 'reviewer' }),
       child({
-        id: 'builder@m#flow',
-        runId: 'flow',
+        id: 'flow',
         label: 'builder',
         category: AgentCategory.Workflow,
       }),
@@ -73,7 +65,6 @@ describe('collectResumeTargets', () => {
       collectResumeTargets({
         view,
         rootRunId: ROOT,
-        rootRunId: 'root',
       }),
     ).toEqual(TWO_RESUME_TARGETS);
   });
@@ -82,8 +73,7 @@ describe('collectResumeTargets', () => {
     const view = viewWith([
       root(),
       child({
-        id: 'bash@tool#sh',
-        runId: 'sh',
+        id: 'sh',
         label: 'bash',
         identity: { kind: 'process', tool: 'bash' },
       }),
@@ -92,7 +82,6 @@ describe('collectResumeTargets', () => {
       collectResumeTargets({
         view,
         rootRunId: ROOT,
-        rootRunId: 'root',
       }),
     ).toEqual([{ runId: 'root', label: 'main', isRoot: true }]);
   });
@@ -101,7 +90,6 @@ describe('collectResumeTargets', () => {
     expect(
       collectResumeTargets({
         view: viewWith([]),
-        rootRunId: undefined,
         rootRunId: undefined,
       }),
     ).toEqual([]);
@@ -309,8 +297,7 @@ describe('collectResumeUsage', () => {
         cacheReadInputTokens: 7,
       }),
       child({
-        id: 'review@m#rev',
-        runId: 'rev',
+        id: 'rev',
         usage: {
           'rev-usage': {
             inputTokens: 40,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
-import type { ProviderErrorPartial } from '@shared/schemas';
+import type { ProviderErrorPartial, RunId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
@@ -24,7 +24,7 @@ function createRetryPermission(
     kind: PERMISSION_KIND.RETRY,
     data: {
       requestId: 'retry-1',
-      runId: 'stream-1',
+      runId: 'run-1' as RunId,
       operation: 'model request',
       model: 'test-model',
       errorMessage: 'Provider quota exhausted',
@@ -118,7 +118,7 @@ describe('retry-request-panel', () => {
     expect(actions).toEqual([
       {
         kind: 'decision.retry',
-        runId: 'stream-1',
+        runId: 'run-1',
         approvalId: 'retry-1',
         decision: { action: 'retry' },
       },

@@ -64,7 +64,7 @@ function createDiffCompiler(runId: RunId, logger: AgentTrace) {
     false,
     () => ({}),
     logger,
-    'diff-stream',
+    runId,
     new TaskRunFileService(runId),
   );
 
@@ -115,7 +115,7 @@ describe('workflow LaTeX compile input directories', () => {
   });
 
   it('derives compile-check input dirs from outputFile.source', async () => {
-    const runId = 'compile-source-dir';
+    const runId = 'compile-source-dir' as RunId;
     const texPath = path.join(runDir(runId), 'r1', 'main.tex');
     await initLatexPlatform({
       [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
@@ -139,7 +139,8 @@ describe('workflow LaTeX compile input directories', () => {
   it.each(['', '/external/source/main.tex'])(
     'falls back to the output location for source %j',
     async (source) => {
-      const runId = `compile-output-dir-${source ? 'external' : 'empty'}`;
+      const runId =
+        `compile-output-dir-${source ? 'external' : 'empty'}` as RunId;
       const texPath = path.join(runDir(runId), 'r2', 'Draft', 'main.tex');
       await initLatexPlatform({
         [texPath]: '\\documentclass{article}\\begin{document}Hi\\end{document}',
@@ -147,12 +148,7 @@ describe('workflow LaTeX compile input directories', () => {
 
       const outputState = createOutputState();
       ensureRoundData(outputState, 2).outputs = [
-        outputFile(
-          runId,
-          path.join('r2', 'Draft', 'main.tex'),
-          source,
-          2,
-        ),
+        outputFile(runId, path.join('r2', 'Draft', 'main.tex'), source, 2),
       ];
 
       await runCompileCheck(compileContext(runId, outputState), 2);
@@ -167,7 +163,7 @@ describe('workflow LaTeX compile input directories', () => {
   );
 
   it('resolves workspace and round-storage paths through one owner', async () => {
-    const runId = 'shared-source-resolver';
+    const runId = 'shared-source-resolver' as RunId;
     await initLatexPlatform({});
 
     expect(
@@ -226,7 +222,7 @@ describe('workflow LaTeX compile input directories', () => {
   });
 
   it('compiles diffs with revised round inputs before workspace fallbacks', async () => {
-    const runId = 'latexdiff-input-dir';
+    const runId = 'latexdiff-input-dir' as RunId;
     await initLatexPlatform({});
 
     await compileDiff(
@@ -238,12 +234,7 @@ describe('workflow LaTeX compile input directories', () => {
 
     expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
       expect.objectContaining({
-        absolutePath: path.join(
-          runDir(runId),
-          'diff',
-          'r2',
-          'main-diff.tex',
-        ),
+        absolutePath: path.join(runDir(runId), 'diff', 'r2', 'main-diff.tex'),
       }),
       expect.objectContaining({
         extraInputDirs: [
@@ -255,7 +246,7 @@ describe('workflow LaTeX compile input directories', () => {
   });
 
   it('keeps an external latexdiff reference in its own directory', async () => {
-    const runId = 'latexdiff-external-input-dir';
+    const runId = 'latexdiff-external-input-dir' as RunId;
     await initLatexPlatform({});
 
     await compileDiff(
@@ -277,7 +268,7 @@ describe('workflow LaTeX compile input directories', () => {
   });
 
   it('keeps a successful diff when publishing its PDF fails', async () => {
-    const runId = 'latexdiff-publish-failure';
+    const runId = 'latexdiff-publish-failure' as RunId;
     await initLatexPlatform({});
     const trace = spiedTrace();
     const publishError = new Error('artifact storage unavailable');
@@ -301,7 +292,7 @@ describe('workflow LaTeX compile input directories', () => {
   });
 
   it('keeps a failed latexdiff compiler transcript out of the warning message', async () => {
-    const runId = 'latexdiff-compile-failure';
+    const runId = 'latexdiff-compile-failure' as RunId;
     await initLatexPlatform({});
     const trace = spiedTrace();
     const logTail = 'LaTeX compiler transcript that should remain diagnostic';

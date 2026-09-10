@@ -27,7 +27,6 @@ import {
   type InstructionAction,
   type RoundStage,
   type RunPhase,
-  type RunId,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
@@ -283,7 +282,6 @@ async function handleActiveSubagents(
       {
         parentId: parent,
         ancestors: [{ id: parent, label: parent }],
-        runId: child.runId,
         label: child.agentName,
         identity: child.identity,
         status:
@@ -303,26 +301,22 @@ async function publishRun(
 ): Promise<void> {
   const runId = (overrides.runId ?? 'stream-1') as RunId;
   const agent = overrides.agent ?? 'polish';
-  const runId = 'e00101' as RunId;
   session.publish([
     {
       type: 'run.start',
-      aggregateId: qualifyAggregateId('stream', runId),
-      runId,
+      aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: overrides.agentCategory ?? AgentCategory.Workflow,
       isRemote: false,
       worktree: null,
-      parentRunId: null,
-      background: false,
+      parent: null,
       approvalPolicy: null,
       checkpointId: null,
     },
   ]);
   session.publishRunEvent(runId, {
     type: 'run.config',
-    runId,
     runId,
     config: AgentConfigSchema.parse({
       agent,
@@ -1191,7 +1185,7 @@ describe('CLI run progress renderer', () => {
       const detach = attachCliSessionProgressProjection({
         events: session.events,
         now: () => session.now(),
-        executions: {
+        runs: {
           onChildActivity: (listener) => {
             roster = listener;
             return () => {
@@ -1219,16 +1213,18 @@ describe('CLI run progress renderer', () => {
       expect.objectContaining({
         kind: 'progress',
         event: 'updateActiveSubagents',
-        // The frozen public row shape: `kind` discriminant, no `identity`.
+        // The frozen public row shape: `kind` discriminant, no `identity`,
+        // and the 0.40 wire keys (`parentStreamId`, `executionId`,
+        // `childStreamId`).
         payload: {
-          parentRunId: 'parent-stream',
+          parentStreamId: 'parent-stream',
           children: [
             {
               kind: 'subagent',
-              runId: 'child-run',
+              executionId: 'child-run',
               agentName: 'review',
               status: 'running',
-              childRunId: 'child-stream',
+              childStreamId: 'child-stream',
             },
           ],
         },
@@ -1243,17 +1239,17 @@ describe('CLI run progress renderer', () => {
       );
 
       host.emitApprovalBypassState({
-        runId: 'stream-1',
+        runId: 'stream-1' as RunId,
         kind: 'bash',
         bypassActive: true,
       });
       host.emitApprovalBypassState({
-        runId: 'stream-1',
+        runId: 'stream-1' as RunId,
         kind: 'toolEdit',
         bypassActive: false,
       });
       host.emitApprovalBypassState({
-        runId: 'stream-1',
+        runId: 'stream-1' as RunId,
         kind: 'superYolo',
         bypassActive: true,
       });

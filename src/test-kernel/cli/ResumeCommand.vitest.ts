@@ -84,8 +84,7 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
   runChat: mocks.runChat,
 }));
 
-const EXECUTION_ID = 'eec001' as RunId;
-const STREAM_ID = 'planner#eec001';
+const RUN_ID = 'eec001' as RunId;
 
 const TOOL_USE_CONFIG = AgentConfigSchema.parse({
   agent: 'planner',
@@ -99,11 +98,11 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse({
   agentCategory: AgentCategory.Workflow,
 });
 
-const STAMPED_META = {
+const STAMPED_META: RunMeta = {
+  schemaVersion: 1,
   timestamp: '2026-07-31T00:00:00.000Z',
-  runId: STREAM_ID,
   identity: { kind: 'agent', agent: 'planner' },
-} as unknown as RunMeta;
+};
 
 /** Reset and seed the real (fake-platform-backed) run store. */
 async function seedRunRecord(seed: {
@@ -113,27 +112,27 @@ async function seedRunRecord(seed: {
 }): Promise<void> {
   const session = createProcessSession();
   mocks.initializeCliTranscriptSession.mockResolvedValue(session);
-  const store = getRunStore(EXECUTION_ID);
-  await store.delete(flowKey(EXECUTION_ID));
+  const store = getRunStore(RUN_ID);
+  await store.delete(flowKey(RUN_ID));
   await Effect.runPromise(
     session.commit([
       {
         type: 'run.start',
-        aggregateId: aggregateId('stream', STREAM_ID),
-        runId: EXECUTION_ID,
+        aggregateId: aggregateId('run', RUN_ID),
         identity: { kind: 'agent', agent: seed.config?.agent ?? 'planner' },
         category: seed.config?.agentCategory ?? AgentCategory.ToolUse,
         userFollowUpSupport: 'unsupported',
         isRemote: false,
+        parent: null,
       },
     ]),
   );
   if (seed.config)
     await Effect.runPromise(
-      getRunRecords(session, EXECUTION_ID).writeRunRecord(seed.config),
+      getRunRecords(session, RUN_ID).writeRunRecord(seed.config),
     );
   if (seed.checkpoint !== false) {
-    await store.write(flowKey(EXECUTION_ID), {
+    await store.write(flowKey(RUN_ID), {
       shared: {},
       cursor: { nextNodeId: 'start' },
     });
@@ -152,7 +151,7 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
-async function run(context: CliContext, id: RunId = EXECUTION_ID) {
+async function run(context: CliContext, id: RunId = RUN_ID) {
   const { runResumeCommand } = await import('@cli/commands/resumeRun');
   return runResumeCommand(context, id);
 }
@@ -162,7 +161,7 @@ async function stubWorkflowResume(config: AgentConfig): Promise<void> {
   mocks.retrieveSessionResumeData.mockResolvedValue({
     type: 'workflow',
     agentConfig: config,
-    runId: EXECUTION_ID,
+    runId: RUN_ID,
   });
 }
 
@@ -187,7 +186,7 @@ describe('runResumeCommand', () => {
     expect(mocks.runChat).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
-        initialResume: { id: EXECUTION_ID, config: TOOL_USE_CONFIG },
+        initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG },
       }),
     );
     expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
@@ -209,7 +208,7 @@ describe('runResumeCommand', () => {
     mocks.retrieveSessionResumeData.mockResolvedValue({
       type: 'workflow',
       agentConfig: WORKFLOW_CONFIG,
-      runId: EXECUTION_ID,
+      runId: RUN_ID,
       modelHandlerCompatibilityKey: 'anthropic',
     });
 
@@ -221,7 +220,7 @@ describe('runResumeCommand', () => {
       WORKFLOW_CONFIG,
       expect.any(Object),
       expect.objectContaining({
-        runId: EXECUTION_ID,
+        runId: RUN_ID,
         modelHandlerCompatibilityKey: 'anthropic',
       }),
     );
@@ -326,7 +325,7 @@ describe('runResumeCommand', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining(`texra resume ${EXECUTION_ID}`),
+      expect.stringContaining(`texra resume ${RUN_ID}`),
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining('For scripting, use `texra run`.'),
@@ -339,7 +338,7 @@ describe('runResumeCommand', () => {
     ).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining(`texra-local resume ${EXECUTION_ID}`),
+      expect.stringContaining(`texra-local resume ${RUN_ID}`),
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining('For scripting, use `texra-local run`.'),
@@ -361,7 +360,7 @@ describe('runResumeCommand', () => {
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Run not found: ${EXECUTION_ID}`,
+      `Run not found: ${RUN_ID}`,
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
@@ -382,16 +381,16 @@ describe('runResumeCommand', () => {
   });
 
   it('reports a live run instead of failing silently', async () => {
-    await acquireFreshRunLease(EXECUTION_ID);
+    await acquireFreshRunLease(RUN_ID);
     try {
       await expect(run(cliContext())).resolves.toBe(2);
 
       expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-        `Run ${EXECUTION_ID} is already running in this process.`,
+        `Run ${RUN_ID} is already running in this process.`,
       );
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
-      await releaseOwnedRunLease(EXECUTION_ID);
+      await releaseOwnedRunLease(RUN_ID);
     }
   });
 
@@ -406,7 +405,7 @@ describe('runResumeCommand', () => {
     // An unreadable lease says nothing about the checkpoint, so it keeps the
     // operational wording rather than telling the user to delete the run.
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not read the state of run ${EXECUTION_ID}: lease unreadable (lease disk offline)`,
+      `Could not read the state of run ${RUN_ID}: lease unreadable (lease disk offline)`,
     );
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
@@ -438,7 +437,7 @@ describe('runResumeCommand', () => {
 
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not load session ${EXECUTION_ID}: KV timeout`,
+      `Could not load session ${RUN_ID}: KV timeout`,
     );
   });
 
@@ -448,7 +447,7 @@ describe('runResumeCommand', () => {
   it('refuses a checkpoint whose record cannot be resumed as unusable state', async () => {
     await seedRunRecord({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockRejectedValue(
-      new PersistedFlowStateError(EXECUTION_ID, 'unsupported-record'),
+      new PersistedFlowStateError(RUN_ID, 'unsupported-record'),
     );
 
     await expect(run(cliContext())).resolves.toBe(2);

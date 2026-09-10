@@ -18,13 +18,12 @@ vi.mock('@commands/agent/executeCommand', () => ({
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
-const STREAM = 'stream:ext-resume-ports' as RunId;
-const EXECUTION = 'exec:ext-resume' as RunId;
+const RUN = 'ab12cd' as RunId;
 
 async function captureOptions(): Promise<ResumeRunOptions> {
-  await tryResumeFromResumeData(STREAM);
+  await tryResumeFromResumeData(RUN);
   const options = mocks.resumeRunWithRefusalNotice.mock.calls[0]?.[1];
   expect(options).toBeDefined();
   return options as ResumeRunOptions;
@@ -37,13 +36,13 @@ describe('tryResumeFromResumeData', () => {
       .mockReturnValue(Effect.succeed(true));
   });
 
-  it('reports cancellation once the stream transcript is gone', async () => {
+  it('reports cancellation once the run transcript is gone', async () => {
     const options = await captureOptions();
 
     expect(options.isCancellationRequested?.()).toBe(true);
   });
 
-  it('keeps resuming while the stream transcript is present', async () => {
+  it('keeps resuming while the run transcript is present', async () => {
     const session = defaultSession();
     const has = vi.spyOn(session.transcripts, 'has').mockReturnValue(true);
 

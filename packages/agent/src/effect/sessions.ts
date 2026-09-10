@@ -59,7 +59,6 @@ import {
   aggregateId as qualifyAggregateId,
   type RunId,
   type SessionCloseReport,
-  type RunId,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { RequestError } from '@shared/session/requestErrors';
@@ -116,9 +115,8 @@ export interface StartInput {
 
 /** One run of an agent, from the moment it exists in its session. */
 export interface Run {
-  /** The run's run id, minted here and handed to the launcher, so it
+  /** The run's id, minted here and handed to the launcher, so it
    *  identifies the run before its first model call. */
-  readonly runId: RunId;
   readonly runId: RunId;
   /**
    * The run's own outcome first: on failure the fold's fate never replaces
@@ -325,7 +323,7 @@ function start(
     const config = yield* admitInput(input);
     const runId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
-    const admitted = yield* Deferred.make<RunId, RunFailure>();
+    const admitted = yield* Deferred.make<void, RunFailure>();
     let handle: RuntimeAgentRunHandle | undefined;
     let detach: (() => void) | undefined;
     let reading = false;
@@ -383,7 +381,7 @@ function start(
               onRun: (live) => {
                 handle = live;
               },
-              onStreamResolved: (runId, runTrace) => {
+              onStreamResolved: (_, runTrace) => {
                 detach = runTrace.subscribe((event) => {
                   if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
                     log.warn(
@@ -394,7 +392,7 @@ function start(
                   }
                   Queue.offerUnsafe(trace, event);
                 });
-                Deferred.doneUnsafe(admitted, Effect.succeed(runId));
+                Deferred.doneUnsafe(admitted, Effect.void);
               },
               session,
               stopAfterCycle: true,
@@ -410,7 +408,7 @@ function start(
           { startImmediately: true },
         );
         spawned.push(runFiber);
-        const runId = yield* restore(Deferred.await(admitted));
+        yield* restore(Deferred.await(admitted));
         const view = session.viewChanges.pipe(
           // The level replays on subscribe, and the fold lands the run's
           // `run.start` asynchronously, so a replayed level can predate the
@@ -451,9 +449,7 @@ function start(
           Stream.runDrain(
             view.pipe(
               Stream.tap((level) =>
-                interest(
-                  descendantRuns(level, runId, { includeRoot: true }),
-                ),
+                interest(descendantRuns(level, runId, { includeRoot: true })),
               ),
             ),
           ),
@@ -461,7 +457,6 @@ function start(
         );
         spawned.push(drain);
         return {
-          runId,
           runId,
           result: Fiber.join(runFiber).pipe(
             Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),

@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { getStreamTabId } from '@agent/runtime/runTab';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -20,7 +19,7 @@ import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -81,24 +80,18 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   };
 }
 
-async function persistTranscriptEntry(
-  runId: RunId,
-  agent: string,
-): Promise<RunId> {
-  const runId = getStreamTabId(agent, { runId });
+async function persistTranscriptEntry(runId: RunId): Promise<void> {
   await Effect.runPromise(
     session.commit([
       {
         type: 'log',
-        aggregateId: aggregateId('stream', runId),
+        aggregateId: aggregateId('run', runId),
         level: LOG_LEVELS.INFO,
         messageType: MESSAGE_TYPES.USER_MESSAGE,
         message: 'hello',
       },
     ]),
   );
-
-  return runId;
 }
 
 describe('ChatExportController.exportAsHtml', () => {
@@ -127,16 +120,12 @@ describe('ChatExportController.exportAsHtml', () => {
     const templatePath = await writeTemplate();
     const runId = 'eec001' as RunId;
     const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
-    publishTestRunStart(
-      session,
-      getStreamTabId(runConfigRecord.agent, { runId }),
-      runId,
-    );
+    publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, runId).writeRunRecord(runConfigRecord),
     );
-    const runId = await persistTranscriptEntry(runId, 'review');
+    await persistTranscriptEntry(runId);
 
     const outcome = await Effect.runPromise(
       controller.exportAsHtml(runId, templatePath),
@@ -159,16 +148,12 @@ describe('ChatExportController.exportAsHtml', () => {
 
   it('throws when the standalone template bundle is missing', async () => {
     const runId = 'eec002' as RunId;
-    publishTestRunStart(
-      session,
-      getStreamTabId(config().agent, { runId }),
-      runId,
-    );
+    publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, runId).writeRunRecord(config()),
     );
-    const runId = await persistTranscriptEntry(runId, 'orchestrator');
+    await persistTranscriptEntry(runId);
 
     await expect(
       Effect.runPromise(
@@ -200,16 +185,12 @@ describe('ChatExportController.buildExportInput', () => {
 
   it('returns ok when config and transcript are stored', async () => {
     const runId = 'eec001' as RunId;
-    publishTestRunStart(
-      session,
-      getStreamTabId(config().agent, { runId }),
-      runId,
-    );
+    publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, runId).writeRunRecord(config()),
     );
-    const runId = await persistTranscriptEntry(runId, 'orchestrator');
+    await persistTranscriptEntry(runId);
 
     await expect(
       Effect.runPromise(controller.buildExportInput(runId)),
@@ -220,11 +201,7 @@ describe('ChatExportController.buildExportInput', () => {
 
   it('reports conversation_missing when a config is stored but no transcript exists', async () => {
     const runId = 'eec003' as RunId;
-    publishTestRunStart(
-      session,
-      getStreamTabId(config().agent, { runId }),
-      runId,
-    );
+    publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, runId).writeRunRecord(config()),

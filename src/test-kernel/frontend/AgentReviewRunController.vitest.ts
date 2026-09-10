@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunId } from '@shared/schemas';
 import {
   AgentReviewRunController,
   type AgentReviewRunToken,
@@ -14,7 +15,7 @@ function createRunHarness() {
   const stopAgentRun = vi.fn(() => Effect.void);
   let currentHandle: AgentRunHandle | undefined;
   const session = {
-    executions: {
+    runs: {
       getHandle: () => currentHandle,
       stopAgentRun,
     },
@@ -22,12 +23,9 @@ function createRunHarness() {
   const bind = (
     controller: AgentReviewRunController,
     run: AgentReviewRunToken,
-    runId: string,
+    runId: RunId,
   ) => {
-    const handle = {
-      runId,
-      childRunId: `review#${runId}`,
-    } as AgentRunHandle;
+    const handle = { runId } as AgentRunHandle;
     currentHandle = handle;
     Effect.runSync(controller.bind(run, handle));
     return handle;
@@ -38,7 +36,7 @@ function createRunHarness() {
 function startBoundRun(
   controller: AgentReviewRunController,
   harness: ReturnType<typeof createRunHarness>,
-  runId: string,
+  runId: RunId,
 ): AgentReviewRunToken {
   const run = controller.start(harness.session);
   harness.bind(controller, run, runId);
@@ -66,7 +64,7 @@ describe('AgentReviewRunController', () => {
 
     expect(stopReview(controller)).toBe(true);
     expect(controller.isActive).toBe(true);
-    harness.bind(controller, run, 'review-a');
+    harness.bind(controller, run, 'review-a' as RunId);
 
     expect(harness.stopAgentRun).toHaveBeenCalledOnce();
     expect(stopReview(controller)).toBe(false);
@@ -79,11 +77,11 @@ describe('AgentReviewRunController', () => {
   it('ignores a stale finalizer and stops only the current run', () => {
     const controller = new AgentReviewRunController();
     const first = createRunHarness();
-    const runA = startBoundRun(controller, first, 'review-a');
+    const runA = startBoundRun(controller, first, 'review-a' as RunId);
     expect(controller.finish(runA)).toBe(true);
 
     const second = createRunHarness();
-    startBoundRun(controller, second, 'review-b');
+    startBoundRun(controller, second, 'review-b' as RunId);
 
     expect(controller.finish(runA)).toBe(false);
     expect(stopReview(controller)).toBe(true);
@@ -110,7 +108,7 @@ describe('AgentReviewRunController', () => {
   it('discards a running review without releasing the slot', () => {
     const controller = new AgentReviewRunController();
     const harness = createRunHarness();
-    const run = startBoundRun(controller, harness, 'review-a');
+    const run = startBoundRun(controller, harness, 'review-a' as RunId);
     controller.collect(run, reviewCollection('src/a.ts'));
 
     Effect.runSync(controller.discard());
@@ -132,7 +130,7 @@ describe('AgentReviewRunController', () => {
   it('leaves a later run current after an earlier one was discarded', () => {
     const controller = new AgentReviewRunController();
     const first = createRunHarness();
-    const runA = startBoundRun(controller, first, 'review-a');
+    const runA = startBoundRun(controller, first, 'review-a' as RunId);
     Effect.runSync(controller.discard());
     expect(controller.finish(runA)).toBe(true);
 

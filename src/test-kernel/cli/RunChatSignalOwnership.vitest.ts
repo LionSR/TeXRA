@@ -20,7 +20,6 @@ import {
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
-  type RunId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -29,7 +28,6 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { generateRunId } from '@utils/core';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -536,15 +534,13 @@ describe('runChat signal ownership wiring', () => {
       session.publish(
         [history, ownRoot].map((runId) => ({
           type: 'run.start' as const,
-          aggregateId: qualifyAggregateId('stream', runId),
-          runId: generateRunId(),
+          aggregateId: qualifyAggregateId('run', runId),
           identity: { kind: 'agent' as const, agent: 'assistant' },
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
           category: AgentCategory.ToolUse,
           isRemote: false,
           worktree: null,
-          parentRunId: null,
-          background: false,
+          parent: null,
           approvalPolicy: null,
           checkpointId: null,
         })),

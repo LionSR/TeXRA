@@ -306,7 +306,7 @@ export function createDesktopHostRequests(
     }
     await fileActions.diffStreamToolbarAction({
       outputsByRound: request.outputsByRound ?? {},
-      ...(request.runId && { runId: request.runId }),
+      runId: request.runId,
       workspaceScan: {
         agent: request.agent,
         model: request.model,

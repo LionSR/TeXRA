@@ -13,6 +13,7 @@ import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import type { RunId } from '@shared/schemas';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -40,7 +41,7 @@ function externalSource(
 function runStorageSource(
   runDirectory: string,
   relativePath: string,
-  runId: string,
+  runId: RunId,
 ): ReturnType<typeof createRunStorageLocation> {
   return createRunStorageLocation(
     path.join(runDirectory, relativePath),
@@ -68,7 +69,7 @@ describe('compiled PDF artifacts', () => {
     await expect(
       publishCompiledPdfArtifact({
         runDirectory,
-        runId: 'missing123',
+        runId: 'missing123' as RunId,
         round: 1,
         displayName: 'missing.tex',
         source: externalSource(runDirectory, 'missing.tex'),
@@ -87,7 +88,7 @@ describe('compiled PDF artifacts', () => {
     await expect(
       publishCompiledPdfArtifact({
         runDirectory,
-        runId: 'stat123',
+        runId: 'stat123' as RunId,
         round: 1,
         displayName: 'paper.tex',
         source: externalSource(runDirectory, 'paper.tex'),
@@ -106,7 +107,7 @@ describe('compiled PDF artifacts', () => {
 
     const artifact = await publishCompiledPdfArtifact({
       runDirectory,
-      runId: 'delete-missing123',
+      runId: 'delete-missing123' as RunId,
       round: 1,
       displayName: 'paper.tex',
       source: externalSource(runDirectory, 'paper.tex'),
@@ -131,7 +132,7 @@ describe('compiled PDF artifacts', () => {
     await expect(
       publishCompiledPdfArtifact({
         runDirectory,
-        runId: 'delete123',
+        runId: 'delete123' as RunId,
         round: 1,
         displayName: 'paper.tex',
         source: externalSource(runDirectory, 'paper.tex'),
@@ -148,7 +149,7 @@ describe('compiled PDF artifacts', () => {
 
     const artifact = await publishCompiledPdfArtifact({
       runDirectory,
-      runId: 'abc123',
+      runId: 'abc123' as RunId,
       round: 2,
       displayName: 'paper.tex',
       source: externalSource(runDirectory, path.join('r2', 'paper.tex')),
@@ -172,13 +173,13 @@ describe('compiled PDF artifacts', () => {
 
     const artifact = await publishCompiledPdfArtifact({
       runDirectory,
-      runId: 'suffix123',
+      runId: 'suffix123' as RunId,
       round: 4,
       displayName: 'latexdiff-output.tex',
       source: runStorageSource(
         runDirectory,
         path.join('r4', 'sections', 'main.tex'),
-        'suffix123',
+        'suffix123' as RunId,
       ),
       compiledPdfPath,
       pdfStemSuffix: '-diff',
@@ -194,13 +195,13 @@ describe('compiled PDF artifacts', () => {
 
     const artifact = await publishCompiledPdfArtifact({
       runDirectory,
-      runId: 'windows123',
+      runId: 'windows123' as RunId,
       round: 4,
       displayName: 'main.tex',
       source: createRunStorageLocation(
         path.join(runDirectory, 'r4', 'sections', 'main.tex'),
         'r4\\sections\\main.tex',
-        'windows123',
+        'windows123' as RunId,
       ),
       compiledPdfPath,
       pdfStemSuffix: '-diff',
@@ -217,14 +218,14 @@ describe('compiled PDF artifacts', () => {
     const source = runStorageSource(
       runDirectory,
       path.join('r5', 'sections', 'main.tex'),
-      'kind123',
+      'kind123' as RunId,
     );
     await writePdf(baseDiffPdfPath, 'base diff');
     await writePdf(roundDiffPdfPath, 'round diff');
 
     const baseDiff = await publishCompiledPdfArtifact({
       runDirectory,
-      runId: 'kind123',
+      runId: 'kind123' as RunId,
       round: 5,
       displayName: 'base-diff.tex',
       source,
@@ -233,7 +234,7 @@ describe('compiled PDF artifacts', () => {
     });
     const roundDiff = await publishCompiledPdfArtifact({
       runDirectory,
-      runId: 'kind123',
+      runId: 'kind123' as RunId,
       round: 5,
       displayName: 'round-diff.tex',
       source,
@@ -263,25 +264,25 @@ describe('compiled PDF artifacts', () => {
 
     const first = await publishCompiledPdfArtifact({
       runDirectory,
-      runId: 'dup123',
+      runId: 'dup123' as RunId,
       round: 3,
       displayName: 'main.tex',
       source: runStorageSource(
         runDirectory,
         path.join('r3', 'ch1', 'main.tex'),
-        'dup123',
+        'dup123' as RunId,
       ),
       compiledPdfPath: firstPdfPath,
     });
     const second = await publishCompiledPdfArtifact({
       runDirectory,
-      runId: 'dup123',
+      runId: 'dup123' as RunId,
       round: 3,
       displayName: 'main.tex',
       source: runStorageSource(
         runDirectory,
         path.join('r3', 'ch2', 'main.tex'),
-        'dup123',
+        'dup123' as RunId,
       ),
       compiledPdfPath: secondPdfPath,
     });

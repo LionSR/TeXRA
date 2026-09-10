@@ -73,7 +73,7 @@ interface ConversationRegionProps {
   readonly onCancelChildList: () => void;
   readonly onChildSelectionChange: (value: RunId) => void;
   readonly onFocusSession: (runId: RunId) => void;
-  readonly onKillRun: (runId: string) => void;
+  readonly onKillRun: (runId: RunId) => void;
 }
 
 export function ConversationRegion({

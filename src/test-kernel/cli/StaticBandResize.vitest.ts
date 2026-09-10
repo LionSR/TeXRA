@@ -249,8 +249,8 @@ describe('Static band resize', () => {
     } = await loadTranscriptStack();
     const { createElement } = React;
     const runId = 'run-label-stream' as RunId;
-    const runId = 'late-subagent-id';
-    const runPath = `/executions/${runId}/report`;
+    const childRunId = 'late-subagent-id';
+    const runPath = `/executions/${childRunId}/report`;
     const runEntry = completedToolEntry({
       id: 'run-view',
       toolName: 'executions',
@@ -259,9 +259,7 @@ describe('Static band resize', () => {
       settlementSeqNo: 1,
     });
 
-    seedTranscript(cliState, runId, '/tmp/run-label-proof', [
-      runEntry,
-    ]);
+    seedTranscript(cliState, runId, '/tmp/run-label-proof', [runEntry]);
 
     const inkRef: {
       current?: { repaint(options: TuiRepaintOptions): void };
@@ -299,7 +297,7 @@ describe('Static band resize', () => {
       out.output = '';
       inst.rerender(
         createElement(App, {
-          labels: new Map([[runId, 'reviewer']]),
+          labels: new Map([[childRunId, 'reviewer']]),
         }),
       );
 

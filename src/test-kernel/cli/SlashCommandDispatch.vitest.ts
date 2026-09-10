@@ -70,7 +70,6 @@ import {
   type RunId,
   type Plan,
   type RunPhase,
-  type RunId,
   type TodoItem,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
@@ -119,7 +118,7 @@ function seedChildRoster(
   ensureRun(parentRunId);
   const parent = seeded.get(parentRunId);
   for (const row of rows) {
-    ensureRun(row.childRunId, {
+    ensureRun(row.childRunId as RunId, {
       parentId: parentRunId,
       ancestors: [
         ...(parent?.ancestors ?? []),
@@ -354,7 +353,7 @@ describe('handleTuiSlashCommand', () => {
     expect(snapshots.preload).toHaveBeenCalledTimes(2);
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 
-    activeRunId.set('another-stream');
+    activeRunId.set('another-stream' as RunId);
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
     expect(localEntries()).toEqual([]);
     closeForegroundReader();

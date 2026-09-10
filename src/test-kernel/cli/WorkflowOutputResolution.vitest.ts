@@ -10,7 +10,12 @@ import {
   type CliWorkflowRunResult,
 } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+  AgentCategory,
+} from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -50,8 +55,7 @@ function workflowResult(
   return {
     category: AgentCategory.Workflow,
     outcome,
-    runId: 'workflow-output-test',
-    runId: 'workflow-output-test',
+    runId: 'workflow-output-test' as RunId,
     compileFailures: [],
     outputs: outputs.map((output) => ({
       round: output.round ?? 1,

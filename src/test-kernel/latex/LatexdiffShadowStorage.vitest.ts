@@ -145,7 +145,7 @@ describe('LaTeXdiffService shadow output', () => {
         makeTempDir('texra-latexdiff-rounds-', tempDirs),
       );
       const workspaceDir = path.join(tempDir, 'workspace');
-      const runId: RunId = 'abcdef';
+      const runId = 'abcdef' as RunId;
       const firstDir = path.join(tempDir, 'executions', runId, 'r1');
       const secondDir = path.join(tempDir, 'executions', runId, 'r2');
       const basePath = path.join(workspaceDir, 'paper.tex');
@@ -172,11 +172,7 @@ describe('LaTeXdiffService shadow output', () => {
       });
 
       const base = createWorkspaceLocation(basePath, 'paper.tex');
-      const first = createRunStorageLocation(
-        firstPath,
-        'r1/paper.tex',
-        runId,
-      );
+      const first = createRunStorageLocation(firstPath, 'r1/paper.tex', runId);
       const second = createRunStorageLocation(
         secondPath,
         'r2/paper.tex',
@@ -360,7 +356,8 @@ describe('LaTeXdiffService shadow output', () => {
 
     await installNodeBackedPlatform(workspaceDir, storageRoot);
 
-    const fileService = new TaskRunFileService('run-1');
+    const runId = 'run-1' as RunId;
+    const fileService = new TaskRunFileService(runId);
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(dependencyPath, 'refs/macros.sty'),
     );
@@ -369,7 +366,7 @@ describe('LaTeXdiffService shadow output', () => {
 
     await expect(
       readFile(
-        path.join(getRunDir('run-1'), 'diff', 'r2', 'refs', 'macros.sty'),
+        path.join(getRunDir(runId), 'diff', 'r2', 'refs', 'macros.sty'),
         'utf8',
       ),
     ).resolves.toBe('\\newcommand{\\RR}{\\mathbb{R}}\n');

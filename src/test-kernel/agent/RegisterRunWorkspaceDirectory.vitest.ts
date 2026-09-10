@@ -12,6 +12,7 @@ import {
 } from '@agent/storage/runLifecycle';
 import { inspectRunLease } from '@agent/storage/runLease';
 import { effectRuntime } from '@platform/processRuntime';
+import type { RunId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -22,9 +23,8 @@ const baseConfig = AgentConfigSchema.parse({
   instruction: 'Check the proof.',
   agentCategory: 'toolUse',
 });
-const runId = 'abc123';
+const runId = 'abc123' as RunId;
 const options = {
-  runId: 'stream:abc123',
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'nativeInteractive',
 } as const;
@@ -60,13 +60,12 @@ describe('run registration and finalization', () => {
       ).toMatchObject({
         workingDirectory: workingDirectory ?? '/workspace/root',
       });
-      expect(
-        await run(getRunRecords(session, runId).readMeta()),
-      ).toMatchObject({
-        runId: options.runId,
-        identity: options.identity,
-        userFollowUpSupport: 'nativeInteractive',
-      });
+      expect(await run(getRunRecords(session, runId).readMeta())).toMatchObject(
+        {
+          identity: options.identity,
+          userFollowUpSupport: 'nativeInteractive',
+        },
+      );
       expect(await getRunStore(runId).listKeys()).toEqual([]);
     },
   );
@@ -77,12 +76,10 @@ describe('run registration and finalization', () => {
       Effect.die(failure),
     );
     await expect(register()).rejects.toBe(failure);
-    expect(
-      await runInSession(session, () => inspectRunLease(runId)),
-    ).toEqual({ status: 'free' });
-    expect(
-      await run(getRunRecords(session, runId).readMeta()),
-    ).toBeNull();
+    expect(await runInSession(session, () => inspectRunLease(runId))).toEqual({
+      status: 'free',
+    });
+    expect(await run(getRunRecords(session, runId).readMeta())).toBeNull();
   });
 
   it.each([false, true])(
@@ -95,17 +92,9 @@ describe('run registration and finalization', () => {
         Effect.fail(failure),
       );
       await expect(
-        run(
-          acquireResumedRunOwnership(
-            session,
-            runId,
-            options.runId,
-          ),
-        ),
+        run(acquireResumedRunOwnership(session, runId)),
       ).rejects.toBe(failure);
-      const lease = await runInSession(session, () =>
-        inspectRunLease(runId),
-      );
+      const lease = await runInSession(session, () => inspectRunLease(runId));
       expect(lease.status).toBe(alreadyOwned ? 'owned' : 'free');
     },
   );
@@ -121,24 +110,9 @@ describe('run registration and finalization', () => {
     await expect(
       run(getRunRecords(session, runId).writeReport('unowned')),
     ).rejects.toThrow();
-    await run(session.acquireRunClaims(runId, options.runId));
+    await run(session.acquireRunClaims(runId));
     await run(getRunRecords(session, runId).writeReport('owned'));
-    expect(
-      await run(getRunRecords(session, runId).readReport()),
-    ).toBe('owned');
-  });
-
-  it('keeps the existing local run claimed when a new birth collides with its stream', async () => {
-    await register();
-    await expect(
-      run(registerRun(session, 'bcd234', baseConfig, 'chat', options)),
-    ).rejects.toThrow();
-    await run(
-      getRunRecords(session, runId).writeReport('still owned'),
-    );
-    expect(
-      await run(getRunRecords(session, runId).readReport()),
-    ).toBe('still owned');
+    expect(await run(getRunRecords(session, runId).readReport())).toBe('owned');
   });
 
   it('releases fresh birth claims when the committed publication consumer fails', async () => {
@@ -146,15 +120,13 @@ describe('run registration and finalization', () => {
       Effect.die(new Error('consumer failed')),
     );
     await expect(register()).rejects.toThrow();
-    expect(
-      await run(getRunRecords(session, runId).readMeta()),
-    ).not.toBeNull();
+    expect(await run(getRunRecords(session, runId).readMeta())).not.toBeNull();
     await expect(
       run(getRunRecords(session, runId).writeReport('unowned')),
     ).rejects.toThrow();
-    expect(
-      await runInSession(session, () => inspectRunLease(runId)),
-    ).toEqual({ status: 'free' });
+    expect(await runInSession(session, () => inspectRunLease(runId))).toEqual({
+      status: 'free',
+    });
   });
 
   it.each(['preserve', 'delete'] as const)(

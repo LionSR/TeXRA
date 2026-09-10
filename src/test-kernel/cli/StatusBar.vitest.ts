@@ -12,11 +12,7 @@ import {
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
-import {
-  RUN_PHASE,
-  type RunId,
-  RUN_LIFECYCLE_READY,
-} from '@shared/schemas';
+import { RUN_PHASE, type RunId, RUN_LIFECYCLE_READY } from '@shared/schemas';
 import { runStatusCopy } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
@@ -53,8 +49,7 @@ function statusInput(
 
   return {
     status: RUN_PHASE.WAITING,
-    statusLabel: runStatusCopy(rest.status ?? RUN_PHASE.WAITING)
-      .statusLabel,
+    statusLabel: runStatusCopy(rest.status ?? RUN_PHASE.WAITING).statusLabel,
     transientNotice: undefined,
     bypass: NO_BYPASS,
     queuedFollowUpMessages: [],
@@ -988,17 +983,17 @@ describe('CLI StatusBar display model', () => {
     // and the target reads the view it is given.
     type Status = RunView['status'];
     const rootView = (status: Status): RunView =>
-      makeRunView({ id: 'root', status });
+      makeRunView({ id: 'root' as RunId, status });
     const childView = (status: Status): RunView =>
       makeRunView({
-        id: 'child',
+        id: 'child' as RunId,
         status,
         parentId: 'root' as RunId,
         ancestors: [{ id: 'root' as RunId, label: 'root' }],
       });
     const grandchildView = (status: Status): RunView =>
       makeRunView({
-        id: 'grandchild',
+        id: 'grandchild' as RunId,
         status,
         parentId: 'child' as RunId,
         ancestors: [

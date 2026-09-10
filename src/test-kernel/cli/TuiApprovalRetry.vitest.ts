@@ -133,7 +133,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionAutoApproval } from '@tools/goal';
 import { proposalApprovals } from '@tools/approval';
-import { generateRunId } from '@utils/core';
 import {
   bashApprovalRequest,
   toolEditApprovalRequest,
@@ -149,21 +148,17 @@ function port(): SessionHostInteractions {
   const session = defaultSession();
   const ensureRun = (runId: string | null | undefined): void => {
     if (!runId) return;
-    if (
-      SubscriptionRef.getUnsafe(session.view).runs.has(
-        runId as RunId,
-      )
-    )
+    if (SubscriptionRef.getUnsafe(session.view).runs.has(runId as RunId))
       return;
     session.publish([
       {
         type: 'run.start',
-        aggregateId: qualifyAggregateId('stream', runId),
-        runId: generateRunId(),
+        aggregateId: qualifyAggregateId('run', runId as RunId),
         identity: { kind: 'agent', agent: 'agent' },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         category: AgentCategory.ToolUse,
         isRemote: false,
+        parent: null,
       },
     ]);
   };
@@ -269,7 +264,7 @@ function ordinaryRetry(
 ): RetryPermission {
   return {
     requestId,
-    runId,
+    runId: runId as RunId,
     operation: 'model request',
     errorMessage: 'Temporary connection error.',
   };
@@ -392,10 +387,7 @@ async function beginSubscriptionSwitch(
 ): Promise<{
   readonly result: ReturnType<NonNullable<HostInteractions['requestRetry']>>;
 }> {
-  const result = port().requestRetry(
-    chatGptSubscriptionRetry(runId),
-    options,
-  );
+  const result = port().requestRetry(chatGptSubscriptionRetry(runId), options);
   await waitForApproval('retry', { runId });
   decideRetry(PERSONAL_KEY_RETRY);
   return { result };
@@ -483,7 +475,7 @@ describe('TUI retry approvals', () => {
     await port().openExternalInquiry({
       requestId: 'inquiry-interrupted',
       allowBypass: false,
-      runId: 'inquiry-stream',
+      runId: 'inquiry-stream' as RunId,
       question: 'Which external fact should be checked?',
       threadId: 'ei_aabbccddeeff',
       sessionLinks: null,
@@ -513,7 +505,7 @@ describe('TUI retry approvals', () => {
     await port().openExternalInquiry({
       requestId: 'inquiry-note-free',
       allowBypass: false,
-      runId: 'inquiry-stream',
+      runId: 'inquiry-stream' as RunId,
       question: 'Which external fact should be checked?',
       threadId: 'ei_112233445566',
       sessionLinks: null,
@@ -567,7 +559,7 @@ describe('TUI retry approvals', () => {
     const result = port().requestBashApproval(
       bashApprovalRequest({
         command: 'echo ok',
-        runId: 'bash-bypass-stream',
+        runId: 'bash-bypass-stream' as RunId,
       }),
     );
 
@@ -584,14 +576,14 @@ describe('TUI retry approvals', () => {
 
   it('updates TUI command bypass state when goal auto-approval is enabled and cleared', async () => {
     const { presentationHost } = tui();
-    await setGoalSessionAutoApproval('goal-bypass-stream', 'commands');
+    await setGoalSessionAutoApproval('goal-bypass-stream' as RunId, 'commands');
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       runId: 'goal-bypass-stream',
       kind: 'bash',
       bypassActive: true,
     });
 
-    await setGoalSessionAutoApproval('goal-bypass-stream', false);
+    await setGoalSessionAutoApproval('goal-bypass-stream' as RunId, false);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       runId: 'goal-bypass-stream',
       kind: 'bash',
@@ -601,9 +593,12 @@ describe('TUI retry approvals', () => {
 
   it('scopes goal auto-approval to all agent work and clears it together', async () => {
     tui();
-    await setGoalSessionAutoApproval('goal-all-bypass-stream', 'allAgentWork');
+    await setGoalSessionAutoApproval(
+      'goal-all-bypass-stream' as RunId,
+      'allAgentWork',
+    );
 
-    await setGoalSessionAutoApproval('goal-all-bypass-stream', false);
+    await setGoalSessionAutoApproval('goal-all-bypass-stream' as RunId, false);
   });
 
   it('updates TUI edit bypass state at the approval decision site', async () => {
@@ -614,7 +609,7 @@ describe('TUI retry approvals', () => {
         originalContent: 'old',
         proposedContent: 'new',
         sourceTool: 'edit',
-        runId: 'edit-bypass-stream',
+        runId: 'edit-bypass-stream' as RunId,
       }),
     );
 
@@ -636,7 +631,7 @@ describe('TUI retry approvals', () => {
     const { presentationHost, interactions } = tui();
     const result = port().requestAgentProposal({
       requestId: 'proposal-bypass',
-      runId: 'proposal-bypass-stream',
+      runId: 'proposal-bypass-stream' as RunId,
       agent: 'critic',
       agentSource: null,
       model: 'kimi26T',
@@ -650,15 +645,17 @@ describe('TUI retry approvals', () => {
     currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
 
     await expect(result).resolves.toEqual({ action: 'approve' });
-    expect(proposalApprovals().isBypassed('proposal-bypass-stream')).toBe(true);
+    expect(
+      proposalApprovals().isBypassed('proposal-bypass-stream' as RunId),
+    ).toBe(true);
     expect(
       currentSession().approvals.toolEdit.bypass.isBypassed(
-        'proposal-bypass-stream',
+        'proposal-bypass-stream' as RunId,
       ),
     ).toBe(true);
     expect(
       currentSession().approvals.bash.bypass.isBypassed(
-        'proposal-bypass-stream',
+        'proposal-bypass-stream' as RunId,
       ),
     ).toBe(true);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
@@ -680,7 +677,7 @@ describe('TUI retry approvals', () => {
 
   it('approves delegated work already queued in the same stream', async () => {
     const { interactions } = tui();
-    const runId = 'parallel-approval-stream';
+    const runId = 'parallel-approval-stream' as RunId;
     const proposal = port().requestAgentProposal({
       requestId: 'proposal-current',
       runId,
@@ -732,7 +729,7 @@ describe('TUI retry approvals', () => {
     void port().requestBashApproval(
       bashApprovalRequest({
         command: 'lake test',
-        runId: 'other-approval-stream',
+        runId: 'other-approval-stream' as RunId,
       }),
     );
 
@@ -752,7 +749,7 @@ describe('TUI retry approvals', () => {
 
   it('keeps an ordinary proposal approval limited to the current request', async () => {
     const { interactions } = tui();
-    const runId = 'proposal-one-off-stream';
+    const runId = 'proposal-one-off-stream' as RunId;
     const result = port().requestAgentProposal({
       requestId: 'proposal-one-off',
       runId,
@@ -770,9 +767,9 @@ describe('TUI retry approvals', () => {
 
     await expect(result).resolves.toEqual({ action: 'approve' });
     expect(proposalApprovals().isBypassed(runId)).toBe(false);
-    expect(
-      currentSession().approvals.toolEdit.bypass.isBypassed(runId),
-    ).toBe(false);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(runId)).toBe(
+      false,
+    );
     expect(currentSession().approvals.bash.bypass.isBypassed(runId)).toBe(
       false,
     );
@@ -1080,7 +1077,7 @@ describe('TUI retry approvals', () => {
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
     expect(mocks.preferKimiCode).toBe(false);
 
-    port().cancel({ runId: 'kimi-cancel-prepare', kind: 'retry' });
+    port().cancel({ runId: 'kimi-cancel-prepare' as RunId, kind: 'retry' });
     await expect(result).resolves.toEqual({ action: 'cancel' });
     preparation.resolve();
     await settleRetryContinuation();
@@ -1206,7 +1203,7 @@ describe('TUI retry approvals', () => {
     );
 
     port().cancel({
-      runId: 'cancel-during-validation',
+      runId: 'cancel-during-validation' as RunId,
       kind: 'retry',
     });
     await expect(result).resolves.toEqual({ action: 'cancel' });
@@ -1281,7 +1278,7 @@ describe('TUI retry approvals', () => {
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
 
     port().cancel({
-      runId: 'stalled-preparation',
+      runId: 'stalled-preparation' as RunId,
       kind: 'retry',
       cause: 'Cancelled in test.',
     });
@@ -1459,7 +1456,7 @@ describe('TUI retry approvals', () => {
     const bash = port().requestBashApproval(
       bashApprovalRequest({
         command: 'echo ok',
-        runId: 'bash-stream',
+        runId: 'bash-stream' as RunId,
       }),
     );
 
@@ -1516,7 +1513,7 @@ describe('TUI retry approvals', () => {
     // but the queue still owns it, so the cancel below reaches its
     // preparation.
     port().cancel({
-      runId: 'cancelled-ordinary',
+      runId: 'cancelled-ordinary' as RunId,
       kind: 'retry',
       cause: 'Cancelled in test.',
     });
@@ -1555,9 +1552,7 @@ describe('TUI retry approvals', () => {
       // host directly.
       const result =
         _trigger === 'unbound'
-          ? handle.interactions.requestRetry?.(
-              chatGptSubscriptionRetry(runId),
-            )
+          ? handle.interactions.requestRetry?.(chatGptSubscriptionRetry(runId))
           : port().requestRetry(chatGptSubscriptionRetry(runId));
       invalidate(handle);
       await expect(result).resolves.toEqual({ action: 'cancel' });

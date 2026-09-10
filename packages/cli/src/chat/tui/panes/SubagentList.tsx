@@ -184,7 +184,7 @@ export interface SubagentListProps {
   readonly maxRows?: number;
   readonly onCancel?: () => void;
   readonly onFocusRun?: (runId: RunId) => void;
-  readonly onKillRun?: (runId: string) => void;
+  readonly onKillRun?: (runId: RunId) => void;
   readonly onSelectionChange?: (value: RunId) => void;
   readonly pendingApprovals?: ReadonlyMap<
     string,
@@ -228,9 +228,7 @@ export function SubagentList(
       const { stream, expanded } = selectedRow;
       if (key.leftArrow || key.rightArrow || input === ' ') {
         const next = key.rightArrow || (!key.leftArrow && !expanded);
-        expandedRuns.set(
-          new Map(expandedRuns.get()).set(stream.id, next),
-        );
+        expandedRuns.set(new Map(expandedRuns.get()).set(stream.id, next));
       } else if (
         input.toLowerCase() === 'r' &&
         stream.group === 'interrupted' &&
@@ -257,8 +255,7 @@ export function SubagentList(
     >
       <Select
         activeValue={rows.find(
-          (row) =>
-            row.kind === 'stream' && row.stream.id === props.activeRunId,
+          (row) => row.kind === 'stream' && row.stream.id === props.activeRunId,
         )}
         highlightedValue={selectedRow ?? null}
         hotkeys={false}

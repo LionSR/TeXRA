@@ -640,11 +640,11 @@ describe('CLI workflow run command', () => {
             {
               type: 'run.start',
               aggregateId: aggregateId('run', run.result.runId),
-              runId,
               identity: { kind: 'agent', agent: 'polish' },
               category: AgentCategory.Workflow,
               userFollowUpSupport: 'unsupported',
               isRemote: false,
+              parent: null,
             },
           ]);
           // The existing executeCliConfig stub is a Promise port. Its run owns

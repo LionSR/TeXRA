@@ -4,11 +4,7 @@ import * as path from 'node:path';
 // Local imports
 import type { runCompileCheck } from '@agent/implementations/flows/reflection/output/compileCheck';
 import type { OutputState } from '@agent/implementations/flows/reflection/output/outputState';
-import type {
-  RunId,
-  FileLocation,
-  OutputFileInfo,
-} from '@shared/schemas';
+import type { RunId, FileLocation, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -56,7 +52,7 @@ export function compileContext(
     fileService: new TaskRunFileService(runId),
     outputState,
     logger: spiedTrace(),
-    runId: 'compile-stream',
+    runId,
   };
 }
 

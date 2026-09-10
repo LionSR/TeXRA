@@ -1,6 +1,6 @@
 // The recorded fan-out session every renderer is checked against: a
 // workflow-script root, one child agent run with a grandchild of its own, a
-// background process stream. `buildScenario` is the commit-ordered event log a
+// process run. `buildScenario` is the commit-ordered event log a
 // publisher would replay; `fanOutView` and its variants fold it into the
 // `SessionView` the fold test asserts on and the design harness renders, so
 // the two can never drift.
@@ -12,6 +12,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
+  RunIdSchema,
   ToolConfigSchema,
   type ApprovalPolicySnapshot,
   type FoldInput,
@@ -20,6 +21,7 @@ import {
   type DisplaySessionEvent,
   type StreamLogEntry,
   type RunId,
+  type RunParent,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
@@ -31,10 +33,10 @@ import {
 /** A process identity, never a lease token (contract C5). */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
 export const OTHER_OWNER = '["test-host",4343,"2026-09-04T00:00:00.000Z"]';
-export const ROOT = 'review#aaaaaaaaaaaa' as RunId;
-export const CHILD = 'search#bbbbbbbbbbbb' as RunId;
-export const GRANDCHILD = 'lint#dddddddddddd' as RunId;
-export const PROCESS = 'bash@tool#cccccccccccc' as RunId;
+export const ROOT = RunIdSchema.parse('aaaaaaaaaaaa');
+export const CHILD = RunIdSchema.parse('bbbbbbbbbbbb');
+export const GRANDCHILD = RunIdSchema.parse('dddddddddddd');
+export const PROCESS = RunIdSchema.parse('cccccccccccc');
 
 /** The board's clock: what a host passes as `nowMs` to read elapsed. Every
  *  fixture timestamp is anchored to it so the harness reads minutes. */
@@ -97,21 +99,25 @@ export class Log {
   readonly events: DisplaySessionEvent[] = [];
   private readonly seq = new Map<string, number>();
   private readonly entrySeq = new Map<RunId, number>();
+  /** Each run's creation commit: what the database stamps on a child's
+   *  `run.start.parent` (one run model, section 3.2). */
+  private readonly startCommit = new Map<RunId, number>();
   private commit = 0;
 
   emit(
-    aggregateId: string,
+    runId: RunId,
     at: number,
     body: DisplaySessionEventBody,
     ownerId: string | null = OWNER,
   ): DisplaySessionEvent {
-    const key = qualifyAggregateId(
-      body.type === 'inquiryThreadUpdated' ? 'inquiry' : 'stream',
-      aggregateId,
-    );
+    const key =
+      body.type === 'inquiryThreadUpdated'
+        ? qualifyAggregateId('inquiry', runId)
+        : qualifyAggregateId('run', runId);
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
     this.commit += 1;
+    if (body.type === 'run.start') this.startCommit.set(runId, this.commit);
     // A body is a distributive omit over the union, so the spread cannot be
     // typed back into the union without this assertion.
     const event = {
@@ -124,6 +130,17 @@ export class Log {
     } as DisplaySessionEvent;
     this.events.push(event);
     return event;
+  }
+
+  /** The parent edge a child's `run.start` carries: the launching run and
+   *  its creation commit. A parent with no `run.start` is refused, as the
+   *  database refuses it. */
+  parent(id: RunId): RunParent {
+    const startCommit = this.startCommit.get(id);
+    if (startCommit === undefined) {
+      throw new Error(`fixture parent ${id} has no run.start`);
+    }
+    return { id, startCommit };
   }
 
   /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
@@ -191,7 +208,7 @@ export const tail = (event: DisplaySessionEvent): FoldInput => ({
 
 export const subscribe = (...ids: RunId[]): FoldInput => ({
   _tag: 'subscriptions',
-  set: ids.map((id) => ({ id: qualifyAggregateId('stream', id), fromSeq: 0 })),
+  set: ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
 });
 
 export function local(state: Partial<LocalRuntimeState>): FoldInput {
@@ -218,11 +235,11 @@ export function buildScenario({ proposal = false } = {}) {
 
   log.emit(ROOT, T.root, {
     type: 'run.start',
-    runId: 'aaaaaaaaaaaa',
     identity: ROOT_IDENTITY,
     category: AgentCategory.Workflow,
     isRemote: false,
     worktree: { workingDirectory: '/paper', branch: 'main' },
+    parent: null,
     userFollowUpSupport: 'unsupported',
     approvalPolicy: ROOT_POLICY,
     checkpointId: 'review@chat',
@@ -231,11 +248,9 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'run.activate',
     category: AgentCategory.Workflow,
     isRemote: false,
-    background: false,
   });
   log.emit(ROOT, T.root, {
     type: 'run.config',
-    runId: 'aaaaaaaaaaaa',
     config: AgentConfigFieldsSchema.parse({
       agentCategory: AgentCategory.Workflow,
       model: 'claude-sonnet-4-5',
@@ -282,21 +297,17 @@ export function buildScenario({ proposal = false } = {}) {
     }),
   );
 
-  // The child agent run: its run.start carries the parent, and the registry
-  // confirms the edge as a session fact.
+  // The child agent run: its run.start carries the whole parent edge.
   log.emit(CHILD, T.child, {
     type: 'run.start',
-    runId: 'bbbbbbbbbbbb',
     identity: CHILD_IDENTITY,
     category: AgentCategory.ToolUse,
     isRemote: false,
-    parentRunId: ROOT,
+    parent: log.parent(ROOT),
     userFollowUpSupport: 'nativeInteractive',
   });
-  log.emit(CHILD, T.child, { type: 'setParentStream', parentRunId: ROOT });
   log.emit(CHILD, T.child, {
     type: 'run.config',
-    runId: 'bbbbbbbbbbbb',
     config: AgentConfigFieldsSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       model: 'claude-sonnet-4-5',
@@ -352,12 +363,11 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
-    runId: 'dddddddddddd',
     identity: GRANDCHILD_IDENTITY,
     category: AgentCategory.ToolUse,
     isRemote: false,
     userFollowUpSupport: 'unsupported',
-    parentRunId: CHILD,
+    parent: log.parent(CHILD),
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'status',
@@ -372,10 +382,8 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'result',
     outcome: 'completed',
-    runId: 'dddddddddddd',
     agentName: 'custom:lint',
     category: AgentCategory.ToolUse,
-    isSubagent: true,
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'status',
@@ -404,18 +412,17 @@ export function buildScenario({ proposal = false } = {}) {
     },
   });
 
-  // A background process stream, newer than the root: leads the order.
+  // A top-level process run, newer than the root: leads the order.
   log.emit(PROCESS, T.process, {
     type: 'run.start',
-    runId: 'cccccccccccc',
     identity: { kind: 'process', tool: 'bash' },
     category: AgentCategory.ToolUse,
     isRemote: false,
+    parent: null,
     userFollowUpSupport: 'unsupported',
   });
   log.emit(PROCESS, T.process, {
     type: 'run.config',
-    runId: 'cccccccccccc',
     config: AgentConfigFieldsSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       model: 'unused',
@@ -489,10 +496,8 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.childDone, {
     type: 'result',
     outcome: 'completed',
-    runId: 'bbbbbbbbbbbb',
     agentName: 'custom:search',
     category: AgentCategory.ToolUse,
-    isSubagent: true,
   });
   log.emit(CHILD, T.childDone, {
     type: 'status',
@@ -520,10 +525,8 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.rootDone, {
     type: 'result',
     outcome: 'completed',
-    runId: 'aaaaaaaaaaaa',
     agentName: 'review',
     category: AgentCategory.Workflow,
-    isSubagent: false,
   });
   log.emit(ROOT, T.rootDone, {
     type: 'status',
@@ -571,7 +574,7 @@ function ownedBy(
   aggregateId: RunId,
   ownerId: string,
 ): FoldInput[] {
-  const key = qualifyAggregateId('stream', aggregateId);
+  const key = qualifyAggregateId('run', aggregateId);
   return inputs.map((input) => {
     if (input._tag === 'drained' || input._tag === 'replay.complete') {
       return {
@@ -618,8 +621,7 @@ export function withWaitingGrandchild(): SessionView {
     (input) =>
       !(
         input._tag === 'event' &&
-        ((input.event.aggregateId ===
-          qualifyAggregateId('stream', GRANDCHILD) &&
+        ((input.event.aggregateId === qualifyAggregateId('run', GRANDCHILD) &&
           settled.has(input.event.type) &&
           input.event.at === T.grandchildDone) ||
           input.event.type === 'approval.requested')
@@ -658,10 +660,9 @@ interface BoardCall {
   readonly id: string;
   readonly phase: string;
   readonly status: WorkflowCallProgress['status'];
-  /** The child stream the call opened; its label doubles as the stream's. */
+  /** The child run the call opened; its label doubles as the run's. */
   readonly child?: {
     readonly id: RunId;
-    readonly runId: string;
     readonly startedAt: number;
     readonly latest?: string;
     readonly outputTokens?: number;
@@ -675,22 +676,19 @@ interface BoardCall {
   readonly costUsd?: number;
 }
 
+/** A run id for a board call: the call id's characters as hex, so calls
+ *  that share a prefix still get distinct ids. */
+const runIdOf = (id: string): RunId =>
+  RunIdSchema.parse(
+    [...id].map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join(''),
+  );
+
 const child = (
   id: string,
   startedAt: number,
-  extra: Omit<
-    NonNullable<BoardCall['child']>,
-    'id' | 'runId' | 'startedAt'
-  > = {},
+  extra: Omit<NonNullable<BoardCall['child']>, 'id' | 'startedAt'> = {},
 ): NonNullable<BoardCall['child']> => ({
-  id: `${id}#${id
-    .replaceAll(/[^a-z]/g, '')
-    .padEnd(12, 'e')
-    .slice(0, 12)}` as RunId,
-  runId: id
-    .replaceAll(/[^a-z]/g, '')
-    .padEnd(12, 'e')
-    .slice(0, 12),
+  id: runIdOf(id),
   startedAt,
   ...extra,
 });
@@ -891,11 +889,11 @@ function boardView({
   const startedAt = BOARD_NOW - min(38);
   log.emit(ROOT, startedAt, {
     type: 'run.start',
-    runId: 'aaaaaaaaaaaa',
     identity: { kind: 'multiAgentWorkflow', workflowName: 'review' },
     category: AgentCategory.Workflow,
     isRemote: false,
     worktree: { workingDirectory: '/paper', branch: 'main' },
+    parent: null,
     userFollowUpSupport: 'unsupported',
     approvalPolicy: ROOT_POLICY,
     checkpointId: 'review@chat',
@@ -904,11 +902,9 @@ function boardView({
     type: 'run.activate',
     category: AgentCategory.Workflow,
     isRemote: false,
-    background: false,
   });
   log.emit(ROOT, startedAt, {
     type: 'run.config',
-    runId: 'aaaaaaaaaaaa',
     config: AgentConfigFieldsSchema.parse({
       agentCategory: AgentCategory.Workflow,
       model: 'claude-sonnet-4-5',
@@ -925,7 +921,7 @@ function boardView({
   });
   log.emit(ROOT, startedAt, {
     type: 'usage',
-    storageKey: 'aaaaaaaaaaaa',
+    runId: ROOT,
     usage: { inputTokens: 210_000, outputTokens: 41_000, cost: 1.84 },
   });
   const phases = ['Scout', 'Review', 'Verify', 'Report'];
@@ -1004,16 +1000,14 @@ function boardView({
       const { child: kid } = entry;
       log.emit(kid.id, kid.startedAt, {
         type: 'run.start',
-        runId: kid.runId,
         identity: { kind: 'agent', agent: `custom:${entry.id}` },
         category: AgentCategory.ToolUse,
         isRemote: false,
-        parentRunId: ROOT,
+        parent: log.parent(ROOT),
         userFollowUpSupport: 'unsupported',
       });
       log.emit(kid.id, kid.startedAt, {
         type: 'run.config',
-        runId: kid.runId,
         config: AgentConfigFieldsSchema.parse({
           agentCategory: AgentCategory.ToolUse,
           model: 'claude-sonnet-4-5',
@@ -1043,7 +1037,7 @@ function boardView({
       if (kid.outputTokens !== undefined) {
         log.emit(kid.id, kid.startedAt + 3, {
           type: 'usage',
-          storageKey: kid.runId,
+          runId: kid.id,
           usage: {
             inputTokens: kid.outputTokens * 5,
             outputTokens: kid.outputTokens,
@@ -1067,17 +1061,15 @@ function boardView({
         });
       }
       // A call already terminal when the board opens carries its child's
-      // outcome too: the row's status and the child stream's phase are one
+      // outcome too: the row's status and the child run's phase are one
       // fact, so the tree never reads "Running" under a finished call.
       if (entry.status === 'failed' || entry.status === 'completed') {
         const done = entry.status === 'completed';
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'result',
           outcome: done ? 'completed' : 'failed',
-          runId: kid.runId,
           agentName: `custom:${entry.id}`,
           category: AgentCategory.ToolUse,
-          isSubagent: true,
         });
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'status',
@@ -1106,10 +1098,8 @@ function boardView({
         log.emit(kid.id, closedAt - 1, {
           type: 'result',
           outcome: 'completed',
-          runId: kid.runId,
           agentName: `custom:${entry.id}`,
           category: AgentCategory.ToolUse,
-          isSubagent: true,
         });
         log.emit(kid.id, closedAt - 1, {
           type: 'status',
@@ -1140,10 +1130,8 @@ function boardView({
     log.emit(ROOT, closedAt + 2, {
       type: 'result',
       outcome,
-      runId: 'aaaaaaaaaaaa',
       agentName: 'review',
       category: AgentCategory.Workflow,
-      isSubagent: false,
     });
     log.emit(ROOT, closedAt + 2, {
       type: 'status',

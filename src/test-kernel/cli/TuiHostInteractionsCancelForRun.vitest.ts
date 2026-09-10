@@ -36,7 +36,6 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
-import { generateRunId } from '@utils/core';
 import {
   bashApprovalRequest,
   toolEditApprovalRequest,
@@ -50,31 +49,30 @@ function host(): CliRuntimeHost {
  *  request goes through the session, which publishes the fact the modal
  *  reads and settles the pending set. */
 
+const runA = 'stream-a' as RunId;
+const runB = 'stream-b' as RunId;
+
 /**
- * The session's port for a test: a request names a stream the fold must
+ * The session's port for a test: a request names a run the fold must
  * already hold (only `run.start` mints one), so each hook first publishes
- * the stream's existence fact when the view lacks it, then goes through the
+ * the run's existence fact when the view lacks it, then goes through the
  * session, which publishes `approval.requested` and settles the answer.
  */
 function port(): SessionHostInteractions {
   const session = defaultSession();
   const ensureRun = (runId: string | null | undefined): void => {
     if (!runId) return;
-    if (
-      SubscriptionRef.getUnsafe(session.view).runs.has(
-        runId as RunId,
-      )
-    )
+    if (SubscriptionRef.getUnsafe(session.view).runs.has(runId as RunId))
       return;
     session.publish([
       {
         type: 'run.start',
-        aggregateId: qualifyAggregateId('stream', runId),
-        runId: generateRunId(),
+        aggregateId: qualifyAggregateId('run', runId as RunId),
         identity: { kind: 'agent', agent: 'agent' },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         category: AgentCategory.ToolUse,
         isRemote: false,
+        parent: null,
       },
     ]);
   };
@@ -151,21 +149,21 @@ describe('createTuiHostInteractions', () => {
     const interactions = tuiInteractions();
     const planResult = interactions.requestPlanApproval({
       requestId: 'approval-a',
-      runId: 'stream-a',
+      runId: runA,
       plan,
       goalEnabled: false,
     });
     const otherStreamResult = interactions.requestPlanApproval({
       requestId: 'approval-b',
-      runId: 'stream-b',
+      runId: runB,
       plan,
       goalEnabled: false,
     });
 
-    await waitForApproval('planApproval', { runId: 'stream-a' });
+    await waitForApproval('planApproval', { runId: runA });
 
     interactions.cancel({
-      runId: 'stream-a',
+      runId: runA,
       cause: 'Session interrupted.',
     });
 
@@ -176,7 +174,7 @@ describe('createTuiHostInteractions', () => {
 
     // stream-b's request was never touched and now becomes the foreground
     // modal instead of being left permanently pending.
-    await waitForApproval('planApproval', { runId: 'stream-b' });
+    await waitForApproval('planApproval', { runId: runB });
     currentApproval.get()?.decide({ accepted: true });
     await expect(otherStreamResult).resolves.toEqual({ action: 'approve' });
   });
@@ -185,11 +183,11 @@ describe('createTuiHostInteractions', () => {
     const interactions = tuiInteractions();
     const goalResult = interactions.requestPlanApproval({
       requestId: 'approval-goal',
-      runId: 'stream-a',
+      runId: runA,
       plan,
       goalEnabled: true,
     });
-    await waitForApproval('planApproval', { runId: 'stream-a' });
+    await waitForApproval('planApproval', { runId: runA });
     currentApproval.get()?.decide({
       accepted: true,
       goalAutoApproveAll: true,
@@ -202,11 +200,11 @@ describe('createTuiHostInteractions', () => {
 
     const rejected = interactions.requestPlanApproval({
       requestId: 'approval-reject',
-      runId: 'stream-a',
+      runId: runA,
       plan,
       goalEnabled: false,
     });
-    await waitForApproval('planApproval', { runId: 'stream-a' });
+    await waitForApproval('planApproval', { runId: runA });
     currentApproval.get()?.decide({ accepted: false });
 
     // A rejection without a user message omits `feedback` rather than
@@ -218,14 +216,14 @@ describe('createTuiHostInteractions', () => {
     const interactions = tuiInteractions();
     const proposalResult = interactions.requestAgentProposal({
       requestId: 'proposal-a',
-      runId: 'stream-a',
+      runId: runA,
       ...proposal,
     });
 
-    await waitForApproval('proposal', { runId: 'stream-a' });
+    await waitForApproval('proposal', { runId: runA });
 
     interactions.cancel({
-      runId: 'stream-a',
+      runId: runA,
       cause: 'Session interrupted.',
     });
 
@@ -241,14 +239,14 @@ describe('createTuiHostInteractions', () => {
     const bashResult = interactions.requestBashApproval(
       bashApprovalRequest({
         command: 'echo hi',
-        runId: 'stream-a',
+        runId: runA,
       }),
     );
 
-    await waitForApproval('bash', { runId: 'stream-a' });
+    await waitForApproval('bash', { runId: runA });
 
     interactions.cancel({
-      runId: 'stream-a',
+      runId: runA,
       cause: 'Session interrupted.',
     });
 
@@ -267,13 +265,13 @@ describe('createTuiHostInteractions', () => {
         originalContent: 'old',
         proposedContent: 'new',
         sourceTool: 'edit',
-        runId: 'stream-a',
+        runId: runA,
       }),
     );
 
-    await waitForApproval('toolEdit', { runId: 'stream-a' });
+    await waitForApproval('toolEdit', { runId: runA });
     interactions.cancel({
-      runId: 'stream-a',
+      runId: runA,
       cause: 'Session interrupted.',
     });
 
@@ -291,11 +289,11 @@ describe('createTuiHostInteractions', () => {
     // entry, resolving the pending retry with 'cancel'.
     const retryResult = interactions.requestRetry({
       requestId: 'retry:first',
-      runId: 'stream-a',
+      runId: runA,
       operation: 'Model invocation',
     });
 
-    await waitForApproval('retry', { runId: 'stream-a' });
+    await waitForApproval('retry', { runId: runA });
 
     interactions.cancel({ cause: 'All approvals cleared.' });
 
@@ -306,12 +304,12 @@ describe('createTuiHostInteractions', () => {
     // resurrect it, and a fresh request reserves a fresh entry.
     const second = interactions.requestRetry({
       requestId: 'retry:second',
-      runId: 'stream-a',
+      runId: runA,
       operation: 'Model invocation',
     });
     await waitForApproval('retry', {});
     interactions.cancel({
-      runId: 'stream-a',
+      runId: runA,
       kind: 'retry',
       cause: 'Session interrupted.',
     });
@@ -322,15 +320,15 @@ describe('createTuiHostInteractions', () => {
     const interactions = tuiInteractions();
     const planResult = interactions.requestPlanApproval({
       requestId: 'approval-kind',
-      runId: 'stream-a',
+      runId: runA,
       plan,
       goalEnabled: false,
     });
 
-    await waitForApproval('planApproval', { runId: 'stream-a' });
+    await waitForApproval('planApproval', { runId: runA });
 
     interactions.cancel({
-      runId: 'stream-a',
+      runId: runA,
       kind: 'retry',
       cause: 'Session interrupted.',
     });
@@ -338,7 +336,7 @@ describe('createTuiHostInteractions', () => {
     // The plan approval is still the foreground modal and still decidable.
     expect(currentApproval.get()?.payload).toMatchObject({
       kind: 'planApproval',
-      data: { runId: 'stream-a' },
+      data: { runId: runA },
     });
     currentApproval.get()?.decide({ accepted: true });
     await expect(planResult).resolves.toEqual({ action: 'approve' });

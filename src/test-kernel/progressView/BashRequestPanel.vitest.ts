@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
-import type { BashPermission } from '@shared/schemas';
+import type { BashPermission, RunId } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
@@ -72,7 +72,7 @@ describe('bash-request-panel', () => {
 
   it('passes canBypass to the split button and "a" emits approveSession', async () => {
     const element = await mountPanel(
-      createPermission({ allowBypass: true, runId: 'stream-1' }),
+      createPermission({ allowBypass: true, runId: 'run-1' as RunId }),
     );
     const actions = recordPermissionActions(element);
 
@@ -85,14 +85,14 @@ describe('bash-request-panel', () => {
         kind: 'policy.set',
         change: {
           field: 'bypass',
-          runId: 'stream-1',
+          runId: 'run-1',
           bypass: 'bash',
           enabled: true,
         },
       },
       {
         kind: 'decision.bash',
-        runId: 'stream-1',
+        runId: 'run-1',
         approvalId: 'bash-request-1',
         decision: { action: 'approve' },
       },

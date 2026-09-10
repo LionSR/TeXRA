@@ -14,7 +14,7 @@ import {
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import type { FileLocation, ToolConfig } from '@shared/schemas';
+import type { FileLocation, RunId, ToolConfig } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -203,7 +203,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
   /** Resolve the symlink `mirrorWorkspaceFile` creates in run storage and
    * assert it points back at the real workspace figure. */
   async function expectFigureMirrored(
-    runId: string,
+    runId: RunId,
     figurePath: string,
   ): Promise<void> {
     const mirroredPath = path.join(getRunDir(runId), 'figures/plot.png');
@@ -219,7 +219,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     'extractFiguresFromFiles reuses its resolved baseDir instead of re-resolving it in mirrorFigureDependencies',
     () =>
       Effect.gen(function* () {
-        const runId = 'extract-basedir-dedup';
+        const runId = 'extract-basedir-dedup' as RunId;
         const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
         const workspaceState = AgentWorkspaceState.create();
@@ -241,9 +241,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         expect(workspaceState.media.files.map((f) => f.absolutePath)).toEqual([
           figurePath,
         ]);
-        yield* Effect.promise(() =>
-          expectFigureMirrored(runId, figurePath),
-        );
+        yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
       }),
   );
 
@@ -251,7 +249,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     'mirrorFiguresForFiles (no precomputed baseDir) still resolves and mirrors the correct path',
     () =>
       Effect.gen(function* () {
-        const runId = 'mirror-basedir-fallback';
+        const runId = 'mirror-basedir-fallback' as RunId;
         const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
         const manager = new LatexMediaManager(
@@ -267,9 +265,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
         // inside extractFigurePathsFromLatex, once as the fallback).
         expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
 
-        yield* Effect.promise(() =>
-          expectFigureMirrored(runId, figurePath),
-        );
+        yield* Effect.promise(() => expectFigureMirrored(runId, figurePath));
       }),
   );
 });

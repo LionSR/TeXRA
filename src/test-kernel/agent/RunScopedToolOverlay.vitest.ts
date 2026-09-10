@@ -11,11 +11,7 @@ import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import {
-  AgentCategory,
-  type RunId,
-  type RunId,
-} from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { testModelCell } from './modelCellTestUtils';
@@ -79,12 +75,9 @@ describe('run-scoped tool overlay', () => {
 
   it('adds two injected tools and submit_output to the model-facing list', async () => {
     const runId = '9329abcd' as RunId;
-    const runId = `chat#${runId}` as RunId;
     const session = createTestSession();
     const runScope = createRunScope({
       runId,
-      runId,
-      agentName: 'chat',
       session,
       signal: new AbortController().signal,
     });
@@ -141,12 +134,9 @@ describe('run-scoped tool overlay', () => {
 
   it('filters approval-gated and runtime-unavailable declared tools without a run context', async () => {
     const runId = '9329abce' as RunId;
-    const runId = `chat#${runId}` as RunId;
     const session = createTestSession();
     const runScope = createRunScope({
       runId,
-      runId,
-      agentName: 'chat',
       session,
       signal: new AbortController().signal,
     });

@@ -1,11 +1,14 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - stream state
+// Local imports - run state
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
-import { RUN_PHASE, type TokenUsageStats } from '@shared/schemas';
+import { RUN_PHASE, type RunId, type TokenUsageStats } from '@shared/schemas';
 import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
+
+const runA = 'aaaaaa' as RunId;
+const runB = 'bbbbbb' as RunId;
 
 /**
  * The tracker holds no state: it projects from the session status plane and
@@ -14,31 +17,27 @@ import { RUN_TRANSITION_CAUSE } from '@shared/runs/runStatus';
  */
 function trackerOverStatusPlane(): {
   status: RunStatusMachine;
-  usageByRun: Map<string, Map<string, TokenUsageStats>>;
+  usageByRun: Map<RunId, Map<string, TokenUsageStats>>;
   tracker: StatusBarUsageTracker;
 } {
   const status = new RunStatusMachine(
     () => {},
     () => {},
   );
-  const usageByRun = new Map<string, Map<string, TokenUsageStats>>();
+  const usageByRun = new Map<RunId, Map<string, TokenUsageStats>>();
   const tracker = new StatusBarUsageTracker(status, {
-    getRunUsage: (stream) => usageByRun.get(stream) ?? new Map(),
+    getRunUsage: (runId) => usageByRun.get(runId) ?? new Map(),
   });
   return { status, usageByRun, tracker };
 }
 
-function startStream(status: RunStatusMachine, runId: string): void {
-  status.transition(
-    runId,
-    RUN_PHASE.RUNNING,
-    RUN_TRANSITION_CAUSE.LIFECYCLE,
-  );
+function startRun(status: RunStatusMachine, runId: RunId): void {
+  status.transition(runId, RUN_PHASE.RUNNING, RUN_TRANSITION_CAUSE.LIFECYCLE);
 }
 
 function setRunUsage(
-  usageByRun: Map<string, Map<string, TokenUsageStats>>,
-  runId: string,
+  usageByRun: Map<RunId, Map<string, TokenUsageStats>>,
+  runId: RunId,
   runs: Record<string, TokenUsageStats>,
 ): void {
   usageByRun.set(runId, new Map(Object.entries(runs)));
@@ -48,7 +47,7 @@ describe('StatusBarUsageTracker', () => {
   it('reports zero usage for runs without a known in-flight status', () => {
     const { usageByRun, tracker } = trackerOverStatusPlane();
 
-    setRunUsage(usageByRun, 'stream-a', {
+    setRunUsage(usageByRun, runA, {
       'run-a': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
     });
 
@@ -57,15 +56,15 @@ describe('StatusBarUsageTracker', () => {
     expect(tracker.totalUsage.outputTokens).toBe(0);
   });
 
-  it('sums the accumulated per-run usage of every in-flight stream', () => {
+  it('sums the accumulated per-run usage of every in-flight run', () => {
     const { status, usageByRun, tracker } = trackerOverStatusPlane();
-    startStream(status, 'stream-a');
-    startStream(status, 'stream-b');
-    setRunUsage(usageByRun, 'stream-a', {
+    startRun(status, runA);
+    startRun(status, runB);
+    setRunUsage(usageByRun, runA, {
       'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
       'run-2': { cost: 0.02, inputTokens: 30, outputTokens: 40 },
     });
-    setRunUsage(usageByRun, 'stream-b', {
+    setRunUsage(usageByRun, runB, {
       'run-3': { cost: 0.04, inputTokens: 5, outputTokens: 6 },
     });
 
@@ -75,18 +74,14 @@ describe('StatusBarUsageTracker', () => {
     expect(tracker.totalUsage.outputTokens).toBe(66);
   });
 
-  it('keeps counting a stream that waits for follow-up input', () => {
+  it('keeps counting a run that waits for follow-up input', () => {
     const { status, usageByRun, tracker } = trackerOverStatusPlane();
-    startStream(status, 'stream-a');
-    setRunUsage(usageByRun, 'stream-a', {
+    startRun(status, runA);
+    setRunUsage(usageByRun, runA, {
       'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
     });
 
-    status.transition(
-      'stream-a',
-      RUN_PHASE.WAITING,
-      RUN_TRANSITION_CAUSE.WAIT,
-    );
+    status.transition(runA, RUN_PHASE.WAITING, RUN_TRANSITION_CAUSE.WAIT);
 
     // Waiting is in flight but not active: the spend stays in the tooltip
     // total while the spinner count drops to zero.
@@ -95,15 +90,15 @@ describe('StatusBarUsageTracker', () => {
     expect(tracker.totalUsage.inputTokens).toBe(10);
   });
 
-  it('drops a stream from the total once it reaches a final status', () => {
+  it('drops a run from the total once it reaches a final status', () => {
     const { status, usageByRun, tracker } = trackerOverStatusPlane();
-    startStream(status, 'stream-a');
-    setRunUsage(usageByRun, 'stream-a', {
+    startRun(status, runA);
+    setRunUsage(usageByRun, runA, {
       'run-1': { cost: 0.01, inputTokens: 10, outputTokens: 20 },
     });
 
     status.transition(
-      'stream-a',
+      runA,
       RUN_PHASE.COMPLETED,
       RUN_TRANSITION_CAUSE.LIFECYCLE,
     );
@@ -113,11 +108,7 @@ describe('StatusBarUsageTracker', () => {
 
     // Resuming re-enters flight, and the store-accumulated usage — including
     // the earlier runs' — is projected again.
-    status.transition(
-      'stream-a',
-      RUN_PHASE.RUNNING,
-      RUN_TRANSITION_CAUSE.RESUME,
-    );
+    status.transition(runA, RUN_PHASE.RUNNING, RUN_TRANSITION_CAUSE.RESUME);
     expect(tracker.totalUsage.cost).toBeCloseTo(0.01);
     expect(tracker.totalUsage.inputTokens).toBe(10);
     expect(tracker.totalUsage.outputTokens).toBe(20);
@@ -128,13 +119,13 @@ describe('StatusBarUsageTracker', () => {
 
     expect(tracker.activeRunCount).toBe(0);
 
-    startStream(status, 'stream-a');
-    startStream(status, 'stream-b');
+    startRun(status, runA);
+    startRun(status, runB);
     expect(tracker.activeRunCount).toBe(2);
 
-    // A stream cleared out of the status plane without a published phase
+    // A run cleared out of the status plane without a published phase
     // change stops being counted; there is no second copy to go stale.
-    status.clearRun('stream-b');
+    status.clearRun(runB);
     expect(tracker.activeRunCount).toBe(1);
   });
 });

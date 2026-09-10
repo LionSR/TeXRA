@@ -19,6 +19,7 @@ import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
+  type RunId,
   type SettingsViewInboundHandlerRegistry,
 } from '@shared/schemas';
 import {
@@ -63,15 +64,13 @@ export interface DesktopSettingsUiHost extends Pick<
    */
   /** Select a stream in the shown paper's surface: `missing` when the view
    *  no longer holds it, `unavailable` when no paper is shown. */
-  revealRun(
-    runId: string,
-  ): Promise<'revealed' | 'missing' | 'unavailable'>;
+  revealRun(runId: RunId): Promise<'revealed' | 'missing' | 'unavailable'>;
   /**
    * Display label for a stream, used by the Git tab to name each subscription's
    * owning agent run. Returns undefined when no presentation is attached, in
    * which case the raw stream id is shown.
    */
-  getRunLabel(runId: string): string | undefined;
+  getRunLabel(runId: RunId): string | undefined;
   /** Prompt for a secret (masked). Used for the GitHub personal access token. */
   promptForSecret(input: {
     title: string;
@@ -399,7 +398,7 @@ export function createDesktopSettingsIpc(
    * it. A stream deleted since the entry was written has nothing to show, so
    * say so instead of leaving the click with no visible effect.
    */
-  async function revealRun(runId: string): Promise<void> {
+  async function revealRun(runId: RunId): Promise<void> {
     const result = await options.ui.revealRun(runId);
     if (result === 'missing') {
       await options.ui.showInfoMessage(

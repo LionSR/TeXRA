@@ -9,11 +9,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  aggregateId,
-  type RunId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId, type RunId } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -71,21 +67,24 @@ export function createProcessSession(
   });
 }
 
-/** Publish the existence fact before a test exercises a run's later events. */
+/**
+ * Publish the existence fact before a test exercises a run's later events.
+ * A child names its parent, whose own `run.start` must already be published.
+ */
 export function publishTestRunStart(
   session: SessionHandle,
-  runId: RunId,
   runId: RunId = generateRunId(),
+  options: { parent?: RunId | null } = {},
 ): RunId {
   session.publish([
     {
       type: 'run.start',
-      aggregateId: aggregateId('stream', runId),
-      runId,
+      aggregateId: aggregateId('run', runId),
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: 'unsupported',
       category: 'toolUse',
       isRemote: false,
+      parent: options.parent == null ? null : { id: options.parent },
     },
   ]);
   return runId;

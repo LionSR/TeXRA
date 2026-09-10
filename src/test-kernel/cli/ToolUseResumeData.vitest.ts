@@ -8,11 +8,7 @@ import {
   isCliRunResumable as isCliRunResumableEffect,
   type CliRunResumabilityFacts,
 } from '@cli/runtime/toolUseResumeData';
-import {
-  RUN_OUTCOME,
-  type RunId,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
@@ -39,7 +35,6 @@ function listingFacts(
   return {
     id: runId,
     checkpointPresent: true,
-    runId: `${config.agent}@run#${runId}` as RunId,
     agentCategory: config.agentCategory,
     outcome: RUN_OUTCOME.FAILED,
     ...overrides,
@@ -70,16 +65,12 @@ afterEach(async () => {
 });
 
 describe('CLI listing resumability', () => {
-  it.each([
-    ['no checkpoint file', { checkpointPresent: false }],
-    ['no stamped stream id', { runId: undefined }],
-  ])(
+  it.each([['no checkpoint file', { checkpointPresent: false }]])(
     'does not advertise a row with %s, without reading its state',
     async (description, overrides) => {
-      const runId =
-        `gate-${description.replaceAll(' ', '-')}` as RunId;
+      const runId = `gate-${description.replaceAll(' ', '-')}` as RunId;
       // A continuable record is on disk, so reading it would answer `true`.
-      // Only the two free facts can produce the `false` asserted below.
+      // Only the free fact can produce the `false` asserted below.
       await writeFlowRecord(runId, { currentRound: 0, totalRounds: 4 });
 
       await expect(
@@ -97,8 +88,7 @@ describe('CLI listing resumability', () => {
   ])(
     'advertises %s without parsing its checkpoint',
     async (description, overrides) => {
-      const runId =
-        `free-${description.replaceAll(' ', '-')}` as RunId;
+      const runId = `free-${description.replaceAll(' ', '-')}` as RunId;
       // A terminal rejection is on disk, so a parse would answer `false`.
       // Only the short-circuit can produce the `true` asserted below.
       await writeFlowRecord(runId, TERMINAL_REJECTION);
@@ -126,9 +116,7 @@ describe('CLI listing resumability', () => {
         `workflow-terminal-${description.replaceAll(' ', '-')}` as RunId;
       await writeFlowRecord(runId, shared);
 
-      await expect(isCliRunResumable(listingFacts(runId))).resolves.toBe(
-        false,
-      );
+      await expect(isCliRunResumable(listingFacts(runId))).resolves.toBe(false);
     },
   );
 });

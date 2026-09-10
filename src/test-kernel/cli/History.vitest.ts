@@ -18,11 +18,7 @@ import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import {
-  MESSAGE_TYPES,
-  type RunId,
-  type RunId,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -203,11 +199,9 @@ function runListEntry(
   };
 }
 
-// The durable facts that make a listing row resumable: a checkpoint on disk
-// and the stream id stamped at registration.
+// The durable fact that makes a listing row resumable: a checkpoint on disk.
 const RESUMABLE_ROW_FACTS = {
   checkpointPresent: true,
-  runId: 'correct@run#resumable' as RunId,
 };
 
 // A fresh temp directory to point --assets-dir at.
@@ -461,11 +455,10 @@ describe('CLI history runtime', () => {
 
   it('finds a stamped diagnostic-only root in CLI history details', async () => {
     const runId = 'a11ce7a11ce7' as RunId;
-    const root = `orchestrator@model#${runId}` as RunId;
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const session = defaultSession();
-    publishTestRunStart(session, root, runId);
-    session.publishRunEvent(root, {
+    publishTestRunStart(session, runId);
+    session.publishRunEvent(runId, {
       type: 'log',
       level: 'info',
       message: 'Root status only',
@@ -473,12 +466,11 @@ describe('CLI history runtime', () => {
     });
     await session.settlePublications();
     mockNothingPersisted();
-    // The runId stamped on run metadata at registration is the one
-    // run→stream mapping; the diagnostic-only transcript row proves
-    // the run exists even though it yields no conversation.
+    // The metadata stamped at registration plus the diagnostic-only
+    // transcript row prove the run exists even though it yields no
+    // conversation.
     mocks.readMeta.mockResolvedValue({
       timestamp: '2026-05-18T08:00:00.000Z',
-      runId: root,
     });
 
     await expect(readCliHistoryDetails(runId)).resolves.toMatchObject({
@@ -1009,7 +1001,7 @@ describe('CLI history runtime', () => {
         (session) =>
           Effect.gen(function* () {
             const id = 'aabbcc' as RunId;
-            publishTestRunStart(session, 'history-deletion' as RunId, id);
+            publishTestRunStart(session, id);
             yield* Effect.promise(() => session.settlePublications());
             expect(yield* deleteCliHistory(session, { all: true })).toEqual({
               deleted: 'all',
@@ -1246,7 +1238,6 @@ describe('CLI history runtime', () => {
 
       function makeTrace(runId: string): TraceDocument {
         return {
-          runId,
           runId,
           config,
           meta: null,

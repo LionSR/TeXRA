@@ -13,7 +13,6 @@ import {
   openInfoPane,
   rootRunPending,
   rootRunId,
-  rootRunId,
   resetCliState,
   setTransientNotice,
   transientNotice,
@@ -52,7 +51,6 @@ import {
   type Plan,
   type RunIdentity,
   type RunPhase,
-  type RunId,
   type TodoItem,
   type UserFollowUpSupport,
 } from '@shared/schemas';
@@ -71,11 +69,8 @@ const grandchild = 'grandchild-1' as RunId;
 
 /** A root with two children created in name order, the second of which has
  *  one child. */
-function familyView(
-  over: Partial<Record<RunId, Partial<RunView>>> = {},
-) {
-  const ancestorsOf = (...ids: RunId[]) =>
-    ids.map((id) => ({ id, label: id }));
+function familyView(over: Partial<Record<RunId, Partial<RunView>>> = {}) {
+  const ancestorsOf = (...ids: RunId[]) => ids.map((id) => ({ id, label: id }));
   return viewWith([
     makeRunView({ id: root, createdAt: 1, ...over[root] }),
     makeRunView({
@@ -110,24 +105,14 @@ describe('focus over the session view', () => {
     seedView(familyView({ [child2]: { forceExpanded: true } }));
     expect(sessionListRunIds.get()).toEqual([root]);
     expandedRuns.set(new Map([[root, true]]));
-    expect(sessionListRunIds.get()).toEqual([
-      root,
-      child2,
-      grandchild,
-      child1,
-    ]);
+    expect(sessionListRunIds.get()).toEqual([root, child2, grandchild, child1]);
     expandedRuns.set(
       new Map([
         [root, true],
         [child2, false],
       ]),
     );
-    expect(sessionListRunIds.get()).toEqual([
-      root,
-      child2,
-      grandchild,
-      child1,
-    ]);
+    expect(sessionListRunIds.get()).toEqual([root, child2, grandchild, child1]);
     expect(
       sessionListRows
         .get()
@@ -681,7 +666,6 @@ describe('CLI TUI row allocation', () => {
     const startupPromise = new Promise<void>(() => {});
     const session = new TuiSession();
     session.runId = root;
-    session.runId = 'exec-old';
     session.runExitCode = CliExitCode.AgentError;
     session.markRunCompleted();
     session.stopRequested = true;
@@ -689,7 +673,6 @@ describe('CLI TUI row allocation', () => {
     session.markRunPending(startupPromise);
 
     expect(session.runId).toBeUndefined();
-    expect(session.runId).toBe('exec-old');
     expect(session.runPromise).toBe(startupPromise);
     expect(session.runExitCode).toBe(CliExitCode.Success);
     expect(session.runCompleted).toBe(false);
@@ -721,7 +704,6 @@ describe('CLI TUI row allocation', () => {
     const startupPromise = new Promise<void>(() => {});
     const session = new TuiSession();
     session.runId = root;
-    session.runId = 'exec-old';
     session.runExitCode = CliExitCode.AgentError;
     session.stopRequested = true;
     session.markRunPending(startupPromise);
@@ -739,7 +721,6 @@ describe('CLI TUI row allocation', () => {
     session.markRunCompleted();
     session.runId = root;
     session.interruptedRunId = root;
-    session.runId = 'old-run';
     session.runExitCode = CliExitCode.Interrupted;
     session.stopRequested = true;
 
@@ -747,7 +728,6 @@ describe('CLI TUI row allocation', () => {
 
     expect(session.runId).toBeUndefined();
     expect(session.interruptedRunId).toBeUndefined();
-    expect(session.runId).toBeUndefined();
     expect(session.runPromise).toBeUndefined();
     expect(session.runExitCode).toBe(CliExitCode.Success);
     expect(session.runCompleted).toBe(false);

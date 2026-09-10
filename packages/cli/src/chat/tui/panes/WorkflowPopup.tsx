@@ -232,9 +232,9 @@ interface WorkflowPopupProps {
   >;
   readonly onClose: () => void;
   readonly onFocusRun: (runId: RunId) => void;
-  readonly onKillRun: (runId: string) => void;
+  readonly onKillRun: (runId: RunId) => void;
   readonly onWorkflowControl: (
-    runId: string,
+    runId: RunId,
     action: WorkflowControlAction,
   ) => void;
   readonly onOpenTranscript: (runId: RunId) => void;
@@ -274,9 +274,7 @@ export function WorkflowPopup({
         .filter((task) => {
           const childId = model.childRunOf.get(task.id);
           const child =
-            childId === undefined
-              ? undefined
-              : sessionState.runs.get(childId);
+            childId === undefined ? undefined : sessionState.runs.get(childId);
           return child !== undefined && child.approval !== 'none';
         })
         .map((task) => task.id),
@@ -310,12 +308,9 @@ export function WorkflowPopup({
 
   // The model names the card's child stream; whether that stream exists in
   // this host is the host's question.
-  const childRunOf = (
-    row: WorkflowTaskRowModel,
-  ): RunId | undefined => {
+  const childRunOf = (row: WorkflowTaskRowModel): RunId | undefined => {
     const childRunId = model.childRunOf.get(row.id);
-    return childRunId !== undefined &&
-      sessionState.runs.has(childRunId)
+    return childRunId !== undefined && sessionState.runs.has(childRunId)
       ? childRunId
       : undefined;
   };
@@ -368,9 +363,7 @@ export function WorkflowPopup({
           { key: 'r', action: 'retry' },
         ]
       : []),
-    ...(selectedRunId !== undefined
-      ? [{ key: 'x', action: 'kill' }]
-      : []),
+    ...(selectedRunId !== undefined ? [{ key: 'x', action: 'kill' }] : []),
     { key: 'Ctrl-T', action: 'log' },
     { key: 'Esc', action: view.filter.length > 0 ? 'clear filter' : 'close' },
   ];
@@ -468,11 +461,7 @@ export function WorkflowPopup({
       }
       return;
     }
-    if (
-      (input === 's' || input === 'r') &&
-      controllable &&
-      selectedRunId
-    ) {
+    if ((input === 's' || input === 'r') && controllable && selectedRunId) {
       onWorkflowControl(selectedRunId, input === 's' ? 'skip' : 'retry');
       return;
     }

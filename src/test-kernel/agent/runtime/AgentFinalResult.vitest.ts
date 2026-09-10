@@ -8,12 +8,7 @@ import type {
   ToolUseFlowResult,
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import type {
-  RunId,
-  RunOutcome,
-  RunId,
-  OutputFileSummary,
-} from '@shared/schemas';
+import type { RunId, RunOutcome, OutputFileSummary } from '@shared/schemas';
 
 const OUTPUT: OutputFileSummary = {
   round: 1,
@@ -25,7 +20,7 @@ const OUTPUT: OutputFileSummary = {
   removed: 2,
 };
 
-const EXECUTION_ID = 'abcdefabcdef' as RunId;
+const RUN_ID = 'abcdefabcdef' as RunId;
 
 function workflowFlowResult(
   overrides: Partial<WorkflowFlowResult> = {},
@@ -33,8 +28,7 @@ function workflowFlowResult(
   return {
     category: 'workflow',
     outcome: 'completed',
-    runId: EXECUTION_ID,
-    runId: 'stream:workflow' as RunId,
+    runId: RUN_ID,
     outputs: [],
     compileFailures: [],
     ...overrides,
@@ -47,8 +41,7 @@ function toolUseFlowResult(
   return {
     category: 'toolUse',
     outcome: 'completed',
-    runId: EXECUTION_ID,
-    runId: 'stream:tool-use' as RunId,
+    runId: RUN_ID,
     ...overrides,
   };
 }

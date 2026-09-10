@@ -33,8 +33,7 @@ vi.mock('@latex/latexdiff/diffOperations', () => ({
   runLatexdiffViaWorkspaceScan: mocks.runLatexdiffViaWorkspaceScan,
 }));
 
-const { runLatexdiffForRun } =
-  await import('@latex/latexdiff/runLatexdiff');
+const { runLatexdiffForRun } = await import('@latex/latexdiff/runLatexdiff');
 
 const latexdiff = {
   channel: 'test',
@@ -54,7 +53,6 @@ function roundMap(): RoundIndexed<OutputFileInfo> {
 
 const runDiscovery: LatexRunDiscoveryPort = {
   listAgentRuns: () => Effect.succeed([]),
-  readRunId: () => Effect.succeed(undefined),
 };
 
 const snapshots = { read: vi.fn() };
@@ -189,9 +187,7 @@ describe('runLatexdiffForRun', () => {
     'falls back to a workspace scan when auto-discovery finds nothing',
     () =>
       Effect.gen(function* () {
-        mocks.discoverLatestRunOutputs.mockReturnValue(
-          Effect.succeed(null),
-        );
+        mocks.discoverLatestRunOutputs.mockReturnValue(Effect.succeed(null));
 
         const result = yield* runLatexdiffForRun({ ...baseRequest });
 
@@ -237,11 +233,7 @@ describe('runLatexdiffForRun diagnostics', () => {
 
       expect(result.source).toBe('run-dir-scan');
       expect(
-        logs.has(
-          'DEBUG',
-          'test',
-          'Using run-dir scan outputs from run abc123',
-        ),
+        logs.has('DEBUG', 'test', 'Using run-dir scan outputs from run abc123'),
       ).toBe(true);
     }).pipe(Effect.provide(effectDiagnosticsLayer)),
   );

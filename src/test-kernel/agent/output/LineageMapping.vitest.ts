@@ -9,7 +9,7 @@ import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 
 describe('workflow output lineage mapping', () => {
-  const runId: RunId = 'abc123';
+  const runId = 'abc123' as RunId;
 
   function runStorageFile(relativePath: string) {
     return createRunStorageLocation(

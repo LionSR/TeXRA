@@ -28,7 +28,6 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   type RunId,
-  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -63,15 +62,12 @@ function createModelCell(): RunReflectionFlowInput['modelCell'] {
 
 async function runPersistedReflectionFlow(
   runId: RunId,
-  runId: RunId,
   logger: RunReflectionFlowInput['logger'] = noopTrace,
   options: { rounds?: number; aborted?: boolean } = {},
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
   const session = createProcessSession();
   const runScope = createRunScope({
     runId,
-    runId,
-    agentName: CONFIG.agent,
     session,
     signal:
       options.aborted === false
@@ -109,11 +105,9 @@ function recoveryCase(
   options: { rounds?: number; aborted?: boolean } = {},
 ) {
   const runId = `reflection-flow-${name}` as RunId;
-  const runId = `workflow@gpt54#reflection-flow-${name}` as RunId;
   return {
     key: flowKey(runId),
-    run: () =>
-      runPersistedReflectionFlow(runId, runId, noopTrace, options),
+    run: () => runPersistedReflectionFlow(runId, noopTrace, options),
     store: getRunStore(runId),
   };
 }
@@ -170,7 +164,6 @@ describe('runReflectionFlow persisted-state recovery', () => {
     await expect(
       runPersistedReflectionFlow(
         'reflection-flow-preparation-failure' as RunId,
-        'workflow@gpt54#reflection-flow-preparation-failure' as RunId,
         logger,
       ),
     ).rejects.toMatchObject({

@@ -11,7 +11,7 @@ import {
 import { subscribeToSignalChanges } from '@shared/signals';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import { rootRunId, rootRunPending } from './state/cliState';
+import { claimedRunId, rootRunId, rootRunPending } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';
 import {
   anyRunRunning,
@@ -65,14 +65,14 @@ function writeTerminalTitle(title: string): void {
 function currentTerminalTitleState(): SessionTitleState {
   const view = sessionView().get();
   if (attentionRequests(view).length > 0) return 'approval';
-  const runId = rootRunId.get();
+  const runId = claimedRunId.get();
   if (
     chatTuiCanStopActiveRun({
       runPending: rootRunPending.get(),
       runId,
       status: runPhaseOf(runViewOf(view, runId)),
     }) ||
-    anyRunRunning(view, runId)
+    anyRunRunning(view, rootRunId.get())
   ) {
     return 'running';
   }
@@ -134,7 +134,7 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [sessionView(), rootRunPending, rootRunId],
+    [sessionView(), claimedRunId, rootRunPending, rootRunId],
     synchronize,
   );
   synchronize();

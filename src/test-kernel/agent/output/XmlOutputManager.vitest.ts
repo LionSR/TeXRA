@@ -10,12 +10,14 @@ import {
   type OutputDependencies,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
+
+const RUN_ID = 'xml-output-manager-test' as RunId;
 
 const formatterMocks = vi.hoisted(() => ({
   runLatexFormatter: vi.fn(),
@@ -69,8 +71,8 @@ function createXmlManager(
       outputFiles: options.outputFiles ?? [],
     } as unknown as AgentConfig,
     logger,
-    new TaskRunFileService('xml-output-manager-test'),
-    'xml-test@stream#1',
+    new TaskRunFileService(RUN_ID),
+    RUN_ID,
   );
 }
 

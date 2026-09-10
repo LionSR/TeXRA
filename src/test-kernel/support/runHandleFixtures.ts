@@ -2,15 +2,12 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import {
-  RunHandle,
-  type RunFacts,
-} from '@agent/runtime/RunHandle';
+import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { AgentCategory } from '@shared/schemas';
-import type { RunId, RunIdentity, RunId } from '@shared/schemas';
+import type { RunId, RunIdentity } from '@shared/schemas';
 
 /**
  * A live run handle for tests.
@@ -19,24 +16,21 @@ import type { RunId, RunIdentity, RunId } from '@shared/schemas';
  * {@link RunFacts}, so a schema change breaks every fixture in one place.
  */
 export function testRunHandle(input: {
-  runId: string;
-  parentRunId: RunId;
-  /** Defaults to `parentRunId`, i.e. a run that is its own parent. */
-  childRunId?: RunId;
+  runId: RunId;
+  /** The parent edge; omitted (or null) for a root. */
+  parent?: RunId | null;
   agent: string;
   category?: AgentCategory;
   /** Defaults to a native agent identity for `agent`. */
   identity?: RunIdentity;
   trace?: AgentTrace;
 }): RunHandle {
-  const runId = input.childRunId ?? input.parentRunId;
   const run: RunFacts = {
-    runId,
-    runId: input.runId as RunId,
+    runId: input.runId,
     identity: input.identity ?? { kind: 'agent', agent: input.agent },
     category: input.category ?? AgentCategory.ToolUse,
   };
-  return new RunHandle(run, input.parentRunId, input.trace);
+  return new RunHandle(run, input.parent ?? null, input.trace);
 }
 
 /** A registry with a status machine whose facts reach its `handleStatus`. */

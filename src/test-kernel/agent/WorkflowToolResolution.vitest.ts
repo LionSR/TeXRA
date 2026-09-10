@@ -14,7 +14,6 @@ import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
   AgentCategory,
   type RunId,
-  type RunId,
   type ToolDefinition,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -79,13 +78,10 @@ async function observeWorkflowTools({
   runtimeUnavailableTools?: readonly string[];
   warn: typeof noopTrace.warn;
 }): Promise<ToolDefinition[][]> {
-  const runId = `workflow-tools-${crypto.randomUUID()}` as RunId;
-  const runId = `workflow-tools@stream#${runId}` as RunId;
+  const runId = crypto.randomUUID() as RunId;
   const session = createTestSession();
   const runScope = createRunScope({
     runId,
-    runId,
-    agentName: CONFIG.agent,
     session,
     signal: new AbortController().signal,
   });

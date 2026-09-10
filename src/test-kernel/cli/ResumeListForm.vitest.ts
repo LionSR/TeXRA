@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { resumeEntryDescription } from '@cli/chat/tui/forms/ResumeListForm';
-import { HISTORY_RUN_STATUS } from '@shared/schemas';
+import { HISTORY_RUN_STATUS, type RunId } from '@shared/schemas';
 
 describe('CLI ResumeListForm labels', () => {
   const TIMESTAMP = '2026-05-20T21:00:00.000Z';
@@ -36,7 +36,7 @@ describe('CLI ResumeListForm labels', () => {
   ])('$name', ({ agent, inputBasename, description, expected }) => {
     expect(
       resumeEntryDescription({
-        id: 'abc',
+        id: 'abc' as RunId,
         timestamp: TIMESTAMP,
         agent,
         model: 'deepseekT',

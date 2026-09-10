@@ -57,7 +57,6 @@ import {
   TODO_STATUS,
   TOOL_USE_STATUS,
   USER_FOLLOW_UP_SUPPORT,
-  type RunId,
   type InquiryThreadId,
   type NormalizedToolUse,
   type PlanApprovalPermission,
@@ -113,8 +112,8 @@ import {
 } from '../src/chat/tui/commands/slashForms';
 import {
   activeRunId as activeRunIdSignal,
+  claimedRunId,
   rootRunPending,
-  rootRunId,
   rootRunId,
   resetCliState,
   sessionMeta,
@@ -172,10 +171,10 @@ import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
-const STREAM_ID = 'harness-stream-1';
+const STREAM_ID = 'harness-stream-1' as RunId;
 const HARNESS_MODEL = 'harness-model';
 const RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID =
-  'correct@harness-model#harness-workflow-agent-a' as RunId;
+  'harness-workflow-agent-a' as RunId;
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
@@ -698,9 +697,7 @@ function seedRun(
     userFollowUpSupport:
       options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     parent:
-      options.parentRunId === undefined
-        ? null
-        : { id: options.parentRunId },
+      options.parentRunId === undefined ? null : { id: options.parentRunId },
   });
   if (identity.kind === 'agent') {
     publish({
@@ -716,11 +713,7 @@ function seedRun(
 }
 
 /** Place a stream in a phase: the status fact every renderer folds. */
-function seedPhase(
-  runId: RunId,
-  phase: RunPhase,
-  runStartedAt?: number,
-): void {
+function seedPhase(runId: RunId, phase: RunPhase, runStartedAt?: number): void {
   seedRun(runId);
   publish({
     type: 'status',
@@ -1308,30 +1301,24 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 }
 
 async function seedRunningWorkflow(): Promise<void> {
-  const runId = 'aaaa0002f10e' as RunId;
-  const childRunId = 'workflow-script#aaaa0002f10e' as RunId;
+  const childRunId = 'aaaa0002f10e' as RunId;
   const firstAgentRunId = RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID;
-  const secondAgentRunId =
-    'correct@harness-model#harness-workflow-agent-b' as RunId;
+  const secondAgentRunId = 'harness-workflow-agent-b' as RunId;
   seedRun(childRunId, {
     category: AgentCategory.Workflow,
     identity: {
       kind: 'multiAgentWorkflow',
       workflowName: 'live-workflow-validation',
     },
-    runId,
     parentRunId: STREAM_ID,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
   const residency = await effectRuntime().runPromise(
-    session().transcripts.acquireRunResidency(childRunId, runId),
+    session().transcripts.acquireRunResidency(childRunId),
   );
   const runTrace = createRunTrace(residency);
-  const detachRunTrace = session().attachRunTrace(
-    runTrace.trace,
-    childRunId,
-  );
+  const detachRunTrace = session().attachRunTrace(runTrace.trace, childRunId);
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1370,14 +1357,10 @@ async function seedRunningWorkflow(): Promise<void> {
     },
     stageId: phaseStage.id,
   });
-  for (const [agentRunId, agentRunId] of [
-    [firstAgentRunId, 'aaaa0008f10e'],
-    [secondAgentRunId, 'aaaa0009f10e'],
-  ] as const) {
+  for (const agentRunId of [firstAgentRunId, secondAgentRunId]) {
     seedRun(agentRunId, {
       category: AgentCategory.Workflow,
       identity: { kind: 'agent', agent: 'correct' },
-      runId: agentRunId,
       parentRunId: childRunId,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     });
@@ -1392,10 +1375,9 @@ async function seedRunningWorkflow(): Promise<void> {
 }
 
 function seedRunningProcessChild(): void {
-  const childRunId = 'bash#aaaa0003f10e' as RunId;
+  const childRunId = 'aaaa0003f10e' as RunId;
   seedRun(childRunId, {
     identity: { kind: 'process', tool: 'bash' },
-    runId: 'aaaa0003f10e',
     parentRunId: STREAM_ID,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
@@ -1408,35 +1390,31 @@ if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
   const nestedStartedAt = startedAt + 24_000;
   const nestedStrategyChild = {
-    runId: 'aaaa0004f10e',
+    runId: 'aaaa0004f10e' as RunId,
     identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
-    childRunId: 'harness-nested-local-checker-stream',
     status: RUN_PHASE.RUNNING,
     startedAt: nestedStartedAt,
   };
   const childRuns = [
     {
-      runId: 'aaaa0005f10e',
+      runId: 'aaaa0005f10e' as RunId,
       identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
-      childRunId: 'harness-child-strategy-stream',
       status: RUN_PHASE.RUNNING,
       startedAt,
     },
     {
-      runId: 'aaaa0006f10e',
+      runId: 'aaaa0006f10e' as RunId,
       identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
-      childRunId: 'harness-child-lean-stream',
       status: RUN_PHASE.WAITING,
       startedAt: startedAt - 123_000,
     },
     {
-      runId: 'aaaa0007f10e',
+      runId: 'aaaa0007f10e' as RunId,
       identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
-      childRunId: 'harness-child-review-stream',
       status: RUN_PHASE.RUNNING,
       startedAt: startedAt + 12_000,
     },
@@ -1457,10 +1435,9 @@ if (SHOW_CHILDREN) {
     runViewOf(currentView(), STREAM_ID)?.runStartedAt ?? startedAt,
   );
   for (const child of childRuns) {
-    const runId = child.childRunId as RunId;
+    const runId = child.runId;
     seedRun(runId, {
       identity: child.identity,
-      runId: child.runId,
       parentRunId: STREAM_ID,
     });
     seedDescription(runId, `${child.agentName} sub-workflow`);
@@ -1471,7 +1448,7 @@ if (SHOW_CHILDREN) {
       publish({
         type: 'usage',
         aggregateId: qualifyAggregateId('run', runId),
-        storageKey: child.runId as RunId,
+        runId,
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }
@@ -1484,11 +1461,10 @@ if (SHOW_CHILDREN) {
     }
   }
   if (SHOW_NESTED_CHILDREN) {
-    const nestedRunId = nestedStrategyChild.childRunId as RunId;
+    const nestedRunId = nestedStrategyChild.runId;
     seedRun(nestedRunId, {
       identity: nestedStrategyChild.identity,
-      runId: nestedStrategyChild.runId,
-      parentRunId: 'harness-child-strategy-stream' as RunId,
+      parentRunId: 'aaaa0005f10e' as RunId,
     });
     seedDescription(nestedRunId, 'localChecker nested proof check');
     seedRows(
@@ -1716,10 +1692,7 @@ function markHarnessStreamInterrupted(runId: RunId): void {
   seedPhase(runId, RUN_PHASE.CANCELLED);
 }
 
-function appendHarnessAssistantTranscript(
-  text: string,
-  runId?: RunId,
-): void {
+function appendHarnessAssistantTranscript(text: string, runId?: RunId): void {
   appendHarnessTranscript('assistant', text, runId);
 }
 
@@ -1779,11 +1752,8 @@ function applyHarnessApprovalPolicySelection(
   setHarnessApprovalPolicy(policy);
 }
 
-function markHarnessRunStopped(runId: string): void {
-  const view = currentView();
-  const child = [...view.runs.values()].find(
-    (stream) => stream.runId === runId,
-  );
+function markHarnessRunStopped(runId: RunId): void {
+  const child = currentView().runs.get(runId);
   if (!child) return;
   appendHarnessAssistantTranscript(
     `Harness kill requested for ${runId}.`,
@@ -1971,7 +1941,7 @@ registerBuiltinSlashCommands({
 // pending root-run claim on the harness stream, so the status bar derives
 // the Ctrl-C stop hint from these signals exactly as `texra chat` does.
 rootRunPending.set(canInterrupt);
-rootRunId.set(canInterrupt ? STREAM_ID : undefined);
+claimedRunId.set(canInterrupt ? STREAM_ID : undefined);
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);

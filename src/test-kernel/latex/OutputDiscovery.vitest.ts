@@ -10,6 +10,7 @@ import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import type { RunId } from '@shared/schemas';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -31,7 +32,7 @@ const { discoverLatestRunOutputs } =
 const { scanRunDirForOutputs } =
   await import('@latex/latexdiff/runOutputFiles');
 
-function matchingRun(id: string) {
+function matchingRun(id: RunId) {
   return {
     id,
     timestamp: '2026-01-01T00:00:00.000Z',
@@ -43,22 +44,8 @@ function matchingRun(id: string) {
 
 function discoveryWith(
   entries: readonly ReturnType<typeof matchingRun>[],
-): {
-  discovery: LatexRunDiscoveryPort;
-  readRunId: ReturnType<typeof vi.fn>;
-} {
-  const readRunId = vi.fn(async (_id: string) => undefined);
-  return {
-    discovery: {
-      listAgentRuns: () => Effect.succeed(entries),
-      readRunId: (id) =>
-        Effect.tryPromise({
-          try: () => readRunId(id),
-          catch: (error) => error as Error,
-        }),
-    },
-    readRunId,
-  };
+): LatexRunDiscoveryPort {
+  return { listAgentRuns: () => Effect.succeed(entries) };
 }
 
 const MATCHING_QUERY = {
@@ -81,7 +68,7 @@ describe('discoverLatestRunOutputs', () => {
   });
 
   it.effect(
-    'falls back to an on-disk run-dir scan when the stream-tab snapshot is empty',
+    'falls back to an on-disk run-dir scan when the run snapshot is empty',
     () =>
       Effect.gen(function* () {
         const runDir = yield* Effect.promise(async () => {
@@ -96,8 +83,8 @@ describe('discoverLatestRunOutputs', () => {
           return dir;
         });
 
-        const { discovery } = discoveryWith([
-          matchingRun('exec-headless'),
+        const discovery = discoveryWith([
+          matchingRun('exec-headless' as RunId),
         ]);
         mocks.findRunDir.mockResolvedValue(runDir);
 
@@ -120,14 +107,12 @@ describe('discoverLatestRunOutputs', () => {
   );
 
   it.effect(
-    'reads outputs under the registered stream identity instead of rebuilding it from configuration (#9590 A1)',
+    'reads the snapshot under the run id instead of rebuilding an identity from configuration (#9590 A1)',
     () =>
       Effect.gen(function* () {
-        const { discovery, readRunId } = discoveryWith([
-          matchingRun('exec-registered'),
+        const discovery = discoveryWith([
+          matchingRun('exec-registered' as RunId),
         ]);
-        // Registered under a stream the agent/model config would NOT derive.
-        readRunId.mockResolvedValue('polish@earlierModel#exec-registered');
         const rounds = { 0: [] };
         mocks.read.mockReturnValue(
           Effect.succeed({ outputFilesByRound: rounds }),
@@ -141,10 +126,7 @@ describe('discoverLatestRunOutputs', () => {
           platform().fs,
         );
 
-        expect(readRunId).toHaveBeenCalledWith('exec-registered');
-        expect(mocks.read).toHaveBeenCalledWith(
-          'polish@earlierModel#exec-registered',
-        );
+        expect(mocks.read).toHaveBeenCalledWith('exec-registered');
         expect(result).toEqual({ runId: 'exec-registered', rounds });
         expect(mocks.findRunDir).not.toHaveBeenCalled();
       }),
@@ -158,7 +140,7 @@ describe('discoverLatestRunOutputs', () => {
           makeTempDir('texra-latexdiff-', tempDirs),
         );
 
-        const { discovery } = discoveryWith([matchingRun('exec-empty')]);
+        const discovery = discoveryWith([matchingRun('exec-empty' as RunId)]);
         mocks.findRunDir.mockResolvedValue(emptyDir);
 
         const result = yield* discoverLatestRunOutputs(
@@ -178,9 +160,7 @@ describe('discoverLatestRunOutputs', () => {
     () =>
       Effect.gen(function* () {
         const discovery: LatexRunDiscoveryPort = {
-          listAgentRuns: () =>
-            Effect.fail(new Error('run index unreadable')),
-          readRunId: () => Effect.succeed(undefined),
+          listAgentRuns: () => Effect.fail(new Error('run index unreadable')),
         };
 
         const failure = yield* Effect.flip(
@@ -204,7 +184,7 @@ describe('outputDiscovery diagnostics', () => {
   /** The scan under the logger production installs, so entries reach the sink. */
   const runScan = (): Effect.Effect<unknown> =>
     scanRunDirForOutputs(
-      'abc123',
+      'abc123' as RunId,
       'paper.tex',
       undefined,
       'test',

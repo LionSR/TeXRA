@@ -36,7 +36,6 @@ import {
   RUN_PHASE,
   type RunId,
   type SessionEventDraft,
-  type RunId,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
@@ -56,30 +55,30 @@ function textTail(
 
 const SELF = '["test-host",4242,"self-start"]';
 const KEY = '/workspace/framing';
-const STREAM = 'stream:framing' as RunId;
-const EXECUTION = 'ab12cd' as RunId;
+const RUN = 'ab12cd' as RunId;
+const SECOND = 'dec0de' as RunId;
 const PORT = 'sidebar';
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
-  aggregateId: qualifyAggregateId('stream', STREAM),
-  runId: EXECUTION,
+  aggregateId: qualifyAggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
   category: AgentCategory.ToolUse,
   isRemote: false,
+  parent: null,
 };
 
 const waiting: SessionEventDraft = {
   type: 'status',
-  aggregateId: qualifyAggregateId('stream', STREAM),
+  aggregateId: qualifyAggregateId('run', RUN),
   phase: RUN_PHASE.WAITING,
   cause: 'wait',
 };
 
 const running: SessionEventDraft = {
   type: 'status',
-  aggregateId: qualifyAggregateId('stream', STREAM),
+  aggregateId: qualifyAggregateId('run', RUN),
   phase: RUN_PHASE.RUNNING,
   previousPhase: RUN_PHASE.WAITING,
   cause: 'resume',
@@ -134,11 +133,11 @@ const settle = (
 
 /** What a renderer draws of a view: the same for both hosts of one log. */
 function drawn(view: SessionView) {
-  const stream = view.runs.get(STREAM);
+  const run = view.runs.get(RUN);
   return {
     order: view.order,
-    status: stream?.status ?? null,
-    group: stream?.group ?? null,
+    status: run?.status ?? null,
+    group: run?.group ?? null,
     approvals: view.approvals.map((a) => a.requestId),
     inflight: [...view.inflight.entries()],
   };
@@ -149,7 +148,7 @@ const subscribe: Subscribe = {
   session: KEY,
   generation: 1,
   cursor: 0,
-  aggregates: [{ id: qualifyAggregateId('stream', STREAM), fromSeq: 0 }],
+  aggregates: [{ id: qualifyAggregateId('run', RUN), fromSeq: 0 }],
 };
 
 /** A framer source over the runtime graph in context. */
@@ -167,13 +166,13 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
-  it('rejects a stream event carried by an inquiry aggregate at the wire boundary', () => {
+  it('rejects a run event carried by an inquiry aggregate at the wire boundary', () => {
     const input = {
       _tag: 'event',
       read: 'listing',
       event: {
         ...runStart,
-        aggregateId: qualifyAggregateId('inquiry', STREAM),
+        aggregateId: qualifyAggregateId('inquiry', 'ei_012345abcdef'),
         seq: 1,
         commit: 1,
         ownerId: SELF,
@@ -189,7 +188,7 @@ describe('session framer', () => {
     ).toBe(true);
   });
 
-  it('preserves stream and run subscription keys across the webview bridge', async () => {
+  it('preserves run subscription keys across the webview bridge', async () => {
     const session = createTestSession();
     const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
     const bridge = new SessionBridge({
@@ -200,8 +199,8 @@ describe('session framer', () => {
       },
     });
     const keys = [
-      qualifyAggregateId('stream', STREAM),
-      qualifyAggregateId('run', EXECUTION),
+      qualifyAggregateId('run', RUN),
+      qualifyAggregateId('run', SECOND),
     ];
     try {
       bridge.attach({ id: PORT, send: () => {} }).receive({
@@ -263,13 +262,13 @@ describe('session framer', () => {
         const first = textTail('Hel');
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, first]]),
+          new Map([[`${RUN}/row-1`, first]]),
         );
         yield* SubscriptionRef.set(
           chunks.ref,
           new Map([
-            [`${STREAM}/row-1`, textTail('lo', first)],
-            ['stream:unnamed/row-1', textTail('hidden')],
+            [`${RUN}/row-1`, textTail('lo', first)],
+            ['0ff1ce/row-1', textTail('hidden')],
           ]),
         );
         const tail: EventsFrame[] = [];
@@ -287,10 +286,10 @@ describe('session framer', () => {
         expect(tail.at(-1)?.cursor).toBe(3);
         expect(tail.every((frame) => frame.chunks.length <= 1)).toBe(true);
         const merged = tail.flatMap((frame) => frame.chunks);
-        expect(merged.every((chunk) => chunk.runId === STREAM)).toBe(true);
+        expect(merged.every((chunk) => chunk.runId === RUN)).toBe(true);
         expect(merged.map((chunk) => chunk.text).join('')).toBe('Hello');
         expect(merged[0]).toMatchObject({
-          runId: STREAM,
+          runId: RUN,
           rowId: 'row-1',
           from: 0,
         });
@@ -310,20 +309,19 @@ describe('session framer', () => {
         const chunks = yield* TextChunkSource;
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, textTail('Hello')]]),
+          new Map([[`${RUN}/row-1`, textTail('Hello')]]),
         );
         const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
         const webview = yield* WebviewSessions.open(KEY);
         const { frames, view } = webview;
         const shell = webview.subscriptions;
-        // The shell names the second stream ahead of its run.start: live
+        // The shell names the second run ahead of its run.start: live
         // text is framed only for the aggregates a Subscribe names.
-        const child = 'stream:second';
         const named: Subscribe = {
           ...subscribe,
           aggregates: [
             ...subscribe.aggregates,
-            { id: qualifyAggregateId('stream', child), fromSeq: 0 },
+            { id: qualifyAggregateId('run', SECOND), fromSeq: 0 },
           ],
         };
         // The shell: begin the generation and set its transcript set, then
@@ -349,8 +347,8 @@ describe('session framer', () => {
               read: 'all',
               event: {
                 type: 'run.removed',
-                runIds: [EXECUTION],
-                aggregateId: qualifyAggregateId('stream', STREAM),
+                runIds: [RUN],
+                aggregateId: qualifyAggregateId('run', RUN),
                 seq: 9,
                 commit: 99,
                 ownerId: SELF,
@@ -367,11 +365,11 @@ describe('session framer', () => {
         const ticker = yield* Effect.forkScoped(ticking);
         yield* settle(
           view.ref,
-          (v) => v.inflight.get(`${STREAM}/row-1`) === 'Hello',
+          (v) => v.inflight.get(`${RUN}/row-1`) === 'Hello',
         );
         yield* settle(
           runtimeView.ref,
-          (v) => v.inflight.get(`${STREAM}/row-1`) === 'Hello',
+          (v) => v.inflight.get(`${RUN}/row-1`) === 'Hello',
         );
         expect(drawn(yield* SubscriptionRef.get(view.ref))).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
@@ -380,17 +378,17 @@ describe('session framer', () => {
         yield* events.publish([running]);
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, textTail('Hello again')]]),
+          new Map([[`${RUN}/row-1`, textTail('Hello again')]]),
         );
         yield* settle(
           view.ref,
           (v) =>
-            v.runs.get(STREAM)?.status === RUN_PHASE.RUNNING &&
-            v.inflight.get(`${STREAM}/row-1`) === 'Hello again',
+            v.runs.get(RUN)?.status === RUN_PHASE.RUNNING &&
+            v.inflight.get(`${RUN}/row-1`) === 'Hello again',
         );
         yield* settle(
           runtimeView.ref,
-          (v) => v.runs.get(STREAM)?.status === RUN_PHASE.RUNNING,
+          (v) => v.runs.get(RUN)?.status === RUN_PHASE.RUNNING,
         );
         const folded = yield* SubscriptionRef.get(view.ref);
         expect(drawn(folded)).toEqual(
@@ -398,21 +396,17 @@ describe('session framer', () => {
         );
         expect(folded.cursor).toBe(3);
 
-        // A new stream and its first prefix can become ready in one turn.
+        // A new run and its first prefix can become ready in one turn.
         yield* events.publish([
-          {
-            ...runStart,
-            aggregateId: qualifyAggregateId('stream', child),
-            runId: 'dec0de',
-          },
+          { ...runStart, aggregateId: qualifyAggregateId('run', SECOND) },
         ]);
         yield* SubscriptionRef.update(
           chunks.ref,
-          (held) => new Map([...held, [`${child}/row-2`, textTail('First')]]),
+          (held) => new Map([...held, [`${SECOND}/row-2`, textTail('First')]]),
         );
         yield* settle(
           view.ref,
-          (v) => v.inflight.get(`${child}/row-2`) === 'First',
+          (v) => v.inflight.get(`${SECOND}/row-2`) === 'First',
         );
         yield* SubscriptionRef.update(
           chunks.ref,
@@ -420,18 +414,18 @@ describe('session framer', () => {
             new Map([
               ...held,
               [
-                `${child}/row-2`,
-                textTail(' suffix', held.get(`${child}/row-2`)),
+                `${SECOND}/row-2`,
+                textTail(' suffix', held.get(`${SECOND}/row-2`)),
               ],
             ]),
         );
         yield* settle(
           view.ref,
-          (v) => v.inflight.get(`${child}/row-2`) === 'First suffix',
+          (v) => v.inflight.get(`${SECOND}/row-2`) === 'First suffix',
         );
         yield* settle(
           runtimeView.ref,
-          (v) => v.inflight.get(`${child}/row-2`) === 'First suffix',
+          (v) => v.inflight.get(`${SECOND}/row-2`) === 'First suffix',
         );
 
         // Neither a partial replay nor its superseded generation may mutate
@@ -455,7 +449,7 @@ describe('session framer', () => {
           chunks: [
             {
               _tag: 'chunk',
-              runId: STREAM,
+              runId: RUN,
               rowId: 'row-1',
               from: 11,
               to: 12,
@@ -468,20 +462,20 @@ describe('session framer', () => {
         yield* frames.feed({
           ...sameCursorFrame,
           existence: {
-            checkedAggregateIds: [qualifyAggregateId('stream', STREAM)],
+            checkedAggregateIds: [qualifyAggregateId('run', RUN)],
             removedAggregateIds: [],
             claims: [
               {
-                aggregateId: qualifyAggregateId('stream', STREAM),
+                aggregateId: qualifyAggregateId('run', RUN),
                 ownerId: null,
               },
             ],
           },
         });
-        yield* settle(view.ref, (v) => v.runs.get(STREAM)?.ownerId === null);
+        yield* settle(view.ref, (v) => v.runs.get(RUN)?.ownerId === null);
         const afterLive = yield* SubscriptionRef.get(view.ref);
         expect(afterLive.cursor).toBe(beforeLive.cursor);
-        expect(afterLive.inflight.get(`${STREAM}/row-1`)).toBe('Hello again!');
+        expect(afterLive.inflight.get(`${RUN}/row-1`)).toBe('Hello again!');
         const beforeReplay = yield* SubscriptionRef.get(view.ref);
         yield* frames.begin(2);
         yield* shell.set('shell', named.aggregates);
@@ -511,7 +505,7 @@ describe('session framer', () => {
         });
         yield* TestClock.adjust('16 millis');
         expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeReplay);
-        expect(beforeReplay.runs.get(STREAM)?.status).toBe(
+        expect(beforeReplay.runs.get(RUN)?.status).toBe(
           RUN_PHASE.RUNNING,
         );
         yield* frames.begin(3);
@@ -528,7 +522,7 @@ describe('session framer', () => {
         );
         yield* settle(view.ref, (v) => v !== beforeReplay);
         expect(
-          (yield* SubscriptionRef.get(view.ref)).runs.get(STREAM)?.status,
+          (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.status,
         ).toBe(RUN_PHASE.RUNNING);
         yield* Fiber.interrupt(ticker);
         yield* Fiber.interrupt(resumed);

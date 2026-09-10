@@ -29,7 +29,7 @@ import {
   HISTORY_RUN_STATUS,
   resolveHistoryRunStatus,
 } from '@shared/schemas';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -66,7 +66,6 @@ async function seedFlowRecord(
 ): Promise<void> {
   await Effect.runPromise(
     registerRun(currentSession(), id, config, agent, {
-      runId: `${agent}@deepseekT#${id}` as RunId,
       identity: { kind: 'agent', agent },
     }),
   );
@@ -137,7 +136,6 @@ describe('CLI history status formatting', () => {
         schemaVersion: RUN_META_SCHEMA_VERSION,
         timestamp: '2026-06-03T05:03:06.717Z',
         identity: { kind: 'agent', agent: 'assistant' },
-        runId: 'stream-test',
       },
       config: null,
       result: null,
@@ -224,12 +222,12 @@ describe('CLI history status formatting', () => {
       currentSession().commit([
         {
           type: 'run.start',
-          aggregateId: aggregateId('stream', `orchestrator#${id}`),
-          runId: id,
+          aggregateId: aggregateId('run', id),
           identity: { kind: 'agent', agent: 'orchestrator' },
           category: AgentCategory.ToolUse,
           userFollowUpSupport: 'unsupported',
           isRemote: false,
+          parent: null,
         },
       ]),
     );

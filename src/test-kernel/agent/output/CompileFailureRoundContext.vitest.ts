@@ -4,7 +4,7 @@ import {
   appendCompileFailureRoundContext,
   formatCompileFailureRoundContext,
 } from '@agent/implementations/flows/reflection/output/compileFailureRoundContext';
-import type { CompileFailure, CompileResult } from '@shared/schemas';
+import type { CompileFailure, CompileResult, RunId } from '@shared/schemas';
 
 const failure: CompileFailure = {
   round: 0,
@@ -18,7 +18,7 @@ const failure: CompileFailure = {
     kind: 'runStorage',
     absolutePath: '/run/compile/r0_main.tex.log',
     relativePath: 'compile/r0_main.tex.log',
-    runId: '00000000-0000-4000-8000-000000000001',
+    runId: '00000000-0000-4000-8000-000000000001' as RunId,
   },
   logRelativePath: 'compile/r0_main.tex.log',
 };

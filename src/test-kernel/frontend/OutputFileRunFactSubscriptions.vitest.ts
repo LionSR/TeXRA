@@ -2,10 +2,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  aggregateId as qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import type * as VSCode from 'vscode';
 
@@ -116,7 +113,7 @@ const { registerFileDecorations } =
 const { AbsoluteFS } = await import('@utils/files/absoluteFS');
 const vscode = await import('vscode');
 
-const runId = 'stream:frontend-run-fact' as RunId;
+const runId = 'f0a1b2c3d4e5' as RunId;
 
 async function emitOutputFiles(
   session: ReturnType<typeof createTestSession>,
@@ -125,7 +122,7 @@ async function emitOutputFiles(
   session.publish([
     {
       type: 'addOutputFiles',
-      aggregateId: qualifyAggregateId('stream', runId),
+      aggregateId: qualifyAggregateId('run', runId),
       filesByRound: {
         1: [
           {

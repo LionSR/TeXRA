@@ -29,11 +29,6 @@ export interface CliRunResumabilityFacts {
   readonly id: RunId;
   /** A checkpoint file exists on disk — one `stat`, never a parse. */
   readonly checkpointPresent: boolean;
-  /**
-   * The stream stamped on metadata at registration: the reproduction
-   * contract, without which there is no persisted stream to continue.
-   */
-  readonly runId?: RunId;
   readonly agentCategory?: AgentConfig['agentCategory'];
   readonly outcome?: RunOutcome;
 }
@@ -63,15 +58,13 @@ export interface CliRunResumabilityFacts {
  *
  * The cost of covering the missing outcome is one parse per outcome-less
  * workflow row that already passed both free gates: a workflow that crashed
- * between the marker write and its finalization. Legacy rows predating the
- * outcome field are outcome-less too but carry no stamped stream id, so they
- * are refused by the gate above without a read.
+ * between the marker write and its finalization.
  */
 export const isCliRunResumable = Effect.fn('isCliRunResumable')(function* (
   facts: CliRunResumabilityFacts,
   session: SessionHandle,
 ): Effect.fn.Return<boolean> {
-  if (!facts.checkpointPresent || !facts.runId) return false;
+  if (!facts.checkpointPresent) return false;
   if (facts.agentCategory !== AgentCategory.Workflow) return true;
   if (
     facts.outcome === RUN_OUTCOME.CANCELLED ||
@@ -118,13 +111,13 @@ export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
     Effect.map((resume) =>
       resume?.type === 'toolUse' ? resume.agentConfig.model : undefined,
     ),
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          logger.debug(
-            `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
-          );
-          return undefined;
-        }),
-      ),
-    );
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        logger.debug(
+          `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
+        );
+        return undefined;
+      }),
+    ),
+  );
 });

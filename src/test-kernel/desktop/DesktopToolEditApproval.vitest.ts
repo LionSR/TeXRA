@@ -9,6 +9,7 @@ import type { DesktopAgentRunHost } from '@desktop/main/desktopAgentRunHost';
 import type { DiffSource } from '@hosts/uiHosts';
 
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
+import type { RunId } from '@shared/schemas';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type {
@@ -214,53 +215,50 @@ describe('desktop tool edit approval', () => {
     vi.restoreAllMocks();
   });
 
-  approvalTest(
-    'approves pending edits only in the selected stream',
-    async () => {
-      const { controller, waitForPreviews } = await createApprovalFixture();
+  approvalTest('approves pending edits only in the selected run', async () => {
+    const { controller, waitForPreviews } = await createApprovalFixture();
 
-      const target = controller.requestApproval(
-        toolEditApprovalRequest({
-          path: '/workspace/target.txt',
-          originalContent: 'old target\n',
-          proposedContent: 'new target\n',
-          sourceTool: 'write_file',
-          runId: 'stream-target',
-        }),
-      );
-      const other = controller.requestApproval(
-        toolEditApprovalRequest({
-          path: '/workspace/other.txt',
-          originalContent: 'old other\n',
-          proposedContent: 'new other\n',
-          sourceTool: 'write_file',
-          runId: 'stream-other',
-        }),
-      );
-      const requests = await waitForPreviews(2);
+    const target = controller.requestApproval(
+      toolEditApprovalRequest({
+        path: '/workspace/target.txt',
+        originalContent: 'old target\n',
+        proposedContent: 'new target\n',
+        sourceTool: 'write_file',
+        runId: 'run-target' as RunId,
+      }),
+    );
+    const other = controller.requestApproval(
+      toolEditApprovalRequest({
+        path: '/workspace/other.txt',
+        originalContent: 'old other\n',
+        proposedContent: 'new other\n',
+        sourceTool: 'write_file',
+        runId: 'run-other' as RunId,
+      }),
+    );
+    const requests = await waitForPreviews(2);
 
-      let targetSettled = false;
-      void target.then(() => {
-        targetSettled = true;
-      });
-      await controller.approvePendingForRun('stream-target');
-      await expect(target).resolves.toMatchObject({
-        action: 'apply',
-        appliedContent: 'new target\n',
-      });
-      expect(targetSettled).toBe(true);
+    let targetSettled = false;
+    void target.then(() => {
+      targetSettled = true;
+    });
+    await controller.approvePendingForRun('run-target' as RunId);
+    await expect(target).resolves.toMatchObject({
+      action: 'apply',
+      appliedContent: 'new target\n',
+    });
+    expect(targetSettled).toBe(true);
 
-      const otherRequest = requests.find(
-        (request) => request.runId === 'stream-other',
-      );
-      expect(otherRequest).toBeDefined();
-      controller.handleAction({
-        requestId: otherRequest!.requestId,
-        action: 'reject',
-      });
-      await expect(other).resolves.toMatchObject({ action: 'reject' });
-    },
-  );
+    const otherRequest = requests.find(
+      (request) => request.runId === 'run-other',
+    );
+    expect(otherRequest).toBeDefined();
+    controller.handleAction({
+      requestId: otherRequest!.requestId,
+      action: 'reject',
+    });
+    await expect(other).resolves.toMatchObject({ action: 'reject' });
+  });
 
   approvalTest(
     'routes proposed-file previews through desktop temp files before rejection',
@@ -280,7 +278,7 @@ describe('desktop tool edit approval', () => {
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        runId: 'stream-2',
+        runId: 'run-2' as RunId,
       });
       const [request] = await waitForPreviews();
 
@@ -370,7 +368,7 @@ describe('desktop tool edit approval', () => {
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        runId: 'stream-edited-preview',
+        runId: 'run-edited-preview' as RunId,
       });
       const [request] = await waitForPreviews();
 
@@ -419,7 +417,7 @@ describe('desktop tool edit approval', () => {
         originalContent: 'alpha\n',
         proposedContent: 'beta\n',
         sourceTool: 'write_file',
-        runId: 'stream-failed-read',
+        runId: 'run-failed-read' as RunId,
       });
       const [request] = await waitForPreviews();
       const { requestId } = request;
@@ -553,7 +551,7 @@ describe('desktop tool edit approval', () => {
   );
 
   approvalTest(
-    'cleans up a stream approval cancelled during initialization',
+    'cleans up a run approval cancelled during initialization',
     async () => {
       const { requestToolEditApproval, controller, tempRoot } =
         await createApprovalFixture();
@@ -563,11 +561,11 @@ describe('desktop tool edit approval', () => {
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        runId: 'stream-cancel-during-init',
+        runId: 'run-cancel-during-init' as RunId,
       });
       controller.cancel({
         kind: 'toolEdit',
-        runId: 'stream-cancel-during-init',
+        runId: 'run-cancel-during-init' as RunId,
         cause: 'Owning run ended.',
       });
 
@@ -590,7 +588,7 @@ describe('desktop tool edit approval', () => {
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        runId: 'stream-dispose-during-init',
+        runId: 'run-dispose-during-init' as RunId,
       });
       controller.dispose();
 
@@ -603,7 +601,7 @@ describe('desktop tool edit approval', () => {
   );
 
   approvalTest(
-    'cancels only tool-edit approvals selected for the owning stream',
+    'cancels only tool-edit approvals selected for the owning run',
     async () => {
       const { requestToolEditApproval, controller, waitForPreviews, tempRoot } =
         await createApprovalFixture();
@@ -613,29 +611,29 @@ describe('desktop tool edit approval', () => {
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        runId: 'stream-cancelled',
+        runId: 'run-cancelled' as RunId,
       });
       const retainedPromise = requestToolEditApproval({
         path: '/workspace/retained.tex',
         originalContent: 'old\n',
         proposedContent: 'new\n',
         sourceTool: 'write_file',
-        runId: 'stream-retained',
+        runId: 'run-retained' as RunId,
       });
       const requests = await waitForPreviews(2);
       const cancelledRequest = requests.find(
-        (request) => request.runId === 'stream-cancelled',
+        (request) => request.runId === 'run-cancelled',
       );
       const retainedRequest = requests.find(
-        (request) => request.runId === 'stream-retained',
+        (request) => request.runId === 'run-retained',
       );
       if (!cancelledRequest || !retainedRequest) {
-        throw new Error('Expected both stream-scoped approval prompts.');
+        throw new Error('Expected both run-scoped approval prompts.');
       }
 
       controller.cancel({
         kind: 'toolEdit',
-        runId: 'stream-cancelled',
+        runId: 'run-cancelled' as RunId,
         cause: 'Owning run ended.',
       });
 
@@ -658,7 +656,7 @@ describe('desktop tool edit approval', () => {
   );
 
   approvalTest(
-    'cleans pending entries and temp files when stream cleanup rejects a request',
+    'cleans pending entries and temp files when run cleanup rejects a request',
     async () => {
       const {
         releaseRunResources,
@@ -679,13 +677,13 @@ describe('desktop tool edit approval', () => {
           originalContent: 'old\n',
           proposedContent: 'new\n',
           sourceTool: 'write_file',
-          runId: 'stream-cleanup',
+          runId: 'run-cleanup' as RunId,
         }),
       );
       await waitForPreviews();
 
       // Pending interactions are session-owned: sweep the owning session.
-      releaseRunResources('stream-cleanup', session);
+      releaseRunResources('run-cleanup' as RunId, session);
 
       await expect(resultPromise).resolves.toMatchObject({
         action: 'reject',

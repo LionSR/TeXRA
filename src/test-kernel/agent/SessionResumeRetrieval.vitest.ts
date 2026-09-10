@@ -43,7 +43,6 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
-  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -133,13 +132,11 @@ function readFlowRecord(
 
 async function retrieveToolUseResume(
   runId: RunId,
-  runId: RunId,
   config: AgentConfig = CONFIG,
   options?: Parameters<typeof retrieveSessionResumeData>[4],
 ): Promise<ToolUseResumeData> {
   const resume = await Effect.runPromise(
     retrieveSessionResumeData(
-      runId,
       runId,
       config,
       retrievalSession,
@@ -250,7 +247,6 @@ function responseModelHandler(
 
 function buildToolUseResumeData(
   runId: RunId,
-  runId: RunId,
 ): ToolUseResumeData {
   const shared = {
     messages: [],
@@ -260,14 +256,12 @@ function buildToolUseResumeData(
   return {
     type: 'toolUse',
     runId,
-    runId,
     agentConfig: CONFIG,
     shared,
   };
 }
 
 function buildResponseResumeData(
-  runId: RunId,
   runId: RunId,
   response: string,
 ): ToolUseResumeData {
@@ -278,7 +272,6 @@ function buildResponseResumeData(
   };
   return {
     type: 'toolUse',
-    runId,
     runId,
     agentConfig: CONFIG,
     shared,
@@ -308,7 +301,6 @@ interface PersistedFlowRunOptions {
 
 async function runPersistedFlow(
   runId: RunId,
-  runId: RunId,
   resume: ToolUseResumeData | undefined,
   options: PersistedFlowRunOptions = {},
 ) {
@@ -322,7 +314,6 @@ async function runPersistedFlow(
   };
   const abortController = new AbortController();
   const runScope = createRunScope({
-    runId,
     runId,
     agentName: config.agent,
     session,
@@ -384,10 +375,9 @@ async function runPersistedFlow(
 
 async function runResumedFlowToWaiting(
   runId: RunId,
-  runId: RunId,
   resume: ToolUseResumeData,
 ): Promise<void> {
-  const result = await runPersistedFlow(runId, runId, resume);
+  const result = await runPersistedFlow(runId, resume);
   expect(result.outcome).toBe(RUN_PHASE.WAITING);
 }
 
@@ -447,8 +437,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('preserves the checkpoint after a read failure from a later in-flow cycle', async () => {
-    const runId = 'abc-flow-later-read-failure' as RunId;
-    const runId = 'chat@gpt54#abc-flow-later-read-failure' as RunId;
+    const runId = 'ab0001' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const store = getRunStore(runId);
     await writeFlowRecord(runId, snapshot.shared, WAITING_AT_START);
@@ -469,7 +458,7 @@ describe('retrieveSessionResumeData', () => {
 
     try {
       await expect(
-        runPersistedFlow(runId, runId, snapshot, {
+        runPersistedFlow(runId, snapshot, {
           takePendingFollowUps,
           onFlowRecordDisposition: (value) => dispositions.push(value),
         }),
@@ -485,9 +474,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('preserves the checkpoint after an unrelated read-failed flow error', async () => {
-    const runId = 'abc-flow-unrelated-read-failure' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-unrelated-read-failure' as RunId;
+    const runId = 'ab0002' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const runFailure = new PersistedFlowStateError(runId, 'read-failed');
     const runSpy = vi
@@ -497,7 +484,7 @@ describe('retrieveSessionResumeData', () => {
 
     try {
       await expect(
-        runPersistedFlow(runId, runId, snapshot, {
+        runPersistedFlow(runId, snapshot, {
           onFlowRecordDisposition: (value) => dispositions.push(value),
         }),
       ).rejects.toBe(runFailure);
@@ -523,8 +510,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('retrieves a workflow record in the current shape', async () => {
-    const runId = 'workflow-current-shape' as RunId;
-    const runId = 'reflection@gpt54#workflow-current-shape' as RunId;
+    const runId = 'ab0003' as RunId;
     await writeFlowRecord(
       runId,
       reflectionFlowShared({ currentRound: 1 }),
@@ -534,7 +520,6 @@ describe('retrieveSessionResumeData', () => {
       Effect.runPromise(
         retrieveSessionResumeData(
           runId,
-          runId,
           WORKFLOW_CONFIG,
           retrievalSession,
         ),
@@ -543,9 +528,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('rejects a workflow record that only has the retired messages field', async () => {
-    const runId = 'workflow-retired-messages' as RunId;
-    const runId =
-      'reflection@gpt54#workflow-retired-messages' as RunId;
+    const runId = 'ab0004' as RunId;
     await writeFlowRecord(runId, {
       currentRound: 1,
       totalRounds: 2,
@@ -555,7 +538,6 @@ describe('retrieveSessionResumeData', () => {
     await expect(
       Effect.runPromise(
         retrieveSessionResumeData(
-          runId,
           runId,
           WORKFLOW_CONFIG,
           retrievalSession,
@@ -608,7 +590,6 @@ describe('retrieveSessionResumeData', () => {
 
   it('uses the persisted model id while preserving the original stream id', async () => {
     const runId = 'abc123' as RunId;
-    const runId = 'chat@gpt54#abc123' as RunId;
     await writeFlowRecord(runId, {
       messages: [],
       modelId: 'gpt55',
@@ -625,8 +606,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('uses the launch model when only MODEL contains a retired identity', async () => {
-    const runId = 'abc123-legacy-model' as RunId;
-    const runId = 'chat@gpt54#abc123-legacy-model' as RunId;
+    const runId = 'ab0005' as RunId;
     await writeFlowRecord(runId, {
       messages: [],
       shouldSkipCycle: false,
@@ -640,8 +620,7 @@ describe('retrieveSessionResumeData', () => {
   });
 
   it('falls back to the launch model when nothing persisted a model', async () => {
-    const runId = 'abc123-no-model' as RunId;
-    const runId = 'chat@gpt54#abc123-no-model' as RunId;
+    const runId = 'ab0006' as RunId;
     await writeFlowRecord(runId, {
       messages: [],
       shouldSkipCycle: false,
@@ -660,7 +639,6 @@ describe('retrieveSessionResumeData', () => {
 
   it('preserves a recovered parent stream id in tool-use snapshots', async () => {
     const runId = 'abc131' as RunId;
-    const runId = 'chat@gpt54#abc131-child' as RunId;
     const parentRunId = 'chat@gpt54#abc131-parent' as RunId;
     await writeFlowRecord(runId, {
       messages: [],
@@ -668,7 +646,7 @@ describe('retrieveSessionResumeData', () => {
       stateSlices: defaultStateSlices(),
     });
 
-    const resume = await retrieveToolUseResume(runId, runId, CONFIG, {
+    const resume = await retrieveToolUseResume(runId, CONFIG, {
       parentRunId,
     });
 
@@ -677,7 +655,6 @@ describe('retrieveSessionResumeData', () => {
 
   it('throws when resumable tool-use storage cannot be read', async () => {
     const runId = 'abc129' as RunId;
-    const runId = 'chat@gpt54#abc129' as RunId;
     const store = getRunStore(runId);
     await writeFlowRecord(runId, {
       messages: [],
@@ -697,7 +674,6 @@ describe('retrieveSessionResumeData', () => {
         Effect.runPromise(
           retrieveSessionResumeData(
             runId,
-            runId,
             CONFIG,
             retrievalSession,
           ),
@@ -712,7 +688,6 @@ describe('retrieveSessionResumeData', () => {
 
   it('throws when tool-use metadata is invalid even if the flow record is valid', async () => {
     const runId = 'abc130' as RunId;
-    const runId = 'chat@gpt54#abc130' as RunId;
     const readMetadata = vi
       .spyOn(retrievalSession, 'readRunRecords')
       .mockReturnValue(
@@ -732,7 +707,6 @@ describe('retrieveSessionResumeData', () => {
       Effect.runPromise(
         retrieveSessionResumeData(
           runId,
-          runId,
           CONFIG,
           retrievalSession,
         ),
@@ -751,13 +725,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('rejects a persisted record on a fresh launch', async () => {
-    const runId = 'abc-flow-fresh-collision' as RunId;
-    const runId = 'chat@gpt54#abc-flow-fresh-collision' as RunId;
+    const runId = 'ab0007' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     await writeFlowRecord(runId, snapshot.shared);
 
     await expect(
-      runPersistedFlow(runId, runId, undefined),
+      runPersistedFlow(runId, undefined),
     ).rejects.toMatchObject({
       name: PersistedFlowStateError.name,
       reason: 'unexpected-record',
@@ -765,13 +738,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves the validation cause for an invalid fresh-launch collision', async () => {
-    const runId = 'abc-flow-invalid-fresh-collision' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-invalid-fresh-collision' as RunId;
+    const runId = 'ab0008' as RunId;
     await writeFlowRecord(runId, { messages: 'not-an-array' });
 
     await expect(
-      runPersistedFlow(runId, runId, undefined),
+      runPersistedFlow(runId, undefined),
     ).rejects.toMatchObject({
       name: PersistedFlowStateError.name,
       reason: 'invalid-shared',
@@ -780,11 +751,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('creates fresh shared state when the flow record is absent', async () => {
-    const runId = 'abc-flow-absent' as RunId;
-    const runId = 'chat@gpt54#abc-flow-absent' as RunId;
+    const runId = 'ab0009' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
 
-    const result = await runPersistedFlow(runId, runId, snapshot);
+    const result = await runPersistedFlow(runId, snapshot);
 
     expect(result.outcome).toBe(RUN_PHASE.WAITING);
     const stored = await readFlowRecord(runId);
@@ -804,12 +774,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const runId = `abc-flow-stale-response-${suffix}` as RunId;
       const runId =
         `chat@gpt54#abc-flow-stale-response-${suffix}` as RunId;
-      const resume = buildResponseResumeData(runId, runId, 'A');
+      const resume = buildResponseResumeData(runId, 'A');
       if (persistRecord) {
         await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
       }
 
-      const result = await runPersistedFlow(runId, runId, resume);
+      const result = await runPersistedFlow(runId, resume);
 
       expect(result).toMatchObject({ outcome: RUN_PHASE.WAITING });
       expect(result.response).toBeUndefined();
@@ -827,10 +797,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         `abc-flow-fresh-resumed-response-${suffix}` as RunId;
       const runId =
         `chat@gpt54#abc-flow-fresh-resumed-response-${suffix}` as RunId;
-      const resume = buildResponseResumeData(runId, runId, prior);
+      const resume = buildResponseResumeData(runId, prior);
       await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
 
-      const result = await runPersistedFlow(runId, runId, resume, {
+      const result = await runPersistedFlow(runId, resume, {
         modelHandler: responseModelHandler([{ text: fresh }]),
         drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
       });
@@ -840,13 +810,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   );
 
   it('retains identical partial text produced before a resumed cycle fails', async () => {
-    const runId = 'abc-flow-identical-partial-response' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-identical-partial-response' as RunId;
-    const resume = buildResponseResumeData(runId, runId, 'A');
+    const runId = 'ab000a' as RunId;
+    const resume = buildResponseResumeData(runId, 'A');
     await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
 
-    const result = await runPersistedFlow(runId, runId, resume, {
+    const result = await runPersistedFlow(runId, resume, {
       modelHandler: responseModelHandler([{ text: 'A' }], {
         createAssistantMessageFromResponse: () => {
           throw new Error('Provider stream failed after partial output');
@@ -867,10 +835,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('scrubs persisted assembly text before an answerless resumed cycle fails', async () => {
-    const runId = 'abc-flow-stale-assembly-response' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-stale-assembly-response' as RunId;
-    const baseResume = buildResponseResumeData(runId, runId, 'A');
+    const runId = 'ab000b' as RunId;
+    const baseResume = buildResponseResumeData(runId, 'A');
     const shared = {
       ...baseResume.shared,
       stateSlices: {
@@ -893,7 +859,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       },
     );
 
-    const result = await runPersistedFlow(runId, runId, resume, {
+    const result = await runPersistedFlow(runId, resume, {
       modelHandler: responseModelHandler([{ error: providerError }]),
       drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
     });
@@ -903,12 +869,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('returns explanatory text accompanying submit_output', async () => {
-    const runId = 'abc-flow-terminal-tool-response' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-terminal-tool-response' as RunId;
+    const runId = 'ab000c' as RunId;
     const config = structuredOutputConfig();
 
-    const result = await runPersistedFlow(runId, runId, undefined, {
+    const result = await runPersistedFlow(runId, undefined, {
       config,
       isSubagent: false,
       stopAfterCycle: true,
@@ -928,9 +892,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('retains tool-round text when a later model round fails', async () => {
-    const runId = 'abc-flow-tool-text-later-failure' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-tool-text-later-failure' as RunId;
+    const runId = 'ab000d' as RunId;
     const providerError = Object.assign(new Error('Later provider failure'), {
       status: 401,
     });
@@ -943,7 +905,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       call: vi.fn(async () => ({ status: 'executed' as const, output: 'ok' })),
     };
 
-    const result = await runPersistedFlow(runId, runId, undefined, {
+    const result = await runPersistedFlow(runId, undefined, {
       modelHandler: responseModelHandler([
         {
           text: 'I checked the tool.',
@@ -962,12 +924,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('retains a fresh response when compaction replaces the whole message array', async () => {
-    const runId = 'abc-flow-compacted-response' as RunId;
-    const runId = 'chat@gpt54#abc-flow-compacted-response' as RunId;
-    const resume = buildResponseResumeData(runId, runId, 'A');
+    const runId = 'ab000e' as RunId;
+    const resume = buildResponseResumeData(runId, 'A');
     await writeFlowRecord(runId, resume.shared, WAITING_AT_START);
 
-    const result = await runPersistedFlow(runId, runId, resume, {
+    const result = await runPersistedFlow(runId, resume, {
       modelHandler: responseModelHandler([
         {
           text: 'B',
@@ -989,10 +950,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('keeps returning a response from a fresh root model cycle', async () => {
-    const runId = 'abc-flow-fresh-root-response' as RunId;
-    const runId = 'chat@gpt54#abc-flow-fresh-root-response' as RunId;
+    const runId = 'ab000f' as RunId;
 
-    const result = await runPersistedFlow(runId, runId, undefined, {
+    const result = await runPersistedFlow(runId, undefined, {
       isSubagent: false,
       stopAfterCycle: true,
       modelHandler: responseModelHandler([{ text: 'fresh answer' }]),
@@ -1005,16 +965,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('returns the latest response across real same-invocation follow-up cycles', async () => {
-    const runId = 'abc-flow-multiple-cycle-response' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-multiple-cycle-response' as RunId;
+    const runId = 'ab0010' as RunId;
     const takePendingFollowUps = vi
       .fn<NonNullable<RunToolUseFlowInput['takePendingFollowUps']>>()
       .mockReturnValueOnce([])
       .mockReturnValueOnce([{ text: 'Continue.', origin: 'user' }])
       .mockReturnValue([]);
 
-    const result = await runPersistedFlow(runId, runId, undefined, {
+    const result = await runPersistedFlow(runId, undefined, {
       modelHandler: responseModelHandler([
         { text: 'first answer' },
         { text: 'latest answer' },
@@ -1030,8 +988,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('offers queue ownership again after a resumed subagent parks', async () => {
-    const runId = 'abc-flow-post-park-owner' as RunId;
-    const runId = 'chat@gpt54#abc-flow-post-park-owner' as RunId;
+    const runId = 'ab0011' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const boundaryEvents: string[] = [];
     const takePendingFollowUps = vi.fn(() => {
@@ -1039,7 +996,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       return [];
     });
 
-    const result = await runPersistedFlow(runId, runId, snapshot, {
+    const result = await runPersistedFlow(runId, snapshot, {
       attachment: {
         attach: () => {
           boundaryEvents.push('attach');
@@ -1061,14 +1018,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // may then interrupt it. A throw anywhere after that first statement used
     // to strand the live context on the handle, because the pairing lived in
     // the value the callback never got to return.
-    const runId = 'abc-flow-attach-failure' as RunId;
-    const runId = 'chat@gpt54#abc-flow-attach-failure' as RunId;
+    const runId = 'ab0012' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const attachFailure = new Error('host wiring failed');
     const detached: ToolUseSetupContext[] = [];
 
     await expect(
-      runPersistedFlow(runId, runId, snapshot, {
+      runPersistedFlow(runId, snapshot, {
         attachment: {
           attach: () => {
             throw attachFailure;
@@ -1086,8 +1042,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   // record under the run lease and hands it in, so only a fresh launch
   // still probes for a leftover record here.
   it('releases follow-ups while preserving the record after a persistence read failure', async () => {
-    const runId = `abc-flow-read-failure-fresh` as RunId;
-    const runId = `chat@gpt54#abc-flow-read-failure-fresh` as RunId;
+    const runId = 'ab0013' as RunId;
     const snapshot = undefined;
     const store = getRunStore(runId);
     const session = createProcessSession();
@@ -1097,7 +1052,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(runId, runId, snapshot, {
+        runPersistedFlow(runId, snapshot, {
           attachment: {
             attach: () => {
               session.followUps.submit(
@@ -1124,8 +1079,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves a resumed record when its first in-flow read fails', async () => {
-    const runId = 'abc-flow-read-failure-resumed' as RunId;
-    const runId = 'chat@gpt54#abc-flow-read-failure-resumed' as RunId;
+    const runId = 'ab0014' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const store = getRunStore(runId);
     await writeFlowRecord(runId, snapshot.shared);
@@ -1135,7 +1089,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(runId, runId, snapshot, {
+        runPersistedFlow(runId, snapshot, {
           onFlowRecordDisposition: (value) => dispositions.push(value),
         }),
       ).rejects.toMatchObject({
@@ -1153,9 +1107,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves the structured flow error when teardown also fails', async () => {
-    const runId = 'abc-flow-primary-and-teardown-failure' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-primary-and-teardown-failure' as RunId;
+    const runId = 'ab0015' as RunId;
     const base = buildToolUseResumeData(runId, runId);
     const failedShared = {
       ...base.shared,
@@ -1183,7 +1135,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     try {
       // The run's own failure outranks the teardown failure: it is carried
       // out on the result rather than replaced by the thrown teardown error.
-      const result = await runPersistedFlow(runId, runId, snapshot, {
+      const result = await runPersistedFlow(runId, snapshot, {
         attachment: {
           detach: () => {
             throw teardownFailure;
@@ -1208,8 +1160,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('surfaces the first teardown failure after an otherwise successful exit', async () => {
-    const runId = 'abc-flow-teardown-failure' as RunId;
-    const runId = 'chat@gpt54#abc-flow-teardown-failure' as RunId;
+    const runId = 'ab0016' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const session = createProcessSession();
     const teardownFailure = new Error('flow detachment failed');
@@ -1217,7 +1168,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(runId, runId, snapshot, {
+        runPersistedFlow(runId, snapshot, {
           attachment: {
             attach: (context) => context.interrupt(),
             detach: () => {
@@ -1234,10 +1185,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves a missing structured-output failure when teardown also fails', async () => {
-    const runId =
-      'abc-flow-structured-output-and-teardown-failure' as RunId;
-    const runId =
-      'chat@gpt54#abc-flow-structured-output-and-teardown-failure' as RunId;
+    const runId = 'ab0017' as RunId;
     const snapshot = {
       ...buildToolUseResumeData(runId, runId),
       agentConfig: structuredOutputConfig(),
@@ -1251,7 +1199,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const teardownFailure = new Error('flow detachment failed');
 
     await expect(
-      runPersistedFlow(runId, runId, snapshot, {
+      runPersistedFlow(runId, snapshot, {
         attachment: {
           detach: () => {
             throw teardownFailure;
@@ -1321,7 +1269,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         cause: expect.objectContaining({ name: 'ZodError' }),
       };
       await expect(
-        runPersistedFlow(runId, runId, snapshot),
+        runPersistedFlow(runId, snapshot),
       ).rejects.toMatchObject(expectedError);
       expect(deleteSpy).not.toHaveBeenCalled();
       expect(await store.read(flowKey(runId))).toEqual(stored);
@@ -1331,8 +1279,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('skips persistence recovery when setup hands off a cancellation', async () => {
-    const runId = 'abc-cancel-setup' as RunId;
-    const runId = 'chat@gpt54#abc-cancel-setup' as RunId;
+    const runId = 'ab0018' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const store = getRunStore(runId);
     const readSpy = vi.spyOn(store, 'read');
@@ -1340,7 +1287,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      const result = await runPersistedFlow(runId, runId, snapshot, {
+      const result = await runPersistedFlow(runId, snapshot, {
         attachment: {
           attach: (flowContext) => flowContext.interrupt(),
         },
@@ -1359,8 +1306,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
   it('distinguishes reused and fresh startup cancellation checkpoint and queue disposition', async () => {
     {
-      const runId = 'abc-reused-cancel-setup' as RunId;
-      const runId = 'chat@gpt54#abc-reused-cancel-setup' as RunId;
+      const runId = 'ab0019' as RunId;
       const storedShared = activeHandlerShared();
       await writeFlowRecord(runId, storedShared);
       const store = getRunStore(runId);
@@ -1380,7 +1326,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
       try {
         const result = await runPersistedFlow(
-          runId,
           runId,
           undefined,
           {
@@ -1422,8 +1367,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
 
     {
-      const runId = 'abc-reused-cancel-attachment' as RunId;
-      const runId = 'chat@gpt54#abc-reused-cancel-attachment' as RunId;
+      const runId = 'ab001a' as RunId;
       const storedShared = activeHandlerShared();
       await writeFlowRecord(runId, storedShared);
       const session = createProcessSession();
@@ -1432,7 +1376,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
       try {
         const result = await runPersistedFlow(
-          runId,
           runId,
           undefined,
           {
@@ -1471,8 +1414,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
 
     {
-      const runId = 'abc-fresh-cancel-setup' as RunId;
-      const runId = 'chat@gpt54#abc-fresh-cancel-setup' as RunId;
+      const runId = 'ab001b' as RunId;
       const store = getRunStore(runId);
       const session = createProcessSession();
       let flowContext: ToolUseSetupContext | undefined;
@@ -1486,7 +1428,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
       try {
         const result = await runPersistedFlow(
-          runId,
           runId,
           undefined,
           {
@@ -1526,13 +1467,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves the resumable flow after an established run is interrupted', async () => {
-    const runId = 'abc-interrupted-conversation' as RunId;
-    const runId = 'chat@gpt54#abc-interrupted-conversation' as RunId;
+    const runId = 'ab001c' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const store = getRunStore(runId);
     let flowContext: ToolUseSetupContext | undefined;
 
-    const result = await runPersistedFlow(runId, runId, snapshot, {
+    const result = await runPersistedFlow(runId, snapshot, {
       attachment: {
         attach: (context) => {
           flowContext = context;
@@ -1551,8 +1491,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves an established flow when provider cancellation rejects the run', async () => {
-    const runId = 'abc-interrupted-provider' as RunId;
-    const runId = 'chat@gpt54#abc-interrupted-provider' as RunId;
+    const runId = 'ab001d' as RunId;
     const store = getRunStore(runId);
     let flowContext: ToolUseSetupContext | undefined;
     const storedShared = activeHandlerShared();
@@ -1571,7 +1510,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(runId, runId, snapshot, {
+        runPersistedFlow(runId, snapshot, {
           attachment: {
             attach: (context) => {
               flowContext = context;
@@ -1602,13 +1541,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // success path, so dropping the item here would lose it for good. (The
     // former async window during a pre-flow recovery read no longer exists:
     // a resumed flow does no disk read before it becomes interruptible.)
-    const runId = 'abc-cancel-followup' as RunId;
-    const runId = 'chat@gpt54#abc-cancel-followup' as RunId;
+    const runId = 'ab001e' as RunId;
     const snapshot = buildToolUseResumeData(runId, runId);
     const session = createProcessSession();
 
     try {
-      const result = await runPersistedFlow(runId, runId, snapshot, {
+      const result = await runPersistedFlow(runId, snapshot, {
         attachment: {
           attach: (context) => {
             session.followUps.submit(
@@ -1633,8 +1571,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves late input when an orphaned host-resumed subagent is cancelled mid-turn', async () => {
-    const runId = 'abc-cancel-active-followup' as RunId;
-    const runId = 'chat@gpt54#abc-cancel-active-followup' as RunId;
+    const runId = 'ab001f' as RunId;
     const session = createProcessSession();
     const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(runId, runId);
@@ -1664,7 +1601,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(runId, runId, snapshot, {
+        runPersistedFlow(runId, snapshot, {
           attachment: {
             attach: (context) => {
               flowContext = context;
@@ -1690,8 +1627,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // the child-run loop owns the queue across all of its turns and releases it
     // with the terminal/recoverable decision. The borrowing flow may cancel its
     // own wait, but dropping the owner's queued items is not its call to make.
-    const runId = 'abc-cancel-child-followup' as RunId;
-    const runId = 'chat@gpt54#abc-cancel-child-followup' as RunId;
+    const runId = 'ab0020' as RunId;
     const session = createProcessSession();
     const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(runId, runId);
@@ -1718,7 +1654,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(runId, runId, snapshot, {
+        runPersistedFlow(runId, snapshot, {
           attachment: {
             attach: (context) => {
               flowContext = context;
@@ -1744,7 +1680,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // write ahead of the flow's step writes -- otherwise every turn costs
     // a `StorageFSKVStore` disk write for a no-op overwrite.
     const runId = 'abc143' as RunId;
-    const runId = 'chat@gpt54#abc143' as RunId;
     await writeFlowRecord(
       runId,
       {
@@ -1765,7 +1700,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const store = getRunStore(runId);
     const writeSpy = vi.spyOn(store, 'write');
     try {
-      await runResumedFlowToWaiting(runId, runId, resume);
+      await runResumedFlowToWaiting(runId, resume);
 
       // `PersistedFlow` still legitimately persists its own node-cursor
       // progress once as the flow steps through to WAITING -- that write is
@@ -1786,7 +1721,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
   it('keeps a persisted snapshot compatibility key authoritative over the active handler', async () => {
     const runId = 'abc142' as RunId;
-    const runId = 'chat@gpt54#abc142' as RunId;
     const persistedCompatibilityKey = 'ModelHandlerAnthropic';
     await writeFlowRecord(
       runId,
@@ -1804,7 +1738,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       persistedCompatibilityKey,
     );
 
-    await runResumedFlowToWaiting(runId, runId, resume);
+    await runResumedFlowToWaiting(runId, resume);
 
     const healedRecord = await readFlowRecord(runId);
     expect(healedRecord?.shared).toMatchObject({
