@@ -12,9 +12,21 @@ Status: proposed
 > 2026-09-10; this is that extraction.
 >
 > Enumerated by direct inspection at `cf88d2d`. It is a point-in-time
-> inventory of the surface as published today, not a proposal to change it:
+> inventory of the surface as **declared** today, not a proposal to change it:
 > **no export is added, removed, or renamed by this document.** The one
 > substantive claim it makes is the `/effect` correction in §2.
+>
+> "Declared", not "published", throughout: `packages/agent` builds and bundles
+> locally but is **not published to npm** (`AGENTS.md` §Layout), so every entry
+> and export named below is a declared package surface, not a shipped release
+> contract. Nothing here is externally committed, which is precisely what makes
+> a later retirement decision cheap.
+>
+> This inventory does **not** on its own discharge the remaining boundary work
+> `AGENTS.md` names ("the Tier-1 public manifest and shrinking the frozen
+> deep-import lists"). It is the enumeration half, still `proposed`; the
+> ratification of what Tier-1 keeps or seals, and the shrinking of the frozen
+> lists, both remain open.
 
 ## 1. Method, and what was actually verified
 
@@ -36,19 +48,40 @@ are guarantees it enforces, not ones this document re-derives.
 
 ## 2. The four entries — and the `/effect` correction
 
-`packages/agent/package.json` publishes four entries:
+`packages/agent/package.json` declares four entries:
 
-| Entry                     | Subpath     | Shape                                                   |
-| ------------------------- | ----------- | ------------------------------------------------------- |
-| `@texra-ai/agent`         | `.`         | Promise / AsyncIterable rendering of the Effect surface |
-| `@texra-ai/agent/schemas` | `./schemas` | Zod schemas and their inferred types                    |
-| `@texra-ai/agent/effect`  | `./effect`  | The Effect services — where the decisions are stated    |
-| `@texra-ai/agent/node`    | `./node`    | The ready-made Node platform                            |
+| Entry                     | Subpath     | Shape                                                             |
+| ------------------------- | ----------- | ----------------------------------------------------------------- |
+| `@texra-ai/agent`         | `.`         | Promise / AsyncIterable rendering, plus its own process lifecycle |
+| `@texra-ai/agent/schemas` | `./schemas` | Zod schemas and their inferred types                              |
+| `@texra-ai/agent/effect`  | `./effect`  | The Effect services — where the decisions are stated              |
+| `@texra-ai/agent/node`    | `./node`    | The ready-made Node platform                                      |
+
+**The root entry is not purely a rendering.** Its own docstring says it "adds no
+logic of its own," and that holds for the _run_ semantics — which level is a
+run's first, when its drain ends, which failure wins are all stated once on
+`/effect`. But `index.ts` does own decisions the scoped `/effect` entry
+deliberately does not share, and a future API change needs them on the
+ownership map:
+
+- the process-global `composition` and its single hold, reused by every later
+  `runAgent` on the same platform (`index.ts`, `agentServices`);
+- the refusal of any run arriving after `lifecycle.shutdownRan` — stated in
+  `index.ts` itself as "the Promise entry's own condition, since the Effect
+  surface composes per scope";
+- registration of the runtime shutdown handlers that close and flush the
+  session, and release the hold;
+- unwrapping `RunFailure` into its cause, so a Promise embedder catches what
+  the launch path threw.
+
+On `/effect` the scope owns each composition instead, so `Runtime.layer` may
+compose the same process again. The two entries differ in lifetime ownership,
+not in run semantics.
 
 **Correction to `2026-09-05` §4.** That doc's "Package surface" paragraph reads
 "Keep `packages/agent`, `@texra-ai/agent`, `/node` and the existing `/schemas`
 surface" — it does not mention `/effect`. A Tier-1 list seeded from that
-sentence verbatim would silently retire a live published export. Three
+sentence verbatim would silently retire a live declared entry. Three
 independent facts say `/effect` is Tier-1:
 
 1. It is a declared entry in `package.json` `exports`.
@@ -65,9 +98,29 @@ So the manifest is four entries, and `/effect` is not optional in it.
 ## 3. Exact exports
 
 **81 export bindings across the four entries; 68 distinct names** — 13 repeat
-bindings across 12 names deliberately published from more than one entry (the
-result union, the view types, and the identifier types). 30 bindings are
-values, 51 are types.
+bindings across 12 names deliberately declared from more than one entry. 30
+bindings are values, 51 are types.
+
+Those 12 names in full, since each is a cross-entry commitment that has to be
+changed in every entry at once:
+
+| Name                 | Declared from               |
+| -------------------- | --------------------------- |
+| `AgentFlowResult`    | root, `/schemas`, `/effect` |
+| `ToolUseFlowResult`  | root, `/schemas`            |
+| `WorkflowFlowResult` | root, `/schemas`            |
+| `ExecutionId`        | `/schemas`, `/effect`       |
+| `StreamTabId`        | `/schemas`, `/effect`       |
+| `AgentPlatform`      | root, `/effect`             |
+| `AgentEvent`         | root, `/effect`             |
+| `ITool`              | root, `/effect`             |
+| `SessionCloseReport` | root, `/effect`             |
+| `SessionView`        | root, `/effect`             |
+| `StreamView`         | root, `/effect`             |
+| `TranscriptView`     | root, `/effect`             |
+
+`AgentFlowResult` appears in three entries and so contributes two of the 13
+repeats; the other eleven names contribute one each.
 
 ### 3.1 `@texra-ai/agent` — 19 (4 values, 15 types)
 
@@ -180,14 +233,14 @@ The honest count, and the reason publication stays gated:
 - **In-repo consumer-shaped: one.** `packages/agent/example/effectSession.mjs`,
   installed from a packed tarball, exercising `/effect` (`Runtime`, `Sessions`,
   `Session.start`, the tagged refusal) and `/node` (`nodePlatform`). It is the
-  only code in the tree that imports the package by its published name.
+  only code in the tree that imports the package by its package name.
 - **The three hosts consume none of it.** `extension`, `desktop`, and `cli`
   reach shared core through the repo-root `@agent/*` path aliases, not through
   `@texra-ai/agent`. Their coupling is governed separately by
   `config/ratchets/host-agent-import-baseline.json`.
 - **Coverage gap worth naming:** no artifact in the repository imports the
   **root** entry or **`/schemas`** by package name. `runAgent`, `AgentRun`,
-  `defineTool`, and all 33 schema exports are published but unexercised as a
+  `defineTool`, and all 33 schema exports are declared but unexercised as a
   consumer would reach them. The example covers `/effect` + `/node` only.
 
 ## 5. What already keeps this surface honest
@@ -196,16 +249,16 @@ These are enforced today by `packages/agent/scripts/validate-artifacts.mjs` at
 build time. They are cited, not added — per `CLAUDE.md`, the open work is this
 manifest, "not another lint rule":
 
-- **No provider-SDK type leak, per entry.** Every published entry's declaration
+- **No provider-SDK type leak, per entry.** Every declared entry's declaration
   graph is walked and rejected if it reaches `@anthropic-ai/sdk`,
   `@google/genai`, `@openrouter/sdk`, or `openai` — "an entry whose declaration
-  graph reaches a provider SDK puts that provider's types back on the published
+  graph reaches a provider SDK puts that provider's types back on the declared
   surface however narrow the entry looks." This is why `index.ts` sources
   `AgentFlowResult` from its own module rather than the `@agent/runtime`
   barrel.
 - **No `vscode`, no extension-host paths** in any declaration.
 - **No unresolved internal path alias** leaking into declarations.
-- **No source or declaration maps** published; NodeNext relative specifiers
+- **No source or declaration maps** emitted; NodeNext relative specifiers
   must carry `.js`.
 
 `host-agent-import-baseline.json`'s `agent` row (7 specifiers:
@@ -215,19 +268,29 @@ manifest, "not another lint rule":
 semantics, "exactly the internal-coupling width a Tier-1 barrel must re-export
 or seal." Those seven are the modules §3 draws from.
 
-## 6. One item the readiness passes should stop carrying as open
+## 6. Result taxonomy — closed on 2026-09-04, re-verified here
 
-**Result taxonomy is documented — close it.** The readiness passes carried
-"result-taxonomy documentation" as an open item (most recently
-[`-09-02` §5.6](../../archived/simplification/2026-09-02-agent-sdk-readiness-reverify.md),
-"the single largest 'which result do I get?' clarification the surface needs").
-`packages/agent/README.md` §"Run results" now answers it in full: exactly one
-result shape, `AgentFlowResult`, discriminated on `category`; what each member
-adds; that `run.result` is terminal-only and `WAITING` is a non-terminal
-internal state deliberately not exported because the surface has no interactive
-channel to un-park it; and that the normalized `cost` breakdown and per-file
-`diffs` live on an internal type, leaving the coarse `totalCostUsd` on the
-published one. That is the clarification the item asked for, and it is a
+Recorded as historical verification only; this document does **not** close it
+and there is no audit transition here.
+
+The readiness passes carried "result-taxonomy documentation" as an open item
+through
+[`-09-02` §5.6](../../archived/simplification/2026-09-02-agent-sdk-readiness-reverify.md)
+("the single largest 'which result do I get?' clarification the surface
+needs"). It was **closed by the
+[`-09-04` pass §5](../../archived/simplification/2026-09-04-agent-sdk-readiness-reverify.md)**,
+which records commit `733b8a4` landing the documentation on the SDK surface and
+the commit message marking `agent-sdk-readiness:S6` complete. The
+[`-09-09` pass](../../implemented/simplification/2026-09-09-agent-sdk-readiness-reverify.md)
+correctly no longer carries it.
+
+Re-verified at `cf88d2d` while enumerating §3: `packages/agent/README.md`
+§"Run results" still documents exactly one result shape, `AgentFlowResult`,
+discriminated on `category`; what each member adds; that `run.result` is
+terminal-only and `WAITING` is a non-terminal internal state deliberately not
+exported because the surface has no interactive channel to un-park it; and that
+the normalized `cost` breakdown and per-file `diffs` stay on an internal type,
+leaving the coarse `totalCostUsd` on the declared one. Still true, still the
 prerequisite the item named for any future export of `AgentFinalResult`.
 
 ## 7. What this manifest does not settle
