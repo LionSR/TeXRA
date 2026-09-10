@@ -216,7 +216,9 @@ that just needs a failure hook overrides `BaseNode.execFallback`.
   it earns its place, a feature gets a few at its durable boundary. Extend
   existing suites instead of adding files, and don't demand tests in review
   beyond this bar. Full rules: AGENTS.md "Testing discipline".
-- **Serialize async work with `p-queue`**, never a hand-rolled promise chain.
+- **Serialize async work through Effect** (concurrency primitives or the
+  existing per-key ordering helper), never `p-queue` or a hand-rolled promise
+  chain; see AGENTS.md "Code quality rules".
 
 Full rationale and the evidence behind each: AGENTS.md "Design and
 refactoring" and "Code quality rules".
