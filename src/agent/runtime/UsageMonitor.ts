@@ -257,7 +257,7 @@ export class UsageMonitor {
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usageRoute: usage.usageRoute,
-        runId: this.context.runId,
+        streamId: this.context.runId,
       });
     } catch (error) {
       this.context.logger.warn('Backend usage logging failed', {
