@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, type Scheduler } from 'effect';
+import { Effect, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -12,201 +12,13 @@ import {
 } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
-/** Run the registry's persistence drain at the test's edge until it ends. */
-const withDrain = <A, E, R>(
-  registry: AgentCliSessionRegistry,
-  body: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> =>
-  Effect.acquireUseRelease(
-    Effect.forkChild(registry.persistenceDrain()),
-    () => body,
-    (drain) => Fiber.interrupt(drain),
-  );
-
 describe('AgentCliSessionRegistry', () => {
-  // `it.live`: the sweep drives a custom real-time scheduler by hand and
-  // polls with `vi.waitFor`, neither of which the TestClock `it.effect`
-  // installs can advance.
-  it.live(
-    'keeps a queued mapping when a drain is interrupted at a scheduler handoff',
-    () =>
-      Effect.gen(function* () {
-        // Sweep actual runtime yield points through dequeue and persistence. A
-        // surviving drain must find the write unless the retiring drain owns it.
-        for (let pauseAfter = 2; pauseAfter < 80; pauseAfter++) {
-          const tasks: Array<() => void> = [];
-          let operations = 0;
-          const scheduler: Scheduler.Scheduler = {
-            executionMode: 'async',
-            shouldYield: () => ++operations === pauseAfter,
-            makeDispatcher: () => ({
-              scheduleTask: (task) => tasks.push(task),
-              flush: () => {
-                while (tasks.length > 0) tasks.shift()?.();
-              },
-            }),
-          };
-          const executions = testExecutionRegistry();
-          const persistSessionId = vi.fn(async () => {});
-          const registry = new AgentCliSessionRegistry(
-            'test_session_id',
-            executions,
-            {
-              persistSessionId,
-              reportPersistenceFailure: vi.fn(),
-            },
-          );
-          registry.register('session-handoff', {
-            childStreamId: 'child-handoff' as StreamTabId,
-            executionId: 'execution-handoff' as ExecutionId,
-          });
-          const retiring = Effect.runFork(registry.persistenceDrain(), {
-            scheduler,
-          });
-          // runFork starts the interrupt synchronously: the signal must be
-          // set before the drain below, because the retiring fiber can be
-          // suspended at a scheduler handoff whose only resumption lives in
-          // `tasks`. Signaling late deadlocks the interrupt's settlement.
-          const interrupting = Effect.runFork(Fiber.interrupt(retiring));
-          // The paused scheduler also owns cancellation cleanup and promise
-          // settlement. Drain it before starting the surviving consumer.
-          yield* Effect.promise(async () => {
-            for (let step = 0; step < 100; step++) {
-              while (tasks.length > 0) tasks.shift()?.();
-              await Promise.resolve();
-            }
-          });
-          yield* Fiber.join(interrupting);
-          try {
-            yield* withDrain(
-              registry,
-              Effect.promise(() =>
-                vi.waitFor(() =>
-                  expect(persistSessionId).toHaveBeenCalledOnce(),
-                ),
-              ),
-            );
-            expect(persistSessionId).toHaveBeenCalledWith(
-              'execution-handoff',
-              'test_session_id',
-              'session-handoff',
-            );
-          } finally {
-            executions.dispose();
-          }
-        }
-      }),
-  );
-
-  it.live.each([
-    {
-      kind: 'rejected',
-      makePersist: (error: Error) => vi.fn().mockRejectedValueOnce(error),
-    },
-    {
-      kind: 'thrown',
-      makePersist: (error: Error) =>
-        vi.fn(() => {
-          throw error;
-        }),
-    },
-  ])(
-    'contains a $kind session mapping write failure without awaiting registration',
-    ({ makePersist }) =>
-      Effect.gen(function* () {
-        const executionId = 'execution-write-failure' as ExecutionId;
-        const writeError = new Error('storage unavailable');
-        const persistSessionId = makePersist(writeError);
-        const reportPersistenceFailure = vi.fn();
-        const executions = testExecutionRegistry();
-        const registry = new AgentCliSessionRegistry(
-          'test_session_id',
-          executions,
-          {
-            persistSessionId,
-            reportPersistenceFailure,
-          },
-        );
-
-        try {
-          yield* withDrain(
-            registry,
-            Effect.gen(function* () {
-              expect(
-                registry.register('session-write-failure', {
-                  childStreamId: 'child-write-failure' as StreamTabId,
-                  executionId,
-                }),
-              ).toBeUndefined();
-
-              yield* Effect.promise(() =>
-                vi.waitFor(() => {
-                  expect(reportPersistenceFailure).toHaveBeenCalledWith(
-                    executionId,
-                    writeError,
-                  );
-                }),
-              );
-              expect(reportPersistenceFailure).toHaveBeenCalledOnce();
-              expect(persistSessionId).toHaveBeenCalledOnce();
-              expect(registry.lookup('session-write-failure')).toBeDefined();
-            }),
-          );
-        } finally {
-          registry.release('session-write-failure');
-          executions.dispose();
-        }
-      }),
-  );
-
-  it.live('contains diagnostic failures after a rejected mapping write', () =>
-    Effect.gen(function* () {
-      const persistSessionId = vi
-        .fn()
-        .mockRejectedValueOnce(new Error('storage unavailable'));
-      const executions = testExecutionRegistry();
-      const registry = new AgentCliSessionRegistry(
-        'test_session_id',
-        executions,
-        {
-          persistSessionId,
-          reportPersistenceFailure: () => {
-            throw new Error('log sink unavailable');
-          },
-        },
-      );
-
-      yield* withDrain(
-        registry,
-        Effect.gen(function* () {
-          registry.register('session-log-failure', {
-            childStreamId: 'child-log-failure' as StreamTabId,
-            executionId: 'execution-log-failure' as ExecutionId,
-          });
-
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(persistSessionId).toHaveBeenCalledOnce()),
-          );
-          yield* Effect.promise(
-            () => new Promise((resolve) => setImmediate(resolve)),
-          );
-          expect(registry.lookup('session-log-failure')).toBeDefined();
-        }),
-      );
-      registry.release('session-log-failure');
-      executions.dispose();
-    }),
-  );
-
   it.effect(
     'atomically claims a session id and wakes waiters when it becomes active',
     () =>
       Effect.gen(function* () {
         const executions = testExecutionRegistry();
-        const registry = new AgentCliSessionRegistry(
-          'test_session_id',
-          executions,
-        );
+        const registry = new AgentCliSessionRegistry(executions);
         const entry = {
           childStreamId: 'child-a' as StreamTabId,
           executionId: 'execution-a' as ExecutionId,
@@ -251,10 +63,7 @@ describe('AgentCliSessionRegistry', () => {
     () =>
       Effect.gen(function* () {
         const executions = testExecutionRegistry();
-        const registry = new AgentCliSessionRegistry(
-          'test_session_id',
-          executions,
-        );
+        const registry = new AgentCliSessionRegistry(executions);
 
         try {
           const releaseClaim = registry.claim('session-a');
@@ -279,7 +88,7 @@ describe('AgentCliSessionRegistry', () => {
 
   it('releases every active alias owned by one execution', () => {
     const executions = testExecutionRegistry();
-    const registry = new AgentCliSessionRegistry('test_session_id', executions);
+    const registry = new AgentCliSessionRegistry(executions);
     const executionA = 'execution-a' as ExecutionId;
     const executionB = 'execution-b' as ExecutionId;
     const entry = (executionId: ExecutionId, childStreamId: StreamTabId) => ({
@@ -318,7 +127,7 @@ describe('AgentCliSessionRegistry', () => {
   it('interrupts an in-flight loop without promoting its reserved resume id', () => {
     const executionId = 'execution-in-flight' as ExecutionId;
     const interrupt = vi.fn();
-    const registry = new AgentCliSessionRegistry('test_session_id', {
+    const registry = new AgentCliSessionRegistry({
       getAgentHandleByStream: () => ({ interrupt }),
     } as unknown as ExecutionRegistry);
     const releaseClaim = registry.claim('reserved-session');
@@ -340,7 +149,7 @@ describe('AgentCliSessionRegistry', () => {
 
   it('interrupts each child through the session execution registry', () => {
     const executions = testExecutionRegistry();
-    const registry = new AgentCliSessionRegistry('test_session_id', executions);
+    const registry = new AgentCliSessionRegistry(executions);
     const interruptA = vi.fn();
     const interruptB = vi.fn();
 

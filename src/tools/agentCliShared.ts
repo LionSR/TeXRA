@@ -1,7 +1,7 @@
 // Shared helpers for the agent-CLI tool modules (codex.ts, claudeAgent.ts).
 // Host-agnostic, VS Code-free.
 
-import { Cause, Data, Deferred, Effect, Exit, Fiber } from 'effect';
+import { Cause, Data, Effect, Exit, Fiber } from 'effect';
 
 import { registerExecution } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
@@ -252,13 +252,9 @@ interface AgentCliLaunchParams {
   description: string;
   config: AgentConfig;
   registerFailedMessage: string;
-  /** Session-keyed registry accessor; the launched loop's drain forks here. */
-  store: AgentCliSessionStoreAccessor;
   startLoop: (ctx: {
     childStream: ChildStream;
     executionId: ExecutionId;
-    /** Settled by the loop wrapper when the loop's completion settles. */
-    loopSettled: Deferred.Deferred<void>;
   }) => Effect.Effect<void, Error>;
   summary: string;
   launchedLine: string;
@@ -268,13 +264,6 @@ interface AgentCliLaunchParams {
 /**
  * Register a fresh agent-CLI execution, create its child stream tab, start the
  * provider's turn loop, and return the "launched" ToolResult.
- *
- * The registry's persistence drain is forked here — on the tool's run edge,
- * which is where this Effect runs — and raced against the loop's settlement,
- * so the drain lives exactly as long as the loop it persists for. Session
- * writes the loop registers afterwards queue into the drain without any
- * fiber of their own, and an in-flight write still lands when the loop ends
- * (see `AgentCliSessionRegistry.persistenceDrain`).
  */
 export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
@@ -296,8 +285,6 @@ export const launchAgentCliSession = Effect.fn(
         tool: params.agentName,
       } as const;
 
-      const registry = params.store(params.session);
-      const loopSettled = Deferred.makeUnsafe<void>();
       yield* registerExecution(
         params.session,
         executionId,
@@ -330,13 +317,6 @@ export const launchAgentCliSession = Effect.fn(
         executionId,
         Effect.gen(function* () {
           yield* restore(Effect.void);
-          yield* Effect.forkDetach(
-            Effect.raceFirst(
-              registry.persistenceDrain(),
-              Deferred.await(loopSettled),
-            ),
-            { startImmediately: true },
-          );
 
           const stream = yield* createChildStream(
             params.session,
@@ -352,11 +332,7 @@ export const launchAgentCliSession = Effect.fn(
           );
           const started = yield* Effect.exit(
             Effect.suspend(() =>
-              params.startLoop({
-                childStream: stream,
-                executionId,
-                loopSettled,
-              }),
+              params.startLoop({ childStream: stream, executionId }),
             ),
           );
           if (Exit.isFailure(started)) {
@@ -382,7 +358,6 @@ export const launchAgentCliSession = Effect.fn(
         }),
       ).pipe(
         Effect.uninterruptible,
-        Effect.onError(() => Deferred.succeed(loopSettled, undefined)),
         Effect.mapError((cause) => new AgentCliCallFailed({ cause })),
       );
 
@@ -558,11 +533,6 @@ interface AgentCliLoopParams<TTurn> {
   /** Session/thread registry the loop tracks in-flight and successful turns in. */
   store: AgentCliSessionStoreAccessor;
   /**
-   * Settled when the loop's completion promise settles, ending the
-   * persistence drain the launch forked for this loop.
-   */
-  loopSettled: Deferred.Deferred<void>;
-  /**
    * The disk-based fallback session/thread id claimed synchronously before the
    * loop starts, if any. Release it if the loop exits before promoting it.
    */
@@ -619,7 +589,6 @@ export function startAgentCliLoop<TTurn>(
       stageLabel,
       initialPrompt,
       store,
-      loopSettled,
       releaseFallbackClaim,
       runProviderTurn,
       resolveSessionIds,
@@ -713,7 +682,6 @@ export function startAgentCliLoop<TTurn>(
             logger.error(loopFailedMessage, { data: Cause.squash(cause) });
           }),
         ),
-        Effect.ensuring(Deferred.succeed(loopSettled, undefined)),
       ),
     );
   }).pipe(Effect.uninterruptible);

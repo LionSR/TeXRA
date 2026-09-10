@@ -19,7 +19,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  */
 
 // Third-party imports
-import { Effect, type Deferred } from 'effect';
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -367,8 +367,6 @@ function startCodexLoop(params: {
   resumeThreadId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
-  /** Settled by the loop wrapper when the loop's completion settles. */
-  loopSettled: Deferred.Deferred<void>;
 }): Effect.Effect<void, Error> {
   const {
     thread,
@@ -378,7 +376,6 @@ function startCodexLoop(params: {
     initialPrompt,
     resumeThreadId: fallbackThreadId,
     releaseFallbackClaim,
-    loopSettled,
   } = params;
   const { childStreamId, logger } = childStream;
 
@@ -391,7 +388,6 @@ function startCodexLoop(params: {
     stageLabel: 'Codex session',
     initialPrompt,
     store: codexThreadsFor,
-    loopSettled,
     releaseFallbackClaim,
     runProviderTurn: (prompt, _ports, signal) =>
       runStreamedTurn(thread, prompt, childStreamId, logger, signal),
@@ -570,8 +566,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
     description: input.prompt,
     config,
     registerFailedMessage: 'Failed to register Codex execution.',
-    store: codexThreadsFor,
-    startLoop: ({ childStream, executionId, loopSettled }) =>
+    startLoop: ({ childStream, executionId }) =>
       startCodexLoop({
         session,
         thread,
@@ -581,7 +576,6 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
         initialPrompt: input.prompt,
         resumeThreadId: input.thread_id ?? undefined,
         releaseFallbackClaim,
-        loopSettled,
       }),
     summary: `Launched Codex: ${preview}`,
     launchedLine: `Codex agent launched (sandbox: ${sandboxMode}).`,

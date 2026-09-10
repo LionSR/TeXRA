@@ -19,17 +19,14 @@ import type { Effect } from 'effect';
 // codex/claude registry, so per-session teardown interrupts exactly its own
 // agent-CLI children and a registry dies with its session instead of living
 // as a process singleton.
-function sessionRegistries(persistedSessionKey: string) {
+function sessionRegistries() {
   const registries = new WeakMap<SessionHandle, AgentCliSessionRegistry>();
   return {
     registries,
     for: (session: SessionHandle): AgentCliSessionRegistry => {
       let registry = registries.get(session);
       if (!registry) {
-        registry = new AgentCliSessionRegistry(
-          persistedSessionKey,
-          session.executions,
-        );
+        registry = new AgentCliSessionRegistry(session.executions);
         registries.set(session, registry);
       }
       return registry;
@@ -37,8 +34,8 @@ function sessionRegistries(persistedSessionKey: string) {
   };
 }
 
-const codexThreads = sessionRegistries('codex_thread_id');
-const claudeAgentSessions = sessionRegistries('claude_agent_session_id');
+const codexThreads = sessionRegistries();
+const claudeAgentSessions = sessionRegistries();
 
 /** The session's registry of live codex threads. */
 export const codexThreadsFor = codexThreads.for;

@@ -329,10 +329,7 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('unwinds provider ownership and loop resources when synchronous setup fails', async () => {
     const { childStreamId, executionId } = loopIds('setup-failure');
-    const registry = new AgentCliSessionRegistry(
-      'test_session_id',
-      session.executions,
-    );
+    const registry = new AgentCliSessionRegistry(session.executions);
     const releaseSessionOwnership = vi.fn(() =>
       registry.releaseByExecutionId(executionId),
     );

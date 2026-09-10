@@ -1,69 +1,8 @@
-import { Data, Deferred, Effect, Option, Queue } from 'effect';
+import { Deferred, Effect } from 'effect';
 
-import { getExecutionStore } from '@agent/storage';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-
-const logger = createLog('AgentCliSessionRegistry');
-
-interface AgentCliSessionRegistryDependencies {
-  persistSessionId(
-    executionId: ExecutionId,
-    key: string,
-    sessionId: string,
-  ): Promise<void>;
-  reportPersistenceFailure(executionId: ExecutionId, error: unknown): void;
-}
-
-const DEFAULT_DEPENDENCIES: AgentCliSessionRegistryDependencies = {
-  persistSessionId: (executionId, key, sessionId) =>
-    getExecutionStore(executionId).write(key, sessionId),
-  reportPersistenceFailure: (executionId, error) => {
-    logger.debug(`Failed to persist CLI session mapping for ${executionId}`, {
-      data: error,
-    });
-  },
-};
-
-/** The session-mapping write rejected or threw; `cause` is what it raised. */
-class SessionMappingWriteFailed extends Data.TaggedError(
-  'SessionMappingWriteFailed',
-)<{ readonly cause: unknown }> {}
-
-/**
- * Persist one SDK session id for a child execution. A write failure is
- * reported through the injected diagnostics sink and otherwise contained:
- * registration never waits on it and never fails because of it. The sink
- * itself throwing is a defect of the drain fiber, not a rejection anyone
- * observes.
- */
-const persistSessionMapping = Effect.fn(
-  'AgentCliSessionRegistry.persistSessionMapping',
-)(function* (
-  dependencies: AgentCliSessionRegistryDependencies,
-  executionId: ExecutionId,
-  key: string,
-  sessionId: string,
-) {
-  yield* Effect.tryPromise({
-    try: () => dependencies.persistSessionId(executionId, key, sessionId),
-    catch: (cause) => new SessionMappingWriteFailed({ cause }),
-  }).pipe(
-    Effect.catchTag('SessionMappingWriteFailed', (failure) =>
-      Effect.sync(() =>
-        dependencies.reportPersistenceFailure(executionId, failure.cause),
-      ),
-    ),
-  );
-});
-
-/** One queued session-mapping persistence write. */
-interface SessionMappingWrite {
-  readonly executionId: ExecutionId;
-  readonly sessionId: string;
-}
 
 /**
  * What the registry tracks about one live agent-CLI session: the child run's
@@ -97,19 +36,8 @@ function settleReservation(
 export class AgentCliSessionRegistry {
   private readonly sessions = new Map<string, AgentCliSessionState>();
   private readonly inFlight = new Map<ExecutionId, AgentCliSessionEntry>();
-  /**
-   * The write queue a live drain takes from. Created by the first
-   * {@link persistenceDrain}; absent before any drain starts, in which case
-   * {@link register} buffers instead.
-   */
-  private writes: Queue.Queue<SessionMappingWrite> | undefined;
-  private readonly bufferedWrites: SessionMappingWrite[] = [];
 
-  constructor(
-    private readonly persistedSessionKey: string,
-    private readonly executions: ExecutionRegistry,
-    private readonly dependencies: AgentCliSessionRegistryDependencies = DEFAULT_DEPENDENCIES,
-  ) {}
+  constructor(private readonly executions: ExecutionRegistry) {}
 
   /**
    * Atomically reserve an unowned SDK session id. Returns a release handle
@@ -132,70 +60,14 @@ export class AgentCliSessionRegistry {
   }
 
   /**
-   * Register an active external-agent session and queue its SDK id for
-   * persistence (for later display or cross-reference after an extension
-   * reload clears memory). When the id was reserved, registration also wakes
-   * callers waiting to enqueue a follow-up on the new loop. The write itself
-   * is taken by a {@link persistenceDrain} fiber — the boundary that launches
-   * a loop forks one — so registration never waits on it and never fails
-   * because of it. A write registered before the first drain starts is
-   * buffered and flushed when one does.
+   * Register an active external-agent session. When the id was reserved,
+   * registration also wakes callers waiting to enqueue a follow-up on the new
+   * loop.
    */
   register(sessionId: string, entry: AgentCliSessionEntry): void {
     const previous = this.sessions.get(sessionId);
     this.sessions.set(sessionId, { kind: 'active', entry });
     settleReservation(previous, entry);
-    const write: SessionMappingWrite = {
-      executionId: entry.executionId,
-      sessionId,
-    };
-    if (this.writes) Queue.offerUnsafe(this.writes, write);
-    else this.bufferedWrites.push(write);
-  }
-
-  /**
-   * The session-mapping write drain: takes queued writes one at a time and
-   * runs each to completion. One write is uninterruptible once taken, so a
-   * write racing its loop's teardown still lands; interruption between
-   * writes ends the drain at once. The boundary launching a loop forks this
-   * and races it against that loop's settlement; concurrent drains are safe
-   * because each queued write is taken exactly once. The first drain creates
-   * the queue and flushes anything buffered before it started.
-   */
-  persistenceDrain(): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      if (this.writes) return this.drainWrites(this.writes);
-      return Effect.flatMap(Queue.unbounded<SessionMappingWrite>(), (queue) => {
-        this.writes = queue;
-        for (const write of this.bufferedWrites.splice(0)) {
-          Queue.offerUnsafe(queue, write);
-        }
-        return this.drainWrites(queue);
-      });
-    });
-  }
-
-  private drainWrites(
-    queue: Queue.Queue<SessionMappingWrite>,
-  ): Effect.Effect<void> {
-    return Effect.forever(
-      Effect.uninterruptibleMask((restore) =>
-        // Waiting owns no write. Dequeue and persistence share the mask;
-        // another drain may consume the peeked item before our poll.
-        Effect.flatMap(restore(Queue.peek(queue)), () =>
-          Effect.flatMap(Queue.poll(queue), (write) =>
-            Option.isSome(write)
-              ? persistSessionMapping(
-                  this.dependencies,
-                  write.value.executionId,
-                  this.persistedSessionKey,
-                  write.value.sessionId,
-                )
-              : Effect.void,
-          ),
-        ),
-      ),
-    );
   }
 
   /** Track a launched loop before its SDK session id is safe to publish. */
