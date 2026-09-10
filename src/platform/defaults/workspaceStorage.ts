@@ -37,17 +37,8 @@ export function workspaceStorageId(workspacePath: string | undefined): string {
   return `${stem}-${truncatedHexId(source, 8)}`;
 }
 
-/**
- * Storage-format namespace. Bumped to `v2` for 1.0: the session database's
- * row shape changed incompatibly (one `run` aggregate, renamed row types, a
- * different partial index), and a 1.0 host must never open the `v1` file a
- * 0.x host wrote. No migration and no legacy reader: the `v1` tree is simply
- * left where it is.
- */
-const STORAGE_NAMESPACE = 'v2';
-
 export function resolveGlobalStoragePath(storageRoot: string): string {
-  return join(storageRoot, STORAGE_NAMESPACE, STORAGE_LAYOUT.global);
+  return join(storageRoot, 'v1', STORAGE_LAYOUT.global);
 }
 
 export function resolveWorkspaceStoragePath(
@@ -56,7 +47,7 @@ export function resolveWorkspaceStoragePath(
 ): string {
   return join(
     storageRoot,
-    STORAGE_NAMESPACE,
+    'v1',
     STORAGE_LAYOUT.workspace,
     workspaceStorageId(workspacePath),
   );
