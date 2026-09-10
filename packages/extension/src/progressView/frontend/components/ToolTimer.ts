@@ -1,7 +1,14 @@
 /** Live elapsed-time timer for in-progress tool calls. */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports
@@ -32,6 +39,10 @@ export class ToolTimer extends LitElement {
   @property({ attribute: false }) timeoutMs = 0;
 
   private readonly _ticker = new TickerController(this, 1000);
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('startTime')) this._ticker.refresh();
+  }
 
   override render(): TemplateResult | typeof nothing {
     if (this.startTime <= 0) return nothing;
