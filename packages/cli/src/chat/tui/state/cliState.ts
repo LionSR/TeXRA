@@ -14,6 +14,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { StreamView } from '@shared/session/sessionView';
+import { STREAM_GROUP_LABELS } from '@shared/streams/streamStatusDisplay';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
 import { sessionView } from './sessionView';
 import type { PastedImageEntry } from '../input/draftAttachments';
@@ -168,23 +169,7 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   for (const streams of Object.values(groups)) {
     const first = streams.at(0);
     if (!first) continue;
-    const group = first.group;
-    let label: string;
-    switch (group) {
-      case 'running':
-        label = 'Running';
-        break;
-      case 'waiting':
-        label = 'Waiting on you';
-        break;
-      case 'interrupted':
-        label = 'Interrupted';
-        break;
-      case 'recent':
-        label = 'Recent';
-        break;
-    }
-    rows.push({ kind: 'group', label });
+    rows.push({ kind: 'group', label: STREAM_GROUP_LABELS[first.group] });
     for (const stream of streams) append(stream, 0);
   }
   return rows;

@@ -18,6 +18,10 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import {
+  STREAM_GROUP_LABELS,
+  STREAM_GROUP_ORDER,
+} from '@shared/streams/streamStatusDisplay';
 import { focusRingStyles } from '@shared/styles/controlStyles';
 import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@shared/wa/icons';
 
@@ -49,14 +53,6 @@ const TONE_ICONS: Record<StreamView['tone'], TeXRAIconName> = {
   neutral: 'circle',
 };
 
-/** One section per `group` arm, in union order. */
-const GROUP_LABELS: Record<StreamView['group'], string> = {
-  running: 'Running',
-  waiting: 'Waiting on you',
-  interrupted: 'Interrupted',
-  recent: 'Recent',
-};
-const GROUP_ORDER = Object.keys(GROUP_LABELS) as StreamView['group'][];
 
 function buildTooltip(stream: StreamView): string {
   const modelDisplay =
@@ -455,11 +451,11 @@ export class StreamTabs extends LitElement {
         selected,
       );
     } else {
-      body = html`${GROUP_ORDER.map((group) => {
+      body = html`${STREAM_GROUP_ORDER.map((group) => {
         const rows = top.filter((stream) => stream.group === group);
         if (rows.length === 0) return nothing;
         return html`<div class="group-heading group-${group}">
-            <span>${GROUP_LABELS[group]}</span>
+            <span>${STREAM_GROUP_LABELS[group]}</span>
             <span class="group-count">${rows.length}</span>
           </div>
           ${this.renderRows(
