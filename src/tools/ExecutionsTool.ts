@@ -125,8 +125,7 @@ class ExecutionsReadFailed extends Data.TaggedError('ExecutionsReadFailed')<{
 
 interface RunToolContext {
   readonly session: SessionHandle;
-  readonly runId: string | undefined;
-  readonly runId: string | undefined;
+  readonly runId: RunId | undefined;
   readonly inRunScope: <A>(operation: () => A) => A;
 }
 
@@ -141,7 +140,7 @@ const executionsRead = <A>(
   });
 
 /**
- * Block until one of `runIds` changes status, the caller's stream
+ * Block until one of `runIds` changes status, the caller's run
  * receives a follow-up (the user breaking the wait), or `timeoutSeconds`
  * elapse — whichever comes first. `settled` is re-checked once the change
  * listeners are registered, closing the window between the caller's
@@ -155,7 +154,7 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   function* (
     context: RunToolContext,
     timeoutSeconds: number,
-    runIds: string[],
+    runIds: readonly RunId[],
     settled: () => boolean,
   ) {
     const followUp = yield* Deferred.make<void>();
@@ -169,8 +168,7 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       ),
       (stop) => Effect.sync(stop),
     );
-    const statusChange =
-      context.session.runs.waitForAnyChange(runIds);
+    const statusChange = context.session.runs.waitForAnyChange(runIds);
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
     );
@@ -187,7 +185,7 @@ function getRunningTodos(
   session: SessionHandle,
   handle: RunHandle,
 ): readonly TodoItem[] {
-  return session.snapshots.getWorkPlan(handle.childRunId).todos;
+  return session.snapshots.getWorkPlan(handle.runId).todos;
 }
 
 interface SizedEntry {
@@ -236,7 +234,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   protected execute(input: ExecutionsToolInput): Promise<ToolResult> {
     const context: RunToolContext = {
       session: currentSession(),
-      runId: getRunContextRunId(),
       runId: getRunContextRunId(),
       inRunScope: AsyncLocalStorage.bind(<A>(operation: () => A): A =>
         operation(),
@@ -346,12 +343,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         if (rest.length === 0) {
           return yield* this.listFiles(context, runId);
         }
-        return yield* this.readFile(
-          context,
-          runId,
-          rest.join('/'),
-          viewRange,
-        );
+        return yield* this.readFile(context, runId, rest.join('/'), viewRange);
       case 'workspace-files':
         if (rest.length === 0) {
           return yield* this.listWorkspaceFiles(context, runId);
@@ -389,9 +381,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const result = RunIdSchema.safeParse(id);
     if (!result.success) {
       return Effect.fail(
-        new ToolError(
-          `Invalid run ID format: ${id}. Expected hex string.`,
-        ),
+        new ToolError(`Invalid run ID format: ${id}. Expected hex string.`),
       );
     }
     return Effect.succeed(result.data);
@@ -403,7 +393,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   )(function* (
     context: RunToolContext,
     timeout: number,
-    ids?: readonly string[] | null,
+    ids?: readonly RunId[] | null,
   ) {
     const candidateIds = ids?.length
       ? unique(ids)
@@ -420,31 +410,33 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
   });
 
-  private readonly listRuns = Effect.fn('ExecutionsTool.listRuns')(
-    function* (context: RunToolContext, offset: number, limit: number) {
-      const entries = yield* listRuns(context.session);
+  private readonly listRuns = Effect.fn('ExecutionsTool.listRuns')(function* (
+    context: RunToolContext,
+    offset: number,
+    limit: number,
+  ) {
+    const entries = yield* listRuns(context.session);
 
-      if (entries.length === 0) {
-        return executed('No run history found.');
-      }
+    if (entries.length === 0) {
+      return executed('No run history found.');
+    }
 
-      const { page, start, end, total } = paginateToolListing(
-        entries,
-        offset,
-        limit,
-      );
-      // One page, not one directory — see DURABLE_READ_CONCURRENCY.
-      const lines = yield* Effect.forEach(
-        page,
-        (entry) => formatListingLine(entry, context.session),
-        { concurrency: DURABLE_READ_CONCURRENCY },
-      );
+    const { page, start, end, total } = paginateToolListing(
+      entries,
+      offset,
+      limit,
+    );
+    // One page, not one directory — see DURABLE_READ_CONCURRENCY.
+    const lines = yield* Effect.forEach(
+      page,
+      (entry) => formatListingLine(entry, context.session),
+      { concurrency: DURABLE_READ_CONCURRENCY },
+    );
 
-      return executed(
-        `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
-      );
-    },
-  );
+    return executed(
+      `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
+    );
+  });
 
   private readonly showSummary = Effect.fn('ExecutionsTool.showSummary')(
     function* (
@@ -523,14 +515,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
 
       if (!meta && !record) {
-        const resumability = yield* deriveResumability(
-          runId,
-          context.session,
-        );
+        const resumability = yield* deriveResumability(runId, context.session);
         if (resumability.kind !== 'checkpoint') {
-          return yield* Effect.fail(
-            new ToolError(`Run not found: ${runId}`),
-          );
+          return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
         }
         return executed(
           `Run: ${runId}\nStatus: resumable\n(No metadata available - use /executions/${runId}/conversation to view messages)`,
@@ -541,11 +528,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // display falls back to the config.
       const identity = meta?.identity;
       const category = runDisplayCategory(identity, record);
-      const info = yield* getRunStatusInfo(
-        runId,
-        context.session,
-        meta,
-      );
+      const info = yield* getRunStatusInfo(runId, context.session, meta);
       const lines = buildCompletedSummaryLines(
         runId,
         record,
@@ -647,9 +630,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       const target = context.session.runs.getHandle(runId);
       if (!target) {
         return yield* Effect.fail(
-          new ToolError(
-            `Run ${runId} not found or already completed.`,
-          ),
+          new ToolError(`Run ${runId} not found or already completed.`),
         );
       }
 
@@ -771,15 +752,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   );
 
   private readonly showChildren = Effect.fn('ExecutionsTool.showChildren')(
-    function* (
-      this: ExecutionsTool,
-      context: RunToolContext,
-      runId: RunId,
-    ) {
-      const children = yield* readRunChildren(
-        context.session,
-        runId,
-      );
+    function* (this: ExecutionsTool, context: RunToolContext, runId: RunId) {
+      const children = yield* readRunChildren(context.session, runId);
       if (children.length === 0) {
         return executed(`No child executions found for ${runId}.`);
       }
@@ -823,32 +797,25 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       runId,
       context.session,
     ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
-    const { conversation, source, runId } = conversationResult;
-    const streamDiagnostics = [`Stream: ${runId ?? 'none'}`];
+    const { conversation, source } = conversationResult;
 
     if (!conversation) {
       // Match the top-level run lookup: a flow-only record is found only
       // when the shared storage decision says it is resumable.
       const meta = yield* records.readMeta();
-      const resumability = yield* deriveResumability(
-        runId,
-        context.session,
-      );
+      const resumability = yield* deriveResumability(runId, context.session);
       const exists =
         meta !== null ||
         resumability.kind === 'checkpoint' ||
         hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
-        return yield* Effect.fail(
-          new ToolError(`Run not found: ${runId}`),
-        );
+        return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
       }
       return executed(
         formatConversation([], {
           totalMessages: 0,
           metadata: [
             'Source: none',
-            ...streamDiagnostics,
             'Returned message interval: [0, 0)',
             'Next offset: none',
           ],
@@ -864,7 +831,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       totalMessages: conversation.length,
       metadata: [
         `Source: ${source}`,
-        ...streamDiagnostics,
         `Returned message interval: [${pageStart}, ${pageEnd})`,
         `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
       ],
@@ -875,7 +841,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   /**
    * stdout/stderr of a background command, projected from the transcript log
-   * its child stream already writes (`createChildRun` in `tools/bash.ts`).
+   * its child run already writes (`createChildRun` in `tools/bash.ts`).
    *
    * This is the only route readable *while the command runs*: `/report` and
    * `/result` are written at completion, and the completion follow-up carries
@@ -890,17 +856,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       runId: RunId,
       viewRange?: [number, number],
     ) {
-      // The handle names the live child stream; liveness itself is resolved
-      // below, from facts that outlive this process.
+      // The handle only proves the run is live in this process; liveness
+      // itself is resolved below, from facts that outlive this process.
       const handle = context.session.runs.getHandle(runId);
-      const meta = yield* getRunRecords(
-        context.session,
-        runId,
-      ).readMeta();
+      const meta = yield* getRunRecords(context.session, runId).readMeta();
       if (!meta && !handle) {
-        return yield* Effect.fail(
-          new ToolError(`Run not found: ${runId}`),
-        );
+        return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
       }
       if (meta?.identity?.kind !== 'process') {
         return executed(
@@ -910,11 +871,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
 
       const transcripts = context.session.transcripts;
-      // The stream is the one stamped on run metadata at registration.
-      const runId = handle?.childRunId ?? meta?.runId;
-      if (!runId || !transcripts.has(runId)) {
+      // The transcript log is keyed by the run id itself.
+      if (!transcripts.has(runId)) {
         return executed(
-          `No retained output for ${runId}: its stream log is no longer available. ` +
+          `No retained output for ${runId}: its transcript log is no longer available. ` +
             `Use /executions/${runId}/report for the result summary.`,
         );
       }
@@ -926,14 +886,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // No snapshot: `meta` was read before the transcript, and a command that
       // finished during that read must not be judged against the row as it
       // looked beforehand. One read of one run can afford a fresh one.
-      const liveness = yield* resolveRunLiveness(
-        runId,
-        context.session,
-      );
+      const liveness = yield* resolveRunLiveness(runId, context.session);
       const info = statusInfoFromLiveness(liveness);
       // The footer states the same reading as the header: "no handle in this
       // process" alone never justifies calling the command finished, and a
-      // handle this process still tracks past its stream's terminal phase never
+      // handle this process still tracks past its terminal phase never
       // justifies calling it still running.
       const retained = `this is the retained log; /executions/${runId}/report has the result summary`;
       const footer = ((): string => {
@@ -1010,10 +967,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     context: RunToolContext,
     runId: RunId,
   ) {
-    const files = yield* listRunGeneratedFiles(
-      runId,
-      context.session,
-    ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
+    const files = yield* listRunGeneratedFiles(runId, context.session).pipe(
+      Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
+    );
     if (files.length === 0) {
       return executed('No files generated for this run.');
     }
@@ -1062,9 +1018,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
 
     if (entries.length === 0) {
-      return executed(
-        `No workspace files recorded for run ${runId}.`,
-      );
+      return executed(`No workspace files recorded for run ${runId}.`);
     }
 
     const lines = formatSizedEntryLines(entries);

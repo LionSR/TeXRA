@@ -221,7 +221,6 @@ export async function readCliHistoryDetails(
           {
             id,
             checkpointPresent: values[7],
-            runId: values[0]?.runId,
             agentCategory: values[1].agentCategory,
             outcome: values[0]?.outcome,
           },
@@ -428,19 +427,27 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
       .filter((row) => row.type === 'run.removed')
       .map((row) => row.aggregateId),
   );
-  const starts = rows
-    .filter((row) => row.type === 'run.start')
-    .filter((row) => !removed.has(row.aggregateId));
+  // A `run.start` row opens a run aggregate, so its aggregate id is the run id.
+  const starts = rows.flatMap((row) => {
+    if (row.type !== 'run.start' || removed.has(row.aggregateId)) return [];
+    const target = aggregateTarget(row.aggregateId);
+    if (target.kind !== 'run') {
+      throw new Error(
+        `run.start on a ${target.kind} aggregate: ${row.aggregateId}`,
+      );
+    }
+    return [{ runId: target.id, commit: row.commit }];
+  });
   const selected = options.all
     ? starts
-    : starts.filter((row) => row.runId === options.id);
+    : starts.filter((start) => start.runId === options.id);
   const deleted: RunId[] = [];
   const active: RunId[] = [];
   const failed: { runId: RunId; message: string }[] = [];
   for (const start of selected) {
     const result = yield* Effect.result(
       session.requests.removeRun(
-        aggregateTarget(start.aggregateId).id,
+        start.runId,
         options.all ? 'bulk' : 'single',
         start.commit,
       ),
@@ -492,10 +499,7 @@ export function formatCliHistoryText(
     .join('\n');
 }
 
-export function formatCliHistoryNotFoundText(
-  id: RunId,
-  cwd?: string,
-): string {
+export function formatCliHistoryNotFoundText(id: RunId, cwd?: string): string {
   const workspace = cwd?.trim();
   return [
     workspace
@@ -614,7 +618,6 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     {
       id: entry.id,
       checkpointPresent: entry.checkpointPresent,
-      runId: entry.runId,
       agentCategory: config.agentCategory,
       outcome: entry.outcome,
     },

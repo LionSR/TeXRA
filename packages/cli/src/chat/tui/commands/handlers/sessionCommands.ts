@@ -30,7 +30,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { effectRuntime } from '@platform/processRuntime';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 import type { RunSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -93,7 +93,7 @@ export async function showCliWorkPlan(
   );
 }
 
-function activeSkillNamesFor(runId: string | undefined): readonly string[] {
+function activeSkillNamesFor(runId: RunId | undefined): readonly string[] {
   if (runId === undefined) return [];
   const entries = defaultSession().transcripts.get(runId)?.getRange(0) ?? [];
   const latest = entries.findLast(

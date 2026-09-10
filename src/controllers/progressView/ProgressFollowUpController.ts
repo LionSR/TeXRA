@@ -62,7 +62,6 @@ interface CompileFixerInput {
   compileFailures: CompileFailure[];
   runOutputs: ReadonlyRoundIndexed<OutputFileInfo>;
   modelOptions: readonly ProgressFollowUpModelOption[];
-  runId?: string;
 }
 
 export class ProgressFollowUpController {
@@ -76,7 +75,6 @@ export class ProgressFollowUpController {
     const compileFailures = Object.values(
       this.deps.state.getCompileFailures(runId),
     ).flat();
-    const { runId } = this.deps.state.getRunMetadata(runId);
 
     return this.planCompileFixer({
       runId,
@@ -84,7 +82,6 @@ export class ProgressFollowUpController {
       compileFailures,
       runOutputs: this.deps.state.getOutputFiles(runId),
       modelOptions,
-      runId,
     });
   }
 
@@ -178,9 +175,9 @@ export class ProgressFollowUpController {
   private buildCompileFixerQuestion(
     compileFailures: CompileFailure[],
     targets: CompileFixerTarget[],
-    runId: string | undefined,
+    runId: RunId,
   ): string {
-    const runHint = runId ? `Run: ${runId}` : undefined;
+    const runHint = `Run: ${runId}`;
     const editableFiles = targets.map((target) => target.path);
     const editableHint = `Editable workspace ${pluralize(editableFiles.length, 'target')}: ${editableFiles.join(', ')}`;
     const latexdiffContext = this.formatLatexdiffTargetContext(targets);

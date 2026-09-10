@@ -42,7 +42,6 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   cloneRoundIndexed,
-  type RunId,
   type FileOpResult,
   type RunId,
 } from '@shared/schemas';
@@ -139,15 +138,13 @@ export function createDesktopHostRequests(
   );
   const snapshots = session.snapshots;
 
-  const stream = (runId: RunId) => {
-    const found = SubscriptionRef.getUnsafe(session.view).runs.get(runId);
-    if (!found) {
+  const requireOpenRun = (runId: RunId): void => {
+    if (!SubscriptionRef.getUnsafe(session.view).runs.has(runId)) {
       throw new Unavailable({
         runId,
         reason: 'The stream is no longer open.',
       });
     }
-    return found;
   };
 
   const runActions = createHostRunActions({
@@ -166,8 +163,6 @@ export function createDesktopHostRequests(
     showInfo: (message) => host.showInfoMessage(message),
     showWarning: (message) => host.showWarningMessage(message),
   });
-  const { getRunMetadata } = runActions.snapshotPort;
-
   const { snapshotPort } = runActions;
 
   const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
@@ -255,10 +250,7 @@ export function createDesktopHostRequests(
     const config = await effectRuntime().runPromise(
       runActions.readConfig(runId),
     );
-    const outputsByRound = cloneRoundIndexed(
-      snapshots.getOutputFiles(runId),
-    );
-    const { runId } = getRunMetadata(runId);
+    const outputsByRound = cloneRoundIndexed(snapshots.getOutputFiles(runId));
     const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
       ? {
           agent: config.agent,
@@ -276,7 +268,7 @@ export function createDesktopHostRequests(
     }
     return {
       outputsByRound,
-      ...(runId && { runId }),
+      runId,
       ...(workspaceScan && { workspaceScan }),
     };
   }
@@ -422,7 +414,7 @@ export function createDesktopHostRequests(
   }
 
   async function exportTranscript(runId: RunId): Promise<void> {
-    const { runId } = stream(runId);
+    requireOpenRun(runId);
     await effectRuntime().runPromise(
       exportRunTranscript(runId, {
         pickFormat: () => host.pickTranscriptExportFormat(),

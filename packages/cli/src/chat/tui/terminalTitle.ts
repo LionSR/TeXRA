@@ -11,11 +11,7 @@ import {
 import { subscribeToSignalChanges } from '@shared/signals';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import {
-  rootRunPending,
-  rootRunId,
-  rootRunId,
-} from './state/cliState';
+import { rootRunId, rootRunPending } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';
 import {
   anyRunRunning,
@@ -69,14 +65,14 @@ function writeTerminalTitle(title: string): void {
 function currentTerminalTitleState(): SessionTitleState {
   const view = sessionView().get();
   if (attentionRequests(view).length > 0) return 'approval';
-  const pendingRootRunId = rootRunId.get();
+  const runId = rootRunId.get();
   if (
     chatTuiCanStopActiveRun({
       runPending: rootRunPending.get(),
-      runId: pendingRootRunId,
-      status: runPhaseOf(runViewOf(view, pendingRootRunId)),
+      runId,
+      status: runPhaseOf(runViewOf(view, runId)),
     }) ||
-    anyRunRunning(view, rootRunId.get())
+    anyRunRunning(view, runId)
   ) {
     return 'running';
   }
@@ -138,7 +134,7 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [sessionView(), rootRunPending, rootRunId, rootRunId],
+    [sessionView(), rootRunPending, rootRunId],
     synchronize,
   );
   synchronize();

@@ -388,10 +388,7 @@ export class RunTabs extends LitElement {
       .filter((child): child is RunView => child !== undefined);
   }
 
-  private renderNode(
-    stream: RunView,
-    selected: RunId | null,
-  ): TemplateResult {
+  private renderNode(stream: RunView, selected: RunId | null): TemplateResult {
     const children = this.childrenOf(stream);
     const expandable = children.length > 0;
     const expanded = expandable && this.isExpanded(stream);
@@ -435,8 +432,7 @@ export class RunTabs extends LitElement {
     const surface = this.surface;
     const selected = view && surface ? resolveSelected(view, surface) : null;
     const needle = (surface?.search ?? '').trim().toLowerCase();
-    const rootRun =
-      this.root === null ? undefined : this.runOfEvent(this.root);
+    const rootRun = this.root === null ? undefined : this.runOfEvent(this.root);
     const top = (rootRun ? [rootRun.id] : (view?.order ?? []))
       .map((id) => this.runOfEvent(id))
       .filter((stream): stream is RunView => stream !== undefined)
@@ -491,14 +487,17 @@ export class RunTabs extends LitElement {
     );
     if (!(actionElement instanceof HTMLElement)) return;
 
-    const { stream: runId, action } = actionElement.dataset;
-    if (!runId) return;
+    // The action element lives in the row's own `stream-tab`, whose `stream`
+    // is the typed view: the id is read from it, never re-parsed from the DOM.
+    const tab = getComposedPathElement<RunTab>(event, 'stream-tab');
+    const stream = tab?.stream;
+    if (!stream) return;
+    const runId = stream.id;
+    const { action } = actionElement.dataset;
 
     switch (action) {
       case 'select':
-        this.dispatchEvent(
-          SessionUiEvents.surface({ kind: 'select', runId }),
-        );
+        this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', runId }));
         break;
       case 'delete':
         this.dispatchEvent(
@@ -508,9 +507,7 @@ export class RunTabs extends LitElement {
       case 'resume':
         this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', runId }));
         break;
-      case 'toggle-children': {
-        const stream = this.runOfEvent(runId);
-        if (!stream) return;
+      case 'toggle-children':
         this.dispatchEvent(
           SessionUiEvents.surface({
             kind: 'expand',
@@ -519,7 +516,6 @@ export class RunTabs extends LitElement {
           }),
         );
         break;
-      }
     }
   }
 }

@@ -99,13 +99,14 @@ export const activeRunId = signal<RunId | undefined>(undefined);
  * clears a stale selection, and a signal rather than a per-render derivation
  * so every component reads one answer.
  */
-export const selectedRunId: Signal.Computed<RunId | undefined> =
-  computed(() => {
+export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
+  () => {
     const selected = activeRunId.get();
     const view = sessionView().get();
     if (selected === undefined || view.runs.has(selected)) return selected;
     return view.runs.size === 0 ? selected : view.order.at(0);
-  });
+  },
+);
 
 /**
  * Move transcript/status focus onto a stream. Sole focus writer: a stream
@@ -124,9 +125,7 @@ export function focusRun(
 }
 
 /** Expansion is a Surface choice; the fold's forceExpanded takes precedence. */
-export const expandedRuns = signal<ReadonlyMap<RunId, boolean>>(
-  new Map(),
-);
+export const expandedRuns = signal<ReadonlyMap<RunId, boolean>>(new Map());
 
 export type SessionListRow =
   | {
@@ -162,8 +161,7 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     rows.push({ kind: 'stream', stream, depth, expanded: open });
     // A workflow's calls belong to its existing popup.
     if (open) {
-      for (const id of stream.childIds)
-        append(view.runs.get(id)!, depth + 1);
+      for (const id of stream.childIds) append(view.runs.get(id)!, depth + 1);
     }
   };
   for (const runs of Object.values(groups)) {
@@ -192,7 +190,7 @@ export const rootRunPending = signal<boolean>(false);
 /** Run-control mirror of `TuiSession.runId` — cleared while a new run is
  *  pending, unlike `rootRunId`, which stays put as the transcript anchor
  *  across pending windows. Published only by `TuiSession`. */
-export const rootRunId = signal<RunId | undefined>(undefined);
+export const claimedRunId = signal<RunId | undefined>(undefined);
 
 // ---------------------------------------------------------------------------
 // foregroundOverlaySlice
@@ -276,8 +274,7 @@ export const foregroundReader: Signal.Computed<
   ForegroundReaderTarget | undefined
 > = computed(() => {
   const reader = FOREGROUND_READER.get();
-  return reader !== undefined &&
-    sessionView().get().runs.has(reader.runId)
+  return reader !== undefined && sessionView().get().runs.has(reader.runId)
     ? reader
     : undefined;
 });
@@ -553,7 +550,7 @@ export function resetCliState(
   rootRunId.set(undefined);
   expandedRuns.set(new Map());
   rootRunPending.set(false);
-  rootRunId.set(undefined);
+  claimedRunId.set(undefined);
   activeForm.set(undefined);
   goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);

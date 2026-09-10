@@ -18,7 +18,6 @@ import {
   resetCliState,
   rootRunPending,
   rootRunId,
-  rootRunId,
 } from '@cli/chat/tui/state/cliState';
 import {
   installTerminalRestoreOnExit,
@@ -29,11 +28,7 @@ import {
   installTerminalTitleUpdates,
   terminalTitleText,
 } from '@cli/chat/tui/terminalTitle';
-import {
-  RUN_PHASE,
-  type RunPhase,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   bindTestSessionView,
@@ -52,7 +47,7 @@ const NO_TERMINAL_CAPABILITIES = {
   oscColorReports: false,
 };
 
-/** The fold's output the title reads: one root, every later stream its
+/** The fold's output the title reads: one root, every later run its
  *  child, and the session's pending approvals. */
 const phases = new Map<string, RunPhase>();
 let approvals: SessionView['approvals'] = [];
@@ -100,7 +95,7 @@ function queueTitleApproval(runId: string): void {
   approvals = [
     ...approvals,
     {
-      runId as RunId,
+      runId: runId as RunId,
       requestId: `title-${runId}`,
       payload: {
         kind: 'bash',
@@ -168,7 +163,7 @@ describe('installTerminalTitleUpdates', () => {
     expect(writeSync).toHaveBeenCalledTimes(writes);
   };
 
-  it('shows root launch as running before the first stream status arrives', async () => {
+  it('shows root launch as running before the first run status arrives', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     enableOscTitles();
@@ -186,7 +181,7 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     rootRunPending.set(true);
-    rootRunId.set('status-pending-root');
+    rootRunId.set('status-pending-root' as RunId);
 
     const updates = installTerminalTitleUpdates('/work/coauthor');
 
@@ -194,13 +189,13 @@ describe('installTerminalTitleUpdates', () => {
     updates.dispose();
   });
 
-  it('uses every stream phase and gives queued approval precedence', async () => {
+  it('uses every run phase and gives queued approval precedence', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
     rootRunPending.set(true);
-    rootRunId.set('transition-root');
+    rootRunId.set('transition-root' as RunId);
     setPhase('transition-root', RUN_PHASE.WAITING);
     setPhase('transition-child', RUN_PHASE.RUNNING);
     await flushTitleUpdate();

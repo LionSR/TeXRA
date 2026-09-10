@@ -29,7 +29,6 @@ import type {
   RunId,
   ProgressPermissionKind,
   DisplaySessionEvent,
-  RunId,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
@@ -229,23 +228,23 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
   const events: RecordedProgressEvent[] = [];
   const pendingPlans = new Map<
     string,
-    { runId: string; settle: (result: PlanApprovalResult) => void }
+    { runId: RunId; settle: (result: PlanApprovalResult) => void }
   >();
   const pendingProposals = new Map<
     string,
-    { runId: string; settle: (result: ProposalResult) => void }
+    { runId: RunId; settle: (result: ProposalResult) => void }
   >();
   const pendingRetries = new Map<
     string,
-    { runId: string; settle: (result: RetryResult) => void }
+    { runId: RunId; settle: (result: RetryResult) => void }
   >();
   const pendingBashes = new Map<
     string,
-    { runId?: string; settle: (result: BashSettlement) => void }
+    { runId?: RunId; settle: (result: BashSettlement) => void }
   >();
   const pendingUserQuestions = new Map<
     string,
-    { runId?: string; settle: (result: UserQuestionSettlement) => void }
+    { runId?: RunId; settle: (result: UserQuestionSettlement) => void }
   >();
   // Mirrors the host contract: interaction requests ensure the view is
   // open without switching the active tab (#8246).
@@ -390,11 +389,8 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
     dispose: () => cancelWhere({}),
   };
   function cancelWhere(selector: HostInteractionCancelSelector): void {
-    const match = (kind: ProgressPermissionKind, runId?: string) =>
-      matchesCancelSelector(
-        { kind, runId || undefined },
-        selector,
-      );
+    const match = (kind: ProgressPermissionKind, runId?: RunId) =>
+      matchesCancelSelector({ kind, runId }, selector);
     for (const [requestId, pending] of pendingBashes) {
       if (!match('bash', pending.runId)) continue;
       pendingBashes.delete(requestId);
@@ -504,9 +500,7 @@ export function testRunScope(
   const interactions =
     options.interactions ?? sessionWithInteractions(undefined).interactions;
   return createRunScope({
-    runId as RunId,
-    runId: 'deadbeef' as RunId,
-    agentName: 'test-agent',
+    runId: runId as RunId,
     session: options.session ?? sessionWithInteractions(interactions),
     signal: options.signal ?? new AbortController().signal,
   });

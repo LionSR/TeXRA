@@ -4,12 +4,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
-import type {
-  AcceptCopyMeta,
-  OutputFileInfo,
-  ReadonlyRoundIndexed,
-  RunId,
-} from '@shared/schemas';
+import type { AcceptCopyMeta, RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -44,10 +39,7 @@ export interface ProgressWorkflowFileActionsControllerDeps {
 
 export class ProgressWorkflowFileActionsController {
   /** Per-stream snapshot of each output file's content at compare time. */
-  private readonly modelOutputBackups = new Map<
-    RunId,
-    Map<string, string>
-  >();
+  private readonly modelOutputBackups = new Map<RunId, Map<string, string>>();
 
   constructor(
     private readonly deps: ProgressWorkflowFileActionsControllerDeps,
@@ -73,29 +65,13 @@ export class ProgressWorkflowFileActionsController {
     }
   }
 
-  async openTaskStorage(stream: RunId): Promise<void> {
+  async openTaskStorage(runId: RunId): Promise<void> {
     try {
-      const { runId } = this.deps.state.getRunMetadata(stream);
-      const runOutputs = this.deps.state.getOutputFiles(stream);
-      let directoryToReveal: string | undefined;
-
-      if (runId) {
-        directoryToReveal = await findRunDir(runId);
-        if (!directoryToReveal) {
-          await ensureRunDir(runId);
-          directoryToReveal = getRunDir(runId);
-        }
-      } else if (Object.keys(runOutputs).length > 0) {
-        directoryToReveal = this.findOutputDirectory(runOutputs);
-      }
-
+      let directoryToReveal = await findRunDir(runId);
       if (!directoryToReveal) {
-        await this.deps.host.showInfo(
-          'No task storage folder is available for this run yet.',
-        );
-        return;
+        await ensureRunDir(runId);
+        directoryToReveal = getRunDir(runId);
       }
-
       await this.deps.host.openDirectory(directoryToReveal);
     } catch (error) {
       this.deps.host.logError?.('Failed to open task storage folder', error);
@@ -246,10 +222,7 @@ export class ProgressWorkflowFileActionsController {
     return (await execute(file, base)) !== false;
   }
 
-  private async backupModelOutput(
-    runId: RunId,
-    file: string,
-  ): Promise<void> {
+  private async backupModelOutput(runId: RunId, file: string): Promise<void> {
     if (!file) return;
 
     try {
@@ -286,17 +259,5 @@ export class ProgressWorkflowFileActionsController {
       model: config.model,
       round: Math.max(...rounds),
     };
-  }
-
-  private findOutputDirectory(
-    runOutputs: ReadonlyRoundIndexed<OutputFileInfo>,
-  ): string | undefined {
-    const match = Object.values(runOutputs)
-      .flat()
-      .find(
-        ({ location }) =>
-          location.kind === 'runStorage' || location.kind === 'workspace',
-      );
-    return match ? path.dirname(match.location.absolutePath) : undefined;
   }
 }

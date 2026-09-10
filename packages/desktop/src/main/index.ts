@@ -52,6 +52,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
+  RunIdSchema,
   type AgentSource,
   type InstructionAction,
 } from '@shared/schemas';
@@ -827,8 +828,7 @@ function createWindow(options: {
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
-      onLaunched: (runId) =>
-        bridge.surfaceAction({ kind: 'select', runId }),
+      onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
     });
     const hostRequests = createDesktopHostRequests({
       session: project.session,
@@ -934,20 +934,27 @@ function createWindow(options: {
       confirmDialog({ message, confirmLabel }),
     openPath: previewHost.openPath,
     // Selection is the surface's: a settings jump asks the shown project's
-    // surface to select the stream, and reports a stream the view no longer
-    // holds as missing.
-    revealRun: async (runId) => {
+    // surface to select the run, and reports a run the view no longer holds
+    // as missing. The settings wire carries the id as a plain string, so it
+    // is parsed here, at the view boundary: a string that is not a run id
+    // names no run the view could hold.
+    revealRun: async (rawRunId) => {
       const binding = activeBinding();
       if (!binding) return 'unavailable';
+      const runId = RunIdSchema.safeParse(rawRunId);
+      if (!runId.success) return 'missing';
       const view = SubscriptionRef.getUnsafe(binding.project.session.view);
-      if (!view.runs.has(runId)) return 'missing';
-      binding.bridge.surfaceAction({ kind: 'select', runId });
+      if (!view.runs.has(runId.data)) return 'missing';
+      binding.bridge.surfaceAction({ kind: 'select', runId: runId.data });
       return 'revealed';
     },
-    getRunLabel: (runId) =>
-      SubscriptionRef.getUnsafe(activeProject().session.view).runs.get(
-        runId,
-      )?.label,
+    getRunLabel: (rawRunId) => {
+      const runId = RunIdSchema.safeParse(rawRunId);
+      if (!runId.success) return undefined;
+      return SubscriptionRef.getUnsafe(activeProject().session.view).runs.get(
+        runId.data,
+      )?.label;
+    },
     promptForSecret: (input) =>
       promptController.request({ ...input, password: true }),
     // Not previewHost.openExternal: that one shows an error dialog and

@@ -34,6 +34,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import {
   AgentCategory,
+  RunIdSchema,
   DEFAULT_TOOL_CONFIG,
   extractionShorthandToolConfig,
   WorkflowAgentProposalSchema,
@@ -213,12 +214,9 @@ const DelegateAgentInputSchema = z
       ),
     memories: memoriesField,
     working_directory: workingDirectoryField,
-    execution_id: z
-      .string()
-      .nullish()
-      .describe(
-        'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the run ID from the original delegation result or /executions.',
-      ),
+    execution_id: RunIdSchema.nullish().describe(
+      'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the run ID from the original delegation result or /executions.',
+    ),
   })
   .refine((data) => Boolean(data.agent) !== Boolean(data.execution_id), {
     error:
@@ -250,7 +248,7 @@ Agent selection: choose the most specific agent whose description matches the ta
 Available models: loaded from the active credentials at runtime.
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."
+Example (resume): execution_id=3f9a1c7e2b4d, instruction="Also fix the bibliography slide formatting."
 
 Git worktree support: resolved from the active workspace at runtime.`,
   schema: DelegateAgentInputSchema,
@@ -314,7 +312,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
   /** Queue follow-up instructions for a tool-use subagent. */
   private readonly resumeAgent = Effect.fn('DelegateAgentTool.resumeAgent')(
     function* (
-      runId: string,
+      runId: RunId,
       instruction: string,
       session: SessionHandle,
       callerRunId: RunId | undefined,
@@ -356,11 +354,9 @@ Git worktree support: resolved from the active workspace at runtime.`,
       }
 
       const framedInstruction = formatFollowUpInstruction(instruction);
-      const result = yield* submitFollowUp(
-        handle.runId,
-        framedInstruction,
-        { session },
-      );
+      const result = yield* submitFollowUp(handle.runId, framedInstruction, {
+        session,
+      });
       if (result.status === 'failed') {
         return yield* Effect.fail(
           new Error(

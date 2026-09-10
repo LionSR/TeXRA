@@ -9,7 +9,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { RUN_PHASE } from '@shared/schemas';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 
 /**
@@ -17,7 +17,7 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
  *
  * Returns true when:
  * - The handle is gone (run already untracked / completed), OR
- * - The stream left the canonical in-flight phases, OR
+ * - The run left the canonical in-flight phases, OR
  * - The run is a *tool-use subagent* in WAITING (job done, result
  *   already delivered by the child-run loop's per-turn delivery — see
  *   childRunLoop.ts). Workflow subagents in WAITING may still be awaiting
@@ -25,7 +25,7 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
  *
  * One getHandle + one getStatus per call — no redundant lookups.
  */
-export function shouldSkipWait(runId: string): boolean {
+export function shouldSkipWait(runId: RunId): boolean {
   const session = currentSession();
   const handle = session.runs.getHandle(runId);
   if (!handle) return true;
@@ -47,7 +47,7 @@ export function shouldSkipWait(runId: string): boolean {
 }
 
 /**
- * Listen for follow-up messages on the current stream and call `onFollowUp`
+ * Listen for follow-up messages on the current run and call `onFollowUp`
  * when one arrives. This lets users break out of a blocking
  * `executions wait` by sending a follow-up message.
  *

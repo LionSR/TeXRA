@@ -385,7 +385,7 @@ export class RunHeader extends LitElement {
         label: stream.label,
         model: stream.model ?? undefined,
         modelLabel: stream.modelLabel ?? undefined,
-        runId: stream.runId,
+        runId: stream.id,
         description: stream.description ?? undefined,
       },
       files: stream.files,
@@ -444,9 +444,7 @@ export class RunHeader extends LitElement {
         );
         return;
       case ELEMENT_IDS.DIFF_STREAM_BTN:
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'latexdiff', runId }),
-        );
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'latexdiff', runId }));
         return;
       case ELEMENT_IDS.CLEAN_STREAM_BTN:
         this.dispatchEvent(SessionUiEvents.host({ kind: 'clean', runId }));
@@ -644,9 +642,7 @@ export class RunHeader extends LitElement {
       <wa-tooltip for=${ELEMENT_IDS.GOAL_CHIP}>${tooltip}</wa-tooltip>`;
   }
 
-  private renderRunElapsed(
-    stream: RunView,
-  ): TemplateResult | typeof nothing {
+  private renderRunElapsed(stream: RunView): TemplateResult | typeof nothing {
     if (stream.runStartedAt === null || stream.group === 'recent') {
       return nothing;
     }

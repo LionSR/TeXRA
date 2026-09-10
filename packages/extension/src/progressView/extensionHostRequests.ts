@@ -65,11 +65,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import {
-  Cancelled,
-  Rejected,
-  Unavailable,
-} from '@shared/session/requestErrors';
+import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -261,14 +257,6 @@ export function createExtensionHostRequests(
   }
 
   async function exportTranscript(runId: RunId): Promise<void> {
-    const runId =
-      runActions.snapshotPort.getRunMetadata(runId).runId;
-    if (!runId) {
-      throw new Unavailable({
-        runId,
-        reason: 'This run has no transcript to export.',
-      });
-    }
     await effectRuntime().runPromise(
       exportRunTranscript(runId, {
         pickFormat: async () =>

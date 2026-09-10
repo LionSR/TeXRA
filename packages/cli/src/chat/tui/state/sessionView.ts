@@ -82,13 +82,11 @@ export function runViewOf(
 }
 
 /** The run to stop when a child is still running or waiting. */
-export function killableRunId(
-  stream: RunView | undefined,
-): string | undefined {
+export function killableRunId(stream: RunView | undefined): RunId | undefined {
   return stream &&
     stream.parentId !== null &&
     (stream.group === 'running' || stream.group === 'waiting')
-    ? stream.runId
+    ? stream.id
     : undefined;
 }
 
@@ -109,9 +107,7 @@ export function runLabelOf(stream: RunView): string {
 }
 
 /** The stream's phase: undefined before the first `status` folds. */
-export function runPhaseOf(
-  stream: RunView | undefined,
-): RunPhase | undefined {
+export function runPhaseOf(stream: RunView | undefined): RunPhase | undefined {
   return stream === undefined || stream.status === RUN_LIFECYCLE_READY
     ? undefined
     : stream.status;

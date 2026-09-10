@@ -44,10 +44,7 @@ import { WorkflowPopup } from './panes/WorkflowPopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import {
-  currentApproval,
-  promoteApprovalsForRun,
-} from './state/approvalQueue';
+import { currentApproval, promoteApprovalsForRun } from './state/approvalQueue';
 import {
   ActiveDraftScope,
   createActiveDraftRegistry,
@@ -118,8 +115,8 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
 function runLabelsOf(view: SessionView): RunLabels {
   const labels = new Map<string, string>();
   for (const stream of view.runs.values()) {
-    if (stream.parentId !== null && stream.label !== stream.runId) {
-      labels.set(stream.runId, stream.label);
+    if (stream.parentId !== null && stream.label !== stream.id) {
+      labels.set(stream.id, stream.label);
     }
   }
   return labels;
@@ -131,10 +128,10 @@ export interface AppProps {
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
   ) => void;
-  readonly onKillRun: (runId: string) => void;
+  readonly onKillRun: (runId: RunId) => void;
   /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onWorkflowControl: (
-    runId: string,
+    runId: RunId,
     action: WorkflowControlAction,
   ) => void;
   /** Whether bare Escape may stop the identified focused stream. */
@@ -179,10 +176,7 @@ export function App(props: AppProps): React.JSX.Element {
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeRun = runViewOf(view, activeRunId);
   const activeParentId = activeRun?.parentId ?? undefined;
-  const subagentRunLabels = useMemo(
-    () => runLabelsOf(view),
-    [view],
-  );
+  const subagentRunLabels = useMemo(() => runLabelsOf(view), [view]);
   const activeApprovalVisible = approvalVisibleForSelection({
     pending,
     selectedRunId: activeRunId,
@@ -260,9 +254,7 @@ export function App(props: AppProps): React.JSX.Element {
     runViewOf(view, childListTarget),
   );
   const workflowPopupRunId =
-    foregroundReader?.kind === 'workflow'
-      ? foregroundReader.runId
-      : undefined;
+    foregroundReader?.kind === 'workflow' ? foregroundReader.runId : undefined;
   const workflowPopupRoot = runViewOf(view, workflowPopupRunId);
   const workflowPopupModel = workflowPopupRoot?.transcript.run ?? undefined;
   const workflowPopup = useSignal(workflowPopupViewSignal);
@@ -273,8 +265,7 @@ export function App(props: AppProps): React.JSX.Element {
   const childListValues = sessions;
   const childListAvailable = childListValues.length > 0;
   const selectedChild = runViewOf(view, selectedChildValue);
-  const selectedChildKillable =
-    killableRunId(selectedChild) !== undefined;
+  const selectedChildKillable = killableRunId(selectedChild) !== undefined;
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
@@ -313,7 +304,7 @@ export function App(props: AppProps): React.JSX.Element {
     dispatchChildListSelection({ kind: 'focusRun', runId });
     const stream = view.runs.get(runId)!;
     if (stream.group === 'interrupted' && stream.resumeEligible) {
-      props.onSubmit(`/resume ${stream.runId}`);
+      props.onSubmit(`/resume ${stream.id}`);
     } else {
       focusRunAndPromoteApprovals(runId);
     }
@@ -358,9 +349,7 @@ export function App(props: AppProps): React.JSX.Element {
       case 'transcriptReader': {
         if (foregroundReader?.kind !== 'transcript') return null;
         const stream = runViewOf(view, foregroundReader.runId);
-        const label = stream
-          ? runLabelOf(stream)
-          : foregroundReader.runId;
+        const label = stream ? runLabelOf(stream) : foregroundReader.runId;
         return (
           <TranscriptReader
             availableRows={availableRows}
@@ -408,9 +397,7 @@ export function App(props: AppProps): React.JSX.Element {
       case 'workPlanReader': {
         if (foregroundReader?.kind !== 'workPlan') return null;
         const stream = runViewOf(view, foregroundReader.runId);
-        const label = stream
-          ? runLabelOf(stream)
-          : foregroundReader.runId;
+        const label = stream ? runLabelOf(stream) : foregroundReader.runId;
         return (
           <WorkPlanReader
             availableRows={availableRows}
@@ -472,10 +459,7 @@ export function App(props: AppProps): React.JSX.Element {
   };
 
   const handleBareEscape = (runId: RunId): boolean => {
-    if (
-      selectedRunIdSignal.get() !== runId ||
-      !bareEscapeActive(runId)
-    ) {
+    if (selectedRunIdSignal.get() !== runId || !bareEscapeActive(runId)) {
       return false;
     }
     const parentId = parentIdOf(runId);
@@ -685,9 +669,7 @@ export function App(props: AppProps): React.JSX.Element {
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
               runFocusAvailable={sessions.length > 0}
-              transcriptAvailable={
-                (activeRun?.transcript.rows.length ?? 0) > 0
-              }
+              transcriptAvailable={(activeRun?.transcript.rows.length ?? 0) > 0}
             />
           </>
         )}

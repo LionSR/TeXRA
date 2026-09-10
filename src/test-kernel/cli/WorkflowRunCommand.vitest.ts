@@ -41,8 +41,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@agent/storage', async (importOriginal) => {
-  const { createFakeRunRecords } =
-    await import('@test/support/FakeRunKVStore');
+  const { createFakeRunRecords } = await import('@test/support/FakeRunKVStore');
   return {
     ...(await importOriginal<typeof import('@agent/storage')>()),
     getRunRecords: vi.fn(() =>
@@ -191,8 +190,7 @@ function workflowRun(
     outcomePersisted: true,
     result: {
       category: AgentCategory.Workflow,
-      runId,
-      runId.replace(/^exec-/, 'stream-'),
+      runId: runId as RunId,
       outcome: RUN_OUTCOME.COMPLETED,
       outputs: [],
       compileFailures: [],
@@ -201,10 +199,7 @@ function workflowRun(
   };
 }
 
-function mockWorkflowRun(
-  result: WorkflowExecuteResult,
-  once = false,
-): void {
+function mockWorkflowRun(result: WorkflowExecuteResult, once = false): void {
   const implementation = async (
     _config: unknown,
     _context: unknown,
@@ -546,7 +541,6 @@ describe('CLI workflow run command', () => {
       expect(Object.keys(emission?.json ?? {})).toEqual([
         'category',
         'runId',
-        'runId',
         'outcome',
         'outputs',
         'compileFailures',
@@ -633,9 +627,7 @@ describe('CLI workflow run command', () => {
             () => import('@agent/storage/runLease'),
           );
           yield* Effect.promise(() =>
-            runInSession(session, () =>
-              acquireFreshRunLease(runId),
-            ),
+            runInSession(session, () => acquireFreshRunLease(runId)),
           );
           const run = workflowRun(runId);
           if (!run.ok) throw new Error('Expected workflow result.');
@@ -643,13 +635,11 @@ describe('CLI workflow run command', () => {
             session,
           );
           const records = storage.getRunRecords(session, runId);
-          vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(
-            records,
-          );
+          vi.mocked(mockedStorage.getRunRecords).mockReturnValueOnce(records);
           yield* session.commit([
             {
               type: 'run.start',
-              aggregateId: aggregateId('stream', run.result.runId),
+              aggregateId: aggregateId('run', run.result.runId),
               runId,
               identity: { kind: 'agent', agent: 'polish' },
               category: AgentCategory.Workflow,
@@ -667,9 +657,7 @@ describe('CLI workflow run command', () => {
                   .pipe(
                     Effect.as(run),
                     Effect.ensuring(
-                      session
-                        .releaseRunLease(runId)
-                        .pipe(Effect.orDie),
+                      session.releaseRunLease(runId).pipe(Effect.orDie),
                     ),
                   ),
               ),
@@ -1053,10 +1041,7 @@ describe('CLI workflow run command', () => {
       outcome: RUN_OUTCOME.CANCELLED,
     });
     if (!durableRun.ok) throw new Error('Expected a workflow result.');
-    mockWorkflowRun(
-      { ...durableRun, outcomePersisted: false },
-      true,
-    );
+    mockWorkflowRun({ ...durableRun, outcomePersisted: false }, true);
 
     await expect(runWorkflow()).resolves.toBe(CliExitCode.Interrupted);
 
@@ -1126,8 +1111,7 @@ describe('CLI workflow run command', () => {
   it('rejects recovery advertising for a checkpoint carrying a flow failure', async () => {
     await runWorkflow();
     const canAdvertise =
-      mocks.executeCliConfig.mock.calls[0]?.[2]
-        .canAdvertiseInterruptedRun;
+      mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
 
     expect(
       canAdvertise?.({
@@ -1143,8 +1127,7 @@ describe('CLI workflow run command', () => {
   it('rejects recovery advertising for terminal unresolved compile rejection', async () => {
     await runWorkflow();
     const canAdvertise =
-      mocks.executeCliConfig.mock.calls[0]?.[2]
-        .canAdvertiseInterruptedRun;
+      mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
 
     expect(
       canAdvertise?.({

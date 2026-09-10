@@ -14,7 +14,7 @@ import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas';
+import type { ToolResult, UserQuestionPermission } from '@shared/schemas';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -55,7 +55,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     data: input.questions[0]?.question.slice(0, 100) ?? '',
   });
 
-  const permission = {
+  const permission: UserQuestionPermission = {
     requestId,
     questions: input.questions,
     context: input.context ?? undefined,

@@ -28,7 +28,7 @@ function setupMachine(runId: string): {
       () => {},
     ),
     statusEvents: () => published,
-    runId as RunId,
+    runId: runId as RunId,
   };
 }
 
@@ -71,9 +71,7 @@ describe('RunStatusMachine', () => {
 
   it('exercises the live machine against the exhaustive transition table', () => {
     const phases = Object.values(RUN_PHASE) as RunPhase[];
-    const causes = Object.values(
-      RUN_TRANSITION_CAUSE,
-    ) as RunTransitionCause[];
+    const causes = Object.values(RUN_TRANSITION_CAUSE) as RunTransitionCause[];
     for (const from of [undefined, ...phases]) {
       for (const to of phases) {
         for (const cause of causes) {
@@ -103,23 +101,19 @@ describe('RunStatusMachine', () => {
     );
 
     try {
-      expect(
-        machine.transition(runId, RUN_PHASE.RUNNING, 'lifecycle'),
-      ).toBe(true);
+      expect(machine.transition(runId, RUN_PHASE.RUNNING, 'lifecycle')).toBe(
+        true,
+      );
       expect(machine.getStreamState(runId)?.runStartedAt).toBe(1_000);
 
       vi.setSystemTime(5_000);
-      expect(machine.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(
-        true,
-      );
+      expect(machine.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(true);
       expect(machine.getStreamState(runId)).toEqual({
         phase: RUN_PHASE.WAITING,
       });
 
       vi.setSystemTime(15_000);
-      expect(machine.transition(runId, RUN_PHASE.RUNNING, 'resume')).toBe(
-        true,
-      );
+      expect(machine.transition(runId, RUN_PHASE.RUNNING, 'resume')).toBe(true);
       expect(machine.getStreamState(runId)?.runStartedAt).toBe(15_000);
     } finally {
       vi.useRealTimers();
@@ -221,9 +215,7 @@ describe('RunStatusMachine', () => {
       substate: RUN_SUBSTATE.RESUMING,
     });
 
-    expect(machine.transition(runId, RUN_PHASE.RUNNING, 'resume')).toBe(
-      true,
-    );
+    expect(machine.transition(runId, RUN_PHASE.RUNNING, 'resume')).toBe(true);
 
     expect(machine.get(runId)).toBe(RUN_PHASE.RUNNING);
     expect(machine.getSubstate(runId)).toBeUndefined();
@@ -246,9 +238,7 @@ describe('RunStatusMachine', () => {
 
     seedRunStatusForTest(machine, runId, { phase: RUN_PHASE.RUNNING });
 
-    expect(machine.transition(runId, RUN_PHASE.RUNNING, 'resume')).toBe(
-      true,
-    );
+    expect(machine.transition(runId, RUN_PHASE.RUNNING, 'resume')).toBe(true);
 
     expect(machine.get(runId)).toBe(RUN_PHASE.RUNNING);
     expect(machine.getSubstate(runId)).toBeUndefined();

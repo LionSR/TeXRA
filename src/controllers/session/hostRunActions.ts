@@ -36,7 +36,6 @@ import {
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected, Unavailable } from '@shared/session/requestErrors';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
-import type { RunMetadata } from '@transcript/RunSnapshotStore';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -73,9 +72,7 @@ interface HostRunActions {
   resume(runId: RunId): Effect.Effect<void, Error>;
   runNew(runId: RunId): Effect.Effect<void, Error>;
   runCompileFixer(runId: RunId): Effect.Effect<void, Error>;
-  readConfig(
-    runId: RunId,
-  ): Effect.Effect<AgentConfig | undefined, Error>;
+  readConfig(runId: RunId): Effect.Effect<AgentConfig | undefined, Error>;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
@@ -98,21 +95,10 @@ export function createHostRunActions(
   const { snapshots } = session;
   const view = () => SubscriptionRef.getUnsafe(session.view);
 
-  const getRunMetadata = (runId: RunId): RunMetadata => {
-    const metadata = snapshots.getRunMetadata(runId);
-    return {
-      ...metadata,
-      runId:
-        metadata.runId ?? view().runs.get(runId)?.runId,
-    };
-  };
-
   const snapshotPort = {
-    getRunMetadata,
-    getOutputFiles: (runId: RunId) =>
-      snapshots.getOutputFiles(runId),
-    getCompileFailures: (runId: RunId) =>
-      snapshots.getCompileFailures(runId),
+    getRunMetadata: (runId: RunId) => snapshots.getRunMetadata(runId),
+    getOutputFiles: (runId: RunId) => snapshots.getOutputFiles(runId),
+    getCompileFailures: (runId: RunId) => snapshots.getCompileFailures(runId),
     getKnownWorkspaceOutputPaths: (runId: RunId) =>
       snapshots.getKnownFilePaths(runId, { workspaceOnly: true }),
   };
@@ -121,11 +107,7 @@ export function createHostRunActions(
     runId: RunId,
   ) {
     yield* snapshots.preload([runId]);
-    const { runId } = getRunMetadata(runId);
-    return runId
-      ? ((yield* getRunRecords(session, runId).readConfig()) ??
-          undefined)
-      : undefined;
+    return (yield* getRunRecords(session, runId).readConfig()) ?? undefined;
   });
 
   /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
@@ -142,7 +124,7 @@ export function createHostRunActions(
       );
     }
     yield* snapshots.preload([runId]);
-    const metadata = getRunMetadata(runId);
+    const metadata = snapshots.getRunMetadata(runId);
     if (!isPlainAgentIdentity(metadata.identity)) {
       return yield* Effect.fail(
         new Rejected({
@@ -150,9 +132,7 @@ export function createHostRunActions(
         }),
       );
     }
-    const config = metadata.runId
-      ? yield* getRunRecords(session, metadata.runId).readConfig()
-      : null;
+    const config = yield* getRunRecords(session, runId).readConfig();
     if (!config) {
       return yield* Effect.fail(
         new Rejected({
@@ -361,10 +341,7 @@ export function createHostRunActions(
      * restores it instead of starting a fresh run.
      */
     resume: Effect.fn('HostRunActions.resume')(function* (runId) {
-      const { config, runId } = yield* nativeAgentRun(
-        runId,
-        'resumed',
-      );
+      const { config } = yield* nativeAgentRun(runId, 'resumed');
       if (config.agentCategory !== AgentCategory.Workflow) {
         yield* Effect.tryPromise({
           try: () => platform().agentResume.tryResumeRun(runId),
@@ -373,11 +350,7 @@ export function createHostRunActions(
         return;
       }
       yield* Effect.tryPromise({
-        try: () =>
-          ports.runAgentRequest({
-            config,
-            ...(runId && { runId }),
-          }),
+        try: () => ports.runAgentRequest({ config, runId }),
         catch: ensureError,
       });
     }),
@@ -440,12 +413,10 @@ export function createHostRunActions(
         kimiCodeRoutedOnFailure: request.kimiCodeRoutedOnFailure ?? undefined,
       });
     },
-    restoreState: Effect.fn('HostRunActions.restoreState')(
-      function* (runId) {
-        const { config } = yield* nativeAgentRun(runId, 'restored');
-        return config;
-      },
-    ),
+    restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {
+      const { config } = yield* nativeAgentRun(runId, 'restored');
+      return config;
+    }),
   };
 }
 

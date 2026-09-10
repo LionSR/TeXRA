@@ -366,7 +366,7 @@ export class SessionComposer extends LitElement {
     return launch ? launch.instruction[launch.sessionType] : '';
   }
 
-  private get recordingTarget(): string {
+  private get recordingTarget(): RunId | 'launch' {
     return this.stream?.id ?? 'launch';
   }
 

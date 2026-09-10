@@ -156,11 +156,7 @@ export function createSessionExitController(
     if (!session.runId) return;
     const { view, rootRunId } = snapshot;
     const hint = formatResumeHint(
-      collectResumeTargets({
-        view,
-        rootRunId,
-        rootRunId: session.runId,
-      }),
+      collectResumeTargets({ view, rootRunId: session.runId }),
       collectResumeUsage(view, rootRunId),
       ctx.commandName,
       {

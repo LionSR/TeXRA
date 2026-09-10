@@ -297,8 +297,8 @@ export class WorkflowRunBoard extends LitElement {
     this.dispatchEvent(
       SessionUiEvents.runtime({
         kind: 'workflow.control',
-        runId: child.id,
-        runId: child.runId,
+        runId: this.stream.id,
+        childRunId: child.id,
         action,
       }),
     );

@@ -41,7 +41,7 @@ import {
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import type { Goal, Plan, ToolResult } from '@shared/schemas';
+import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
 import { goalElapsedMs, isGoalInFlight, ToolError } from '@shared/schemas';
 import { requireRunId } from '@tools/contextHelpers';
 import {
@@ -142,7 +142,7 @@ interface PlanPorts {
 const setGoalAutoApproval = Effect.fn('PlanTool.setGoalAutoApproval')(
   function* (
     ports: PlanPorts,
-    runId: string,
+    runId: RunId,
     scope: GoalAutoApprovalScope | false,
   ) {
     const interactions = getRunContextInteractions(ports.contexts?.runContext);
@@ -159,13 +159,13 @@ const setGoalAutoApproval = Effect.fn('PlanTool.setGoalAutoApproval')(
 /**
  * Start an autonomous goal whose objective is the just-approved plan
  * document, verbatim. Falls back explicitly if goal is disabled. If one
- * is already in flight for the stream, retarget it so future
+ * is already in flight for the run, retarget it so future
  * continuations follow the current user decision.
  */
 const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   ports: PlanPorts,
   plan: Plan,
-  runId: string,
+  runId: RunId,
   autoApprovalScope: GoalAutoApprovalScope,
 ) {
   if (!ports.inRunScope(isGoalEnabled)) {
@@ -185,7 +185,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 
   const objective = plan.objective;
 
-  // If a goal is already in flight on this stream, retarget it at the
+  // If a goal is already in flight on this run, retarget it at the
   // newly approved objective instead of silently leaving the loop driving
   // the stale one.
   const existing = ports.inRunScope(() => GoalStore.getForRun(runId));
@@ -280,7 +280,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   ports: PlanPorts,
   plan: Plan,
-  runId: string,
+  runId: RunId,
   workPlanState: WorkPlanState,
 ) {
   const requestId = `plan-${generateShortId()}`;
@@ -393,23 +393,18 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
     logger.warn('Plan created without runId: skipping approval gate');
     return buildApprovedResult();
   }
-  return yield* requestApproval(
-    ports,
-    plan,
-    runId,
-    callContext.workPlanState,
-  );
+  return yield* requestApproval(ports, plan, runId, callContext.workPlanState);
 });
 
 const executePause = Effect.fn('PlanTool.executePause')(function* (
   ports: PlanPorts,
-  runId: string,
+  runId: RunId,
   reason: string,
 ) {
   const goal = ports.inRunScope(() => GoalStore.getForRun(runId));
   if (!goal) {
     return executed(
-      'No autonomous goal is currently running on this stream, so there is nothing to pause. ' +
+      'No autonomous goal is currently running on this run, so there is nothing to pause. ' +
         'If you need user input, ask the user directly in your next message; do not call plan(command="pause") again.',
       'No autonomous goal to pause.',
     );
@@ -433,13 +428,13 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
 
 const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   ports: PlanPorts,
-  runId: string,
+  runId: RunId,
   reason: string,
 ) {
   const goal = ports.inRunScope(() => GoalStore.getForRun(runId));
   if (!goal) {
     return executed(
-      'No autonomous goal is currently running on this stream, so there is nothing to mark complete. ' +
+      'No autonomous goal is currently running on this run, so there is nothing to mark complete. ' +
         'The plan work is otherwise finished; return the final answer to the user and do not call plan(command="complete") again.',
       'Plan-only work complete: summarize the result.',
     );

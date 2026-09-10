@@ -19,7 +19,6 @@ import {
   WORKFLOW_TASK_STATUS_LABEL,
   type RunId,
   type RunPhase,
-  type RunId,
 } from '@shared/schemas';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import {
@@ -110,10 +109,10 @@ function claimRootRun(
   wantedRunId: RunId | undefined,
   attachCursor: number,
 ): RunId | undefined {
-  const candidates = [...view.runs.values()].filter((stream) =>
+  const candidates = [...view.runs.values()].filter((run) =>
     wantedRunId !== undefined
-      ? stream.runId === wantedRunId
-      : stream.parentId === null && stream.createdAt > attachCursor,
+      ? run.id === wantedRunId
+      : run.parentId === null && run.createdAt > attachCursor,
   );
   candidates.sort((a, b) => a.createdAt - b.createdAt);
   return candidates.at(0)?.id;
@@ -201,9 +200,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private root(): RunView | undefined {
-    return this.rootRunId
-      ? this.view?.runs.get(this.rootRunId)
-      : undefined;
+    return this.rootRunId ? this.view?.runs.get(this.rootRunId) : undefined;
   }
 
   private get rootStreamTerminal(): boolean {
@@ -213,11 +210,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private applyView(view: SessionView): void {
     const previous = this.view;
     this.view = view;
-    this.rootRunId ??= claimRootRun(
-      view,
-      this.wantedRunId,
-      this.attachCursor,
-    );
+    this.rootRunId ??= claimRootRun(view, this.wantedRunId, this.attachCursor);
     const root = this.root();
     if (!root) return;
     const wasTerminal = isTerminalOutcomePhase(

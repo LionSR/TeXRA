@@ -46,11 +46,7 @@ import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type {
-  AgentDelegationScope,
-  RunId,
-  RunPhase,
-} from '@shared/schemas';
+import type { AgentDelegationScope, RunId, RunPhase } from '@shared/schemas';
 import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { descendantRuns } from '@shared/session/sessionView';
@@ -357,8 +353,7 @@ export async function runChat(
     runPhaseOf(runViewOf(currentView(), session.runId));
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
-      session.runId &&
-      runtimeSession.runs.getToolUseFlowContext(session.runId),
+      session.runId && runtimeSession.runs.getToolUseFlowContext(session.runId),
     );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
@@ -412,9 +407,7 @@ export async function runChat(
 
   const resetSessionForClear = (): void => {
     const currentRunId = session.runId ?? activeRunIdSignal.get();
-    const activeStatus = runPhaseOf(
-      runViewOf(currentView(), currentRunId),
-    );
+    const activeStatus = runPhaseOf(runViewOf(currentView(), currentRunId));
     const isRunPending = chatTuiRunPending(session);
 
     if (
@@ -437,11 +430,9 @@ export async function runChat(
     // Release this conversation's resident transcripts when their remaining
     // readers and writers leave. Clearing the terminal does not delete history.
     const store = runtimeSession.transcripts;
-    for (const runId of descendantRuns(
-      currentView(),
-      rootRunIdSignal.get(),
-      { includeRoot: true },
-    )) {
+    for (const runId of descendantRuns(currentView(), rootRunIdSignal.get(), {
+      includeRoot: true,
+    })) {
       store.requestEviction(runId);
     }
     resetCliState(meta);
@@ -513,10 +504,7 @@ export async function runChat(
         effectRuntime().runFork(stop.settlement);
       }}
       onWorkflowControl={(runId, action) => {
-        runtimeSession.workflowControls.control(
-          runId as RunId,
-          action,
-        );
+        runtimeSession.workflowControls.control(runId, action);
       }}
       history={inputHistory}
     />,

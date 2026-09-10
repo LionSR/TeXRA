@@ -23,10 +23,10 @@ import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
   selectedRunId as selectedRunIdSignal,
+  claimedRunId as claimedRunIdSignal,
   rootRunPending as rootRunPendingSignal,
   rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
-  rootRunId as rootRunIdSignal,
 } from '../state/cliState';
 import {
   ancestorPhaseLabel,
@@ -80,11 +80,11 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // on the closure's identity, which froze the hint at its boot-time value
   // for the whole run (#8273).
   const rootRunPending = useSignal(rootRunPendingSignal);
-  const rootRunId = useSignal(rootRunIdSignal);
+  const claimedRunId = useSignal(claimedRunIdSignal);
   const runStopFacts = {
     runPending: rootRunPending,
-    runId: rootRunId,
-    status: runPhaseOf(runViewOf(view, rootRunId)),
+    runId: claimedRunId,
+    status: runPhaseOf(runViewOf(view, claimedRunId)),
   };
   const ownedRunIds = useMemo(
     () => descendantRuns(view, rootRunId, { includeRoot: true }),
@@ -318,8 +318,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       agentSelectionAvailable: !rootRunPending,
       chatInputAvailable: props.chatInputAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
-      parentNavigationAvailable:
-        runViewOf(view, activeRunId)?.parentId != null,
+      parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
       runFocusAvailable: props.runFocusAvailable,
       shiftEnterNewline: caps.kittyKeyboard,
       transcriptAvailable: props.transcriptAvailable,

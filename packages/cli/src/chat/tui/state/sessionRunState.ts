@@ -1,18 +1,15 @@
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import {
-  RUN_PHASE,
-  type RunPhase,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 
-import { rootRunPending, rootRunId } from './cliState';
+import { claimedRunId, rootRunPending } from './cliState';
 
 /**
  * Root-run state of one chat TUI session.
  *
  * The run-claim triple (`runId`, `runPromise`, `runCompleted`) is mirrored
- * into the `rootRun*` signals that renders read, and the mirror must never lag
+ * into the `rootRunPending` / `claimedRunId` signals that renders read, and
+ * the mirror must never lag
  * the fields: an unpublished mutation leaves the Ctrl-C hint and the
  * start-availability gate stale (#8273). The triple is therefore owned here —
  * private storage, published by construction — instead of being a plain record
@@ -30,7 +27,6 @@ export class TuiSession {
 
   /** Root conversation that remains recoverable after an interrupted turn. */
   interruptedRunId: RunId | undefined;
-  runId: string | undefined;
   runExitCode: CliExitCode = CliExitCode.Success;
   stopRequested = false;
 
@@ -56,7 +52,6 @@ export class TuiSession {
     this._runPromise = undefined;
     this._runCompleted = false;
     this.interruptedRunId = undefined;
-    this.runId = undefined;
     this.runExitCode = CliExitCode.Success;
     this.stopRequested = false;
     this.publish();
@@ -100,7 +95,7 @@ export class TuiSession {
    */
   private publish(): void {
     rootRunPending.set(chatTuiRunPending(this));
-    rootRunId.set(this._runId);
+    claimedRunId.set(this._runId);
   }
 }
 
@@ -117,15 +112,13 @@ type PendingTuiRunSessionState = Pick<
 export function chatTuiCanInterruptActiveRun(
   session: InterruptibleTuiSessionState,
 ): boolean {
-  return Boolean(
-    session.runId && session.runPromise && !session.runCompleted,
-  );
+  return Boolean(session.runId && session.runPromise && !session.runCompleted);
 }
 
 /**
  * Run facts the stop predicates consume. Two producers share this shape:
  * `runChatTui` derives it from the mutable session (signal-handler paths),
- * and the StatusBar derives it from the `rootRunPending`/`rootRunId`
+ * and the StatusBar derives it from the `rootRunPending`/`claimedRunId`
  * signals so the Ctrl-C hint recomputes reactively during renders.
  */
 interface ChatTuiRunStopFacts {

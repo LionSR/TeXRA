@@ -9,10 +9,7 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { usageCostLabel } from '@shared/copy/modelAccess';
-import {
-  descendantRuns,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 
 import { cumulativeUsageOf, runViewOf } from './sessionView';
 
@@ -25,7 +22,6 @@ export interface ResumeTarget {
 interface ResumeTargetsInput {
   readonly view: SessionView;
   readonly rootRunId: RunId | undefined;
-  readonly rootRunId: string | undefined;
 }
 
 export interface ResumeCommandOptions {
@@ -105,26 +101,17 @@ function formatResumeUsage(
 export function collectResumeTargets({
   view,
   rootRunId,
-  rootRunId,
 }: ResumeTargetsInput): readonly ResumeTarget[] {
   const targets: ResumeTarget[] = [];
-  const seen = new Set<string>();
   if (rootRunId) {
     targets.push({ runId: rootRunId, label: 'main', isRoot: true });
-    seen.add(rootRunId);
   }
   for (const runId of descendantRuns(view, rootRunId, {
     includeRoot: false,
   })) {
-    const stream = runViewOf(view, runId);
-    if (!stream || seen.has(stream.runId)) continue;
-    if (!stream.resumeEligible) continue;
-    seen.add(stream.runId);
-    targets.push({
-      runId: stream.runId,
-      label: stream.label,
-      isRoot: false,
-    });
+    const run = runViewOf(view, runId);
+    if (!run?.resumeEligible) continue;
+    targets.push({ runId: run.id, label: run.label, isRoot: false });
   }
   return targets;
 }

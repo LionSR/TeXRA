@@ -70,14 +70,12 @@ export async function runResumeCommand(
   return effectRuntime().runPromise(
     Effect.gen(function* () {
       const store = getRunRecords(session, id);
-      const metadata = yield* Effect.result(
-        Effect.all([store.readConfig(), store.readMeta()]),
-      );
-      if (Result.isFailure(metadata)) {
-        writeTextStderr(loadFailureMessage(id, metadata.failure));
+      const configResult = yield* Effect.result(store.readConfig());
+      if (Result.isFailure(configResult)) {
+        writeTextStderr(loadFailureMessage(id, configResult.failure));
         return CliExitCode.AgentError;
       }
-      const [config, meta] = metadata.success;
+      const config = configResult.success;
       if (!config) {
         writeTextStderr(`Run not found: ${id}`);
         return CliExitCode.Usage;
@@ -90,9 +88,7 @@ export async function runResumeCommand(
           writeTextStderr(runLeaseHeldMessage(id, classification.owner));
           return CliExitCode.Usage;
         case 'owned_here':
-          writeTextStderr(
-            `Run ${id} is already running in this process.`,
-          );
+          writeTextStderr(`Run ${id} is already running in this process.`);
           return CliExitCode.Usage;
         case 'unclassified':
           // A history row is advertised from its checkpoint file alone, so a run
@@ -111,17 +107,6 @@ export async function runResumeCommand(
           return CliExitCode.Usage;
         case 'resumable':
           break;
-      }
-      // FK-first: the stream id stamped at registration is the reproduction
-      // contract. A row without one predates stamping, so there is no persisted
-      // stream to reopen, a different fact from "this run finished", and worth
-      // saying plainly since only an explicitly named id reaches here (the
-      // history listing never advertises such a row).
-      if (!meta?.runId) {
-        writeTextStderr(
-          `Run ${id} predates transcript stream stamping and cannot be continued. Start a new agent task instead.`,
-        );
-        return CliExitCode.Usage;
       }
 
       // Tool-use resume reopens the interactive TUI, so headless callers are

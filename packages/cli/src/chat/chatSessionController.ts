@@ -51,7 +51,6 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
-  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
@@ -192,10 +191,7 @@ export interface ChatSessionController {
    * Attempt to resume a queued follow-up target from the CLI platform port.
    * Returns true only when this controller accepts the target resume.
    */
-  tryResumeRun(
-    runId: RunId,
-    recovery?: RecoveryContinuation,
-  ): Promise<boolean>;
+  tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
   /**
    * The composer's submit path (PRD 10.1): a slash command, the first
    * instruction of a fresh root run, a message into an interrupted root, or
@@ -302,9 +298,9 @@ export function createChatSessionController(
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
 
-  /** The stream of `runId`, from the first view level that holds it. */
-  const rootStreamOf = (
-    runId: string | undefined,
+  /** `runId` once the fold holds it, from the first view level that does. */
+  const awaitRunFolded = (
+    runId: RunId | undefined,
   ): Promise<RunId | undefined> =>
     runId === undefined
       ? Promise.resolve(undefined)
@@ -313,17 +309,9 @@ export function createChatSessionController(
             Stream.make(SubscriptionRef.getUnsafe(runtimeSession.view)),
             SubscriptionRef.changes(runtimeSession.view),
           ).pipe(
-            Stream.map(
-              (view) =>
-                [...view.runs.values()].find(
-                  (stream) =>
-                    stream.parentId === null &&
-                    stream.runId === runId,
-                )?.id,
-            ),
-            Stream.filter((id): id is RunId => id !== undefined),
+            Stream.filter((view) => view.runs.has(runId)),
             Stream.runHead,
-            Effect.map(Option.getOrUndefined),
+            Effect.map((head) => (Option.isSome(head) ? runId : undefined)),
           ),
         );
 
@@ -444,15 +432,19 @@ export function createChatSessionController(
 
   const interruptActiveRun = (): void => {
     runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
-    if (!session.runId) return;
-    session.interruptedRunId = session.runId;
+    // The run id is known from the mint, but a stop can only land on a run
+    // the fold holds; `onStreamResolved` re-reads `stopRequested` for a stop
+    // asked in the launch gap.
+    const runId = session.runId;
+    if (!runId || !runViewOf(currentView(), runId)) return;
+    session.interruptedRunId = runId;
     // Ctrl-C is a configured stop surface: the user stopped the root run, so
     // the detach-on-stop toggle decides whether active subagents survive it.
     // `stopRun` below is the other gesture and answers deliberately
     // differently.
     void request({
       kind: 'stream.stop',
-      runId: session.runId,
+      runId,
       detachActiveChildren: detachSubagentsOnStop(),
     });
   };
@@ -591,7 +583,6 @@ export function createChatSessionController(
       setupRunHost(sessionContext);
     const runId = generateRunId();
     ownRun(runId);
-    session.runId = runId;
 
     const {
       promise: claimedRunPromise,
@@ -599,8 +590,10 @@ export function createChatSessionController(
       reject: rejectRunPromise,
     } = pDefer<void>();
     // Native launch may resolve its stream on this turn. Claim first so
-    // marking the run pending cannot erase that stream or a reentrant stop.
+    // marking the run pending cannot erase the claimed run or a reentrant
+    // stop.
     session.markRunPending(claimedRunPromise);
+    session.runId = runId;
     void effectRuntime()
       .runPromise(
         recoverRun(
@@ -617,8 +610,8 @@ export function createChatSessionController(
                   runtimeUnavailableTools:
                     getDefaultUnavailableToolNames('cli'),
                   onStreamResolved: (resolvedRunId) => {
-                    // Each chat round mints a fresh root RunId (new
-                    // runId), so bash/tool-edit/super-YOLO bypass, which is
+                    // Each chat round mints a fresh root run id, so
+                    // bash/tool-edit/super-YOLO bypass, which is
                     // keyed per stream, would otherwise reset every round even
                     // though the user is continuing the same conversation. Link the
                     // new round's stream to the previous one so bypass resolution
@@ -634,7 +627,6 @@ export function createChatSessionController(
                         previousRootRunId,
                       );
                     }
-                    session.runId = resolvedRunId;
                     rootRunId.set(resolvedRunId);
                     moveLocalTranscriptToRun(resolvedRunId);
                     focusRun(resolvedRunId);
@@ -682,15 +674,14 @@ export function createChatSessionController(
     let recovery: FollowUpRecoveryLease | undefined;
     let recoveryHandedOff = false;
     const attemptResume = Effect.gen(function* () {
-      // The durable record names the stream (FK stamped at registration) and
-      // the config the TUI adopts before the run. Workflow runs resume
-      // headless through `texra resume`, not inside a chat.
+      // The durable record carries the config the TUI adopts before the run.
+      // Workflow runs resume headless through `texra resume`, not inside a
+      // chat.
       const store = getRunRecords(runtimeSession, id);
       const [config, meta] = yield* Effect.all([
         store.readConfig(),
         store.readMeta(),
       ]);
-      const runId = meta?.runId;
       // Refusal tail every early exit below shares: put back what the
       // synchronous prologue superseded, surface the reason, settle the slot.
       const refuseResume = (reason: string): void => {
@@ -699,7 +690,7 @@ export function createChatSessionController(
         session.markRunCompleted();
         resolveRunPromise();
       };
-      if (!config || !runId) {
+      if (!config || !meta) {
         refuseResume(`Run not found: ${id}`);
         return;
       }
@@ -710,7 +701,7 @@ export function createChatSessionController(
         return;
       }
 
-      recovery = runtimeSession.followUps.claimRecovery(runId, true);
+      recovery = runtimeSession.followUps.claimRecovery(id, true);
       if (!recovery) {
         refuseResume(describeFollowUpFailure('not_resumable'));
         return;
@@ -735,9 +726,8 @@ export function createChatSessionController(
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
-        session.runId = runId;
         session.runId = id;
-        rootRunId.set(runId);
+        rootRunId.set(id);
         // The session held no stream until the line above: `markRunPending`,
         // inside the synchronous slot claim at the top of `resume`, dropped
         // the pre-resume one, so a Ctrl-C in the window before adoption could
@@ -752,14 +742,14 @@ export function createChatSessionController(
 
         await effectRuntime().runPromise(
           runtimeSession.transcripts
-            .ensureLoaded(runId)
-            .pipe(Effect.andThen(snapshotStore.load([runId]))),
+            .ensureLoaded(id)
+            .pipe(Effect.andThen(snapshotStore.load([id]))),
         );
         // The load re-establishes this stream's work-plan provenance in the
         // store, which is what an open `/plan` reader re-reads to clear its
         // failure-time mask. The transcript itself is the fold's: the TUI
         // subscribes the stream's aggregate and renders `transcript.rows`.
-        focusRun(runId);
+        focusRun(id);
       };
 
       // The seeded batch stays this call's until the stream queue takes it
@@ -885,14 +875,7 @@ export function createChatSessionController(
         }
 
         yield* snapshotStore.preload([runId]);
-        const runMetadata = snapshotStore.getRunMetadata(runId);
-        const runId = runMetadata.runId;
-        if (!runId) return false;
-
-        const config = yield* getRunRecords(
-          runtimeSession,
-          runId,
-        ).readConfig();
+        const config = yield* getRunRecords(runtimeSession, runId).readConfig();
         if (!config) return false;
         if (isCancellationRequested()) return false;
         const parentRunId = snapshotStore.getParentRunId(runId);
@@ -904,7 +887,6 @@ export function createChatSessionController(
         finalize = runHost.finalize;
         const { approvalsUnavailable, ownRun } = runHost;
         ownRun(runId);
-        session.runId = runId;
         session.runId = runId;
         if (!parentRunId) {
           rootRunId.set(runId);
@@ -1048,7 +1030,6 @@ export function createChatSessionController(
     displayInstruction?: string,
   ): Promise<boolean> => {
     followUpQueue.clear();
-    session.runId = undefined;
     let started = false;
     const pendingStart = effectRuntime().runPromise(
       recoverRun(
@@ -1178,11 +1159,11 @@ export function createChatSessionController(
       let delivered = false;
       let followUpTarget = childFollowUpTarget;
       try {
-        // The fold states when the pending run's stream exists: the first
-        // view level holding the stream of the run this controller
-        // minted, unless the run settles first.
+        // The fold states when the pending run exists: the first view level
+        // holding the run this controller minted, unless the run settles
+        // first.
         followUpTarget ??= await Promise.race([
-          rootStreamOf(session.runId),
+          awaitRunFolded(session.runId),
           session.runPromise?.then(() => undefined),
         ]);
         if (session.stopRequested) {

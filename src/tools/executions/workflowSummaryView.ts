@@ -45,7 +45,6 @@ function workflowAttemptView(
   return {
     number: attempt.number,
     id: compactWorkflowText(attempt.id),
-    childRunId: compactWorkflowText(attempt.childRunId),
     model: compactWorkflowText(attempt.model),
     costUsd: attempt.costUsd,
     startedAt: attempt.startedAt,
@@ -79,9 +78,7 @@ function workflowCallFailurePriority(status: string): number {
   return 1;
 }
 
-export function workflowRunView(
-  snapshot: WorkflowRunSnapshot,
-): unknown {
+export function workflowRunView(snapshot: WorkflowRunSnapshot): unknown {
   const byPriority = snapshot.calls.toSorted(
     (left, right) =>
       Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(left.status)) -
@@ -124,7 +121,6 @@ export function workflowRunView(
           context: compactWorkflowFiles(call.files.context),
           media: compactWorkflowFiles(call.files.media),
         },
-        childRunId: compactWorkflowText(call.childRunId),
         childRunId: compactWorkflowText(call.childRunId),
         attempts: call.attempts
           .slice(-WORKFLOW_SUMMARY_MAX_ATTEMPTS)
