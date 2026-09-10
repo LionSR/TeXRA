@@ -147,7 +147,7 @@ describe('stream-tabs over the fold', () => {
     const row = rowOf(element, CHILD);
 
     control(row, 'delete').click();
-    expect(requests).toEqual([{ kind: 'stream.delete', runId: CHILD }]);
+    expect(requests).toEqual([{ kind: 'run.delete', runId: CHILD }]);
 
     control(row, 'toggle-children').click();
     expect(surfaceActions).toEqual([

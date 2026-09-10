@@ -120,7 +120,7 @@ describe('stream-header over the fold', () => {
     expect(stop?.tagName.toLowerCase()).toBe('wa-button');
     expectAnchoredTooltip(element, ELEMENT_IDS.STOP_STREAM_BTN);
     stop?.click();
-    expect(requests).toEqual([{ kind: 'stream.stop', runId: ROOT }]);
+    expect(requests).toEqual([{ kind: 'run.stop', runId: ROOT }]);
   });
 
   it('offers no copy-run-context action on a workflow-script run or a tool-use stream', async () => {
