@@ -9,8 +9,10 @@
  * edited through the regular host settings surface.
  */
 
+import { Effect } from 'effect';
 import { z } from 'zod';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 
 import { executed } from '@tools/core/result';
@@ -106,6 +108,7 @@ export class ReadConfigTool extends defineTool({
 Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,
   schema: ReadConfigInputSchema,
 }) {
+  // Reading configuration is synchronous; there is no program to run.
   protected async execute(input: ReadConfigInput): Promise<ToolResult> {
     const value = texraScopedConfig.get(input.key);
     const json = JSON.stringify(value, null, 2) ?? 'undefined';
@@ -134,6 +137,30 @@ const UpdateConfigInputSchema = z.strictObject({
 
 type UpdateConfigInput = z.infer<typeof UpdateConfigInputSchema>;
 
+const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
+  input: UpdateConfigInput,
+) {
+  const entry = UPDATABLE_KEYS[input.key];
+  const parsed = entry.schema.safeParse(input.value);
+  if (!parsed.success) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Value rejected for ${input.key}: ${z.prettifyError(parsed.error)}. ${entry.summary}`,
+      ),
+    );
+  }
+
+  const previous = texraScopedConfig.get(input.key);
+  yield* texraScopedConfig.update(input.key, parsed.data, input.target);
+
+  const before = JSON.stringify(previous);
+  const after = JSON.stringify(parsed.data);
+  return executed(
+    `Updated ${input.key} (${input.target} scope): ${before ?? 'undefined'} → ${after}.`,
+    `Updated ${input.key} (${input.target})`,
+  );
+});
+
 export class UpdateConfigTool extends defineTool({
   name: 'update_config',
   requiresApproval: true,
@@ -147,23 +174,7 @@ ${describeAllowlist()}
 Anything outside this list must be changed through the host's regular configuration surface.`,
   schema: UpdateConfigInputSchema,
 }) {
-  protected async execute(input: UpdateConfigInput): Promise<ToolResult> {
-    const entry = UPDATABLE_KEYS[input.key];
-    const parsed = entry.schema.safeParse(input.value);
-    if (!parsed.success) {
-      throw new ToolError(
-        `Value rejected for ${input.key}: ${z.prettifyError(parsed.error)}. ${entry.summary}`,
-      );
-    }
-
-    const previous = texraScopedConfig.get(input.key);
-    await texraScopedConfig.update(input.key, parsed.data, input.target);
-
-    const before = JSON.stringify(previous);
-    const after = JSON.stringify(parsed.data);
-    return executed(
-      `Updated ${input.key} (${input.target} scope): ${before ?? 'undefined'} → ${after}.`,
-      `Updated ${input.key} (${input.target})`,
-    );
+  protected execute(input: UpdateConfigInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(updateConfig(input));
   }
 }

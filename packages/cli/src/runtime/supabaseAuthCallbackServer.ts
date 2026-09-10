@@ -1,4 +1,3 @@
-// Standard library imports
 import { randomBytes } from 'node:crypto';
 import {
   createServer,
@@ -8,7 +7,6 @@ import {
 
 import { z } from 'zod';
 
-// Local imports - auth
 import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 import { unwrapAuthPortCause } from '@auth/authProgram';
 import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';

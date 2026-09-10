@@ -1,8 +1,11 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
+import { hostPort } from '@common/hostPort';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import type { CommandId } from '@shared/commands/catalog';
 
@@ -55,6 +58,34 @@ const InvokeCommandInputSchema = z.strictObject({
 
 type InvokeCommandInput = z.infer<typeof InvokeCommandInputSchema>;
 
+const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
+  input: InvokeCommandInput,
+) {
+  const platform = getSetupPlatform();
+  const commandId = input.command.trim();
+
+  if (!ALLOWED_COMMANDS.has(commandId)) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Command "${commandId}" is not in the setup allowlist. Allowed: ${[...ALLOWED_COMMANDS].sort().join(', ')}.`,
+      ),
+    );
+  }
+
+  const commands = platform.commands;
+  if (!commands) {
+    return yield* Effect.fail(
+      new ToolError('VS Code command invocation is unavailable in this host.'),
+    );
+  }
+  yield* hostPort(() => commands.invoke(commandId));
+
+  return executed(
+    `Invoked VS Code command "${commandId}". If this opens a UI prompt, wait for the user's response before continuing.`,
+    `Invoked ${commandId}`,
+  );
+});
+
 export class InvokeCommandTool extends defineTool({
   name: 'invoke_command',
   // Requires VS Code commands.
@@ -63,26 +94,7 @@ export class InvokeCommandTool extends defineTool({
   description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the TeXRA account sign-in (texra.auth.signIn), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showMultiAgent / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
   schema: InvokeCommandInputSchema,
 }) {
-  protected async execute(input: InvokeCommandInput): Promise<ToolResult> {
-    const platform = getSetupPlatform();
-    const commandId = input.command.trim();
-
-    if (!ALLOWED_COMMANDS.has(commandId)) {
-      throw new ToolError(
-        `Command "${commandId}" is not in the setup allowlist. Allowed: ${[...ALLOWED_COMMANDS].sort().join(', ')}.`,
-      );
-    }
-
-    if (!platform.commands) {
-      throw new ToolError(
-        'VS Code command invocation is unavailable in this host.',
-      );
-    }
-    await platform.commands.invoke(commandId);
-
-    return executed(
-      `Invoked VS Code command "${commandId}". If this opens a UI prompt, wait for the user's response before continuing.`,
-      `Invoked ${commandId}`,
-    );
+  protected execute(input: InvokeCommandInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(invokeCommand(input));
   }
 }

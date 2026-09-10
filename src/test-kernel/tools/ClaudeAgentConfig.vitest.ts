@@ -2,6 +2,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - model
@@ -55,7 +56,7 @@ type BuildEnvOptions = Parameters<
 /** Reload the module under the current mocks and build the env in one step. */
 async function buildEnv(options?: BuildEnvOptions): Promise<NodeJS.ProcessEnv> {
   const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
-  return buildClaudeAgentEnv(options);
+  return Effect.runPromise(buildClaudeAgentEnv(options));
 }
 
 function seedManagedSecret(): void {

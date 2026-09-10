@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
@@ -363,10 +364,12 @@ describe('delegation model availability', () => {
     ]);
 
     await expect(
-      selectAvailableDelegationModel({
-        requestedModel: 'opus48T',
-        parentModel: 'sonnet46T',
-      }),
+      Effect.runPromise(
+        selectAvailableDelegationModel({
+          requestedModel: 'opus48T',
+          parentModel: 'sonnet46T',
+        }),
+      ),
     ).rejects.toThrow(
       'Model "opus48T" is not currently available for delegation with the currently configured model access. Available models: sonnet46T, deepseekT.',
     );
@@ -379,11 +382,15 @@ describe('delegation model availability', () => {
     ]);
 
     await expect(
-      selectAvailableDelegationModel({ parentModel: 'sonnet46T' }),
+      Effect.runPromise(
+        selectAvailableDelegationModel({ parentModel: 'sonnet46T' }),
+      ),
     ).resolves.toBe('sonnet46T');
 
     await expect(
-      selectAvailableDelegationModel({ parentModel: 'opus48T' }),
+      Effect.runPromise(
+        selectAvailableDelegationModel({ parentModel: 'opus48T' }),
+      ),
     ).resolves.toBe('deepseekT');
   });
 
@@ -391,7 +398,9 @@ describe('delegation model availability', () => {
     mocks.computeModelOptionsData.mockResolvedValue([]);
 
     await expect(
-      selectAvailableDelegationModel({ parentModel: 'opus48T' }),
+      Effect.runPromise(
+        selectAvailableDelegationModel({ parentModel: 'opus48T' }),
+      ),
     ).rejects.toThrow(
       'No models are currently available for delegation. Review or configure model access before delegating.',
     );

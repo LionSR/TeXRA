@@ -553,17 +553,13 @@ export async function runWorkflowScript(
     ) {
       recoverySource = { implicitIndex: prior.index, journalProven: true };
     }
-    if (
-      callOptions.phase !== undefined &&
-      executionState.currentPhaseIndex === -1
-    ) {
-      try {
-        executionState.enterStage(callOptions.phase);
-      } catch (error) {
-        throw contractFault(error);
-      }
-    }
     try {
+      if (
+        callOptions.phase !== undefined &&
+        executionState.currentPhaseIndex === -1
+      ) {
+        executionState.enterStage(callOptions.phase);
+      }
       executionState.issueCall(
         {
           id: progressId,

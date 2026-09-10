@@ -30,7 +30,6 @@ import {
   RcMap,
   Ref,
   Result,
-  type Scope,
 } from 'effect';
 
 import { warn } from '@logger/logUtils';
@@ -381,7 +380,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     }
     // Leased for the command's duration: a build is server activity. The
     // lake commands serialize per workspace inside `runLakeCommand`, which
-    // resolves with the exit code and never rejects on it.
+    // succeeds with the exit code and never fails on it.
     const results = yield* Effect.forEach(
       roots,
       (root) =>
@@ -389,16 +388,14 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
           lease(root, runId).pipe(
             Effect.andThen(
               // `runLakeCommand` reports a non-zero exit in its result and
-              // runs execa with `reject: false`, so it settles rather than
-              // rejecting — including when `lake` is missing.
-              Effect.promise(() =>
-                runLakeCommand({
-                  workspaceRoot: root,
-                  lakeCommand,
-                  args,
-                  serialize: true,
-                }),
-              ),
+              // runs execa with `reject: false`, so it succeeds rather than
+              // failing — including when `lake` is missing.
+              runLakeCommand({
+                workspaceRoot: root,
+                lakeCommand,
+                args,
+                serialize: true,
+              }),
             ),
           ),
         ),

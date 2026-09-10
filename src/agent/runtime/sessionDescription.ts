@@ -41,7 +41,7 @@ function warnWithoutRejecting(message: string): void {
  * and truncate to a UI-friendly length. Returns an empty string when the
  * cleaned result has no meaningful content.
  */
-export function cleanSessionDescription(text: string): string {
+function cleanSessionDescription(text: string): string {
   const cleaned = text
     .trim()
     .replaceAll(/\s*\n\s*/g, ' ')

@@ -35,10 +35,9 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { StreamLogStore } from '@transcript';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DesktopProjectRecords } from './desktopProjectRecords.js';
 
 import type { DesktopProjectsMessage } from '../shared/desktopProjectMessages.js';
@@ -173,7 +172,7 @@ async function stopProjectExecutions(session: SessionHandle): Promise<void> {
     for (;;) {
       const active = executions.getActiveIds();
       if (active.length === 0) return;
-      await executions.waitForAnyChange(active);
+      await effectRuntime().runPromise(executions.waitForAnyChange(active));
     }
   });
 }

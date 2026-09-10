@@ -68,6 +68,7 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  interruptedWorkflowCall,
   isTranscriptEvent,
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -80,7 +81,6 @@ import {
   type StreamPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import { interruptedWorkflowCall } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import {
@@ -192,8 +192,8 @@ export class SessionHandle {
    * transcript tier the view folds for that port, the view's set being the
    * union over every port. An Effect-native reader (the SDK's run drain,
    * the session bridge's ports) sets its own port here;
-   * {@link setTranscriptSubscriptions} is the same write for the callers
-   * that still speak Promises.
+   * {@link setTranscriptSubscriptions} is the same write with this session's
+   * qualification and disposal guard applied.
    */
   readonly subscriptions: SessionGraph['subscriptions'];
   /** Session-scoped status plane. */
@@ -256,8 +256,7 @@ export class SessionHandle {
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    const transcripts = init.transcripts;
-    this.transcripts = transcripts;
+    this.transcripts = init.transcripts;
     this.roots = init.roots;
     const graph = init.graph(this);
     this.graph = graph;
@@ -272,7 +271,7 @@ export class SessionHandle {
       (event) => this.publishStatus(event),
       (streamId, detail) => this.setUnreadable(streamId, detail),
     );
-    const followUps = new ToolUseFollowUpQueue();
+    this.followUps = new ToolUseFollowUpQueue();
     const interactions = new SessionHostInteractions(this);
     // The approval authority publishes a stream's full policy snapshot on
     // every effective bypass change; `setApprovalPolicy` below publishes the
@@ -280,7 +279,7 @@ export class SessionHandle {
     const approvals = createSessionApprovals(interactions, (streamId) =>
       this.publishApprovalPolicy(streamId),
     );
-    const executions = new ExecutionRegistry({
+    this.executions = new ExecutionRegistry({
       streamStatus: status,
       publish: (events) => this.publish(events),
       approvals,
@@ -290,9 +289,7 @@ export class SessionHandle {
         this.releaseExecutionLease(executionId),
     });
 
-    this.executions = executions;
     this.status = status;
-    this.followUps = followUps;
     // The sidecar store is a session artifact exactly like `transcripts`: the
     // session projects its own run events into it and flushes it below, so no
     // host has to construct, attach, and flush one of its own.
@@ -494,10 +491,11 @@ export class SessionHandle {
   }
 
   private async flushArtifactsOnce(): Promise<void> {
-    const writers = this.artifactFlushers;
     const results = await Promise.allSettled([
       this.settlePublications(),
-      ...[...writers].map((flush) => Promise.resolve().then(flush)),
+      ...[...this.artifactFlushers].map((flush) =>
+        Promise.resolve().then(flush),
+      ),
     ]);
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],
@@ -706,11 +704,6 @@ export class SessionHandle {
     );
   }
 
-  /** Stream existence from the committed view, after publication settlement. */
-  hasStream(streamId: StreamTabId): boolean {
-    return SubscriptionRef.getUnsafe(this.view).streams.has(streamId);
-  }
-
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
     return this.transcripts.acceptCommitted(event).pipe(
@@ -759,20 +752,25 @@ export class SessionHandle {
    * logical stream ids whose transcript tier the view folds for that port.
    * Qualify them once when entering the event graph. An empty
    * set removes the port; the view's set is the union over every port.
+   *
+   * The write is returned, not run: the session owns no fiber for a set a
+   * surface asks for, so the host entry that asks runs it on its own runtime
+   * and a session disposed before it starts writes nothing.
    */
   setTranscriptSubscriptions(
     port: string,
     set: readonly (Omit<TranscriptSubscription, 'id'> & { id: StreamTabId })[],
-  ): void {
-    if (this.disposed) return;
-    effectRuntime().runFork(
-      this.subscriptions.set(
-        port,
-        set.map(({ id, fromSeq }) => ({
-          id: qualifyAggregateId('stream', id),
-          fromSeq,
-        })),
-      ),
+  ): Effect.Effect<void> {
+    return Effect.suspend(() =>
+      this.disposed
+        ? Effect.void
+        : this.subscriptions.set(
+            port,
+            set.map(({ id, fromSeq }) => ({
+              id: qualifyAggregateId('stream', id),
+              fromSeq,
+            })),
+          ),
     );
   }
 

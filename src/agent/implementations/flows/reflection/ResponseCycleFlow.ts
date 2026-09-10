@@ -262,12 +262,6 @@ class ResponseProcessNode extends BaseNode<
         };
       }
 
-      const common = {
-        stopReason,
-        useStreaming,
-        normalizedUsage,
-      };
-
       const bestConnector =
         await this.services.runScope.session.responseTextProcessing.connectResponseText(
           prepRes.lastResponse.slice(-K_SLICE),
@@ -279,7 +273,9 @@ class ResponseProcessNode extends BaseNode<
       return {
         kind: 'success',
         value: {
-          ...common,
+          stopReason,
+          useStreaming,
+          normalizedUsage,
           hasResponse: true,
           processedResponse,
           bestConnector,
@@ -469,7 +465,7 @@ class ResponseContinuationNode extends BaseNode<
     const continuationLimitExceeded = round.continuationCount > CONTINUE_LIMIT;
     const inputTokenLimitExceeded = totals.totalInputTokens > INPUT_TOKEN_LIMIT;
     const maxOutputTokensExceeded = totals.totalOutputTokens > maxOutputTokens;
-    const shouldEndTurn = END_TURN_REASONS.includes(stopReason ?? '');
+    const shouldEndTurn = END_TURN_REASONS.includes(stopReason);
     const encounterDocumentTag = processedResponse.includes(OUTPUT_END_TAG);
 
     // Warn-only by design: this multiplier has never fed `shouldStop`, it just

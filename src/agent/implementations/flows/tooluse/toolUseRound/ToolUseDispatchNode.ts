@@ -577,32 +577,21 @@ export class ToolUseDispatchNode extends BaseNode<
       result: execResult.extracted.sanitizedResult,
       attachments: execResult.extracted.attachments,
     }));
-    if (
-      toolResults.length > 1 &&
-      modelHandler.requiresBatchedParallelToolResults
-    ) {
+    // One batched message when the handler requires it (see above);
+    // otherwise one message per call. Assistant text rides the first.
+    const batches =
+      toolResults.length > 1 && modelHandler.requiresBatchedParallelToolResults
+        ? [toolResults]
+        : toolResults.map((toolResult) => [toolResult]);
+    for (const [index, batch] of batches.entries()) {
       const followUpMsgs =
         await modelHandler.createBatchedToolUseFollowUpMessages(
-          toolResults,
+          batch,
           workspace,
-          assistantText || undefined,
+          index === 0 ? assistantText || undefined : undefined,
           client,
         );
       shared.messages.push(...followUpMsgs);
-    } else {
-      for (const [
-        index,
-        { call, result, attachments },
-      ] of toolResults.entries()) {
-        const followUpMsgs =
-          await modelHandler.createBatchedToolUseFollowUpMessages(
-            [{ call, result, attachments }],
-            workspace,
-            index === 0 ? assistantText || undefined : undefined,
-            client,
-          );
-        shared.messages.push(...followUpMsgs);
-      }
     }
 
     // Note: userInstruction is already included in the tool_result content

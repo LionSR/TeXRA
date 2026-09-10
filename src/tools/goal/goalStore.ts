@@ -120,7 +120,7 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
 /**
  * Mutate callbacks must return the same array reference (`index`, unchanged)
  * when nothing actually changed, so this can skip the write via reference
- * equality — all current callers (`addToIndex` and `forgetMany`'s inline
+ * equality — all current callers (`addToIndex` and `removeRecords`' inline
  * callback) already follow this contract.
  */
 async function mutateIndex(

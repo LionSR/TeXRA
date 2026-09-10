@@ -156,11 +156,6 @@ export class Database extends Context.Service<
       id: AggregateId,
       fromSeq: number,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-    readonly aggregatesAfterCommit: (
-      ids: readonly AggregateId[],
-      afterCommit: CommitOrdinal,
-      throughCommit?: CommitOrdinal,
-    ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** Atomically acquire existing, open aggregates after proving prior owners dead. */
     readonly acquireClaims: (
       ids: readonly AggregateId[],

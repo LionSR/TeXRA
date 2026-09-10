@@ -112,7 +112,6 @@ import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
-import { StreamLogStore } from '@transcript';
 import {
   initProcessSettingHost,
   readPlatformSetting,
@@ -567,9 +566,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
-  await seedDisabledToolDefaults(
-    context.globalState,
-    GlobalStateKey.LAST_KNOWN_VERSION,
+  await effectRuntime().runPromise(
+    seedDisabledToolDefaults(
+      context.globalState,
+      GlobalStateKey.LAST_KNOWN_VERSION,
+    ),
   );
 
   // Onboarding-funnel backfill (PRD: agent-native onboarding): upgraders who
@@ -729,22 +730,24 @@ async function activateExtension(context: vscode.ExtensionContext) {
       if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
       // Re-probe so any subscribed UI (Tools tab) reflects the new token
       // presence; getGitHubToken() now reads SecretStorage live (no cache).
-      void refreshToolAvailability().catch(logRefreshFailure('secret change'));
+      void effectRuntime()
+        .runPromise(refreshToolAvailability())
+        .catch(logRefreshFailure('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void refreshToolAvailability().catch(
-        logRefreshFailure('extension change'),
-      );
+      void effectRuntime()
+        .runPromise(refreshToolAvailability())
+        .catch(logRefreshFailure('extension change'));
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group. ProgressViewProvider owns
     // the ordered workspace-storage and native-config replacement.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void refreshToolAvailability().catch(
-        logRefreshFailure('workspace folder change'),
-      );
+      void effectRuntime()
+        .runPromise(refreshToolAvailability())
+        .catch(logRefreshFailure('workspace folder change'));
     }),
   );
   const disposeGitHubAuthListener = appSignals.on(

@@ -2,6 +2,7 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, it, vi } from 'vitest';
 
 // Local imports
@@ -10,7 +11,7 @@ import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
 
 const mocks = vi.hoisted(() => ({
-  listStoredKeys: vi.fn<() => Promise<readonly string[]>>(),
+  listStoredKeys: vi.fn<() => Effect.Effect<readonly string[], unknown>>(),
 }));
 
 vi.mock('@tools/setup/platform', async (importOriginal) => {
@@ -36,7 +37,7 @@ beforeEach(() => {
 async function callWithStoredKeys(
   keys: readonly string[],
 ): Promise<ToolCallResult> {
-  mocks.listStoredKeys.mockResolvedValue(keys);
+  mocks.listStoredKeys.mockReturnValue(Effect.succeed(keys));
   const result = await tool.call({});
   assert.equal(result.status, 'executed');
   return result;
@@ -54,8 +55,8 @@ describe('list_api_keys tool', () => {
   });
 
   it('reports unsupported enumeration instead of an empty store', async () => {
-    mocks.listStoredKeys.mockRejectedValue(
-      new Error('SecretStorage key enumeration is not supported'),
+    mocks.listStoredKeys.mockReturnValue(
+      Effect.fail(new Error('SecretStorage key enumeration is not supported')),
     );
 
     const result = await tool.call({});

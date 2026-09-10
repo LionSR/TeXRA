@@ -145,7 +145,7 @@ describe('terminal result event', () => {
       // The handle carries the run's trace channel for run-scoped subscribers.
       expect(handle?.trace).toBe(logger);
       // `result` settles with the same terminal event (always resolves).
-      await expect(handle?.result).resolves.toMatchObject({
+      await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
         type: 'result',
         outcome: 'completed',
         executionId: ctx.runScope.executionId,
@@ -240,7 +240,7 @@ describe('terminal result event', () => {
           ),
         ),
       ).rejects.toThrow('boom');
-      await expect(handle?.result).resolves.toMatchObject({
+      await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
         type: 'result',
         outcome: 'failed',
       });

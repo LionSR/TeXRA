@@ -139,7 +139,7 @@ export interface StatusBarDisplayInput {
    *  to show), never for context occupancy: that is `contextState`. */
   readonly usage: TokenUsageStats | undefined;
   /** Model-handler-authoritative context occupancy for the displayed stream
-   *  (`StreamExecutionState.contextState`). */
+   *  (`StreamView.context`). */
   readonly contextState: ContextStateData | undefined;
   readonly stage: StreamStage | undefined;
   /** Retained and active direct subagents owned by the displayed stream. */
@@ -271,7 +271,7 @@ function subscriptionQuotaSegment(
   };
 }
 
-// The gauge renders `StreamExecutionState.contextState` — the model handler's
+// The gauge renders `StreamView.context` — the model handler's
 // own reading of the window it served the last response under, which is the
 // only value that stays right across subscription caps and compaction. The
 // `usage` fallback covers the pre-first-response window, where the handler has

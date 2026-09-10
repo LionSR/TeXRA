@@ -93,7 +93,6 @@ import {
   reserveHostRequest,
   settleHostRequestsWhere,
   type ApprovalDecision,
-  type ApprovalPayload,
   type RetryApprovalPayload,
 } from './approvalQueue';
 

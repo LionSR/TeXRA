@@ -6,7 +6,6 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { isRemoteAgent, resolveAgentForLaunch } from '@agent/index';
 import {
-  logSdkError,
   logUserMessage,
   type AgentTrace,
   type StageHandle,
@@ -56,8 +55,6 @@ import {
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
   STREAM_PHASE,
-  STREAM_SUBSTATE,
-  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
@@ -69,7 +66,6 @@ import { createRunScope } from './RunScope';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
 import type { SessionHandle } from './SessionHandle';
-import type { StreamStatusMachine } from './StreamStatusService';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
   RuntimePresentationEvent,
@@ -132,15 +128,12 @@ interface AgentLaunchInput {
   toolPolicy?: ToolPolicy;
 }
 
-const STATUS_MESSAGES: Record<string, string> = {
-  [STREAM_SUBSTATE.STARTING]: 'already launching',
-  [STREAM_SUBSTATE.RESUMING]: 'resuming',
-  [STREAM_PHASE.RUNNING]: 'already running',
-  [STREAM_PHASE.WAITING]: 'waiting for retry',
-  [STREAM_PHASE.COMPLETED]: 'completed',
-  [STREAM_PHASE.CANCELLED]: 'stopped',
-  [STREAM_PHASE.FAILED]: 'failed',
-};
+/** Fail the effect with an `Error` when the launch signal has aborted. */
+const failIfAborted = (signal: AbortSignal | undefined) =>
+  Effect.try({
+    try: () => signal?.throwIfAborted(),
+    catch: ensureError,
+  });
 
 export function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
@@ -309,10 +302,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       suppressErrorNotification?: boolean;
     } & { session: SessionHandle },
   ) {
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
     const fullConfig = input.config;
     const interactions = input.session.interactions;
     // Resolve by the source the delegation captured at validation time, so launch
@@ -331,10 +321,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         ),
       catch: ensureError,
     });
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
     // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
     // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
     // (to Workflow when absent), so `setting.agentCategory` is always populated
@@ -346,10 +333,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         ),
       catch: ensureError,
     });
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
 
     // Block category mismatch: prevent launching a tool-use agent as a workflow
     // (or vice versa). Source-pinned resolution already guarantees launch lands on
@@ -398,24 +382,17 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     streamId: StreamTabId,
     resources: Array<() => void | Promise<void>>,
   ): Effect.fn.Return<AgentLaunchContext, Error> {
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
     const { config, setting, prompt, resolution } = input.definition;
-    const fullConfig = config;
     const interactions = input.session.interactions;
     const modelConfig = yield* Effect.tryPromise({
       try: async () =>
         runInSession(input.session, () =>
-          validateModelExists(fullConfig.model, interactions),
+          validateModelExists(config.model, interactions),
         ),
       catch: ensureError,
     });
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
 
     // The session is resolved once at the boundary (buildAgentLaunchContext)
     // and carried in, so a delegated launch inherits the parent run's session
@@ -424,10 +401,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const modelHandlerCompatibilityKey =
       input.modelHandlerCompatibilityKey ??
       (yield* inferLaunchModelHandlerCompatibilityKey(executionId, session));
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
     const modelHandler = yield* Effect.tryPromise({
       try: async () =>
         runInSession(session, () =>
@@ -446,10 +420,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       catch: ensureError,
     });
     resources.push(() => modelHandler.dispose());
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
     const modelCell = new ModelCell(modelHandler, config.model);
 
     const residency = yield* session.transcripts.acquireRunResidency(
@@ -471,21 +442,15 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       },
     };
     resources.push(() => runTrace.dispose());
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
     attachment.detach = session.attachRunTrace(rawRunTrace.trace, streamId);
 
     const agentLogger = runTrace.trace;
     modelHandler.setAgentCategory(setting.agentCategory);
     modelHandler.setLogger(agentLogger);
 
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
-    const isRemote = isRemoteAgent(fullConfig.agent);
+    yield* failIfAborted(input.signal);
+    const isRemote = isRemoteAgent(config.agent);
     // Registration committed creation, configuration and initial activation.
     // A resumed turn appends only its new activation.
     const background = input.isSubagent ?? false;
@@ -536,7 +501,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       config.mediaFiles,
       modelHandler.capabilities,
       'attached',
-      fullConfig.model,
+      config.model,
     );
     if (visionWarning) agentLogger.warn(visionWarning);
 
@@ -559,7 +524,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       executionId,
       agentName: config.agent,
       workingDirectory,
-      delegationAgentScope: fullConfig.delegationAgentScope,
+      delegationAgentScope: config.delegationAgentScope,
       session,
       signal: runSignal,
     });
@@ -587,10 +552,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         ),
       catch: ensureError,
     });
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
 
     const userVarChannels: UserVariableChannels = { ...baseVars };
     const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
@@ -636,10 +598,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 /** Resolve the context of a run already admitted and created by registration. */
 export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (input: AgentLaunchInput & { session: SessionHandle }) {
-    yield* Effect.try({
-      try: () => input.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    yield* failIfAborted(input.signal);
     const { session: launchSession, executionId } = input;
     const { config } = input.definition;
     const streamStatus = launchSession.status;

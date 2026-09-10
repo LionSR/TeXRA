@@ -170,7 +170,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     mocks.getCurrentToolContexts.mockReturnValue(fakeToolContexts());
     mocks.registerExecution.mockReturnValue(Effect.void);
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
-    mocks.buildClaudeAgentEnv.mockResolvedValue({});
+    mocks.buildClaudeAgentEnv.mockReturnValue(Effect.succeed({}));
     mocks.findClaudeBinaryPath.mockResolvedValue(undefined);
     mocks.createChildStream.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildStream(childStreamId)),
@@ -402,7 +402,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     const captured = captureStrategy();
     mocks.buildClaudeAgentEnv.mockImplementation(() => {
       envStarted.resolve(undefined);
-      return envReady.promise;
+      return Effect.promise(() => envReady.promise);
     });
 
     const tool = new ClaudeAgentTool();
@@ -466,9 +466,12 @@ describe('claude_agent tool launch and resume fallback', () => {
     mocks.buildClaudeAgentEnv
       .mockImplementationOnce(() => {
         firstEnvStarted.resolve(undefined);
-        return firstEnv.promise;
+        // A rejected env read was a rejected Promise collaborator before the
+        // conversion; as an Effect with no failure channel it stays a defect,
+        // so the tool still surfaces it as an error result.
+        return Effect.promise(() => firstEnv.promise);
       })
-      .mockResolvedValueOnce({});
+      .mockReturnValueOnce(Effect.succeed({}));
 
     const tool = new ClaudeAgentTool();
     const first = tool.call({

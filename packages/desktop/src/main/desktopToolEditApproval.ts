@@ -13,6 +13,7 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
+import { effectRuntime } from '@platform/processRuntime';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -47,12 +48,14 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
       'texra-tool-edit-',
       this.options.tempRoot,
     );
-    const { originalPath, proposedPath } = await writeApprovalTempFiles({
-      directory: tempDir,
-      targetPath: request.path,
-      originalContent: request.originalContent,
-      proposedContent: request.proposedContent,
-    });
+    const { originalPath, proposedPath } = await effectRuntime().runPromise(
+      writeApprovalTempFiles({
+        directory: tempDir,
+        targetPath: request.path,
+        originalContent: request.originalContent,
+        proposedContent: request.proposedContent,
+      }),
+    );
     return new DesktopToolEditPreview(this.options.ui, context, {
       tempDir,
       originalPath,

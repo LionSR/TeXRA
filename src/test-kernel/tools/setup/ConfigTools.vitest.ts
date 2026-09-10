@@ -1,5 +1,6 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
+import { Effect } from 'effect';
 import { afterEach, describe, it, vi } from 'vitest';
 
 import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
         key: string,
         value: unknown,
         target: 'user' | 'workspace',
-      ) => Promise<void>
+      ) => Effect.Effect<void, unknown>
     >(),
 }));
 
@@ -43,10 +44,12 @@ function createPlatform(initial: Record<string, unknown> = {}): {
   const store: Record<string, unknown> = { ...initial };
   const updates: UpdateRecord[] = [];
   mocks.get.mockImplementation((key) => store[key]);
-  mocks.update.mockImplementation(async (key, value, target) => {
-    updates.push({ key, value, target });
-    store[key] = value;
-  });
+  mocks.update.mockImplementation((key, value, target) =>
+    Effect.sync(() => {
+      updates.push({ key, value, target });
+      store[key] = value;
+    }),
+  );
   return { store, updates };
 }
 

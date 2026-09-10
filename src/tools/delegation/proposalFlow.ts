@@ -250,15 +250,10 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   let modelOverride: string | undefined;
   if (result.model && result.model !== proposal.model) {
     const modelExit = yield* Effect.exit(
-      Effect.tryPromise({
-        try: () =>
-          withRunContext(parentContext, () =>
-            selectAvailableDelegationModel({
-              requestedModel: result.model,
-              parentModel: proposal.model,
-            }),
-          ),
-        catch: ensureError,
+      selectAvailableDelegationModel({
+        requestedModel: result.model,
+        parentModel: proposal.model,
+        withScope: <T>(read: () => T) => withRunContext(parentContext, read),
       }),
     );
     if (Exit.isFailure(modelExit)) {

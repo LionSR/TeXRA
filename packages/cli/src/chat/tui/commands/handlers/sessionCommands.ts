@@ -30,7 +30,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { effectRuntime } from '@platform/processRuntime';
-import { MESSAGE_TYPES, type StreamTabId } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 import type { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';

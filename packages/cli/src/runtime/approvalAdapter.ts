@@ -76,7 +76,7 @@ const decideGated = Effect.fn('approvalAdapter.decideGated')(function* (
   options: { writeRejectionToStderr?: boolean } = {},
 ) {
   if (immediate) {
-    return { decision: immediate as ApprovalDecision, prompted: false };
+    return { decision: immediate, prompted: false };
   }
 
   const decision = yield* askApproval(context, content, hooks);
@@ -87,7 +87,7 @@ const decideGated = Effect.fn('approvalAdapter.decideGated')(function* (
         : content.summary,
     );
   }
-  return { decision: decision as ApprovalDecision, prompted: true };
+  return { decision, prompted: true };
 });
 
 /** Approve/reject settlement shared by the bash, plan, proposal, and tool-edit
@@ -118,7 +118,7 @@ export function toApprovalSettlement(
 }
 
 function toPromptedApprovalSettlement(
-  decision: ApprovalDecision & { readonly rejectionCause?: string },
+  decision: CliApprovalDecision,
   prompted: boolean,
 ): BashSettlement {
   if (prompted || decision.accepted) return toApprovalSettlement(decision);

@@ -130,10 +130,12 @@ Optional auto-attach from the input LaTeX:
     const agentName = agent.name;
     const { streamId, context } = requireRunStream('delegate_workflow');
 
-    const model = await selectAvailableDelegationModel({
-      requestedModel: input.model,
-      parentModel: context.model,
-    });
+    const model = await effectRuntime().runPromise(
+      selectAvailableDelegationModel({
+        requestedModel: input.model,
+        parentModel: context.model,
+      }),
+    );
 
     await assertWorkflowFilesExist([
       { label: 'Input file', files: input.inputFiles },
@@ -267,10 +269,12 @@ Git worktree support: resolved from the active workspace at runtime.`,
 
     const { streamId, context } = requireRunStream('delegate_agent');
 
-    const model = await selectAvailableDelegationModel({
-      requestedModel: input.model,
-      parentModel: context.model,
-    });
+    const model = await effectRuntime().runPromise(
+      selectAvailableDelegationModel({
+        requestedModel: input.model,
+        parentModel: context.model,
+      }),
+    );
     const rootUserInstruction = getCurrentToolCallContext()?.userInstruction;
 
     // Construct tool-use proposal (no file fields)

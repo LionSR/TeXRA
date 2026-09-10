@@ -447,13 +447,6 @@ function createWindow(options: {
     });
     return prompt.actions[response]?.choice ?? 'cancel';
   };
-  const chooseTeamAvailability = (
-    unavailableNames: readonly string[],
-    presetName?: string,
-  ) =>
-    presentTeamAvailabilityPrompt(
-      teamAvailabilityPrompt(unavailableNames, presetName),
-    );
   // Lightweight update check: at most once/day, notifies at most once per
   // release via a native dialog linking to the GitHub release page. Not a full
   // updater: no download, no install, no feed files. Disable with
@@ -727,7 +720,8 @@ function createWindow(options: {
     openDiff: desktopDiffHost.openDiff,
     confirmAcceptFile: (message) =>
       confirmDialog({ message, confirmLabel: 'Replace file' }),
-    chooseTeamAvailability,
+    chooseTeamAvailability: (unavailableNames) =>
+      presentTeamAvailabilityPrompt(teamAvailabilityPrompt(unavailableNames)),
     signInForRemoteAgentCatalog,
     // Presentation failures are reported, never raised: an execution must not
     // fail because a dialog could not be shown. The caller still awaits the
@@ -852,7 +846,7 @@ function createWindow(options: {
       onboarding: requireOnboardingIpc(),
       openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: async () => {
-        await refreshToolAvailability();
+        await effectRuntime().runPromise(refreshToolAvailability());
       },
       logger: console,
     });
@@ -1157,10 +1151,13 @@ function createWindow(options: {
           buildItems: async (cachedResults) => {
             const { buildToolDashboardItems } =
               await import('@controllers/settingsView/ToolDashboardData');
-            return buildToolDashboardItems('desktop', cachedResults);
+            return effectRuntime().runPromise(
+              buildToolDashboardItems('desktop', cachedResults),
+            );
           },
           getCachedCheckResults: async () => getLastCheckResults() ?? undefined,
-          refreshAvailability: refreshToolAvailability,
+          refreshAvailability: () =>
+            effectRuntime().runPromise(refreshToolAvailability()),
           planTerminalAction: async (toolId, kind) => {
             const { planToolTerminalAction } =
               await import('@controllers/settingsView/ToolDashboardData');
@@ -1291,28 +1288,19 @@ function createWindow(options: {
                       ? primaryError.reason
                       : toErrorMessage(primaryError),
                 });
-                if (presentation?.type === 'instruction') {
+                if (
+                  presentation?.type === 'instruction' ||
+                  presentation?.type === 'error'
+                ) {
                   yield* Effect.tryPromise({
                     try: () =>
                       Promise.resolve(
                         setupSession.interactions.emit(
-                          'requestShowInstruction',
+                          presentation.type === 'instruction'
+                            ? 'requestShowInstruction'
+                            : 'requestShowError',
                           presentation.payload,
                           { replayWhenAttached: true },
-                        ),
-                      ),
-                    catch: (emitError) => emitError,
-                  });
-                } else if (presentation?.type === 'error') {
-                  yield* Effect.tryPromise({
-                    try: () =>
-                      Promise.resolve(
-                        setupSession.interactions.emit(
-                          'requestShowError',
-                          presentation.payload,
-                          {
-                            replayWhenAttached: true,
-                          },
                         ),
                       ),
                     catch: (emitError) => emitError,
@@ -1562,8 +1550,7 @@ function createWindow(options: {
     promptController.dispose();
     hostBridge.dispose();
   });
-  const mainViewIpc = { postToRenderer: hostBridge.postToRenderer };
-  ipcRef.current = mainViewIpc;
+  ipcRef.current = { postToRenderer: hostBridge.postToRenderer };
   syncProjectBindings();
   attachActiveProject();
   Menu.setApplicationMenu(

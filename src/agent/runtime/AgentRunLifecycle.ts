@@ -33,7 +33,6 @@ import type {
 import {
   agentName as baseAgentName,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   toRetryErrorInfo,
 } from '@shared/schemas';
@@ -526,7 +525,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     if (options?.onRun) {
       const onRun = options.onRun;
       // Start observation at the same time as invocation. The callback may
-      // await handle.result, so its observer must not hold up the flow.
+      // run handle.result to completion, so its observer must not hold up
+      // the flow that settles it.
       yield* Effect.tryPromise({
         try: async () => onRun(handle),
         catch: ensureError,
@@ -695,9 +695,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     const run = Effect.gen(function* () {
       // `run.start` is already out: the launch context published it at its
       // reservation commit point. Publish the run config before the RUNNING
-      // transition so progress backends can create the initial
-      // StreamExecutionState with the real category when the transition-owned
-      // run-start side effects fire.
+      // transition so the fold already carries the stream's real category when
+      // the transition-owned run-start side effects fire.
       ctx.logger.emit({
         type: 'run.config',
         streamId,

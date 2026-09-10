@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Internal imports
@@ -7,6 +8,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -66,19 +68,20 @@ export function setInlineCommentProvider(next: InlineCommentProvider): void {
 }
 
 /**
- * Resolve the host-injected provider, throwing when none was wired. The throw
+ * Resolve the host-injected provider, failing when none was wired. The failure
  * is intentional: `unavailableHosts` already keeps `inline_comment` out of the
  * CLI and desktop rosters, so reaching the tool with no provider means a host
  * skipped the registration — a startup bug that must name itself rather than
  * report a plausible no-op back to the agent.
  */
-function requireProvider(): InlineCommentProvider {
-  if (!provider) {
-    throw new ToolError(
-      'Inline comments are unavailable: no host called setInlineCommentProvider() during startup. Only the VS Code extension host wires this tool.',
-    );
-  }
-  return provider;
+function requireProvider(): Effect.Effect<InlineCommentProvider, ToolError> {
+  return provider
+    ? Effect.succeed(provider)
+    : Effect.fail(
+        new ToolError(
+          'Inline comments are unavailable: no host called setInlineCommentProvider() during startup. Only the VS Code extension host wires this tool.',
+        ),
+      );
 }
 
 const THREAD_ID_DESCRIPTION = 'The thread id returned by "add" or "list".';
@@ -171,6 +174,124 @@ function formatThread(thread: InlineCommentThreadView): string {
   return comments ? `${header}\n${comments}` : header;
 }
 
+/**
+ * Wrap an unexpected failure from path resolution or the provider. A
+ * `ToolError` already names itself and passes through unchanged.
+ */
+function addCommentFailure(error: unknown): ToolError {
+  if (error instanceof ToolError) return error;
+  const detail = toErrorMessage(error);
+  log.error(`Failed to add inline comment: ${detail}`);
+  return new ToolError(`Failed to add inline comment: ${detail}`);
+}
+
+function threadNotFound(threadId: string): ToolResult {
+  return executed(
+    `No comment thread with id "${threadId}". Use the "list" command to see open threads.`,
+    'Thread not found',
+  );
+}
+
+const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
+  input: AddCommentInput,
+) {
+  const { path, line, endLine, body } = input;
+  const resolved = yield* Effect.try({
+    try: () =>
+      resolveWorkspaceRelativePath(
+        path,
+        getRunContextWorkingDirectory(tryUseRunContext()),
+      ),
+    catch: addCommentFailure,
+  });
+  const provider = yield* requireProvider();
+  const result = yield* Effect.try({
+    try: () =>
+      provider.add({
+        absolutePath: resolved.absolute,
+        line,
+        endLine: endLine ?? line,
+        body,
+      }),
+    catch: addCommentFailure,
+  });
+  if (!result) {
+    return yield* Effect.fail(
+      new ToolError('Failed to create the comment thread.'),
+    );
+  }
+  const where = result.resolvedPath || resolved.absolute;
+  const summary = `Opened comment thread ${result.threadId} at ${where}:${line}`;
+  return executed(
+    `${summary}\nThe user can reply or resolve it in the editor; read replies with the "list" command.`,
+    summary,
+  );
+});
+
+const replyToThread = Effect.fn('InlineCommentTool.reply')(function* (
+  input: ReplyCommentInput,
+) {
+  const { threadId, body } = input;
+  if (!(yield* requireProvider()).reply({ threadId, body })) {
+    return threadNotFound(threadId);
+  }
+  const summary = `Replied to comment thread ${threadId}`;
+  return executed(summary, summary);
+});
+
+const setThreadResolved = Effect.fn('InlineCommentTool.setResolved')(function* (
+  input: SetResolvedInput,
+  resolved: boolean,
+) {
+  const { threadId } = input;
+  if (!(yield* requireProvider()).setResolved({ threadId, resolved })) {
+    return threadNotFound(threadId);
+  }
+  const summary = `${resolved ? 'Resolved' : 'Reopened'} comment thread ${threadId}`;
+  return executed(summary, summary);
+});
+
+const listThreads = Effect.fn('InlineCommentTool.list')(function* (
+  input: ListCommentInput,
+) {
+  let absolutePath: string | undefined;
+  if (input.path != null) {
+    const workingDirectory = getRunContextWorkingDirectory(tryUseRunContext());
+    absolutePath = resolveWorkspaceRelativePath(
+      input.path,
+      workingDirectory,
+    ).absolute;
+  }
+  const threads = (yield* requireProvider()).list({ absolutePath });
+  if (threads.length === 0) {
+    return executed(
+      input.path
+        ? `No comment threads in ${input.path}.`
+        : 'No comment threads are open.',
+      'No comment threads',
+    );
+  }
+  const summary = formatResultCount(threads.length, 'comment thread');
+  return executed(threads.map(formatThread).join('\n\n'), summary);
+});
+
+function inlineComment(
+  input: InlineCommentInput,
+): Effect.Effect<ToolResult, ToolError> {
+  switch (input.command) {
+    case 'add':
+      return addThread(input);
+    case 'reply':
+      return replyToThread(input);
+    case 'resolve':
+      return setThreadResolved(input, true);
+    case 'unresolve':
+      return setThreadResolved(input, false);
+    case 'list':
+      return listThreads(input);
+  }
+}
+
 export class InlineCommentTool extends defineTool({
   name: 'inline_comment',
   // Requires the VS Code Comments UI.
@@ -179,95 +300,7 @@ export class InlineCommentTool extends defineTool({
     'Leave inline comment threads in the editor via VS Code\'s native Comments UI (gutter bubbles + Comments panel) that the user can reply to and resolve. Commands: "add" opens a thread on a file range, "reply" appends to a thread, "resolve"/"unresolve" toggle a thread\'s state, "list" reads open threads including the user\'s replies. Use this for conversational, resolvable review notes; use the diagnostics tool\'s "add" command for one-off lint-style critique squiggles. Not available outside the VS Code extension host.',
   schema: InlineCommentInputSchema,
 }) {
-  protected async execute(input: InlineCommentInput): Promise<ToolResult> {
-    switch (input.command) {
-      case 'add':
-        return this.addThread(input);
-      case 'reply':
-        return this.reply(input);
-      case 'resolve':
-        return this.setResolved(input, true);
-      case 'unresolve':
-        return this.setResolved(input, false);
-      case 'list':
-        return this.list(input);
-    }
-  }
-
-  private addThread(input: AddCommentInput): ToolResult {
-    const { path, line, endLine, body } = input;
-    try {
-      const workingDirectory =
-        getRunContextWorkingDirectory(tryUseRunContext());
-      const resolved = resolveWorkspaceRelativePath(path, workingDirectory);
-      const result = requireProvider().add({
-        absolutePath: resolved.absolute,
-        line,
-        endLine: endLine ?? line,
-        body,
-      });
-      if (!result) {
-        throw new ToolError('Failed to create the comment thread.');
-      }
-      const where = result.resolvedPath || resolved.absolute;
-      const summary = `Opened comment thread ${result.threadId} at ${where}:${line}`;
-      return executed(
-        `${summary}\nThe user can reply or resolve it in the editor; read replies with the "list" command.`,
-        summary,
-      );
-    } catch (error) {
-      if (error instanceof ToolError) throw error;
-      const detail = toErrorMessage(error);
-      log.error(`Failed to add inline comment: ${detail}`);
-      throw new ToolError(`Failed to add inline comment: ${detail}`);
-    }
-  }
-
-  private reply(input: ReplyCommentInput): ToolResult {
-    const { threadId, body } = input;
-    if (!requireProvider().reply({ threadId, body })) {
-      return this.threadNotFound(threadId);
-    }
-    const summary = `Replied to comment thread ${threadId}`;
-    return executed(summary, summary);
-  }
-
-  private setResolved(input: SetResolvedInput, resolved: boolean): ToolResult {
-    const { threadId } = input;
-    if (!requireProvider().setResolved({ threadId, resolved })) {
-      return this.threadNotFound(threadId);
-    }
-    const summary = `${resolved ? 'Resolved' : 'Reopened'} comment thread ${threadId}`;
-    return executed(summary, summary);
-  }
-
-  private list(input: ListCommentInput): ToolResult {
-    let absolutePath: string | undefined;
-    if (input.path != null) {
-      const workingDirectory =
-        getRunContextWorkingDirectory(tryUseRunContext());
-      absolutePath = resolveWorkspaceRelativePath(
-        input.path,
-        workingDirectory,
-      ).absolute;
-    }
-    const threads = requireProvider().list({ absolutePath });
-    if (threads.length === 0) {
-      return executed(
-        input.path
-          ? `No comment threads in ${input.path}.`
-          : 'No comment threads are open.',
-        'No comment threads',
-      );
-    }
-    const summary = formatResultCount(threads.length, 'comment thread');
-    return executed(threads.map(formatThread).join('\n\n'), summary);
-  }
-
-  private threadNotFound(threadId: string): ToolResult {
-    return executed(
-      `No comment thread with id "${threadId}". Use the "list" command to see open threads.`,
-      'Thread not found',
-    );
+  protected execute(input: InlineCommentInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(inlineComment(input));
   }
 }

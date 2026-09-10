@@ -2,10 +2,12 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Deferred, Effect, Exit } from 'effect';
 import ignore from 'ignore';
 
 // Local imports - common
 import { isFileNotFoundError } from '@common/errors';
+import { hostPort } from '@common/hostPort';
 
 // Local imports - utils
 import { filterNotNull } from '@utils/core';
@@ -29,58 +31,73 @@ const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
   ignoreFiles: [],
 };
 
-let gitignoreMatcherPromise: Promise<GitignoreMatcher> | undefined;
+/**
+ * The shared load, or nothing when no load has succeeded yet. Callers that
+ * arrive while a load is in flight await its outcome instead of starting a
+ * second one; a failed load clears this so the next caller retries.
+ */
+let sharedLoad: Deferred.Deferred<GitignoreMatcher, unknown> | undefined;
 
-async function readGitignoreFile(
+const readGitignoreFile = (
   absolutePath: string,
-  readContent: () => Promise<string>,
-): Promise<GitignoreSource | null> {
-  try {
-    const content = await readContent();
-    return { absolutePath, content };
-  } catch (error) {
-    if (isFileNotFoundError(error)) {
-      return null;
-    }
-    throw error;
-  }
-}
+  readContent: Effect.Effect<string, unknown>,
+): Effect.Effect<GitignoreSource | null, unknown> =>
+  readContent.pipe(
+    Effect.map((content): GitignoreSource | null => ({
+      absolutePath,
+      content,
+    })),
+    // An absent policy file is the normal case; any other read failure is the
+    // caller's to see.
+    Effect.catch((error) =>
+      isFileNotFoundError(error) ? Effect.succeed(null) : Effect.fail(error),
+    ),
+  );
 
-async function readWorkspaceGitignore(
+const readWorkspaceGitignore = (
   relativePath: string,
-): Promise<GitignoreSource | null> {
+): Effect.Effect<GitignoreSource | null, unknown> => {
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
-    return null;
+    return Effect.succeed(null);
   }
   const normalized = relativePath.replace(/^\/+/, '');
-  return readGitignoreFile(path.join(workspacePath, normalized), () =>
-    WorkspaceFS.read(normalized),
+  return readGitignoreFile(
+    path.join(workspacePath, normalized),
+    hostPort(() => WorkspaceFS.read(normalized)),
   );
-}
+};
 
-async function readGlobalGitignore(): Promise<GitignoreSource | null> {
+const readGlobalGitignore = (): Effect.Effect<
+  GitignoreSource | null,
+  unknown
+> => {
   const homeDirectory = safeHomedir();
   if (!homeDirectory) {
-    return null;
+    return Effect.succeed(null);
   }
   const absolutePath = path.join(homeDirectory, '.gitignore_global');
-  return readGitignoreFile(absolutePath, () => AbsoluteFS.read(absolutePath));
-}
+  return readGitignoreFile(
+    absolutePath,
+    hostPort(() => AbsoluteFS.read(absolutePath)),
+  );
+};
 
-async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
+const loadGitignoreMatcher = Effect.fn('loadGitignoreMatcher')(function* () {
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
     return EMPTY_GITIGNORE_MATCHER;
   }
 
-  const sources = (
-    await Promise.all([
+  const sources = (yield* Effect.all(
+    [
       readGlobalGitignore(),
       readWorkspaceGitignore('.gitignore_global'),
       readWorkspaceGitignore('.gitignore'),
-    ])
-  ).filter(filterNotNull);
+    ],
+    // The three policies were read together and fail fast, as Promise.all did.
+    { concurrency: 'unbounded' },
+  )).filter(filterNotNull);
 
   if (sources.length === 0) {
     return EMPTY_GITIGNORE_MATCHER;
@@ -108,19 +125,30 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
     },
     ignoreFiles: sources.map((source) => source.absolutePath),
   };
-}
+});
 
-export async function getGitignoreMatcher(): Promise<GitignoreMatcher> {
-  if (!gitignoreMatcherPromise) {
-    gitignoreMatcherPromise = loadGitignoreMatcher();
-  }
-  const matcherPromise = gitignoreMatcherPromise;
-  try {
-    return await matcherPromise;
-  } catch (error) {
-    if (gitignoreMatcherPromise === matcherPromise) {
-      gitignoreMatcherPromise = undefined;
+export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(
+  function* (): Effect.fn.Return<GitignoreMatcher, unknown> {
+    const inFlight = sharedLoad;
+    if (inFlight) {
+      return yield* Deferred.await(inFlight);
     }
-    throw error;
-  }
-}
+    const deferred = Deferred.makeUnsafe<GitignoreMatcher, unknown>();
+    sharedLoad = deferred;
+    // The load completes even if the caller that started it is interrupted:
+    // every other caller is waiting on this Deferred, and an interrupted
+    // shared load would strand them.
+    return yield* Effect.uninterruptible(
+      loadGitignoreMatcher().pipe(
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            if (Exit.isFailure(exit) && sharedLoad === deferred) {
+              sharedLoad = undefined;
+            }
+            Deferred.doneUnsafe(deferred, exit);
+          }),
+        ),
+      ),
+    );
+  },
+);

@@ -6,7 +6,6 @@ import { getExecutionRecords } from '@agent/storage';
 import {
   WorkflowRunAbortError,
   type WorkflowAgentInvocation,
-  type WorkflowScriptRunOptions,
 } from '@agent/workflowScript';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { runInSession, type LaunchRunContext } from '@agent/runtime/RunContext';
@@ -37,15 +36,13 @@ function workflowScriptModelSelection(
   parent: LaunchRunContext,
 ): Effect.Effect<string, Error> {
   const requestedModel = invocation.options.model;
-  return Effect.tryPromise({
-    try: () =>
-      runInSession(parent.runScope.session, () =>
-        selectAvailableDelegationModel({
-          ...(requestedModel !== undefined && { requestedModel }),
-          parentModel: parent.model,
-        }),
-      ),
-    catch: (error) => {
+  return selectAvailableDelegationModel({
+    ...(requestedModel !== undefined && { requestedModel }),
+    parentModel: parent.model,
+    withScope: <T>(read: () => T) =>
+      runInSession(parent.runScope.session, read),
+  }).pipe(
+    Effect.mapError((error) => {
       // A declared model is workflow configuration, so its rejection must not
       // disappear as a nullable call inside parallel(). When the
       // script omits the field, preserve the established delegation failure
@@ -55,8 +52,8 @@ function workflowScriptModelSelection(
         formatError('Workflow model could not be selected', error),
         { cause: error },
       );
-    },
-  });
+    }),
+  );
 }
 
 /**
@@ -75,9 +72,7 @@ interface WorkflowRunIdentity {
 
 /**
  * Resolve what one issued `agent()` call actually runs; agent, model, result
- * contract, and files; from the options the script declared. One owner for
- * both the launch (`prepare`) and the per-call review a host shows before
- * admitting the call, so the card the user approves is the config that runs.
+ * contract, and files; from the options the script declared.
  */
 const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   function* (

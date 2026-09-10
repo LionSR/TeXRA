@@ -1,4 +1,5 @@
 // Local imports
+import { effectRuntime } from '@platform/processRuntime';
 import {
   EXTERNAL_TOOL_DEFS,
   type ExternalToolDef,
@@ -54,7 +55,12 @@ function noteForTool(
 }
 
 export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
-  const checks = new Map((await runExternalToolChecks()).map((r) => [r.id, r]));
+  const checks = new Map(
+    (await effectRuntime().runPromise(runExternalToolChecks())).map((r) => [
+      r.id,
+      r,
+    ]),
+  );
   const disabledIds = getDisabledToolIds();
 
   return getCliToolDefs().map((def) => {

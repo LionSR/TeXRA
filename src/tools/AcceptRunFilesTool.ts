@@ -158,7 +158,7 @@ Parameters map directly to subagent-result delivery attributes:
           try: prepareFiles,
           catch: (error) => error,
         });
-      }).pipe(Effect.catch((error) => Effect.die(error))),
+      }).pipe(Effect.orDie),
     );
   }
 

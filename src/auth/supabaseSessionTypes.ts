@@ -11,7 +11,7 @@ const SupabaseSessionSchema = z.object({
   refreshToken: z.string(),
   account: z.object({
     id: z.string(),
-    label: z.string().transform((label) => label.trim()),
+    label: z.string().trim(),
   }),
   expiresAt: z.number(),
 });
@@ -104,7 +104,6 @@ type StorableSessionInput = {
   refresh_token: string;
   expires_at?: number;
   expires_in?: number;
-  token_type?: string;
   user: {
     id: string;
     email?: string | null;

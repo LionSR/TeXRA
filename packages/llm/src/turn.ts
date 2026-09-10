@@ -423,6 +423,13 @@ const EVIDENCE_PROTOCOL = {
   'minimax-reasoning': 'minimax-chat',
   'minimax-message': 'minimax-chat',
   'minimax-function-call': 'minimax-chat',
+  google: 'google-interactions',
+  anthropic: 'anthropic-messages',
+  xai: 'xai-chat',
+  openrouter: 'openrouter-chat',
+  minimax: 'minimax-chat',
+  'google-interactions': 'google-interactions',
+  'openai-responses': 'openai-responses',
 } as const;
 
 function validateAssistantContent(
@@ -799,6 +806,45 @@ const EditorControlsSchema = z.strictObject({
   toolChoice: z.literal('auto'),
 });
 
+function validateTemperatureDefault(
+  configuration: {
+    readonly supportsTemperature: boolean;
+    readonly defaults: { readonly temperature: number | null };
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    !configuration.supportsTemperature &&
+    configuration.defaults.temperature !== null
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['defaults', 'temperature'],
+      message: 'A model without temperature support requires a null default.',
+    });
+  }
+}
+
+function validateEffortDefault<E extends string>(
+  configuration: {
+    readonly supportedEfforts: readonly E[];
+    readonly defaults: { readonly effort: E | null };
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    configuration.defaults.effort !== null &&
+    !configuration.supportedEfforts.includes(configuration.defaults.effort)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['defaults', 'effort'],
+      message:
+        'The default reasoning effort must be supported by the selected route.',
+    });
+  }
+}
+
 /** Already-selected protocol binding and defaults, provided by the application. */
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
   BindingSchema.extend({
@@ -826,28 +872,8 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     defaults: OpenRouterControlsSchema.omit({ toolChoice: true }).readonly(),
   })
     .superRefine((configuration, ctx) => {
-      if (
-        !configuration.supportsTemperature &&
-        configuration.defaults.temperature !== null
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['defaults', 'temperature'],
-          message:
-            'A model without temperature support requires a null default.',
-        });
-      }
-      if (
-        configuration.defaults.effort !== null &&
-        !configuration.supportedEfforts.includes(configuration.defaults.effort)
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['defaults', 'effort'],
-          message:
-            'The default reasoning effort must be supported by the selected route.',
-        });
-      }
+      validateTemperatureDefault(configuration, ctx);
+      validateEffortDefault(configuration, ctx);
     })
     .readonly(),
   BindingSchema.extend({
@@ -857,28 +883,8 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     defaults: OpenAIChatControlsSchema.omit({ toolChoice: true }).readonly(),
   })
     .superRefine((configuration, ctx) => {
-      if (
-        !configuration.supportsTemperature &&
-        configuration.defaults.temperature !== null
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['defaults', 'temperature'],
-          message:
-            'A model without temperature support requires a null default.',
-        });
-      }
-      if (
-        configuration.defaults.effort !== null &&
-        !configuration.supportedEfforts.includes(configuration.defaults.effort)
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['defaults', 'effort'],
-          message:
-            'The default reasoning effort must be supported by the selected route.',
-        });
-      }
+      validateTemperatureDefault(configuration, ctx);
+      validateEffortDefault(configuration, ctx);
     })
     .readonly(),
   BindingSchema.extend({
@@ -927,17 +933,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     defaults: XaiControlsSchema.omit({ toolChoice: true }).readonly(),
   })
     .superRefine((configuration, ctx) => {
-      if (
-        configuration.defaults.effort !== null &&
-        !configuration.supportedEfforts.includes(configuration.defaults.effort)
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['defaults', 'effort'],
-          message:
-            'The default reasoning effort must be supported by the selected route.',
-        });
-      }
+      validateEffortDefault(configuration, ctx);
     })
     .readonly(),
   BindingSchema.extend({
@@ -1021,17 +1017,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     defaults: AnthropicControlsSchema.omit({ toolChoice: true }).readonly(),
   })
     .superRefine((configuration, ctx) => {
-      if (
-        !configuration.supportsTemperature &&
-        configuration.defaults.temperature !== null
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['defaults', 'temperature'],
-          message:
-            'A model without temperature support requires a null default.',
-        });
-      }
+      validateTemperatureDefault(configuration, ctx);
     })
     .readonly(),
 ]);
@@ -1366,26 +1352,16 @@ const HttpTurnResultSchema = z
           'A stop-sequence outcome requires its exact matched sequence, and no other outcome has one.',
       });
     }
+    const usageKind = result.usage?.providerUsage?.kind;
+    const finishKind = result.finishEvidence?.kind;
     if (
       (result.refusalEvidence !== undefined &&
         result.requestedOrigin.protocol !== 'anthropic-messages') ||
       (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
-      (result.usage?.providerUsage?.kind === 'google' &&
-        result.requestedOrigin.protocol !== 'google-interactions') ||
-      (result.usage?.providerUsage?.kind === 'anthropic' &&
-        result.requestedOrigin.protocol !== 'anthropic-messages') ||
-      (result.usage?.providerUsage?.kind === 'xai' &&
-        result.requestedOrigin.protocol !== 'xai-chat') ||
-      ((result.usage?.providerUsage?.kind === 'openrouter' ||
-        result.finishEvidence?.kind === 'openrouter') &&
-        result.requestedOrigin.protocol !== 'openrouter-chat') ||
-      ((result.usage?.providerUsage?.kind === 'minimax' ||
-        result.finishEvidence?.kind === 'minimax') &&
-        result.requestedOrigin.protocol !== 'minimax-chat') ||
-      (result.finishEvidence?.kind === 'google-interactions' &&
-        result.requestedOrigin.protocol !== 'google-interactions') ||
-      (result.finishEvidence?.kind === 'openai-responses' &&
-        result.requestedOrigin.protocol !== 'openai-responses')
+      (usageKind != null &&
+        result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[usageKind]) ||
+      (finishKind != null &&
+        result.requestedOrigin.protocol !== EVIDENCE_PROTOCOL[finishKind])
     ) {
       ctx.addIssue({
         code: 'custom',

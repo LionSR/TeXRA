@@ -17,7 +17,12 @@
 
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
+import { runInSession } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { byStringProp } from '@utils/core';
@@ -46,72 +51,106 @@ export interface RunGeneratedFile {
 /**
  * List the generated (non-KV) files under a run's storage directory, sorted by
  * path. Returns `[]` when the run has no storage directory at all.
+ *
+ * Every storage read runs in `session`'s scope: `StorageFS` resolves its root
+ * from the ambient session, and a fiber's continuation carries no caller's
+ * scope, so a host holding one session per open paper would otherwise walk the
+ * wrong root.
  */
-export async function listRunGeneratedFiles(
-  executionId: ExecutionId,
-): Promise<RunGeneratedFile[]> {
-  const runDir = await findExistingRunStoragePath(executionId);
-  if (!runDir) return [];
-  const files = await walkRunStorage(runDir, '', RUN_FILE_SCAN_DEPTH);
-  return files.sort(byStringProp((file) => file.path));
-}
+export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
+  function* (
+    executionId: ExecutionId,
+    session: SessionHandle,
+  ): Effect.fn.Return<RunGeneratedFile[], unknown> {
+    const runDir = yield* hostPort(() =>
+      runInSession(session, () => findExistingRunStoragePath(executionId)),
+    );
+    if (!runDir) return [];
+    const files = yield* walkRunStorage(
+      session,
+      runDir,
+      '',
+      RUN_FILE_SCAN_DEPTH,
+    );
+    return files.sort(byStringProp((file) => file.path));
+  },
+);
 
-async function walkRunStorage(
+function walkRunStorage(
+  session: SessionHandle,
   basePath: string,
   relativePath: string,
   maxDepth: number,
-): Promise<RunGeneratedFile[]> {
-  const fullPath = relativePath ? path.join(basePath, relativePath) : basePath;
+): Effect.Effect<RunGeneratedFile[], unknown> {
+  return Effect.gen(function* () {
+    const fullPath = relativePath
+      ? path.join(basePath, relativePath)
+      : basePath;
 
-  let entries: readonly (readonly [string, number])[];
-  try {
-    entries = await StorageFS.readDir(fullPath);
-  } catch (error) {
-    // Deliberately warn-and-continue rather than rethrow: an unreadable
-    // subdirectory must not blank out the rest of the listing. A missing
-    // directory is the expected "nothing persisted here" case; any other read
-    // failure (permissions, corrupt storage) still degrades to empty, but
-    // loudly — the warn is the surfacing mechanism, matching the
-    // outputDiscovery/externalInquiryStorage fallback precedent (#10630).
-    if (!isFileNotFoundError(error)) {
-      log.warn(`Unreadable run directory '${fullPath}'; listing it as empty`, {
-        data: error,
-      });
-    }
-    return [];
-  }
+    const entries = yield* hostPort(() =>
+      runInSession(session, () => StorageFS.readDir(fullPath)),
+    ).pipe(
+      // Deliberately warn-and-continue rather than rethrow: an unreadable
+      // subdirectory must not blank out the rest of the listing. A missing
+      // directory is the expected "nothing persisted here" case; any other read
+      // failure (permissions, corrupt storage) still degrades to empty, but
+      // loudly — the warn is the surfacing mechanism, matching the
+      // outputDiscovery/externalInquiryStorage fallback precedent (#10630).
+      Effect.catch((error) =>
+        Effect.sync((): [string, number][] => {
+          if (!isFileNotFoundError(error)) {
+            log.warn(
+              `Unreadable run directory '${fullPath}'; listing it as empty`,
+              { data: error },
+            );
+          }
+          return [];
+        }),
+      ),
+    );
 
-  const files: RunGeneratedFile[] = [];
-  for (const [name, type] of entries) {
-    // Skip before stat and before recursion: a KV-named *directory* is
-    // internal metadata all the way down, so its children are not generated
-    // output either.
-    if (isKVFile(name)) continue;
+    const files: RunGeneratedFile[] = [];
+    for (const [name, type] of entries) {
+      // Skip before stat and before recursion: a KV-named *directory* is
+      // internal metadata all the way down, so its children are not generated
+      // output either.
+      if (isKVFile(name)) continue;
 
-    const rawRelative = relativePath ? path.join(relativePath, name) : name;
-    const childPath = path.join(basePath, rawRelative);
-    const entryIsDirectory = isDirectory(type);
+      const rawRelative = relativePath ? path.join(relativePath, name) : name;
+      const childPath = path.join(basePath, rawRelative);
+      const entryIsDirectory = isDirectory(type);
 
-    try {
-      const stat = await StorageFS.stat(childPath);
+      const stat = yield* hostPort(() =>
+        runInSession(session, () => StorageFS.stat(childPath)),
+      ).pipe(
+        // An entry that vanished (or whose parent stopped being a directory)
+        // between readDir and stat is a benign race; anything else is a real
+        // fault and propagates.
+        Effect.catch((error) =>
+          isFileNotFoundError(error) || isNotADirectoryError(error)
+            ? Effect.succeed(undefined)
+            : Effect.fail(error),
+        ),
+      );
+      if (!stat) continue;
+
       files.push({
         path: toPosixPath(rawRelative),
         size: stat.size,
         isDirectory: entryIsDirectory,
       });
-    } catch (error) {
-      // An entry that vanished (or whose parent stopped being a directory)
-      // between readDir and stat is a benign race; anything else is a real
-      // fault and propagates.
-      if (isFileNotFoundError(error) || isNotADirectoryError(error)) continue;
-      throw error;
-    }
 
-    if (entryIsDirectory && maxDepth > 1) {
-      files.push(
-        ...(await walkRunStorage(basePath, rawRelative, maxDepth - 1)),
-      );
+      if (entryIsDirectory && maxDepth > 1) {
+        files.push(
+          ...(yield* walkRunStorage(
+            session,
+            basePath,
+            rawRelative,
+            maxDepth - 1,
+          )),
+        );
+      }
     }
-  }
-  return files;
+    return files;
+  });
 }

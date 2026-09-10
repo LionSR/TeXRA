@@ -691,26 +691,28 @@ export function createChatSessionController(
         store.readMeta(),
       ]);
       const streamId = meta?.streamId;
-      let failure: string | undefined;
-      if (!config || !streamId) {
-        failure = `Execution not found: ${id}`;
-      } else if (config.agentCategory !== AgentCategory.ToolUse) {
-        failure = `Execution ${id} is a workflow; resume it with \`texra resume ${id}\`.`;
-      }
-      if (failure || !config || !streamId) {
+      // Refusal tail every early exit below shares: put back what the
+      // synchronous prologue superseded, surface the reason, settle the slot.
+      const refuseResume = (reason: string): void => {
         restoreInterruptedRecovery(supersededRecovery);
-        appendLocalErrorTranscript(failure ?? `Execution not found: ${id}`);
+        appendLocalErrorTranscript(reason);
         session.markRunCompleted();
         resolveRunPromise();
+      };
+      if (!config || !streamId) {
+        refuseResume(`Execution not found: ${id}`);
+        return;
+      }
+      if (config.agentCategory !== AgentCategory.ToolUse) {
+        refuseResume(
+          `Execution ${id} is a workflow; resume it with \`texra resume ${id}\`.`,
+        );
         return;
       }
 
       recovery = runtimeSession.followUps.claimRecovery(streamId, true);
       if (!recovery) {
-        restoreInterruptedRecovery(supersededRecovery);
-        appendLocalErrorTranscript(describeFollowUpFailure('not_resumable'));
-        session.markRunCompleted();
-        resolveRunPromise();
+        refuseResume(describeFollowUpFailure('not_resumable'));
         return;
       }
 

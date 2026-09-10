@@ -1,25 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
+import { type CompileFailure, type OutputFileInfo } from '@shared/schemas';
 import {
-  AgentCategory,
-  type CompileFailure,
-  type OutputFileInfo,
-  type StreamTabInfo,
-} from '@shared/schemas';
-import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
+  formatWorkflowRunContext,
+  type WorkflowRunContextInput,
+} from '@shared/copy/workflowRunContext';
 
-function baseStream(overrides: Partial<StreamTabInfo> = {}): StreamTabInfo {
+type StreamFields = WorkflowRunContextInput['stream'];
+
+function baseStream(overrides: Partial<StreamFields> = {}): StreamFields {
   return {
-    name: 'stream-a',
-    // What buildStreamTabInfo emits for this identity — a producer never
-    // ships an arbitrary label beside a resolved identity.
+    // The resolved identity display name — a producer never ships an
+    // arbitrary label beside a resolved identity.
     label: 'writer',
-    identity: { kind: 'agent', agent: 'writer' },
-    agentCategory: AgentCategory.Workflow,
     model: 'gemini31p',
     modelLabel: 'Gemini 3.1 Pro',
     executionId: 'a1b2c3d4',
-    creationTimestamp: 1,
     ...overrides,
   };
 }

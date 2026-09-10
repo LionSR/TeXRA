@@ -49,7 +49,6 @@ import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
   MESSAGE_TYPES,
-  ToolError,
 } from '@shared/schemas';
 import type {
   ClaudeAgentEffort,
@@ -626,9 +625,10 @@ const launchClaudeAgentSession = Effect.fn(
   // `additionalDirectories`, unlike codex's `workingDirectory`.
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(workingDir);
-  const env = yield* agentCliCall(() =>
-    runInSession(session, () => config.buildClaudeAgentEnv()),
-  );
+  // No session frame here, unlike the module read above: the env block reads
+  // only the process environment and `platform().secrets`, neither of which is
+  // workspace-scoped, so it needs no `runInSession` scope of its own.
+  const env = yield* config.buildClaudeAgentEnv();
   const pathToClaudeCodeExecutable = yield* agentCliCall(() =>
     findClaudeBinaryPath(),
   );

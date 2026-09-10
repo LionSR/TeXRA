@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform/test support/tools
@@ -29,11 +30,11 @@ describe('external tool definitions', () => {
     await installToolAvailability(true);
 
     try {
-      const probeResult = await texraCli.probe?.();
+      const probeResult = await Effect.runPromise(texraCli.probe!());
 
       expect(probeResult).toBe(true);
-      expect(await texraCli.check(probeResult)).toBe(true);
-      expect(await texraCli.statusLabel?.(probeResult)).toBe(
+      expect(await Effect.runPromise(texraCli.check(probeResult))).toBe(true);
+      expect(await Effect.runPromise(texraCli.statusLabel!(probeResult))).toBe(
         'Detected; integration coming soon',
       );
     } finally {
@@ -50,23 +51,27 @@ describe('external tool definitions', () => {
     await installToolAvailability(false);
 
     try {
-      const probeResult = await lean.probe?.();
+      const probeResult = await Effect.runPromise(lean.probe!());
 
       expect(findPath).toHaveBeenCalledWith('lake');
       expect(probeResult).toEqual({
         extensionAvailable: false,
         lakeAvailable: true,
       });
-      await expect(lean.check(probeResult)).resolves.toBe(true);
+      await expect(Effect.runPromise(lean.check(probeResult))).resolves.toBe(
+        true,
+      );
 
       findPath.mockReturnValue(null);
-      const missingProbeResult = await lean.probe?.();
+      const missingProbeResult = await Effect.runPromise(lean.probe!());
 
       expect(missingProbeResult).toEqual({
         extensionAvailable: false,
         lakeAvailable: false,
       });
-      await expect(lean.check(missingProbeResult)).resolves.toBe(false);
+      await expect(
+        Effect.runPromise(lean.check(missingProbeResult)),
+      ).resolves.toBe(false);
     } finally {
       await installPlatform();
     }

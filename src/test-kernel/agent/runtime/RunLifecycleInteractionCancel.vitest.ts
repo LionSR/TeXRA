@@ -140,7 +140,7 @@ describe('run lifecycle host-interaction cancel', () => {
     expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(true);
     await stopped.promise;
     expect(session.executions.getHandle(executionId)).toBeUndefined();
-    await expect(handle.result).resolves.toMatchObject({
+    await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
       outcome: RUN_OUTCOME.CANCELLED,
     });
     expect(ctx.disposeTrace).toHaveBeenCalledOnce();

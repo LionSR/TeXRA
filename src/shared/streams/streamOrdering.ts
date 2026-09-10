@@ -1,9 +1,10 @@
-import type { StreamTabInfo } from '@shared/schemas';
-
 /** Ordering helpers shared by stream tabs and transcript rows. */
 
 /** The two fields tab order depends on, so name-only sorts can reuse this rule. */
-type StreamOrderingFields = Pick<StreamTabInfo, 'name' | 'creationTimestamp'>;
+type StreamOrderingFields = {
+  readonly name: string;
+  readonly creationTimestamp: number;
+};
 
 /** Sort by newest creation time first, breaking ties alphabetically by name. */
 export function compareByNewestCreationTime(

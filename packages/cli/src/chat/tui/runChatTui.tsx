@@ -338,9 +338,11 @@ export async function runChat(
     const key = ids.join('\0');
     if (key === subscribedStreams) return;
     subscribedStreams = key;
-    runtimeSession.setTranscriptSubscriptions(
-      'tui',
-      ids.map((id) => ({ id, fromSeq: 0 })),
+    effectRuntime().runFork(
+      runtimeSession.setTranscriptSubscriptions(
+        'tui',
+        ids.map((id) => ({ id, fromSeq: 0 })),
+      ),
     );
   };
   disposables.add(
@@ -407,10 +409,6 @@ export async function runChat(
     getSlashCommandContext: slashCommandContext,
   });
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeStream));
-
-  const interruptActive = (): void => {
-    chatController.stop();
-  };
 
   const resetSessionForClear = (): void => {
     const currentStreamId = session.streamId ?? activeStreamIdSignal.get();
@@ -565,7 +563,7 @@ export async function runChat(
     resumeTerminalTitle: terminalTitleUpdates.resume,
     canStopActiveRun,
     isResumableIdle,
-    interruptActive,
+    interruptActive: () => chatController.stop(),
   });
   // Transfer signal ownership from the platform handler and arm this session's
   // handlers, not any earlier: everything above (initInteractiveCliPlatform,

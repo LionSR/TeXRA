@@ -152,7 +152,7 @@ const executionsRead = <A>(
  * pre-check and registration. The race settles on the first completion,
  * success or defect, so a throw inside the registry wait surfaces at once
  * instead of stalling until the deadline. Interrupting the winner-less
- * racers aborts the registry wait's signal and disposes the follow-up
+ * racers detaches the registry wait's listeners and disposes the follow-up
  * listener.
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
@@ -173,11 +173,8 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       ),
       (stop) => Effect.sync(stop),
     );
-    // Non-rejecting: `waitForAnyChange`'s executor resolves on a registry
-    // listener or on the abort and never rejects.
-    const statusChange = Effect.promise((signal) =>
-      context.session.executions.waitForAnyChange(executionIds, signal),
-    );
+    const statusChange =
+      context.session.executions.waitForAnyChange(executionIds);
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
     );
@@ -295,7 +292,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         case 'kill':
           return yield* this.handleKill(context, executionId);
         case 'wait':
-          yield* this.waitForChange(context, executionId, input.timeout);
+          yield* this.waitForAnyChange(context, input.timeout, [executionId]);
           return yield* this.showSummary(context, executionId, {
             suppressAutoDeliveredSubagentReport: true,
           });
@@ -426,20 +423,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       pendingIds.every((id) => context.inRunScope(() => shouldSkipWait(id))),
     );
   });
-
-  /** Wait for a specific execution to change status, with timeout. */
-  private readonly waitForChange = Effect.fn('ExecutionsTool.waitForChange')(
-    function* (
-      context: ExecutionToolContext,
-      executionId: ExecutionId,
-      timeout: number,
-    ) {
-      if (context.inRunScope(() => shouldSkipWait(executionId))) return;
-      yield* awaitStatusChange(context, timeout, [executionId], () =>
-        context.inRunScope(() => shouldSkipWait(executionId)),
-      );
-    },
-  );
 
   private readonly listExecutions = Effect.fn('ExecutionsTool.listExecutions')(
     function* (context: ExecutionToolContext, offset: number, limit: number) {
@@ -1044,9 +1027,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     context: ExecutionToolContext,
     executionId: ExecutionId,
   ) {
-    const files = yield* executionsRead(context, () =>
-      listRunGeneratedFiles(executionId),
-    );
+    const files = yield* listRunGeneratedFiles(
+      executionId,
+      context.session,
+    ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
     if (files.length === 0) {
       return executed('No files generated for this execution.');
     }

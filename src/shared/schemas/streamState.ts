@@ -1,30 +1,17 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import { GoalStateSchema } from './goal';
-import { AgentCategory, AgentCategorySchema } from './agent';
 import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
-import {
-  STREAM_LIFECYCLE_READY,
-  StreamLifecycleStatusSchema,
-  StreamPhaseSchema,
-  StreamSubstateSchema,
-  UserFollowUpSupportSchema,
-} from './stream';
-import { TaskGroupSchema } from './taskGroup';
-import { PlanSchema } from './plan';
-import { TodoItemSchema } from './todo';
-import { ContextStateDataSchema } from './contextManagement';
-import { RunUsageMapSchema } from './usage';
+import { StreamPhaseSchema } from './stream';
 
 // Active Child Info — one flat row shape. Every child owns a stream tab
 // (`childStreamId` always present) and carries its parsed `identity`
 // verbatim; renderers key icons and clickability on `identity.kind` instead
 // of tool-name sniffing or a roster-side kind union.
 
-const ActiveChildInfoSchema = z.object({
+export const ActiveChildInfoSchema = z.object({
   executionId: z.string(),
   /** Stream tab ID — every child stream owns a tab. */
   childStreamId: z.string(),
@@ -116,49 +103,6 @@ export const ConversationProgressSchema = z.object({
 });
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
-
-const DEFAULT_STREAM_METADATA_STATUS = STREAM_LIFECYCLE_READY;
-
-// Stream metadata: the backend-owned fields of a stream's state.
-
-export const BackendOwnedFieldsSchema = z.object({
-  status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
-  /**
-   * Whether `status` is a terminal outcome that no producer can still move.
-   * The fold's `runDurablyFinal` produces it from the stream's status and
-   * the local snapshot, which needs the terminal outcome plus one of two
-   * ways to have no producer left: the phase came
-   * from the durable facts (origin `derived`, so nothing is running this
-   * stream anywhere), or it is this process's own `live` entry with no hold
-   * and no execution still tracked for the stream — the case where
-   * `finalizeRunTerminal` untracked the run before storing its terminal
-   * phase. The phase alone does not carry that — a user stop publishes
-   * CANCELLED while the run is still unwinding in the host process — so this
-   * is the bit a renderer needs before painting an unclosed task group or an
-   * unsettled workflow card as interrupted.
-   */
-  statusDurablyFinal: z.boolean().prefault(false),
-  substate: StreamSubstateSchema.optional(),
-  /** Present only with the `unavailable` sentinel: the banner and tooltip copy. */
-  statusDetail: z.string().optional(),
-  /**
-   * Epoch ms when the stream entered its current active phase, stamped once by
-   * the session status machine (`StreamPhaseState.runStartedAt`). Absent while
-   * the phase is not active. Every host renders elapsed time from this one
-   * value; the tick rate and duration format stay host modality.
-   */
-  runStartedAt: z.int().positive().optional(),
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
-  lastTimestamp: z.number().optional(),
-  conversationProgress: ConversationProgressSchema.prefault({
-    toolCallCount: 0,
-  }),
-  stage: StreamStageSchema.optional(),
-  /** Child roster — live entries plus the finished ones retained for display
-   *  (`finishedAt` set). */
-  subagents: z.array(ActiveChildInfoSchema).prefault([]),
-});
 
 export const ApprovalBypassesSchema = z.record(
   z.enum(APPROVAL_BYPASS_KINDS),

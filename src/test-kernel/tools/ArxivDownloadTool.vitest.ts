@@ -7,9 +7,10 @@ const gitignoreMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@tools/gitignore', () => ({
-  getGitignoreMatcher: async () => ({
-    ignores: (path: string) => gitignoreMock.ignoredPaths.has(path),
-  }),
+  getGitignoreMatcher: () =>
+    Effect.succeed({
+      ignores: (path: string) => gitignoreMock.ignoredPaths.has(path),
+    }),
 }));
 
 // Local imports

@@ -265,7 +265,9 @@ beforeEach(async () => {
   await WorkspaceFS.write('references.bib', '@book{example}');
   await WorkspaceFS.write('figure.pdf', 'pdf');
   mocks.registerExecution.mockReturnValue(Effect.void);
-  mocks.selectAvailableDelegationModel.mockResolvedValue('parent-model');
+  mocks.selectAvailableDelegationModel.mockReturnValue(
+    Effect.succeed('parent-model'),
+  );
   mocks.requestDelegationProposal.mockResolvedValue({
     result: { action: 'approve' },
     autoApproved: false,
@@ -784,12 +786,15 @@ return null`;
   });
 
   it('gates the run model through delegation model availability', async () => {
-    mocks.selectAvailableDelegationModel.mockResolvedValueOnce('served-model');
+    mocks.selectAvailableDelegationModel.mockReturnValueOnce(
+      Effect.succeed('served-model'),
+    );
 
     await callTool();
 
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
+      withScope: expect.any(Function),
     });
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       currentSession(),
@@ -801,8 +806,10 @@ return null`;
   });
 
   it('rejects an unserveable run model before registering a detached run', async () => {
-    mocks.selectAvailableDelegationModel.mockRejectedValueOnce(
-      new Error('No models are currently available for delegation.'),
+    mocks.selectAvailableDelegationModel.mockReturnValueOnce(
+      Effect.fail(
+        new Error('No models are currently available for delegation.'),
+      ),
     );
 
     const result = await callTool();

@@ -213,8 +213,8 @@ export class PRPollingSource extends PollingSourceBase<
   static resetAnnotationFetchBudgetForTests(
     remainingFetches?: number,
     nowMs?: number,
-  ): void {
-    SharedAnnotationFetchBudget.resetForTests(remainingFetches, nowMs);
+  ): Effect.Effect<void> {
+    return SharedAnnotationFetchBudget.resetForTests(remainingFetches, nowMs);
   }
 
   subscribe(
@@ -814,17 +814,19 @@ export class PRPollingSource extends PollingSourceBase<
       SharedAnnotationFetchBudget,
       now,
     ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
-        ),
-      ),
       Effect.map((annotations) => ({ ok: true as const, annotations })),
       Effect.catchCause((cause) => {
+        // Recover only a single typed failure, unwrapped — the caller
+        // classifies `.cause` directly. Anything else (interrupts, compound
+        // failures) re-raises on the PollHookRejected channel this hook
+        // reports.
         const reason = cause.reasons[0];
-        return cause.reasons.length === 1 && reason?._tag === 'Fail'
-          ? Effect.succeed({ ok: false as const, failure: reason.error })
-          : Effect.failCause(cause);
+        if (cause.reasons.length === 1 && reason?._tag === 'Fail') {
+          return Effect.succeed({ ok: false as const, failure: reason.error });
+        }
+        return Effect.failCause(
+          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
+        );
       }),
     );
     if (fetched.ok) {
@@ -834,10 +836,11 @@ export class PRPollingSource extends PollingSourceBase<
       }
       return true;
     }
-    const { failure } = fetched;
-    const err = failure.cause;
+    const err = fetched.failure;
     if (err instanceof AnnotationFetchBudgetExhaustedError) return false;
-    if (err instanceof GitHubRateLimitError) return yield* Effect.fail(failure);
+    if (err instanceof GitHubRateLimitError) {
+      return yield* Effect.fail(new PollHookRejected({ cause: err }));
+    }
     if (err instanceof GitHubPermanentError || err instanceof GitHubAuthError) {
       const reason =
         err instanceof GitHubAuthError ? 'forbidden' : 'unavailable';

@@ -31,8 +31,7 @@ import {
   type ExecutionId,
   type ExecutionMeta,
 } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ResultMetaSchema, type ResultMeta } from './resultMeta';
 import { runWithExecutionLeaseWriteFence } from './executionLease';
@@ -154,30 +153,22 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   // -- Typed readers --------------------------------------------------------
 
   /**
-   * Read a key and validate it against a schema, returning the parsed value
-   * or `null` when the key is absent. These readers are permissive: malformed
-   * turn-state data warns and also reads as `null`, preserving the existing
-   * turn-state policy. Canonical execution metadata uses the strict event accessor.
+   * Permissive read: a missing or malformed turn-state entry resolves to
+   * `null`, with malformed data leaving a warn trace. Canonical execution
+   * metadata uses the strict event accessor.
    */
-  private async readValidated<T>(
-    key: string,
-    schema: z.ZodType<T>,
-  ): Promise<T | null> {
-    const raw = await this.read(key);
+  async readTurnState(): Promise<ChildTurnState | null> {
+    const raw = await this.read(KEYS.TURN_STATE);
     if (raw === undefined) return null;
-    const result = schema.safeParse(raw);
+    const result = ChildTurnStateSchema.safeParse(raw);
     if (result.success) return result.data;
     log.warn(
-      `Failed to parse execution ${this.executionId} ${key}.json: ${toErrorMessage(
+      `Failed to parse execution ${this.executionId} ${KEYS.TURN_STATE}.json: ${toErrorMessage(
         result.error,
       )}`,
       { data: result.error },
     );
     return null;
-  }
-
-  async readTurnState(): Promise<ChildTurnState | null> {
-    return this.readValidated(KEYS.TURN_STATE, ChildTurnStateSchema);
   }
 
   async writeTurnState(state: ChildTurnState): Promise<void> {
@@ -191,54 +182,48 @@ export function executionMetaFromEvents(
   executionId: ExecutionId,
 ): ExecutionMeta | null {
   const id = aggregateId('execution', executionId);
-  const startOf = (rows: readonly SessionEvent[]) =>
-    rows.find(
-      (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
-        row.type === 'run.start' && row.executionId === executionId,
-    );
-  const metaOf = (rows: readonly SessionEvent[]): ExecutionMeta | null => {
-    const start = startOf(rows);
-    if (
-      !start ||
-      rows.some(
-        (row) =>
-          row.aggregateId === start.aggregateId &&
-          row.type === 'stream.removed',
-      )
+  const start = rows.find(
+    (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
+      row.type === 'run.start' && row.executionId === executionId,
+  );
+  if (
+    !start ||
+    rows.some(
+      (row) =>
+        row.aggregateId === start.aggregateId && row.type === 'stream.removed',
     )
-      return null;
-    const status = rows.findLast(
-      (row) => row.aggregateId === start.aggregateId && row.type === 'status',
-    );
-    const description = rows.findLast(
-      (row) => row.aggregateId === id && row.type === 'execution.description',
-    );
-    const workflow = rows.findLast(
-      (row) => row.aggregateId === id && row.type === 'execution.workflow',
-    );
-    return ExecutionMetaSchema.parse({
-      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: new Date(start.at).toISOString(),
-      streamId: aggregateTarget(start.aggregateId).id,
-      identity: start.identity ?? undefined,
-      userFollowUpSupport: start.userFollowUpSupport,
-      parentExecutionId: start.parentExecutionId,
-      outcome:
-        status?.type === 'status' &&
-        (status.phase === RUN_OUTCOME.COMPLETED ||
-          status.phase === RUN_OUTCOME.CANCELLED ||
-          status.phase === RUN_OUTCOME.FAILED)
-          ? status.phase
-          : undefined,
-      description:
-        description?.type === 'execution.description'
-          ? description.description
-          : undefined,
-      workflow:
-        workflow?.type === 'execution.workflow' ? workflow.workflow : undefined,
-    });
-  };
-  return metaOf(rows);
+  )
+    return null;
+  const status = rows.findLast(
+    (row) => row.aggregateId === start.aggregateId && row.type === 'status',
+  );
+  const description = rows.findLast(
+    (row) => row.aggregateId === id && row.type === 'execution.description',
+  );
+  const workflow = rows.findLast(
+    (row) => row.aggregateId === id && row.type === 'execution.workflow',
+  );
+  return ExecutionMetaSchema.parse({
+    schemaVersion: EXECUTION_META_SCHEMA_VERSION,
+    timestamp: new Date(start.at).toISOString(),
+    streamId: aggregateTarget(start.aggregateId).id,
+    identity: start.identity ?? undefined,
+    userFollowUpSupport: start.userFollowUpSupport,
+    parentExecutionId: start.parentExecutionId,
+    outcome:
+      status?.type === 'status' &&
+      (status.phase === RUN_OUTCOME.COMPLETED ||
+        status.phase === RUN_OUTCOME.CANCELLED ||
+        status.phase === RUN_OUTCOME.FAILED)
+        ? status.phase
+        : undefined,
+    description:
+      description?.type === 'execution.description'
+        ? description.description
+        : undefined,
+    workflow:
+      workflow?.type === 'execution.workflow' ? workflow.workflow : undefined,
+  });
 }
 
 /** Read the current configuration from the same committed prefix as metadata. */

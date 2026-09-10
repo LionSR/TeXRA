@@ -39,7 +39,7 @@ interface PRPollingSourceClass {
   resetAnnotationFetchBudgetForTests(
     remainingRequests?: number,
     nowMs?: number,
-  ): void;
+  ): Effect.Effect<void>;
 }
 
 type AnnotationFetchFn = (
@@ -213,7 +213,7 @@ describe('PRPollingSource annotation pagination', () => {
         );
         const source = new PRPollingSource();
         source.has = vi.fn().mockReturnValue(true);
-        PRPollingSource.resetAnnotationFetchBudgetForTests(0);
+        yield* PRPollingSource.resetAnnotationFetchBudgetForTests(0);
         const runs = [checkRun(7), checkRun(8)];
         const state = drainState(runs);
 
@@ -233,8 +233,8 @@ describe('AnnotationFetchBudget', () => {
   it('does not stall refills after the clock moves backward', () => {
     const budget = new AnnotationFetchBudget(1, 1000);
 
-    expect(budget.tryClaim(1000)).toBe(true);
-    expect(budget.tryClaim(900)).toBe(false);
-    expect(budget.tryClaim(1900)).toBe(true);
+    expect(Effect.runSync(budget.tryClaim(1000))).toBe(true);
+    expect(Effect.runSync(budget.tryClaim(900))).toBe(false);
+    expect(Effect.runSync(budget.tryClaim(1900))).toBe(true);
   });
 });

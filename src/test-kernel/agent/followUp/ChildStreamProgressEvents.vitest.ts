@@ -616,7 +616,7 @@ describe('child stream progress events', () => {
             STREAM_PHASE.FAILED,
           );
           const failedHandle = handle;
-          const result = yield* Effect.promise(() => failedHandle.result);
+          const result = yield* failedHandle.result;
           expect(result).toMatchObject({
             type: 'result',
             outcome: 'failed',
@@ -670,7 +670,7 @@ describe('child stream progress events', () => {
       parentStreamId,
       items: [],
     });
-    await expect(handle?.result).resolves.toMatchObject({
+    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
       type: 'result',
       outcome: 'failed',
       error: {
@@ -715,7 +715,7 @@ describe('child stream progress events', () => {
           qualifyAggregateId('stream', stoppedChildStreamId),
       ),
     ).toHaveLength(0);
-    await expect(handle?.result).resolves.toMatchObject({
+    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
       type: 'result',
       outcome: 'cancelled',
       executionId: stoppedExecutionId,
@@ -737,7 +737,7 @@ describe('child stream progress events', () => {
       childStream.finalize({ outcome: RUN_OUTCOME.CANCELLED }),
     );
 
-    await expect(handle?.result).resolves.toMatchObject({
+    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
       type: 'result',
       outcome: 'cancelled',
       executionId: cancelledExecutionId,
@@ -764,7 +764,7 @@ describe('child stream progress events', () => {
     expect(defaultSession().status.get(failedChildStreamId)).toBe(
       STREAM_PHASE.FAILED,
     );
-    await expect(handle?.result).resolves.toMatchObject({
+    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
       type: 'result',
       outcome: 'failed',
       executionId: failedExecutionId,

@@ -12,7 +12,7 @@ import {
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import {
   streamHeldMessage,
   streamUnreadableMessage,
@@ -124,12 +124,10 @@ export function enqueueLiveFollowUp(
   session.followUps.submit(streamId, followUp, 'live_owner');
 }
 
-interface PendingResume {
-  readonly resume: Promise<boolean>;
-}
-
 type Admission =
-  SubmitFollowUpResult | PendingResume | { status: 'no_session' };
+  | SubmitFollowUpResult
+  | { readonly resume: Promise<boolean> }
+  | { status: 'no_session' };
 
 /**
  * Route and admit one submission. Synchronous from the registry snapshot to

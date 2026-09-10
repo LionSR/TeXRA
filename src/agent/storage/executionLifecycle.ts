@@ -17,8 +17,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { flowKey } from '@agent/node/persistedFlow';
 
-import { createLog } from '@logger/logUtils';
-import { type WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   RUN_OUTCOME,
   AgentCategory,
@@ -30,17 +28,14 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type AggregateId,
   type ExecutionId,
-  type ExecutionMeta,
   type RunIdentity,
   type RunOutcome,
   type StreamTabId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { KeyedMutex } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
-import { ensureError } from '@utils/errors/errorMessage';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getExecutionStore,
   getExecutionRecords,
@@ -52,8 +47,6 @@ import {
   acquireResumedExecutionLease,
   releaseOwnedExecutionLease,
 } from './executionLease';
-
-const log = createLog('ExecutionLifecycle');
 
 function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
   // First non-blank candidate wins, stored verbatim (untrimmed) — trimming

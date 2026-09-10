@@ -1,8 +1,10 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - tools
 import { isTexFile } from '@common/files/fileTypeUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import replacementEngine from '@replacement/engine';
 import type { ToolResult } from '@shared/schemas';
 import {
@@ -23,6 +25,43 @@ const WriteInputSchema = z.strictObject({
 
 export type WriteInput = z.infer<typeof WriteInputSchema>;
 
+const write = Effect.fn('WriteFileTool.execute')(function* (
+  input: WriteInput,
+): Effect.fn.Return<ToolResult, unknown> {
+  const prepared = yield* resolveWritableTarget(input.path, {
+    missing: 'allow',
+  });
+  if ('blocked' in prepared) {
+    return prepared.blocked;
+  }
+  const { path, displayPath, exists, originalContent } = prepared.target;
+  const proposedContent = isTexFile(path)
+    ? replacementEngine.applyFor(input.content, 'tex-write')
+    : input.content;
+
+  return yield* applyApprovedFileEdit({
+    path,
+    displayPath,
+    originalContent,
+    proposedContent,
+    sourceTool: 'write_file',
+    startLine: 'approval',
+    present: ({ appliedContent }) => {
+      const originalLineCount = countLines(originalContent);
+      const newLineCount = countLines(appliedContent);
+      const action = exists ? 'Overwrote' : 'Created';
+      const replacementNote =
+        exists && originalLineCount > 0
+          ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
+          : undefined;
+      return {
+        summary: `${action} ${displayPath} (${newLineCount} lines)`,
+        output: replacementNote ? `written\n\n${replacementNote}` : 'written',
+      };
+    },
+  });
+});
+
 export class WriteFileTool extends defineTool({
   name: 'write_file',
   requiresApproval: true,
@@ -30,38 +69,7 @@ export class WriteFileTool extends defineTool({
     'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,
 }) {
-  protected async execute(input: WriteInput): Promise<ToolResult> {
-    const prepared = await resolveWritableTarget(input.path, {
-      missing: 'allow',
-    });
-    if ('blocked' in prepared) {
-      return prepared.blocked;
-    }
-    const { path, displayPath, exists, originalContent } = prepared.target;
-    const proposedContent = isTexFile(path)
-      ? replacementEngine.applyFor(input.content, 'tex-write')
-      : input.content;
-
-    return applyApprovedFileEdit({
-      path,
-      displayPath,
-      originalContent,
-      proposedContent,
-      sourceTool: 'write_file',
-      startLine: 'approval',
-      present: ({ appliedContent }) => {
-        const originalLineCount = countLines(originalContent);
-        const newLineCount = countLines(appliedContent);
-        const action = exists ? 'Overwrote' : 'Created';
-        const replacementNote =
-          exists && originalLineCount > 0
-            ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
-            : undefined;
-        return {
-          summary: `${action} ${displayPath} (${newLineCount} lines)`,
-          output: replacementNote ? `written\n\n${replacementNote}` : 'written',
-        };
-      },
-    });
+  protected execute(input: WriteInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(write(input));
   }
 }

@@ -4,9 +4,10 @@
  * Host-neutral: shells out via the shared command runner so the same resolver
  * is usable from the VS Code extension host and the Electron desktop main process.
  *
- * A tiny per-path cache lets sync render paths (`buildStreamTabInfo`) read
- * the last-known value via `peekWorktreeInfo()` while async resolution is
- * triggered separately by callers (e.g. on stream creation).
+ * A tiny per-path cache lets sync callers (`launchWorktreeInfo`, which stamps
+ * the worktree a run's `run.start` carries) read the last-known value via
+ * `peekWorktreeInfo()` while async resolution is triggered separately by
+ * callers (e.g. on stream creation).
  */
 
 import { LRUCache } from 'lru-cache';

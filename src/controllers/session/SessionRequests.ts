@@ -186,8 +186,7 @@ function deleteAdmittedStream(
 ): Effect.Effect<Outcome, RequestError> {
   const aggregateId = qualifyAggregateId('stream', streamId);
   return Effect.gen(function* () {
-    const row = admitted;
-    if (row.startCommit === null) {
+    if (admitted.startCommit === null) {
       return yield* Effect.fail(
         new Unavailable({
           streamId: streamId,
@@ -196,7 +195,7 @@ function deleteAdmittedStream(
       );
     }
     const [start] = yield* log
-      .readAll(row.startCommit - 1, row.startCommit)
+      .readAll(admitted.startCommit - 1, admitted.startCommit)
       .pipe(Effect.orDie);
     if (start?.type !== 'run.start' || start.aggregateId !== aggregateId) {
       return yield* Effect.fail(

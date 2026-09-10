@@ -1,5 +1,6 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
 // Local imports
@@ -12,13 +13,19 @@ import { setSetupPlatform } from '@tools/setup/platform';
 import { createFakeSetupPlatform } from './fixtures';
 
 const mocks = vi.hoisted(() => ({
-  apiKeyOrigin: vi.fn<() => Promise<'secret' | 'env' | 'none' | 'unknown'>>(),
-  anyUsableCredentialExists: vi.fn<() => Promise<boolean>>(),
+  apiKeyOrigin:
+    vi.fn<
+      () => Effect.Effect<'secret' | 'env' | 'none' | 'unknown', unknown>
+    >(),
+  anyUsableCredentialExists: vi.fn<() => Effect.Effect<boolean, unknown>>(),
   locateTool:
     vi.fn<
       (
         name: string,
-      ) => Promise<{ name: string; installed: boolean; path?: string }>
+      ) => Effect.Effect<
+        { name: string; installed: boolean; path?: string },
+        unknown
+      >
     >(),
 }));
 
@@ -45,22 +52,25 @@ function outputOf(result: { output?: string }): string {
 }
 
 function installChatGptOnlySetupPlatform(): void {
-  mocks.anyUsableCredentialExists.mockResolvedValue(true);
-  vi.spyOn(
-    setupPlatformModule,
-    'getChatGptSubscriptionStatus',
-  ).mockResolvedValue({ signedIn: true, enabled: true });
+  mocks.anyUsableCredentialExists.mockReturnValue(Effect.succeed(true));
+  vi.spyOn(setupPlatformModule, 'getChatGptSubscriptionStatus').mockReturnValue(
+    Effect.succeed({ signedIn: true, enabled: true }),
+  );
 }
 
 beforeEach(() => {
   setSetupPlatform(createFakeSetupPlatform());
-  mocks.apiKeyOrigin.mockReset().mockResolvedValue('none');
-  mocks.anyUsableCredentialExists.mockReset().mockResolvedValue(false);
-  mocks.locateTool.mockReset().mockImplementation(async (name) => ({
-    name,
-    installed: true,
-    path: '/test/tool',
-  }));
+  mocks.apiKeyOrigin.mockReset().mockReturnValue(Effect.succeed('none'));
+  mocks.anyUsableCredentialExists
+    .mockReset()
+    .mockReturnValue(Effect.succeed(false));
+  mocks.locateTool.mockReset().mockImplementation((name) =>
+    Effect.succeed({
+      name,
+      installed: true,
+      path: '/test/tool',
+    }),
+  );
 });
 
 afterEach(() => {
@@ -69,7 +79,7 @@ afterEach(() => {
 
 describe('setup credential reporting', () => {
   it('reports the active host and provider-key origin without secret values', async () => {
-    mocks.apiKeyOrigin.mockResolvedValue('env');
+    mocks.apiKeyOrigin.mockReturnValue(Effect.succeed('env'));
 
     const result = await new ProbeEnvironmentTool().call({});
 
@@ -99,9 +109,11 @@ describe('setup credential reporting', () => {
   });
 
   it('keeps probing when one provider key origin is unavailable', async () => {
-    mocks.apiKeyOrigin.mockRejectedValue(new Error('Keychain unavailable'));
-    mocks.anyUsableCredentialExists.mockRejectedValue(
-      new Error('Credential scan unavailable'),
+    mocks.apiKeyOrigin.mockReturnValue(
+      Effect.fail(new Error('Keychain unavailable')),
+    );
+    mocks.anyUsableCredentialExists.mockReturnValue(
+      Effect.fail(new Error('Credential scan unavailable')),
     );
 
     const result = await new ProbeEnvironmentTool().call({});
@@ -114,8 +126,8 @@ describe('setup credential reporting', () => {
   });
 
   it('reports when aggregate credential readiness is unavailable', async () => {
-    mocks.anyUsableCredentialExists.mockRejectedValue(
-      new Error('Credential scan unavailable'),
+    mocks.anyUsableCredentialExists.mockReturnValue(
+      Effect.fail(new Error('Credential scan unavailable')),
     );
 
     const result = await new ProbeEnvironmentTool().call({});

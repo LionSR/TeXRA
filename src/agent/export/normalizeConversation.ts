@@ -434,9 +434,10 @@ export function normalizeConversationForExport(
           nodes.push({ kind: 'tool-result', text: textParts.join('\n') });
         }
       } else {
-        const outputText =
-          typeof output === 'string' ? output : prettyJson(output ?? '');
-        nodes.push({ kind: 'tool-result', text: outputText });
+        nodes.push({
+          kind: 'tool-result',
+          text: toolResultContentText(output),
+        });
       }
       lastAssistantHadToolUse = false;
       continue;
