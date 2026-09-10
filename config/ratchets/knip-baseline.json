@@ -447,9 +447,9 @@
     },
     {
       "file": "packages/cli/src/chat/tui/state/transcript.ts",
-      "category": "production-dead",
+      "category": "unused",
       "kind": "exports",
-      "name": "CLI_LOCAL_STREAM_ID"
+      "name": "CLI_LOCAL_RUN_ID"
     },
     {
       "file": "packages/cli/src/chat/tui/terminalTitle.ts",
