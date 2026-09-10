@@ -75,7 +75,9 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
   onFollowUpConsumed?: () => void;
   /** When true, the subagent prompt variant is used and every completed model
    *  cycle suspends at WAITING (see `ToolUseWaitNode`) instead of blocking
-   *  in-flow for the next follow-up. A resumed flow may first consume
+   *  in-flow for the next follow-up. The caller derives it from the run's
+   *  parent edge (`parentRunId !== undefined`); this flow and its services
+   *  carry only the derived switch. A resumed flow may first consume
    *  `drainedFollowUps`; the child-run loop still owns delivery and every later
    *  turn boundary. */
   isSubagent?: boolean;
@@ -680,8 +682,7 @@ export async function runToolUseFlow(
     // whose child loop retains the sole consumer lease across turns.
     attemptTeardown('releasing the follow-up queue', () =>
       sessionLifecycle.release(
-        preserveFollowUpQueue ||
-          runSession.runs.hasActiveChildren(runId)
+        preserveFollowUpQueue || runSession.runs.hasActiveChildren(runId)
           ? 'recoverable'
           : 'terminal',
       ),

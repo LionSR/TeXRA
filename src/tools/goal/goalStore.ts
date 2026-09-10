@@ -22,11 +22,11 @@ import {
 } from '@shared/schemas';
 import { filterNotNull, unique, hexId12, KeyedMutex } from '@utils/core';
 
-const STREAM_KEY_PREFIX = 'goals:byRun:';
+const RUN_KEY_PREFIX = 'goals:byRun:';
 const INDEX_KEY = 'goals:index';
-// Stream index growth is user-driven (one entry per stream that ever had
-// a Goal). `forget()` removes entries; callers that delete a stream
-// without calling `forget()` leave dangling entries until next manual cleanup.
+// Index growth is user-driven (one entry per run that ever had a Goal).
+// `forget()` removes entries; callers that delete a run without calling
+// `forget()` leave dangling entries until next manual cleanup.
 // Single logical resource (the index), so KeyedMutex (utils/core/keyedMutex.ts)
 // is used with one constant key rather than a bare Mutex — the same
 // primitive most other module-level locks in the codebase already use.
@@ -37,8 +37,8 @@ export interface GoalStateChange {
   readonly runId: RunId;
 }
 
-function streamKey(runId: RunId): string {
-  return `${STREAM_KEY_PREFIX}${runId}`;
+function runKey(runId: RunId): string {
+  return `${RUN_KEY_PREFIX}${runId}`;
 }
 
 function nowIso(): string {
@@ -77,18 +77,18 @@ function emitGoalStateChanged(
 
 function readRaw(runId: RunId): Goal | null {
   // tryWorkspaceRoots is bootstrap-tolerant: read-only paths called before
-  // the roots are installed (e.g. early-stream syncs in some tests) return
+  // the roots are installed (e.g. early-run syncs in some tests) return
   // null rather than throwing. Write paths still use workspaceRoots() which
   // does throw, surfacing the misuse.
   const state = tryWorkspaceRoots()?.workspaceState;
   if (!state) return null;
-  const key = streamKey(runId);
+  const key = runKey(runId);
   const raw = state.get<unknown>(key);
   if (raw == null) return null;
   const parsed = GoalSchema.safeParse(raw);
   if (!parsed.success) {
     throw new Error(
-      `Failed to parse persisted goal for stream "${runId}" at storage key "${key}".`,
+      `Failed to parse persisted goal for run "${runId}" at storage key "${key}".`,
       { cause: parsed.error },
     );
   }
@@ -96,7 +96,7 @@ function readRaw(runId: RunId): Goal | null {
 }
 
 async function writeRaw(goal: Goal): Promise<void> {
-  await workspaceRoots().workspaceState.update(streamKey(goal.runId), goal);
+  await workspaceRoots().workspaceState.update(runKey(goal.runId), goal);
 }
 
 function readIndex(): RunId[] {
@@ -124,9 +124,7 @@ async function addToIndex(runId: RunId): Promise<void> {
  * equality — all current callers (`addToIndex` and `removeRecords`' inline
  * callback) already follow this contract.
  */
-async function mutateIndex(
-  mutate: (index: RunId[]) => RunId[],
-): Promise<void> {
+async function mutateIndex(mutate: (index: RunId[]) => RunId[]): Promise<void> {
   await indexMutex.runExclusive('index', async () => {
     const state = workspaceRoots().workspaceState;
     const index = readIndex();
@@ -202,7 +200,7 @@ export function goalStateChanges(
 
 export const GoalStore = Object.freeze({
   /**
-   * Get the goal for a stream, or null when none exists.
+   * Get the goal for a run, or null when none exists.
    *
    * @throws When a present saved record does not match {@link GoalSchema}.
    */
@@ -218,7 +216,7 @@ export const GoalStore = Object.freeze({
   },
 
   /**
-   * Create a new active goal for the stream. Throws if one already exists
+   * Create a new active goal for the run. Throws if one already exists
    * (active or paused). Finishing one (forget) and starting another is normal.
    */
   async start(runId: RunId, objective: string): Promise<Goal> {
@@ -226,7 +224,7 @@ export const GoalStore = Object.freeze({
     const existing = readRaw(runId);
     if (existing && isGoalInFlight(existing)) {
       throw new Error(
-        `A goal is already in progress for this stream (status: ${existing.status}). ` +
+        `A goal is already in progress for this run (status: ${existing.status}). ` +
           `Abandon or complete it before starting a new one.`,
       );
     }
@@ -250,10 +248,7 @@ export const GoalStore = Object.freeze({
    * is not in ALLOWED_TRANSITIONS (only active<->paused are legal; finishing
    * is `forget()`).
    */
-  async setStatus(
-    runId: RunId,
-    nextStatus: GoalStatus,
-  ): Promise<Goal | null> {
+  async setStatus(runId: RunId, nextStatus: GoalStatus): Promise<Goal | null> {
     const current = readRaw(runId);
     if (!current) return null;
     if (current.status === nextStatus) return current;
@@ -262,11 +257,7 @@ export const GoalStore = Object.freeze({
         `Illegal goal transition: ${current.status} → ${nextStatus}.`,
       );
     }
-    return update(
-      runId,
-      (goal) => ({ ...goal, status: nextStatus }),
-      current,
-    );
+    return update(runId, (goal) => ({ ...goal, status: nextStatus }), current);
   },
 
   /**
@@ -274,17 +265,14 @@ export const GoalStore = Object.freeze({
    * already in flight — re-targeting an active loop is preferable to
    * silently leaving it pointed at a stale objective.
    */
-  async editObjective(
-    runId: RunId,
-    newObjective: string,
-  ): Promise<Goal> {
+  async editObjective(runId: RunId, newObjective: string): Promise<Goal> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
     const updated = await update(runId, (goal) => ({
       ...goal,
       objective: trimmed,
     }));
     if (!updated) {
-      throw new Error('No goal found for this stream.');
+      throw new Error('No goal found for this run.');
     }
     return updated;
   },
@@ -298,7 +286,7 @@ export const GoalStore = Object.freeze({
 
   /**
    * Bulk variant for callers that need to forget many runs at once
-   * (e.g. delete-all-runs). Per-stream record deletes run in parallel
+   * (e.g. delete-all-runs). Per-run record deletes run in parallel
    * — independent keys — but the index update is a single read-filter-
    * write so concurrent `forget()` calls don't race on it.
    */
@@ -311,19 +299,17 @@ export const GoalStore = Object.freeze({
   },
 
   /** Remove stored records; the caller owns notification of the state change. */
-  async removeRecords(
-    runIds: readonly RunId[],
-  ): Promise<readonly RunId[]> {
+  async removeRecords(runIds: readonly RunId[]): Promise<readonly RunId[]> {
     const state = workspaceRoots().workspaceState;
     // Gate on raw key presence, not parse success, so explicit cleanup can
     // still remove an invalid record without first reading it.
     const toRemove = runIds.filter(
-      (id) => state.get<unknown>(streamKey(id)) != null,
+      (id) => state.get<unknown>(runKey(id)) != null,
     );
     if (toRemove.length === 0) return [];
     const dropped = new Set(toRemove);
     await Promise.all([
-      ...toRemove.map((id) => state.update(streamKey(id), undefined)),
+      ...toRemove.map((id) => state.update(runKey(id), undefined)),
       mutateIndex((index) => {
         const next = index.filter((id) => !dropped.has(id));
         return next.length === index.length ? index : next;

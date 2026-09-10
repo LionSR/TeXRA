@@ -1,4 +1,4 @@
-/** Completed-run display reads, keyed by the registered run-to-stream link. */
+/** Completed-run display reads, keyed by run id. */
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
@@ -16,7 +16,7 @@ import {
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
 
-/** Read completed tasks from the session's committed stream fold. */
+/** Read completed tasks from the session's committed run fold. */
 export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
   function* (
     runId: RunId,

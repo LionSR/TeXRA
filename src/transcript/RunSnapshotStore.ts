@@ -1,4 +1,4 @@
-/** Stream display state, folded from the root's committed event table. */
+/** Run display state, folded from the root's committed event table. */
 import { Effect, Semaphore, type Context } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -118,7 +118,7 @@ function fold(events: readonly SessionEvent[]): RunSnapshotRecord | undefined {
   const first = events[0];
   if (first === undefined) return undefined;
   if (first.type !== 'run.start' || first.seq !== 1) {
-    throw new Error('A stream-state read must begin with its creation row.');
+    throw new Error('A run-state read must begin with its creation row.');
   }
   const record = initialRecord(first);
   for (const event of events) apply(record, event);
@@ -147,38 +147,38 @@ export class RunSnapshotStore {
         Effect.sync(() => {
           const target = aggregateTarget(event.aggregateId);
           if (target.kind !== 'run') return;
-          const stream = target.id;
-          const current = this.records.get(stream);
+          const run = target.id;
+          const current = this.records.get(run);
           if (event.type === 'run.start') {
             if (!current || event.commit > current.startCommit) {
-              this.records.set(stream, initialRecord(event));
+              this.records.set(run, initialRecord(event));
             }
           } else if (current) {
             apply(current, event);
           }
-          // An unopened historical stream is read as a complete prefix on preload.
+          // An unopened historical run is read as a complete prefix on preload.
         }),
       );
   }
 
-  private current(stream: RunId): RunSnapshotRecord | undefined {
-    const record = this.records.get(stream);
+  private current(run: RunId): RunSnapshotRecord | undefined {
+    const record = this.records.get(run);
     return record?.removed ? undefined : record;
   }
 
-  private readRecord(stream: RunId) {
+  private readRecord(run: RunId) {
     return this.database
-      .readAggregate(aggregateId('run', stream), 0)
+      .readAggregate(aggregateId('run', run), 0)
       .pipe(Effect.map(fold));
   }
 
-  read(stream: RunId) {
+  read(run: RunId) {
     return this.gate.withPermit(
-      this.readRecord(stream).pipe(
+      this.readRecord(run).pipe(
         Effect.map((record) =>
           record && !record.removed
             ? structuredClone(record.snapshot)
-            : RunSnapshotSchema.parse({ runId: stream }),
+            : RunSnapshotSchema.parse({ runId: run }),
         ),
       ),
     );
@@ -188,11 +188,11 @@ export class RunSnapshotStore {
     return this.gate.withPermit(
       Effect.forEach(
         runs,
-        (stream) =>
-          this.readRecord(stream).pipe(
+        (run) =>
+          this.readRecord(run).pipe(
             Effect.map((record) => {
-              if (record) this.records.set(stream, record);
-              else this.records.delete(stream);
+              if (record) this.records.set(run, record);
+              else this.records.delete(run);
             }),
           ),
         { discard: true },
@@ -204,22 +204,22 @@ export class RunSnapshotStore {
     return this.gate.withPermit(
       Effect.gen({ self: this }, function* () {
         const keep = new Set(runs);
-        for (const stream of this.records.keys()) {
-          if (!keep.has(stream)) this.records.delete(stream);
+        for (const run of this.records.keys()) {
+          if (!keep.has(run)) this.records.delete(run);
         }
-        for (const stream of runs) {
-          const record = yield* this.readRecord(stream);
-          if (record) this.records.set(stream, record);
-          else this.records.delete(stream);
+        for (const run of runs) {
+          const record = yield* this.readRecord(run);
+          if (record) this.records.set(run, record);
+          else this.records.delete(run);
         }
       }),
     );
   }
 
-  requestEviction(stream: RunId, shouldStillEvict?: () => boolean) {
+  requestEviction(run: RunId, shouldStillEvict?: () => boolean) {
     return this.gate.withPermit(
       Effect.sync(() => {
-        if (shouldStillEvict?.() !== false) this.records.delete(stream);
+        if (shouldStillEvict?.() !== false) this.records.delete(run);
       }),
     );
   }
@@ -239,32 +239,28 @@ export class RunSnapshotStore {
     );
   }
 
-  getOutputFiles(stream: RunId): ReadonlyRoundIndexed<OutputFileInfo> {
-    return this.current(stream)?.snapshot.outputFilesByRound ?? {};
+  getOutputFiles(run: RunId): ReadonlyRoundIndexed<OutputFileInfo> {
+    return this.current(run)?.snapshot.outputFilesByRound ?? {};
   }
 
-  getMissingOutputs(stream: RunId): ReadonlyRoundIndexed<string> {
-    return this.current(stream)?.snapshot.missingOutputsByRound ?? {};
+  getMissingOutputs(run: RunId): ReadonlyRoundIndexed<string> {
+    return this.current(run)?.snapshot.missingOutputsByRound ?? {};
   }
 
-  getCompileFailures(
-    stream: RunId,
-  ): ReadonlyRoundIndexed<CompileFailure> {
-    return this.current(stream)?.snapshot.compileFailuresByRound ?? {};
+  getCompileFailures(run: RunId): ReadonlyRoundIndexed<CompileFailure> {
+    return this.current(run)?.snapshot.compileFailuresByRound ?? {};
   }
 
-  getRunUsage(stream: RunId): ReadonlyMap<string, TokenUsageStats> {
-    return new Map(
-      Object.entries(this.current(stream)?.snapshot.runUsage ?? {}),
-    );
+  getRunUsage(run: RunId): ReadonlyMap<string, TokenUsageStats> {
+    return new Map(Object.entries(this.current(run)?.snapshot.runUsage ?? {}));
   }
 
   getKnownFilePaths(
-    stream: RunId,
+    run: RunId,
     options: { workspaceOnly?: boolean } = {},
   ): Set<string> {
     return new Set(
-      Object.values(this.getOutputFiles(stream)).flatMap((files) =>
+      Object.values(this.getOutputFiles(run)).flatMap((files) =>
         files
           .filter(
             (file) =>
@@ -275,8 +271,8 @@ export class RunSnapshotStore {
     );
   }
 
-  getWorkPlan(stream: RunId): WorkPlanSnapshot {
-    const snapshot = this.current(stream)?.snapshot;
+  getWorkPlan(run: RunId): WorkPlanSnapshot {
+    const snapshot = this.current(run)?.snapshot;
     return {
       todos: snapshot?.todos ?? [],
       plan: snapshot?.plan ?? null,
@@ -284,15 +280,15 @@ export class RunSnapshotStore {
     };
   }
 
-  getRunMetadata(stream: RunId): RunMetadata {
-    return this.current(stream)?.metadata ?? {};
+  getRunMetadata(run: RunId): RunMetadata {
+    return this.current(run)?.metadata ?? {};
   }
 
-  hasProvenance(stream: RunId): boolean {
-    return this.current(stream) !== undefined;
+  hasProvenance(run: RunId): boolean {
+    return this.current(run) !== undefined;
   }
 
-  getParentRunId(stream: RunId): RunId | undefined {
-    return this.current(stream)?.snapshot.parentRunId;
+  getParentRunId(run: RunId): RunId | undefined {
+    return this.current(run)?.snapshot.parentRunId;
   }
 }

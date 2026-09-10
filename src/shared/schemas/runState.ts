@@ -1,21 +1,21 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
+import { RunIdSchema } from './identifiers';
 import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
 import { RunPhaseSchema } from './run';
 
-// Active Child Info — one flat row shape. Every child owns a stream tab
-// (`childRunId` always present) and carries its parsed `identity`
-// verbatim; renderers key icons and clickability on `identity.kind` instead
-// of tool-name sniffing or a roster-side kind union.
+// Active Child Info — one flat row shape. `childRunId` is the child's run id
+// and the only id on the row; the child carries its parsed `identity`
+// verbatim, and renderers key icons and clickability on `identity.kind`
+// instead of tool-name sniffing or a roster-side kind union.
 
 export const ActiveChildInfoSchema = z.object({
-  runId: z.string(),
-  /** Stream tab ID — every child stream owns a tab. */
-  childRunId: z.string(),
-  /** What owns the child stream — every roster emitter declares it. */
+  /** The child's run id. */
+  childRunId: RunIdSchema,
+  /** What owns the child run — every roster emitter declares it. */
   identity: RunIdentitySchema,
   agentName: z.string(),
   /**
@@ -26,7 +26,7 @@ export const ActiveChildInfoSchema = z.object({
   /**
    * Epoch milliseconds when the current child handle generation was created.
    * Kept on the wire for live and retained roster rows; live active-phase
-   * elapsed time comes from the child stream's `runStartedAt` instead.
+   * elapsed time comes from the child run's `runStartedAt` instead.
    */
   startedAt: z.int().positive().optional(),
   /**
@@ -40,7 +40,7 @@ export const ActiveChildInfoSchema = z.object({
    * Workflow-script phase that owns this child, when its parent is a
    * workflow-script run. This is the only join key between a grandchild's
    * roster row (which knows tokens/elapsed) and the run's task cards (which
-   * know `phase`) — `WorkflowCallIdentity` carries no run or stream id.
+   * know `phase`) — `WorkflowCallIdentity` carries no run id.
    * Immutable per attempt: it is stamped on the handle before the first
    * `RunRegistry.onChildActivity` notification, so retained (finished)
    * rows keep it. Optional because only a workflow-script run's children have
@@ -66,7 +66,7 @@ export type RoundStage = z.infer<typeof RoundStageSchema>;
 //
 // A workflow-script run advances through named phases instead of the numbered
 // rounds used by reflection workflows. Both are projected from the same
-// `stage.start` fact, discriminated by its `kind`, and a stream that opens
+// `stage.start` fact, discriminated by its `kind`, and a run that opens
 // phases never opens rounds.
 
 const PhaseStageSchema = z.object({

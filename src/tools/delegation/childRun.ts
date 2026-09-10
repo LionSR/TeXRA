@@ -40,7 +40,7 @@ interface CreateChildRunOptions {
 
 interface FinalizeChildRunOptions {
   /**
-   * The child's report of its own exit. A report, not a verdict: the stream
+   * The child's report of its own exit. A report, not a verdict: the run
    * phase owns the terminal outcome, so an explicit stop/kill that already
    * landed CANCELLED outranks a FAILED this reports.
    */
@@ -65,7 +65,7 @@ export interface ChildRun {
   /** The active turn failed; preserve explicit user stops. */
   failTurn: () => void;
   /**
-   * Complete the child stream lifecycle through the owning run handle.
+   * Complete the child run lifecycle through the owning run handle.
    * Resolves once the shared terminal finalizer has persisted, settled, and
    * untracked — callers that must not exit before the terminal status lands
    * (headless CLI session loops) await it.
@@ -91,8 +91,6 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   parentRunId: RunId,
   options: CreateChildRunOptions,
 ): Effect.fn.Return<ChildRun, Error> {
-  const childRunId = runId;
-
   yield* Effect.tryPromise({
     try: () => session.settlePublications(),
     catch: ensureError,
@@ -113,10 +111,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   const setup = yield* Effect.exit(
     Effect.gen(function* () {
       // Attach the run's canonical event publication before activation.
-      detachSessionTrace = session.attachRunTrace(
-        runTrace.trace,
-        childRunId,
-      );
+      detachSessionTrace = session.attachRunTrace(runTrace.trace, runId);
       const disposeTrace = () => {
         detachSessionTrace?.();
         runTrace.dispose();
@@ -139,39 +134,30 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
         config: options.config,
       });
       // Display-only fan-out: the durable copy is `RunMeta.description`,
-      // written by `registerRun` before this stream exists (#9590 Stage 6).
+      // written by `registerRun` before this run exists (#9590 Stage 6).
       const description = childRunDescription(options.description);
       session.publish([
         {
           type: 'updateRunDescription',
-          aggregateId: qualifyAggregateId('run', childRunId),
+          aggregateId: qualifyAggregateId('run', runId),
           description,
         },
       ]);
 
       return {
-        childRunId,
+        childRunId: runId,
         logger: runTrace.trace,
         // Reports, not writes: the status machine's transition table decides
-        // which of these lands, so a stale handle or a stream a stop already
+        // which of these lands, so a stale handle or a run a stop already
         // cancelled simply keeps the phase it has.
         waitForInput: () => {
-          session.runs.updateAgentRunStatus(
-            handle,
-            RUN_PHASE.WAITING,
-          );
+          session.runs.updateAgentRunStatus(handle, RUN_PHASE.WAITING);
         },
         beginTurn: () => {
-          session.runs.updateAgentRunStatus(
-            handle,
-            RUN_PHASE.RUNNING,
-          );
+          session.runs.updateAgentRunStatus(handle, RUN_PHASE.RUNNING);
         },
         failTurn: () => {
-          session.runs.updateAgentRunStatus(
-            handle,
-            RUN_PHASE.FAILED,
-          );
+          session.runs.updateAgentRunStatus(handle, RUN_PHASE.FAILED);
         },
         finalize: (finalizeOptions) =>
           finalizeChildRun({
@@ -188,10 +174,10 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
     const error = Cause.squash(setup.cause);
     // Roll back every fallible setup step in reverse-ish order; a cleanup
     // failure must neither mask the original error nor skip later steps. A
-    // stream that already published its `run.start` exists for every fold,
+    // run that already published its `run.start` exists for every fold,
     // so it ends with its terminal `result` instead of lingering as a
     // started-but-never-run ghost; the child's result stays out of the host
-    // result plane (a child result), as every child-stream result does.
+    // result plane (a child result), as every child-run result does.
     const failures: unknown[] = [error];
     const cleanups: Effect.Effect<unknown, Error>[] = [
       Effect.sync(() => {
@@ -204,7 +190,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
           category: options.config.agentCategory,
           error: {
             kind: classifyAgentError(error),
-            message: `Child stream setup failed: ${toErrorMessage(error)}`,
+            message: `Child run setup failed: ${toErrorMessage(error)}`,
           },
         });
       }),
@@ -224,7 +210,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
     }
     if (failures.length > 1) {
       return yield* Effect.fail(
-        new AggregateError(failures, 'Child stream setup and cleanup failed'),
+        new AggregateError(failures, 'Child run setup and cleanup failed'),
       );
     }
     return yield* Effect.fail(ensureError(error));
@@ -241,10 +227,10 @@ interface FinalizeChildRunArgs {
 }
 
 /**
- * Finalize a child stream tab: presentation logging plus the child's report of
+ * Finalize a child run: presentation logging plus the child's report of
  * its own exit, then the shared terminal finalizer (settle, untrack, terminal
- * stream phase) and the autoClose residency release. Child runs never traverse the run
- * lifecycle, so this is their only settle point.
+ * run phase) and the autoClose residency release. Child runs never traverse
+ * the run lifecycle, so this is their only settle point.
  */
 const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,
@@ -268,26 +254,26 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
       if (errorMessage) {
         logger.error(errorMessage);
       }
-      // What the child saw, in the shared vocabulary. The stream phase decides
+      // What the child saw, in the shared vocabulary. The run phase decides
       // which of this and an already-landed stop is the run's terminal fact;
       // that resolution lives in `finalizeRunTerminal`.
       outcome = options.outcome;
       error = failed
         ? {
             kind: classifyAgentError(options.error),
-            message: errorMessage ?? 'Child stream failed',
+            message: errorMessage ?? 'Child run failed',
           }
         : undefined;
     }),
   );
   if (Exit.isFailure(prologue)) {
-    logger.error('Child stream finalize prologue failed', {
+    logger.error('Child run finalize prologue failed', {
       data: { error: Cause.squash(prologue.cause) },
     });
     outcome = RUN_OUTCOME.FAILED;
     error = {
       kind: 'unexpected',
-      message: 'Child stream finalize prologue failed',
+      message: 'Child run finalize prologue failed',
     };
   }
 
@@ -300,7 +286,7 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     error,
     stage: options.stage,
     flushArtifacts: () => session.flushArtifacts(),
-    // No trace emit: child-stream results must stay out of `session.onResult`
+    // No trace emit: child-run results must stay out of `session.onResult`
     // (host toast) consumers; the loop already presents them as follow-ups.
     persistence: options.persistence ?? { kind: 'skip' },
   });

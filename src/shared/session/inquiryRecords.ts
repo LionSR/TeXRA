@@ -38,7 +38,8 @@ export class InquiryRecords extends Context.Service<
     ) => Effect.Effect<InquiryThreadSummary | null, Error>;
     readonly listThreadsByStatus: (params: {
       status: InquiryThreadStatus | 'any';
-      scope: 'stream' | 'all';
+      /** `'run'` narrows to `runId`'s own threads; `'all'` spans every run. */
+      scope: 'run' | 'all';
       runId?: RunId;
       limit?: number;
     }) => Effect.Effect<InquiryThreadSummary[], Error>;

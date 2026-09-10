@@ -18,10 +18,7 @@ import {
   getRunContextRunId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import type {
-  RunHandle,
-  RunStatusInfo,
-} from '@agent/runtime/RunHandle';
+import type { RunHandle, RunStatusInfo } from '@agent/runtime/RunHandle';
 import type {
   AgentCategory,
   RunId,
@@ -152,25 +149,21 @@ export function formatStatusInfo(info: RunStatusInfo): string {
  * A run nothing alive owns and nothing terminalized reads `unknown`, never a
  * terminal outcome invented from the absence of a handle in this process.
  */
-export const getRunStatusInfo = Effect.fn('getRunStatusInfo')(
-  function* (
-    runId: RunId,
-    session: SessionHandle,
-    knownMeta?: KnownRunMeta,
-  ) {
-    return statusInfoFromLiveness(
-      yield* resolveRunLiveness(runId, session, knownMeta),
-    );
-  },
-);
+export const getRunStatusInfo = Effect.fn('getRunStatusInfo')(function* (
+  runId: RunId,
+  session: SessionHandle,
+  knownMeta?: KnownRunMeta,
+) {
+  return statusInfoFromLiveness(
+    yield* resolveRunLiveness(runId, session, knownMeta),
+  );
+});
 
 /**
  * The same reading for a caller that already resolved the liveness and needs
  * the arm itself (to word a footer, say) as well as the status line.
  */
-export function statusInfoFromLiveness(
-  liveness: RunLiveness,
-): RunStatusInfo {
+export function statusInfoFromLiveness(liveness: RunLiveness): RunStatusInfo {
   switch (liveness.kind) {
     case 'live':
       return liveness.info;
@@ -204,9 +197,7 @@ export const formatListingLine = Effect.fn('formatListingLine')(function* (
   const { agent, model, category } = listingDisplay(entry);
   const categoryTag = category ? `  ${category}` : '';
   const modelTag = model == null ? '' : `  ${model}`;
-  const parentSuffix = entry.parentRunId
-    ? `  parent=${entry.parentRunId}`
-    : '';
+  const parentSuffix = entry.parentRunId ? `  parent=${entry.parentRunId}` : '';
   const descSuffix = entry.description ? `: ${entry.description}` : '';
   return `${entry.id}  ${ts}  ${agent}${categoryTag}${modelTag}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
 });
@@ -236,8 +227,8 @@ export interface RunSummaryOptions {
 
 /**
  * Whether a report already auto-delivered to the caller should be elided from
- * the summary: true when `handle` is a tool-use child whose parent stream is
- * the calling stream — i.e. the caller already receives this child's report
+ * the summary: true when `handle` is a tool-use child whose parent run is
+ * the calling run — i.e. the caller already receives this child's report
  * automatically as a follow-up, so /executions/{id} shouldn't duplicate it.
  * Deliberately identity-kind-agnostic: background bash processes
  * (`kind: 'process'`, category ToolUse) auto-deliver their reports exactly
@@ -343,7 +334,7 @@ export function buildSummaryTailLines(
   if (report && options.suppressReport) {
     lines.push(
       '',
-      `Result: delivered automatically to this parent stream as a follow-up message. Use /executions/${runId}/report to read the persisted report explicitly.`,
+      `Result: delivered automatically to this parent run as a follow-up message. Use /executions/${runId}/report to read the persisted report explicitly.`,
     );
   } else if (report) {
     lines.push('', 'Result:', report);

@@ -7,6 +7,7 @@ import {
   loadDatabaseFixture,
   type DatabaseFixture,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
+import type { RunId } from '@shared/schemas';
 
 import {
   closeTexraApp,
@@ -19,10 +20,10 @@ import {
   createIsolatedProfile,
 } from './workspaceStorageFixture.js';
 
-const WAITING_STREAM = 'e2e-waiting#a11ce1';
-const WAITING_EXECUTION = 'a11ce1';
-const ORPHAN_STREAM = 'e2e-orphan#baddad';
-const ORPHAN_EXECUTION = 'baddad';
+// One id per run: the aggregate's logical id is the run id, and the agent
+// name the tab shows comes from the run's identity, not from the id.
+const WAITING_RUN = 'a11ce1' as RunId;
+const ORPHAN_RUN = 'baddad' as RunId;
 
 /** Open the same C1 database implementation used by the application. */
 function inEventDatabase<A, E>(
@@ -50,7 +51,7 @@ function inEventDatabase<A, E>(
   );
 }
 
-async function writeCanonicalStreamFixtures(
+async function writeCanonicalRunFixtures(
   fixture: DatabaseFixture,
   storagePath: string,
 ) {
@@ -61,53 +62,53 @@ async function writeCanonicalStreamFixtures(
       const database = yield* fixture.Database;
       const fixtures = [
         {
-          runId: WAITING_STREAM,
-          runId: WAITING_EXECUTION,
+          runId: WAITING_RUN,
+          agent: 'e2e-waiting',
           phase: 'waiting' as const,
         },
         {
-          runId: ORPHAN_STREAM,
-          runId: ORPHAN_EXECUTION,
+          runId: ORPHAN_RUN,
+          agent: 'e2e-orphan',
           phase: 'running' as const,
         },
       ];
-      for (const streamFixture of fixtures) {
-        const id = fixture.aggregateId('stream', streamFixture.runId);
+      for (const runFixture of fixtures) {
+        const id = fixture.aggregateId('run', runFixture.runId);
         yield* database.appendAll([
           {
             type: 'run.start',
             aggregateId: id,
-            runId: streamFixture.runId,
-            identity: { kind: 'agent', agent: streamFixture.runId },
+            identity: { kind: 'agent', agent: runFixture.agent },
             category: 'toolUse',
             userFollowUpSupport: 'nativeInteractive',
             isRemote: false,
+            parent: null,
           },
           {
             type: 'stage.start',
             aggregateId: id,
-            id: `${streamFixture.runId}-running-group`,
+            id: `${runFixture.runId}-running-group`,
             label: 'Persisted round',
             kind: 'round',
           },
           {
             type: 'response.finalized',
             aggregateId: id,
-            text: `Saved history for ${streamFixture.runId}.`,
+            text: `Saved history for ${runFixture.agent}.`,
           },
           {
             type: 'status',
             aggregateId: id,
-            phase: streamFixture.phase,
-            cause: streamFixture.phase === 'waiting' ? 'wait' : 'lifecycle',
+            phase: runFixture.phase,
+            cause: runFixture.phase === 'waiting' ? 'wait' : 'lifecycle',
           },
         ]);
       }
       // These rows belong to a stopped writer. The next process must derive
       // interrupted presentation without rewriting the recorded phases.
       yield* database.releaseClaims(
-        fixtures.map((streamFixture) =>
-          fixture.aggregateId('stream', streamFixture.runId),
+        fixtures.map((runFixture) =>
+          fixture.aggregateId('run', runFixture.runId),
         ),
       );
       return yield* database.readAll(0);
@@ -161,7 +162,7 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
       workspacePath,
     });
     const fixture = await loadDatabaseFixture(userDataPath);
-    const persisted = await writeCanonicalStreamFixtures(fixture, storagePath);
+    const persisted = await writeCanonicalRunFixtures(fixture, storagePath);
 
     currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
     expect(await processId(currentLaunch)).not.toBe(firstPid);
@@ -170,8 +171,7 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
       .poll(async () =>
         currentLaunch!.page.locator('stream-tab').evaluateAll((tabs) =>
           tabs.map((tab) => ({
-            runId: (tab as HTMLElement & { stream: { id: string } }).stream
-              .id,
+            runId: (tab as HTMLElement & { stream: { id: string } }).stream.id,
             status: (tab as HTMLElement & { stream: { status: string } }).stream
               .status,
             group: (tab as HTMLElement & { stream: { group: string } }).stream
@@ -181,8 +181,8 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
       )
       .toEqual(
         expect.arrayContaining([
-          { runId: WAITING_STREAM, status: 'waiting', group: 'interrupted' },
-          { runId: ORPHAN_STREAM, status: 'running', group: 'interrupted' },
+          { runId: WAITING_RUN, status: 'waiting', group: 'interrupted' },
+          { runId: ORPHAN_RUN, status: 'running', group: 'interrupted' },
         ]),
       );
     const reloaded = await inEventDatabase(

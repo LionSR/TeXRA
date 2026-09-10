@@ -9,7 +9,9 @@ import { StorageFS } from '@utils/files/storageFS';
 
 setupPlatform({ workspacePath: '/workspace/persisted-compile-rejection' });
 
-const runId = 'terminal-compile-rejection' as RunId;
+// Run ids are hex (`RunIdSchema`), and the lease claim directory re-parses
+// them, so the fixture mints a real one rather than a descriptive label.
+const runId = 'c0de1cea5e01' as RunId;
 
 async function writeFlowRecord(shared: Record<string, unknown>): Promise<void> {
   await getRunStore(runId).write(flowKey(runId), {
@@ -46,8 +48,8 @@ describe('persisted compile rejection lookup', () => {
   ])('recognizes terminal state from %s', async (_description, shared) => {
     await writeFlowRecord(shared);
 
-    await expect(
-      hasTerminalPersistedCompileRejection(runId),
-    ).resolves.toBe(true);
+    await expect(hasTerminalPersistedCompileRejection(runId)).resolves.toBe(
+      true,
+    );
   });
 });

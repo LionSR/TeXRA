@@ -15,7 +15,7 @@ import {
 } from '@shared/runs/runStatus';
 import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
 
-/** Fresh registry + recording host, keyed to a per-test stream id. */
+/** Fresh registry + recording host, keyed to a per-test run id. */
 function setupMachine(runId: string): {
   machine: RunStatusMachine;
   statusEvents: () => StatusEvent[];
@@ -33,7 +33,7 @@ function setupMachine(runId: string): {
 }
 
 describe('RunStatusMachine', () => {
-  it('keeps stream status state per instance', () => {
+  it('keeps run status state per instance', () => {
     const first = new RunStatusMachine(
       () => {},
       () => {},
@@ -42,7 +42,7 @@ describe('RunStatusMachine', () => {
       () => {},
       () => {},
     );
-    const runId = 'stream-status-instance-test' as RunId;
+    const runId = 'run-status-instance-test' as RunId;
 
     seedRunStatusForTest(first, runId, { phase: RUN_PHASE.WAITING });
 
@@ -61,7 +61,7 @@ describe('RunStatusMachine', () => {
       (event) => secondPublished.events.push(event),
       () => {},
     );
-    const runId = 'stream-status-listener-test' as RunId;
+    const runId = 'run-status-listener-test' as RunId;
 
     second.transition(runId, RUN_PHASE.CANCELLED, 'user-stop');
 
@@ -80,7 +80,7 @@ describe('RunStatusMachine', () => {
             () => {},
           );
           const runId =
-            `stream-status-table:${from ?? 'none'}:${to}:${cause}` as RunId;
+            `run-status-table:${from ?? 'none'}:${to}:${cause}` as RunId;
           if (from) seedRunStatusForTest(machine, runId, { phase: from });
 
           const accepted = machine.transition(runId, to, cause);
@@ -96,9 +96,7 @@ describe('RunStatusMachine', () => {
 
   it('closes the active window in WAITING and restamps after the resume gap', () => {
     vi.useFakeTimers({ now: 1_000 });
-    const { machine, runId } = setupMachine(
-      'stream-status-active-window-resume',
-    );
+    const { machine, runId } = setupMachine('run-status-active-window-resume');
 
     try {
       expect(machine.transition(runId, RUN_PHASE.RUNNING, 'lifecycle')).toBe(
@@ -123,7 +121,7 @@ describe('RunStatusMachine', () => {
   it('terminalizes waiting runs through resume then lifecycle', () => {
     const cause = RUN_TRANSITION_CAUSE.LIFECYCLE;
     const { machine, statusEvents, runId } = setupMachine(
-      `stream-status-waiting-terminal-${cause}`,
+      `run-status-waiting-terminal-${cause}`,
     );
 
     seedRunStatusForTest(machine, runId, { phase: RUN_PHASE.WAITING });
@@ -154,7 +152,7 @@ describe('RunStatusMachine', () => {
 
   it('terminalizes visible runs that were not started yet', () => {
     const { machine, statusEvents, runId } = setupMachine(
-      'stream-status-undefined-terminal-repair',
+      'run-status-undefined-terminal-repair',
     );
 
     expect(
@@ -186,7 +184,7 @@ describe('RunStatusMachine', () => {
 
   it('accepts already-matching terminal outcomes without warning callers', () => {
     const { machine, statusEvents, runId } = setupMachine(
-      'stream-status-matching-terminal',
+      'run-status-matching-terminal',
     );
 
     seedRunStatusForTest(machine, runId, {
@@ -207,7 +205,7 @@ describe('RunStatusMachine', () => {
 
   it('clears a transient running substate through the table-checked resume transition', () => {
     const { machine, statusEvents, runId } = setupMachine(
-      'stream-status-clear-running-substate',
+      'run-status-clear-running-substate',
     );
 
     seedRunStatusForTest(machine, runId, {
@@ -233,7 +231,7 @@ describe('RunStatusMachine', () => {
 
   it('skips the write and publish for a no-op RUNNING resume with no substate to clear', () => {
     const { machine, statusEvents, runId } = setupMachine(
-      'stream-status-noop-running-resume',
+      'run-status-noop-running-resume',
     );
 
     seedRunStatusForTest(machine, runId, { phase: RUN_PHASE.RUNNING });
@@ -252,7 +250,7 @@ describe('RunStatusMachine', () => {
   // caller routing anything.
   it('publishes the canonical session fact on the single status rail', () => {
     const { machine, statusEvents, runId } = setupMachine(
-      'stream-status-single-rail',
+      'run-status-single-rail',
     );
 
     seedRunStatusForTest(machine, runId, { phase: RUN_PHASE.WAITING });
@@ -282,8 +280,8 @@ describe('RunStatusMachine', () => {
       'cause',
       'phase',
       'previousPhase',
-      'runStartedAt',
       'runId',
+      'runStartedAt',
       'substate',
       'type',
     ]);

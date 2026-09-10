@@ -308,9 +308,9 @@ export interface HostApprovalBypassStateUpdate {
  *
  * - `{}` — cancel every pending request.
  * - `{ kind }` — cancel every pending request of that kind.
- * - `{ runId }` — cancel every pending request on that stream.
- * - `{ runId, kind }` — cancel that kind on that stream.
- * - `runId: null` — cancel only requests with no concrete stream
+ * - `{ runId }` — cancel every pending request on that run.
+ * - `{ runId, kind }` — cancel that kind on that run.
+ * - `runId: null` — cancel only requests with no concrete run
  *   (the runless/unscoped sweep).
  */
 export interface HostInteractionCancelSelector {
@@ -399,7 +399,7 @@ interface PendingSessionInteraction {
   readonly runId?: RunId;
   /** The `approval.requested` fact this request published, so its
    *  `approval.resolved` names the same request; absent while no session is
-   *  bound or the request names no stream. */
+   *  bound or the request names no run. */
   readonly fact?: {
     readonly runId: RunId;
     readonly requestId: string;
@@ -723,13 +723,13 @@ export class SessionHostInteractions implements HostInteractions {
     return undefined;
   }
 
-  /** Settle a removed stream's local requests without appending to its closed aggregate. */
+  /** Settle a removed run's local requests without appending to its closed aggregate. */
   discardRun(runId: RunId): void {
     for (const pending of this.pending) {
       if (pending.runId !== runId) continue;
       this.pending.delete(pending);
       pending.cancellationRequested = true;
-      pending.settle(pending.cancellationResult('Stream removed.'));
+      pending.settle(pending.cancellationResult('Run removed.'));
     }
   }
 
@@ -796,7 +796,7 @@ export class SessionHostInteractions implements HostInteractions {
    * supplied beside it, so a request can never be paired with another kind's
    * cancellation result, and the settled type follows the same key.
    *
-   * A request for a stream is a run fact: `approval.requested` is published
+   * A request naming a run is a run fact: `approval.requested` is published
    * before the host sees it, and `approval.resolved` when it leaves the
    * pending set, whichever way it settled (a host decision, a cancellation,
    * a rejected dispatch, session disposal).
@@ -833,7 +833,7 @@ export class SessionHostInteractions implements HostInteractions {
     });
   }
 
-  /** A request naming a stream is a run fact; a runless one (an unscoped
+  /** A request naming a run is a run fact; a runless one (an unscoped
    *  question) has no aggregate to publish on. */
   private publishRequested(
     runId: RunId | undefined,
@@ -953,7 +953,7 @@ export class SessionHostInteractions implements HostInteractions {
     try {
       logger.warn(
         `No interaction host is attached: parked the ${pending.kind} request ` +
-          `(stream ${pending.runId ?? 'none'}) until one attaches. A ` +
+          `(run ${pending.runId ?? 'none'}) until one attaches. A ` +
           'headless embedder must attach at least `{ cancel: () => {} }`, or ' +
           'blocking requests never settle.',
       );

@@ -10,7 +10,7 @@ import { filterNotNullish } from '@utils/core';
 
 export interface WorkflowRunContextInput {
   /** Only the run-identifying fields this summary prints. */
-  stream: {
+  run: {
     /** Canonical display name of the run, already resolved from its identity. */
     readonly label: string;
     readonly model?: string;
@@ -40,15 +40,15 @@ export function formatWorkflowRunContext(
   const hasFailures = failures.some(([, rows]) => rows.length > 0);
   if (!hasOutputs && !hasFailures) return '';
 
-  const { stream } = input;
+  const { run } = input;
   // `label` already is the identity display name; callers never pass a raw id.
-  const agent = stream.label;
-  const model = stream.modelLabel ?? stream.model;
+  const agent = run.label;
+  const model = run.modelLabel ?? run.model;
 
   const lines: (string | undefined)[] = [
     `Workflow run: ${model ? `${agent} (${model})` : agent}`,
-    stream.runId ? `Run: ${stream.runId}` : undefined,
-    stream.description ? `Goal: ${stream.description}` : undefined,
+    run.runId ? `Run: ${run.runId}` : undefined,
+    run.description ? `Goal: ${run.description}` : undefined,
   ];
 
   if (hasOutputs) {
