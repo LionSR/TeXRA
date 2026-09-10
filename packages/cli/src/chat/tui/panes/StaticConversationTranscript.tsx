@@ -12,7 +12,7 @@ import { Box, Static, Text } from 'ink';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { createLog } from '@logger/logUtils';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { SessionView } from '@shared/session/sessionView';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
@@ -722,10 +722,35 @@ interface StaticTranscriptBuildResult {
 const log = createLog('StaticConversationTranscript');
 const DUPLICATE_ROW_ID_REPORT_CAP = 1000;
 /** Row ids already reported as duplicates, so a persistently-colliding id is
- *  logged once instead of once per rebuild. `upsertRow` (sessionFold) and the
- *  local-notice counter (`transcript.ts`) both guarantee unique ids; a
+ *  reported once instead of once per rebuild. `upsertRow` (sessionFold) and
+ *  the local-notice counter (`transcript.ts`) both guarantee unique ids; a
  *  collision here means one of those invariants broke upstream. */
 const duplicateRowIdsReported = createBoundedIdSet(DUPLICATE_ROW_ID_REPORT_CAP);
+
+/**
+ * A visible marker for a dropped duplicate-id row, shaped like the local
+ * notices `transcript.ts` synthesizes (`origin: 'local'`, host-assigned id).
+ * `log.warn` alone is not enough here: while the TUI owns the terminal,
+ * `initCliPlatform` installs a no-op log sink (every interactive launch sets
+ * `quietLogs: true`), so logging is a best-effort record for non-interactive
+ * hosts and this inline row — matching `EntryErrorBoundary`'s convention of
+ * surfacing a render-time defect in the transcript itself — is what an
+ * interactive user actually sees.
+ */
+function duplicateRowIdWarningRow(entry: TranscriptRow): TranscriptRow {
+  return {
+    id: `duplicate-row-warning:${entry.id}`,
+    origin: 'local',
+    timestamp: Date.now(),
+    level: 'error',
+    kind: 'error',
+    summary: transcriptText(
+      `Duplicate transcript row id (kind ${entry.kind}); dropped a repeat. This points at an upsert or local-notice bug upstream.`,
+    ),
+    details: [],
+    detailText: transcriptText(''),
+  };
+}
 
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
@@ -765,6 +790,8 @@ export function buildStaticTranscriptItems(
         log.warn(
           `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in a static rebuild; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
         );
+        const warningRow = duplicateRowIdWarningRow(entry);
+        items.push({ id: warningRow.id, kind: 'entry', entry: warningRow });
       }
       continue;
     }
@@ -1032,6 +1059,19 @@ export function advanceStaticTranscriptState(
   }
 
   let previousItem = nextItems.at(-1);
+  const appendItem = (item: StaticTranscriptItem): void => {
+    const metrics = staticTranscriptItemMetrics(
+      item,
+      width,
+      executionLabels,
+      previousItem,
+    );
+    nextRowCount += metrics.rows;
+    nextByteCount += metrics.bytes;
+    nextItems = [...nextItems, item];
+    previousItem = item;
+    changed = true;
+  };
   if (plan.appended.length > 0) {
     const seenIds = new Set(nextItems.map((item) => item.id));
     for (const entry of plan.appended) {
@@ -1041,6 +1081,8 @@ export function advanceStaticTranscriptState(
           log.warn(
             `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in an incremental append; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
           );
+          const warningRow = duplicateRowIdWarningRow(entry);
+          appendItem({ id: warningRow.id, kind: 'entry', entry: warningRow });
         }
         continue;
       }
@@ -1049,18 +1091,8 @@ export function advanceStaticTranscriptState(
         kind: 'entry',
         entry,
       };
-      const metrics = staticTranscriptItemMetrics(
-        item,
-        width,
-        executionLabels,
-        previousItem,
-      );
-      nextRowCount += metrics.rows;
-      nextByteCount += metrics.bytes;
-      nextItems = [...nextItems, item];
-      previousItem = item;
+      appendItem(item);
       seenIds.add(entry.id);
-      changed = true;
     }
   }
 
