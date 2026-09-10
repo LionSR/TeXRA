@@ -1,6 +1,7 @@
 /**
  * Build and execute latexdiff operations from either run metadata
- * (`OutputFileInfo` per round) or a workspace scan of legacy/mid-era layouts.
+ * (`OutputFileInfo` per round) or a workspace scan of flat
+ * `<base>_<chunk>_r{N}_<model>.tex` copies.
  */
 
 // Node imports
@@ -18,18 +19,14 @@ import {
   RoundKeySchema,
 } from '@shared/schemas';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
-import {
-  legacyWorkflowOutputRoundRegex,
-  midEraWorkflowOutputStem,
-  parseWorkflowOutputRoundDir,
-} from '@shared/constants/workflowOutput';
+import { legacyWorkflowOutputRoundRegex } from '@shared/constants/workflowOutput';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { ensureError } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { hasExtension } from '@utils/core/pathCore';
-import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
+import { isFile, isSymlink } from '@utils/files/fsEntryType';
 
 // Local file imports
 import type {
@@ -292,49 +289,11 @@ export const runLatexdiffViaWorkspaceScan = Effect.fn(
         roundOutputs.set(round.data, path.join(outputDirPath, fileName));
       }
 
-      // Mid-era layout: outputs under `r{round}/<base>_<cleanAgent>_<model>.tex`.
-      // Some upgraded workspaces may still hold these files. Only look in
-      // known `r{round}/` subdirectories so we don't descend the whole tree.
-      const midEraFilename = `${midEraWorkflowOutputStem({
-        base: baseInputName,
-        agent,
-        model,
-      })}.tex`;
-      for (const [entryName, entryType] of dirEntries) {
-        if (!isDirectory(entryType) || isSymlink(entryType)) continue;
-        const round = parseWorkflowOutputRoundDir(entryName);
-        if (round == null) continue;
-        if (roundOutputs.has(round)) continue;
-
-        const roundAbsoluteDir = path.join(absoluteDir, entryName);
-        // Skip unreadable round dirs but record which one so a missing round
-        // output isn't silently invisible during diagnosis.
-        const roundEntries = yield* readDir(roundAbsoluteDir).pipe(
-          Effect.catch((error) =>
-            Effect.logDebug(
-              `Skipping round dir '${roundAbsoluteDir}': ${error}`,
-            ).pipe(Effect.as<[string, number][] | null>(null)),
-          ),
-        );
-        if (roundEntries === null) continue;
-        const match = roundEntries.find(
-          ([fileName, nestedType]) =>
-            isFile(nestedType) &&
-            !isSymlink(nestedType) &&
-            fileName === midEraFilename,
-        );
-        if (!match) continue;
-        roundOutputs.set(
-          round,
-          path.join(outputDirPath, entryName, midEraFilename),
-        );
-      }
-
-      // New-layout workflow outputs live inside task-run storage
+      // Workflow outputs themselves live inside task-run storage
       // (`executions/{id}/r{round}/output.tex`), not in the workspace. That
       // path is driven by execution metadata (`OutputFileInfo.outputsByRound`)
-      // via `runLatexdiffFromMetadata`; the workspace scan here only covers
-      // pre-refactor files.
+      // via `runLatexdiffFromMetadata`; the workspace scan here covers only
+      // the flat names above, which Save-as-copy still writes.
 
       if (roundOutputs.size > 0) {
         inputToOutputsMap.set(
