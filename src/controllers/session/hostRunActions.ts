@@ -69,7 +69,7 @@ export interface HostRunActionPorts {
   showWarning(message: string): Promise<void> | void;
 }
 
-export interface HostRunActions {
+interface HostRunActions {
   resume(streamId: StreamTabId): Effect.Effect<void, Error>;
   runNew(streamId: StreamTabId): Effect.Effect<void, Error>;
   runCompileFixer(streamId: StreamTabId): Effect.Effect<void, Error>;

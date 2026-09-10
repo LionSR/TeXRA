@@ -4,13 +4,20 @@ import {
   type CompileFailure,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
-  type StreamTabInfo,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { filterNotNullish } from '@utils/core';
 
 export interface WorkflowRunContextInput {
-  stream: StreamTabInfo;
+  /** Only the run-identifying fields this summary prints. */
+  stream: {
+    /** Canonical display name of the run, already resolved from its identity. */
+    readonly label: string;
+    readonly model?: string;
+    readonly modelLabel?: string;
+    readonly executionId?: string;
+    readonly description?: string;
+  };
   files: ReadonlyRoundIndexed<OutputFileInfo>;
   compileFailures: ReadonlyRoundIndexed<CompileFailure>;
 }
@@ -34,7 +41,7 @@ export function formatWorkflowRunContext(
   if (!hasOutputs && !hasFailures) return '';
 
   const { stream } = input;
-  // `label` already is the identity display name (`buildStreamTabInfo`).
+  // `label` already is the identity display name; callers never pass a raw id.
   const agent = stream.label;
   const model = stream.modelLabel ?? stream.model;
 

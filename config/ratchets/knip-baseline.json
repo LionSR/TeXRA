@@ -998,12 +998,6 @@
       "name": "shouldUseResponsesAPI"
     },
     {
-      "file": "src/agent/runtime/sessionDescription.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "cleanSessionDescription"
-    },
-    {
       "file": "src/agent/storage/conversationFormat.ts",
       "category": "production-dead",
       "kind": "exports",

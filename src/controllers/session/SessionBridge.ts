@@ -56,7 +56,7 @@ const RequestEnvelopeSchema = z.object({
   requestId: z.string().min(1),
 });
 
-export interface SessionBridgeOptions {
+interface SessionBridgeOptions {
   readonly session: SessionHandle;
   readonly onPortClosed: (port: string) => void;
   /** The host's capabilities (8.3), performed on the surface's behalf. A
@@ -70,7 +70,7 @@ export interface SessionBridgeOptions {
 }
 
 /** One attached transport port: the host posts `send`'s messages to it. */
-export interface SessionPort {
+interface SessionPort {
   readonly id: string;
   readonly send: (message: DownMessage) => void;
 }

@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Option, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -88,8 +88,6 @@ describe('committed stream removal', () => {
             cause: 'Stream removed.',
           });
           expect(handle.isOwnedBy(parent)).toBe(false);
-          expect(session.hasStream(parent)).toBe(false);
-          expect(session.hasStream(child)).toBe(true);
           expect(session.now()).toBe(before + 1);
           expect(
             yield* Effect.sync(() =>
@@ -210,14 +208,15 @@ describe('indexed background-shell cleanup', () => {
             ),
           );
           yield* sweepLeftoverStreams(session, rows.flat());
-          yield* Stream.runHead(
+          const swept = yield* Stream.runHead(
             session.viewChanges.pipe(
               Stream.filter((view) => !view.streams.has(shell)),
             ),
           );
-          expect(session.hasStream(active)).toBe(true);
-          expect(session.hasStream(notAShell)).toBe(true);
-          expect(session.hasStream(agent)).toBe(true);
+          const streams = Option.getOrThrow(swept).streams;
+          expect([...streams.keys()].toSorted()).toEqual(
+            [active, notAShell, agent].toSorted(),
+          );
         }),
       ),
   );

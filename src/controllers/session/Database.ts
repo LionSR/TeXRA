@@ -329,10 +329,6 @@ export const databaseLayer = (
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
         ORDER BY e.seq`;
-      const after = `SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
-          AND e."commit" > ? AND e."commit" <= ?
-        ORDER BY e."commit"`;
       const inputTypes = JSON.stringify([
         ...LISTING_TYPES,
         'approval.requested.1',
@@ -934,16 +930,6 @@ export const databaseLayer = (
               return (yield* sql.unsafe<Record<string, unknown>>(aggregate, [
                 id,
                 fromSeq,
-              ])).map(decodeEvent);
-            }),
-          ),
-        aggregatesAfterCommit: (ids, afterCommit, throughCommit) =>
-          query(
-            Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(after, [
-                JSON.stringify(ids),
-                afterCommit,
-                throughCommit ?? (yield* currentCommit),
               ])).map(decodeEvent);
             }),
           ),

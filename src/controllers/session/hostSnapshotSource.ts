@@ -29,7 +29,7 @@ import type {
 
 type Banners = HostSnapshot['banners'];
 
-export interface HostSnapshotSourceOptions {
+interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
   globalState: StateStore;
   /** The launcher's single-slot catalogs: base and edited candidates. */

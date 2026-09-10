@@ -64,7 +64,6 @@ import {
 } from '@shared/schemas';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import {
   descendantStreams,
   type SessionView as RuntimeSessionView,
@@ -169,8 +168,6 @@ export interface Session {
   ) => Effect.Effect<Outcome, RequestError>;
   /** The fold's levels, each an immutable value. */
   readonly view: { readonly changes: Stream.Stream<SessionView> };
-  /** The session's event plane, reads only. */
-  readonly events: Omit<SessionEventsShape, 'publish'>;
   /**
    * This reader's transcript interest, held for the scope and cleared when
    * it closes. Its port is the reader's own, so it never disturbs a run's.
@@ -505,7 +502,6 @@ function sessionOf(handle: RuntimeSessionHandle): Session {
     start: (input) => start(handle, input),
     request: (request) => handle.requests.request(request),
     view: { changes: handle.viewChanges },
-    events: handle.events,
     subscribe: (interests) =>
       Effect.acquireRelease(
         Effect.suspend(() => {
