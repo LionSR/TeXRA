@@ -13,8 +13,20 @@ Status: proposed
 >
 > Enumerated by direct inspection at `cf88d2d`. It is a point-in-time
 > inventory of the surface as **declared** today, not a proposal to change it:
-> **no export is added, removed, or renamed by this document.** The one
+> **no export is added, removed, or renamed by this document**, and the one
+> subtraction it records is ruled elsewhere, in the amendment below. The one
 > substantive claim it makes is the `/effect` correction in §2.
+>
+> **S0 amendment.** Step S0 of the
+> [one run model](./2026-09-10-one-run-model.md) §6 drops `StreamTabId` and
+> `StreamTabIdSchema` from every entry here. That type is the run id with a
+> label glued on, and it is deleted rather than aliased in S1 (§3.1 of that
+> note), so naming it here would freeze retired vocabulary as public surface.
+> The run id is already declared by both entries that named `StreamTabId`, as
+> the `ExecutionId` type on `/effect` and as `ExecutionId` with
+> `ExecutionIdSchema` on the root entry, so the drop adds nothing to the
+> surface.
+> Every count below is the surface after it.
 >
 > "Declared", not "published", throughout: `packages/agent` builds and bundles
 > locally but is **not published to npm** (`AGENTS.md` §Layout), so every entry
@@ -31,11 +43,11 @@ Status: proposed
 ## 1. Method, and what was actually verified
 
 Every name below was read out of the four entry modules under
-`packages/agent/src/` and then resolved back to its defining module. Of the 75
+`packages/agent/src/` and then resolved back to its defining module. Of the 72
 re-exported bindings, 56 resolve to a direct `export` declaration in the named
-module; the remaining 19 reach `src/shared/schemas/index.ts`, which is a barrel
+module; the remaining 16 reach `src/shared/schemas/index.ts`, which is a barrel
 of 60 `export *` lines, and each was resolved through it to a concrete
-declaration — 16 distinct names across `opResults.ts`, `agent.ts`,
+declaration — 14 distinct names across `opResults.ts`, `agent.ts`,
 `identifiers.ts`, `stream.ts`, and `sessionEvent.ts`. Six further names are
 declared locally in the entry files themselves (four in `index.ts`, two in
 `node.ts`). **Nothing in §3 is unresolved.**
@@ -97,11 +109,11 @@ So the manifest is four entries, and `/effect` is not optional in it.
 
 ## 3. Exact exports
 
-**81 export bindings across the four entries; 68 distinct names** — 13 repeat
-bindings across 12 names deliberately declared from more than one entry. 30
-bindings are values, 51 are types.
+**78 export bindings across the four entries; 66 distinct names** — 12 repeat
+bindings across 11 names deliberately declared from more than one entry. 29
+bindings are values, 49 are types.
 
-Those 12 names in full, since each is a cross-entry commitment that has to be
+Those 11 names in full, since each is a cross-entry commitment that has to be
 changed in every entry at once:
 
 | Name                 | Declared from               |
@@ -110,7 +122,6 @@ changed in every entry at once:
 | `ToolUseFlowResult`  | root, `/schemas`            |
 | `WorkflowFlowResult` | root, `/schemas`            |
 | `ExecutionId`        | `/schemas`, `/effect`       |
-| `StreamTabId`        | `/schemas`, `/effect`       |
 | `AgentPlatform`      | root, `/effect`             |
 | `AgentEvent`         | root, `/effect`             |
 | `ITool`              | root, `/effect`             |
@@ -119,8 +130,8 @@ changed in every entry at once:
 | `StreamView`         | root, `/effect`             |
 | `TranscriptView`     | root, `/effect`             |
 
-`AgentFlowResult` appears in three entries and so contributes two of the 13
-repeats; the other eleven names contribute one each.
+`AgentFlowResult` appears in three entries and so contributes two of the 12
+repeats; the other ten names contribute one each.
 
 ### 3.1 `@texra-ai/agent` — 19 (4 values, 15 types)
 
@@ -146,7 +157,7 @@ repeats; the other eleven names contribute one each.
 | `DefinedToolClass`   | type  | `@tools/core/define`               |
 | `SessionCloseReport` | type  | `@shared/schemas` → `opResults.ts` |
 
-### 3.2 `@texra-ai/agent/schemas` — 33 (18 values, 15 types)
+### 3.2 `@texra-ai/agent/schemas` — 31 (17 values, 14 types)
 
 | Name                         | Kind  | Defined in                              |
 | ---------------------------- | ----- | --------------------------------------- |
@@ -165,7 +176,6 @@ repeats; the other eleven names contribute one each.
 | `AgentNameSchema`            | value | `@shared/schemas` → `agent.ts`          |
 | `AgentSourceSchema`          | value | `@shared/schemas` → `agent.ts`          |
 | `ExecutionIdSchema`          | value | `@shared/schemas` → `identifiers.ts`    |
-| `StreamTabIdSchema`          | value | `@shared/schemas` → `identifiers.ts`    |
 | `RUN_OUTCOME`                | value | `@shared/schemas` → `stream.ts`         |
 | `RunOutcomeSchema`           | value | `@shared/schemas` → `stream.ts`         |
 | `AgentConfig`                | type  | `@agent/core/definition/AgentConfig`    |
@@ -181,10 +191,9 @@ repeats; the other eleven names contribute one each.
 | `WorkflowFlowResult`         | type  | `@agent/runtime/AgentFlowResult`        |
 | `AgentSource`                | type  | `@shared/schemas` → `agent.ts`          |
 | `ExecutionId`                | type  | `@shared/schemas` → `identifiers.ts`    |
-| `StreamTabId`                | type  | `@shared/schemas` → `identifiers.ts`    |
 | `RunOutcome`                 | type  | `@shared/schemas` → `stream.ts`         |
 
-### 3.3 `@texra-ai/agent/effect` — 27 (7 values, 20 types)
+### 3.3 `@texra-ai/agent/effect` — 26 (7 values, 19 types)
 
 | Name                     | Kind  | Defined in                            |
 | ------------------------ | ----- | ------------------------------------- |
@@ -210,7 +219,6 @@ repeats; the other eleven names contribute one each.
 | `AggregateId`            | type  | `@shared/schemas` → `sessionEvent.ts` |
 | `TranscriptSubscription` | type  | `@shared/schemas` → `sessionEvent.ts` |
 | `ExecutionId`            | type  | `@shared/schemas` → `identifiers.ts`  |
-| `StreamTabId`            | type  | `@shared/schemas` → `identifiers.ts`  |
 | `SessionCloseReport`     | type  | `@shared/schemas` → `opResults.ts`    |
 | `RequestError`           | type  | `@shared/session/requestErrors`       |
 | `Outcome`                | type  | `@shared/session/runtimeRequest`      |
@@ -240,7 +248,7 @@ The honest count, and the reason publication stays gated:
   `config/ratchets/host-agent-import-baseline.json`.
 - **Coverage gap worth naming:** no artifact in the repository imports the
   **root** entry or **`/schemas`** by package name. `runAgent`, `AgentRun`,
-  `defineTool`, and all 33 schema exports are declared but unexercised as a
+  `defineTool`, and all 31 schema exports are declared but unexercised as a
   consumer would reach them. The example covers `/effect` + `/node` only.
 
 ## 5. What already keeps this surface honest

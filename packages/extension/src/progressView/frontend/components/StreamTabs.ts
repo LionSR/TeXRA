@@ -374,7 +374,7 @@ export class StreamTabs extends LitElement {
 
   private isExpanded(stream: StreamView): boolean {
     if (stream.forceExpanded) return true;
-    return this.surface?.expanded.get(stream.id) === 'expanded';
+    return this.surface?.expanded.get(stream.id) === true;
   }
 
   /** The tree under a row, at any depth. The rail (`topLevelOnly`) shows
@@ -515,7 +515,7 @@ export class StreamTabs extends LitElement {
           SessionUiEvents.surface({
             kind: 'expand',
             streamId,
-            override: this.isExpanded(stream) ? 'collapsed' : 'expanded',
+            expanded: !this.isExpanded(stream),
           }),
         );
         break;

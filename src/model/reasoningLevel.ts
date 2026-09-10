@@ -4,20 +4,38 @@ import {
   type ModelCapabilities,
   type ModelConfig,
 } from 'llm-zoo';
+import { ReasoningEffortSchema } from 'llm-zoo/schemas';
+
+import type { StateStore } from '@platform/interfaces';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 /**
- * Single source of truth: user-facing reasoning level strings -> ReasoningEffort enum.
- * The reverse mapping for settings UI controls is derived from this record.
+ * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary.
+ *
+ * This is the one boundary between the persisted `texra.reasoningLevels`
+ * record and the runtime: the stored strings are parsed here, so no caller
+ * carries a bare string and an entry that is not an effort is reported rather
+ * than quietly disappearing. Reads only; the write path keeps the stored
+ * record verbatim so an unreadable entry is never dropped from storage.
  */
-export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
-  none: ReasoningEffort.NONE,
-  minimal: ReasoningEffort.MINIMAL,
-  low: ReasoningEffort.LOW,
-  medium: ReasoningEffort.MEDIUM,
-  high: ReasoningEffort.HIGH,
-  xhigh: ReasoningEffort.XHIGH,
-  max: ReasoningEffort.MAX,
-};
+export function reasoningEffortOverrides(
+  state: StateStore,
+): Readonly<Record<string, ReasoningEffort>> {
+  const stored = state.get<Record<string, string>>(
+    GlobalStateKey.REASONING_LEVELS,
+    {},
+  );
+  const overrides: Record<string, ReasoningEffort> = {};
+  for (const [model, value] of Object.entries(stored)) {
+    const parsed = ReasoningEffortSchema.safeParse(value);
+    if (parsed.success) {
+      overrides[model] = parsed.data;
+    }
+    // A stored value outside llm-zoo's vocabulary is dropped. `src/model` has
+    // no logging edge, so this drop is silent; issue tracked separately.
+  }
+  return overrides;
+}
 
 /** Whether the model exposes a genuine user-selectable effort range. */
 function hasConfigurableReasoningEffort(

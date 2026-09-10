@@ -136,7 +136,7 @@ describe('stream-tabs over the fold', () => {
     expect(surfaceActions).toEqual([{ kind: 'select', streamId: CHILD }]);
   });
 
-  it('dispatches the delete arm and the expansion override from a row', async () => {
+  it('dispatches the delete arm and the expansion toggle from a row', async () => {
     const view = fanOutView();
     const child = view.streams.get(CHILD);
     const { element, surfaceActions, requests } = await mountTabs(
@@ -154,7 +154,7 @@ describe('stream-tabs over the fold', () => {
       {
         kind: 'expand',
         streamId: CHILD,
-        override: child?.forceExpanded ? 'collapsed' : 'expanded',
+        expanded: child?.forceExpanded !== true,
       },
     ]);
   });

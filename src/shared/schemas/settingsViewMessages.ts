@@ -8,6 +8,8 @@
  * dispatchers.
  */
 import { z } from 'zod';
+import { ReasoningEffort } from 'llm-zoo';
+import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -271,32 +273,26 @@ export type UpdateAgentSelectionMessage = z.infer<
 // Model selection data schema
 // ============================================================
 
-/** Reasoning effort levels that a user can select (low → high tiers). */
-export const ReasoningLevelSchema = z.enum([
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-]);
-export type ReasoningLevel = z.infer<typeof ReasoningLevelSchema>;
-export const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
-  none: 'None',
-  minimal: 'Minimal',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'Extra High',
-  max: 'Max',
+/**
+ * Display labels for llm-zoo's reasoning efforts, written low → high because
+ * the picker offers them in that order. The key type keeps the record
+ * exhaustive against the registry vocabulary.
+ */
+export const REASONING_LEVEL_LABELS: Record<ReasoningEffort, string> = {
+  [ReasoningEffort.NONE]: 'None',
+  [ReasoningEffort.MINIMAL]: 'Minimal',
+  [ReasoningEffort.LOW]: 'Low',
+  [ReasoningEffort.MEDIUM]: 'Medium',
+  [ReasoningEffort.HIGH]: 'High',
+  [ReasoningEffort.XHIGH]: 'Extra High',
+  [ReasoningEffort.MAX]: 'Max',
 };
 export const REASONING_LEVEL_OPTIONS: readonly {
-  readonly value: ReasoningLevel;
+  readonly value: ReasoningEffort;
   readonly label: string;
-}[] = ReasoningLevelSchema.options.map((value) => ({
-  value,
-  label: REASONING_LEVEL_LABELS[value],
+}[] = Object.entries(REASONING_LEVEL_LABELS).map(([value, label]) => ({
+  value: value as ReasoningEffort,
+  label,
 }));
 
 const ModelSelectionItemSchema = z.object({
@@ -310,11 +306,11 @@ const ModelSelectionItemSchema = z.object({
   /** Whether this model supports user-configurable reasoning effort. */
   supportsReasoningLevel: z.boolean().optional(),
   /** The model's default reasoning level from its static config. */
-  defaultReasoningLevel: ReasoningLevelSchema.optional(),
+  defaultReasoningLevel: ReasoningEffortSchema.optional(),
   /** The user's chosen reasoning level override (undefined = use default). */
-  reasoningLevel: ReasoningLevelSchema.optional(),
+  reasoningLevel: ReasoningEffortSchema.optional(),
   /** Exact registry-declared effort vocabulary for this model. */
-  supportedReasoningLevels: z.array(ReasoningLevelSchema).optional(),
+  supportedReasoningLevels: z.array(ReasoningEffortSchema).optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
   // Resolved once by computeModelOptionsData and carried verbatim so the
@@ -887,7 +883,7 @@ const SetModelReasoningLevelMessageSchema = modelCommand(
   CMD.SET_MODEL_REASONING_LEVEL,
 ).extend({
   /** The reasoning level to set, or undefined/null to reset to model default. */
-  level: ReasoningLevelSchema.nullable(),
+  level: ReasoningEffortSchema.nullable(),
 });
 
 const RequestModelAccessMessageSchema = modelCommand(CMD.REQUEST_MODEL_ACCESS);

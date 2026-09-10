@@ -14,7 +14,7 @@ import {
 import { AgentError } from '@common/errors';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
-import { LEVEL_TO_EFFORT } from '@model/reasoningLevel';
+import { reasoningEffortOverrides } from '@model/reasoningLevel';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
@@ -161,15 +161,13 @@ const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   if (!handler.supportsReasoningLevelOverride) return handler;
 
-  const level = platform().globalState.get<Record<string, string>>(
-    GlobalStateKey.REASONING_LEVELS,
-    {},
-  )[handler.config.name];
-  const effort = level ? LEVEL_TO_EFFORT[level] : undefined;
+  const effort = reasoningEffortOverrides(platform().globalState)[
+    handler.config.name
+  ];
   if (effort === undefined) return handler;
 
   log.debug(
-    `Applying reasoning level override for ${handler.config.name}: ${level}`,
+    `Applying reasoning level override for ${handler.config.name}: ${effort}`,
   );
   handler.capabilities.reasoningEffort = effort;
   return handler;
