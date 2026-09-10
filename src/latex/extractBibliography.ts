@@ -2,12 +2,15 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
+
 // Named import only: bibtex's UMD exports carry `__esModule: true`, so a
 // default import bundles to `undefined` under esbuild's ESM interop and the
 // destructure crashes at module init (0.39.10 startup-crash).
 import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
+import { ensureError } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Local file imports
@@ -43,24 +46,40 @@ interface BibliographyEntriesResult {
   missingKeys: string[];
 }
 
-export async function extractBibliographyContext(
+/** Bibliography probes hit the filesystem, so bound the fan-out. */
+const PROBE_CONCURRENCY = 8;
+
+/** Read a workspace-relative file, surfacing the read failure as a typed error. */
+const readWorkspaceFile = Effect.fn('latex.readWorkspaceFile')(function* (
+  filePath: string,
+) {
+  return yield* Effect.tryPromise({
+    try: () => WorkspaceFS.read(filePath),
+    catch: ensureError,
+  });
+});
+
+export const extractBibliographyContext = Effect.fn(
+  'latex.extractBibliographyContext',
+)(function* (
   texPath: string,
-): Promise<BibliographyReferenceResult> {
+): Effect.fn.Return<BibliographyReferenceResult, Error> {
   const texDir = path.dirname(texPath);
-  const content = await WorkspaceFS.read(texPath);
+  const content = yield* readWorkspaceFile(texPath);
   const uncommented = stripLatexComments(content);
 
   const referencedPaths = collectBibliographyPaths(texDir, uncommented);
-  const existing: string[] = [];
-  const missing: string[] = [];
-
-  for (const candidate of referencedPaths) {
-    if (await WorkspaceFS.exists(candidate)) {
-      existing.push(candidate);
-    } else {
-      missing.push(candidate);
-    }
-  }
+  const probed = yield* Effect.forEach(
+    referencedPaths,
+    (candidate) =>
+      Effect.tryPromise({
+        try: () => WorkspaceFS.exists(candidate),
+        catch: ensureError,
+      }).pipe(Effect.map((exists) => ({ candidate, exists }))),
+    { concurrency: PROBE_CONCURRENCY },
+  );
+  const pathsWhere = (exists: boolean): string[] =>
+    probed.filter((entry) => entry.exists === exists).map((e) => e.candidate);
 
   const citationKeys = collectCommaSeparatedMatches(
     uncommented,
@@ -68,11 +87,11 @@ export async function extractBibliographyContext(
   );
 
   return {
-    bibliographyFiles: existing,
-    missingBibliographyFiles: missing,
+    bibliographyFiles: pathsWhere(true),
+    missingBibliographyFiles: pathsWhere(false),
     citationKeys,
   };
-}
+});
 
 function formatFieldValue(value: unknown): string {
   if (value == null) {
@@ -142,15 +161,21 @@ function parseBibEntries(content: string): Map<string, string> {
   return entries;
 }
 
-export async function loadBibliographyEntries(
-  bibliographyFiles: string[],
-  citationKeys: string[],
-): Promise<BibliographyEntriesResult> {
+export const loadBibliographyEntries = Effect.fn(
+  'latex.loadBibliographyEntries',
+)(function* (
+  bibliographyFiles: readonly string[],
+  citationKeys: readonly string[],
+): Effect.fn.Return<BibliographyEntriesResult, Error> {
   // Citation keys are matched case-insensitively; the first definition of a
-  // key across the bibliography files wins.
+  // key across the bibliography files wins, so the files are read as one
+  // bounded fan-out and folded back in their declared order.
+  const contents = yield* Effect.forEach(bibliographyFiles, readWorkspaceFile, {
+    concurrency: PROBE_CONCURRENCY,
+  });
+
   const parsedEntries = new Map<string, { key: string; value: string }>();
-  for (const filePath of bibliographyFiles) {
-    const content = await WorkspaceFS.read(filePath);
+  for (const content of contents) {
     for (const [key, value] of parseBibEntries(content)) {
       const normalizedKey = key.toLowerCase();
       if (!parsedEntries.has(normalizedKey)) {
@@ -181,7 +206,7 @@ export async function loadBibliographyEntries(
   }
 
   return { entries, missingKeys };
-}
+});
 
 export function summarizeBibliographyEntries(
   entries: Map<string, string>,

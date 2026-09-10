@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as figureModule from '@latex/extractFigure';
@@ -18,9 +19,9 @@ describe('ExtractLatexFiguresTool', () => {
       '/workspace/main.tex': '\\documentclass{article}',
       '/workspace/figures/plot.pdf': 'pdf',
     });
-    vi.spyOn(figureModule, 'extractFigurePathsFromLatex').mockResolvedValue([
-      'figures/plot.pdf',
-    ]);
+    vi.spyOn(figureModule, 'extractFigurePathsFromLatex').mockReturnValue(
+      Effect.succeed(['figures/plot.pdf']),
+    );
 
     const result = await new ExtractLatexFiguresTool().call({
       texPath: 'main.tex',
@@ -40,7 +41,9 @@ describe('ExtractLatexFiguresTool', () => {
     await installPlatform({
       '/workspace/report.tex': '\\documentclass{article}',
     });
-    vi.spyOn(figureModule, 'extractFigurePathsFromLatex').mockResolvedValue([]);
+    vi.spyOn(figureModule, 'extractFigurePathsFromLatex').mockReturnValue(
+      Effect.succeed([]),
+    );
 
     const result = await new ExtractLatexFiguresTool().call({
       texPath: 'report.tex',

@@ -5,6 +5,41 @@ documents. No file here imports `vscode`; host wiring (commands, UI prompts)
 stays in the extension/desktop/CLI layers and reaches this code through typed
 ports (see `overleafClone.ts`) rather than the other way around.
 
+## The subsystem is Effect-native
+
+The subprocess-and-filesystem lane — `texcount.ts`, `latexdiff.ts` and
+`latexdiff/`, the three extractors, `overleafClone.ts`, `arxivProcessor.ts`
+and `LatexMediaManager.ts` — returns `Effect` programs, not Promises. Two
+consequences worth knowing before you touch a file here:
+
+- **Nothing in this directory runs a fiber.** A caller runs the program at
+  its own boundary: a tool's `execute()`, a VS Code command, a desktop
+  request handler, or a CLI command. The exceptions are named debt, not a
+  pattern to copy — `MediaExtractionNode`, `TeXCountNode`, `LatexDiffManager`
+  and `tools/approval/latexPreview.ts` each keep one `runPromise` against the
+  Promise-shaped reflection flow, and `config/ratchets/effect-migration-baseline.json`
+  names the lane that deletes them.
+- **Cancellation is interruption, not a threaded `AbortSignal`.** `texcount`
+  and the latexdiff executors spawn their subprocess inside
+  `Effect.tryPromise`, whose thunk receives the signal that aborts when the
+  running fiber is interrupted. Do not add a `signal` parameter to a function
+  here so a caller can pass one down.
+
+- **Diagnostics are `Effect.log*`, not `createLog`.** A program names its
+  channel once with `withLogChannel` from `@logger/effectLog` and every entry
+  below it inherits that channel, so no helper takes a channel parameter just
+  to log. Both producers end at the same host sink, so a test asserts on the
+  entries the sink received (`@test/support/logSinkCapture`) rather than on a
+  logger-namespace spy. One consequence to know: the Effect logger drops
+  `Debug` entries unless `texra.logger.debugMode` is on, where `createLog`
+  emitted them and let the host's level filter decide. `LatexMediaManager`'s
+  injected `LatexTrace` is not this — that is the run's product trace and
+  stays as it is (migration PRD, R9).
+
+A new function in this directory converts together with its callers up to one
+of those boundaries, or it waits — a Promise → Effect → Promise sandwich is
+rejected in review (migration PRD, execution rule 1).
+
 The files have distinct roles:
 
 - **Compilation** — `texTools.ts` builds the kpathsea search path and runs

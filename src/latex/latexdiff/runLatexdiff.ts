@@ -11,7 +11,7 @@
 
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   ExecutionIdSchema,
   OutputFileInfoSchema,
@@ -25,7 +25,6 @@ import type {
 } from '@shared/schemas';
 
 import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
-import { ensureError } from '@utils/errors/errorMessage';
 import {
   runLatexdiffFromMetadata,
   runLatexdiffViaWorkspaceScan,
@@ -110,7 +109,6 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
       progress,
     } = params;
     const runId = params.runId ?? undefined;
-    const log = createLog(latexdiff.channel);
 
     let outputsByRound = params.outputsByRound ?? null;
     let source: LatexdiffOutputsSource = outputsByRound
@@ -125,22 +123,18 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
     if (!outputsByRound && runId) {
       const parsedRunId = ExecutionIdSchema.safeParse(runId);
       if (parsedRunId.success) {
-        const scanned = yield* Effect.tryPromise({
-          try: () =>
-            scanRunDirForOutputs(
-              parsedRunId.data,
-              inputFile,
-              outputFiles,
-              latexdiff.channel,
-              params.filesystem,
-            ),
-          catch: ensureError,
-        });
+        const scanned = yield* scanRunDirForOutputs(
+          parsedRunId.data,
+          inputFile,
+          outputFiles,
+          latexdiff.channel,
+          params.filesystem,
+        );
         if (scanned) {
           outputsByRound = scanned;
           source = 'run-dir-scan';
           discoveredExecutionId = parsedRunId.data;
-          log.debug(
+          yield* Effect.logDebug(
             `Using run-dir scan outputs from execution ${parsedRunId.data}`,
           );
         }
@@ -168,36 +162,35 @@ export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
         outputsByRound = discovered.rounds;
         source = 'metadata';
         discoveredExecutionId = discovered.executionId;
-        log.debug(
+        yield* Effect.logDebug(
           `Using metadata outputs from execution ${discovered.executionId}`,
         );
       }
     }
 
     const rounds = outputsByRound;
-    const outcome = yield* Effect.tryPromise({
-      try: () =>
-        rounds
-          ? runLatexdiffFromMetadata({
-              rounds,
-              mathMarkup,
-              generateBetweenRoundDiffs,
-              latexdiff,
-              progress,
-            })
-          : runLatexdiffViaWorkspaceScan({
-              agent,
-              model,
-              inputFile,
-              outputFiles,
-              mathMarkup,
-              generateBetweenRoundDiffs,
-              latexdiff,
-              progress,
-            }),
-      catch: ensureError,
-    });
+    const outcome = yield* rounds
+      ? runLatexdiffFromMetadata({
+          rounds,
+          mathMarkup,
+          generateBetweenRoundDiffs,
+          latexdiff,
+          progress,
+        })
+      : runLatexdiffViaWorkspaceScan({
+          agent,
+          model,
+          inputFile,
+          outputFiles,
+          mathMarkup,
+          generateBetweenRoundDiffs,
+          latexdiff,
+          progress,
+        });
 
     return { outcome, executionId: discoveredExecutionId, source };
   },
+  // One channel for the whole run, so the discovery steps and the diff engine
+  // below both land on the caller's channel.
+  (effect, params) => withLogChannel(params.latexdiff.channel)(effect),
 );

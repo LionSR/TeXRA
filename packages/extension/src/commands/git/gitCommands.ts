@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { execa } from 'execa';
 import * as vscode from 'vscode';
 
@@ -16,10 +17,11 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
 import { readRecentCommitLabels } from '@utils/git/repositoryOverview';
@@ -181,83 +183,107 @@ function buildOverleafClonePorts(
   return {
     // `getStored` (not `get`): the clone token is a persisted credential the
     // user manages here, never an environment override.
-    getStoredToken: (key) => secrets.getStored(key),
-    deleteStoredToken: (key) => secrets.delete(key),
-    storeToken: (key, token) => secrets.set(key, token),
+    getStoredToken: (key) => Effect.promise(() => secrets.getStored(key)),
+    deleteStoredToken: (key) => Effect.promise(() => secrets.delete(key)),
+    storeToken: (key, token) => Effect.promise(() => secrets.set(key, token)),
     promptToken: (spec) =>
-      promptInput(
-        spec.tokenTitle,
-        spec.tokenHint ?? 'Enter your Git authentication token.',
-        true,
+      Effect.promise(() =>
+        promptInput(
+          spec.tokenTitle,
+          spec.tokenHint ?? 'Enter your Git authentication token.',
+          true,
+        ),
       ),
-    showInvalidToken: async (spec, message) => {
-      log.error(message);
-      const action = await vscode.window.showErrorMessage(
-        message,
-        ...(spec.tokenHint ? (['How to get a token'] as const) : []),
-      );
-      if (action === 'How to get a token') {
-        void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL));
-      }
-    },
+    showInvalidToken: (spec, message) =>
+      Effect.promise(async () => {
+        log.error(message);
+        const action = await vscode.window.showErrorMessage(
+          message,
+          ...(spec.tokenHint ? (['How to get a token'] as const) : []),
+        );
+        if (action === 'How to get a token') {
+          void vscode.env.openExternal(
+            vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL),
+          );
+        }
+      }),
 
-    isGitAvailable: () => executeCommandSync(['git', '--version']).success,
-    showGitMissing: promptGitMissing,
-    listWorkspaceEntries: async (workspacePath) =>
-      (await WorkspaceFS.readDir(workspacePath)).map(([name]) => name),
-    showWorkspaceUnreadable: (e) => {
-      log.error(`readDir failed: ${toErrorMessage(e)}`);
-      void vscode.window.showErrorMessage('Cannot read workspace folder.');
-    },
-    showWorkspaceNotEmpty: () => {
-      void showLoggedMessage(CHANNEL, 'Workspace folder must be empty.');
-    },
+    isGitAvailable: () =>
+      Effect.sync(() => executeCommandSync(['git', '--version']).success),
+    showGitMissing: () => Effect.promise(() => promptGitMissing()),
+    listWorkspaceEntries: (workspacePath) =>
+      Effect.tryPromise({
+        try: async () =>
+          (await WorkspaceFS.readDir(workspacePath)).map(([name]) => name),
+        catch: ensureError,
+      }),
+    showWorkspaceUnreadable: (e) =>
+      Effect.sync(() => {
+        log.error(`readDir failed: ${toErrorMessage(e)}`);
+        void vscode.window.showErrorMessage('Cannot read workspace folder.');
+      }),
+    showWorkspaceNotEmpty: () =>
+      Effect.sync(() => {
+        void showLoggedMessage(CHANNEL, 'Workspace folder must be empty.');
+      }),
 
-    runClone: async (remoteUrl, workspacePath) => {
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
-        },
-        () =>
-          execa('git', ['clone', remoteUrl, '.'], {
-            cwd: workspacePath,
-            // Same extended PATH as the executeCommandSync preflight above, so
-            // the probe can't pass while the clone misses git (bot review).
-            // extendEnv: false is required — makeMachineGitEnv omits the
-            // helper-invoking keys, and execa's default merge re-adds them.
-            env: makeMachineGitEnv(),
-            extendEnv: false,
-          }),
-      );
-    },
-    showCloneSucceeded: (label) => {
-      vscode.window.showInformationMessage(`${label} project cloned.`);
-    },
-    showAuthFailure: async (r) => {
-      const detail = r.isOverleaf
-        ? 'Your git token may be invalid or expired.'
-        : 'Check your credentials.';
-      const actions = r.isOverleaf
-        ? (['Get New Token', 'How to get a token'] as const)
-        : (['Retry'] as const);
-      const authErrorMessage = `Clone failed: authentication error. ${detail}`;
-      const selected = await vscode.window.showErrorMessage(
-        authErrorMessage,
-        ...actions,
-      );
-      if (selected === 'Get New Token') {
-        void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_GIT_TOKEN_URL));
-      } else if (selected === 'How to get a token') {
-        void vscode.env.openExternal(vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL));
-      }
-    },
-    showCloneFailed: (message) => {
-      void vscode.window.showErrorMessage(message);
-    },
-    logCloneError: (message) => {
-      log.error(`Clone failed: ${message}`);
-    },
+    runClone: (remoteUrl, workspacePath) =>
+      Effect.tryPromise({
+        try: () =>
+          vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
+            },
+            () =>
+              execa('git', ['clone', remoteUrl, '.'], {
+                cwd: workspacePath,
+                // Same extended PATH as the executeCommandSync preflight
+                // above, so the probe can't pass while the clone misses git
+                // (bot review). extendEnv: false is required —
+                // makeMachineGitEnv omits the helper-invoking keys, and
+                // execa's default merge re-adds them.
+                env: makeMachineGitEnv(),
+                extendEnv: false,
+              }),
+          ),
+        catch: ensureError,
+      }).pipe(Effect.asVoid),
+    showCloneSucceeded: (label) =>
+      Effect.sync(() => {
+        vscode.window.showInformationMessage(`${label} project cloned.`);
+      }),
+    showAuthFailure: (r) =>
+      Effect.promise(async () => {
+        const detail = r.isOverleaf
+          ? 'Your git token may be invalid or expired.'
+          : 'Check your credentials.';
+        const actions = r.isOverleaf
+          ? (['Get New Token', 'How to get a token'] as const)
+          : (['Retry'] as const);
+        const authErrorMessage = `Clone failed: authentication error. ${detail}`;
+        const selected = await vscode.window.showErrorMessage(
+          authErrorMessage,
+          ...actions,
+        );
+        if (selected === 'Get New Token') {
+          void vscode.env.openExternal(
+            vscode.Uri.parse(OVERLEAF_GIT_TOKEN_URL),
+          );
+        } else if (selected === 'How to get a token') {
+          void vscode.env.openExternal(
+            vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL),
+          );
+        }
+      }),
+    showCloneFailed: (message) =>
+      Effect.sync(() => {
+        void vscode.window.showErrorMessage(message);
+      }),
+    logCloneError: (message) =>
+      Effect.sync(() => {
+        log.error(`Clone failed: ${message}`);
+      }),
   };
 }
 
@@ -282,9 +308,11 @@ export async function cloneOverleafProject(
     return;
   }
 
-  await runOverleafClone(
-    remote,
-    workspacePath,
-    buildOverleafClonePorts(secrets, remote),
+  await effectRuntime().runPromise(
+    runOverleafClone(
+      remote,
+      workspacePath,
+      buildOverleafClonePorts(secrets, remote),
+    ),
   );
 }

@@ -1,8 +1,13 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 import type { FileLocation } from '@shared/schemas';
+import { filterNotNull } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { ensureError } from '@utils/errors/errorMessage';
 import { joinLatexPath } from '@utils/core/pathCore';
 
 import {
@@ -12,6 +17,9 @@ import {
 } from './latexParsingUtils';
 
 const FIGURE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
+
+/** Figure lookups run against the filesystem, so bound the fan-out. */
+const RESOLVE_CONCURRENCY = 8;
 
 /**
  * Parse graphicspath commands supporting both single and multiple path formats.
@@ -41,29 +49,30 @@ function parseGraphicspath(content: string): string[] {
  * Resolve a figure path by searching through possible base paths and
  * extensions. Returns a path relative to `latexDir`, or null.
  */
-async function resolveFigurePath(
+const resolveFigurePath = Effect.fn('latex.resolveFigurePath')(function* (
   figPath: string,
-  searchPaths: string[],
+  searchPaths: readonly string[],
   latexDir: string,
-): Promise<string | null> {
+) {
   const extensions = figPath.includes('.') ? [''] : FIGURE_EXTENSIONS;
-  const absolute = await findExistingLatexPath(
+  const absolute = yield* findExistingLatexPath(
     figPath,
     searchPaths,
     extensions,
   );
   return absolute === null ? null : path.relative(latexDir, absolute);
-}
+});
 
 /**
- * Extract figure paths from a LaTeX file
- * @param latexFile Path to the LaTeX file
- * @returns Array of relative paths to figures
+ * Extract figure paths from a LaTeX file.
+ *
+ * The resolutions run concurrently but `Effect.forEach` hands their results
+ * back in source order, so the de-duplicated output stays deterministic.
  */
-export async function extractFigurePathsFromLatex(
-  latexFileLocation: FileLocation,
-): Promise<string[]> {
-  const latexDir = await resolveLatexDir(latexFileLocation.absolutePath);
+export const extractFigurePathsFromLatex = Effect.fn(
+  'latex.extractFigurePathsFromLatex',
+)(function* (latexFileLocation: FileLocation) {
+  const latexDir = yield* resolveLatexDir(latexFileLocation.absolutePath);
   const graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
 
   // Regular expressions to match figure inclusion commands
@@ -72,33 +81,29 @@ export async function extractFigurePathsFromLatex(
     /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
   ];
 
-  const content = await AbsoluteFS.read(latexFileLocation.absolutePath);
+  const content = yield* Effect.tryPromise({
+    try: () => AbsoluteFS.read(latexFileLocation.absolutePath),
+    catch: ensureError,
+  });
 
   // Pre-process content to remove commented-out text (including inline
   // comments and escaped `\%`, unlike a naive whole-line strip).
   const processedContent = stripLatexComments(content);
 
   // Parse graphicspaths
-  const paths = parseGraphicspath(processedContent);
-  for (const p of paths) {
+  for (const p of parseGraphicspath(processedContent)) {
     graphicspaths.push(joinLatexPath(latexDir, p));
   }
 
-  // Find all matches in the processed content for both patterns
-  const discovered = new Set<string>();
+  const referenced = figurePatterns.flatMap((pattern) =>
+    [...processedContent.matchAll(pattern)].map((match) => match[1]),
+  );
 
-  for (const pattern of figurePatterns) {
-    for (const match of processedContent.matchAll(pattern)) {
-      const resolved = await resolveFigurePath(
-        match[1],
-        graphicspaths,
-        latexDir,
-      );
-      if (resolved) {
-        discovered.add(resolved);
-      }
-    }
-  }
+  const resolved = yield* Effect.forEach(
+    referenced,
+    (figPath) => resolveFigurePath(figPath, graphicspaths, latexDir),
+    { concurrency: RESOLVE_CONCURRENCY },
+  );
 
-  return [...discovered];
-}
+  return [...new Set(resolved.filter(filterNotNull))];
+});

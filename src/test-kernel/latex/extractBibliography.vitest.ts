@@ -1,7 +1,9 @@
 import * as assert from 'node:assert';
 import * as path from 'node:path';
 
-import { afterEach, describe, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { afterEach, describe, vi } from 'vitest';
 
 import {
   extractBibliographyContext,
@@ -23,11 +25,12 @@ describe('extractBibliography helpers', () => {
     vi.restoreAllMocks();
   });
 
-  it('collects bibliography paths and citation keys', async () => {
-    const texPath = path.join('chapters', 'main.tex');
-    const expectedBibPath = path.join('chapters', 'references.bib');
+  it.effect('collects bibliography paths and citation keys', () =>
+    Effect.gen(function* () {
+      const texPath = path.join('chapters', 'main.tex');
+      const expectedBibPath = path.join('chapters', 'references.bib');
 
-    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
+      vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
       % comment
       \\documentclass{article}
       \\addbibresource[location=local]{references}
@@ -35,102 +38,115 @@ describe('extractBibliography helpers', () => {
       More citations \\nocite{gamma}
       % \\cite{ignored}
     `);
-    vi.spyOn(WorkspaceFS, 'exists').mockImplementation(
-      async (file) => file === expectedBibPath,
-    );
+      vi.spyOn(WorkspaceFS, 'exists').mockImplementation(
+        async (file) => file === expectedBibPath,
+      );
 
-    const result = await extractBibliographyContext(texPath);
+      const result = yield* extractBibliographyContext(texPath);
 
-    assert.deepStrictEqual(result.bibliographyFiles, [expectedBibPath]);
-    assert.deepStrictEqual(result.missingBibliographyFiles, []);
-    assert.deepStrictEqual(
-      new Set(result.citationKeys),
-      new Set(['alpha', 'beta', 'gamma']),
-    );
-  });
+      assert.deepStrictEqual(result.bibliographyFiles, [expectedBibPath]);
+      assert.deepStrictEqual(result.missingBibliographyFiles, []);
+      assert.deepStrictEqual(
+        new Set(result.citationKeys),
+        new Set(['alpha', 'beta', 'gamma']),
+      );
+    }),
+  );
 
-  it('handles wildcard nocite directives consistently across runs', async () => {
-    const texPath = 'paper.tex';
-    const expectedBibPath = 'refs.bib';
+  it.effect('handles wildcard nocite directives consistently across runs', () =>
+    Effect.gen(function* () {
+      const texPath = 'paper.tex';
+      const expectedBibPath = 'refs.bib';
 
-    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
+      vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
       % bibliographies
       \\bibliography{refs}
       Intro text
       \\nocite{*}
     `);
-    vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(true);
+      vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(true);
 
-    const first = await extractBibliographyContext(texPath);
-    const second = await extractBibliographyContext(texPath);
+      const first = yield* extractBibliographyContext(texPath);
+      const second = yield* extractBibliographyContext(texPath);
 
-    const expectedKeys = new Set(['*']);
+      const expectedKeys = new Set(['*']);
 
-    assert.deepStrictEqual(first.bibliographyFiles, [expectedBibPath]);
-    assert.deepStrictEqual(second.bibliographyFiles, [expectedBibPath]);
-    assert.deepStrictEqual(new Set(first.citationKeys), expectedKeys);
-    assert.deepStrictEqual(new Set(second.citationKeys), expectedKeys);
-    assert.deepStrictEqual(second, first);
-  });
+      assert.deepStrictEqual(first.bibliographyFiles, [expectedBibPath]);
+      assert.deepStrictEqual(second.bibliographyFiles, [expectedBibPath]);
+      assert.deepStrictEqual(new Set(first.citationKeys), expectedKeys);
+      assert.deepStrictEqual(new Set(second.citationKeys), expectedKeys);
+      assert.deepStrictEqual(second, first);
+    }),
+  );
 
-  it('marks missing bibliography files and ignores empty citations', async () => {
-    const texPath = 'paper.tex';
+  it.effect(
+    'marks missing bibliography files and ignores empty citations',
+    () =>
+      Effect.gen(function* () {
+        const texPath = 'paper.tex';
 
-    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
+        vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
       \\bibliography{bib/one, bib/two.bib, } % trailing comma
       \\cite{first} \\cite{second, third}
     `);
-    vi.spyOn(WorkspaceFS, 'exists').mockImplementation(
-      async (file) => file === path.join('bib', 'two.bib'),
-    );
+        vi.spyOn(WorkspaceFS, 'exists').mockImplementation(
+          async (file) => file === path.join('bib', 'two.bib'),
+        );
 
-    const result = await extractBibliographyContext(texPath);
+        const result = yield* extractBibliographyContext(texPath);
 
-    assert.deepStrictEqual(result.bibliographyFiles, [
-      path.join('bib', 'two.bib'),
-    ]);
-    assert.deepStrictEqual(result.missingBibliographyFiles, [
-      path.join('bib', 'one.bib'),
-    ]);
-    assert.deepStrictEqual(
-      new Set(result.citationKeys),
-      new Set(['first', 'second', 'third']),
-    );
-  });
+        assert.deepStrictEqual(result.bibliographyFiles, [
+          path.join('bib', 'two.bib'),
+        ]);
+        assert.deepStrictEqual(result.missingBibliographyFiles, [
+          path.join('bib', 'one.bib'),
+        ]);
+        assert.deepStrictEqual(
+          new Set(result.citationKeys),
+          new Set(['first', 'second', 'third']),
+        );
+      }),
+  );
 
-  it('loads requested bibliography entries and reports missing keys', async () => {
-    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(BIB_CONTENT);
+  it.effect(
+    'loads requested bibliography entries and reports missing keys',
+    () =>
+      Effect.gen(function* () {
+        vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(BIB_CONTENT);
 
-    const { entries, missingKeys } = await loadBibliographyEntries(
-      ['references.bib'],
-      ['alpha', 'gamma'],
-    );
+        const { entries, missingKeys } = yield* loadBibliographyEntries(
+          ['references.bib'],
+          ['alpha', 'gamma'],
+        );
 
-    assert.strictEqual(entries.size, 1);
-    // formatBibEntry drops the trailing comma after the last field.
-    assert.strictEqual(
-      entries.get('alpha'),
-      '@article{alpha,\n  title = {Alpha Paper}\n}',
-    );
-    assert.deepStrictEqual(missingKeys, ['gamma']);
+        assert.strictEqual(entries.size, 1);
+        // formatBibEntry drops the trailing comma after the last field.
+        assert.strictEqual(
+          entries.get('alpha'),
+          '@article{alpha,\n  title = {Alpha Paper}\n}',
+        );
+        assert.deepStrictEqual(missingKeys, ['gamma']);
 
-    const formatted = summarizeBibliographyEntries(entries, 5);
-    assert.deepStrictEqual(formatted, [
-      '@article{alpha,\n  title = {Alpha Paper}\n}',
-    ]);
-  });
+        const formatted = summarizeBibliographyEntries(entries, 5);
+        assert.deepStrictEqual(formatted, [
+          '@article{alpha,\n  title = {Alpha Paper}\n}',
+        ]);
+      }),
+  );
 
-  it('loads all entries when nocite wildcard is present', async () => {
-    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(BIB_CONTENT);
+  it.effect('loads all entries when nocite wildcard is present', () =>
+    Effect.gen(function* () {
+      vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(BIB_CONTENT);
 
-    const { entries, missingKeys } = await loadBibliographyEntries(
-      ['references.bib'],
-      ['*'],
-    );
+      const { entries, missingKeys } = yield* loadBibliographyEntries(
+        ['references.bib'],
+        ['*'],
+      );
 
-    assert.strictEqual(entries.size, 2);
-    assert.deepStrictEqual(missingKeys, []);
-    assert.ok(entries.has('alpha'));
-    assert.ok(entries.has('beta'));
-  });
+      assert.strictEqual(entries.size, 2);
+      assert.deepStrictEqual(missingKeys, []);
+      assert.ok(entries.has('alpha'));
+      assert.ok(entries.has('beta'));
+    }),
+  );
 });

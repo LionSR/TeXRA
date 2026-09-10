@@ -9,7 +9,6 @@ import type {
 } from '@shared/schemas';
 import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { toNewestFirstByTimestamp } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 import {
   scanRunDirForOutputs,
   type RunOutputFilesystem,
@@ -74,17 +73,13 @@ export const discoverLatestExecutionOutputs = Effect.fn(
     }
     // Generated files remain discoverable when no output facts were recorded.
     // Use all configured input files as diff bases, as the pinned-run path does.
-    const scanned = yield* Effect.tryPromise({
-      try: () =>
-        scanRunDirForOutputs(
-          candidate.id,
-          query.inputFile,
-          candidate.inputFiles.slice(1),
-          channel,
-          filesystem,
-        ),
-      catch: ensureError,
-    });
+    const scanned = yield* scanRunDirForOutputs(
+      candidate.id,
+      query.inputFile,
+      candidate.inputFiles.slice(1),
+      channel,
+      filesystem,
+    );
     if (scanned) {
       return { executionId: candidate.id, rounds: scanned };
     }

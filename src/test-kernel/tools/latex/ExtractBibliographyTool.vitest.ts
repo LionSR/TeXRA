@@ -1,13 +1,15 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as bibliographyModule from '@latex/extractBibliography';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractBibliographyTool } from '@tools/latex/ExtractBibliographyTool';
+import type { Success } from 'effect/Effect';
 
-type BibliographyContext = Awaited<
+type BibliographyContext = Success<
   ReturnType<typeof bibliographyModule.extractBibliographyContext>
 >;
-type BibliographyEntries = Awaited<
+type BibliographyEntries = Success<
   ReturnType<typeof bibliographyModule.loadBibliographyEntries>
 >;
 
@@ -21,17 +23,21 @@ function mockBibliography(options: {
   entries?: Partial<BibliographyEntries>;
   summary?: string[];
 }): void {
-  vi.spyOn(bibliographyModule, 'extractBibliographyContext').mockResolvedValue({
-    citationKeys: [],
-    bibliographyFiles: [],
-    missingBibliographyFiles: [],
-    ...options.context,
-  });
-  vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockResolvedValue({
-    entries: new Map(),
-    missingKeys: [],
-    ...options.entries,
-  });
+  vi.spyOn(bibliographyModule, 'extractBibliographyContext').mockReturnValue(
+    Effect.succeed({
+      citationKeys: [],
+      bibliographyFiles: [],
+      missingBibliographyFiles: [],
+      ...options.context,
+    }),
+  );
+  vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockReturnValue(
+    Effect.succeed({
+      entries: new Map(),
+      missingKeys: [],
+      ...options.entries,
+    }),
+  );
   vi.spyOn(bibliographyModule, 'summarizeBibliographyEntries').mockReturnValue(
     options.summary ?? [],
   );
@@ -119,10 +125,12 @@ describe('ExtractBibliographyTool', () => {
     });
     const loadEntries = vi
       .mocked(bibliographyModule.loadBibliographyEntries)
-      .mockResolvedValue({
-        entries: new Map([['alpha', '@article{alpha,...}']]),
-        missingKeys: [],
-      });
+      .mockReturnValue(
+        Effect.succeed({
+          entries: new Map([['alpha', '@article{alpha,...}']]),
+          missingKeys: [],
+        }),
+      );
 
     const result = await new ExtractBibliographyTool().call({
       texPath: 'thesis.tex',
@@ -142,7 +150,7 @@ describe('ExtractBibliographyTool', () => {
     mockBibliography({});
     const loadEntries = vi
       .mocked(bibliographyModule.loadBibliographyEntries)
-      .mockResolvedValue({ entries: new Map(), missingKeys: [] });
+      .mockReturnValue(Effect.succeed({ entries: new Map(), missingKeys: [] }));
 
     const result = await new ExtractBibliographyTool().call({
       texPath: 'standalone.tex',

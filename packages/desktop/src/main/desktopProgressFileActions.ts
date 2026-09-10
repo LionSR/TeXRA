@@ -173,11 +173,13 @@ export class DesktopProgressFileActions {
 
   async runLatexdiffFile(baseFile: string, editedFile: string): Promise<void> {
     const service = new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL);
-    const result = await service.runDiff(
-      pathToLocation(baseFile),
-      pathToLocation(editedFile),
-      '_diff',
-      DEFAULT_MATH_MARKUP,
+    const result = await effectRuntime().runPromise(
+      service.runDiff(
+        pathToLocation(baseFile),
+        pathToLocation(editedFile),
+        '_diff',
+        DEFAULT_MATH_MARKUP,
+      ),
     );
 
     if (!result.success) {

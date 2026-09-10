@@ -1,13 +1,13 @@
-import { createLog } from '@logger/logUtils';
+import { Effect } from 'effect';
+
+import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
-
-const log = createLog(CHANNEL);
 
 const CHINESE_PACKAGES = [
   'xeCJK',
@@ -18,19 +18,30 @@ const CHINESE_PACKAGES = [
   'ctexbook',
 ];
 
-async function hasChinesePackages(absolutePath: string): Promise<boolean> {
-  try {
-    const content = await AbsoluteFS.read(absolutePath);
-    return CHINESE_PACKAGES.some(
-      (pkg) =>
-        content.includes(`\\usepackage{${pkg}}`) ||
-        content.includes(`\\documentclass{${pkg}}`),
-    );
-  } catch (err) {
-    log.error(`Error checking Chinese packages: ${toErrorMessage(err)}`);
-    return false;
-  }
-}
+/** texcount runs one subprocess per file, so bound the fan-out. */
+const COUNT_CONCURRENCY = 4;
+
+const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
+  absolutePath: string,
+) {
+  return yield* Effect.tryPromise({
+    try: () => AbsoluteFS.read(absolutePath),
+    catch: ensureError,
+  }).pipe(
+    Effect.map((content) =>
+      CHINESE_PACKAGES.some(
+        (pkg) =>
+          content.includes(`\\usepackage{${pkg}}`) ||
+          content.includes(`\\documentclass{${pkg}}`),
+      ),
+    ),
+    Effect.catch((err) =>
+      Effect.logError(
+        `Error checking Chinese packages: ${toErrorMessage(err)}`,
+      ).pipe(Effect.as(false)),
+    ),
+  );
+});
 
 export type TexcountMode = 'separate' | 'include' | 'sum';
 
@@ -45,38 +56,51 @@ interface TexcountResult {
 }
 
 /** Returns why the file cannot be counted, or null when it is countable. */
-async function rejectionReason(
+const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
   filePath: string,
-  channel: string,
-): Promise<string | null> {
-  const log = createLog(channel);
-  if (!(await AbsoluteFS.exists(filePath))) {
+) {
+  const exists = yield* Effect.tryPromise({
+    try: () => AbsoluteFS.exists(filePath),
+    catch: ensureError,
+  });
+  if (!exists) {
     const reason = `File ${filePath} does not exist.`;
-    log.warn(reason);
+    yield* Effect.logWarning(reason);
     return reason;
   }
 
   if (!hasExtension(filePath, '.tex')) {
     const reason = `Error: File ${filePath} is not a LaTeX file. Skipping.`;
-    log.warn(reason);
+    yield* Effect.logWarning(reason);
     return reason;
   }
 
   return null;
-}
+});
 
-async function runTexcount(
+/**
+ * Invoke `texcount`. The subprocess is cancelled by the fiber's own
+ * interruption: `Effect.tryPromise` hands the thunk an `AbortSignal` that
+ * aborts when the fiber is interrupted, so no caller threads a signal in.
+ *
+ * `channel` is still a parameter because `runToolWithCheck` logs the command
+ * itself through the Promise-shaped writers; this function's own entries take
+ * the channel the whole count was annotated with.
+ */
+const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   args: string[],
   channel: string,
   context: string,
-  signal?: AbortSignal,
-): Promise<{ stdout: string | null; error?: string }> {
-  const log = createLog(channel);
-  const result = await runToolWithCheck('texcount', args, {
-    channel,
-    truncate: false,
-    showError: true,
-    signal,
+): Effect.fn.Return<{ stdout: string | null; error?: string }, Error> {
+  const result = yield* Effect.tryPromise({
+    try: (signal) =>
+      runToolWithCheck('texcount', args, {
+        channel,
+        truncate: false,
+        showError: true,
+        signal,
+      }),
+    catch: ensureError,
   });
 
   if (!result) {
@@ -87,16 +111,16 @@ async function runTexcount(
   }
 
   if (result.success && result.stdout) {
-    log.debug(`Successfully counted ${context}`);
+    yield* Effect.logDebug(`Successfully counted ${context}`);
     return { stdout: result.stdout };
   }
 
-  log.error(`Error getting tex count for ${context}`);
+  yield* Effect.logError(`Error getting tex count for ${context}`);
   if (result.stdout) {
-    log.error(`Stdout: ${result.stdout}`);
+    yield* Effect.logError(`Stdout: ${result.stdout}`);
   }
   if (result.stderr) {
-    log.error(`Stderr: ${result.stderr}`);
+    yield* Effect.logError(`Stderr: ${result.stderr}`);
   }
 
   return {
@@ -105,74 +129,87 @@ async function runTexcount(
       `texcount failed while processing ${context}.` +
       (result.stderr ? ` Details: ${result.stderr}` : ''),
   };
-}
+});
 
-async function getIndividualCounts(
-  paths: string[],
+const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
+  function* (
+    paths: readonly string[],
+    channel: string,
+    includeReferenced: boolean,
+  ) {
+    const results = yield* Effect.forEach(
+      paths,
+      (filePath) =>
+        Effect.gen(function* () {
+          const absolutePath = pathToLocation(filePath).absolutePath;
+          const reason = yield* rejectionReason(absolutePath);
+          if (reason) {
+            return { output: null, error: reason };
+          }
+
+          const args: string[] = [];
+          if (includeReferenced) {
+            args.push('-inc');
+          }
+          if (yield* hasChinesePackages(absolutePath)) {
+            args.push('-ch-only');
+          }
+          args.push(filePath);
+
+          const { stdout, error } = yield* runTexcount(args, channel, filePath);
+          return {
+            output: stdout
+              ? `TeX Count Results for ${filePath}:\n${stdout}`
+              : null,
+            error,
+          };
+        }),
+      { concurrency: COUNT_CONCURRENCY },
+    );
+
+    return {
+      outputs: results.map((result) => result.output).filter(filterNotNull),
+      errors: results.map((result) => result.error).filter(filterNotNullish),
+    };
+  },
+);
+
+const getSummedCount = Effect.fn('texcount.getSummedCount')(function* (
+  paths: readonly string[],
   channel: string,
-  includeReferenced: boolean,
-  signal?: AbortSignal,
-): Promise<{ outputs: string[]; errors: string[] }> {
-  const results = await Promise.all(
-    paths.map(async (filePath) => {
-      const absolutePath = pathToLocation(filePath).absolutePath;
-      const reason = await rejectionReason(absolutePath, channel);
-      if (reason) {
-        return { output: null, error: reason };
-      }
+) {
+  const errors: string[] = [];
 
-      const args: string[] = [];
-      if (includeReferenced) {
-        args.push('-inc');
-      }
-      if (await hasChinesePackages(absolutePath)) {
-        args.push('-ch-only');
-      }
-      args.push(filePath);
-
-      const { stdout, error } = await runTexcount(
-        args,
-        channel,
-        filePath,
-        signal,
-      );
-      return {
-        output: stdout ? `TeX Count Results for ${filePath}:\n${stdout}` : null,
-        error,
-      };
-    }),
+  // The per-file probes fan out; the sum itself is a single texcount call
+  // over whatever survived, so the results are folded back in input order.
+  const screened = yield* Effect.forEach(
+    paths,
+    (filePath) =>
+      Effect.gen(function* () {
+        const absolutePath = pathToLocation(filePath).absolutePath;
+        const reason = yield* rejectionReason(absolutePath);
+        if (reason) return { filePath, reason, chinese: false };
+        return {
+          filePath,
+          reason: null,
+          chinese: yield* hasChinesePackages(absolutePath),
+        };
+      }),
+    { concurrency: COUNT_CONCURRENCY },
   );
 
-  return {
-    outputs: results.map((result) => result.output).filter(filterNotNull),
-    errors: results.map((result) => result.error).filter(filterNotNullish),
-  };
-}
-
-async function getSummedCount(
-  paths: string[],
-  channel: string,
-  signal?: AbortSignal,
-): Promise<{ output: string | null; errors: string[] }> {
-  const log = createLog(channel);
   const validPaths: string[] = [];
-  const errors: string[] = [];
   let enableChineseMode = false;
-
-  for (const filePath of paths) {
-    const absolutePath = pathToLocation(filePath).absolutePath;
-    const reason = await rejectionReason(absolutePath, channel);
-    if (reason) {
-      errors.push(reason);
+  for (const entry of screened) {
+    if (entry.reason) {
+      errors.push(entry.reason);
       continue;
     }
-
-    validPaths.push(filePath);
-
-    if (!enableChineseMode && (await hasChinesePackages(absolutePath))) {
+    validPaths.push(entry.filePath);
+    if (!enableChineseMode && entry.chinese) {
       enableChineseMode = true;
-      log.debug(
-        `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
+      yield* Effect.logDebug(
+        `Chinese packages detected in ${entry.filePath}, enabling Chinese character counting`,
       );
     }
   }
@@ -193,11 +230,10 @@ async function getSummedCount(
   }
   args.push(...validPaths);
 
-  const { stdout, error } = await runTexcount(
+  const { stdout, error } = yield* runTexcount(
     args,
     channel,
     `sum for ${validPaths.join(', ')}`,
-    signal,
   );
   if (!stdout) {
     if (error) {
@@ -210,51 +246,40 @@ async function getSummedCount(
     output: `Combined TeX Count Results (sum):\n${stdout}`,
     errors,
   };
-}
+});
 
-export async function getTeXCount(
+export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   filePaths: string | string[],
-  // `signal` rides alongside the schema-derived options: it's a runtime
-  // capability, not data, so it stays out of the Zod schema.
-  {
-    mode = 'separate',
-    channel,
-    signal,
-  }: TexcountOptions & { signal?: AbortSignal } = {},
-): Promise<TexcountResult> {
+  { mode = 'separate', channel }: TexcountOptions = {},
+): Effect.fn.Return<TexcountResult, never> {
   const resolvedChannel = channel ?? CHANNEL;
-  const log = createLog(resolvedChannel);
 
-  try {
-    const paths = ensureArray(filePaths);
-    const trimmedPaths = paths
+  const counted = Effect.gen(function* () {
+    const trimmedPaths = ensureArray(filePaths)
       .map((filePath) => filePath.trim())
       .filter((filePath) => filePath.length > 0);
 
     if (trimmedPaths.length === 0) {
       const message = 'No LaTeX files provided for texcount.';
-      log.warn(message);
+      yield* Effect.logWarning(message);
       return { output: null, errors: [message] };
     }
 
     if (mode === 'sum') {
-      const { output, errors } = await getSummedCount(
+      const { output, errors } = yield* getSummedCount(
         trimmedPaths,
         resolvedChannel,
-        signal,
       );
       if (output) {
-        log.info(`Combined TeX Count Results:\n${output}`);
+        yield* Effect.logInfo(`Combined TeX Count Results:\n${output}`);
       }
       return { output, errors };
     }
 
-    const includeReferenced = mode === 'include';
-    const { outputs, errors } = await getIndividualCounts(
+    const { outputs, errors } = yield* getIndividualCounts(
       trimmedPaths,
       resolvedChannel,
-      includeReferenced,
-      signal,
+      mode === 'include',
     );
     if (outputs.length === 0) {
       if (errors.length === 0) {
@@ -264,14 +289,27 @@ export async function getTeXCount(
     }
 
     const combinedOutput = outputs.join('\n\n');
-    log.info(`Combined TeX Count Results:\n${combinedOutput}`);
+    yield* Effect.logInfo(`Combined TeX Count Results:\n${combinedOutput}`);
     return { output: combinedOutput, errors };
-  } catch (err) {
-    const errorMessage = `Error in getTeXCount: ${toErrorMessage(err)}`;
-    log.error(errorMessage);
-    return { output: null, errors: [errorMessage] };
-  }
-}
+  });
+
+  // Every failure below is a counting failure, reported in `errors` rather
+  // than raised: a caller asking for a word count wants the partial answer
+  // and the reason, not a thrown run.
+  return yield* counted.pipe(
+    Effect.catch((err) =>
+      Effect.suspend(() => {
+        const errorMessage = `Error in getTeXCount: ${toErrorMessage(err)}`;
+        return Effect.logError(errorMessage).pipe(
+          Effect.as<TexcountResult>({ output: null, errors: [errorMessage] }),
+        );
+      }),
+    ),
+    // One channel for the whole count: every helper below logs into it
+    // instead of taking the channel as a parameter of its own.
+    withLogChannel(resolvedChannel),
+  );
+});
 
 interface TeXCountStat {
   label: string;
@@ -294,12 +332,11 @@ export function parseTeXCountStats(output: string): TeXCountStat[] {
   }).filter(filterNotNull);
 }
 
-export async function getTeXCountStats(
-  filePaths: string | string[],
-  channel: string = CHANNEL,
-): Promise<string | null> {
-  const { output } = await getTeXCount(filePaths, { channel });
-  return output
-    ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
-    : null;
-}
+export const getTeXCountStats = Effect.fn('texcount.getTeXCountStats')(
+  function* (filePaths: string | string[], channel: string = CHANNEL) {
+    const { output } = yield* getTeXCount(filePaths, { channel });
+    return output
+      ? `TeX Count Statistics:<texcount>\n${output}\n</texcount>\n\n`
+      : null;
+  },
+);

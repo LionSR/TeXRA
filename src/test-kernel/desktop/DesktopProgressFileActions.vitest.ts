@@ -90,13 +90,14 @@ async function loadFileActions(options: {
         }),
   );
 
-  const runDiff = vi.fn(
-    async (): Promise<LaTeXdiffResult> =>
+  const runDiff = vi.fn((): Effect.Effect<LaTeXdiffResult> =>
+    Effect.succeed(
       options.fallbackResult ?? {
         success: true,
         diffPath: absolutePath('workspace', 'main_diff.tex'),
         message: 'diff written',
       },
+    ),
   );
 
   mocks.doMock('@platform/platform', () => ({

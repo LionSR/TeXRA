@@ -469,9 +469,8 @@ export function createDesktopHostRequests(
     }
     const base = pathToLocation(baseFile);
     if (action === 'latexdiffvc') {
-      const result = await new LaTeXdiffService(LATEXDIFF_CHANNEL).runDiffVc(
-        base,
-        commit,
+      const result = await effectRuntime().runPromise(
+        new LaTeXdiffService(LATEXDIFF_CHANNEL).runDiffVc(base, commit),
       );
       if (!result.success) throw new Rejected({ reason: result.message });
       await host.openBuildDisplay(createExternalLocation(result.diffPath));

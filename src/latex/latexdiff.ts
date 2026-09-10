@@ -1,9 +1,12 @@
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { formatError, isFileNotFoundError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { ensureError } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { executeCommand } from '@utils/system/execUtils';
 import {
@@ -32,6 +35,15 @@ export type LaTeXdiffResult =
       message: string;
     };
 
+/** A failed diff, as the value every entry point resolves to. */
+function failed(message: string): LaTeXdiffResult {
+  return { success: false, message };
+}
+
+function succeeded(diffPath: string, message: string): LaTeXdiffResult {
+  return { success: true, diffPath, message };
+}
+
 function hasDocumentEnvironment(content: string): boolean {
   return (
     content.includes('\\begin{document}') && content.includes('\\end{document}')
@@ -42,65 +54,81 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
-  private readonly log = createLog(this.channel);
-
   constructor(private readonly channel: string) {
     this.fileProcessor = new DiffFileProcessor();
     this.commandExecutor = new DiffCommandExecutor(channel);
   }
 
-  private logDiffError(context: string, err: unknown): LaTeXdiffResult {
-    const message = formatError(context, err);
-    this.log.error(message);
-    return { success: false, message };
+  /**
+   * Turn a diff failure into the service's own result value. Every public
+   * entry point ends here, so a caller never has to distinguish "latexdiff
+   * refused" from "the run threw".
+   */
+  private failure(
+    context: string,
+  ): (err: unknown) => Effect.Effect<LaTeXdiffResult> {
+    return (err) =>
+      Effect.suspend(() => {
+        const message = formatError(context, err);
+        return Effect.logError(message).pipe(Effect.as(failed(message)));
+      });
+  }
+
+  private read(absolutePath: string): Effect.Effect<string, Error> {
+    return Effect.tryPromise({
+      try: () => AbsoluteFS.read(absolutePath),
+      catch: ensureError,
+    });
   }
 
   /** Read both diff inputs, returning null when either input no longer exists. */
-  private async readDiffInputs(
+  private readDiffInputs(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
-  ): Promise<[string, string] | null> {
-    try {
-      return await Promise.all([
-        AbsoluteFS.read(inputLocation.absolutePath),
-        AbsoluteFS.read(editedLocation.absolutePath),
-      ]);
-    } catch (error) {
-      if (isFileNotFoundError(error)) return null;
-      throw error;
-    }
+  ): Effect.Effect<[string, string] | null, Error> {
+    return Effect.all(
+      [
+        this.read(inputLocation.absolutePath),
+        this.read(editedLocation.absolutePath),
+      ],
+      { concurrency: 2 },
+    ).pipe(
+      Effect.catchIf(isFileNotFoundError, () =>
+        Effect.succeed<[string, string] | null>(null),
+      ),
+    );
   }
 
-  async runDiff(
+  runDiff(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
     suffix = '_diff',
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; subtype?: string; outputDirectory?: string },
-  ): Promise<LaTeXdiffResult> {
-    try {
+  ): Effect.Effect<LaTeXdiffResult> {
+    return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
       const editedFile = editedLocation.absolutePath;
 
       if (!inputFile) {
-        this.log.warn('Input file is empty or undefined');
-        return { success: false, message: 'Input file is empty or undefined' };
+        yield* Effect.logWarning('Input file is empty or undefined');
+        return failed('Input file is empty or undefined');
       }
 
       // Direct callers use one read pass for both existence and document
       // structure validation. Round-specific wrappers keep their earlier
       // exists checks so they can report round-specific error messages.
-      const contents = await this.readDiffInputs(inputLocation, editedLocation);
+      const contents = yield* this.readDiffInputs(
+        inputLocation,
+        editedLocation,
+      );
       if (!contents) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
-        this.log.warn(message);
-        return { success: false, message };
+        yield* Effect.logWarning(message);
+        return failed(message);
       }
       if (!contents.every(hasDocumentEnvironment)) {
-        return {
-          success: false,
-          message: 'Files missing document environment',
-        };
+        return failed('Files missing document environment');
       }
 
       const diffFileName = generateDiffFileName(inputFile, editedFile, suffix);
@@ -108,68 +136,74 @@ export class LaTeXdiffService {
         options?.outputDirectory ?? path.dirname(inputFile);
       const outputPath = path.join(outputDirectory, diffFileName);
 
-      this.log.debug(
+      yield* Effect.logDebug(
         `Running latexdiff for ${inputLocation.absolutePath} and ${editedLocation.absolutePath}`,
       );
 
-      // Execute latexdiff command
-      const result = await this.commandExecutor.executeDiff(
+      const result = yield* this.commandExecutor.executeDiff(
         inputFile,
         editedFile,
         { mathMarkup, subtype: options?.subtype, cwd: options?.cwd },
       );
       if (!result.stdout) {
-        throw new Error('Latexdiff produced no output');
+        return yield* Effect.fail(new Error('Latexdiff produced no output'));
       }
 
       // Write and process output
-      await AbsoluteFS.ensureDir(outputDirectory);
       const outputLocation = pathToLocation(outputPath);
-      await AbsoluteFS.write(outputLocation.absolutePath, result.stdout);
-      await this.fileProcessor.processDiffFile(outputLocation, editedLocation);
+      yield* Effect.tryPromise({
+        try: async () => {
+          await AbsoluteFS.ensureDir(outputDirectory);
+          await AbsoluteFS.write(outputLocation.absolutePath, result.stdout);
+        },
+        catch: ensureError,
+      });
+      yield* this.fileProcessor.processDiffFile(outputLocation, editedLocation);
 
-      this.log.debug(
+      yield* Effect.logDebug(
         `Latexdiff succeeded: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
       );
 
-      return {
-        success: true,
-        diffPath: outputLocation.absolutePath,
-        message: `LaTeXdiff completed successfully: ${diffFileName}`,
-      };
-    } catch (err) {
-      this.log.debug(
-        `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
+      return succeeded(
+        outputLocation.absolutePath,
+        `LaTeXdiff completed successfully: ${diffFileName}`,
       );
-      return this.logDiffError('Error running LaTeX diff', err);
-    }
+    }).pipe(
+      Effect.tapError(() =>
+        Effect.logDebug(
+          `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
+        ),
+      ),
+      Effect.catch(this.failure('Error running LaTeX diff')),
+      withLogChannel(this.channel),
+    );
   }
 
-  async runDiffVc(
+  runDiffVc(
     inputLocation: FileLocation,
     commitHash: string,
     mathMarkup?: MathMarkupOption,
-  ): Promise<LaTeXdiffResult> {
-    try {
+  ): Effect.Effect<LaTeXdiffResult> {
+    return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
-      if (!hasDocumentEnvironment(await AbsoluteFS.read(inputFile))) {
+      if (!hasDocumentEnvironment(yield* this.read(inputFile))) {
         const message =
           'File missing document environment (must contain \\begin{document} and \\end{document})';
-        this.log.error(message);
-        return { success: false, message };
+        yield* Effect.logError(message);
+        return failed(message);
       }
 
       // latexdiff-vc --git runs `git show <commit>:<file>`, which expects
       // a path relative to the repo root. Absolute paths break its temp
       // path construction. Resolve via git rev-parse to get the repo root.
       const fileDir = path.dirname(inputFile);
-      const gitRoot = await this.getGitRoot(fileDir);
+      const gitRoot = yield* this.getGitRoot(fileDir);
       const cwd = gitRoot ?? fileDir;
       const filePath = gitRoot
         ? path.relative(gitRoot, inputFile)
         : path.basename(inputFile);
 
-      await this.commandExecutor.executeDiffVc(filePath, commitHash, {
+      yield* this.commandExecutor.executeDiffVc(filePath, commitHash, {
         mathMarkup,
         cwd,
       });
@@ -185,96 +219,106 @@ export class LaTeXdiffService {
         `${parsedFilePath.name}-diff${commitHash}${parsedFilePath.ext}`,
       );
       const outputPath = path.join(cwd, diffFilePath);
-      await this.fileProcessor.processDiffFile(
+      yield* this.fileProcessor.processDiffFile(
         pathToLocation(outputPath),
         inputLocation,
       );
 
       const diffFileName = path.basename(diffFilePath);
 
-      return {
-        success: true,
-        diffPath: outputPath,
-        message: `LaTeXdiff VC completed successfully: ${diffFileName}`,
-      };
-    } catch (err) {
-      return this.logDiffError('Error running LaTeX diff VC', err);
-    }
+      return succeeded(
+        outputPath,
+        `LaTeXdiff VC completed successfully: ${diffFileName}`,
+      );
+    }).pipe(
+      Effect.catch(this.failure('Error running LaTeX diff VC')),
+      withLogChannel(this.channel),
+    );
   }
 
-  async runDiffForRound(
+  runDiffForRound(
     baseLocation: FileLocation,
     outputLocation: FileLocation,
     round: number,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; outputDirectory?: string },
-  ): Promise<LaTeXdiffResult> {
-    try {
-      if (!(await this.bothFilesExist(baseLocation, outputLocation))) {
+  ): Effect.Effect<LaTeXdiffResult> {
+    return Effect.gen({ self: this }, function* () {
+      if (!(yield* this.bothFilesExist(baseLocation, outputLocation))) {
         const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
-        this.log.warn(message);
-        return { success: false, message };
+        yield* Effect.logWarning(message);
+        return failed(message);
       }
 
-      return await this.runDiff(
+      return yield* this.runDiff(
         baseLocation,
         outputLocation,
         '_diff',
         mathMarkup,
         options,
       );
-    } catch (err) {
-      return this.logDiffError('Error in runDiffForRound', err);
-    }
+    }).pipe(
+      Effect.catch(this.failure('Error in runDiffForRound')),
+      withLogChannel(this.channel),
+    );
   }
 
-  async runDiffBetweenRounds(
+  runDiffBetweenRounds(
     firstLocation: FileLocation,
     secondLocation: FileLocation,
     fromRound: number,
     toRound: number,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; outputDirectory?: string },
-  ): Promise<LaTeXdiffResult> {
-    try {
-      if (!(await this.bothFilesExist(firstLocation, secondLocation))) {
+  ): Effect.Effect<LaTeXdiffResult> {
+    return Effect.gen({ self: this }, function* () {
+      if (!(yield* this.bothFilesExist(firstLocation, secondLocation))) {
         const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
-        this.log.warn(message);
-        return { success: false, message };
+        yield* Effect.logWarning(message);
+        return failed(message);
       }
 
       const diffSuffix = buildBetweenRoundDiffSuffix(toRound, fromRound);
-      return await this.runDiff(
+      return yield* this.runDiff(
         firstLocation,
         secondLocation,
         diffSuffix,
         mathMarkup,
         options,
       );
-    } catch (err) {
-      return this.logDiffError('Error in runDiffBetweenRounds', err);
-    }
+    }).pipe(
+      Effect.catch(this.failure('Error in runDiffBetweenRounds')),
+      withLogChannel(this.channel),
+    );
   }
 
-  private async bothFilesExist(
+  private bothFilesExist(
     first: FileLocation,
     second: FileLocation,
-  ): Promise<boolean> {
-    const [firstExists, secondExists] = await Promise.all([
-      AbsoluteFS.exists(first.absolutePath),
-      AbsoluteFS.exists(second.absolutePath),
-    ]);
-    return firstExists && secondExists;
+  ): Effect.Effect<boolean, Error> {
+    const exists = (location: FileLocation) =>
+      Effect.tryPromise({
+        try: () => AbsoluteFS.exists(location.absolutePath),
+        catch: ensureError,
+      });
+    return Effect.all([exists(first), exists(second)], {
+      concurrency: 2,
+    }).pipe(Effect.map(([a, b]) => a && b));
   }
 
-  private async getGitRoot(cwd: string): Promise<string | null> {
-    const result = await executeCommand(
-      ['git', 'rev-parse', '--show-toplevel'],
-      {
-        channel: this.channel,
-        cwd,
-      },
+  private getGitRoot(cwd: string): Effect.Effect<string | null, Error> {
+    return Effect.tryPromise({
+      try: (signal) =>
+        executeCommand(['git', 'rev-parse', '--show-toplevel'], {
+          channel: this.channel,
+          cwd,
+          signal,
+        }),
+      catch: ensureError,
+    }).pipe(
+      Effect.map((result) =>
+        result.success && result.stdout ? result.stdout.trim() : null,
+      ),
     );
-    return result.success && result.stdout ? result.stdout.trim() : null;
   }
 }

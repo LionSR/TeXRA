@@ -50,9 +50,10 @@ export function isDebugModeEnabled(): boolean {
 /**
  * Render a debug payload for display. Errors don't survive `JSON.stringify`,
  * so they're flattened here; `safe-stable-stringify` already renders circular
- * references as `"[Circular]"`.
+ * references as `"[Circular]"`. Shared with `@logger/effectLog`, so an entry
+ * carries the same rendered payload whichever producer wrote it.
  */
-function formatLogData(data: unknown): string {
+export function formatLogData(data: unknown): string {
   if (typeof data !== 'object' || data === null) return String(data);
   return (
     safeStringify(

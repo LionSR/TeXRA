@@ -1,7 +1,10 @@
+import { Effect } from 'effect';
+
 import { BaseNode } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import { effectRuntime } from '@platform/processRuntime';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 
 import { getFilesForRound } from '../helpers';
@@ -54,22 +57,29 @@ export class MediaExtractionNode extends BaseNode<
       return null;
     }
 
+    // The one Promise seam left in this node: the media manager is Effect
+    // below this line, and the flow engine above it is not. The run goes when
+    // the reflection flow itself becomes a plain Effect loop (PRD R4).
     if (prepRes.currentRound === 0) {
-      await latexMediaManager.processInputFiles(
-        prepRes.files,
-        prepRes.workspaceState,
-        config.toolConfig,
-        prepRes.extraMediaFiles,
+      await effectRuntime().runPromise(
+        latexMediaManager.processInputFiles(
+          prepRes.files,
+          prepRes.workspaceState,
+          config.toolConfig,
+          prepRes.extraMediaFiles,
+        ),
       );
     } else {
       // Output files live at `runDir/r{round}/…`; mirror mirrored-workspace
       // deps (cls/sty/bib, local \input targets) as symlinks inside the
       // round dir so pdflatex/latexmk can resolve them during auto-compile.
       await fileService.ensureMirroredInRoundDir(prepRes.currentRound);
-      await latexMediaManager.processOutputFiles(
-        prepRes.files,
-        prepRes.workspaceState,
-        config.toolConfig,
+      await effectRuntime().runPromise(
+        latexMediaManager.processOutputFiles(
+          prepRes.files,
+          prepRes.workspaceState,
+          config.toolConfig,
+        ),
       );
     }
 

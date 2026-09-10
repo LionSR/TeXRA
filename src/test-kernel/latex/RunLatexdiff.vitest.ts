@@ -1,10 +1,16 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { LaTeXdiffService } from '@latex/latexdiff';
 import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
+import type { DiffRunOutcome } from '@latex/latexdiff/types';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
+import { captureLogEntries } from '@test/support/logSinkCapture';
+import { installPlatform } from '@test/support/setupPlatform';
+
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
 
 const mocks = vi.hoisted(() => ({
@@ -35,8 +41,12 @@ const latexdiff = {
   service: {} as LaTeXdiffService,
 };
 
-const METADATA_OUTCOME = { results: [], totalOperations: 1 };
-const SCAN_OUTCOME = { results: [], totalOperations: 2 };
+/**
+ * The diff engines are mocked here, so the outcome is a placeholder: these
+ * tests assert which engine ran and how the outputs were resolved, never what
+ * the engine returned.
+ */
+const EMPTY_OUTCOME: DiffRunOutcome = { results: [] };
 
 function roundMap(): RoundIndexed<OutputFileInfo> {
   return { 1: [] as OutputFileInfo[] };
@@ -64,177 +74,177 @@ const baseRequest = {
 describe('runLatexdiffForExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.runLatexdiffFromMetadata.mockResolvedValue(METADATA_OUTCOME);
-    mocks.runLatexdiffViaWorkspaceScan.mockResolvedValue(SCAN_OUTCOME);
+    mocks.runLatexdiffFromMetadata.mockReturnValue(
+      Effect.succeed(EMPTY_OUTCOME),
+    );
+    mocks.runLatexdiffViaWorkspaceScan.mockReturnValue(
+      Effect.succeed(EMPTY_OUTCOME),
+    );
   });
 
-  it('uses caller-supplied outputs without any discovery', async () => {
-    const rounds = roundMap();
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({
+  it.effect('uses caller-supplied outputs without any discovery', () =>
+    Effect.gen(function* () {
+      const rounds = roundMap();
+      const result = yield* runLatexdiffForExecution({
         ...baseRequest,
         outputsByRound: rounds,
+      });
+
+      expect(result.source).toBe('metadata');
+      expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ rounds }),
+      );
+      expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
+      expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect(
+    'scopes a valid runId to a run-dir scan before metadata discovery',
+    () =>
+      Effect.gen(function* () {
+        mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
+
+        const result = yield* runLatexdiffForExecution({
+          ...baseRequest,
+          runId: 'abc123',
+        });
+
+        expect(result.source).toBe('run-dir-scan');
+        expect(result.executionId).toBe('abc123');
+        expect(mocks.scanRunDirForOutputs).toHaveBeenCalledWith(
+          'abc123',
+          'paper.tex',
+          undefined,
+          'test',
+          baseRequest.filesystem,
+        );
+        expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
+        expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
       }),
-    );
+  );
 
-    expect(result.source).toBe('metadata');
-    expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({ rounds }),
-    );
-    expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
-    expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
-  });
+  it.effect(
+    'does not fall back to auto-discovery when a pinned runId scan misses',
+    () =>
+      Effect.gen(function* () {
+        mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(null));
 
-  it('scopes a valid runId to a run-dir scan before metadata discovery', async () => {
-    mocks.scanRunDirForOutputs.mockResolvedValue(roundMap());
+        const result = yield* runLatexdiffForExecution({
+          ...baseRequest,
+          runId: 'abc123',
+        });
 
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({
-        ...baseRequest,
-        runId: 'abc123',
+        expect(result.source).toBe('workspace-scan');
+        expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
+        expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalled();
       }),
-    );
+  );
 
-    expect(result.source).toBe('run-dir-scan');
-    expect(result.executionId).toBe('abc123');
-    expect(mocks.scanRunDirForOutputs).toHaveBeenCalledWith(
-      'abc123',
-      'paper.tex',
-      undefined,
-      'test',
-      baseRequest.filesystem,
-    );
-    expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
-    expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
-  });
+  it.effect(
+    'ignores an invalid runId without scanning or auto-discovering',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* runLatexdiffForExecution({
+          ...baseRequest,
+          runId: 'not-hex!',
+        });
 
-  it('does not fall back to auto-discovery when a pinned runId scan misses', async () => {
-    mocks.scanRunDirForOutputs.mockResolvedValue(null);
-
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({
-        ...baseRequest,
-        runId: 'abc123',
+        expect(result.source).toBe('workspace-scan');
+        expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
+        expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
+        expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalled();
       }),
-    );
+  );
 
-    expect(result.source).toBe('workspace-scan');
-    expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
-    expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalled();
-  });
+  it.effect('auto-discovers by agent/model/input when no runId is given', () =>
+    Effect.gen(function* () {
+      mocks.discoverLatestExecutionOutputs.mockReturnValue(
+        Effect.succeed({
+          executionId: 'def456',
+          rounds: roundMap(),
+        }),
+      );
 
-  it('ignores an invalid runId without scanning or auto-discovering', async () => {
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({
-        ...baseRequest,
-        runId: 'not-hex!',
+      const result = yield* runLatexdiffForExecution({ ...baseRequest });
+
+      expect(result.source).toBe('metadata');
+      expect(result.executionId).toBe('def456');
+      expect(mocks.discoverLatestExecutionOutputs).toHaveBeenCalledWith(
+        executionDiscovery,
+        snapshots,
+        {
+          agent: 'revise',
+          model: 'claude-opus-4-8',
+          inputFile: 'paper.tex',
+        },
+        'test',
+        baseRequest.filesystem,
+      );
+      expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
+    }),
+  );
+
+  it.effect(
+    'falls back to a workspace scan when auto-discovery finds nothing',
+    () =>
+      Effect.gen(function* () {
+        mocks.discoverLatestExecutionOutputs.mockReturnValue(
+          Effect.succeed(null),
+        );
+
+        const result = yield* runLatexdiffForExecution({ ...baseRequest });
+
+        expect(result.source).toBe('workspace-scan');
+        expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agent: 'revise',
+            model: 'claude-opus-4-8',
+            inputFile: 'paper.tex',
+          }),
+        );
       }),
-    );
-
-    expect(result.source).toBe('workspace-scan');
-    expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
-    expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
-    expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalled();
-  });
-
-  it('auto-discovers by agent/model/input when no runId is given', async () => {
-    mocks.discoverLatestExecutionOutputs.mockReturnValue(
-      Effect.succeed({
-        executionId: 'def456',
-        rounds: roundMap(),
-      }),
-    );
-
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({ ...baseRequest }),
-    );
-
-    expect(result.source).toBe('metadata');
-    expect(result.executionId).toBe('def456');
-    expect(mocks.discoverLatestExecutionOutputs).toHaveBeenCalledWith(
-      executionDiscovery,
-      snapshots,
-      {
-        agent: 'revise',
-        model: 'claude-opus-4-8',
-        inputFile: 'paper.tex',
-      },
-      'test',
-      baseRequest.filesystem,
-    );
-    expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
-  });
-
-  it('falls back to a workspace scan when auto-discovery finds nothing', async () => {
-    mocks.discoverLatestExecutionOutputs.mockReturnValue(Effect.succeed(null));
-
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({ ...baseRequest }),
-    );
-
-    expect(result.source).toBe('workspace-scan');
-    expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'revise',
-        model: 'claude-opus-4-8',
-        inputFile: 'paper.tex',
-      }),
-    );
-  });
+  );
 });
 
-// #10635: runLatexdiffForExecution resolves its logger per call from the
-// latexdiff runtime channel — a logger-namespace spy must observe that channel.
-describe('runLatexdiffForExecution logger seam', () => {
-  beforeEach(() => {
+// #10635: runLatexdiffForExecution names the latexdiff runtime channel once
+// for the whole run, so a line any discovery step writes lands on it.
+describe('runLatexdiffForExecution diagnostics', () => {
+  beforeEach(async () => {
     vi.clearAllMocks();
-    mocks.runLatexdiffFromMetadata.mockResolvedValue(METADATA_OUTCOME);
-    mocks.runLatexdiffViaWorkspaceScan.mockResolvedValue(SCAN_OUTCOME);
+    // Debug mode on: the Effect logger drops `Debug` entries otherwise, and
+    // this assertion is about the channel, not that gate.
+    await installPlatform({ config: { 'texra.logger.debugMode': true } });
+    mocks.runLatexdiffFromMetadata.mockReturnValue(
+      Effect.succeed(EMPTY_OUTCOME),
+    );
   });
 
   afterEach(() => {
+    setLogSink(null);
     vi.restoreAllMocks();
   });
 
-  it('logs the run-dir scan resolution on the latexdiff runtime channel', async () => {
-    mocks.scanRunDirForOutputs.mockResolvedValue(roundMap());
-    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+  it.effect('names the latexdiff runtime channel on discovery lines', () =>
+    Effect.gen(function* () {
+      mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
+      const logs = captureLogEntries();
 
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({
+      const result = yield* runLatexdiffForExecution({
         ...baseRequest,
         runId: 'abc123',
-      }),
-    );
+      });
 
-    expect(result.source).toBe('run-dir-scan');
-    expect(debug).toHaveBeenCalledWith(
-      'test',
-      expect.stringContaining(
-        'Using run-dir scan outputs from execution abc123',
-      ),
-    );
-  });
-
-  it('logs the metadata discovery resolution on the latexdiff runtime channel', async () => {
-    mocks.discoverLatestExecutionOutputs.mockReturnValue(
-      Effect.succeed({
-        executionId: 'def456',
-        rounds: roundMap(),
-      }),
-    );
-    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
-
-    const result = await Effect.runPromise(
-      runLatexdiffForExecution({ ...baseRequest }),
-    );
-
-    expect(result.source).toBe('metadata');
-    expect(debug).toHaveBeenCalledWith(
-      'test',
-      expect.stringContaining('Using metadata outputs from execution def456'),
-    );
-  });
+      expect(result.source).toBe('run-dir-scan');
+      expect(
+        logs.has(
+          'DEBUG',
+          'test',
+          'Using run-dir scan outputs from execution abc123',
+        ),
+      ).toBe(true);
+    }).pipe(Effect.provide(effectDiagnosticsLayer)),
+  );
 });
 
 describe('normalizeRunLatexdiffOutputsByRound', () => {
