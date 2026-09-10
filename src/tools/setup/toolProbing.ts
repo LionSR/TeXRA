@@ -1,4 +1,8 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
+import { hostPort } from '@common/hostPort';
 import {
   CORE_LATEX_TOOLS,
   IMAGE_TOOLS,
@@ -31,15 +35,17 @@ const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_TOOLS);
  * (e.g. `node`, `git`, or an arbitrary binary the user asks about). The PATH
  * search also supplies the absolute path presented alongside the flag.
  */
-export async function locateTool(name: string): Promise<ToolStatus> {
-  const knownInstalled = await checkToolInstalled(name, false);
+export const locateTool = Effect.fn('locateTool')(function* (
+  name: string,
+): Effect.fn.Return<ToolStatus, unknown> {
+  const knownInstalled = yield* hostPort(() => checkToolInstalled(name, false));
   const resolvedPath = BinaryResolver.findPath(name);
   return {
     name,
     installed: knownInstalled || resolvedPath !== null,
     path: resolvedPath ?? undefined,
   };
-}
+});
 
 /**
  * Names of the missing core dependencies, given statuses for the whole of
@@ -64,14 +70,17 @@ function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
  * means. Each tool's divergent credential/optional-tool handling stays in the
  * tool.
  */
-export async function collectCoreSetupStatus(platform: SetupPlatform) {
-  const auth = await getSetupAuthStatus();
-  const coreTools = await Promise.all(
-    PROBED_CORE_TOOLS.map((name) => locateTool(name)),
-  );
-  const missingCore = missingCoreTools(coreTools);
-  const latexWorkshopInstalled = platform.extensions?.isInstalled(
-    LATEX_WORKSHOP_EXT_ID,
-  );
-  return { auth, coreTools, missingCore, latexWorkshopInstalled };
-}
+export const collectCoreSetupStatus = Effect.fn('collectCoreSetupStatus')(
+  function* (platform: SetupPlatform) {
+    const auth = yield* getSetupAuthStatus();
+    const coreTools = yield* Effect.all(
+      PROBED_CORE_TOOLS.map((name) => locateTool(name)),
+      { concurrency: 'unbounded' },
+    );
+    const missingCore = missingCoreTools(coreTools);
+    const latexWorkshopInstalled = platform.extensions?.isInstalled(
+      LATEX_WORKSHOP_EXT_ID,
+    );
+    return { auth, coreTools, missingCore, latexWorkshopInstalled };
+  },
+);

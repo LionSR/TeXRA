@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { errnoError } from '@test/support/fsTestUtils';
@@ -88,7 +89,7 @@ vi.mock('@utils/system/platformPaths', () => ({
 async function loadMatcher() {
   vi.resetModules();
   const { getGitignoreMatcher } = await import('@tools/gitignore');
-  return getGitignoreMatcher();
+  return Effect.runPromise(getGitignoreMatcher());
 }
 
 async function loadWorkspaceMatcher(gitignore: string) {
@@ -162,8 +163,8 @@ describe('getGitignoreMatcher', () => {
     const { getGitignoreMatcher } = await import('@tools/gitignore');
 
     const failedCalls = await Promise.allSettled([
-      getGitignoreMatcher(),
-      getGitignoreMatcher(),
+      Effect.runPromise(getGitignoreMatcher()),
+      Effect.runPromise(getGitignoreMatcher()),
     ]);
 
     for (const result of failedCalls) {
@@ -176,8 +177,8 @@ describe('getGitignoreMatcher', () => {
 
     fsState.workspaceReadErrors.delete('.gitignore');
     const [matcher, concurrentMatcher] = await Promise.all([
-      getGitignoreMatcher(),
-      getGitignoreMatcher(),
+      Effect.runPromise(getGitignoreMatcher()),
+      Effect.runPromise(getGitignoreMatcher()),
     ]);
 
     expect(matcher).toBe(concurrentMatcher);

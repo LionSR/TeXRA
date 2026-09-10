@@ -23,6 +23,9 @@
  * the block instead.
  */
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import {
   findAgentByIdentifier,
@@ -41,6 +44,7 @@ import type {
 import { isModelOptionAvailable } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { unique } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 
 /**
@@ -211,17 +215,35 @@ function formatAvailableModelsLine(
  * against the live availability list so an unavailable choice fails here rather
  * than after launch.
  */
-export async function selectAvailableDelegationModel(input: {
+export const selectAvailableDelegationModel = Effect.fn(
+  'selectAvailableDelegationModel',
+)(function* (input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
-}): Promise<string> {
+  /**
+   * Context frame the availability read runs inside. Callers that reach this
+   * from outside their run's own frame — an approved proposal, a workflow
+   * script's per-call model routing — pass their `withRunContext` /
+   * `runInSession` wrapper here. Only the read needs it; the decision below
+   * is pure.
+   */
+  readonly withScope?: <T>(read: () => T) => T;
+}) {
+  const { withScope } = input;
+  const models = yield* Effect.tryPromise({
+    try: () =>
+      withScope
+        ? withScope(() => computeModelOptionsData())
+        : computeModelOptionsData(),
+    catch: ensureError,
+  });
   const availableModels = unique(
-    availableModelNamesFromOptions(await computeModelOptionsData())
+    availableModelNamesFromOptions(models)
       .map((model) => model.trim())
       .filter(Boolean),
   );
   if (availableModels.length === 0) {
-    throw new Error(NO_DELEGATION_MODELS_MESSAGE);
+    return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));
   }
 
   const decision = decideRunModel(
@@ -237,16 +259,18 @@ export async function selectAvailableDelegationModel(input: {
     (model) => availableModels.includes(model),
   );
   if (!decision) {
-    throw new Error(NO_DELEGATION_MODELS_MESSAGE);
+    return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));
   }
   if (decision.unavailable) {
     const requestedModel = input.requestedModel?.trim() || null;
-    throw new Error(
-      `Model "${requestedModel}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
+    return yield* Effect.fail(
+      new Error(
+        `Model "${requestedModel}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
+      ),
     );
   }
   return decision.model;
-}
+});
 
 /* -------------------------------------------------------------------------
  * Worktree support

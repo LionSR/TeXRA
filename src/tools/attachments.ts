@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { imageSize } from 'image-size';
 
 // Local imports
@@ -7,8 +8,8 @@ import {
   resolveAndFormat,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
-import { wrapApiCall } from '@tools/utils';
 import { isNonEmptyString } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -39,17 +40,29 @@ const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
 const MANY_IMAGE_MAX_DIMENSION = 2000;
 
 /** Returns true if buffer is an image exceeding the many-image dimension limit. */
-function isOversizedImage(buffer: Buffer | Uint8Array): boolean {
-  try {
-    const { width, height } = imageSize(buffer);
-    return (
-      width > MANY_IMAGE_MAX_DIMENSION || height > MANY_IMAGE_MAX_DIMENSION
-    );
-  } catch {
+function isOversizedImage(buffer: Buffer | Uint8Array): Effect.Effect<boolean> {
+  return Effect.try(() => imageSize(buffer)).pipe(
+    Effect.map(
+      ({ width, height }) =>
+        width > MANY_IMAGE_MAX_DIMENSION || height > MANY_IMAGE_MAX_DIMENSION,
+    ),
     // Unrecognized or truncated image data — nothing to measure.
-    return false;
-  }
+    Effect.catch(() => Effect.succeed(false)),
+  );
 }
+
+/**
+ * Preserve a nested ToolError so its message and cause chain survive; wrap
+ * anything else in one prefixed with the operation that failed.
+ */
+const attachmentFailure =
+  (errorPrefix: string) =>
+  (error: unknown): ToolError =>
+    error instanceof ToolError
+      ? error
+      : new ToolError(`${errorPrefix}: ${toErrorMessage(error)}`, {
+          cause: error,
+        });
 
 export interface BuildBytesAttachmentOptions {
   /** Display path surfaced to the model. */
@@ -68,70 +81,92 @@ export interface BuildBytesAttachmentOptions {
  * read_file hint. The returned attachment owns a copy of `bytes`, so callers
  * may zero their own buffer afterwards.
  */
-export function buildBytesAttachment({
-  path,
-  mimeType,
-  bytes,
-  description,
-}: BuildBytesAttachmentOptions): ToolFileAttachment {
-  if (isImageMimeType(mimeType) && isOversizedImage(bytes)) {
+export const buildBytesAttachment = Effect.fn('buildBytesAttachment')(
+  function* ({
+    path,
+    mimeType,
+    bytes,
+    description,
+  }: BuildBytesAttachmentOptions): Effect.fn.Return<ToolFileAttachment, never> {
+    const oversized =
+      isImageMimeType(mimeType) && (yield* isOversizedImage(bytes));
+    if (oversized) {
+      return {
+        path,
+        mimeType,
+        description:
+          (description ? `${description}: ` : '') +
+          `Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
+      };
+    }
+
     return {
       path,
       mimeType,
-      description:
-        (description ? `${description}: ` : '') +
-        `Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
+      bytes: Uint8Array.from(bytes),
+      ...(description && { description }),
     };
-  }
-
-  return {
-    path,
-    mimeType,
-    bytes: Uint8Array.from(bytes),
-    ...(description && { description }),
-  };
-}
+  },
+);
 
 /**
  * Build a tool attachment by reading a workspace file and packaging metadata.
  */
-export async function buildFileAttachment({
+export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   filePath,
   description,
   mimeType,
   resolved,
-}: BuildFileAttachmentOptions): Promise<ToolFileAttachment> {
+}: BuildFileAttachmentOptions): Effect.fn.Return<
+  ToolFileAttachment,
+  ToolError
+> {
   if (!isNonEmptyString(filePath)) {
-    throw new ToolError('Attachment path must be provided.');
-  }
-
-  const { path, display } = resolved
-    ? { path: resolved, display: toPosixPath(resolved.relative) }
-    : resolveAndFormat(filePath);
-  if (!(await WorkspaceFS.exists(path.fsPath))) {
-    throw new ToolError(`Attachment not found: ${display}`);
-  }
-
-  const stats = await wrapApiCall(
-    () => WorkspaceFS.stat(path.fsPath),
-    `Failed to inspect attachment ${display}`,
-  );
-
-  if (stats.size > ATTACHMENT_MAX_BYTES) {
-    throw new ToolError(
-      `Attachment ${display} exceeds maximum size of ${formatBytes(ATTACHMENT_MAX_BYTES)}.`,
+    return yield* Effect.fail(
+      new ToolError('Attachment path must be provided.'),
     );
   }
 
-  const buffer = await wrapApiCall(
-    () => WorkspaceFS.readBytes(path.fsPath),
-    `Failed to read attachment ${display}`,
-  );
+  // An unresolvable path rejects with a ToolError the tool runner reports to
+  // the model, so it stays a failure rather than becoming a defect.
+  const { path, display } = resolved
+    ? { path: resolved, display: toPosixPath(resolved.relative) }
+    : yield* Effect.try({
+        try: () => resolveAndFormat(filePath),
+        catch: attachmentFailure(`Failed to resolve attachment ${filePath}`),
+      });
+  const present = yield* Effect.tryPromise({
+    try: () => WorkspaceFS.exists(path.fsPath),
+    catch: attachmentFailure(`Failed to inspect attachment ${display}`),
+  });
+  if (!present) {
+    return yield* Effect.fail(
+      new ToolError(`Attachment not found: ${display}`),
+    );
+  }
+
+  const stats = yield* Effect.tryPromise({
+    try: () => WorkspaceFS.stat(path.fsPath),
+    catch: attachmentFailure(`Failed to inspect attachment ${display}`),
+  });
+
+  if (stats.size > ATTACHMENT_MAX_BYTES) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Attachment ${display} exceeds maximum size of ${formatBytes(ATTACHMENT_MAX_BYTES)}.`,
+      ),
+    );
+  }
+
+  const buffer = yield* Effect.tryPromise({
+    try: () => WorkspaceFS.readBytes(path.fsPath),
+    catch: attachmentFailure(`Failed to read attachment ${display}`),
+  });
 
   const inferredMime =
     mimeType ?? getMimeType(path.fsPath) ?? 'application/octet-stream';
 
-  const attachment = buildBytesAttachment({
+  const attachment = yield* buildBytesAttachment({
     path: display,
     mimeType: inferredMime,
     bytes: buffer,
@@ -140,4 +175,4 @@ export async function buildFileAttachment({
   buffer.fill(0);
 
   return attachment;
-}
+});

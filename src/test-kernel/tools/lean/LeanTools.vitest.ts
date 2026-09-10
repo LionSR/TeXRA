@@ -124,7 +124,9 @@ describe('Lean external tool status', () => {
     });
 
     await expect(
-      lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      effectRuntime().runPromise(
+        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      ),
     ).resolves.toBeUndefined();
 
     registerLeanServer({
@@ -134,12 +136,16 @@ describe('Lean external tool status', () => {
       status: 'starting',
     });
     await expect(
-      lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      effectRuntime().runPromise(
+        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      ),
     ).resolves.toBe('1 server active');
 
     updateLeanServer('direct:/running', { status: 'running' });
     await expect(
-      lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      effectRuntime().runPromise(
+        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      ),
     ).resolves.toBe('1 server active');
   });
 });
@@ -204,14 +210,16 @@ describe('runLakeCommand mutex', () => {
   });
 
   it('keeps the current 4,194,304-character tail cap and truncation marker', async () => {
-    const result = await runLakeCommand({
-      workspaceRoot: workspaceA,
-      lakeCommand: NODE,
-      args: [
-        '-e',
-        `process.stdout.write('HEAD_MARKER' + 'x'.repeat(${4 * 1024 * 1024 + 100}) + 'TAIL_MARKER')`,
-      ],
-    });
+    const result = await effectRuntime().runPromise(
+      runLakeCommand({
+        workspaceRoot: workspaceA,
+        lakeCommand: NODE,
+        args: [
+          '-e',
+          `process.stdout.write('HEAD_MARKER' + 'x'.repeat(${4 * 1024 * 1024 + 100}) + 'TAIL_MARKER')`,
+        ],
+      }),
+    );
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.startsWith('…[output truncated]…\n')).toBe(true);
@@ -223,14 +231,16 @@ describe('runLakeCommand mutex', () => {
   });
 
   it('preserves non-zero exit diagnostics', async () => {
-    const result = await runLakeCommand({
-      workspaceRoot: workspaceA,
-      lakeCommand: NODE,
-      args: [
-        '-e',
-        `process.stdout.write('build context'); process.stderr.write('compile failed'); process.exit(7)`,
-      ],
-    });
+    const result = await effectRuntime().runPromise(
+      runLakeCommand({
+        workspaceRoot: workspaceA,
+        lakeCommand: NODE,
+        args: [
+          '-e',
+          `process.stdout.write('build context'); process.stderr.write('compile failed'); process.exit(7)`,
+        ],
+      }),
+    );
 
     expect(result).toEqual({
       exitCode: 7,
@@ -240,12 +250,14 @@ describe('runLakeCommand mutex', () => {
   });
 
   it('preserves timeout diagnostics', async () => {
-    const result = await runLakeCommand({
-      workspaceRoot: workspaceA,
-      lakeCommand: NODE,
-      args: ['-e', 'setTimeout(() => {}, 60_000)'],
-      timeoutMs: 20,
-    });
+    const result = await effectRuntime().runPromise(
+      runLakeCommand({
+        workspaceRoot: workspaceA,
+        lakeCommand: NODE,
+        args: ['-e', 'setTimeout(() => {}, 60_000)'],
+        timeoutMs: 20,
+      }),
+    );
 
     expect(result.exitCode).toBe(-1);
     expect(result.stderr).toContain('timed out after 20 milliseconds');
@@ -257,18 +269,22 @@ describe('runLakeCommand mutex', () => {
     const gateB = path.join(workspaceA, 'gate-b');
     const readyB = path.join(workspaceA, 'ready-b');
 
-    const first = runLakeCommand({
-      workspaceRoot: workspaceA,
-      lakeCommand: NODE,
-      args: nodeGateCommand(readyA, gateA),
-      serialize: true,
-    });
-    const second = runLakeCommand({
-      workspaceRoot: workspaceA,
-      lakeCommand: NODE,
-      args: nodeGateCommand(readyB, gateB),
-      serialize: true,
-    });
+    const first = effectRuntime().runPromise(
+      runLakeCommand({
+        workspaceRoot: workspaceA,
+        lakeCommand: NODE,
+        args: nodeGateCommand(readyA, gateA),
+        serialize: true,
+      }),
+    );
+    const second = effectRuntime().runPromise(
+      runLakeCommand({
+        workspaceRoot: workspaceA,
+        lakeCommand: NODE,
+        args: nodeGateCommand(readyB, gateB),
+        serialize: true,
+      }),
+    );
 
     // The first child holds the workspace mutex: it starts and blocks on its
     // gate. While that gate holds, the second call's child cannot have
@@ -308,18 +324,22 @@ describe('runLakeCommand mutex', () => {
     const readyB = path.join(secondWorkspace(), 'ready-b');
 
     const calls = Promise.all([
-      runLakeCommand({
-        workspaceRoot: workspaceA,
-        lakeCommand: NODE,
-        args: nodeGateCommand(readyA, gateA),
-        serialize,
-      }),
-      runLakeCommand({
-        workspaceRoot: secondWorkspace(),
-        lakeCommand: NODE,
-        args: nodeGateCommand(readyB, gateB),
-        serialize,
-      }),
+      effectRuntime().runPromise(
+        runLakeCommand({
+          workspaceRoot: workspaceA,
+          lakeCommand: NODE,
+          args: nodeGateCommand(readyA, gateA),
+          serialize,
+        }),
+      ),
+      effectRuntime().runPromise(
+        runLakeCommand({
+          workspaceRoot: secondWorkspace(),
+          lakeCommand: NODE,
+          args: nodeGateCommand(readyB, gateB),
+          serialize,
+        }),
+      ),
     ]);
 
     // Both children announce themselves while each is still blocked on its

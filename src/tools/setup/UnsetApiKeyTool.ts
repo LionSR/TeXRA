@@ -1,13 +1,16 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { hostPort } from '@common/hostPort';
 import {
   API_PROVIDERS,
   apiKeyEnvName,
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local file imports
@@ -24,67 +27,78 @@ const UnsetApiKeyInputSchema = z.strictObject({
 
 type UnsetApiKeyInput = z.infer<typeof UnsetApiKeyInputSchema>;
 
+const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
+  input: UnsetApiKeyInput,
+) {
+  const platform = getSetupPlatform();
+  const provider = input.provider.trim();
+  if (!isApiProvider(provider)) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Unknown provider "${provider}". Supported: ${API_PROVIDERS.join(', ')}.`,
+      ),
+    );
+  }
+  const envVar = apiKeyEnvName(provider);
+
+  const storedExists = yield* setupSecrets.storedApiKeyExists(provider);
+  if (!storedExists) {
+    // If no persisted entry exists but a *usable* (non-blank) key
+    // is still reported, it's coming from the `<PROVIDER>_API_KEY`
+    // env var — `deleteApiKey` can't touch that, so be explicit.
+    const envExists = yield* setupSecrets.hasUsableApiKey(provider);
+    if (envExists) {
+      return executed(
+        `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. The credential store has nothing to clear: unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
+        `${provider} key is env-var-backed`,
+      );
+    }
+    return executed(
+      `There was no stored API key for provider "${provider}" to remove.`,
+      `No stored ${provider} API key`,
+    );
+  }
+
+  yield* setupSecrets.deleteApiKey(provider);
+  // Mirror the manual `texra.setApiKey` command ordering: drop the cached
+  // key lookups so models that just lost their credential stop appearing
+  // selectable, then refresh the status surfaces.
+  invalidateApiKeyCache();
+  const commands = platform.commands;
+  if (commands) {
+    // Credential changes must remain successful when a host cannot refresh
+    // its status surfaces; the next ordinary refresh reconciles stale UI.
+    // `Effect.exit` per command keeps the settled-not-fail-fast semantics.
+    yield* Effect.forEach(
+      ['texra.refreshApiKeyStatus', 'texra.refreshAllOptions'],
+      (commandId) => Effect.exit(hostPort(() => commands.invoke(commandId))),
+      { concurrency: 'unbounded', discard: true },
+    );
+  }
+
+  // A shell env var can shadow the deletion — flag that so the agent can
+  // tell the user why the key still appears to exist after removal.
+  const stillPresent = yield* setupSecrets.hasUsableApiKey(provider);
+  if (stillPresent) {
+    return executed(
+      `Removed stored API key for provider "${provider}", but the ${envVar} environment variable is still set and will continue to provide a credential. Unset ${envVar} in your shell to fully remove it.`,
+      `Removed stored ${provider} key (env var still active)`,
+    );
+  }
+
+  return executed(
+    `Removed stored API key for provider "${provider}".`,
+    `Removed ${provider} API key`,
+  );
+});
+
 export class UnsetApiKeyTool extends defineTool({
   name: 'unset_api_key',
   requiresApproval: true,
   description: `Remove a provider's API key from TeXRA's persisted credential store. Use when the user wants to rotate or clear credentials. Non-destructive of any other state: just deletes that one secret. If the key is actually coming from a \`<PROVIDER>_API_KEY\` environment variable, this tool will report that: the credential store has nothing to remove, and the env var must be cleared in the user's shell.`,
   schema: UnsetApiKeyInputSchema,
 }) {
-  protected async execute(input: UnsetApiKeyInput): Promise<ToolResult> {
-    const platform = getSetupPlatform();
-    const provider = input.provider.trim();
-    if (!isApiProvider(provider)) {
-      throw new ToolError(
-        `Unknown provider "${provider}". Supported: ${API_PROVIDERS.join(', ')}.`,
-      );
-    }
-    const envVar = apiKeyEnvName(provider);
-
-    const storedExists = await setupSecrets.storedApiKeyExists(provider);
-    if (!storedExists) {
-      // If no persisted entry exists but a *usable* (non-blank) key
-      // is still reported, it's coming from the `<PROVIDER>_API_KEY`
-      // env var — `deleteApiKey` can't touch that, so be explicit.
-      const envExists = await setupSecrets.hasUsableApiKey(provider);
-      if (envExists) {
-        return executed(
-          `No stored API key for "${provider}" to remove, but one is still active via the ${envVar} environment variable. The credential store has nothing to clear: unset ${envVar} in your shell (or the source that sets it) to remove this credential.`,
-          `${provider} key is env-var-backed`,
-        );
-      }
-      return executed(
-        `There was no stored API key for provider "${provider}" to remove.`,
-        `No stored ${provider} API key`,
-      );
-    }
-
-    await setupSecrets.deleteApiKey(provider);
-    // Mirror the manual `texra.setApiKey` command ordering: drop the cached
-    // key lookups so models that just lost their credential stop appearing
-    // selectable, then refresh the status surfaces.
-    invalidateApiKeyCache();
-    if (platform.commands) {
-      // Credential changes must remain successful when a host cannot refresh
-      // its status surfaces; the next ordinary refresh reconciles stale UI.
-      await Promise.allSettled([
-        platform.commands.invoke('texra.refreshApiKeyStatus'),
-        platform.commands.invoke('texra.refreshAllOptions'),
-      ]);
-    }
-
-    // A shell env var can shadow the deletion — flag that so the agent can
-    // tell the user why the key still appears to exist after removal.
-    const stillPresent = await setupSecrets.hasUsableApiKey(provider);
-    if (stillPresent) {
-      return executed(
-        `Removed stored API key for provider "${provider}", but the ${envVar} environment variable is still set and will continue to provide a credential. Unset ${envVar} in your shell to fully remove it.`,
-        `Removed stored ${provider} key (env var still active)`,
-      );
-    }
-
-    return executed(
-      `Removed stored API key for provider "${provider}".`,
-      `Removed ${provider} API key`,
-    );
+  protected execute(input: UnsetApiKeyInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(unsetApiKey(input));
   }
 }

@@ -1,4 +1,4 @@
-import { Redacted } from 'effect';
+import { Effect, Redacted } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -19,9 +19,12 @@ import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
 import { setSetupPlatform } from '@tools/setup/platform';
 
 const setupSecretsMocks = vi.hoisted(() => ({
-  deleteApiKey: vi.fn<(provider: ApiProvider) => Promise<void>>(),
-  hasUsableApiKey: vi.fn<(provider: ApiProvider) => Promise<boolean>>(),
-  storedApiKeyExists: vi.fn<(provider: ApiProvider) => Promise<boolean>>(),
+  deleteApiKey:
+    vi.fn<(provider: ApiProvider) => Effect.Effect<void, unknown>>(),
+  hasUsableApiKey:
+    vi.fn<(provider: ApiProvider) => Effect.Effect<boolean, unknown>>(),
+  storedApiKeyExists:
+    vi.fn<(provider: ApiProvider) => Effect.Effect<boolean, unknown>>(),
 }));
 
 vi.mock('@tools/setup/platform', async (importOriginal) => {
@@ -72,16 +75,20 @@ function setupApiKeyToolPlatform(
   store: Map<string, string>,
   envProviders: ReadonlySet<ApiProvider> = new Set(),
 ): void {
-  setupSecretsMocks.deleteApiKey.mockImplementation(async (provider) => {
-    store.delete(apiKeySecretName(provider));
-  });
-  setupSecretsMocks.hasUsableApiKey.mockImplementation(
-    async (provider) =>
-      (store.get(apiKeySecretName(provider))?.trim().length ?? 0) > 0 ||
-      envProviders.has(provider),
+  setupSecretsMocks.deleteApiKey.mockImplementation((provider) =>
+    Effect.sync(() => {
+      store.delete(apiKeySecretName(provider));
+    }),
   );
-  setupSecretsMocks.storedApiKeyExists.mockImplementation(async (provider) =>
-    store.has(apiKeySecretName(provider)),
+  setupSecretsMocks.hasUsableApiKey.mockImplementation((provider) =>
+    Effect.sync(
+      () =>
+        (store.get(apiKeySecretName(provider))?.trim().length ?? 0) > 0 ||
+        envProviders.has(provider),
+    ),
+  );
+  setupSecretsMocks.storedApiKeyExists.mockImplementation((provider) =>
+    Effect.sync(() => store.has(apiKeySecretName(provider))),
   );
   setSetupPlatform({
     host: 'cli',

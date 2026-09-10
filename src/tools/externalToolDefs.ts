@@ -11,7 +11,11 @@
  *   - {@link @controllers/settingsView/ToolDashboardData} — reads everything for the UI
  */
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
+import { hostPort } from '@common/hostPort';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import type { ToolCategory } from '@shared/schemas';
@@ -73,13 +77,17 @@ export interface ExternalToolDef {
   /** Tool names belonging to this group — must match registry keys. */
   readonly tools: readonly RegisteredToolName[];
   /** Optional shared probe result passed to check/status/detail callbacks. */
-  readonly probe?: () => Promise<unknown>;
+  readonly probe?: () => Effect.Effect<unknown, unknown>;
   /** Returns true if the external dependency is available. */
-  readonly check: (probeResult?: unknown) => Promise<boolean>;
+  readonly check: (probeResult?: unknown) => Effect.Effect<boolean, unknown>;
   /** Optional detailed status string resolved at check time (shown below description). */
-  readonly detailCheck?: (probeResult?: unknown) => Promise<string | undefined>;
+  readonly detailCheck?: (
+    probeResult?: unknown,
+  ) => Effect.Effect<string | undefined, unknown>;
   /** Optional short status label for the dashboard badge. */
-  readonly statusLabel?: (probeResult?: unknown) => Promise<string | undefined>;
+  readonly statusLabel?: (
+    probeResult?: unknown,
+  ) => Effect.Effect<string | undefined, unknown>;
   // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
@@ -109,39 +117,33 @@ export interface ExternalToolDef {
 // Zotero probe helpers
 // ============================================================
 
-async function fetchLocalhost(
+function fetchLocalhost(
   url: string,
   timeoutMs = ZOTERO_PROBE_TIMEOUT_MS,
-): Promise<Pick<Response, 'ok' | 'status'>> {
-  let response: Response | undefined;
-  try {
-    response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-    return { ok: response.ok, status: response.status };
-  } finally {
-    await response?.body?.cancel().catch(() => undefined);
-  }
+): Effect.Effect<Pick<Response, 'ok' | 'status'>, unknown> {
+  return Effect.acquireUseRelease(
+    hostPort(() => fetch(url, { signal: AbortSignal.timeout(timeoutMs) })),
+    (response) => Effect.succeed({ ok: response.ok, status: response.status }),
+    // The probe never reads the body; releasing it frees the socket, and a
+    // cancel that itself fails says nothing about availability.
+    (response) => Effect.ignore(hostPort(() => response.body?.cancel())),
+  );
 }
 
 /** Probe the Zotero connector endpoint (responds if Zotero is running). */
-async function probeZoteroConnector(port: number): Promise<boolean> {
-  try {
-    await fetchLocalhost(`http://127.0.0.1:${port}/connector/ping`);
-    return true;
-  } catch {
-    return false;
-  }
+function probeZoteroConnector(port: number): Effect.Effect<boolean> {
+  return fetchLocalhost(`http://127.0.0.1:${port}/connector/ping`).pipe(
+    Effect.as(true),
+    Effect.catch(() => Effect.succeed(false)),
+  );
 }
 
 /** Probe the Better BibTeX JSON-RPC endpoint. */
-async function probeZoteroBbt(port: number): Promise<boolean> {
-  try {
-    const response = await fetchLocalhost(
-      `http://127.0.0.1:${port}/better-bibtex/json-rpc`,
-    );
-    return response.ok || response.status === 405;
-  } catch {
-    return false;
-  }
+function probeZoteroBbt(port: number): Effect.Effect<boolean> {
+  return fetchLocalhost(`http://127.0.0.1:${port}/better-bibtex/json-rpc`).pipe(
+    Effect.map((response) => response.ok || response.status === 405),
+    Effect.catch(() => Effect.succeed(false)),
+  );
 }
 
 interface GitHubPRPrerequisites {
@@ -149,28 +151,30 @@ interface GitHubPRPrerequisites {
   inGitRepo: boolean;
 }
 
-async function getGitHubPRPrerequisites(): Promise<GitHubPRPrerequisites> {
-  const tokenPresent = (await getGitHubToken()) !== undefined;
-  const inGitRepo = await isGitRepository();
-  return { tokenPresent, inGitRepo };
-}
+const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
+  function* () {
+    const tokenPresent = (yield* hostPort(getGitHubToken)) !== undefined;
+    const inGitRepo = yield* hostPort(isGitRepository);
+    return { tokenPresent, inGitRepo };
+  },
+);
 
 function resolveGitHubPRPrerequisites(
   probeResult: unknown,
-): GitHubPRPrerequisites | Promise<GitHubPRPrerequisites> {
+): Effect.Effect<GitHubPRPrerequisites, unknown> {
   // The probe runs in-process and its result is handed straight back here, so
-  // the shape is structurally guaranteed; only a thrown probe (probeResult
+  // the shape is structurally guaranteed; only a failed probe (probeResult
   // undefined) needs the re-probe fallback.
   return probeResult === undefined
     ? getGitHubPRPrerequisites()
-    : (probeResult as GitHubPRPrerequisites);
+    : Effect.succeed(probeResult as GitHubPRPrerequisites);
 }
 
-async function probeTexraCli(): Promise<boolean> {
+const probeTexraCli = Effect.fn('probeTexraCli')(function* () {
   if (platform().toolAvailability.isTexraCliEntrypoint()) return true;
-  if (await checkToolInstalled('texra', false)) return true;
-  return checkToolInstalled('texra-local', false);
-}
+  if (yield* hostPort(() => checkToolInstalled('texra', false))) return true;
+  return yield* hostPort(() => checkToolInstalled('texra-local', false));
+});
 
 interface Lean4Prerequisites {
   extensionAvailable: boolean;
@@ -204,16 +208,14 @@ function wslInstallHint(): string {
  * Code): the dependency is present when its SDK imports and the native binary
  * resolves. Any import or resolution failure counts as unavailable.
  */
-async function probeSdkBinaryAvailable(
+function probeSdkBinaryAvailable(
   importSdk: () => Promise<unknown>,
   findBinary: () => Promise<string | undefined>,
-): Promise<boolean> {
-  try {
-    await importSdk();
-    return (await findBinary()) != null;
-  } catch {
-    return false;
-  }
+): Effect.Effect<boolean> {
+  return Effect.gen(function* () {
+    yield* hostPort(importSdk);
+    return (yield* hostPort(findBinary)) != null;
+  }).pipe(Effect.catch(() => Effect.succeed(false)));
 }
 
 /** Resolved status of an SDK-backed CLI integration for the dashboard. */
@@ -227,34 +229,43 @@ type SdkBinaryStatus =
  * absent). Callers own only the final "ready" line, so the import/binary
  * narrative lives in one place instead of once per entry.
  */
-async function probeSdkBinaryStatus(config: {
+function probeSdkBinaryStatus(config: {
   importSdk: () => Promise<unknown>;
   findBinary: () => Promise<string | undefined>;
   missingPackageMessage: string;
   importFailedLabel: string;
   binaryNotFoundMessage: string;
   classifyImportError?: (msg: string) => string | undefined;
-}): Promise<SdkBinaryStatus> {
-  try {
-    await config.importSdk();
-  } catch (err: unknown) {
-    const msg = toErrorMessage(err);
-    if (isMissingPackageError(msg)) {
-      return { ok: false, message: config.missingPackageMessage };
+}): Effect.Effect<SdkBinaryStatus, unknown> {
+  return Effect.gen(function* () {
+    // Only the import is classified into a message; a binary-resolution
+    // failure stays on the error channel, as it did when it threw past the
+    // import's try/catch.
+    const importFailure = yield* hostPort(config.importSdk).pipe(
+      Effect.as(undefined),
+      Effect.catch((err: unknown) => {
+        const msg = toErrorMessage(err);
+        if (isMissingPackageError(msg)) {
+          return Effect.succeed(config.missingPackageMessage);
+        }
+        const classified = config.classifyImportError?.(msg);
+        if (classified != null) return Effect.succeed(classified);
+        return Effect.succeed(`${config.importFailedLabel}: ${msg}`);
+      }),
+    );
+    if (importFailure !== undefined) {
+      return { ok: false as const, message: importFailure };
     }
-    const classified = config.classifyImportError?.(msg);
-    if (classified != null) return { ok: false, message: classified };
-    return { ok: false, message: `${config.importFailedLabel}: ${msg}` };
-  }
 
-  const binaryPath = await config.findBinary();
-  if (!binaryPath) {
-    return {
-      ok: false,
-      message: config.binaryNotFoundMessage + wslInstallHint(),
-    };
-  }
-  return { ok: true, binaryPath };
+    const binaryPath = yield* hostPort(config.findBinary);
+    if (!binaryPath) {
+      return {
+        ok: false as const,
+        message: config.binaryNotFoundMessage + wslInstallHint(),
+      };
+    }
+    return { ok: true as const, binaryPath };
+  });
 }
 
 /**
@@ -267,8 +278,8 @@ async function probeSdkBinaryStatus(config: {
  * callbacks, and those callbacks stay pure functions of the resolved value.
  */
 function prerequisitesChecks<T>(config: {
-  probe: () => Promise<T>;
-  resolve: (probeResult: unknown) => T | Promise<T>;
+  probe: () => Effect.Effect<T, unknown>;
+  resolve: (probeResult: unknown) => Effect.Effect<T, unknown>;
   check: (prereqs: T) => boolean;
   statusLabel: (prereqs: T) => string | undefined;
   detailCheck: (prereqs: T) => string | undefined;
@@ -276,9 +287,9 @@ function prerequisitesChecks<T>(config: {
   const { probe, resolve, check, statusLabel, detailCheck } = config;
   return {
     probe,
-    check: async (probeResult) => check(await resolve(probeResult)),
-    statusLabel: async (probeResult) => statusLabel(await resolve(probeResult)),
-    detailCheck: async (probeResult) => detailCheck(await resolve(probeResult)),
+    check: (probeResult) => Effect.map(resolve(probeResult), check),
+    statusLabel: (probeResult) => Effect.map(resolve(probeResult), statusLabel),
+    detailCheck: (probeResult) => Effect.map(resolve(probeResult), detailCheck),
   };
 }
 
@@ -336,7 +347,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installUrl: 'https://app.uio.no/ifi/texcount/',
     configNotes: 'Part of most TeX Live distributions.',
     hideFromDashboard: true, // Shown in LaTeX settings tab instead
-    check: () => checkToolInstalled('texcount', false),
+    check: () => hostPort(() => checkToolInstalled('texcount', false)),
   },
   {
     id: 'wolfram',
@@ -356,7 +367,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'it automatically. Free licenses are available for development use.',
     installUrl: 'https://www.wolfram.com/engine/',
     configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
-    check: () => checkToolInstalled('wolframscript', false),
+    check: () => hostPort(() => checkToolInstalled('wolframscript', false)),
   },
   {
     id: 'zotero',
@@ -384,11 +395,11 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
     toggleable: true,
-    check: async () => probeZoteroBbt(getZoteroPort()),
-    detailCheck: async () => {
+    check: () => probeZoteroBbt(getZoteroPort()),
+    detailCheck: Effect.fn('externalToolDefs.zoteroDetail')(function* () {
       const port = getZoteroPort();
-      const zoteroOk = await probeZoteroConnector(port);
-      const bbtOk = await probeZoteroBbt(port);
+      const zoteroOk = yield* probeZoteroConnector(port);
+      const bbtOk = yield* probeZoteroBbt(port);
       if (zoteroOk && bbtOk) {
         return `Zotero running on port ${port}, Better BibTeX responding.`;
       }
@@ -396,7 +407,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         return `Zotero detected on port ${port}, but Better BibTeX is not responding. Install the Better BibTeX plugin.`;
       }
       return `Zotero not detected on port ${port}. Make sure Zotero is running.`;
-    },
+    }),
   },
   {
     id: 'lean4',
@@ -435,15 +446,17 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'VS Code build: requires the leanprover.lean4 extension. ' +
       'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after thirty minutes, surfaced below.',
     ...prerequisitesChecks({
-      probe: async () => {
-        const extensionAvailable =
-          platform().toolAvailability.isVscodeExtensionInstalled(
-            LEAN4_EXTENSION_ID,
-          );
-        const lakeAvailable = BinaryResolver.findPath('lake') !== null;
-        return { extensionAvailable, lakeAvailable };
-      },
-      resolve: resolveLean4Prerequisites,
+      probe: () =>
+        Effect.sync(() => {
+          const extensionAvailable =
+            platform().toolAvailability.isVscodeExtensionInstalled(
+              LEAN4_EXTENSION_ID,
+            );
+          const lakeAvailable = BinaryResolver.findPath('lake') !== null;
+          return { extensionAvailable, lakeAvailable };
+        }),
+      resolve: (probeResult) =>
+        Effect.succeed(resolveLean4Prerequisites(probeResult)),
       check: ({ extensionAvailable, lakeAvailable }) =>
         extensionAvailable || lakeAvailable,
       statusLabel: ({ extensionAvailable, lakeAvailable }) => {
@@ -482,7 +495,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'No local install required. Turning this off removes delegate_multi_agents from every agent tool list, even agents whose configuration names it explicitly.',
     toggleable: true,
-    check: async () => true,
+    check: () => Effect.succeed(true),
   },
 
   {
@@ -541,7 +554,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'No local install required. Uses your own external chat subscription through a human-in-the-loop copy/paste flow.',
     authNote: 'Uses your premium chat subscription',
     toggleable: true,
-    check: async () => true,
+    check: () => Effect.succeed(true),
   },
 
   {
@@ -567,7 +580,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     ...prerequisitesChecks<boolean | undefined>({
       probe: probeTexraCli,
       resolve: (probeResult) =>
-        typeof probeResult === 'boolean' ? probeResult : undefined,
+        Effect.succeed(
+          typeof probeResult === 'boolean' ? probeResult : undefined,
+        ),
       check: (detected) => detected ?? false,
       statusLabel: (detected) =>
         detected ? 'Detected; integration coming soon' : undefined,
@@ -609,8 +624,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
     toggleable: true,
     check: () => probeSdkBinaryAvailable(importCodexClass, findCodexBinaryPath),
-    detailCheck: async () => {
-      const status = await probeSdkBinaryStatus({
+    detailCheck: Effect.fn('externalToolDefs.codexDetail')(function* () {
+      const status = yield* probeSdkBinaryStatus({
         importSdk: importCodexClass,
         findBinary: findCodexBinaryPath,
         missingPackageMessage:
@@ -626,7 +641,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       });
       if (!status.ok) return status.message;
       return `Codex CLI ready. Binary: ${status.binaryPath}`;
-    },
+    }),
   },
 
   {
@@ -667,8 +682,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     toggleable: true,
     check: () =>
       probeSdkBinaryAvailable(importClaudeAgentSdk, findClaudeBinaryPath),
-    detailCheck: async () => {
-      const status = await probeSdkBinaryStatus({
+    detailCheck: Effect.fn('externalToolDefs.claudeAgentDetail')(function* () {
+      const status = yield* probeSdkBinaryStatus({
         importSdk: importClaudeAgentSdk,
         findBinary: findClaudeBinaryPath,
         missingPackageMessage:
@@ -682,10 +697,13 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       const claudePath = status.binaryPath;
 
       const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
-      const keyOrigin = await lookupApiKeyOrigin(
-        platform().secrets,
-        'anthropic',
-      ).catch(() => (process.env[anthropicApiKeyEnv] ? 'env' : 'none'));
+      const keyOrigin = yield* hostPort(() =>
+        lookupApiKeyOrigin(platform().secrets, 'anthropic'),
+      ).pipe(
+        Effect.catch(() =>
+          Effect.succeed(process.env[anthropicApiKeyEnv] ? 'env' : 'none'),
+        ),
+      );
       const hasOauthToken = hasClaudeCodeOauthToken();
       const authBits: string[] = [];
       if (keyOrigin === 'secret') {
@@ -701,7 +719,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
           : 'No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN detected: the CLI will use whatever `claude login` session you have.';
 
       return `Claude CLI ready. Binary: ${claudePath}. ${authNote}`;
-    },
+    }),
   },
 
   // System dependencies (latexindent, image processing) have moved to the

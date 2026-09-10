@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -44,17 +45,25 @@ describe('shared setup capabilities', () => {
     expect(setup.commands).toBeUndefined();
     expect(setup.extensions).toBeUndefined();
     expect(setup.terminal).toBeUndefined();
-    await expect(setupSecrets.storedApiKeyExists('openai')).resolves.toBe(true);
-    await expect(setupSecrets.hasUsableApiKey('openai')).resolves.toBe(true);
-    await expect(setupSecrets.gitHubTokenExists()).resolves.toBe('env');
-    await expect(setupSecrets.listStoredKeys()).resolves.toContain(
-      'apiKey.openai',
-    );
+    await expect(
+      Effect.runPromise(setupSecrets.storedApiKeyExists('openai')),
+    ).resolves.toBe(true);
+    await expect(
+      Effect.runPromise(setupSecrets.hasUsableApiKey('openai')),
+    ).resolves.toBe(true);
+    await expect(
+      Effect.runPromise(setupSecrets.gitHubTokenExists()),
+    ).resolves.toBe('env');
+    await expect(
+      Effect.runPromise(setupSecrets.listStoredKeys()),
+    ).resolves.toContain('apiKey.openai');
 
     expect(texraScopedConfig.get('texra.bib.defaultPath')).toBe(
       'references.bib',
     );
-    await texraScopedConfig.update('texra.bib.defaultPath', 'main.bib', 'user');
+    await Effect.runPromise(
+      texraScopedConfig.update('texra.bib.defaultPath', 'main.bib', 'user'),
+    );
     expect(
       workspaceRoots().config.inspect('texra.bib.defaultPath')?.globalValue,
     ).toBe('main.bib');
@@ -72,22 +81,26 @@ describe('shared setup capabilities', () => {
       'apiKey.openai',
     ]);
 
-    await expect(setupSecrets.storedApiKeyExists('openai')).resolves.toBe(true);
+    await expect(
+      Effect.runPromise(setupSecrets.storedApiKeyExists('openai')),
+    ).resolves.toBe(true);
   });
 
   it('reports a signed-in account', async () => {
     vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
     vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
 
-    await expect(getSetupAuthStatus()).resolves.toEqual({
+    await expect(Effect.runPromise(getSetupAuthStatus())).resolves.toEqual({
       authenticated: true,
       email: undefined,
     });
   });
 
   it('keeps API-key-only setup usable without reporting sign-in', async () => {
-    await expect(setupSecrets.anyUsableCredentialExists()).resolves.toBe(true);
-    await expect(getSetupAuthStatus()).resolves.toEqual({
+    await expect(
+      Effect.runPromise(setupSecrets.anyUsableCredentialExists()),
+    ).resolves.toBe(true);
+    await expect(Effect.runPromise(getSetupAuthStatus())).resolves.toEqual({
       authenticated: false,
     });
   });
@@ -99,7 +112,7 @@ describe('shared setup capabilities', () => {
       accountId: 'account-private-id',
     });
 
-    const status = await getChatGptSubscriptionStatus();
+    const status = await Effect.runPromise(getChatGptSubscriptionStatus());
 
     expect(status.signedIn).toBe(true);
     expect(status).not.toHaveProperty('account');
@@ -117,7 +130,9 @@ describe('shared setup capabilities', () => {
       'isCodexSubscriptionActive',
     ).mockResolvedValue(false);
 
-    await expect(getChatGptSubscriptionStatus()).resolves.toEqual({
+    await expect(
+      Effect.runPromise(getChatGptSubscriptionStatus()),
+    ).resolves.toEqual({
       signedIn: true,
       enabled: false,
     });

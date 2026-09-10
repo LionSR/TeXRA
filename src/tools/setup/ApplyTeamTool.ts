@@ -13,6 +13,7 @@
  * silently dropped.
  */
 
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 import {
@@ -72,6 +73,131 @@ const ApplyTeamInputSchema = z.strictObject({
 
 type ApplyTeamInput = z.infer<typeof ApplyTeamInputSchema>;
 
+const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
+  input: ApplyTeamInput,
+) {
+  const state = { getAgents: getAgentsByCategory };
+  const roster = createWorkspaceAgentRosterController();
+  const { signIn } = getSetupPlatform();
+  const authStatus = yield* getSetupAuthStatus();
+
+  // Applying the roster and recording it as the default team both go
+  // through this tool's adapter — the Settings "apply team" action commits
+  // only the roster, since it has no notion of a fresh-workspace default.
+  const catalog: TeamRosterCatalog = {
+    resolvePreset: (presetId) => {
+      const preset =
+        presetId === STARTER_AGENT_MODE_PRESET.id
+          ? STARTER_AGENT_MODE_PRESET
+          : AGENT_MODE_PRESETS_BY_ID.get(presetId);
+      if (!preset) return { ok: false, reason: 'unknownPreset' };
+      return {
+        ok: true,
+        preset,
+        resolution: resolveTeamRoster(state, preset),
+      };
+    },
+    commitPreset: async (preset) => {
+      await roster.setTeam(preset.id);
+      await roster.setDefaultTeam(preset.id);
+      // The setup agent runs this mid-conversation, so an open settings
+      // view is showing a roster this call just replaced.
+      appSignals.emit('agentRosterChanged', undefined);
+    },
+  };
+
+  const result = yield* applyTeamRosterWithPreflight(input.teamId, {
+    catalog,
+    loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+    canAccessRemoteCatalog: async () => authStatus.authenticated,
+    providedChoice: input.unavailableAction ?? undefined,
+    choose: async () => undefined,
+    signIn,
+    forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
+  });
+
+  if (result.status === 'unknown') {
+    // The schema gates ids, so this only fires if the enum and the preset
+    // list ever disagree — fail loudly rather than half-apply.
+    return yield* Effect.fail(
+      new ToolError(
+        `Unknown team id "${input.teamId}". Valid ids: ${TEAM_IDS.join(', ')}.`,
+      ),
+    );
+  }
+
+  if (result.status === 'choice-required') {
+    const names = result.unavailableNames.join(', ');
+    return executed(
+      `The ${result.preset.name} team has unavailable TeXRA-hosted members: ${names}. Ask the user to choose one action: Sign in to TeXRA, Continue with available members, or Cancel. Then call apply_team again with unavailableAction set to "sign-in", "continue", or "cancel". No roster or default-team state was written.`,
+      `Team not applied; TeXRA-hosted members are unavailable: ${names}.`,
+    );
+  }
+
+  if (result.status === 'cancelled') {
+    return executed(
+      'Cancelled. No roster or default-team state was written.',
+      `Cancelled ${result.preset.name} team application.`,
+    );
+  }
+  if (result.status === 'unavailable') {
+    return yield* Effect.fail(
+      new ToolError(
+        `The ${result.preset.name} team is still unavailable after refreshing the TeXRA agent catalog: ${result.unavailableNames.join(', ')}.`,
+      ),
+    );
+  }
+
+  const { preset } = result;
+  const { keys, unresolvedNames } = result.resolution;
+  const texraHostedNames = teamHostedNamesForPreflight(preset, unresolvedNames);
+
+  // `keys` holds only the agent keys that resolved in the registry. Names
+  // that didn't resolve are not dropped: the roster stores the team
+  // reference and re-resolves `preset.agents` on every read, so a member
+  // activates the moment it appears. `unresolvedNames` is preflight
+  // evidence, not stored state. Account-served leads are absent until
+  // sign-in — say so instead of letting it read as a silent failure; check
+  // registry resolution, never auth.
+  const activeWorkflow = keys.workflow;
+  const activeToolUse = keys.toolUse;
+  const pendingRemoteLeads = unresolvedNames.filter((name) =>
+    texraHostedNames.has(name),
+  );
+  const pendingOther = unresolvedNames.filter(
+    (name) => !texraHostedNames.has(name),
+  );
+
+  const signInNote =
+    pendingRemoteLeads.length > 0
+      ? `The ${pendingRemoteLeads.join(' and ')} lead is TeXRA-hosted. It joins the roster automatically after sign-in.`
+      : undefined;
+
+  const lines = [
+    `Applied the ${preset.name} roster to this workspace.`,
+    `Workflow agents (${activeWorkflow.length}): ${
+      activeWorkflow.map((key) => agentName(key)).join(', ') || '(none)'
+    }`,
+    `Assistants (${activeToolUse.length}): ${
+      activeToolUse.map((key) => agentName(key)).join(', ') || '(none)'
+    }`,
+    `Saved "${preset.id}" as the default team: fresh workspaces start with this roster.`,
+  ];
+  if (signInNote) lines.push(signInNote);
+  if (pendingOther.length > 0) {
+    lines.push(
+      `Not installed yet (kept in the roster, activates when available): ${pendingOther.join(', ')}.`,
+    );
+  }
+
+  const summary = [
+    `Applied the ${preset.name} roster: ${activeWorkflow.length} workflows, ${activeToolUse.length} assistants.`,
+    ...(signInNote ? [signInNote] : []),
+  ].join(' ');
+
+  return executed(lines.join('\n'), summary);
+});
+
 export class ApplyTeamTool extends defineTool({
   name: 'apply_team',
   description: `Apply an agent team (a discipline roster) to this workspace and record it as the user's default team.
@@ -82,127 +208,7 @@ Teams:
 ${describeTeams()}`,
   schema: ApplyTeamInputSchema,
 }) {
-  protected async execute(input: ApplyTeamInput): Promise<ToolResult> {
-    const state = { getAgents: getAgentsByCategory };
-    const roster = createWorkspaceAgentRosterController();
-    const { signIn } = getSetupPlatform();
-    const authStatus = await getSetupAuthStatus();
-
-    // Applying the roster and recording it as the default team both go
-    // through this tool's adapter — the Settings "apply team" action commits
-    // only the roster, since it has no notion of a fresh-workspace default.
-    const catalog: TeamRosterCatalog = {
-      resolvePreset: (presetId) => {
-        const preset =
-          presetId === STARTER_AGENT_MODE_PRESET.id
-            ? STARTER_AGENT_MODE_PRESET
-            : AGENT_MODE_PRESETS_BY_ID.get(presetId);
-        if (!preset) return { ok: false, reason: 'unknownPreset' };
-        return {
-          ok: true,
-          preset,
-          resolution: resolveTeamRoster(state, preset),
-        };
-      },
-      commitPreset: async (preset) => {
-        await roster.setTeam(preset.id);
-        await roster.setDefaultTeam(preset.id);
-        // The setup agent runs this mid-conversation, so an open settings
-        // view is showing a roster this call just replaced.
-        appSignals.emit('agentRosterChanged', undefined);
-      },
-    };
-
-    const result = await effectRuntime().runPromise(
-      applyTeamRosterWithPreflight(input.teamId, {
-        catalog,
-        loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-        canAccessRemoteCatalog: async () => authStatus.authenticated,
-        providedChoice: input.unavailableAction ?? undefined,
-        choose: async () => undefined,
-        signIn,
-        forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
-      }),
-    );
-
-    if (result.status === 'unknown') {
-      // The schema gates ids, so this only fires if the enum and the preset
-      // list ever disagree — fail loudly rather than half-apply.
-      throw new ToolError(
-        `Unknown team id "${input.teamId}". Valid ids: ${TEAM_IDS.join(', ')}.`,
-      );
-    }
-
-    if (result.status === 'choice-required') {
-      const names = result.unavailableNames.join(', ');
-      return executed(
-        `The ${result.preset.name} team has unavailable TeXRA-hosted members: ${names}. Ask the user to choose one action: Sign in to TeXRA, Continue with available members, or Cancel. Then call apply_team again with unavailableAction set to "sign-in", "continue", or "cancel". No roster or default-team state was written.`,
-        `Team not applied; TeXRA-hosted members are unavailable: ${names}.`,
-      );
-    }
-
-    if (result.status === 'cancelled') {
-      return executed(
-        'Cancelled. No roster or default-team state was written.',
-        `Cancelled ${result.preset.name} team application.`,
-      );
-    }
-    if (result.status === 'unavailable') {
-      throw new ToolError(
-        `The ${result.preset.name} team is still unavailable after refreshing the TeXRA agent catalog: ${result.unavailableNames.join(', ')}.`,
-      );
-    }
-
-    const { preset } = result;
-    const { keys, unresolvedNames } = result.resolution;
-    const texraHostedNames = teamHostedNamesForPreflight(
-      preset,
-      unresolvedNames,
-    );
-
-    // `keys` holds only the agent keys that resolved in the registry. Names
-    // that didn't resolve are not dropped: the roster stores the team
-    // reference and re-resolves `preset.agents` on every read, so a member
-    // activates the moment it appears. `unresolvedNames` is preflight
-    // evidence, not stored state. Account-served leads are absent until
-    // sign-in — say so instead of letting it read as a silent failure; check
-    // registry resolution, never auth.
-    const activeWorkflow = keys.workflow;
-    const activeToolUse = keys.toolUse;
-    const pendingRemoteLeads = unresolvedNames.filter((name) =>
-      texraHostedNames.has(name),
-    );
-    const pendingOther = unresolvedNames.filter(
-      (name) => !texraHostedNames.has(name),
-    );
-
-    const signInNote =
-      pendingRemoteLeads.length > 0
-        ? `The ${pendingRemoteLeads.join(' and ')} lead is TeXRA-hosted. It joins the roster automatically after sign-in.`
-        : undefined;
-
-    const lines = [
-      `Applied the ${preset.name} roster to this workspace.`,
-      `Workflow agents (${activeWorkflow.length}): ${
-        activeWorkflow.map((key) => agentName(key)).join(', ') || '(none)'
-      }`,
-      `Assistants (${activeToolUse.length}): ${
-        activeToolUse.map((key) => agentName(key)).join(', ') || '(none)'
-      }`,
-      `Saved "${preset.id}" as the default team: fresh workspaces start with this roster.`,
-    ];
-    if (signInNote) lines.push(signInNote);
-    if (pendingOther.length > 0) {
-      lines.push(
-        `Not installed yet (kept in the roster, activates when available): ${pendingOther.join(', ')}.`,
-      );
-    }
-
-    const summary = [
-      `Applied the ${preset.name} roster: ${activeWorkflow.length} workflows, ${activeToolUse.length} assistants.`,
-      ...(signInNote ? [signInNote] : []),
-    ].join(' ');
-
-    return executed(lines.join('\n'), summary);
+  protected execute(input: ApplyTeamInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(applyTeam(input));
   }
 }

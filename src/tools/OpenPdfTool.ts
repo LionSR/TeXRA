@@ -1,16 +1,24 @@
+// Node imports
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import {
   getRunContextExecutionId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { hostPort } from '@common/hostPort';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   fileLocationDisplayPath,
   ToolError,
   type FileLocation,
+  type RunStorageFileLocation,
   type ToolResult,
 } from '@shared/schemas';
 import {
@@ -36,54 +44,104 @@ const OpenPdfInputSchema = z.strictObject({
 
 export type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
 
+/**
+ * The host viewer and the run coordinates path resolution needs, read from
+ * the session in the caller's run context before the program runs.
+ */
+interface OpenPdfPorts {
+  readonly openPdf: HostInteractions['openPdf'];
+  /**
+   * Reads the active working directory, bound to the calling turn. It stays a
+   * thunk because parsing rejects a relative working directory, and an
+   * absolute run-storage path must resolve without ever asking for one.
+   */
+  readonly toolRoot: () => string | undefined;
+  /**
+   * The requested path's run-storage identity, resolved in the caller's turn:
+   * the run-storage root is `workspaceRoots().storage`, which is per-session
+   * ambient state, so recognising the path must not depend on whichever roots
+   * the program's fiber carries. Undefined when this run has no storage of its
+   * own or the path lies outside it.
+   */
+  readonly runStorageLocation: RunStorageFileLocation | undefined;
+}
+
+const openPdfProgram = Effect.fn('OpenPdfTool.execute')(function* (
+  ports: OpenPdfPorts,
+  input: OpenPdfInput,
+) {
+  const openPdf = ports.openPdf;
+  if (!openPdf) {
+    return yield* Effect.fail(
+      new ToolError(
+        'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
+      ),
+    );
+  }
+
+  const location = yield* resolvePdfLocation(input.path, ports);
+  const displayPath = fileLocationDisplayPath(location);
+
+  if (!hasExtension(location.absolutePath, '.pdf')) {
+    return yield* Effect.fail(
+      new ToolError(`open_pdf only opens PDF files: ${displayPath}`),
+    );
+  }
+  if (!(yield* hostPort(() => AbsoluteFS.isFile(location.absolutePath)))) {
+    return yield* Effect.fail(
+      new ToolError(`PDF file not found: ${displayPath}`),
+    );
+  }
+
+  yield* hostPort(() =>
+    openPdf({
+      location,
+      preserveFocus: input.preserve_focus ?? false,
+    }),
+  );
+
+  const message = `Opened PDF: ${displayPath}`;
+  return executed(message, message);
+});
+
 export class OpenPdfTool extends defineTool({
   name: 'open_pdf',
   description:
     'Open a PDF file in the host PDF viewer. The tool accepts workspace-relative paths, working-directory-relative paths, and absolute run-storage paths.',
   schema: OpenPdfInputSchema,
 }) {
-  protected async execute(input: OpenPdfInput): Promise<ToolResult> {
-    const openPdf = currentSession().interactions.openPdf;
-    if (!openPdf) {
-      throw new ToolError(
-        'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
-      );
-    }
-
-    const location = resolvePdfLocation(input.path);
-    const displayPath = fileLocationDisplayPath(location);
-
-    if (!hasExtension(location.absolutePath, '.pdf')) {
-      throw new ToolError(`open_pdf only opens PDF files: ${displayPath}`);
-    }
-    if (!(await AbsoluteFS.isFile(location.absolutePath))) {
-      throw new ToolError(`PDF file not found: ${displayPath}`);
-    }
-
-    await openPdf({
-      location,
-      preserveFocus: input.preserve_focus ?? false,
-    });
-
-    const message = `Opened PDF: ${displayPath}`;
-    return executed(message, message);
+  protected execute(input: OpenPdfInput): Promise<ToolResult> {
+    // The session and the run it belongs to are the calling turn's, so they
+    // are read here and handed to the program rather than from a fiber.
+    const executionId = getRunContextExecutionId(tryUseRunContext());
+    const trimmedPath = input.path.trim();
+    const ports: OpenPdfPorts = {
+      openPdf: currentSession().interactions.openPdf,
+      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+      runStorageLocation:
+        executionId && trimmedPath
+          ? runStorageLocationFromAbsolutePath(trimmedPath, executionId)
+          : undefined,
+    };
+    return effectRuntime().runPromise(openPdfProgram(ports, input));
   }
 }
 
-function resolvePdfLocation(rawPath: string): FileLocation {
-  const trimmed = rawPath.trim();
-  if (!trimmed) {
-    throw new ToolError('path is required.');
-  }
+const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
+  function* (
+    rawPath: string,
+    ports: OpenPdfPorts,
+  ): Effect.fn.Return<FileLocation, ToolError> {
+    const trimmed = rawPath.trim();
+    if (!trimmed) {
+      return yield* Effect.fail(new ToolError('path is required.'));
+    }
 
-  const executionId = getRunContextExecutionId(tryUseRunContext());
-  const runStorageLocation = executionId
-    ? runStorageLocationFromAbsolutePath(trimmed, executionId)
-    : undefined;
-  if (runStorageLocation) {
-    return runStorageLocation;
-  }
+    if (ports.runStorageLocation) {
+      return ports.runStorageLocation;
+    }
 
-  const resolved = resolveWorkspaceRelativePath(trimmed, currentToolRoot());
-  return pathToLocation(resolved.absolute);
-}
+    const resolved = resolveWorkspaceRelativePath(trimmed, ports.toolRoot());
+    return pathToLocation(resolved.absolute);
+  },
+);

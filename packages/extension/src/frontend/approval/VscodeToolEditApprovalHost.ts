@@ -23,6 +23,7 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { DiffSession, DiffViewHost } from '@hosts/uiHosts';
+import { effectRuntime } from '@platform/processRuntime';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
@@ -48,12 +49,14 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview> {
     await mkdir(this.storageDirectory, { recursive: true });
-    const staged = await writeApprovalTempFiles({
-      directory: this.storageDirectory,
-      targetPath: request.path,
-      originalContent: request.originalContent,
-      proposedContent: request.proposedContent,
-    });
+    const staged = await effectRuntime().runPromise(
+      writeApprovalTempFiles({
+        directory: this.storageDirectory,
+        targetPath: request.path,
+        originalContent: request.originalContent,
+        proposedContent: request.proposedContent,
+      }),
+    );
     return new VscodeToolEditPreview(
       this.diffViewHost,
       request,
@@ -133,7 +136,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     // Stop listening for tab closes before closing the diff ourselves.
     this.tabCloseListener?.dispose();
     await this.diffViewHost.closeDiff(this.diffSession);
-    await this.staged.cleanup();
+    await effectRuntime().runPromise(this.staged.cleanup);
   }
 
   private openDiff(): Promise<void> {

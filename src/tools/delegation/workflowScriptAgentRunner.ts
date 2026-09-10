@@ -37,15 +37,13 @@ function workflowScriptModelSelection(
   parent: LaunchRunContext,
 ): Effect.Effect<string, Error> {
   const requestedModel = invocation.options.model;
-  return Effect.tryPromise({
-    try: () =>
-      runInSession(parent.runScope.session, () =>
-        selectAvailableDelegationModel({
-          ...(requestedModel !== undefined && { requestedModel }),
-          parentModel: parent.model,
-        }),
-      ),
-    catch: (error) => {
+  return selectAvailableDelegationModel({
+    ...(requestedModel !== undefined && { requestedModel }),
+    parentModel: parent.model,
+    withScope: <T>(read: () => T) =>
+      runInSession(parent.runScope.session, read),
+  }).pipe(
+    Effect.mapError((error) => {
       // A declared model is workflow configuration, so its rejection must not
       // disappear as a nullable call inside parallel(). When the
       // script omits the field, preserve the established delegation failure
@@ -55,8 +53,8 @@ function workflowScriptModelSelection(
         formatError('Workflow model could not be selected', error),
         { cause: error },
       );
-    },
-  });
+    }),
+  );
 }
 
 /**

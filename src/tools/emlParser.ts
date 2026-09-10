@@ -1,7 +1,9 @@
 // Third-party imports
+import { Effect } from 'effect';
 import PostalMime from 'postal-mime';
 
 // Local imports
+import { hostPort } from '@common/hostPort';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 
 import type { Address, Attachment, Email } from 'postal-mime';
@@ -40,12 +42,14 @@ const turndownService = createHtmlToMarkdown();
  * When no plain-text part exists, falls back to a Markdown conversion of the HTML body.
  * Non-image attachment filenames are listed at the end of the text.
  */
-export async function parseEml(rawEml: string): Promise<EmlParseResult> {
-  const email = await PostalMime.parse(rawEml);
+export const parseEml = Effect.fn('parseEml')(function* (
+  rawEml: string,
+): Effect.fn.Return<EmlParseResult, unknown> {
+  const email = yield* hostPort(() => PostalMime.parse(rawEml));
   const partition = partitionAttachments(email.attachments);
   const text = formatEmail(email, partition);
   return { text, images: partition.images };
-}
+});
 
 // ---------------------------------------------------------------------------
 // Formatting helpers

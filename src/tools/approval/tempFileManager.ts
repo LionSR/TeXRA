@@ -23,6 +23,8 @@
 import { unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { debug } from '@logger/logUtils';
 import { generateShortId } from '@utils/core';
 
@@ -34,7 +36,7 @@ export interface ApprovalTempFiles {
    * callers that manage an enclosing directory (e.g. Desktop's mkdtemp)
    * can still rm-rf the dir afterwards without seeing errors here.
    */
-  readonly cleanup: () => Promise<void>;
+  readonly cleanup: Effect.Effect<void>;
 }
 
 interface WriteApprovalTempFilesInput {
@@ -45,43 +47,64 @@ interface WriteApprovalTempFilesInput {
   readonly proposedContent: string;
 }
 
+/** Best-effort temp cleanup; ENOENT/already-removed is expected and benign. */
+const removeTempFile = (target: string): Effect.Effect<void> =>
+  Effect.tryPromise({
+    try: () => unlink(target),
+    catch: (error) => error,
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        debug('approval.tempFiles', `Failed to unlink temp file ${target}`, {
+          data: error,
+        });
+      }),
+    ),
+  );
+
 /**
  * File names use a per-side random ID so reusing a shared directory across
  * concurrent requests cannot collide.
  */
-export async function writeApprovalTempFiles(
-  input: WriteApprovalTempFilesInput,
-): Promise<ApprovalTempFiles> {
-  const { directory, targetPath, originalContent, proposedContent } = input;
-  const ext = path.extname(targetPath) || '.txt';
-  const originalPath = path.join(
-    directory,
-    `${generateShortId()}-original${ext}`,
-  );
-  const proposedPath = path.join(
-    directory,
-    `${generateShortId()}-proposed${ext}`,
-  );
+export const writeApprovalTempFiles = Effect.fn('writeApprovalTempFiles')(
+  function* (
+    input: WriteApprovalTempFilesInput,
+  ): Effect.fn.Return<ApprovalTempFiles, unknown> {
+    const { directory, targetPath, originalContent, proposedContent } = input;
+    const ext = path.extname(targetPath) || '.txt';
+    const originalPath = path.join(
+      directory,
+      `${generateShortId()}-original${ext}`,
+    );
+    const proposedPath = path.join(
+      directory,
+      `${generateShortId()}-proposed${ext}`,
+    );
 
-  await Promise.all([
-    writeFile(originalPath, originalContent, 'utf8'),
-    writeFile(proposedPath, proposedContent, 'utf8'),
-  ]);
+    // Both sides start together and the first failure fails the stage, as the
+    // `Promise.all` here did; a staged pair nobody can read is not a partial
+    // success to salvage.
+    yield* Effect.all(
+      [
+        Effect.tryPromise({
+          try: () => writeFile(originalPath, originalContent, 'utf8'),
+          catch: (error) => error,
+        }),
+        Effect.tryPromise({
+          try: () => writeFile(proposedPath, proposedContent, 'utf8'),
+          catch: (error) => error,
+        }),
+      ],
+      { concurrency: 'unbounded' },
+    );
 
-  return {
-    originalPath,
-    proposedPath,
-    cleanup: async () => {
-      const swallowUnlink = (target: string) => (error: unknown) => {
-        // Best-effort cleanup; ENOENT/already-removed is expected and benign.
-        debug('approval.tempFiles', `Failed to unlink temp file ${target}`, {
-          data: error,
-        });
-      };
-      await Promise.all([
-        unlink(originalPath).catch(swallowUnlink(originalPath)),
-        unlink(proposedPath).catch(swallowUnlink(proposedPath)),
-      ]);
-    },
-  };
-}
+    return {
+      originalPath,
+      proposedPath,
+      cleanup: Effect.all(
+        [removeTempFile(originalPath), removeTempFile(proposedPath)],
+        { concurrency: 'unbounded', discard: true },
+      ),
+    };
+  },
+);

@@ -1,5 +1,6 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
+import { Effect } from 'effect';
 import { describe, it } from 'vitest';
 
 // Local imports
@@ -21,7 +22,7 @@ Content-Type: text/html; charset=utf-8
 
 describe('parseEml', () => {
   it('converts an HTML-only body to Markdown without leaking style/script content', async () => {
-    const { text } = await parseEml(HTML_ONLY_EML);
+    const { text } = await Effect.runPromise(parseEml(HTML_ONLY_EML));
 
     assert.match(text, /Hello \*\*world\*\*,/);
     assert.match(text, /Item one/);

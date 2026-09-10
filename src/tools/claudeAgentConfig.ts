@@ -4,6 +4,7 @@ import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { execa } from 'execa';
 
 // Local imports
@@ -11,6 +12,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { platform } from '@platform/platform';
@@ -100,43 +102,52 @@ export function hasClaudeCodeOauthToken(
  * `env` and `currentPlatform` are injectable for testability; home-directory
  * resolution goes through `safeHomedir()` (mockable via `node:os`).
  */
-async function hasClaudeOauthCredential(
-  env: NodeJS.ProcessEnv = process.env,
-  currentPlatform: NodeJS.Platform = process.platform,
-): Promise<boolean> {
-  if (hasClaudeCodeOauthToken(env)) return true;
+const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
+  function* (
+    env: NodeJS.ProcessEnv = process.env,
+    currentPlatform: NodeJS.Platform = process.platform,
+  ): Effect.fn.Return<boolean, never> {
+    if (hasClaudeCodeOauthToken(env)) return true;
 
-  const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
-  try {
+    const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
     // Raw node:fs/promises, not platform().fs: FileSystemProvider
     // (@platform/interfaces) exposes no access/existence-check primitive, only
-    // `stat`, which would need this same try/catch for a not-found error — so
-    // routing through it buys nothing for this single boolean check.
-    await access(path.join(configDir, '.credentials.json'));
-    return true;
-  } catch {
-    // access(F_OK) succeeds when the file exists regardless of its read
-    // permissions, so an error means the file is absent or the path is not
-    // traversable. Neither case is a usable credential.
-  }
+    // `stat`, which would need this same failure branch for a not-found error
+    // — so routing through it buys nothing for this single boolean check.
+    const credentialFileExists = yield* Effect.tryPromise({
+      try: () => access(path.join(configDir, '.credentials.json')),
+      catch: (error) => error,
+    }).pipe(
+      Effect.as(true),
+      // access(F_OK) succeeds when the file exists regardless of its read
+      // permissions, so an error means the file is absent or the path is not
+      // traversable. Neither case is a usable credential.
+      Effect.catch(() => Effect.succeed(false)),
+    );
+    if (credentialFileExists) return true;
 
-  if (currentPlatform === 'darwin') {
-    for (const probe of claudeKeychainCredentialProbes(configDir)) {
-      try {
-        const result = await execa('security', probe, {
-          stdio: 'ignore',
-          timeout: 1000,
-          reject: false,
-        });
-        if (result.exitCode === 0) return true;
-      } catch {
-        // Not found / `security` unavailable — try the next known service name.
+    if (currentPlatform === 'darwin') {
+      for (const probe of claudeKeychainCredentialProbes(configDir)) {
+        const exitCode = yield* Effect.tryPromise({
+          try: () =>
+            execa('security', probe, {
+              stdio: 'ignore',
+              timeout: 1000,
+              reject: false,
+            }),
+          catch: (error) => error,
+        }).pipe(
+          Effect.map((result) => result.exitCode),
+          // Not found / `security` unavailable — try the next known service name.
+          Effect.catch(() => Effect.succeed(undefined)),
+        );
+        if (exitCode === 0) return true;
       }
     }
-  }
 
-  return false;
-}
+    return false;
+  },
+);
 
 function resolveClaudeConfigDir(configDirInput: string | undefined): string {
   const homeDir = safeHomedir() ?? '/nonexistent';
@@ -199,9 +210,9 @@ function claudeKeychainCredentialProbes(configDir: string): string[][] {
  *
  * The SDK identifies itself in the User-Agent via CLAUDE_AGENT_SDK_CLIENT_APP.
  */
-export async function buildClaudeAgentEnv(
+export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   options: { platform?: NodeJS.Platform } = {},
-): Promise<NodeJS.ProcessEnv> {
+): Effect.fn.Return<NodeJS.ProcessEnv, never> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
@@ -217,7 +228,7 @@ export async function buildClaudeAgentEnv(
   // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
   //    OAuth credential, and skip injecting the managed secret entirely.
   if (
-    await hasClaudeOauthCredential(env, options.platform ?? process.platform)
+    yield* hasClaudeOauthCredential(env, options.platform ?? process.platform)
   ) {
     delete env[apiKeyVar];
     return env;
@@ -229,20 +240,22 @@ export async function buildClaudeAgentEnv(
   // 3. Fall back to the Settings-managed secret. An unreadable secret store
   //    leaves the subprocess with no credential at all, so say so rather than
   //    letting it surface as an opaque "Invalid API key" from Claude Code.
-  const managed = await lookupApiKey(platform().secrets, 'anthropic').catch(
-    (error: unknown) => {
+  const managed = yield* hostPort(() =>
+    lookupApiKey(platform().secrets, 'anthropic'),
+  ).pipe(
+    Effect.catch((error: unknown) => {
       log.warn(
         `Failed to read the managed Anthropic API key: ${toErrorMessage(error)}`,
       );
-      return undefined;
-    },
+      return Effect.succeed(undefined);
+    }),
   );
   if (managed) {
     env[apiKeyVar] = exposeApiKey(managed);
   }
 
   return env;
-}
+});
 
 // ============================================================================
 // Synthetic execution metadata for child streams

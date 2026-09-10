@@ -1,3 +1,9 @@
+// Third-party imports
+import { Effect } from 'effect';
+
+// Local imports - common
+import { hostPort } from '@common/hostPort';
+
 // Local imports - shared schemas
 import { ToolError, type ToolResult } from '@shared/schemas';
 
@@ -104,38 +110,51 @@ interface ResolveWritableTargetOptions {
 }
 
 /** Resolve, authorize, read-gate, and load a workspace file for editing. */
-export async function resolveWritableTarget(
-  inputPath: string,
-  options: ResolveWritableTargetOptions = {},
-): Promise<WritableTargetPreparation> {
-  const { path: resolved, display: displayPath } = resolveAndFormat(
-    inputPath,
-    currentToolRoot(),
-  );
-  assertWritable(resolved, displayPath);
+export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
+  function* (
+    inputPath: string,
+    options: ResolveWritableTargetOptions = {},
+  ): Effect.fn.Return<WritableTargetPreparation, unknown> {
+    // Resolution, the read-only-root check and the caller's own validation all
+    // reject with a ToolError the tool runner reports to the model, so they
+    // stay a failure rather than becoming a defect.
+    const { path, displayPath } = yield* Effect.try({
+      try: () => {
+        const { path: resolved, display } = resolveAndFormat(
+          inputPath,
+          currentToolRoot(),
+        );
+        assertWritable(resolved, display);
 
-  const path = resolved.fsPath;
-  options.validate?.({ path, displayPath });
+        const fsPath = resolved.fsPath;
+        options.validate?.({ path: fsPath, displayPath: display });
+        return { path: fsPath, displayPath: display };
+      },
+      catch: (error) => error,
+    });
 
-  // Shared read-before-edit gate, then the current content.
-  const exists = await WorkspaceFS.exists(path);
-  const blocked = requireFileReadForEdit(path, exists);
-  if (blocked) {
-    return { blocked };
-  }
+    // Shared read-before-edit gate, then the current content.
+    const exists = yield* hostPort(() => WorkspaceFS.exists(path));
+    const blocked = requireFileReadForEdit(path, exists);
+    if (blocked) {
+      return { blocked };
+    }
 
-  return {
-    target: {
-      path,
-      displayPath,
-      exists,
-      originalContent:
-        exists || (options.missing ?? 'require') === 'require'
-          ? await WorkspaceFS.read(path)
-          : '',
-    },
-  };
-}
+    const originalContent =
+      exists || (options.missing ?? 'require') === 'require'
+        ? yield* hostPort(() => WorkspaceFS.read(path))
+        : '';
+
+    return {
+      target: {
+        path,
+        displayPath,
+        exists,
+        originalContent,
+      },
+    };
+  },
+);
 
 interface LiteralMatchContext {
   count: number;
@@ -222,54 +241,58 @@ interface ApprovedFileEditRequest {
  * tool-specific; approval, writing, rejection, diff notes, and edit metadata
  * remain one invariant pipeline.
  */
-export async function applyApprovedFileEdit({
-  path,
-  displayPath,
-  originalContent,
-  proposedContent,
-  sourceTool,
-  present,
-  beforeWrite,
-  afterWrite,
-  startLine = 'omit',
-  diffSeparator,
-}: ApprovedFileEditRequest): Promise<ToolResult> {
-  const outcome = await requestAndWriteApprovedEdit({
+export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
+  function* ({
     path,
     displayPath,
     originalContent,
     proposedContent,
     sourceTool,
+    present,
     beforeWrite,
-  });
-  if ('rejected' in outcome) {
-    return outcome.rejected;
-  }
-
-  const edit: AppliedFileEdit = outcome;
-  await afterWrite?.(edit);
-  const presentation = present(edit);
-  const output = appendApprovalDiffNote(
-    presentation.output,
-    displayPath,
-    proposedContent,
-    edit.appliedContent,
+    afterWrite,
+    startLine = 'omit',
     diffSeparator,
-  );
+  }: ApprovedFileEditRequest): Effect.fn.Return<ToolResult, unknown> {
+    const outcome = yield* hostPort(() =>
+      requestAndWriteApprovedEdit({
+        path,
+        displayPath,
+        originalContent,
+        proposedContent,
+        sourceTool,
+        beforeWrite,
+      }),
+    );
+    if ('rejected' in outcome) {
+      return outcome.rejected;
+    }
 
-  return {
-    status: 'executed',
-    summary: presentation.summary,
-    output,
-    userPatch: edit.approval.userPatch,
-    edits: [
-      {
-        path: displayPath,
-        lineChanges: edit.approval.lineChanges,
-        ...(startLine === 'approval' && {
-          startLine: edit.approval.startLine,
-        }),
-      },
-    ],
-  };
-}
+    const edit: AppliedFileEdit = outcome;
+    yield* hostPort(() => afterWrite?.(edit));
+    const presentation = present(edit);
+    const output = appendApprovalDiffNote(
+      presentation.output,
+      displayPath,
+      proposedContent,
+      edit.appliedContent,
+      diffSeparator,
+    );
+
+    return {
+      status: 'executed',
+      summary: presentation.summary,
+      output,
+      userPatch: edit.approval.userPatch,
+      edits: [
+        {
+          path: displayPath,
+          lineChanges: edit.approval.lineChanges,
+          ...(startLine === 'approval' && {
+            startLine: edit.approval.startLine,
+          }),
+        },
+      ],
+    };
+  },
+);

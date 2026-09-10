@@ -6,6 +6,9 @@
  * keeps that tool-layer dependency out of shared settings-view code.
  */
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
@@ -156,66 +159,65 @@ const BUILTIN_TOOLS: (Omit<
  *   these results (including their `statusDetail`). Used by the toggle
  *   handler for instant UI updates.
  */
-export async function buildToolDashboardItems(
-  host: ToolHost,
-  cachedResults?: ExternalToolCheckResult[],
-): Promise<ToolDashboardItem[]> {
-  const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.filter(
-    ({ toolNames }) =>
-      !toolNames.every((name) => isDefaultToolUnavailableOnHost(name, host)),
-  ).map(({ toolNames, ...rest }) => ({
-    ...rest,
-    tools: toolNames.map((name) => ({ name })),
-    status: 'available' as const,
-    installActions: [],
-    requiresSetup: false,
-  }));
+export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
+  function* (host: ToolHost, cachedResults?: ExternalToolCheckResult[]) {
+    const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.filter(
+      ({ toolNames }) =>
+        !toolNames.every((name) => isDefaultToolUnavailableOnHost(name, host)),
+    ).map(({ toolNames, ...rest }) => ({
+      ...rest,
+      tools: toolNames.map((name) => ({ name })),
+      status: 'available' as const,
+      installActions: [],
+      requiresSetup: false,
+    }));
 
-  const results = cachedResults ?? (await runExternalToolChecks());
+    const results = cachedResults ?? (yield* runExternalToolChecks());
 
-  const disabledIds = getDisabledToolIds();
-  const externalItems: ToolDashboardItem[] = [];
-  for (const { id, tools, status, statusLabel, statusDetail } of results) {
-    const def = findExternalToolDef(id);
-    if (!def || def.hideFromDashboard) continue;
-    externalItems.push({
-      id: def.id,
-      name: def.name,
-      category: def.category,
-      description: def.description,
-      tools: tools.map((name) => ({ name })),
-      status,
-      statusLabel,
-      requiresSetup: true,
-      installActions: [
-        ...(def.installGuide
-          ? [{ kind: 'guide' as const, text: def.installGuide }]
-          : []),
-        ...(def.installCommand
-          ? [{ kind: 'command' as const, command: def.installCommand }]
-          : []),
-        ...(def.authCommand
-          ? [{ kind: 'auth' as const, command: def.authCommand }]
-          : []),
-        ...(def.installExtensionId
-          ? [
-              {
-                kind: 'extension' as const,
-                extensionId: def.installExtensionId,
-              },
-            ]
-          : []),
-        ...(def.installUrl
-          ? [{ kind: 'url' as const, url: def.installUrl }]
-          : []),
-      ],
-      configNotes: def.configNotes,
-      statusDetail,
-      authNote: def.authNote,
-      toggleable: def.toggleable,
-      enabled: !disabledIds.has(def.id),
-    });
-  }
+    const disabledIds = getDisabledToolIds();
+    const externalItems: ToolDashboardItem[] = [];
+    for (const { id, tools, status, statusLabel, statusDetail } of results) {
+      const def = findExternalToolDef(id);
+      if (!def || def.hideFromDashboard) continue;
+      externalItems.push({
+        id: def.id,
+        name: def.name,
+        category: def.category,
+        description: def.description,
+        tools: tools.map((name) => ({ name })),
+        status,
+        statusLabel,
+        requiresSetup: true,
+        installActions: [
+          ...(def.installGuide
+            ? [{ kind: 'guide' as const, text: def.installGuide }]
+            : []),
+          ...(def.installCommand
+            ? [{ kind: 'command' as const, command: def.installCommand }]
+            : []),
+          ...(def.authCommand
+            ? [{ kind: 'auth' as const, command: def.authCommand }]
+            : []),
+          ...(def.installExtensionId
+            ? [
+                {
+                  kind: 'extension' as const,
+                  extensionId: def.installExtensionId,
+                },
+              ]
+            : []),
+          ...(def.installUrl
+            ? [{ kind: 'url' as const, url: def.installUrl }]
+            : []),
+        ],
+        configNotes: def.configNotes,
+        statusDetail,
+        authNote: def.authNote,
+        toggleable: def.toggleable,
+        enabled: !disabledIds.has(def.id),
+      });
+    }
 
-  return [...builtinItems, ...externalItems];
-}
+    return [...builtinItems, ...externalItems];
+  },
+);
