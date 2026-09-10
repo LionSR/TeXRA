@@ -1,6 +1,7 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform/test support/tools
 import { installPlatform } from '@test/support/setupPlatform';
@@ -23,57 +24,64 @@ function installToolAvailability(isTexraCliEntrypoint: boolean) {
   );
 }
 
+/** Restore the default platform the way each test's `finally` did. */
+const restorePlatform = <A, E, R>(
+  self: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
+  self.pipe(Effect.ensuring(Effect.promise(() => installPlatform())));
+
 describe('external tool definitions', () => {
-  it('detects the current TeXRA CLI process through the host checker', async () => {
-    const texraCli = findExternalToolDef('texra-cli');
-    if (!texraCli) throw new Error('TeXRA CLI tool definition should exist');
-    await installToolAvailability(true);
+  it.effect(
+    'detects the current TeXRA CLI process through the host checker',
+    () =>
+      restorePlatform(
+        Effect.gen(function* () {
+          const texraCli = findExternalToolDef('texra-cli');
+          if (!texraCli)
+            throw new Error('TeXRA CLI tool definition should exist');
+          yield* Effect.promise(() => installToolAvailability(true));
 
-    try {
-      const probeResult = await Effect.runPromise(texraCli.probe!());
+          const probeResult = yield* texraCli.probe!();
 
-      expect(probeResult).toBe(true);
-      expect(await Effect.runPromise(texraCli.check(probeResult))).toBe(true);
-      expect(await Effect.runPromise(texraCli.statusLabel!(probeResult))).toBe(
-        'Detected; integration coming soon',
-      );
-    } finally {
-      await installPlatform();
-    }
-  });
+          expect(probeResult).toBe(true);
+          expect(yield* texraCli.check(probeResult)).toBe(true);
+          expect(yield* texraCli.statusLabel!(probeResult)).toBe(
+            'Detected; integration coming soon',
+          );
+        }),
+      ),
+  );
 
-  it('detects Lean direct mode from the lake binary without running lake', async () => {
-    const lean = findExternalToolDef('lean4');
-    if (!lean) throw new Error('Lean tool definition should exist');
-    const findPath = vi
-      .spyOn(BinaryResolver, 'findPath')
-      .mockReturnValue('/usr/local/bin/lake');
-    await installToolAvailability(false);
+  it.effect(
+    'detects Lean direct mode from the lake binary without running lake',
+    () =>
+      restorePlatform(
+        Effect.gen(function* () {
+          const lean = findExternalToolDef('lean4');
+          if (!lean) throw new Error('Lean tool definition should exist');
+          const findPath = vi
+            .spyOn(BinaryResolver, 'findPath')
+            .mockReturnValue('/usr/local/bin/lake');
+          yield* Effect.promise(() => installToolAvailability(false));
 
-    try {
-      const probeResult = await Effect.runPromise(lean.probe!());
+          const probeResult = yield* lean.probe!();
 
-      expect(findPath).toHaveBeenCalledWith('lake');
-      expect(probeResult).toEqual({
-        extensionAvailable: false,
-        lakeAvailable: true,
-      });
-      await expect(Effect.runPromise(lean.check(probeResult))).resolves.toBe(
-        true,
-      );
+          expect(findPath).toHaveBeenCalledWith('lake');
+          expect(probeResult).toEqual({
+            extensionAvailable: false,
+            lakeAvailable: true,
+          });
+          expect(yield* lean.check(probeResult)).toBe(true);
 
-      findPath.mockReturnValue(null);
-      const missingProbeResult = await Effect.runPromise(lean.probe!());
+          findPath.mockReturnValue(null);
+          const missingProbeResult = yield* lean.probe!();
 
-      expect(missingProbeResult).toEqual({
-        extensionAvailable: false,
-        lakeAvailable: false,
-      });
-      await expect(
-        Effect.runPromise(lean.check(missingProbeResult)),
-      ).resolves.toBe(false);
-    } finally {
-      await installPlatform();
-    }
-  });
+          expect(missingProbeResult).toEqual({
+            extensionAvailable: false,
+            lakeAvailable: false,
+          });
+          expect(yield* lean.check(missingProbeResult)).toBe(false);
+        }),
+      ),
+  );
 });

@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { listRemoteAgents } from '@agent/remote/remoteAgentList';
@@ -63,47 +64,53 @@ afterEach(() => {
 });
 
 describe('remote agent listing', () => {
-  it('drops remote rows with non-identifier agent names', async () => {
-    installRemoteAgentListClient({
-      data: [invalidAgentRow({}), canonicalReviewRow],
-      error: null,
-    });
+  it.effect('drops remote rows with non-identifier agent names', () =>
+    Effect.gen(function* () {
+      installRemoteAgentListClient({
+        data: [invalidAgentRow({}), canonicalReviewRow],
+        error: null,
+      });
 
-    const agents = await Effect.runPromise(listRemoteAgents());
+      const agents = yield* listRemoteAgents();
 
-    expect(agents.map((agent) => agent.name)).toEqual(['review']);
-  });
+      expect(agents.map((agent) => agent.name)).toEqual(['review']);
+    }),
+  );
 
-  it('drops remote rows without an agent category', async () => {
-    installRemoteAgentListClient({
-      data: [
-        invalidAgentRow({ name: 'uncategorized', agent_category: null }),
-        canonicalReviewRow,
-      ],
-      error: null,
-    });
+  it.effect('drops remote rows without an agent category', () =>
+    Effect.gen(function* () {
+      installRemoteAgentListClient({
+        data: [
+          invalidAgentRow({ name: 'uncategorized', agent_category: null }),
+          canonicalReviewRow,
+        ],
+        error: null,
+      });
 
-    const agents = await Effect.runPromise(listRemoteAgents());
+      const agents = yield* listRemoteAgents();
 
-    expect(agents.map((agent) => agent.name)).toEqual(['review']);
-  });
+      expect(agents.map((agent) => agent.name)).toEqual(['review']);
+    }),
+  );
 
-  it('returns no agents when the list query fails', async () => {
-    const selectedColumns = installRemoteAgentListClient({
-      data: null,
-      error: {
-        code: '42501',
-        message: 'permission denied for table remote_agents',
-      },
-    });
+  it.effect('returns no agents when the list query fails', () =>
+    Effect.gen(function* () {
+      const selectedColumns = installRemoteAgentListClient({
+        data: null,
+        error: {
+          code: '42501',
+          message: 'permission denied for table remote_agents',
+        },
+      });
 
-    const agents = await Effect.runPromise(listRemoteAgents());
+      const agents = yield* listRemoteAgents();
 
-    expect(agents).toEqual([]);
-    expect(selectedColumns).toEqual([
-      'id, name, description, tools, agent_category',
-    ]);
-  });
+      expect(agents).toEqual([]);
+      expect(selectedColumns).toEqual([
+        'id, name, description, tools, agent_category',
+      ]);
+    }),
+  );
 });
 
 describe('remote agent config parsing', () => {

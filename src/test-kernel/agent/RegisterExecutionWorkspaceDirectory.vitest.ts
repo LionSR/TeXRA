@@ -1,5 +1,6 @@
-import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Cause, Effect, Exit } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getExecutionRecords, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -11,7 +12,6 @@ import {
   registerExecution,
 } from '@agent/storage/executionLifecycle';
 import { inspectExecutionLease } from '@agent/storage/executionLease';
-import { effectRuntime } from '@platform/processRuntime';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -29,21 +29,23 @@ const options = {
   userFollowUpSupport: 'nativeInteractive',
 } as const;
 let session: ReturnType<typeof createTestSession>;
-const run = <A, E>(effect: Effect.Effect<A, E>) =>
-  effectRuntime().runPromise(effect);
+/** The failure an exit carries, or undefined when it succeeded. */
+const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>
+  Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
 const register = (workingDirectory?: string) =>
-  run(
-    registerExecution(
-      session,
-      executionId,
-      {
-        ...baseConfig,
-        ...(workingDirectory === undefined ? {} : { workingDirectory }),
-      },
-      'chat',
-      options,
-    ),
+  registerExecution(
+    session,
+    executionId,
+    {
+      ...baseConfig,
+      ...(workingDirectory === undefined ? {} : { workingDirectory }),
+    },
+    'chat',
+    options,
   );
+/** Lease and store reads run through the session's run context, not Effect. */
+const inSession = <T>(fn: () => Promise<T>): Effect.Effect<T> =>
+  Effect.promise(() => runInSession(session, fn));
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -51,173 +53,207 @@ beforeEach(() => {
 });
 
 describe('execution registration and finalization', () => {
-  it.each([undefined, '/workspace/paper '])(
+  it.effect.each([undefined, '/workspace/paper '])(
     'pins the execution working directory for %s',
-    async (workingDirectory) => {
-      await register(workingDirectory);
-      expect(
-        await run(getExecutionRecords(session, executionId).readConfig()),
-      ).toMatchObject({
-        workingDirectory: workingDirectory ?? '/workspace/root',
-      });
-      expect(
-        await run(getExecutionRecords(session, executionId).readMeta()),
-      ).toMatchObject({
-        streamId: options.streamId,
-        identity: options.identity,
-        userFollowUpSupport: 'nativeInteractive',
-      });
-      expect(await getExecutionStore(executionId).listKeys()).toEqual([]);
-    },
-  );
-
-  it('rolls back file ownership when the registration transaction fails', async () => {
-    const failure = new Error('database write failed');
-    vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
-      Effect.die(failure),
-    );
-    await expect(register()).rejects.toBe(failure);
-    expect(
-      await runInSession(session, () => inspectExecutionLease(executionId)),
-    ).toEqual({ status: 'free' });
-    expect(
-      await run(getExecutionRecords(session, executionId).readMeta()),
-    ).toBeNull();
-  });
-
-  it.each([false, true])(
-    'preserves preexisting file ownership %s when database admission fails',
-    async (alreadyOwned) => {
-      await register();
-      if (!alreadyOwned) await run(session.releaseExecutionLease(executionId));
-      const failure = new Error('database admission rejected');
-      vi.spyOn(session, 'acquireExecutionClaims').mockReturnValueOnce(
-        Effect.fail(failure),
-      );
-      await expect(
-        run(
-          acquireResumedExecutionOwnership(
-            session,
-            executionId,
-            options.streamId,
+    (workingDirectory) =>
+      Effect.gen(function* () {
+        yield* register(workingDirectory);
+        expect(
+          yield* getExecutionRecords(session, executionId).readConfig(),
+        ).toMatchObject({
+          workingDirectory: workingDirectory ?? '/workspace/root',
+        });
+        expect(
+          yield* getExecutionRecords(session, executionId).readMeta(),
+        ).toMatchObject({
+          streamId: options.streamId,
+          identity: options.identity,
+          userFollowUpSupport: 'nativeInteractive',
+        });
+        expect(
+          yield* Effect.promise(() =>
+            getExecutionStore(executionId).listKeys(),
           ),
-        ),
-      ).rejects.toBe(failure);
-      const lease = await runInSession(session, () =>
-        inspectExecutionLease(executionId),
-      );
-      expect(lease.status).toBe(alreadyOwned ? 'owned' : 'free');
-    },
+        ).toEqual([]);
+      }),
   );
 
-  it('releases reacquired database claims when repeated registration fails', async () => {
-    await register();
-    await run(session.releaseExecutionLease(executionId));
-    const failure = new Error('registration rejected');
-    vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
-      Effect.die(failure),
-    );
-    await expect(register()).rejects.toBe(failure);
-    await expect(
-      run(getExecutionRecords(session, executionId).writeReport('unowned')),
-    ).rejects.toThrow();
-    await run(session.acquireExecutionClaims(executionId, options.streamId));
-    await run(getExecutionRecords(session, executionId).writeReport('owned'));
-    expect(
-      await run(getExecutionRecords(session, executionId).readReport()),
-    ).toBe('owned');
-  });
+  it.effect(
+    'rolls back file ownership when the registration transaction fails',
+    () =>
+      Effect.gen(function* () {
+        const failure = new Error('database write failed');
+        vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
+          Effect.die(failure),
+        );
+        expect(failureOf(yield* Effect.exit(register()))).toBe(failure);
+        expect(
+          yield* inSession(() => inspectExecutionLease(executionId)),
+        ).toEqual({ status: 'free' });
+        expect(
+          yield* getExecutionRecords(session, executionId).readMeta(),
+        ).toBeNull();
+      }),
+  );
 
-  it('keeps the existing local run claimed when a new birth collides with its stream', async () => {
-    await register();
-    await expect(
-      run(registerExecution(session, 'bcd234', baseConfig, 'chat', options)),
-    ).rejects.toThrow();
-    await run(
-      getExecutionRecords(session, executionId).writeReport('still owned'),
-    );
-    expect(
-      await run(getExecutionRecords(session, executionId).readReport()),
-    ).toBe('still owned');
-  });
+  it.effect.each([false, true])(
+    'preserves preexisting file ownership %s when database admission fails',
+    (alreadyOwned) =>
+      Effect.gen(function* () {
+        yield* register();
+        if (!alreadyOwned) yield* session.releaseExecutionLease(executionId);
+        const failure = new Error('database admission rejected');
+        vi.spyOn(session, 'acquireExecutionClaims').mockReturnValueOnce(
+          Effect.fail(failure),
+        );
+        expect(
+          failureOf(
+            yield* Effect.exit(
+              acquireResumedExecutionOwnership(
+                session,
+                executionId,
+                options.streamId,
+              ),
+            ),
+          ),
+        ).toBe(failure);
+        const lease = yield* inSession(() =>
+          inspectExecutionLease(executionId),
+        );
+        expect(lease.status).toBe(alreadyOwned ? 'owned' : 'free');
+      }),
+  );
 
-  it('releases fresh birth claims when the committed publication consumer fails', async () => {
-    vi.spyOn(session, 'receiveCommittedEvent').mockReturnValue(
-      Effect.die(new Error('consumer failed')),
-    );
-    await expect(register()).rejects.toThrow();
-    expect(
-      await run(getExecutionRecords(session, executionId).readMeta()),
-    ).not.toBeNull();
-    await expect(
-      run(getExecutionRecords(session, executionId).writeReport('unowned')),
-    ).rejects.toThrow();
-    expect(
-      await runInSession(session, () => inspectExecutionLease(executionId)),
-    ).toEqual({ status: 'free' });
-  });
+  it.effect(
+    'releases reacquired database claims when repeated registration fails',
+    () =>
+      Effect.gen(function* () {
+        yield* register();
+        yield* session.releaseExecutionLease(executionId);
+        const failure = new Error('registration rejected');
+        vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
+          Effect.die(failure),
+        );
+        expect(failureOf(yield* Effect.exit(register()))).toBe(failure);
+        expect(
+          failureOf(
+            yield* Effect.exit(
+              getExecutionRecords(session, executionId).writeReport('unowned'),
+            ),
+          ),
+        ).toBeInstanceOf(Error);
+        yield* session.acquireExecutionClaims(executionId, options.streamId);
+        yield* getExecutionRecords(session, executionId).writeReport('owned');
+        expect(
+          yield* getExecutionRecords(session, executionId).readReport(),
+        ).toBe('owned');
+      }),
+  );
 
-  it.each(['preserve', 'delete'] as const)(
+  it.effect(
+    'keeps the existing local run claimed when a new birth collides with its stream',
+    () =>
+      Effect.gen(function* () {
+        yield* register();
+        expect(
+          failureOf(
+            yield* Effect.exit(
+              registerExecution(session, 'bcd234', baseConfig, 'chat', options),
+            ),
+          ),
+        ).toBeInstanceOf(Error);
+        yield* getExecutionRecords(session, executionId).writeReport(
+          'still owned',
+        );
+        expect(
+          yield* getExecutionRecords(session, executionId).readReport(),
+        ).toBe('still owned');
+      }),
+  );
+
+  it.effect(
+    'releases fresh birth claims when the committed publication consumer fails',
+    () =>
+      Effect.gen(function* () {
+        vi.spyOn(session, 'receiveCommittedEvent').mockReturnValue(
+          Effect.die(new Error('consumer failed')),
+        );
+        expect(failureOf(yield* Effect.exit(register()))).toBeInstanceOf(Error);
+        expect(
+          yield* getExecutionRecords(session, executionId).readMeta(),
+        ).not.toBeNull();
+        expect(
+          failureOf(
+            yield* Effect.exit(
+              getExecutionRecords(session, executionId).writeReport('unowned'),
+            ),
+          ),
+        ).toBeInstanceOf(Error);
+        expect(
+          yield* inSession(() => inspectExecutionLease(executionId)),
+        ).toEqual({ status: 'free' });
+      }),
+  );
+
+  it.effect.each(['preserve', 'delete'] as const)(
     'retains the existing requested checkpoint disposition %s',
-    async (flowRecord) => {
-      await register();
-      const store = getExecutionStore(executionId);
-      await runInSession(session, () =>
-        store.write(flowKey(executionId), { checkpoint: 'existing format' }),
-      );
-      expect(
-        await run(
-          finalizeRun(session, {
+    (flowRecord) =>
+      Effect.gen(function* () {
+        yield* register();
+        const store = getExecutionStore(executionId);
+        yield* inSession(() =>
+          store.write(flowKey(executionId), { checkpoint: 'existing format' }),
+        );
+        expect(
+          yield* finalizeRun(session, {
             executionId,
             outcome: 'completed',
             flowRecord,
           }),
-        ),
-      ).toEqual({ ok: true, outcome: 'completed' });
-      expect(
-        await runInSession(session, () => store.exists(flowKey(executionId))),
-      ).toBe(flowRecord === 'preserve');
-    },
+        ).toEqual({ ok: true, outcome: 'completed' });
+        expect(yield* inSession(() => store.exists(flowKey(executionId)))).toBe(
+          flowRecord === 'preserve',
+        );
+      }),
   );
 
-  it.each([
+  it.effect.each([
     { statusFails: true, deletionFails: false },
     { statusFails: true, deletionFails: true },
     { statusFails: false, deletionFails: true },
   ])(
     'preserves independent finalization failures $statusFails/$deletionFails',
-    async ({ statusFails, deletionFails }) => {
-      await register();
-      const statusFailure = new Error('status write failed');
-      const deletionFailure = new Error('checkpoint delete failed');
-      if (statusFails)
-        vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
-          Effect.die(statusFailure),
-        );
-      const deletion = vi.spyOn(getExecutionStore(executionId), 'delete');
-      if (deletionFails) deletion.mockRejectedValueOnce(deletionFailure);
-      const result = await run(
-        finalizeRun(session, {
+    ({ statusFails, deletionFails }) =>
+      Effect.gen(function* () {
+        yield* register();
+        const statusFailure = new Error('status write failed');
+        const deletionFailure = new Error('checkpoint delete failed');
+        if (statusFails)
+          vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
+            Effect.die(statusFailure),
+          );
+        const deletion = vi.spyOn(getExecutionStore(executionId), 'delete');
+        if (deletionFails) deletion.mockRejectedValueOnce(deletionFailure);
+        const result = yield* finalizeRun(session, {
           executionId,
           outcome: 'failed',
           flowRecord: 'delete',
-        }),
-      );
-      expect(result).toMatchObject({
-        ok: false,
-        outcomePersisted: !statusFails,
-      });
-      expect(deletion).toHaveBeenCalledWith(flowKey(executionId));
-      const singleFailure = statusFails ? statusFailure : deletionFailure;
-      if (!result.ok)
-        expect(result.error).toEqual(
-          statusFails && deletionFails
-            ? new AggregateError(
-                [statusFailure, deletionFailure],
-                `Terminal status and flow deletion failed for ${executionId}`,
-              )
-            : singleFailure,
-        );
-    },
+        });
+        expect(result).toMatchObject({
+          ok: false,
+          outcomePersisted: !statusFails,
+        });
+        expect(deletion).toHaveBeenCalledWith(flowKey(executionId));
+        const singleFailure = statusFails ? statusFailure : deletionFailure;
+        if (!result.ok)
+          expect(result.error).toEqual(
+            statusFails && deletionFails
+              ? new AggregateError(
+                  [statusFailure, deletionFailure],
+                  `Terminal status and flow deletion failed for ${executionId}`,
+                )
+              : singleFailure,
+          );
+      }),
   );
 });

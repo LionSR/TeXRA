@@ -1,7 +1,8 @@
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { describe, expect, vi } from 'vitest';
 
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -91,71 +92,75 @@ describe('terminal result event', () => {
     globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
   });
 
-  it('emits exactly one completed result on a successful run', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
-      );
-      expectSingleResult(results, ctx, {
-        outcome: 'completed',
-        category: 'toolUse',
-        isSubagent: false,
-      });
-      expect(results[0].error).toBeUndefined();
-      // One disposal owner for the run's model handler: the cell closes
-      // whichever handler is live when the run ends.
-      expect(ctx.modelCell.handler.dispose).toHaveBeenCalledTimes(1);
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
+  it.effect('emits exactly one completed result on a successful run', () =>
+    Effect.gen(function* () {
+      const { ctx, streamStatus, results } = setupResultCase();
+      try {
+        yield* runFlowWithLifecycle(ctx, async () => completedRun(ctx));
+        expectSingleResult(results, ctx, {
+          outcome: 'completed',
+          category: 'toolUse',
+          isSubagent: false,
+        });
+        expect(results[0].error).toBeUndefined();
+        // One disposal owner for the run's model handler: the cell closes
+        // whichever handler is live when the run ends.
+        expect(ctx.modelCell.handler.dispose).toHaveBeenCalledTimes(1);
+      } finally {
+        clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+      }
+    }),
+  );
 
-  it('emits the completed result even if ending the parent stage throws', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
-      throw new Error('stage listener boom');
-    });
+  it.effect(
+    'emits the completed result even if ending the parent stage throws',
+    () =>
+      Effect.gen(function* () {
+        const { ctx, streamStatus, results } = setupResultCase();
+        vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
+          throw new Error('stage listener boom');
+        });
 
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
-        ),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+        try {
+          expect(
+            yield* runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
+          ).toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
 
-      expectSingleResult(results, ctx, { outcome: 'completed' });
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
+          expectSingleResult(results, ctx, { outcome: 'completed' });
+        } finally {
+          clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+        }
+      }),
+  );
 
-  it('exposes the per-run handle via onRun and settles handle.result', async () => {
-    const { logger, ctx, streamStatus } = setupResultCase();
-    let handle: AgentRunHandle | undefined;
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
-          onRun: (h) => {
-            handle = h;
-          },
-        }),
-      );
-      expect(handle).toBeDefined();
-      // The handle carries the run's trace channel for run-scoped subscribers.
-      expect(handle?.trace).toBe(logger);
-      // `result` settles with the same terminal event (always resolves).
-      await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-        type: 'result',
-        outcome: 'completed',
-        executionId: ctx.runScope.executionId,
-      });
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
+  it.effect(
+    'exposes the per-run handle via onRun and settles handle.result',
+    () =>
+      Effect.gen(function* () {
+        const { logger, ctx, streamStatus } = setupResultCase();
+        let handle: AgentRunHandle | undefined;
+        try {
+          yield* runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+            onRun: (h) => {
+              handle = h;
+            },
+          });
+          expect(handle).toBeDefined();
+          // The handle carries the run's trace channel for run-scoped subscribers.
+          expect(handle?.trace).toBe(logger);
+          // `result` settles with the same terminal event (always resolves).
+          expect(yield* handle!.result).toMatchObject({
+            type: 'result',
+            outcome: 'completed',
+            executionId: ctx.runScope.executionId,
+          });
+        } finally {
+          clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+        }
+      }),
+  );
 
-  it.each([
+  it.effect.each([
     {
       name: 'throws synchronously',
       onRun: () => {
@@ -168,162 +173,184 @@ describe('terminal result event', () => {
         throw new Error('onRun async boom');
       },
     },
-  ])('keeps running when onRun $name', async ({ onRun }) => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () => completedRun(ctx), { onRun }),
-        ),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-      await Promise.resolve();
-
-      expectSingleResult(results, ctx, { outcome: 'completed' });
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
-
-  it('keeps the failed subagent result when the onError delivery hook throws', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlowWithLifecycle(ctx, explodedRun, {
-            isSubagent: true,
-            onError: () => {
-              throw new Error('delivery hook boom');
-            },
+  ])('keeps running when onRun $name', ({ onRun }) =>
+    Effect.gen(function* () {
+      const { ctx, streamStatus, results } = setupResultCase();
+      try {
+        expect(
+          yield* runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+            onRun,
           }),
-        ),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.FAILED });
+        ).toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+        yield* Effect.promise(() => Promise.resolve());
 
-      expectSingleResult(results, ctx, { outcome: 'failed' });
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
+        expectSingleResult(results, ctx, { outcome: 'completed' });
+      } finally {
+        clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+      }
+    }),
+  );
 
-  it('emits the failed result even if ending the parent stage throws', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
-      throw new Error('stage listener boom');
-    });
-
-    try {
-      await expect(
-        Effect.runPromise(runFlowWithLifecycle(ctx, explodedRun)),
-      ).rejects.toThrow('model exploded');
-
-      expectSingleResult(results, ctx, { outcome: 'failed' });
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
-
-  it('settles handle.result as failed on a thrown run (always resolves)', async () => {
-    const { ctx, streamStatus } = setupResultCase();
-    let handle: AgentRunHandle | undefined;
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlowWithLifecycle(
-            ctx,
-            async () => {
-              throw new Error('boom');
-            },
-            {
-              onRun: (h) => {
-                handle = h;
+  it.effect(
+    'keeps the failed subagent result when the onError delivery hook throws',
+    () =>
+      Effect.gen(function* () {
+        const { ctx, streamStatus, results } = setupResultCase();
+        try {
+          expect(
+            yield* runFlowWithLifecycle(ctx, explodedRun, {
+              isSubagent: true,
+              onError: () => {
+                throw new Error('delivery hook boom');
               },
-            },
-          ),
-        ),
-      ).rejects.toThrow('boom');
-      await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-        type: 'result',
-        outcome: 'failed',
-      });
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
+            }),
+          ).toMatchObject({ outcome: RUN_OUTCOME.FAILED });
 
-  it('maps a returned cancellation to a cancelled result (sibling of failed)', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.CANCELLED,
-          executionId: ctx.runScope.executionId,
-          streamId: ctx.runScope.streamId,
-        })),
-      );
-      expectSingleResult(results, ctx, { outcome: 'cancelled' });
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
+          expectSingleResult(results, ctx, { outcome: 'failed' });
+        } finally {
+          clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+        }
+      }),
+  );
 
-  it('emits a cancelled result with kind=abort on a thrown abort', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+  it.effect(
+    'emits the failed result even if ending the parent stage throws',
+    () =>
+      Effect.gen(function* () {
+        const { ctx, streamStatus, results } = setupResultCase();
+        vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
+          throw new Error('stage listener boom');
+        });
+
+        try {
+          expect(
+            (yield* Effect.flip(runFlowWithLifecycle(ctx, explodedRun)))
+              .message,
+          ).toContain('model exploded');
+
+          expectSingleResult(results, ctx, { outcome: 'failed' });
+        } finally {
+          clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+        }
+      }),
+  );
+
+  it.effect(
+    'settles handle.result as failed on a thrown run (always resolves)',
+    () =>
+      Effect.gen(function* () {
+        const { ctx, streamStatus } = setupResultCase();
+        let handle: AgentRunHandle | undefined;
+        try {
+          expect(
+            (yield* Effect.flip(
+              runFlowWithLifecycle(
+                ctx,
+                async () => {
+                  throw new Error('boom');
+                },
+                {
+                  onRun: (h) => {
+                    handle = h;
+                  },
+                },
+              ),
+            )).message,
+          ).toContain('boom');
+          expect(yield* handle!.result).toMatchObject({
+            type: 'result',
+            outcome: 'failed',
+          });
+        } finally {
+          clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+        }
+      }),
+  );
+
+  it.effect(
+    'maps a returned cancellation to a cancelled result (sibling of failed)',
+    () =>
+      Effect.gen(function* () {
+        const { ctx, streamStatus, results } = setupResultCase();
+        try {
+          yield* runFlowWithLifecycle(ctx, async () => ({
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.CANCELLED,
+            executionId: ctx.runScope.executionId,
+            streamId: ctx.runScope.streamId,
+          }));
+          expectSingleResult(results, ctx, { outcome: 'cancelled' });
+        } finally {
+          clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+        }
+      }),
+  );
+
+  it.effect('emits a cancelled result with kind=abort on a thrown abort', () =>
+    Effect.gen(function* () {
+      const { ctx, streamStatus, results } = setupResultCase();
+      try {
+        yield* runFlowWithLifecycle(ctx, async () => {
           throw new DOMException('Request aborted', 'AbortError');
-        }),
+        });
+        expectSingleResult(results, ctx, { outcome: 'cancelled' });
+        expect(results[0].error?.kind).toBe('abort');
+      } finally {
+        clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+      }
+    }),
+  );
+
+  it.effect(
+    'emits a failed result with usage on an unexpected throw after a round',
+    () =>
+      Effect.gen(function* () {
+        const { ctx, streamStatus, results } = setupResultCase();
+        // Record one round of usage so the failed result still carries totals.
+        yield* Effect.promise(() =>
+          ctx.usageMonitor.recordUsage(AgentRunStateSnapshotSchema.parse({})),
+        );
+        try {
+          expect(
+            (yield* Effect.flip(runFlowWithLifecycle(ctx, explodedRun)))
+              .message,
+          ).toContain('model exploded');
+          expectSingleResult(results, ctx, { outcome: 'failed' });
+          expect(results[0].error?.kind).toBeDefined();
+          expect(results[0].usage).toBeDefined();
+        } finally {
+          clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+        }
+      }),
+  );
+
+  it.effect('marks subagent runs and bridges results to session.onResult', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      const onResult = vi.fn();
+      const { logger, ctx, streamStatus } = setupResultCase(session);
+      publishTestRunStart(
+        session,
+        ctx.runScope.streamId,
+        ctx.runScope.executionId,
       );
-      expectSingleResult(results, ctx, { outcome: 'cancelled' });
-      expect(results[0].error?.kind).toBe('abort');
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
-
-  it('emits a failed result with usage on an unexpected throw after a round', async () => {
-    const { ctx, streamStatus, results } = setupResultCase();
-    // Record one round of usage so the failed result still carries totals.
-    await ctx.usageMonitor.recordUsage(AgentRunStateSnapshotSchema.parse({}));
-    try {
-      await expect(
-        Effect.runPromise(runFlowWithLifecycle(ctx, explodedRun)),
-      ).rejects.toThrow('model exploded');
-      expectSingleResult(results, ctx, { outcome: 'failed' });
-      expect(results[0].error?.kind).toBeDefined();
-      expect(results[0].usage).toBeDefined();
-    } finally {
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-    }
-  });
-
-  it('marks subagent runs and bridges results to session.onResult', async () => {
-    const session = createTestSession();
-    const onResult = vi.fn();
-    const { logger, ctx, streamStatus } = setupResultCase(session);
-    publishTestRunStart(
-      session,
-      ctx.runScope.streamId,
-      ctx.runScope.executionId,
-    );
-    const detach = session.attachRunTrace(logger, ctx.runScope.streamId);
-    session.onResult(onResult);
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+      const detach = session.attachRunTrace(logger, ctx.runScope.streamId);
+      session.onResult(onResult);
+      try {
+        yield* runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
           isSubagent: true,
-        }),
-      );
-      await session.settlePublications();
-      expect(onResult).toHaveBeenCalledOnce();
-      expect(onResult.mock.calls[0][0]).toMatchObject({
-        type: 'result',
-        isSubagent: true,
-      });
-    } finally {
-      detach();
-      clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
-      session.dispose();
-    }
-  });
+        });
+        yield* Effect.promise(() => session.settlePublications());
+        expect(onResult).toHaveBeenCalledOnce();
+        expect(onResult.mock.calls[0][0]).toMatchObject({
+          type: 'result',
+          isSubagent: true,
+        });
+      } finally {
+        detach();
+        clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
+        session.dispose();
+      }
+    }),
+  );
 });

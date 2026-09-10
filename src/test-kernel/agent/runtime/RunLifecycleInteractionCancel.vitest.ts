@@ -1,7 +1,8 @@
+import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -94,194 +95,215 @@ describe('run lifecycle host-interaction cancel', () => {
     globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
   });
 
-  it('settles a pending approval when the run completes', async () => {
-    const { session, ctx, executionId, streamId } = lifecycleCase();
-    const pending = requestApproval(
-      session,
-      'approval:completed-run',
-      streamId,
-    );
+  it.effect('settles a pending approval when the run completes', () =>
+    Effect.gen(function* () {
+      const { session, ctx, executionId, streamId } = lifecycleCase();
+      const pending = requestApproval(
+        session,
+        'approval:completed-run',
+        streamId,
+      );
 
-    await Effect.runPromise(
-      runFlowWithLifecycle(ctx, async () =>
+      yield* runFlowWithLifecycle(ctx, async () =>
         toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
-      ),
-    );
+      );
 
-    await expectRunEndedRejection(pending);
-    session.dispose();
-  });
+      yield* Effect.promise(() => expectRunEndedRejection(pending));
+      session.dispose();
+    }),
+  );
 
-  it('settles and untracks the run after native interruption joins the active flow', async () => {
-    const { session, ctx, executionId, streamId } = lifecycleCase();
-    const started = createDeferred<AgentExecutionHandle>();
-    const aborted = createDeferred();
-    const released = createDeferred();
-    const stopped = createDeferred();
-    const fiber = Effect.runFork(
-      runFlowWithLifecycle(ctx, async (handle) => {
-        started.resolve(handle);
-        ctx.runScope.signal.addEventListener('abort', () => aborted.resolve(), {
-          once: true,
+  it.effect(
+    'settles and untracks the run after native interruption joins the active flow',
+    () =>
+      Effect.gen(function* () {
+        const { session, ctx, executionId, streamId } = lifecycleCase();
+        const started = createDeferred<AgentExecutionHandle>();
+        const aborted = createDeferred();
+        const released = createDeferred();
+        const stopped = createDeferred();
+        const fiber = yield* Effect.forkChild(
+          runFlowWithLifecycle(ctx, async (handle) => {
+            started.resolve(handle);
+            ctx.runScope.signal.addEventListener(
+              'abort',
+              () => aborted.resolve(),
+              { once: true },
+            );
+            await aborted.promise;
+            await released.promise;
+            stopped.resolve();
+            return toolUseRun(executionId, streamId, RUN_OUTCOME.CANCELLED);
+          }),
+        );
+        const handle = yield* Effect.promise(() => started.promise);
+        const interrupted = yield* Effect.forkChild(Fiber.interrupt(fiber));
+        yield* Effect.promise(() => aborted.promise);
+        expect(ctx.disposeTrace).not.toHaveBeenCalled();
+        released.resolve();
+        yield* Fiber.join(interrupted);
+        const exit = yield* Fiber.await(fiber);
+        expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
+          true,
+        );
+        yield* Effect.promise(() => stopped.promise);
+        expect(session.executions.getHandle(executionId)).toBeUndefined();
+        expect(yield* handle.result).toMatchObject({
+          outcome: RUN_OUTCOME.CANCELLED,
         });
-        await aborted.promise;
-        await released.promise;
-        stopped.resolve();
-        return toolUseRun(executionId, streamId, RUN_OUTCOME.CANCELLED);
+        expect(ctx.disposeTrace).toHaveBeenCalledOnce();
+        session.dispose();
       }),
-    );
-    const handle = await started.promise;
-    const interrupted = Effect.runPromise(Fiber.interrupt(fiber));
-    await aborted.promise;
-    expect(ctx.disposeTrace).not.toHaveBeenCalled();
-    released.resolve();
-    await interrupted;
-    const exit = await Effect.runPromise(Fiber.await(fiber));
-    expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(true);
-    await stopped.promise;
-    expect(session.executions.getHandle(executionId)).toBeUndefined();
-    await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    expect(ctx.disposeTrace).toHaveBeenCalledOnce();
-    session.dispose();
-  });
+  );
 
-  it('settles a pending approval when the runner throws', async () => {
-    const { session, ctx, streamId } = lifecycleCase();
-    const pending = requestApproval(session, 'approval:failed-run', streamId);
+  it.effect('settles a pending approval when the runner throws', () =>
+    Effect.gen(function* () {
+      const { session, ctx, streamId } = lifecycleCase();
+      const pending = requestApproval(session, 'approval:failed-run', streamId);
 
-    await expect(
-      Effect.runPromise(
+      const failure = yield* Effect.flip(
         runFlowWithLifecycle(ctx, async () => {
           throw new Error('flow exploded');
         }),
-      ),
-    ).rejects.toThrow('flow exploded');
+      );
+      expect(failure.message).toContain('flow exploded');
 
-    await expectRunEndedRejection(pending);
-    session.dispose();
-  });
+      yield* Effect.promise(() => expectRunEndedRejection(pending));
+      session.dispose();
+    }),
+  );
 
-  it('settles a pending approval when the run parks at WAITING', async () => {
-    const { session, ctx, executionId, streamId } = lifecycleCase();
-    const pending = requestApproval(session, 'approval:waiting-run', streamId);
-
-    const result = await Effect.runPromise(
-      runFlowWithLifecycle(ctx, async () =>
-        toolUseRun(executionId, streamId, STREAM_PHASE.WAITING),
-      ),
-    );
-
-    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-    await expectRunEndedRejection(pending);
-    session.dispose();
-  });
-
-  it("leaves another stream's pending approval untouched", async () => {
-    const { session, ctx, executionId, streamId } = lifecycleCase();
-    const otherStreamId = `${streamId}:sibling` as StreamTabId;
-    const sibling = requestApproval(
-      session,
-      'approval:sibling-stream',
-      otherStreamId,
-    );
-    let settled = false;
-    void sibling.then(() => {
-      settled = true;
-    });
-
-    await Effect.runPromise(
-      runFlowWithLifecycle(ctx, async () =>
-        toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
-      ),
-    );
-    await Promise.resolve();
-
-    expect(settled).toBe(false);
-    session.dispose();
-    await expect(sibling).resolves.toMatchObject({ action: 'reject' });
-  });
-
-  it('cancels after the runner finishes unwinding, so a flow releases its follow-up queue first', async () => {
-    const { session, ctx, executionId, streamId } = lifecycleCase();
-    const order: string[] = [];
-    const cancelSpy = vi
-      .spyOn(session.interactions, 'cancel')
-      .mockImplementation(() => {
-        order.push('cancel');
-      });
-
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
-          try {
-            return toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED);
-          } finally {
-            order.push('flow-teardown');
-          }
-        }),
+  it.effect('settles a pending approval when the run parks at WAITING', () =>
+    Effect.gen(function* () {
+      const { session, ctx, executionId, streamId } = lifecycleCase();
+      const pending = requestApproval(
+        session,
+        'approval:waiting-run',
+        streamId,
       );
 
-      expect(order).toEqual(['flow-teardown', 'cancel']);
-      expect(cancelSpy).toHaveBeenCalledExactlyOnceWith({
-        streamId,
-        cause: 'Run ended.',
+      const result = yield* runFlowWithLifecycle(ctx, async () =>
+        toolUseRun(executionId, streamId, STREAM_PHASE.WAITING),
+      );
+
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      yield* Effect.promise(() => expectRunEndedRejection(pending));
+      session.dispose();
+    }),
+  );
+
+  it.effect("leaves another stream's pending approval untouched", () =>
+    Effect.gen(function* () {
+      const { session, ctx, executionId, streamId } = lifecycleCase();
+      const otherStreamId = `${streamId}:sibling` as StreamTabId;
+      const sibling = requestApproval(
+        session,
+        'approval:sibling-stream',
+        otherStreamId,
+      );
+      let settled = false;
+      void sibling.then(() => {
+        settled = true;
       });
-    } finally {
-      cancelSpy.mockRestore();
+
+      yield* runFlowWithLifecycle(ctx, async () =>
+        toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      );
+      yield* Effect.promise(() => Promise.resolve());
+
+      expect(settled).toBe(false);
       session.dispose();
-    }
-  });
+      expect(yield* Effect.promise(() => sibling)).toMatchObject({
+        action: 'reject',
+      });
+    }),
+  );
 
-  it('is harmless after an interrupt-time cancel already settled the approval', async () => {
-    const { session, ctx, executionId, streamId } = lifecycleCase();
-    const pending = requestApproval(
-      session,
-      'approval:interrupted-run',
-      streamId,
-    );
+  it.effect(
+    'cancels after the runner finishes unwinding, so a flow releases its follow-up queue first',
+    () =>
+      Effect.gen(function* () {
+        const { session, ctx, executionId, streamId } = lifecycleCase();
+        const order: string[] = [];
+        const cancelSpy = vi
+          .spyOn(session.interactions, 'cancel')
+          .mockImplementation(() => {
+            order.push('cancel');
+          });
 
-    const result = await Effect.runPromise(
-      runFlowWithLifecycle(ctx, async () => {
-        // What `flowContext.interrupt` does while the flow is still live.
-        session.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-        return toolUseRun(executionId, streamId, RUN_OUTCOME.CANCELLED);
+        try {
+          yield* runFlowWithLifecycle(ctx, async () => {
+            try {
+              return toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED);
+            } finally {
+              order.push('flow-teardown');
+            }
+          });
+
+          expect(order).toEqual(['flow-teardown', 'cancel']);
+          expect(cancelSpy).toHaveBeenCalledExactlyOnceWith({
+            streamId,
+            cause: 'Run ended.',
+          });
+        } finally {
+          cancelSpy.mockRestore();
+          session.dispose();
+        }
       }),
-    );
+  );
 
-    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    // The interrupt-time cancel wins; the lifecycle's second cancel matches no
-    // pending request and cannot overwrite the settled cause.
-    await expect(pending).resolves.toEqual({
-      action: 'reject',
-      cause: 'Run interrupted.',
-    });
-    session.dispose();
-  });
+  it.effect(
+    'is harmless after an interrupt-time cancel already settled the approval',
+    () =>
+      Effect.gen(function* () {
+        const { session, ctx, executionId, streamId } = lifecycleCase();
+        const pending = requestApproval(
+          session,
+          'approval:interrupted-run',
+          streamId,
+        );
 
-  it('keeps the published outcome when a host adapter throws on cancel', async () => {
-    const { session, ctx, executionId, streamId } = lifecycleCase();
-    const detach = session.interactions.use({
-      cancel: () => {
-        throw new Error('host cancel boom');
-      },
-    });
+        const result = yield* runFlowWithLifecycle(ctx, async () => {
+          // What `flowContext.interrupt` does while the flow is still live.
+          session.interactions.cancel({ streamId, cause: 'Run interrupted.' });
+          return toolUseRun(executionId, streamId, RUN_OUTCOME.CANCELLED);
+        });
 
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () =>
-            toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
-          ),
-        ),
-      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-      expect(session.status.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-      // The disposal below must not resurrect the throwing adapter's failure.
-      expect(ctx.modelCell.handler.dispose).toHaveBeenCalledTimes(1);
-    } finally {
-      detach();
-      session.dispose();
-    }
-  });
+        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        // The interrupt-time cancel wins; the lifecycle's second cancel matches
+        // no pending request and cannot overwrite the settled cause.
+        expect(yield* Effect.promise(() => pending)).toEqual({
+          action: 'reject',
+          cause: 'Run interrupted.',
+        });
+        session.dispose();
+      }),
+  );
+
+  it.effect(
+    'keeps the published outcome when a host adapter throws on cancel',
+    () =>
+      Effect.gen(function* () {
+        const { session, ctx, executionId, streamId } = lifecycleCase();
+        const detach = session.interactions.use({
+          cancel: () => {
+            throw new Error('host cancel boom');
+          },
+        });
+
+        try {
+          expect(
+            yield* runFlowWithLifecycle(ctx, async () =>
+              toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+            ),
+          ).toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
+          expect(session.status.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+          // The disposal below must not resurrect the throwing adapter's failure.
+          expect(ctx.modelCell.handler.dispose).toHaveBeenCalledTimes(1);
+        } finally {
+          detach();
+          session.dispose();
+        }
+      }),
+  );
 });

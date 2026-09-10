@@ -1,6 +1,7 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
@@ -522,47 +523,50 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
-  it('retrieves a workflow record in the current shape', async () => {
-    const executionId = 'workflow-current-shape' as ExecutionId;
-    const streamId = 'reflection@gpt54#workflow-current-shape' as StreamTabId;
-    await writeFlowRecord(
-      executionId,
-      reflectionFlowShared({ currentRound: 1 }),
-    );
+  it.effect('retrieves a workflow record in the current shape', () =>
+    Effect.gen(function* () {
+      const executionId = 'workflow-current-shape' as ExecutionId;
+      const streamId = 'reflection@gpt54#workflow-current-shape' as StreamTabId;
+      yield* Effect.promise(() =>
+        writeFlowRecord(executionId, reflectionFlowShared({ currentRound: 1 })),
+      );
 
-    await expect(
-      Effect.runPromise(
-        retrieveSessionResumeData(
+      expect(
+        yield* retrieveSessionResumeData(
           streamId,
           executionId,
           WORKFLOW_CONFIG,
           retrievalSession,
         ),
-      ),
-    ).resolves.toMatchObject({ type: 'workflow', executionId });
-  });
+      ).toMatchObject({ type: 'workflow', executionId });
+    }),
+  );
 
-  it('rejects a workflow record that only has the retired messages field', async () => {
-    const executionId = 'workflow-retired-messages' as ExecutionId;
-    const streamId =
-      'reflection@gpt54#workflow-retired-messages' as StreamTabId;
-    await writeFlowRecord(executionId, {
-      currentRound: 1,
-      totalRounds: 2,
-      messages: [{ role: 'user', content: 'Continue.' }],
-    });
+  it.effect(
+    'rejects a workflow record that only has the retired messages field',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'workflow-retired-messages' as ExecutionId;
+        const streamId =
+          'reflection@gpt54#workflow-retired-messages' as StreamTabId;
+        yield* Effect.promise(() =>
+          writeFlowRecord(executionId, {
+            currentRound: 1,
+            totalRounds: 2,
+            messages: [{ role: 'user', content: 'Continue.' }],
+          }),
+        );
 
-    await expect(
-      Effect.runPromise(
-        retrieveSessionResumeData(
-          streamId,
-          executionId,
-          WORKFLOW_CONFIG,
-          retrievalSession,
-        ),
-      ),
-    ).resolves.toBeNull();
-  });
+        expect(
+          yield* retrieveSessionResumeData(
+            streamId,
+            executionId,
+            WORKFLOW_CONFIG,
+            retrievalSession,
+          ),
+        ).toBeNull();
+      }),
+  );
 
   it('preserves structured output at the persisted shared-state boundary', () => {
     const result = parseToolUseShared({
@@ -675,73 +679,83 @@ describe('retrieveSessionResumeData', () => {
     expect(resume.parentStreamId).toBe(parentStreamId);
   });
 
-  it('throws when resumable tool-use storage cannot be read', async () => {
-    const executionId = 'abc129' as ExecutionId;
-    const streamId = 'chat@gpt54#abc129' as StreamTabId;
-    const store = getExecutionStore(executionId);
-    await writeFlowRecord(executionId, {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    });
-    const originalRead = store.read.bind(store);
-    const readSpy = vi.spyOn(store, 'read').mockImplementation(async (key) => {
-      if (key === flowKey(executionId)) {
-        throw new Error('KV timeout');
-      }
-      return originalRead(key);
-    });
+  it.effect('throws when resumable tool-use storage cannot be read', () =>
+    Effect.gen(function* () {
+      const executionId = 'abc129' as ExecutionId;
+      const streamId = 'chat@gpt54#abc129' as StreamTabId;
+      const store = getExecutionStore(executionId);
+      yield* Effect.promise(() =>
+        writeFlowRecord(executionId, {
+          messages: [],
+          shouldSkipCycle: false,
+          stateSlices: defaultStateSlices(),
+        }),
+      );
+      const originalRead = store.read.bind(store);
+      const readSpy = vi
+        .spyOn(store, 'read')
+        .mockImplementation(async (key) => {
+          if (key === flowKey(executionId)) {
+            throw new Error('KV timeout');
+          }
+          return originalRead(key);
+        });
 
-    try {
-      await expect(
-        Effect.runPromise(
+      try {
+        const failure = yield* Effect.flip(
           retrieveSessionResumeData(
             streamId,
             executionId,
             CONFIG,
             retrievalSession,
           ),
-        ),
-      ).rejects.toThrow(
-        `Failed to retrieve tool-use resume data for stream: ${streamId}`,
-      );
-    } finally {
-      readSpy.mockRestore();
-    }
-  });
+        );
+        expect(failure.message).toContain(
+          `Failed to retrieve tool-use resume data for stream: ${streamId}`,
+        );
+      } finally {
+        readSpy.mockRestore();
+      }
+    }),
+  );
 
-  it('throws when tool-use metadata is invalid even if the flow record is valid', async () => {
-    const executionId = 'abc130' as ExecutionId;
-    const streamId = 'chat@gpt54#abc130' as StreamTabId;
-    const readMetadata = vi
-      .spyOn(retrievalSession, 'readExecutionRecords')
-      .mockReturnValue(
-        Effect.die(
-          new z.ZodError([
-            { code: 'custom', path: [], message: 'corrupt metadata' },
-          ]),
-        ),
-      );
-    await writeFlowRecord(executionId, {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    });
+  it.effect(
+    'throws when tool-use metadata is invalid even if the flow record is valid',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'abc130' as ExecutionId;
+        const streamId = 'chat@gpt54#abc130' as StreamTabId;
+        const readMetadata = vi
+          .spyOn(retrievalSession, 'readExecutionRecords')
+          .mockReturnValue(
+            Effect.die(
+              new z.ZodError([
+                { code: 'custom', path: [], message: 'corrupt metadata' },
+              ]),
+            ),
+          );
+        yield* Effect.promise(() =>
+          writeFlowRecord(executionId, {
+            messages: [],
+            shouldSkipCycle: false,
+            stateSlices: defaultStateSlices(),
+          }),
+        );
 
-    await expect(
-      Effect.runPromise(
-        retrieveSessionResumeData(
-          streamId,
-          executionId,
-          CONFIG,
-          retrievalSession,
-        ),
-      ),
-    ).rejects.toThrow(
-      `Failed to retrieve tool-use resume data for stream: ${streamId}`,
-    );
-    readMetadata.mockRestore();
-  });
+        const failure = yield* Effect.flip(
+          retrieveSessionResumeData(
+            streamId,
+            executionId,
+            CONFIG,
+            retrievalSession,
+          ),
+        );
+        expect(failure.message).toContain(
+          `Failed to retrieve tool-use resume data for stream: ${streamId}`,
+        );
+        readMetadata.mockRestore();
+      }),
+  );
 });
 
 describe('runToolUseFlow consumes the resume boundary instead of re-parsing', () => {

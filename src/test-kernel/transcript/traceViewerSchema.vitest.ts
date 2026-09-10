@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { getExecutionRecords } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -72,49 +73,51 @@ function expectTraceRejected(payload: unknown): void {
 describe('trace-viewer TraceDataSchema', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
 
-  it('accepts a real trace document produced by assembleTrace', async () => {
-    const executionId = 'abc12345' as ExecutionId;
-    const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
+  it.live('accepts a real trace document produced by assembleTrace', () =>
+    Effect.gen(function* () {
+      const executionId = 'abc12345' as ExecutionId;
+      const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
-    const streamId = getStreamTabId('review', { executionId });
-    const session = createTestSession();
-    publishTestRunStart(session, streamId, executionId);
-    await session.settlePublications();
-    await Effect.runPromise(
-      getExecutionRecords(session, executionId).writeRunRecord(executionConfig),
-    );
-    session.publish([
-      {
-        type: 'log',
-        aggregateId: aggregateId('stream', streamId),
-        message: 'hello',
-        level: LOG_LEVELS.INFO,
-        messageType: MESSAGE_TYPES.DEFAULT,
-      },
-      {
-        type: 'status',
-        aggregateId: aggregateId('stream', streamId),
-        phase: 'completed',
-        cause: 'lifecycle',
-      },
-    ]);
-    await session.settlePublications();
-    const result = await Effect.runPromise(assembleTrace(executionId, session));
-    session.dispose();
-    expect(result.status).toBe('ok');
-    if (result.status !== 'ok') return;
+      const streamId = getStreamTabId('review', { executionId });
+      const session = createTestSession();
+      publishTestRunStart(session, streamId, executionId);
+      yield* Effect.promise(() => session.settlePublications());
+      yield* getExecutionRecords(session, executionId).writeRunRecord(
+        executionConfig,
+      );
+      session.publish([
+        {
+          type: 'log',
+          aggregateId: aggregateId('stream', streamId),
+          message: 'hello',
+          level: LOG_LEVELS.INFO,
+          messageType: MESSAGE_TYPES.DEFAULT,
+        },
+        {
+          type: 'status',
+          aggregateId: aggregateId('stream', streamId),
+          phase: 'completed',
+          cause: 'lifecycle',
+        },
+      ]);
+      yield* Effect.promise(() => session.settlePublications());
+      const result = yield* assembleTrace(executionId, session);
+      session.dispose();
+      expect(result.status).toBe('ok');
+      if (result.status !== 'ok') return;
 
-    const parsed = TraceDataSchema.safeParse(result.trace);
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-    expect(parsed.data.executionId).toBe(executionId);
-    expect(parsed.data.streamId).toBe(streamId);
-    expect(parsed.data.meta?.outcome).toBe('completed');
-    expect(parsed.data.entries).toHaveLength(1);
+      const parsed = TraceDataSchema.safeParse(result.trace);
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) return;
+      expect(parsed.data.executionId).toBe(executionId);
+      expect(parsed.data.streamId).toBe(streamId);
+      expect(parsed.data.meta?.outcome).toBe('completed');
+      expect(parsed.data.entries).toHaveLength(1);
 
-    // parseTraceData must accept the same real document without throwing.
-    expect(() => parseTraceData(result.trace)).not.toThrow();
-  });
+      // parseTraceData must accept the same real document without throwing.
+      expect(() => parseTraceData(result.trace)).not.toThrow();
+    }),
+  );
 
   it('rejects a trace missing required top-level fields', () => {
     // config, meta, entries and snapshot all missing.

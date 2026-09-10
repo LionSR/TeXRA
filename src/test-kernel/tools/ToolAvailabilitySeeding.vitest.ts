@@ -1,6 +1,7 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
 import { platform } from '@platform/platform';
@@ -18,19 +19,21 @@ const EXPECTED_DEFAULTS = EXTERNAL_TOOL_DEFS.filter(
 describe('seedDisabledToolDefaults', () => {
   afterEach(() => installPlatform());
 
-  it('seeds every toggleable tool as disabled on a genuinely fresh install', async () => {
-    await installPlatform({ globalState: {} });
+  it.effect(
+    'seeds every toggleable tool as disabled on a genuinely fresh install',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => installPlatform({ globalState: {} }));
 
-    await Effect.runPromise(
-      seedDisabledToolDefaults(platform().globalState, VERSION_KEY),
-    );
+        yield* seedDisabledToolDefaults(platform().globalState, VERSION_KEY);
 
-    expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
-      EXPECTED_DEFAULTS,
-    );
-  });
+        expect(
+          platform().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+        ).toEqual(EXPECTED_DEFAULTS);
+      }),
+  );
 
-  it.each([
+  it.effect.each([
     {
       name: 'a host with a prior-install version marker',
       globalState: { [VERSION_KEY]: '1.2.3' },
@@ -39,15 +42,15 @@ describe('seedDisabledToolDefaults', () => {
       name: 'an already-seeded DISABLED_TOOLS list, even an empty one',
       globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] as string[] },
     },
-  ])('does not seed for $name', async ({ globalState }) => {
-    await installPlatform({ globalState });
+  ])('does not seed for $name', ({ globalState }) =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => installPlatform({ globalState }));
 
-    await Effect.runPromise(
-      seedDisabledToolDefaults(platform().globalState, VERSION_KEY),
-    );
+      yield* seedDisabledToolDefaults(platform().globalState, VERSION_KEY);
 
-    expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
-      globalState[GlobalStateKey.DISABLED_TOOLS],
-    );
-  });
+      expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
+        globalState[GlobalStateKey.DISABLED_TOOLS],
+      );
+    }),
+  );
 });

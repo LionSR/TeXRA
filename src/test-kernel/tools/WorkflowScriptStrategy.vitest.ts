@@ -1,6 +1,7 @@
 import '@test/support/defaultSessionTestSetup';
-import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
@@ -133,307 +134,368 @@ describe('createWorkflowScriptStrategy', () => {
     expect(strategy.resolveDeliveryTarget).toBeUndefined();
   });
 
-  it('runs a live call, settles its journal cost, and delivers the result', async () => {
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'strategy-test',
-        createRunAgent: billingRunAgent,
+  // `it.live` throughout: launching runs the real script engine, so these
+  // cases wait on real promises rather than a test clock.
+  it.live(
+    'runs a live call, settles its journal cost, and delivers the result',
+    () =>
+      Effect.gen(function* () {
+        const ports = fakePorts();
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name: 'strategy-test',
+            createRunAgent: billingRunAgent,
+          }),
+        );
+
+        const turn = yield* strategy.launch(
+          ports,
+          new AbortController().signal,
+        );
+
+        // The live-attempt candidate and final journal agree on the total.
+        expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
+
+        const delivery = yield* Effect.promise(async () =>
+          strategy.formatDelivery(turn, 0),
+        );
+        expect(delivery).toContain('"category": "workflow"');
+        // The run log rides along so the invoking model sees what executed.
+        expect(delivery).toContain('=== Run log ===');
+        expect(delivery).toContain('Finished');
+        expect(delivery).toContain(
+          'Script file: .texra/workflow-scripts/draft-strategy.mjs',
+        );
+        expect(delivery).toContain('with scriptPath:');
+        expect(delivery).toContain('<workflow-summary>');
+        expect(delivery).toContain('"outcome":"completed"');
+        expect(delivery).toContain('"taskDone":1');
+        expect(delivery).toContain('"costUsd":0.42');
+        expect(delivery).toContain(
+          '"files":[{"path":"paper.tex","added":12,"removed":8}]',
+        );
       }),
-    );
+  );
 
-    const turn = await Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    );
+  it.live('settles zero for a pure checkpoint replay', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        runPersistedWorkflowScript({
+          store: getExecutionStore(executionId),
+          checkpointId: checkpointIdFor('strategy-test'),
+          script,
+          runAgent: async () => finalResult,
+        }),
+      );
+      clearStoreCache();
+      const ports = fakePorts();
+      const strategy = createWorkflowScriptStrategy(
+        strategyParams({
+          name: 'strategy-test',
+          // A retrying model rewrites its source; same meta.name still resumes.
+          script: `${script}\n// retry rewrote me`,
+          createRunAgent: () => async () => {
+            throw new Error('replayed call must not re-execute');
+          },
+        }),
+      );
 
-    // The live-attempt candidate and final journal agree on the total.
-    expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
+      const turn = yield* strategy.launch(ports, new AbortController().signal);
 
-    const delivery = await strategy.formatDelivery(turn, 0);
-    expect(delivery).toContain('"category": "workflow"');
-    // The run log rides along so the invoking model sees what executed.
-    expect(delivery).toContain('=== Run log ===');
-    expect(delivery).toContain('Finished');
-    expect(delivery).toContain(
-      'Script file: .texra/workflow-scripts/draft-strategy.mjs',
-    );
-    expect(delivery).toContain('with scriptPath:');
-    expect(delivery).toContain('<workflow-summary>');
-    expect(delivery).toContain('"outcome":"completed"');
-    expect(delivery).toContain('"taskDone":1');
-    expect(delivery).toContain('"costUsd":0.42');
-    expect(delivery).toContain(
-      '"files":[{"path":"paper.tex","added":12,"removed":8}]',
-    );
-  });
+      expect(ports.recordCost).toHaveBeenCalledOnce();
+      expect(ports.recordCost).toHaveBeenCalledWith(0);
+      const delivery = yield* Effect.promise(async () =>
+        strategy.formatDelivery(turn, 0),
+      );
+      expect(delivery).toContain('Using saved result');
+      expect(delivery).toContain(
+        '"files":[{"path":"paper.tex","added":12,"removed":8}]',
+      );
+    }),
+  );
 
-  it('settles zero for a pure checkpoint replay', async () => {
-    await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor('strategy-test'),
-      script,
-      runAgent: async () => finalResult,
-    });
-    clearStoreCache();
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'strategy-test',
-        // A retrying model rewrites its source; same meta.name still resumes.
-        script: `${script}\n// retry rewrote me`,
-        createRunAgent: () => async () => {
-          throw new Error('replayed call must not re-execute');
-        },
-      }),
-    );
-
-    const turn = await Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    );
-
-    expect(ports.recordCost).toHaveBeenCalledOnce();
-    expect(ports.recordCost).toHaveBeenCalledWith(0);
-    const delivery = await strategy.formatDelivery(turn, 0);
-    expect(delivery).toContain('Using saved result');
-    expect(delivery).toContain(
-      '"files":[{"path":"paper.tex","added":12,"removed":8}]',
-    );
-  });
-
-  it('passes JSON arguments through and formats a zero-call result', async () => {
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'arguments',
-        script: `export const meta = {
+  it.live('passes JSON arguments through and formats a zero-call result', () =>
+    Effect.gen(function* () {
+      const ports = fakePorts();
+      const strategy = createWorkflowScriptStrategy(
+        strategyParams({
+          name: 'arguments',
+          script: `export const meta = {
   name: 'arguments',
   description: 'returns its arguments',
 }
 return args`,
-        args: { question: 'What is conserved?' },
-        createRunAgent: billingRunAgent,
-      }),
-    );
+          args: { question: 'What is conserved?' },
+          createRunAgent: billingRunAgent,
+        }),
+      );
 
-    const turn = await Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    );
-    const delivery = await strategy.formatDelivery(turn, 0);
-    expect(delivery).toContain('"question": "What is conserved?"');
-    expect(ports.recordCost).toHaveBeenCalledWith(0);
-  });
+      const turn = yield* strategy.launch(ports, new AbortController().signal);
+      const delivery = yield* Effect.promise(async () =>
+        strategy.formatDelivery(turn, 0),
+      );
+      expect(delivery).toContain('"question": "What is conserved?"');
+      expect(ports.recordCost).toHaveBeenCalledWith(0);
+    }),
+  );
 
-  it('retains checkpoint arguments when a null retry omits them', async () => {
-    const argsScript = `export const meta = {
+  it.live('retains checkpoint arguments when a null retry omits them', () =>
+    Effect.gen(function* () {
+      const argsScript = `export const meta = {
   name: 'retained-arguments',
   description: 'retains omitted retry arguments',
 }
 return args`;
-    await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor('retained-arguments'),
-      script: argsScript,
-      args: { topic: 'geometry' },
-      runAgent: async () => finalResult,
-    });
-    clearStoreCache();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'retained-arguments',
-        script: `${argsScript}\n// revised retry`,
-        args: null,
-        createRunAgent: billingRunAgent,
-      }),
-    );
+      yield* Effect.promise(() =>
+        runPersistedWorkflowScript({
+          store: getExecutionStore(executionId),
+          checkpointId: checkpointIdFor('retained-arguments'),
+          script: argsScript,
+          args: { topic: 'geometry' },
+          runAgent: async () => finalResult,
+        }),
+      );
+      clearStoreCache();
+      const strategy = createWorkflowScriptStrategy(
+        strategyParams({
+          name: 'retained-arguments',
+          script: `${argsScript}\n// revised retry`,
+          args: null,
+          createRunAgent: billingRunAgent,
+        }),
+      );
 
-    const turn = await Effect.runPromise(
-      strategy.launch(fakePorts(), new AbortController().signal),
-    );
-    const delivery = await strategy.formatDelivery(turn, 0);
-    expect(delivery).toContain('"topic": "geometry"');
-  });
+      const turn = yield* strategy.launch(
+        fakePorts(),
+        new AbortController().signal,
+      );
+      const delivery = yield* Effect.promise(async () =>
+        strategy.formatDelivery(turn, 0),
+      );
+      expect(delivery).toContain('"topic": "geometry"');
+    }),
+  );
 
-  it('bounds and normalizes the model-visible run log', async () => {
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'bounded-log',
-        script: `export const meta = {
+  it.live('bounds and normalizes the model-visible run log', () =>
+    Effect.gen(function* () {
+      const strategy = createWorkflowScriptStrategy(
+        strategyParams({
+          name: 'bounded-log',
+          script: `export const meta = {
   name: 'bounded-log',
   description: 'bounds model-visible activity',
 }
 for (let index = 0; index < 100; index += 1) log('line-' + index)
 log('oversized\\n' + 'x'.repeat(2_000))
 return 'done'`,
-        createRunAgent: billingRunAgent,
-      }),
-    );
+          createRunAgent: billingRunAgent,
+        }),
+      );
 
-    const turn = await Effect.runPromise(
-      strategy.launch(fakePorts(), new AbortController().signal),
-    );
-    const delivery = await strategy.formatDelivery(turn, 0);
-    expect(delivery).toContain(
-      '=== Run log (last 80 lines; 21 earlier lines omitted) ===',
-    );
-    expect(delivery).not.toContain('line-20\n');
-    expect(delivery).toContain('line-21\n');
-    expect(delivery).toContain('oversized x');
-    expect(delivery.length).toBeLessThan(42_000);
-  });
+      const turn = yield* strategy.launch(
+        fakePorts(),
+        new AbortController().signal,
+      );
+      const delivery = yield* Effect.promise(async () =>
+        strategy.formatDelivery(turn, 0),
+      );
+      expect(delivery).toContain(
+        '=== Run log (last 80 lines; 21 earlier lines omitted) ===',
+      );
+      expect(delivery).not.toContain('line-20\n');
+      expect(delivery).toContain('line-21\n');
+      expect(delivery).toContain('oversized x');
+      expect(delivery.length).toBeLessThan(42_000);
+    }),
+  );
 
-  it('settles a retained journal and surfaces the resume hint when script code fails', async () => {
-    const failingScript = `export const meta = {
+  it.live(
+    'settles a retained journal and surfaces the resume hint when script code fails',
+    () =>
+      Effect.gen(function* () {
+        const failingScript = `export const meta = {
   name: 'retained-settlement',
   description: 'tests retained journal settlement',
 }
 await agent('saved call')
 throw new Error('script failed after replay')`;
-    await expect(
-      runPersistedWorkflowScript({
-        store: getExecutionStore(executionId),
-        checkpointId: checkpointIdFor('retained-settlement'),
-        script: failingScript,
-        runAgent: async () => finalResult,
+        yield* Effect.promise(() =>
+          expect(
+            runPersistedWorkflowScript({
+              store: getExecutionStore(executionId),
+              checkpointId: checkpointIdFor('retained-settlement'),
+              script: failingScript,
+              runAgent: async () => finalResult,
+            }),
+          ).rejects.toThrow('script failed after replay'),
+        );
+        clearStoreCache();
+        const ports = fakePorts();
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name: 'retained-settlement',
+            script: failingScript,
+            createRunAgent: () => async () => {
+              throw new Error('replayed call must not re-execute');
+            },
+          }),
+        );
+
+        const failure = yield* Effect.flip(
+          strategy.launch(ports, new AbortController().signal),
+        );
+        expect(failure.message).toContain('script failed after replay');
+        // Failure recovery excludes the pre-run journal from this invocation.
+        expect(ports.recordCost).toHaveBeenCalledWith(0);
+
+        const errText = yield* Effect.promise(async () =>
+          strategy.formatError(null, new Error('boom')),
+        );
+        expect(errText).toContain(
+          "journaled under meta.name 'retained-settlement'",
+        );
+        expect(errText).toContain('boom');
+        expect(errText).toContain(
+          'Script file: .texra/workflow-scripts/draft-strategy.mjs',
+        );
+        expect(errText).toContain('with scriptPath:');
+        expect(errText).toContain('"outcome":"failed"');
+        // The failure line's tallies come from the engine's terminal snapshot —
+        // the run replayed one cached call and declared no phases — not from a
+        // re-parse of the checkpoint's script.
+        expect(errText).toContain('"phaseCount":0');
+        expect(errText).toContain('"taskDone":1');
+        expect(errText).toContain('"taskTotal":1');
       }),
-    ).rejects.toThrow('script failed after replay');
-    clearStoreCache();
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'retained-settlement',
-        script: failingScript,
-        createRunAgent: () => async () => {
-          throw new Error('replayed call must not re-execute');
-        },
-      }),
-    );
+  );
 
-    await expect(
-      Effect.runPromise(strategy.launch(ports, new AbortController().signal)),
-    ).rejects.toThrow('script failed after replay');
-    // Failure recovery excludes the pre-run journal from this invocation.
-    expect(ports.recordCost).toHaveBeenCalledWith(0);
-
-    const errText = await strategy.formatError(null, new Error('boom'));
-    expect(errText).toContain(
-      "journaled under meta.name 'retained-settlement'",
-    );
-    expect(errText).toContain('boom');
-    expect(errText).toContain(
-      'Script file: .texra/workflow-scripts/draft-strategy.mjs',
-    );
-    expect(errText).toContain('with scriptPath:');
-    expect(errText).toContain('"outcome":"failed"');
-    // The failure line's tallies come from the engine's terminal snapshot —
-    // the run replayed one cached call and declared no phases — not from a
-    // re-parse of the checkpoint's script.
-    expect(errText).toContain('"phaseCount":0');
-    expect(errText).toContain('"taskDone":1');
-    expect(errText).toContain('"taskTotal":1');
-  });
-
-  it('settles failures from the touched journal without stale entries', async () => {
-    const name = 'attempt-local-settlement';
-    const baselineScript = `export const meta = {
+  it.live(
+    'settles failures from the touched journal without stale entries',
+    () =>
+      Effect.gen(function* () {
+        const name = 'attempt-local-settlement';
+        const baselineScript = `export const meta = {
   name: '${name}',
   description: 'seeds stale recovery entries',
 }
 await agent('stale file')
 return await agent('malformed stale')`;
-    const staleResult: AgentFinalResult = {
-      ...finalResult,
-      outputs: [{ ...finalResult.outputs[0], relativePath: 'stale.tex' }],
-    };
-    await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor(name),
-      script: baselineScript,
-      runAgent: async ({ prompt }) =>
-        prompt === 'stale file' ? staleResult : { malformed: true },
-    });
-    clearStoreCache();
+        const staleResult: AgentFinalResult = {
+          ...finalResult,
+          outputs: [{ ...finalResult.outputs[0], relativePath: 'stale.tex' }],
+        };
+        yield* Effect.promise(() =>
+          runPersistedWorkflowScript({
+            store: getExecutionStore(executionId),
+            checkpointId: checkpointIdFor(name),
+            script: baselineScript,
+            runAgent: async ({ prompt }) =>
+              prompt === 'stale file' ? staleResult : { malformed: true },
+          }),
+        );
+        clearStoreCache();
 
-    const currentResult: AgentFinalResult = {
-      ...finalResult,
-      cost: 0.25,
-      outputs: [{ ...finalResult.outputs[0], relativePath: 'current.tex' }],
-    };
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name,
-        script: `export const meta = {
+        const currentResult: AgentFinalResult = {
+          ...finalResult,
+          cost: 0.25,
+          outputs: [{ ...finalResult.outputs[0], relativePath: 'current.tex' }],
+        };
+        const ports = fakePorts();
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name,
+            script: `export const meta = {
   name: '${name}',
   description: 'fails after current work',
 }
 await agent('current file')
 throw new Error('current revision failed')`,
-        createRunAgent: (hooks) => async (invocation) => {
-          hooks.onCost(invocation, currentResult.cost);
-          return currentResult;
-        },
+            createRunAgent: (hooks) => async (invocation) => {
+              hooks.onCost(invocation, currentResult.cost);
+              return currentResult;
+            },
+          }),
+        );
+
+        const failure = yield* Effect.flip(
+          strategy.launch(ports, new AbortController().signal),
+        );
+        expect(failure.message).toContain('current revision failed');
+        expect(ports.recordCost.mock.calls).toEqual([[0.25], [0.25]]);
+        const errText = yield* Effect.promise(async () =>
+          strategy.formatError(null, new Error('boom')),
+        );
+        expect(errText).toContain('current.tex');
+        expect(errText).not.toContain('stale.tex');
+        expect(errText).toContain('"costUsd":0.25');
       }),
-    );
+  );
 
-    await expect(
-      Effect.runPromise(strategy.launch(ports, new AbortController().signal)),
-    ).rejects.toThrow('current revision failed');
-    expect(ports.recordCost.mock.calls).toEqual([[0.25], [0.25]]);
-    const errText = await strategy.formatError(null, new Error('boom'));
-    expect(errText).toContain('current.tex');
-    expect(errText).not.toContain('stale.tex');
-    expect(errText).toContain('"costUsd":0.25');
-  });
+  it.live(
+    'keeps the delivery summary at the last persisted snapshot when snapshot writes fail',
+    () =>
+      Effect.gen(function* () {
+        const ports = fakePorts();
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name: 'snapshot-write-failure',
+            script,
+            createRunAgent: billingRunAgent,
+            onSnapshot: async () => {
+              throw new Error('snapshot disk full');
+            },
+          }),
+        );
 
-  it('keeps the delivery summary at the last persisted snapshot when snapshot writes fail', async () => {
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'snapshot-write-failure',
-        script,
-        createRunAgent: billingRunAgent,
-        onSnapshot: async () => {
-          throw new Error('snapshot disk full');
-        },
+        const failure = yield* Effect.flip(
+          strategy.launch(ports, new AbortController().signal),
+        );
+        expect(failure.message).toContain(
+          'Failed to persist workflow execution snapshot',
+        );
+
+        // No snapshot was ever durably written, so the failure summary must
+        // report the durable view (nothing ran) rather than the newer in-memory
+        // snapshot the rejected write carried.
+        const errText = yield* Effect.promise(async () =>
+          strategy.formatError(null, new Error('boom')),
+        );
+        expect(errText).toContain('"outcome":"failed"');
+        expect(errText).toContain('"taskDone":0');
+        expect(errText).toContain('"taskTotal":0');
       }),
-    );
+  );
 
-    await expect(
-      Effect.runPromise(strategy.launch(ports, new AbortController().signal)),
-    ).rejects.toThrow('Failed to persist workflow execution snapshot');
-
-    // No snapshot was ever durably written, so the failure summary must
-    // report the durable view (nothing ran) rather than the newer in-memory
-    // snapshot the rejected write carried.
-    const errText = await strategy.formatError(null, new Error('boom'));
-    expect(errText).toContain('"outcome":"failed"');
-    expect(errText).toContain('"taskDone":0');
-    expect(errText).toContain('"taskTotal":0');
-  });
-
-  it('retains live spend when the completed journal result is malformed', async () => {
-    const malformedScript = `export const meta = {
+  it.live(
+    'retains live spend when the completed journal result is malformed',
+    () =>
+      Effect.gen(function* () {
+        const malformedScript = `export const meta = {
   name: 'malformed-cost',
   description: 'tests malformed journal cost settlement',
 }
 return await agent('saved call')`;
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'malformed-cost',
-        script: malformedScript,
-        createRunAgent: (hooks) => async (invocation) => {
-          hooks.onCost(invocation, 0.2);
-          return { not: 'an agent result' };
-        },
-      }),
-    );
+        const ports = fakePorts();
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name: 'malformed-cost',
+            script: malformedScript,
+            createRunAgent: (hooks) => async (invocation) => {
+              hooks.onCost(invocation, 0.2);
+              return { not: 'an agent result' };
+            },
+          }),
+        );
 
-    await expect(
-      Effect.runPromise(strategy.launch(ports, new AbortController().signal)),
-    ).rejects.toThrow('Workflow journal entry 0 is not an agent final result');
-    expect(ports.recordCost.mock.calls).toEqual([[0.2]]);
-  });
+        const failure = yield* Effect.flip(
+          strategy.launch(ports, new AbortController().signal),
+        );
+        expect(failure.message).toContain(
+          'Workflow journal entry 0 is not an agent final result',
+        );
+        expect(ports.recordCost.mock.calls).toEqual([[0.2]]);
+      }),
+  );
 });
 
 /** Let queued abort/skip handling settle without resolving a hung run. */
@@ -521,136 +583,156 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
   // engine's snapshot schema validates every id these fakes report.
   const grandchildExecutionId = 'ccccc0000001' as ExecutionId;
 
-  it('skips an in-flight grandchild by execution id via the session registry', async () => {
-    const fake = controllableRunAgent({
-      attemptExecutionIds: [grandchildExecutionId],
-    });
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'strategy-test',
-        createRunAgent: fake.createRunAgent,
+  it.live(
+    'skips an in-flight grandchild by execution id via the session registry',
+    () =>
+      Effect.gen(function* () {
+        const fake = controllableRunAgent({
+          attemptExecutionIds: [grandchildExecutionId],
+        });
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name: 'strategy-test',
+            createRunAgent: fake.createRunAgent,
+          }),
+        );
+
+        const launch = yield* Effect.forkChild(
+          strategy.launch(fakePorts(), new AbortController().signal),
+        );
+        yield* Effect.promise(() => fake.attemptStarted(1));
+        // An unknown execution id no-ops (the call stays in flight)...
+        workflowControls.control('ddddd0000009' as ExecutionId, 'skip');
+        // ...while the right one translates execId → index → engine skip.
+        workflowControls.control(grandchildExecutionId, 'skip');
+
+        const turn = yield* Fiber.join(launch);
+        expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(fake.attempts()).toBe(1);
+        // The registration is dropped when the run settles.
+        workflowControls.control(grandchildExecutionId, 'skip');
       }),
-    );
+  );
 
-    const launch = Effect.runPromise(
-      strategy.launch(fakePorts(), new AbortController().signal),
-    );
-    await fake.attemptStarted(1);
-    // An unknown execution id no-ops (the call stays in flight)...
-    workflowControls.control('ddddd0000009' as ExecutionId, 'skip');
-    // ...while the right one translates execId → index → engine skip.
-    workflowControls.control(grandchildExecutionId, 'skip');
+  it.live(
+    'retries an in-flight grandchild by execution id, re-running the call',
+    () =>
+      Effect.gen(function* () {
+        const fake = controllableRunAgent({
+          attemptExecutionIds: [grandchildExecutionId],
+          succeedAtAttempt: 2,
+          attemptCosts: [0.1, 0.5],
+        });
+        const logger = new TraceEmitter();
+        const completedTaskCosts: number[] = [];
+        logger.subscribe((event) => {
+          if (
+            event.type === 'workflow.call' &&
+            event.call.status === 'completed'
+          ) {
+            if (event.call.totalCostUsd !== undefined) {
+              completedTaskCosts.push(event.call.totalCostUsd);
+            }
+          }
+        });
+        const ports = fakePorts();
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name: 'strategy-test',
+            logger,
+            createRunAgent: fake.createRunAgent,
+          }),
+        );
 
-    const turn = await launch;
-    expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
-    expect(fake.attempts()).toBe(1);
-    // The registration is dropped when the run settles.
-    workflowControls.control(grandchildExecutionId, 'skip');
-  });
+        const launch = yield* Effect.forkChild(
+          strategy.launch(ports, new AbortController().signal),
+        );
+        yield* Effect.promise(() => fake.attemptStarted(1));
+        workflowControls.control(grandchildExecutionId, 'retry');
 
-  it('retries an in-flight grandchild by execution id, re-running the call', async () => {
-    const fake = controllableRunAgent({
-      attemptExecutionIds: [grandchildExecutionId],
-      succeedAtAttempt: 2,
-      attemptCosts: [0.1, 0.5],
-    });
-    const logger = new TraceEmitter();
-    const completedTaskCosts: number[] = [];
-    logger.subscribe((event) => {
-      if (event.type === 'workflow.call' && event.call.status === 'completed') {
-        if (event.call.totalCostUsd !== undefined) {
-          completedTaskCosts.push(event.call.totalCostUsd);
-        }
-      }
-    });
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'strategy-test',
-        logger,
-        createRunAgent: fake.createRunAgent,
+        const turn = yield* Fiber.join(launch);
+        // The second attempt settles with the real result, and the call ran twice.
+        expect(turn.result).toMatchObject({ category: 'workflow', cost: 0.42 });
+        expect(fake.attempts()).toBe(2);
+        expect(completedTaskCosts).toHaveLength(1);
+        expect(completedTaskCosts[0]).toBeCloseTo(0.6);
+        expect(ports.recordCost.mock.calls).toEqual([[0.1], [0.6], [0.6]]);
       }),
-    );
+  );
 
-    const launch = Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    );
-    await fake.attemptStarted(1);
-    workflowControls.control(grandchildExecutionId, 'retry');
+  it.live(
+    'targets the attempt-specific execution id after a durable retry advances it',
+    () =>
+      Effect.gen(function* () {
+        // After a retry, the re-run registers its child stream under an
+        // attempt-specific id (not the logical id) — the id the roster exposes.
+        // The control bridge must follow that id, not the stale logical one.
+        const logicalExecutionId = grandchildExecutionId;
+        const attemptExecutionId = 'ccccc0000002' as ExecutionId;
+        const fake = controllableRunAgent({
+          attemptExecutionIds: [logicalExecutionId, attemptExecutionId],
+        });
+        const ports = fakePorts();
+        let settled = false;
+        const strategy = createWorkflowScriptStrategy(
+          strategyParams({
+            name: 'strategy-test',
+            createRunAgent: fake.createRunAgent,
+          }),
+        );
 
-    const turn = await launch;
-    // The second attempt settles with the real result, and the call ran twice.
-    expect(turn.result).toMatchObject({ category: 'workflow', cost: 0.42 });
-    expect(fake.attempts()).toBe(2);
-    expect(completedTaskCosts).toHaveLength(1);
-    expect(completedTaskCosts[0]).toBeCloseTo(0.6);
-    expect(ports.recordCost.mock.calls).toEqual([[0.1], [0.6], [0.6]]);
-  });
+        const launch = yield* Effect.forkChild(
+          strategy.launch(ports, new AbortController().signal).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                settled = true;
+              }),
+            ),
+          ),
+        );
+        // Attempt 0 runs under the logical id; retry advances to attempt 1.
+        yield* Effect.promise(() => fake.attemptStarted(1));
+        workflowControls.control(logicalExecutionId, 'retry');
+        yield* Effect.promise(() => fake.attemptStarted(2));
 
-  it('targets the attempt-specific execution id after a durable retry advances it', async () => {
-    // After a retry, the re-run registers its child stream under an
-    // attempt-specific id (not the logical id) — the id the roster exposes.
-    // The control bridge must follow that id, not the stale logical one.
-    const logicalExecutionId = grandchildExecutionId;
-    const attemptExecutionId = 'ccccc0000002' as ExecutionId;
-    const fake = controllableRunAgent({
-      attemptExecutionIds: [logicalExecutionId, attemptExecutionId],
-    });
-    const ports = fakePorts();
-    let settled = false;
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'strategy-test',
-        createRunAgent: fake.createRunAgent,
+        // The stale logical id no longer maps to the in-flight attempt: a skip on
+        // it must no-op, leaving the run pending.
+        workflowControls.control(logicalExecutionId, 'skip');
+        yield* Effect.promise(drainMacrotasks);
+        expect(settled).toBe(false);
+
+        // The attempt-specific id the roster exposes reaches the engine index.
+        workflowControls.control(attemptExecutionId, 'skip');
+        const turn = yield* Fiber.join(launch);
+        expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(fake.attempts()).toBe(2);
       }),
-    );
+  );
 
-    const launch = Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    ).then((turn) => {
-      settled = true;
-      return turn;
-    });
-    // Attempt 0 runs under the logical id; retry advances to attempt 1.
-    await fake.attemptStarted(1);
-    workflowControls.control(logicalExecutionId, 'retry');
-    await fake.attemptStarted(2);
+  it.live('reports skipped-attempt spend before the empty final journal', () =>
+    Effect.gen(function* () {
+      const fake = controllableRunAgent({
+        attemptExecutionIds: [grandchildExecutionId],
+      });
+      const ports = fakePorts();
+      const strategy = createWorkflowScriptStrategy(
+        strategyParams({
+          name: 'strategy-test',
+          createRunAgent: fake.createRunAgent,
+        }),
+      );
 
-    // The stale logical id no longer maps to the in-flight attempt: a skip on
-    // it must no-op, leaving the run pending.
-    workflowControls.control(logicalExecutionId, 'skip');
-    await drainMacrotasks();
-    expect(settled).toBe(false);
+      const launch = yield* Effect.forkChild(
+        strategy.launch(ports, new AbortController().signal),
+      );
+      yield* Effect.promise(() => fake.attemptStarted(1));
+      // Model tokens were spent before the user skipped the attempt.
+      fake.onCost(0.42);
+      workflowControls.control(grandchildExecutionId, 'skip');
 
-    // The attempt-specific id the roster exposes reaches the engine index.
-    workflowControls.control(attemptExecutionId, 'skip');
-    const turn = await launch;
-    expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
-    expect(fake.attempts()).toBe(2);
-  });
-
-  it('reports skipped-attempt spend before the empty final journal', async () => {
-    const fake = controllableRunAgent({
-      attemptExecutionIds: [grandchildExecutionId],
-    });
-    const ports = fakePorts();
-    const strategy = createWorkflowScriptStrategy(
-      strategyParams({
-        name: 'strategy-test',
-        createRunAgent: fake.createRunAgent,
-      }),
-    );
-
-    const launch = Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    );
-    await fake.attemptStarted(1);
-    // Model tokens were spent before the user skipped the attempt.
-    fake.onCost(0.42);
-    workflowControls.control(grandchildExecutionId, 'skip');
-
-    const turn = await launch;
-    expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
-    expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
-  });
+      const turn = yield* Fiber.join(launch);
+      expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+      expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
+    }),
+  );
 });

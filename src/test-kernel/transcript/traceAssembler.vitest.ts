@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { getExecutionRecords } from '@agent/storage';
 import { registerExecution } from '@agent/storage/executionLifecycle';
@@ -40,21 +41,16 @@ const tempDirs = useTempDirs();
 let session: ReturnType<typeof createTestSession>;
 
 /** Populate the transcript input consumed by the export. */
-async function appendLogEntry(
-  streamId: StreamTabId,
-  text: string,
-): Promise<void> {
-  await Effect.runPromise(
-    session.commit([
-      {
-        type: 'log',
-        aggregateId: aggregateId('stream', streamId),
-        level: LOG_LEVELS.INFO,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        message: text,
-      },
-    ]),
-  );
+function appendLogEntry(streamId: StreamTabId, text: string) {
+  return session.commit([
+    {
+      type: 'log',
+      aggregateId: aggregateId('stream', streamId),
+      level: LOG_LEVELS.INFO,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      message: text,
+    },
+  ]);
 }
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -69,29 +65,29 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 /** Persist a run record plus a meta row for an execution. */
-async function writeExecution(
+function writeExecution(
   executionId: ExecutionId,
   meta: { outcome?: RunOutcome; streamId?: StreamTabId } = {},
   executionConfig: AgentConfig = config(),
-): Promise<void> {
-  const streamId =
-    meta.streamId ?? getStreamTabId(executionConfig.agent, { executionId });
-  publishTestRunStart(session, streamId, executionId);
-  await session.settlePublications();
-  await Effect.runPromise(
-    getExecutionRecords(session, executionId).writeRunRecord(executionConfig),
-  );
-  if (meta.outcome)
-    await Effect.runPromise(
-      session.commit([
+) {
+  return Effect.gen(function* () {
+    const streamId =
+      meta.streamId ?? getStreamTabId(executionConfig.agent, { executionId });
+    publishTestRunStart(session, streamId, executionId);
+    yield* Effect.promise(() => session.settlePublications());
+    yield* getExecutionRecords(session, executionId).writeRunRecord(
+      executionConfig,
+    );
+    if (meta.outcome)
+      yield* session.commit([
         {
           type: 'status',
           aggregateId: aggregateId('stream', streamId),
           phase: meta.outcome,
           cause: 'lifecycle',
         },
-      ]),
-    );
+      ]);
+  });
 }
 
 type AssembleTraceResult = Effect.Success<ReturnType<typeof assembleTrace>>;
@@ -116,123 +112,140 @@ describe('assembleTrace', () => {
     vi.restoreAllMocks();
   });
 
-  it('resolves a registered execution from its metadata without any sidecar scan (#9590 A1)', async () => {
-    const executionId = 'abc900abc900' as ExecutionId;
-    const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-    // Registered under a stream the config would NOT derive: proves the read
-    // comes from execution metadata, not from agent/model reconstruction.
-    const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
-    await Effect.runPromise(
-      registerExecution(session, executionId, executionConfig, 'review', {
-        streamId: registeredId,
-        identity: { kind: 'agent', agent: 'review' },
+  it.effect(
+    'resolves a registered execution from its metadata without any sidecar scan (#9590 A1)',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'abc900abc900' as ExecutionId;
+        const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
+        // Registered under a stream the config would NOT derive: proves the
+        // read comes from execution metadata, not from agent/model
+        // reconstruction.
+        const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
+        yield* registerExecution(
+          session,
+          executionId,
+          executionConfig,
+          'review',
+          {
+            streamId: registeredId,
+            identity: { kind: 'agent', agent: 'review' },
+          },
+        );
+        yield* Effect.promise(() => releaseOwnedExecutionLease(executionId));
+        yield* appendLogEntry(registeredId, 'registered row');
+
+        const scan = vi.spyOn(
+          StreamSnapshotStore.prototype,
+          'listPersistedStreams',
+        );
+
+        const trace = unwrapOkTrace(yield* assembleTrace(executionId, session));
+
+        expect(trace.streamId).toBe(registeredId);
+        expect(scan).not.toHaveBeenCalled();
       }),
-    );
-    await releaseOwnedExecutionLease(executionId);
-    await appendLogEntry(registeredId, 'registered row');
+  );
 
-    const scan = vi.spyOn(
-      StreamSnapshotStore.prototype,
-      'listPersistedStreams',
-    );
+  it.effect(
+    'assembles a full trace document from the streamId stamped on execution metadata',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'aa11bb22cc33' as ExecutionId;
+        const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
+        const streamId = getStreamTabId('review', { executionId });
 
-    const trace = unwrapOkTrace(
-      await Effect.runPromise(assembleTrace(executionId, session)),
-    );
+        yield* writeExecution(
+          executionId,
+          { outcome: 'completed', streamId },
+          executionConfig,
+        );
+        yield* appendLogEntry(streamId, 'hello');
+        const todos = [
+          {
+            content: 'Check the argument',
+            activeForm: 'Checking the argument',
+            status: 'pending' as const,
+          },
+        ];
+        session.publish([
+          {
+            type: 'updateTodos',
+            aggregateId: aggregateId('stream', streamId),
+            todos,
+          },
+        ]);
+        yield* Effect.promise(() => settleSessionEvents());
 
-    expect(trace.streamId).toBe(registeredId);
-    expect(scan).not.toHaveBeenCalled();
-  });
+        const trace = unwrapOkTrace(yield* assembleTrace(executionId, session));
 
-  it('assembles a full trace document from the streamId stamped on execution metadata', async () => {
-    const executionId = 'aa11bb22cc33' as ExecutionId;
-    const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-    const streamId = getStreamTabId('review', { executionId });
+        expect(trace.streamId).toBe(streamId);
+        expect(trace.config).toMatchObject({
+          agent: 'review',
+          model: 'sonnet46T',
+        });
+        expect(trace.entries).toHaveLength(1);
+        expect(trace.entries[0]).toMatchObject({
+          text: 'hello',
+        });
+        expect(trace.meta?.outcome).toBe('completed');
+        expect(trace.snapshot.streamId).toBe(streamId);
+        expect(trace.snapshot.todos).toEqual(todos);
+      }),
+  );
 
-    await writeExecution(
-      executionId,
-      { outcome: 'completed', streamId },
-      executionConfig,
-    );
-    await appendLogEntry(streamId, 'hello');
-    const todos = [
-      {
-        content: 'Check the argument',
-        activeForm: 'Checking the argument',
-        status: 'pending' as const,
-      },
-    ];
-    session.publish([
-      {
-        type: 'updateTodos',
-        aggregateId: aggregateId('stream', streamId),
-        todos,
-      },
-    ]);
-    await settleSessionEvents();
+  it.effect('returns config_missing when no config was ever written', () =>
+    Effect.gen(function* () {
+      const result = yield* assembleTrace(
+        'exec-no-config' as ExecutionId,
+        session,
+      );
+      expect(result).toEqual({ status: 'config_missing' });
+    }),
+  );
 
-    const trace = unwrapOkTrace(
-      await Effect.runPromise(assembleTrace(executionId, session)),
-    );
+  it.effect('exports a registered stream with an empty transcript', () =>
+    Effect.gen(function* () {
+      const executionId = 'eec000001' as ExecutionId;
+      const streamId = getStreamTabId('orchestrator', { executionId });
+      yield* writeExecution(executionId, { streamId });
 
-    expect(trace.streamId).toBe(streamId);
-    expect(trace.config).toMatchObject({
-      agent: 'review',
-      model: 'sonnet46T',
-    });
-    expect(trace.entries).toHaveLength(1);
-    expect(trace.entries[0]).toMatchObject({
-      text: 'hello',
-    });
-    expect(trace.meta?.outcome).toBe('completed');
-    expect(trace.snapshot.streamId).toBe(streamId);
-    expect(trace.snapshot.todos).toEqual(todos);
-  });
+      const result = yield* assembleTrace(executionId, session);
 
-  it('returns config_missing when no config was ever written', async () => {
-    const result = await Effect.runPromise(
-      assembleTrace('exec-no-config' as ExecutionId, session),
-    );
-    expect(result).toEqual({ status: 'config_missing' });
-  });
+      expect(unwrapOkTrace(result).entries).toEqual([]);
+    }),
+  );
 
-  it('exports a registered stream with an empty transcript', async () => {
-    const executionId = 'eec000001' as ExecutionId;
-    const streamId = getStreamTabId('orchestrator', { executionId });
-    await writeExecution(executionId, { streamId });
+  it.effect(
+    'resolves a tool-format child stream through its stamped metadata, not name derivation',
+    () =>
+      Effect.gen(function* () {
+        // Background child streams (bash/codex/claude subagents, see
+        // @tools/delegation/childStream.createChildStream) share
+        // getStreamTabId's format but carry a tool-specific prefix, disjoint
+        // from any agent name — the stamped meta.streamId is the only mapping
+        // that reaches them.
+        const executionId = 'eec000002' as ExecutionId;
+        const executionConfig = config({
+          agent: 'orchestrator',
+          model: 'deepseekT',
+        });
+        const actualChildStreamId = `bash@tool#${executionId}` as StreamTabId;
+        expect(actualChildStreamId).not.toBe(
+          getStreamTabId('orchestrator', { executionId }),
+        );
+        yield* writeExecution(
+          executionId,
+          { outcome: 'completed', streamId: actualChildStreamId },
+          executionConfig,
+        );
 
-    const result = await Effect.runPromise(assembleTrace(executionId, session));
+        yield* appendLogEntry(actualChildStreamId, 'child stream output');
 
-    expect(unwrapOkTrace(result).entries).toEqual([]);
-  });
+        const trace = unwrapOkTrace(yield* assembleTrace(executionId, session));
 
-  it('resolves a tool-format child stream through its stamped metadata, not name derivation', async () => {
-    // Background child streams (bash/codex/claude subagents, see
-    // @tools/delegation/childStream.createChildStream) share getStreamTabId's
-    // format but carry a tool-specific prefix, disjoint from any agent name —
-    // the stamped meta.streamId is the only mapping that reaches them.
-    const executionId = 'eec000002' as ExecutionId;
-    const executionConfig = config({
-      agent: 'orchestrator',
-      model: 'deepseekT',
-    });
-    const actualChildStreamId = `bash@tool#${executionId}` as StreamTabId;
-    expect(actualChildStreamId).not.toBe(
-      getStreamTabId('orchestrator', { executionId }),
-    );
-    await writeExecution(
-      executionId,
-      { outcome: 'completed', streamId: actualChildStreamId },
-      executionConfig,
-    );
-
-    await appendLogEntry(actualChildStreamId, 'child stream output');
-
-    const trace = unwrapOkTrace(
-      await Effect.runPromise(assembleTrace(executionId, session)),
-    );
-
-    expect(trace.streamId).toBe(actualChildStreamId);
-    expect(trace.entries).toHaveLength(1);
-  });
+        expect(trace.streamId).toBe(actualChildStreamId);
+        expect(trace.entries).toHaveLength(1);
+      }),
+  );
 });

@@ -1,7 +1,8 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, it } from 'vitest';
+import { describe } from 'vitest';
 
 // Local imports
 import { parseEml } from '@tools/emlParser';
@@ -21,17 +22,21 @@ Content-Type: text/html; charset=utf-8
 `;
 
 describe('parseEml', () => {
-  it('converts an HTML-only body to Markdown without leaking style/script content', async () => {
-    const { text } = await Effect.runPromise(parseEml(HTML_ONLY_EML));
+  it.effect(
+    'converts an HTML-only body to Markdown without leaking style/script content',
+    () =>
+      Effect.gen(function* () {
+        const { text } = yield* parseEml(HTML_ONLY_EML);
 
-    assert.match(text, /Hello \*\*world\*\*,/);
-    assert.match(text, /Item one/);
-    assert.match(text, /Item two/);
-    assert.match(text, /\[this link\]\(https:\/\/example\.com\)/);
-    // Numeric entity (&#8217;) decodes to a curly apostrophe.
-    assert.match(text, /it’s here/);
+        assert.match(text, /Hello \*\*world\*\*,/);
+        assert.match(text, /Item one/);
+        assert.match(text, /Item two/);
+        assert.match(text, /\[this link\]\(https:\/\/example\.com\)/);
+        // Numeric entity (&#8217;) decodes to a curly apostrophe.
+        assert.match(text, /it’s here/);
 
-    assert.doesNotMatch(text, /color:red/);
-    assert.doesNotMatch(text, /alert\(/);
-  });
+        assert.doesNotMatch(text, /color:red/);
+        assert.doesNotMatch(text, /alert\(/);
+      }),
+  );
 });

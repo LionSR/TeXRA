@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
 
@@ -357,54 +358,58 @@ describe('delegation model availability', () => {
     expect(rewritten.description).not.toContain('loaded at runtime');
   });
 
-  it('rejects an explicitly requested model that is not currently available', async () => {
-    mocks.computeModelOptionsData.mockResolvedValue([
-      model('sonnet46T'),
-      model('deepseekT'),
-    ]);
+  it.effect(
+    'rejects an explicitly requested model that is not currently available',
+    () =>
+      Effect.gen(function* () {
+        mocks.computeModelOptionsData.mockResolvedValue([
+          model('sonnet46T'),
+          model('deepseekT'),
+        ]);
 
-    await expect(
-      Effect.runPromise(
-        selectAvailableDelegationModel({
-          requestedModel: 'opus48T',
-          parentModel: 'sonnet46T',
-        }),
-      ),
-    ).rejects.toThrow(
-      'Model "opus48T" is not currently available for delegation with the currently configured model access. Available models: sonnet46T, deepseekT.',
-    );
-  });
+        const failure = yield* Effect.flip(
+          selectAvailableDelegationModel({
+            requestedModel: 'opus48T',
+            parentModel: 'sonnet46T',
+          }),
+        );
 
-  it('uses the parent model only when it is available', async () => {
-    mocks.computeModelOptionsData.mockResolvedValue([
-      model('deepseekT'),
-      model('sonnet46T'),
-    ]);
+        expect(failure.message).toContain(
+          'Model "opus48T" is not currently available for delegation with the currently configured model access. Available models: sonnet46T, deepseekT.',
+        );
+      }),
+  );
 
-    await expect(
-      Effect.runPromise(
-        selectAvailableDelegationModel({ parentModel: 'sonnet46T' }),
-      ),
-    ).resolves.toBe('sonnet46T');
+  it.effect('uses the parent model only when it is available', () =>
+    Effect.gen(function* () {
+      mocks.computeModelOptionsData.mockResolvedValue([
+        model('deepseekT'),
+        model('sonnet46T'),
+      ]);
 
-    await expect(
-      Effect.runPromise(
+      expect(
+        yield* selectAvailableDelegationModel({ parentModel: 'sonnet46T' }),
+      ).toBe('sonnet46T');
+
+      expect(
+        yield* selectAvailableDelegationModel({ parentModel: 'opus48T' }),
+      ).toBe('deepseekT');
+    }),
+  );
+
+  it.effect('rejects delegation when no models are currently available', () =>
+    Effect.gen(function* () {
+      mocks.computeModelOptionsData.mockResolvedValue([]);
+
+      const failure = yield* Effect.flip(
         selectAvailableDelegationModel({ parentModel: 'opus48T' }),
-      ),
-    ).resolves.toBe('deepseekT');
-  });
+      );
 
-  it('rejects delegation when no models are currently available', async () => {
-    mocks.computeModelOptionsData.mockResolvedValue([]);
-
-    await expect(
-      Effect.runPromise(
-        selectAvailableDelegationModel({ parentModel: 'opus48T' }),
-      ),
-    ).rejects.toThrow(
-      'No models are currently available for delegation. Review or configure model access before delegating.',
-    );
-  });
+      expect(failure.message).toContain(
+        'No models are currently available for delegation. Review or configure model access before delegating.',
+      );
+    }),
+  );
 });
 
 describe('delegation worktree availability', () => {

@@ -2,7 +2,8 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { describe, expect } from 'vitest';
 import { Effect } from 'effect';
 import type { ExecutionListingEntry } from '@agent/storage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -62,30 +63,31 @@ describe('tool status formatting', () => {
     );
   });
 
-  it('renders bash execution history as a process without a model', async () => {
-    const entry: ExecutionListingEntry = {
-      kind: 'run',
-      identity: { kind: 'process', tool: 'bash' },
-      id: '16c0f3f748e4',
-      timestamp: '2026-05-15T23:42:06.000Z',
-      parentExecutionId: 'fcf5150d37c6',
-      record: AgentConfigSchema.parse({
-        agent: 'bash',
-        model: 'gemini31p',
-        instruction: 'ls',
-        agentCategory: 'toolUse',
-      }),
-      outcome: 'completed',
-      checkpointPresent: false,
-    };
+  it.effect('renders bash execution history as a process without a model', () =>
+    Effect.gen(function* () {
+      const entry: ExecutionListingEntry = {
+        kind: 'run',
+        identity: { kind: 'process', tool: 'bash' },
+        id: '16c0f3f748e4',
+        timestamp: '2026-05-15T23:42:06.000Z',
+        parentExecutionId: 'fcf5150d37c6',
+        record: AgentConfigSchema.parse({
+          agent: 'bash',
+          model: 'gemini31p',
+          instruction: 'ls',
+          agentCategory: 'toolUse',
+        }),
+        outcome: 'completed',
+        checkpointPresent: false,
+      };
 
-    // The row's own `outcome` is a recorded durable fact, so the status column
-    // shows it without re-reading the metadata file it came from. The other
-    // columns under test are the `process` category and the suppressed model.
-    await expect(
-      Effect.runPromise(formatListingLine(entry, defaultSession())),
-    ).resolves.toBe(
-      '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [completed]  parent=fcf5150d37c6',
-    );
-  });
+      // The row's own `outcome` is a recorded durable fact, so the status
+      // column shows it without re-reading the metadata file it came from. The
+      // other columns under test are the `process` category and the suppressed
+      // model.
+      expect(yield* formatListingLine(entry, defaultSession())).toBe(
+        '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [completed]  parent=fcf5150d37c6',
+      );
+    }),
+  );
 });

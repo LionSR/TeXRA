@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { describe, expect, vi } from 'vitest';
 
 import { Effect } from 'effect';
 import {
@@ -66,15 +67,15 @@ function makeDeps(
 }
 
 describe('team roster application', () => {
-  it('signs in, forces one refresh, and commits exactly once', async () => {
-    const calls: string[] = [];
-    let refreshed = false;
-    const commitPreset = vi.fn(async () => {
-      calls.push('commit');
-    });
+  it.effect('signs in, forces one refresh, and commits exactly once', () =>
+    Effect.gen(function* () {
+      const calls: string[] = [];
+      let refreshed = false;
+      const commitPreset = vi.fn(async () => {
+        calls.push('commit');
+      });
 
-    const result = await Effect.runPromise(
-      applyTeamRosterWithPreflight(
+      const result = yield* applyTeamRosterWithPreflight(
         'research',
         makeDeps({
           catalog: {
@@ -103,32 +104,32 @@ describe('team roster application', () => {
               refreshed = true;
             }),
         }),
-      ),
-    );
+      );
 
-    expect(result).toEqual({
-      status: 'applied',
-      preset,
-      resolution: resolved,
-    });
-    expect(calls).toEqual([
-      'local-load',
-      'choose',
-      'sign-in',
-      'forced-refresh',
-      'commit',
-    ]);
-    expect(commitPreset).toHaveBeenCalledOnce();
-    expect(commitPreset).toHaveBeenCalledWith(preset);
-  });
+      expect(result).toEqual({
+        status: 'applied',
+        preset,
+        resolution: resolved,
+      });
+      expect(calls).toEqual([
+        'local-load',
+        'choose',
+        'sign-in',
+        'forced-refresh',
+        'commit',
+      ]);
+      expect(commitPreset).toHaveBeenCalledOnce();
+      expect(commitPreset).toHaveBeenCalledWith(preset);
+    }),
+  );
 
-  it('cancels before refresh or roster writes', async () => {
-    const commitPreset = vi.fn();
-    let forcedRefresh = false;
-    const signIn = vi.fn();
+  it.effect('cancels before refresh or roster writes', () =>
+    Effect.gen(function* () {
+      const commitPreset = vi.fn();
+      let forcedRefresh = false;
+      const signIn = vi.fn();
 
-    const result = await Effect.runPromise(
-      applyTeamRosterWithPreflight(
+      const result = yield* applyTeamRosterWithPreflight(
         'research',
         makeDeps({
           catalog: { commitPreset },
@@ -138,155 +139,161 @@ describe('team roster application', () => {
               forcedRefresh = true;
             }),
         }),
-      ),
-    );
+      );
 
-    expect(result).toEqual({ status: 'cancelled', preset });
-    expect(signIn).not.toHaveBeenCalled();
-    expect(forcedRefresh).toBe(false);
-    expect(commitPreset).not.toHaveBeenCalled();
-  });
+      expect(result).toEqual({ status: 'cancelled', preset });
+      expect(signIn).not.toHaveBeenCalled();
+      expect(forcedRefresh).toBe(false);
+      expect(commitPreset).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('preflights an arbitrary unresolved member in a legacy custom team', async () => {
-    const legacyPreset: AgentModePreset = {
-      id: 'legacy',
-      name: 'Legacy',
-      description: 'Saved before hosted provenance',
-      icon: 'bookmark',
-      agents: {
-        workflow: [],
-        toolUse: ['review', 'remoteSpecialist'],
-      },
-    };
-    const choose = vi.fn(
-      async (_names: readonly string[]) => 'cancel' as const,
-    );
-    const commitPreset = vi.fn();
-
-    const result = await Effect.runPromise(
-      applyTeamRosterWithPreflight(
-        'legacy',
-        makeDeps({
-          catalog: {
-            resolvePreset: () => ({
-              ok: true,
-              preset: legacyPreset,
-              resolution: {
-                keys: {
-                  workflow: [],
-                  toolUse: ['builtInToolUse:review'],
-                },
-                nameSlots: {
-                  workflow: [],
-                  toolUse: ['remoteSpecialist'],
-                },
-                unresolvedNames: ['remoteSpecialist'],
-              },
-            }),
-            commitPreset,
+  it.effect(
+    'preflights an arbitrary unresolved member in a legacy custom team',
+    () =>
+      Effect.gen(function* () {
+        const legacyPreset: AgentModePreset = {
+          id: 'legacy',
+          name: 'Legacy',
+          description: 'Saved before hosted provenance',
+          icon: 'bookmark',
+          agents: {
+            workflow: [],
+            toolUse: ['review', 'remoteSpecialist'],
           },
-          choose: async (_preset, names) => choose(names),
-        }),
-      ),
-    );
+        };
+        const choose = vi.fn(
+          async (_names: readonly string[]) => 'cancel' as const,
+        );
+        const commitPreset = vi.fn();
 
-    expect(result.status).toBe('cancelled');
-    expect(choose).toHaveBeenCalledWith(['remoteSpecialist']);
-    expect(commitPreset).not.toHaveBeenCalled();
-  });
-
-  it('preflights recognized and arbitrary unresolved members in a mixed legacy team', async () => {
-    const legacyPreset: AgentModePreset = {
-      id: 'mixed-legacy',
-      name: 'Mixed legacy',
-      description: 'Contains local and remote members without provenance',
-      icon: 'bookmark',
-      agents: {
-        workflow: ['generic'],
-        toolUse: ['review', 'remoteSpecialist'],
-      },
-    };
-    const choose = vi.fn(
-      async (_names: readonly string[]) => 'cancel' as const,
-    );
-
-    await Effect.runPromise(
-      applyTeamRosterWithPreflight(
-        'mixed-legacy',
-        makeDeps({
-          catalog: {
-            resolvePreset: () => ({
-              ok: true,
-              preset: legacyPreset,
-              resolution: {
-                keys: {
-                  workflow: [],
-                  toolUse: ['builtInToolUse:review'],
+        const result = yield* applyTeamRosterWithPreflight(
+          'legacy',
+          makeDeps({
+            catalog: {
+              resolvePreset: () => ({
+                ok: true,
+                preset: legacyPreset,
+                resolution: {
+                  keys: {
+                    workflow: [],
+                    toolUse: ['builtInToolUse:review'],
+                  },
+                  nameSlots: {
+                    workflow: [],
+                    toolUse: ['remoteSpecialist'],
+                  },
+                  unresolvedNames: ['remoteSpecialist'],
                 },
-                nameSlots: {
-                  workflow: ['generic'],
-                  toolUse: ['remoteSpecialist'],
-                },
-                unresolvedNames: ['generic', 'remoteSpecialist'],
-              },
-            }),
-          },
-          choose: async (_preset, names) => choose(names),
-        }),
-      ),
-    );
+              }),
+              commitPreset,
+            },
+            choose: async (_preset, names) => choose(names),
+          }),
+        );
 
-    expect(choose).toHaveBeenCalledWith(['generic', 'remoteSpecialist']);
-    expect(legacyPreset).not.toHaveProperty('texraHostedAgents');
-  });
-
-  it('refreshes the host before presenting a successful settings application', async () => {
-    const calls: string[] = [];
-    const getPresetToolUseRoot = vi.fn(() => 'orchestrator');
-
-    await Effect.runPromise(
-      applySettingsTeamRoster('research', {
-        catalog: {
-          resolvePreset: () => ({ ok: true, preset, resolution: resolved }),
-          commitPreset: async () => {
-            calls.push('apply');
-          },
-          getPresetToolUseRoot,
-        },
-        loadLocalCatalog: () => Effect.void,
-        canAccessRemoteCatalog: async () => false,
-        signIn: async () => false,
-        forceRefreshRemoteCatalog: () => Effect.void,
-        presentation: {
-          chooseTeamAvailability: async () => 'cancel',
-          showErrorMessage: async () => {},
-          showInfoMessage: async (message) => {
-            calls.push(`info:${message}`);
-          },
-        },
-        refreshAfterApply: async (selectedToolUseAgent) => {
-          calls.push(`refresh:${selectedToolUseAgent}`);
-        },
+        expect(result.status).toBe('cancelled');
+        expect(choose).toHaveBeenCalledWith(['remoteSpecialist']);
+        expect(commitPreset).not.toHaveBeenCalled();
       }),
-    );
+  );
 
-    expect(getPresetToolUseRoot).toHaveBeenCalledWith(
-      ['orchestrator'],
-      'research',
-    );
-    expect(calls).toEqual([
-      'apply',
-      'refresh:orchestrator',
-      'info:Applied "Research" team',
-    ]);
-  });
+  it.effect(
+    'preflights recognized and arbitrary unresolved members in a mixed legacy team',
+    () =>
+      Effect.gen(function* () {
+        const legacyPreset: AgentModePreset = {
+          id: 'mixed-legacy',
+          name: 'Mixed legacy',
+          description: 'Contains local and remote members without provenance',
+          icon: 'bookmark',
+          agents: {
+            workflow: ['generic'],
+            toolUse: ['review', 'remoteSpecialist'],
+          },
+        };
+        const choose = vi.fn(
+          async (_names: readonly string[]) => 'cancel' as const,
+        );
 
-  it('presents canonical unavailable-member choices and errors', async () => {
-    const prompts: unknown[] = [];
-    const errors: string[] = [];
+        yield* applyTeamRosterWithPreflight(
+          'mixed-legacy',
+          makeDeps({
+            catalog: {
+              resolvePreset: () => ({
+                ok: true,
+                preset: legacyPreset,
+                resolution: {
+                  keys: {
+                    workflow: [],
+                    toolUse: ['builtInToolUse:review'],
+                  },
+                  nameSlots: {
+                    workflow: ['generic'],
+                    toolUse: ['remoteSpecialist'],
+                  },
+                  unresolvedNames: ['generic', 'remoteSpecialist'],
+                },
+              }),
+            },
+            choose: async (_preset, names) => choose(names),
+          }),
+        );
 
-    await Effect.runPromise(
-      applySettingsTeamRoster('research', {
+        expect(choose).toHaveBeenCalledWith(['generic', 'remoteSpecialist']);
+        expect(legacyPreset).not.toHaveProperty('texraHostedAgents');
+      }),
+  );
+
+  it.effect(
+    'refreshes the host before presenting a successful settings application',
+    () =>
+      Effect.gen(function* () {
+        const calls: string[] = [];
+        const getPresetToolUseRoot = vi.fn(() => 'orchestrator');
+
+        yield* applySettingsTeamRoster('research', {
+          catalog: {
+            resolvePreset: () => ({ ok: true, preset, resolution: resolved }),
+            commitPreset: async () => {
+              calls.push('apply');
+            },
+            getPresetToolUseRoot,
+          },
+          loadLocalCatalog: () => Effect.void,
+          canAccessRemoteCatalog: async () => false,
+          signIn: async () => false,
+          forceRefreshRemoteCatalog: () => Effect.void,
+          presentation: {
+            chooseTeamAvailability: async () => 'cancel',
+            showErrorMessage: async () => {},
+            showInfoMessage: async (message) => {
+              calls.push(`info:${message}`);
+            },
+          },
+          refreshAfterApply: async (selectedToolUseAgent) => {
+            calls.push(`refresh:${selectedToolUseAgent}`);
+          },
+        });
+
+        expect(getPresetToolUseRoot).toHaveBeenCalledWith(
+          ['orchestrator'],
+          'research',
+        );
+        expect(calls).toEqual([
+          'apply',
+          'refresh:orchestrator',
+          'info:Applied "Research" team',
+        ]);
+      }),
+  );
+
+  it.effect('presents canonical unavailable-member choices and errors', () =>
+    Effect.gen(function* () {
+      const prompts: unknown[] = [];
+      const errors: string[] = [];
+
+      yield* applySettingsTeamRoster('research', {
         catalog: {
           resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
           commitPreset: vi.fn(),
@@ -307,51 +314,53 @@ describe('team roster application', () => {
           showInfoMessage: async () => {},
         },
         refreshAfterApply: async () => {},
+      });
+
+      expect(prompts).toEqual([
+        {
+          severity: 'warning',
+          message:
+            'Team "Research" has unavailable TeXRA-hosted members: orchestrator.',
+          actions: [
+            { choice: 'sign-in', label: 'Sign In to TeXRA' },
+            {
+              choice: 'continue',
+              label: 'Continue with Available Members',
+            },
+            { choice: 'cancel', label: 'Cancel' },
+          ],
+        },
+      ]);
+      expect(errors).toEqual(['Team "Research" is unavailable: orchestrator.']);
+    }),
+  );
+
+  it.effect(
+    'proceeds on a provided "continue" choice without prompting or signing in',
+    () =>
+      Effect.gen(function* () {
+        const choose = vi.fn();
+        const signIn = vi.fn();
+        const commitPreset = vi.fn();
+
+        const result = yield* applyTeamRosterWithPreflight(
+          'research',
+          makeDeps({
+            catalog: { commitPreset },
+            providedChoice: 'continue',
+            choose,
+            signIn,
+          }),
+        );
+
+        expect(result).toEqual({
+          status: 'applied',
+          preset,
+          resolution: unresolved,
+        });
+        expect(choose).not.toHaveBeenCalled();
+        expect(signIn).not.toHaveBeenCalled();
+        expect(commitPreset).toHaveBeenCalledWith(preset);
       }),
-    );
-
-    expect(prompts).toEqual([
-      {
-        severity: 'warning',
-        message:
-          'Team "Research" has unavailable TeXRA-hosted members: orchestrator.',
-        actions: [
-          { choice: 'sign-in', label: 'Sign In to TeXRA' },
-          {
-            choice: 'continue',
-            label: 'Continue with Available Members',
-          },
-          { choice: 'cancel', label: 'Cancel' },
-        ],
-      },
-    ]);
-    expect(errors).toEqual(['Team "Research" is unavailable: orchestrator.']);
-  });
-
-  it('proceeds on a provided "continue" choice without prompting or signing in', async () => {
-    const choose = vi.fn();
-    const signIn = vi.fn();
-    const commitPreset = vi.fn();
-
-    const result = await Effect.runPromise(
-      applyTeamRosterWithPreflight(
-        'research',
-        makeDeps({
-          catalog: { commitPreset },
-          providedChoice: 'continue',
-          choose,
-          signIn,
-        }),
-      ),
-    );
-
-    expect(result).toEqual({
-      status: 'applied',
-      preset,
-      resolution: unresolved,
-    });
-    expect(choose).not.toHaveBeenCalled();
-    expect(signIn).not.toHaveBeenCalled();
-    expect(commitPreset).toHaveBeenCalledWith(preset);
-  });
+  );
 });

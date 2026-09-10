@@ -1,4 +1,5 @@
 // Third-party imports
+import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -485,32 +486,37 @@ describe('native editor model', () => {
     mocks.canSendRequest.mockReturnValue(true);
   });
 
-  it('captures the exact model and preserves ordered text, images and complete tool exchanges without invented metadata', async () => {
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValueOnce(
-        nativeResponse([
-          new LanguageModelTextPart(''),
-          new LanguageModelTextPart('be'),
-          new LanguageModelTextPart('fore'),
-          new LanguageModelToolCallPart('original-0', 'search', { q: 'a' }),
-          new LanguageModelTextPart('between'),
-          new LanguageModelToolCallPart('original-1', 'search', { q: 'b' }),
-          new LanguageModelTextPart('af'),
-          new LanguageModelTextPart('ter'),
-        ]),
-      )
-      .mockResolvedValueOnce(
-        nativeResponse([new LanguageModelTextPart('done')]),
-      );
-    const selected = fakeModel({ sendRequest });
-    mocks.selectChatModels.mockResolvedValue([
-      fakeModel({ vendor: 'other' }),
-      selected,
-    ]);
-    await Effect.runPromise(
+  effectIt.effect(
+    'captures the exact model and preserves ordered text, images and complete tool exchanges without invented metadata',
+    () =>
       Effect.scoped(
         Effect.gen(function* () {
+          const sendRequest = vi
+            .fn()
+            .mockResolvedValueOnce(
+              nativeResponse([
+                new LanguageModelTextPart(''),
+                new LanguageModelTextPart('be'),
+                new LanguageModelTextPart('fore'),
+                new LanguageModelToolCallPart('original-0', 'search', {
+                  q: 'a',
+                }),
+                new LanguageModelTextPart('between'),
+                new LanguageModelToolCallPart('original-1', 'search', {
+                  q: 'b',
+                }),
+                new LanguageModelTextPart('af'),
+                new LanguageModelTextPart('ter'),
+              ]),
+            )
+            .mockResolvedValueOnce(
+              nativeResponse([new LanguageModelTextPart('done')]),
+            );
+          const selected = fakeModel({ sendRequest });
+          mocks.selectChatModels.mockResolvedValue([
+            fakeModel({ vendor: 'other' }),
+            selected,
+          ]);
           const model = yield* acquireVscodeLanguageModel(
             nativeContext,
             nativeConfiguration(),
@@ -658,10 +664,9 @@ describe('native editor model', () => {
           ).toBe(true);
         }),
       ),
-    );
-  });
+  );
 
-  it.each([
+  effectIt.effect.each([
     [false, false, 'require-granted', false],
     [false, false, 'request-on-send', false],
     [undefined, undefined, 'require-granted', false],
@@ -672,79 +677,75 @@ describe('native editor model', () => {
     [true, undefined, 'request-on-send', true],
   ] as const)(
     'requires explicit consent authority for access %s then %s and mode %s',
-    async (initialAccess, sendAccess, mode, permitted) => {
-      mocks.canSendRequest.mockReturnValue(initialAccess);
-      const selected = fakeModel({
-        sendRequest: vi.fn(async () => nativeResponse([])),
-      });
-      mocks.selectChatModels.mockResolvedValue([selected]);
-      const exit = await Effect.runPromise(
-        Effect.scoped(
-          Effect.gen(function* () {
-            const model = yield* acquireVscodeLanguageModel(
-              nativeContext,
-              nativeConfiguration(),
-              mode,
-            );
-            const turn = yield* model.prepareTurn(nativeRequest);
-            if (turn.mode !== 'foreground')
-              throw new Error('Expected foreground input.');
-            mocks.canSendRequest.mockReturnValue(sendAccess);
-            return yield* model.generateTurn(turn);
-          }),
-        ).pipe(Effect.exit),
-      );
-      expect(Exit.isSuccess(exit)).toBe(permitted);
-      if (Exit.isFailure(exit)) {
-        const failure = exit.cause.reasons.find(Cause.isFailReason);
-        expect(failure?.error).toMatchObject({ kind: 'authentication' });
-        expect(failure?.error).not.toHaveProperty('providerEvidence');
-      }
-      expect(selected.sendRequest).toHaveBeenCalledTimes(Number(permitted));
-      expect(mocks.selectChatModels).toHaveBeenCalledOnce();
-      expect(mocks.canSendRequest).toHaveBeenLastCalledWith(selected);
-    },
+    ([initialAccess, sendAccess, mode, permitted]) =>
+      Effect.gen(function* () {
+        mocks.canSendRequest.mockReturnValue(initialAccess);
+        const selected = fakeModel({
+          sendRequest: vi.fn(async () => nativeResponse([])),
+        });
+        mocks.selectChatModels.mockResolvedValue([selected]);
+        const exit = yield* Effect.exit(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const model = yield* acquireVscodeLanguageModel(
+                nativeContext,
+                nativeConfiguration(),
+                mode,
+              );
+              const turn = yield* model.prepareTurn(nativeRequest);
+              if (turn.mode !== 'foreground')
+                throw new Error('Expected foreground input.');
+              mocks.canSendRequest.mockReturnValue(sendAccess);
+              return yield* model.generateTurn(turn);
+            }),
+          ),
+        );
+        expect(Exit.isSuccess(exit)).toBe(permitted);
+        if (Exit.isFailure(exit)) {
+          const failure = exit.cause.reasons.find(Cause.isFailReason);
+          expect(failure?.error).toMatchObject({ kind: 'authentication' });
+          expect(failure?.error).not.toHaveProperty('providerEvidence');
+        }
+        expect(selected.sendRequest).toHaveBeenCalledTimes(Number(permitted));
+        expect(mocks.selectChatModels).toHaveBeenCalledOnce();
+        expect(mocks.canSendRequest).toHaveBeenLastCalledWith(selected);
+      }),
   );
 
-  it('rejects foreign and retired acquisitions without reselecting or sending', async () => {
-    const selected = fakeModel();
-    mocks.selectChatModels.mockResolvedValue([selected]);
-    const scope = Effect.runSync(Scope.make());
-    const model = await Effect.runPromise(
-      acquireVscodeLanguageModel(nativeContext, nativeConfiguration()).pipe(
-        Scope.provide(scope),
-      ),
-    );
-    const turn = await Effect.runPromise(model.prepareTurn(nativeRequest));
-    if (turn.mode !== 'foreground' || turn.protocol !== 'vscode-lm')
-      throw new Error('Expected editor input.');
-    const foreign = await Effect.runPromise(
-      model
-        .generateTurn({
-          ...turn,
-          acquisitionId: '11111111-1111-4111-8111-111111111111',
-        })
-        .pipe(Effect.exit),
-    );
-    expect(Exit.isFailure(foreign)).toBe(true);
-    await Effect.runPromise(Scope.close(scope, Exit.void));
-    expect(
-      Exit.isFailure(
-        await Effect.runPromise(model.generateTurn(turn).pipe(Effect.exit)),
-      ),
-    ).toBe(true);
-    expect(
-      Exit.isFailure(
-        await Effect.runPromise(
-          model.prepareTurn(nativeRequest).pipe(Effect.exit),
-        ),
-      ),
-    ).toBe(true);
-    expect(mocks.selectChatModels).toHaveBeenCalledOnce();
-    expect(selected.sendRequest).not.toHaveBeenCalled();
-  });
+  effectIt.effect(
+    'rejects foreign and retired acquisitions without reselecting or sending',
+    () =>
+      Effect.gen(function* () {
+        const selected = fakeModel();
+        mocks.selectChatModels.mockResolvedValue([selected]);
+        const scope = yield* Scope.make();
+        const model = yield* acquireVscodeLanguageModel(
+          nativeContext,
+          nativeConfiguration(),
+        ).pipe(Scope.provide(scope));
+        const turn = yield* model.prepareTurn(nativeRequest);
+        if (turn.mode !== 'foreground' || turn.protocol !== 'vscode-lm')
+          throw new Error('Expected editor input.');
+        const foreign = yield* Effect.exit(
+          model.generateTurn({
+            ...turn,
+            acquisitionId: '11111111-1111-4111-8111-111111111111',
+          }),
+        );
+        expect(Exit.isFailure(foreign)).toBe(true);
+        yield* Scope.close(scope, Exit.void);
+        expect(
+          Exit.isFailure(yield* Effect.exit(model.generateTurn(turn))),
+        ).toBe(true);
+        expect(
+          Exit.isFailure(yield* Effect.exit(model.prepareTurn(nativeRequest))),
+        ).toBe(true);
+        expect(mocks.selectChatModels).toHaveBeenCalledOnce();
+        expect(selected.sendRequest).not.toHaveBeenCalled();
+      }),
+  );
 
-  it.each([
+  effectIt.effect.each([
     { ...nativeRequest, temperature: 0.2 },
     {
       messages: [
@@ -774,178 +775,191 @@ describe('native editor model', () => {
     { ...nativeRequest, toolChoice: { name: 'search' } },
   ] satisfies TurnRequest[])(
     'rejects unsupported prepared input before generation: %j',
-    async (request) => {
-      const selected = fakeModel();
-      mocks.selectChatModels.mockResolvedValue([selected]);
-      const exit = await Effect.runPromise(
-        Effect.scoped(
-          Effect.gen(function* () {
-            const model = yield* acquireVscodeLanguageModel(
-              nativeContext,
-              nativeConfiguration(),
-            );
-            return yield* model.prepareTurn(request);
-          }),
-        ).pipe(Effect.exit),
-      );
-      expect(Exit.isFailure(exit)).toBe(true);
-      expect(selected.sendRequest).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each(['NoPermissions', 'Blocked', 'NotFound'] as const)(
-    'retains actual native %s evidence without a synthetic HTTP status',
-    async (code) => {
-      const cause = Object.assign(new Error('native rejection'), { code });
-      mocks.selectChatModels.mockResolvedValue([
-        fakeModel({
-          sendRequest: vi.fn(async () => {
-            throw cause;
-          }),
-        }),
-      ]);
-      const exit = await Effect.runPromise(
-        Effect.scoped(
-          Effect.gen(function* () {
-            const model = yield* acquireVscodeLanguageModel(
-              nativeContext,
-              nativeConfiguration(),
-            );
-            const turn = yield* model.prepareTurn(nativeRequest);
-            if (turn.mode !== 'foreground')
-              throw new Error('Expected foreground input.');
-            return yield* model.generateTurn(turn);
-          }),
-        ).pipe(Effect.exit),
-      );
-      if (!Exit.isFailure(exit)) throw new Error('Expected native failure.');
-      expect(exit.cause.reasons).toHaveLength(1);
-      const failure = exit.cause.reasons.find(Cause.isFailReason);
-      expect(failure?.error).toMatchObject({
-        message: 'native rejection',
-        cause,
-        providerEvidence: { kind: 'vscode-lm', code },
-      });
-      expect(failure?.error).not.toHaveProperty('status');
-      expect(cancellationSources[0].dispose).toHaveBeenCalledOnce();
-    },
-  );
-
-  it.each(['headers', 'body'] as const)(
-    'cancels before joining the exposed pending %s operation',
-    async (stage) => {
-      let entered!: () => void;
-      const ready = new Promise<void>((resolve) => {
-        entered = resolve;
-      });
-      let finish!: () => void;
-      const order: string[] = [];
-      const sendRequest = vi.fn(
-        async (
-          _messages,
-          _options,
-          token: CancellationTokenSource['token'],
-        ) => {
-          token.onCancellationRequested(() => {
-            order.push('cancel');
-          });
-          const pending = new Promise<never>((_resolve, reject) => {
-            finish = () => {
-              order.push('joined');
-              reject(new CancellationError());
-            };
-          });
-          if (stage === 'headers') {
-            entered();
-            return pending;
-          }
-          return {
-            stream: {
-              [Symbol.asyncIterator]: () => ({
-                next: () => {
-                  entered();
-                  return pending;
-                },
-                return: async () => {
-                  order.push('return');
-                  return { done: true, value: undefined };
-                },
-              }),
-            },
-          };
-        },
-      );
-      mocks.selectChatModels.mockResolvedValue([fakeModel({ sendRequest })]);
-      const fiber = Effect.runFork(
-        Effect.scoped(
-          Effect.gen(function* () {
-            const model = yield* acquireVscodeLanguageModel(
-              nativeContext,
-              nativeConfiguration(),
-            );
-            const turn = yield* model.prepareTurn(nativeRequest);
-            if (turn.mode !== 'foreground')
-              throw new Error('Expected foreground input.');
-            return yield* model.generateTurn(turn);
-          }),
-        ),
-      );
-      await ready;
-      const cancellation = Effect.runFork(Fiber.interrupt(fiber));
-      await vi.waitFor(() => expect(order).toEqual(['cancel']));
-      expect(cancellation.pollUnsafe()).toBeUndefined();
-      finish();
-      await Effect.runPromise(Fiber.join(cancellation));
-      expect(order).toEqual(
-        stage === 'headers'
-          ? ['cancel', 'joined']
-          : ['cancel', 'joined', 'return'],
-      );
-      expect(cancellationSources[0].dispose).toHaveBeenCalledOnce();
-      expect(sendRequest).toHaveBeenCalledOnce();
-    },
-  );
-
-  it('preserves a primary malformed response and a distinct iterator cleanup defect', async () => {
-    const cleanup = new Error('return failed');
-    mocks.selectChatModels.mockResolvedValue([
-      fakeModel({
-        sendRequest: vi.fn(async () => ({
-          stream: {
-            [Symbol.asyncIterator]: () => ({
-              next: async () => ({
-                done: false,
-                value: new LanguageModelToolCallPart('', 'search', {}),
-              }),
-              return: async () => {
-                throw cleanup;
-              },
+    (request) =>
+      Effect.gen(function* () {
+        const selected = fakeModel();
+        mocks.selectChatModels.mockResolvedValue([selected]);
+        const exit = yield* Effect.exit(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const model = yield* acquireVscodeLanguageModel(
+                nativeContext,
+                nativeConfiguration(),
+              );
+              return yield* model.prepareTurn(request);
             }),
-          },
-        })),
+          ),
+        );
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(selected.sendRequest).not.toHaveBeenCalled();
       }),
-    ]);
-    const exit = await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const model = yield* acquireVscodeLanguageModel(
-            nativeContext,
-            nativeConfiguration(),
-          );
-          const turn = yield* model.prepareTurn(nativeRequest);
-          if (turn.mode !== 'foreground')
-            throw new Error('Expected foreground input.');
-          return yield* model.generateTurn(turn);
-        }),
-      ).pipe(Effect.exit),
-    );
-    if (!Exit.isFailure(exit)) throw new Error('Expected failure.');
-    expect(exit.cause.reasons.find(Cause.isFailReason)?.error).toMatchObject({
-      kind: 'malformed-output',
-    });
-    expect(exit.cause.reasons.find(Cause.isDieReason)?.defect).toMatchObject({
-      cause: cleanup,
-    });
-    expect(cancellationSources[0].dispose).toHaveBeenCalledOnce();
-  });
+  );
+
+  effectIt.effect.each(['NoPermissions', 'Blocked', 'NotFound'] as const)(
+    'retains actual native %s evidence without a synthetic HTTP status',
+    (code) =>
+      Effect.gen(function* () {
+        const cause = Object.assign(new Error('native rejection'), { code });
+        mocks.selectChatModels.mockResolvedValue([
+          fakeModel({
+            sendRequest: vi.fn(async () => {
+              throw cause;
+            }),
+          }),
+        ]);
+        const exit = yield* Effect.exit(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const model = yield* acquireVscodeLanguageModel(
+                nativeContext,
+                nativeConfiguration(),
+              );
+              const turn = yield* model.prepareTurn(nativeRequest);
+              if (turn.mode !== 'foreground')
+                throw new Error('Expected foreground input.');
+              return yield* model.generateTurn(turn);
+            }),
+          ),
+        );
+        if (!Exit.isFailure(exit)) throw new Error('Expected native failure.');
+        expect(exit.cause.reasons).toHaveLength(1);
+        const failure = exit.cause.reasons.find(Cause.isFailReason);
+        expect(failure?.error).toMatchObject({
+          message: 'native rejection',
+          cause,
+          providerEvidence: { kind: 'vscode-lm', code },
+        });
+        expect(failure?.error).not.toHaveProperty('status');
+        expect(cancellationSources[0].dispose).toHaveBeenCalledOnce();
+      }),
+  );
+
+  effectIt.effect.each(['headers', 'body'] as const)(
+    'cancels before joining the exposed pending %s operation',
+    (stage) =>
+      Effect.gen(function* () {
+        let entered!: () => void;
+        const ready = new Promise<void>((resolve) => {
+          entered = resolve;
+        });
+        let finish!: () => void;
+        const order: string[] = [];
+        const sendRequest = vi.fn(
+          async (
+            _messages,
+            _options,
+            token: CancellationTokenSource['token'],
+          ) => {
+            token.onCancellationRequested(() => {
+              order.push('cancel');
+            });
+            const pending = new Promise<never>((_resolve, reject) => {
+              finish = () => {
+                order.push('joined');
+                reject(new CancellationError());
+              };
+            });
+            if (stage === 'headers') {
+              entered();
+              return pending;
+            }
+            return {
+              stream: {
+                [Symbol.asyncIterator]: () => ({
+                  next: () => {
+                    entered();
+                    return pending;
+                  },
+                  return: async () => {
+                    order.push('return');
+                    return { done: true, value: undefined };
+                  },
+                }),
+              },
+            };
+          },
+        );
+        mocks.selectChatModels.mockResolvedValue([fakeModel({ sendRequest })]);
+        const fiber = yield* Effect.forkChild(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const model = yield* acquireVscodeLanguageModel(
+                nativeContext,
+                nativeConfiguration(),
+              );
+              const turn = yield* model.prepareTurn(nativeRequest);
+              if (turn.mode !== 'foreground')
+                throw new Error('Expected foreground input.');
+              return yield* model.generateTurn(turn);
+            }),
+          ),
+        );
+        yield* Effect.promise(() => ready);
+        const cancellation = yield* Effect.forkChild(Fiber.interrupt(fiber));
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(order).toEqual(['cancel'])),
+        );
+        expect(cancellation.pollUnsafe()).toBeUndefined();
+        finish();
+        yield* Fiber.join(cancellation);
+        expect(order).toEqual(
+          stage === 'headers'
+            ? ['cancel', 'joined']
+            : ['cancel', 'joined', 'return'],
+        );
+        expect(cancellationSources[0].dispose).toHaveBeenCalledOnce();
+        expect(sendRequest).toHaveBeenCalledOnce();
+      }),
+  );
+
+  effectIt.effect(
+    'preserves a primary malformed response and a distinct iterator cleanup defect',
+    () =>
+      Effect.gen(function* () {
+        const cleanup = new Error('return failed');
+        mocks.selectChatModels.mockResolvedValue([
+          fakeModel({
+            sendRequest: vi.fn(async () => ({
+              stream: {
+                [Symbol.asyncIterator]: () => ({
+                  next: async () => ({
+                    done: false,
+                    value: new LanguageModelToolCallPart('', 'search', {}),
+                  }),
+                  return: async () => {
+                    throw cleanup;
+                  },
+                }),
+              },
+            })),
+          }),
+        ]);
+        const exit = yield* Effect.exit(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const model = yield* acquireVscodeLanguageModel(
+                nativeContext,
+                nativeConfiguration(),
+              );
+              const turn = yield* model.prepareTurn(nativeRequest);
+              if (turn.mode !== 'foreground')
+                throw new Error('Expected foreground input.');
+              return yield* model.generateTurn(turn);
+            }),
+          ),
+        );
+        if (!Exit.isFailure(exit)) throw new Error('Expected failure.');
+        expect(
+          exit.cause.reasons.find(Cause.isFailReason)?.error,
+        ).toMatchObject({
+          kind: 'malformed-output',
+        });
+        expect(
+          exit.cause.reasons.find(Cause.isDieReason)?.defect,
+        ).toMatchObject({
+          cause: cleanup,
+        });
+        expect(cancellationSources[0].dispose).toHaveBeenCalledOnce();
+      }),
+  );
 });

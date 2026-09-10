@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   readCliModelAccessStatus,
@@ -13,9 +14,15 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
-import { effectRuntime } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+
+/**
+ * The HTTP client these programs took from the process runtime before the
+ * suite ran them natively: the same layer `installFakeHost` merges in.
+ */
+const withHttpClient = Effect.provide(testHttpClientLayer);
 
 const mocks = vi.hoisted(() => ({
   getCodexStatus: vi.fn(),
@@ -302,41 +309,45 @@ describe('CLI model access routes', () => {
     });
   });
 
-  it('enables Kimi Code routing on a personal fallback when a key exists', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
+  it.effect(
+    'enables Kimi Code routing on a personal fallback when a key exists',
+    () =>
+      Effect.gen(function* () {
+        mocks.hasUsableApiKey.mockResolvedValue(true);
 
-    const result = await effectRuntime().runPromise(
-      await updateCliModelAccess(
-        context,
-        subscriptionPreference('kimi-code', 'on'),
-        { writeProgress: vi.fn() },
-      ),
-    );
+        const result = yield* updateCliModelAccess(
+          context,
+          subscriptionPreference('kimi-code', 'on'),
+          { writeProgress: vi.fn() },
+        );
 
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
-      GlobalStateKey.KIMI_CODE_PREFER,
-      true,
-    );
-    expect(result).toEqual({
-      message:
-        'Prefer Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
-    });
-  });
+        expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
+        expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
+          GlobalStateKey.KIMI_CODE_PREFER,
+          true,
+        );
+        expect(result).toEqual({
+          message:
+            'Prefer Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
+        });
+      }).pipe(withHttpClient),
+  );
 
-  it('guides to key entry when Kimi Code is selected without a key', async () => {
-    const result = await effectRuntime().runPromise(
-      await updateCliModelAccess(
-        context,
-        subscriptionPreference('kimi-code', 'on'),
-        { writeProgress: vi.fn() },
-      ),
-    );
+  it.effect(
+    'guides to key entry when Kimi Code is selected without a key',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* updateCliModelAccess(
+          context,
+          subscriptionPreference('kimi-code', 'on'),
+          { writeProgress: vi.fn() },
+        );
 
-    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(result.message).toContain('No Kimi Code API key configured');
-    expect(result.message).toContain('https://www.kimi.com/code/console');
-  });
+        expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
+        expect(result.message).toContain('No Kimi Code API key configured');
+        expect(result.message).toContain('https://www.kimi.com/code/console');
+      }).pipe(withHttpClient),
+  );
 
   it('reports the GLM Coding Plan preference independently of key', async () => {
     mocks.hasUsableApiKey.mockImplementation(
@@ -357,243 +368,247 @@ describe('CLI model access routes', () => {
     );
   });
 
-  it('enables GLM Coding Plan routing on a personal fallback when a key exists', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
+  it.effect(
+    'enables GLM Coding Plan routing on a personal fallback when a key exists',
+    () =>
+      Effect.gen(function* () {
+        mocks.hasUsableApiKey.mockResolvedValue(true);
 
-    const result = await effectRuntime().runPromise(
-      await updateCliModelAccess(
-        context,
-        subscriptionPreference('glm-code', 'on'),
-        { writeProgress: vi.fn() },
-      ),
-    );
+        const result = yield* updateCliModelAccess(
+          context,
+          subscriptionPreference('glm-code', 'on'),
+          { writeProgress: vi.fn() },
+        );
 
-    expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(true);
-    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
-    expect(mocks.updateGlobalState).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      message:
-        'Prefer GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
-    });
-  });
+        expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(true);
+        expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
+        expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
+        expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
+        expect(mocks.updateGlobalState).not.toHaveBeenCalled();
+        expect(result).toEqual({
+          message:
+            'Prefer GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
+        });
+      }).pipe(withHttpClient),
+  );
 
-  it('guides to key entry when GLM Coding Plan is selected without a key', async () => {
-    const result = await effectRuntime().runPromise(
-      await updateCliModelAccess(
-        context,
-        subscriptionPreference('glm-code', 'on'),
-        { writeProgress: vi.fn() },
-      ),
-    );
+  it.effect(
+    'guides to key entry when GLM Coding Plan is selected without a key',
+    () =>
+      Effect.gen(function* () {
+        const result = yield* updateCliModelAccess(
+          context,
+          subscriptionPreference('glm-code', 'on'),
+          { writeProgress: vi.fn() },
+        );
 
-    expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
-    expect(result.message).toContain('No GLM API key configured');
-    expect(result.message).toContain('https://open.bigmodel.cn');
-  });
+        expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
+        expect(result.message).toContain('No GLM API key configured');
+        expect(result.message).toContain('https://open.bigmodel.cn');
+      }).pipe(withHttpClient),
+  );
 
-  it('turns off GLM Coding Plan without requiring a key', async () => {
-    const result = await effectRuntime().runPromise(
-      await updateCliModelAccess(
+  it.effect('turns off GLM Coding Plan without requiring a key', () =>
+    Effect.gen(function* () {
+      const result = yield* updateCliModelAccess(
         context,
         subscriptionPreference('glm-code', 'off'),
         { writeProgress: vi.fn() },
-      ),
-    );
+      );
 
-    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
-    expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(false);
-    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      message: 'Prefer GLM Coding Plan disabled for GLM models.',
-    });
-  });
+      expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+      expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(false);
+      expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
+      expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        message: 'Prefer GLM Coding Plan disabled for GLM models.',
+      });
+    }).pipe(withHttpClient),
+  );
 
-  it('signs in when needed and enables ChatGPT without an API key', async () => {
-    mocks.signInCliSubscription.mockReturnValue(
-      Effect.succeed({
-        signedIn: true,
-        email: 'user@example.com',
-        label: 'user@example.com',
-      }),
-    );
-    mocks.setPreferCodexSubscription.mockResolvedValue({
-      effective: true,
-      target: 'global',
-    });
-    const writeProgress = vi.fn();
+  it.effect('signs in when needed and enables ChatGPT without an API key', () =>
+    Effect.gen(function* () {
+      mocks.signInCliSubscription.mockReturnValue(
+        Effect.succeed({
+          signedIn: true,
+          email: 'user@example.com',
+          label: 'user@example.com',
+        }),
+      );
+      mocks.setPreferCodexSubscription.mockResolvedValue({
+        effective: true,
+        target: 'global',
+      });
+      const writeProgress = vi.fn();
 
-    const result = await effectRuntime().runPromise(
-      await updateCliModelAccess(
+      const result = yield* updateCliModelAccess(
         context,
         subscriptionPreference('chatgpt', 'on'),
         { writeProgress },
-      ),
-    );
+      );
 
-    expect(mocks.signInCliSubscription).toHaveBeenCalledWith(
-      'chatgpt',
-      { device: false, noBrowser: false },
-      { writeProgress },
-    );
-    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(true);
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      'texra.useOpenRouter',
-      false,
-    );
-    expect(result.message).toBe(
-      'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
-    );
-  });
+      expect(mocks.signInCliSubscription).toHaveBeenCalledWith(
+        'chatgpt',
+        { device: false, noBrowser: false },
+        { writeProgress },
+      );
+      expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(true);
+      expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+        'texra.useOpenRouter',
+        false,
+      );
+      expect(result.message).toBe(
+        'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
+      );
+    }).pipe(withHttpClient),
+  );
 
-  it('turns off ChatGPT without changing the Kimi preference', async () => {
-    mocks.getCodexStatus.mockResolvedValue({
-      signedIn: true,
-      email: 'user@example.com',
-    });
-    mocks.isPreferCodexSubscription.mockReturnValue(true);
-    mocks.setPreferCodexSubscription.mockResolvedValue({
-      effective: false,
-      target: 'global',
-    });
+  it.effect('turns off ChatGPT without changing the Kimi preference', () =>
+    Effect.gen(function* () {
+      mocks.getCodexStatus.mockResolvedValue({
+        signedIn: true,
+        email: 'user@example.com',
+      });
+      mocks.isPreferCodexSubscription.mockReturnValue(true);
+      mocks.setPreferCodexSubscription.mockResolvedValue({
+        effective: false,
+        target: 'global',
+      });
 
-    const result = await effectRuntime().runPromise(
-      await updateCliModelAccess(
+      const result = yield* updateCliModelAccess(
         context,
         subscriptionPreference('chatgpt', 'off'),
         { writeProgress: vi.fn() },
-      ),
-    );
+      );
 
-    expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
-    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      message: 'Prefer ChatGPT subscription disabled for Codex models.',
-    });
-  });
+      expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
+      expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
+      expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        message: 'Prefer ChatGPT subscription disabled for Codex models.',
+      });
+    }).pipe(withHttpClient),
+  );
 
-  it('represents preferences independently and toggles each without side effects', async () => {
-    mocks.getCodexStatus.mockResolvedValue({
-      signedIn: true,
-      email: 'user@example.com',
-    });
-    mocks.isPreferCodexSubscription.mockReturnValue(true);
-    mocks.getPreferKimiCode.mockReturnValue(true);
-    mocks.hasUsableApiKey.mockResolvedValue(true);
+  it.effect(
+    'represents preferences independently and toggles each without side effects',
+    () =>
+      Effect.gen(function* () {
+        mocks.getCodexStatus.mockResolvedValue({
+          signedIn: true,
+          email: 'user@example.com',
+        });
+        mocks.isPreferCodexSubscription.mockReturnValue(true);
+        mocks.getPreferKimiCode.mockReturnValue(true);
+        mocks.hasUsableApiKey.mockResolvedValue(true);
 
-    const status = await readCliModelAccessStatus();
-    expect(status.preferences).toEqual({
-      chatGpt: 'on',
-      grok: 'off',
-    });
-    const descriptions = Object.fromEntries(
-      buildCliModelAccessItems({ kind: 'loaded', access: status })
-        .filter((item) => item.value.kind === 'subscription-preference')
-        .map((item) => {
-          if (item.value.kind !== 'subscription-preference') {
-            throw new Error('expected subscription preference');
-          }
-          return [item.value.provider, item.description];
-        }),
-    );
-    expect(descriptions).toEqual({
-      chatgpt: 'On · user@example.com',
-      grok: 'Off · sign in required to enable',
-      'kimi-code': 'On · key configured',
-      'glm-code': 'Off · key configured',
-    });
+        const status = yield* Effect.promise(() => readCliModelAccessStatus());
+        expect(status.preferences).toEqual({
+          chatGpt: 'on',
+          grok: 'off',
+        });
+        const descriptions = Object.fromEntries(
+          buildCliModelAccessItems({ kind: 'loaded', access: status })
+            .filter((item) => item.value.kind === 'subscription-preference')
+            .map((item) => {
+              if (item.value.kind !== 'subscription-preference') {
+                throw new Error('expected subscription preference');
+              }
+              return [item.value.provider, item.description];
+            }),
+        );
+        expect(descriptions).toEqual({
+          chatgpt: 'On · user@example.com',
+          grok: 'Off · sign in required to enable',
+          'kimi-code': 'On · key configured',
+          'glm-code': 'Off · key configured',
+        });
 
-    await effectRuntime().runPromise(
-      await updateCliModelAccess(
-        context,
-        subscriptionPreference('kimi-code', 'off'),
-        { writeProgress: vi.fn() },
-      ),
-    );
-    expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
-      GlobalStateKey.KIMI_CODE_PREFER,
-      false,
-    );
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
+        yield* updateCliModelAccess(
+          context,
+          subscriptionPreference('kimi-code', 'off'),
+          { writeProgress: vi.fn() },
+        );
+        expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
+          GlobalStateKey.KIMI_CODE_PREFER,
+          false,
+        );
+        expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
+        expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
-    vi.clearAllMocks();
-    mocks.getCodexStatus.mockResolvedValue({
-      signedIn: true,
-      email: 'user@example.com',
-    });
-    mocks.isPreferCodexSubscription.mockReturnValue(true);
-    mocks.setPreferCodexSubscription.mockResolvedValue({
-      effective: false,
-      target: 'global',
-    });
-    await effectRuntime().runPromise(
-      await updateCliModelAccess(
-        context,
-        subscriptionPreference('chatgpt', 'off'),
-        { writeProgress: vi.fn() },
-      ),
-    );
-    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
-    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
-  });
+        vi.clearAllMocks();
+        mocks.getCodexStatus.mockResolvedValue({
+          signedIn: true,
+          email: 'user@example.com',
+        });
+        mocks.isPreferCodexSubscription.mockReturnValue(true);
+        mocks.setPreferCodexSubscription.mockResolvedValue({
+          effective: false,
+          target: 'global',
+        });
+        yield* updateCliModelAccess(
+          context,
+          subscriptionPreference('chatgpt', 'off'),
+          { writeProgress: vi.fn() },
+        );
+        expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
+        expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
+        expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
+      }).pipe(withHttpClient),
+  );
 
-  it('turns off a stale signed-out preference without signing in', async () => {
-    mocks.isPreferCodexSubscription.mockReturnValue(true);
-    mocks.setPreferCodexSubscription.mockResolvedValue({
-      effective: false,
-      target: 'global',
-    });
+  it.effect('turns off a stale signed-out preference without signing in', () =>
+    Effect.gen(function* () {
+      mocks.isPreferCodexSubscription.mockReturnValue(true);
+      mocks.setPreferCodexSubscription.mockResolvedValue({
+        effective: false,
+        target: 'global',
+      });
 
-    const status = await readCliModelAccessStatus();
-    const selection = buildCliModelAccessItems({
-      kind: 'loaded',
-      access: status,
-    }).find(
-      (item) =>
-        item.value.kind === 'subscription-preference' &&
-        item.value.provider === 'chatgpt',
-    );
-    expect(selection?.description).toBe('On · sign in required');
-    if (!selection) throw new Error('Expected ChatGPT preference item');
-    await effectRuntime().runPromise(
-      await updateCliModelAccess(context, selection.value, {
+      const status = yield* Effect.promise(() => readCliModelAccessStatus());
+      const selection = buildCliModelAccessItems({
+        kind: 'loaded',
+        access: status,
+      }).find(
+        (item) =>
+          item.value.kind === 'subscription-preference' &&
+          item.value.provider === 'chatgpt',
+      );
+      expect(selection?.description).toBe('On · sign in required');
+      if (!selection) throw new Error('Expected ChatGPT preference item');
+      yield* updateCliModelAccess(context, selection.value, {
         writeProgress: vi.fn(),
-      }),
-    );
+      });
 
-    expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
-  });
+      expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
+      expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
+    }).pipe(withHttpClient),
+  );
 
-  it('turns off a stale Kimi preference without requiring a key', async () => {
-    mocks.getPreferKimiCode.mockReturnValue(true);
-    const status = await readCliModelAccessStatus();
-    const selection = buildCliModelAccessItems({
-      kind: 'loaded',
-      access: status,
-    }).find(
-      (item) =>
-        item.value.kind === 'subscription-preference' &&
-        item.value.provider === 'kimi-code',
-    );
-    expect(selection?.description).toBe('On · key required');
-    if (!selection) throw new Error('Expected Kimi preference item');
+  it.effect('turns off a stale Kimi preference without requiring a key', () =>
+    Effect.gen(function* () {
+      mocks.getPreferKimiCode.mockReturnValue(true);
+      const status = yield* Effect.promise(() => readCliModelAccessStatus());
+      const selection = buildCliModelAccessItems({
+        kind: 'loaded',
+        access: status,
+      }).find(
+        (item) =>
+          item.value.kind === 'subscription-preference' &&
+          item.value.provider === 'kimi-code',
+      );
+      expect(selection?.description).toBe('On · key required');
+      if (!selection) throw new Error('Expected Kimi preference item');
 
-    vi.clearAllMocks();
-    await effectRuntime().runPromise(
-      await updateCliModelAccess(context, selection.value),
-    );
+      vi.clearAllMocks();
+      yield* updateCliModelAccess(context, selection.value);
 
-    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
-    expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
-      GlobalStateKey.KIMI_CODE_PREFER,
-      false,
-    );
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-  });
+      expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+      expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
+        GlobalStateKey.KIMI_CODE_PREFER,
+        false,
+      );
+      expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
+    }).pipe(withHttpClient),
+  );
 });

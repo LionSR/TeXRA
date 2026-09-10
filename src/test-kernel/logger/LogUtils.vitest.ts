@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink, type LogEntry } from '@logger/logSink';
@@ -128,39 +129,45 @@ describe('logUtils', () => {
     );
   });
 
-  it('routes native Effect logs and nested spans through the redacting sink', () => {
-    enableDebugLogging();
-    const entries = captureEntries();
-    const operation = Effect.fn('model.request')(function* () {
-      yield* Effect.annotateCurrentSpan('executionId', 'run-42');
-      yield* Effect.annotateCurrentSpan('authorization', `Bearer ${SECRET}`);
-      yield* Effect.logWarning('provider warning').pipe(
-        Effect.annotateLogs({ executionId: 'run-42', apiKey: SECRET }),
-      );
-    });
+  it.effect(
+    'routes native Effect logs and nested spans through the redacting sink',
+    () =>
+      Effect.gen(function* () {
+        enableDebugLogging();
+        const entries = captureEntries();
+        const operation = Effect.fn('model.request')(function* () {
+          yield* Effect.annotateCurrentSpan('executionId', 'run-42');
+          yield* Effect.annotateCurrentSpan(
+            'authorization',
+            `Bearer ${SECRET}`,
+          );
+          yield* Effect.logWarning('provider warning').pipe(
+            Effect.annotateLogs({ executionId: 'run-42', apiKey: SECRET }),
+          );
+        });
 
-    Effect.runSync(
-      operation().pipe(
-        Effect.withSpan('session.run'),
-        Effect.provide(effectDiagnosticsLayer),
-      ),
-    );
+        yield* operation().pipe(
+          Effect.withSpan('session.run'),
+          Effect.provide(effectDiagnosticsLayer),
+        );
 
-    const warning = entries.find((entry) => entry.level === 'WARN');
-    expect(warning?.message).toBe('provider warning');
-    // Identity rides the entry's annotations, not a channel argument. A tracer
-    // span does not attribute a log entry: `spans` reads `CurrentLogSpans`.
-    expect(warning?.annotations['executionId']).toBe('run-42');
-    const output = JSON.stringify(entries);
-    expect(output).toContain('[redacted]');
-    expect(output).not.toContain(SECRET);
+        const warning = entries.find((entry) => entry.level === 'WARN');
+        expect(warning?.message).toBe('provider warning');
+        // Identity rides the entry's annotations, not a channel argument. A
+        // tracer span does not attribute a log entry: `spans` reads
+        // `CurrentLogSpans`.
+        expect(warning?.annotations['executionId']).toBe('run-42');
+        const output = JSON.stringify(entries);
+        expect(output).toContain('[redacted]');
+        expect(output).not.toContain(SECRET);
 
-    vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue(undefined);
-    entries.length = 0;
-    Effect.runSync(operation().pipe(Effect.provide(effectDiagnosticsLayer)));
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.message).toBe('provider warning');
-  });
+        vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue(undefined);
+        entries.length = 0;
+        yield* operation().pipe(Effect.provide(effectDiagnosticsLayer));
+        expect(entries).toHaveLength(1);
+        expect(entries[0]?.message).toBe('provider warning');
+      }),
+  );
 
   it('disposes a replaced sink exactly once', () => {
     const dispose = vi.fn();

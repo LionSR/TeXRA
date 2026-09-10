@@ -1,7 +1,8 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
@@ -97,27 +98,29 @@ describe('tool-use follow-up progress events', () => {
     trackedExecutions.push({ session: owner, executionId });
   }
 
-  it('publishes sent follow-up events through the owning session fact hub', async () => {
-    const run = createRecordingHost();
-    const session = trackSession();
-    const sent = recordFollowUpsSent(session);
-    const lease = session.followUps.claimLive(streamId, 'flow')!;
+  it.effect(
+    'publishes sent follow-up events through the owning session fact hub',
+    () =>
+      Effect.gen(function* () {
+        const run = createRecordingHost();
+        const session = trackSession();
+        const sent = recordFollowUpsSent(session);
+        const lease = session.followUps.claimLive(streamId, 'flow')!;
 
-    trackToolUseFlow({ session });
+        trackToolUseFlow({ session });
 
-    const result = await Effect.runPromise(
-      submitFollowUp(streamId, 'please continue', {
-        session,
+        const result = yield* submitFollowUp(streamId, 'please continue', {
+          session,
+        });
+
+        expect(result).toEqual({ status: 'sent' });
+        expect(session.followUps.queue(lease).drainItems()).toMatchObject([
+          { text: 'please continue', origin: 'user' },
+        ]);
+        expect(sent.sent).toEqual([streamId]);
+        expect(run.events).toEqual([]);
       }),
-    );
-
-    expect(result).toEqual({ status: 'sent' });
-    expect(session.followUps.queue(lease).drainItems()).toMatchObject([
-      { text: 'please continue', origin: 'user' },
-    ]);
-    expect(sent.sent).toEqual([streamId]);
-    expect(run.events).toEqual([]);
-  });
+  );
 
   it('prefers an explicit session over the active run context when notifying follow-up sent', () => {
     const run = createRecordingHost();
@@ -183,59 +186,69 @@ describe('tool-use follow-up progress events', () => {
     expect(onFollowUp).not.toHaveBeenCalled();
   });
 
-  it('does not append through stale active contexts after final status', async () => {
-    seedStreamStatusForTest(defaultSession().status, streamId, {
-      phase: STREAM_PHASE.COMPLETED,
-    });
-    trackToolUseFlow();
+  it.effect(
+    'does not append through stale active contexts after final status',
+    () =>
+      Effect.gen(function* () {
+        seedStreamStatusForTest(defaultSession().status, streamId, {
+          phase: STREAM_PHASE.COMPLETED,
+        });
+        trackToolUseFlow();
 
-    const result = await Effect.runPromise(
-      submitFollowUp(streamId, 'late follow-up', { session: defaultSession() }),
-    );
-
-    expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
-    expect(defaultSession().followUps.getAll(streamId)).toEqual([]);
-  });
-
-  it('does not emit a follow-up sent fact when no follow-up reaches a live session', async () => {
-    const session = trackSession();
-    const recorded = recordSessionEvents(session);
-
-    const result = await Effect.runPromise(
-      submitFollowUp(
-        'stream:no-follow-up-session' as StreamTabId,
-        'cannot deliver',
-        { session },
-      ),
-    );
-
-    expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
-    expect(await recorded.read()).toEqual([]);
-  });
-
-  it('queues follow-ups for resuming streams through registry admission', async () => {
-    const resumingStreamId = 'stream:resuming-follow-up' as StreamTabId;
-
-    seedStreamStatusForTest(defaultSession().status, resumingStreamId, {
-      phase: STREAM_PHASE.RUNNING,
-      substate: STREAM_SUBSTATE.RESUMING,
-    });
-
-    try {
-      const result = await Effect.runPromise(
-        submitFollowUp(resumingStreamId, 'queued while resuming', {
+        const result = yield* submitFollowUp(streamId, 'late follow-up', {
           session: defaultSession(),
-        }),
-      );
+        });
 
-      // The fake platform's resume port refuses, so the input stays queued
-      // behind a failed wake.
-      expect(result).toEqual({ status: 'queued', wake: 'failed' });
-      expect(defaultSession().followUps.getAll(resumingStreamId)).toEqual([
-        'queued while resuming',
-      ]);
-    } finally {
-      defaultSession().followUps.terminalize(resumingStreamId);
-    }
-  });
+        expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
+        expect(defaultSession().followUps.getAll(streamId)).toEqual([]);
+      }),
+  );
+
+  it.effect(
+    'does not emit a follow-up sent fact when no follow-up reaches a live session',
+    () =>
+      Effect.gen(function* () {
+        const session = trackSession();
+        const recorded = recordSessionEvents(session);
+
+        const result = yield* submitFollowUp(
+          'stream:no-follow-up-session' as StreamTabId,
+          'cannot deliver',
+          { session },
+        );
+
+        expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
+        expect(yield* Effect.promise(() => recorded.read())).toEqual([]);
+      }),
+  );
+
+  it.effect(
+    'queues follow-ups for resuming streams through registry admission',
+    () =>
+      Effect.gen(function* () {
+        const resumingStreamId = 'stream:resuming-follow-up' as StreamTabId;
+
+        seedStreamStatusForTest(defaultSession().status, resumingStreamId, {
+          phase: STREAM_PHASE.RUNNING,
+          substate: STREAM_SUBSTATE.RESUMING,
+        });
+
+        try {
+          const result = yield* submitFollowUp(
+            resumingStreamId,
+            'queued while resuming',
+            { session: defaultSession() },
+          );
+
+          // The fake platform's resume port refuses, so the input stays queued
+          // behind a failed wake.
+          expect(result).toEqual({ status: 'queued', wake: 'failed' });
+          expect(defaultSession().followUps.getAll(resumingStreamId)).toEqual([
+            'queued while resuming',
+          ]);
+        } finally {
+          defaultSession().followUps.terminalize(resumingStreamId);
+        }
+      }),
+  );
 });

@@ -4,10 +4,11 @@
 // registry, event hub, stream status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import PQueue from 'p-queue';
 import pDefer from 'p-defer';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
@@ -508,59 +509,63 @@ describe('CLI terminal outcome resolution', () => {
     mocks.getExecutionRecords.mockReset();
   });
 
-  it('prefers the persisted post-shutdown outcome', async () => {
-    mocks.getExecutionRecords.mockReturnValue({
-      readMeta: vi.fn().mockResolvedValue({
-        outcome: RUN_OUTCOME.CANCELLED,
-      }),
-    });
+  it.effect('prefers the persisted post-shutdown outcome', () =>
+    Effect.gen(function* () {
+      mocks.getExecutionRecords.mockReturnValue({
+        readMeta: vi.fn().mockResolvedValue({
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
+      });
 
-    await expect(
-      Effect.runPromise(
-        readCliRunOutcomeState(mocks.defaultSession(), {
+      expect(
+        yield* readCliRunOutcomeState(mocks.defaultSession(), {
           category: 'toolUse',
           executionId: 'shutdown-race',
           outcome: RUN_OUTCOME.COMPLETED,
           streamId: 'shutdown-race',
         } as Parameters<typeof readCliRunOutcomeState>[1]),
-      ),
-    ).resolves.toEqual({
-      outcome: RUN_OUTCOME.CANCELLED,
-      outcomePersisted: true,
-    });
-  });
+      ).toEqual({
+        outcome: RUN_OUTCOME.CANCELLED,
+        outcomePersisted: true,
+      });
+    }),
+  );
 
-  it('reports an outcome read failure and retains the completed run', async () => {
-    const reportReadFailure = vi.fn();
-    mocks.getExecutionRecords.mockReturnValue({
-      readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
-    });
+  it.effect(
+    'reports an outcome read failure and retains the completed run',
+    () =>
+      Effect.gen(function* () {
+        const reportReadFailure = vi.fn();
+        mocks.getExecutionRecords.mockReturnValue({
+          readMeta: vi
+            .fn()
+            .mockRejectedValue(new Error('metadata read failed')),
+        });
 
-    await expect(
-      Effect.runPromise(
-        readCliRunOutcomeState(
-          mocks.defaultSession(),
-          {
-            category: 'toolUse',
-            executionId: 'broken-storage',
-            outcome: RUN_OUTCOME.COMPLETED,
-            streamId: 'broken-storage',
-          } as Parameters<typeof readCliRunOutcomeState>[1],
-          reportReadFailure,
-        ),
-      ),
-    ).resolves.toEqual({
-      outcome: RUN_OUTCOME.COMPLETED,
-      outcomePersisted: false,
-    });
-    expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        message:
-          'Could not verify the persisted outcome for execution broken-storage; using the current run outcome: metadata read failed',
-        cause: expect.any(Error),
+        expect(
+          yield* readCliRunOutcomeState(
+            mocks.defaultSession(),
+            {
+              category: 'toolUse',
+              executionId: 'broken-storage',
+              outcome: RUN_OUTCOME.COMPLETED,
+              streamId: 'broken-storage',
+            } as Parameters<typeof readCliRunOutcomeState>[1],
+            reportReadFailure,
+          ),
+        ).toEqual({
+          outcome: RUN_OUTCOME.COMPLETED,
+          outcomePersisted: false,
+        });
+        expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            message:
+              'Could not verify the persisted outcome for execution broken-storage; using the current run outcome: metadata read failed',
+            cause: expect.any(Error),
+          }),
+        );
       }),
-    );
-  });
+  );
 });
 
 describe('createChatSessionController', () => {

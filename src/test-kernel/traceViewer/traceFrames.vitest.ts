@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { getExecutionRecords } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -175,40 +176,44 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     expect(replayed).not.toHaveProperty('files');
   });
 
-  it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
-    const executionId = 'abc124' as ExecutionId;
-    const config = parseConfig(AgentCategory.Workflow);
-    const streamId = getStreamTabId(config.agent, { executionId });
-    const session = createTestSession();
-    publishTestRunStart(session, streamId, executionId);
-    await session.settlePublications();
-    await Effect.runPromise(
-      getExecutionRecords(session, executionId).writeRunRecord(config),
-    );
-    session.publish([
-      {
-        type: 'stage.start',
-        aggregateId: qualifyAggregateId('stream', streamId),
-        id: 'terminal-stage',
-        label: 'Legacy run',
-      },
-      {
-        type: 'stage.end',
-        aggregateId: qualifyAggregateId('stream', streamId),
-        id: 'terminal-stage',
-        status: 'failed',
-      },
-    ]);
-    await session.settlePublications();
-    const result = await Effect.runPromise(assembleTrace(executionId, session));
-    session.dispose();
-    expect(result.status).toBe('ok');
-    if (result.status !== 'ok') return;
-    expect(result.trace.meta?.outcome).toBeUndefined();
-    expect(result.trace.snapshot.status).toBeUndefined();
+  // `it.live`: the session's publication settling and the record writes are
+  // real I/O, so nothing here waits on a test clock.
+  it.live(
+    'derives failed status from a real exported legacy trace without snapshot.status',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'abc124' as ExecutionId;
+        const config = parseConfig(AgentCategory.Workflow);
+        const streamId = getStreamTabId(config.agent, { executionId });
+        const session = createTestSession();
+        publishTestRunStart(session, streamId, executionId);
+        yield* Effect.promise(() => session.settlePublications());
+        yield* getExecutionRecords(session, executionId).writeRunRecord(config);
+        session.publish([
+          {
+            type: 'stage.start',
+            aggregateId: qualifyAggregateId('stream', streamId),
+            id: 'terminal-stage',
+            label: 'Legacy run',
+          },
+          {
+            type: 'stage.end',
+            aggregateId: qualifyAggregateId('stream', streamId),
+            id: 'terminal-stage',
+            status: 'failed',
+          },
+        ]);
+        yield* Effect.promise(() => session.settlePublications());
+        const result = yield* assembleTrace(executionId, session);
+        session.dispose();
+        expect(result.status).toBe('ok');
+        if (result.status !== 'ok') return;
+        expect(result.trace.meta?.outcome).toBeUndefined();
+        expect(result.trace.snapshot.status).toBeUndefined();
 
-    expect(foldTrace(result.trace)?.status).toBe('failed');
-  });
+        expect(foldTrace(result.trace)?.status).toBe('failed');
+      }),
+  );
 
   it('ignores nested group-end status when the root run stage never closed', () => {
     const trace: TraceDocument = {
