@@ -65,10 +65,11 @@ import {
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
-import type {
-  SessionView as RuntimeSessionView,
-  StreamView as RuntimeStreamView,
-  TranscriptView as RuntimeTranscriptView,
+import {
+  descendantStreams,
+  type SessionView as RuntimeSessionView,
+  type StreamView as RuntimeStreamView,
+  type TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -231,20 +232,6 @@ const log = createLog('agentPackage');
  * nothing here discards what it has yet to read.
  */
 const TRACE_HANDOVER_EVENTS = 512;
-
-/** The run's stream and every descendant the view holds. */
-function runStreamIds(view: SessionView, streamId: StreamTabId): StreamTabId[] {
-  const ids: StreamTabId[] = [];
-  for (const stream of view.streams.values()) {
-    if (
-      stream.id === streamId ||
-      stream.ancestors.some((ancestor) => ancestor.id === streamId)
-    ) {
-      ids.push(stream.id);
-    }
-  }
-  return ids;
-}
 
 /**
  * The refusal the package states from the caller's own input, before
@@ -466,7 +453,11 @@ function start(
         const drain = yield* Effect.forkDetach(
           Stream.runDrain(
             view.pipe(
-              Stream.tap((level) => interest(runStreamIds(level, streamId))),
+              Stream.tap((level) =>
+                interest(
+                  descendantStreams(level, streamId, { includeRoot: true }),
+                ),
+              ),
             ),
           ),
           { startImmediately: true },

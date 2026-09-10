@@ -27,6 +27,7 @@ interface FakeStreamView {
   readonly id: string;
   readonly executionId: string;
   readonly ancestors: readonly { readonly id: string }[];
+  readonly childIds: readonly string[];
   readonly durableOutcome: 'completed' | null;
 }
 type FakeSessionView = Omit<RuntimeSessionView, 'streams'> & {
@@ -244,22 +245,34 @@ function sessionView(): SubscriptionRef.SubscriptionRef<FakeSessionView> {
   return mocks.sessionView as SubscriptionRef.SubscriptionRef<FakeSessionView>;
 }
 
-/** Fold one stream into the session view, as its `run.start` would. */
+/** Fold one stream into the session view, as its `run.start` would: the
+ *  fold keeps `childIds` and `ancestors` in sync, so entering a stream with
+ *  ancestors also links it onto its immediate parent's `childIds`. */
 function enterStream(
   id: string,
   stream: Partial<FakeStreamView> = {},
 ): Promise<void> {
+  const ancestors = stream.ancestors ?? [];
+  const parentId = ancestors.at(-1)?.id;
   return Effect.runPromise(
-    SubscriptionRef.update(sessionView(), (current) => ({
-      ...current,
-      streams: new Map(current.streams).set(id, {
+    SubscriptionRef.update(sessionView(), (current) => {
+      const streams = new Map(current.streams).set(id, {
         id,
         executionId: mocks.executionId,
         ancestors: [],
+        childIds: [],
         durableOutcome: null,
         ...stream,
-      }),
-    })),
+      });
+      const parent = parentId === undefined ? undefined : streams.get(parentId);
+      if (parentId !== undefined && parent) {
+        streams.set(parentId, {
+          ...parent,
+          childIds: [...parent.childIds, id],
+        });
+      }
+      return { ...current, streams };
+    }),
   );
 }
 

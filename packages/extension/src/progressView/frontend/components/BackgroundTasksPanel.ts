@@ -30,7 +30,11 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports
 import type { InquiryThreadUpdatedEvent, StreamTabId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import {
+  descendantStreams,
+  type SessionView,
+  type StreamView,
+} from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -253,10 +257,13 @@ export class BackgroundTasksPanel extends LitElement {
    *  since time read the same set: a direct child that finishes while a
    *  grandchild runs leaves the badge lit and the time standing. */
   private descendantsOf(streams: readonly StreamView[]): StreamView[] {
-    return streams.flatMap((child) => [
-      child,
-      ...this.descendantsOf(this.childrenOf(child)),
-    ]);
+    const view = this.view;
+    if (!view) return [];
+    return streams.flatMap((child) =>
+      descendantStreams(view, child.id, { includeRoot: true })
+        .map((id) => view.streams.get(id))
+        .filter((stream): stream is StreamView => stream !== undefined),
+    );
   }
 
   private inquiriesOf(stream: StreamView): InquiryThreadUpdatedEvent[] {
