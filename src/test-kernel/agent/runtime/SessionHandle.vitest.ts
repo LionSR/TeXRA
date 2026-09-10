@@ -2,11 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  SessionHandle,
-  defaultSession,
-  forEachLiveSession,
-} from '@agent/runtime/SessionHandle';
+import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
@@ -30,107 +26,6 @@ function trackAgent(
 }
 
 describe('SessionHandle', () => {
-  it('awaits artifact writers before disposal and leaves the live-session registry', async () => {
-    const session = createTestSession();
-    let releaseWriter!: () => void;
-    const writerGate = new Promise<void>((resolve) => {
-      releaseWriter = resolve;
-    });
-    session.useArtifactFlusher(() => writerGate);
-    const dispose = vi.spyOn(session, 'dispose');
-    const killBackgroundProcesses = vi
-      .spyOn(session.executions, 'killBackgroundProcesses')
-      .mockImplementation(() => undefined);
-
-    const shutdown = (async () => {
-      await session.flushArtifacts();
-      session.dispose();
-    })();
-
-    await Promise.resolve();
-    expect(dispose).not.toHaveBeenCalled();
-    forEachLiveSession((live) => {
-      live.executions.killBackgroundProcesses();
-    });
-    expect(killBackgroundProcesses).toHaveBeenCalledOnce();
-
-    releaseWriter();
-    await shutdown;
-    expect(dispose).toHaveBeenCalledOnce();
-
-    forEachLiveSession((live) => {
-      live.executions.killBackgroundProcesses();
-    });
-    expect(killBackgroundProcesses).toHaveBeenCalledOnce();
-  });
-
-  it('waits for every artifact writer and reports all failures', async () => {
-    const session = createTestSession();
-    const firstError = new Error('first artifact failed');
-    const snapshotError = new Error('snapshot failed');
-    const laterWriter = vi.fn();
-    session.useArtifactFlusher(async () => {
-      throw firstError;
-    });
-    session.useArtifactFlusher(() => {
-      throw snapshotError;
-    });
-    session.useArtifactFlusher(async () => laterWriter());
-
-    try {
-      const failure = await session.flushArtifacts().catch((error) => error);
-      expect(failure).toBeInstanceOf(AggregateError);
-      expect((failure as AggregateError).errors).toEqual([
-        firstError,
-        snapshotError,
-      ]);
-      expect(laterWriter).toHaveBeenCalledOnce();
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it('coalesces durability calls made in the same synchronous burst', async () => {
-    const session = createTestSession();
-    const flush = vi.fn(async () => {});
-    session.useArtifactFlusher(flush);
-    try {
-      const first = session.flushArtifacts();
-      const second = session.flushArtifacts();
-
-      expect(second).toBe(first);
-      await Promise.all([first, second]);
-      expect(flush).toHaveBeenCalledOnce();
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it('runs one trailing durability batch for calls arriving mid-flush', async () => {
-    const session = createTestSession();
-    let releaseFirst = (): void => undefined;
-    const firstGate = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-    const flush = vi
-      .fn<() => Promise<void>>()
-      .mockImplementationOnce(() => firstGate)
-      .mockResolvedValue(undefined);
-    session.useArtifactFlusher(flush);
-    try {
-      const first = session.flushArtifacts();
-      await vi.waitFor(() => expect(flush).toHaveBeenCalledOnce());
-      const trailing = session.flushArtifacts();
-
-      expect(trailing).not.toBe(first);
-      releaseFirst();
-      await Promise.all([first, trailing]);
-      expect(flush).toHaveBeenCalledTimes(2);
-    } finally {
-      session.dispose();
-    }
-  });
-
   it('defaultSession is a stable process-wide singleton', () => {
     const first = defaultSession();
     const second = defaultSession();

@@ -40,7 +40,6 @@ import {
   SubscriptionRef,
   type Stream,
 } from 'effect';
-import pDefer, { type DeferredPromise } from 'p-defer';
 
 import type {
   AgentEvent,
@@ -219,9 +218,6 @@ export class SessionHandle {
   private disposed = false;
   private readonly publicationGate = Semaphore.makeUnsafe(1);
   private readonly publications = new Set<Promise<Exit.Exit<unknown>>>();
-  private readonly artifactFlushers = new Set<() => Promise<void>>();
-  private pendingArtifactFlush: DeferredPromise<void> | undefined;
-  private artifactFlushWorkerRunning = false;
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
@@ -291,8 +287,8 @@ export class SessionHandle {
 
     this.status = status;
     // The sidecar store is a session artifact exactly like `transcripts`: the
-    // session projects its own run events into it and flushes it below, so no
-    // host has to construct, attach, and flush one of its own.
+    // session projects its own run events into it, so no host has to
+    // construct or attach one of its own.
     this.snapshots = init.snapshots;
     this.applySnapshotEvent = this.snapshots.attachSessionEvents();
     this.interactions = interactions;
@@ -301,8 +297,6 @@ export class SessionHandle {
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls = new WorkflowControlRegistry();
-    // Every session owns exactly one trace-flusher map. There is no
-    // process-wide registry: a host drains the session it is shutting down.
     if (init.interactions) this.interactions.use(init.interactions);
     liveSessions.add(this);
     // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
@@ -318,7 +312,6 @@ export class SessionHandle {
       this.disposed = true;
     });
     this.teardown.add(() => this.resultListeners.clear());
-    this.teardown.add(() => this.artifactFlushers.clear());
     this.teardown.add(() => this.interactions.dispose());
     this.teardown.add(() => this.modelRetries.dispose());
     // Drop bypass state before the interaction slot settles pending approvals.
@@ -374,16 +367,10 @@ export class SessionHandle {
     ]);
   }
 
-  /** Register a session-owned durable writer such as a snapshot store. */
-  useArtifactFlusher(flush: () => Promise<void>): () => void {
-    this.artifactFlushers.add(flush);
-    return () => this.artifactFlushers.delete(flush);
-  }
-
   /**
-   * End ownership of one execution after every session-owned durable writer
-   * has drained. An optional post-drain operation publishes lifecycle state
-   * that belongs after those artifacts; it runs before the claim is unlinked.
+   * End ownership of one execution after the facts it queued have committed.
+   * An optional post-drain operation publishes lifecycle state that belongs
+   * after those facts; it runs before the claim is unlinked.
    * The claim is unlinked whatever the drain did: resumability is the
    * checkpoint, so a failed flush is logged and rethrown but never changes
    * who owns the run. A release failure never masks a drain failure: the
@@ -408,8 +395,11 @@ export class SessionHandle {
           yield* afterArtifactsDrained;
         }),
       );
-      // A rejected artifact flush cannot let claim release overtake facts that
-      // were already queued by the same owner.
+      // Settle whatever the drain did. When the drain rejected
+      // (including in `validateOwnedExecutionLease`), the post-drain step
+      // never ran, and this settle still stops claim release from overtaking
+      // facts the owner already queued. On success it also covers the facts
+      // `afterArtifactsDrained` published.
       const published = yield* Effect.exit(
         Effect.tryPromise({
           try: () => this.settlePublications(),
@@ -458,52 +448,14 @@ export class SessionHandle {
     );
   }
 
-  /** Drain registered artifact writers and all pending event publications. */
-  flushArtifacts(): Promise<void> {
-    this.pendingArtifactFlush ??= pDefer<void>();
-    const batch = this.pendingArtifactFlush;
-    if (!this.artifactFlushWorkerRunning) {
-      this.artifactFlushWorkerRunning = true;
-      queueMicrotask(() => {
-        void this.drainArtifactFlushBatches();
-      });
-    }
-    return batch.promise;
-  }
-
   /**
-   * Drain one current batch and, when calls arrived during it, one trailing
-   * batch at a time. This preserves each caller's durability boundary without
-   * repeating a full session flush for every execution ending in one burst.
+   * The host-facing name for "everything this session owes storage has
+   * landed": a session's durable artifacts are the facts it publishes, so
+   * this is exactly {@link settlePublications}. Hosts call it on shutdown and
+   * every run driver reaches it through {@link releaseExecutionLease}.
    */
-  private async drainArtifactFlushBatches(): Promise<void> {
-    while (this.pendingArtifactFlush) {
-      const batch = this.pendingArtifactFlush;
-      this.pendingArtifactFlush = undefined;
-      try {
-        await this.flushArtifactsOnce();
-        batch.resolve();
-      } catch (error) {
-        batch.reject(error);
-      }
-    }
-    this.artifactFlushWorkerRunning = false;
-  }
-
-  private async flushArtifactsOnce(): Promise<void> {
-    const results = await Promise.allSettled([
-      this.settlePublications(),
-      ...[...this.artifactFlushers].map((flush) =>
-        Promise.resolve().then(flush),
-      ),
-    ]);
-    const failures = results.flatMap((result) =>
-      result.status === 'rejected' ? [result.reason] : [],
-    );
-    throwAggregated(
-      failures,
-      'Multiple session artifact writers failed to flush',
-    );
+  flushArtifacts(): Promise<void> {
+    return this.settlePublications();
   }
 
   /**

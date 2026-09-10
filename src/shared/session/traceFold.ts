@@ -46,7 +46,7 @@ function asMessageType(candidate: string | undefined): MessageType {
 }
 
 /** The source event's stable coordinates and the surface's display policy. */
-export interface TraceStamp {
+interface TraceStamp {
   readonly at: number;
   readonly id: string;
   readonly debug: boolean;
@@ -59,15 +59,10 @@ type StageMetadata = Pick<
 
 /** Build the transcript projection for one subscribed aggregate. */
 export function createTranscriptFold(
-  writer: Pick<
-    StreamLog,
-    'append' | 'appendSettled' | 'update' | 'settle' | 'appendText'
-  >,
+  writer: Pick<StreamLog, 'append' | 'appendSettled' | 'update' | 'settle'>,
 ) {
-  const streams = new Map<
-    string,
-    { groupId: string | undefined; messageType: MessageType; chunks: string[] }
-  >();
+  /** Stream rows opened by `stream.start` that nothing has settled yet. */
+  const streams = new Set<string>();
   const activeToolEntries = new Map<string, ToolUseLog>();
   const stageMetadata = new Map<string, StageMetadata>();
   const workflowCallEntries = new Set<string>();
@@ -330,43 +325,29 @@ export function createTranscriptFold(
 
       case 'stream.start': {
         if (transcriptBoundaryClosed) return;
-        const state = {
-          groupId: event.stageId,
-          messageType: asMessageType(event.kind),
-          chunks: [] as string[],
-        };
-        streams.set(event.id, state);
-        if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE)
+        const messageType = asMessageType(event.kind);
+        streams.add(event.id);
+        if (messageType === MESSAGE_TYPES.MODEL_RESPONSE)
           pendingModelResponseId = event.id;
         writer.append({
           id: event.id,
           type: STREAM_LOG_ENTRY_TYPES.LOG,
           level: 'info',
           timestamp: stamp.at,
-          groupId: state.groupId,
-          messageType: state.messageType,
+          groupId: event.stageId,
+          messageType,
           text: '',
           data: { status: 'running' },
           verbose: stamp.debug,
         });
         return;
       }
-      case 'stream.chunk': {
-        if (transcriptBoundaryClosed) return;
-        const state = streams.get(event.id);
-        if (!state) return;
-        state.chunks.push(event.text);
-        // Partial chunks can split a secret. The complete text is redacted
-        // again at settlement or when the transcript boundary closes.
-        writer.appendText(event.id, redactSecrets(event.text));
-        return;
-      }
       case 'stream.end': {
-        const state = streams.get(event.id);
-        if (!state || transcriptBoundaryClosed) return;
-        const text = event.finalText ?? state.chunks.join('');
+        if (!streams.has(event.id) || transcriptBoundaryClosed) return;
         writer.settle(event.id, {
-          text: redactSecrets(text),
+          ...(event.finalText !== undefined && {
+            text: redactSecrets(event.finalText),
+          }),
           data: { status: 'completed' },
         });
         streams.delete(event.id);
@@ -377,11 +358,14 @@ export function createTranscriptFold(
         if (!event.text) return;
         // Upsert by id, not by text: if this round's own MODEL_RESPONSE
         // stream already wrote a (possibly raw, pre-replacement) entry,
-        // reconcile it to the authoritative text; otherwise this round never
-        // streamed (e.g. a non-streaming provider call), so append it fresh.
+        // reconcile it to the authoritative text and close the stream, so no
+        // later stream.end or boundary settlement can replace that text;
+        // otherwise this round never streamed (e.g. a non-streaming provider
+        // call), so append it fresh.
         const correlatorId = pendingModelResponseId;
         pendingModelResponseId = undefined;
         if (correlatorId) {
+          streams.delete(correlatorId);
           writer.settle(correlatorId, {
             text: redactSecrets(event.text),
             data: { status: 'completed' },
@@ -448,11 +432,8 @@ export function createTranscriptFold(
       return;
     transcriptBoundaryClosed = true;
     pendingModelResponseId = undefined;
-    for (const [id, state] of streams) {
-      writer.settle(id, {
-        text: redactSecrets(state.chunks.join('')),
-        data: { status: 'completed' },
-      });
+    for (const id of streams) {
+      writer.settle(id, { data: { status: 'completed' } });
     }
     streams.clear();
     for (const [id, data] of activeToolEntries) {

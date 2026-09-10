@@ -376,7 +376,6 @@ describe('sessionFold', () => {
 
   it('folds a pending approval to waiting only with a held owner', () => {
     const withOwner = foldAll([...scenario.pending, alive]);
-    expect(withOwner.local.self).toStrictEqual([OWNER]);
     expect(stream(withOwner, CHILD).group).toBe('waiting');
     expect(stream(withOwner, CHILD).approval).toBe('own');
     expect(stream(withOwner, CHILD).forceExpanded).toBe(true);
@@ -465,7 +464,7 @@ describe('sessionFold', () => {
     expect(stream(dead, CHILD).group).toBe('interrupted');
   });
 
-  it('keeps live text in inflight by offsets and joins it to its row whichever arrives first', () => {
+  it('keeps live text by offsets and joins it to its row whichever arrives first', () => {
     const log = new Log();
     log.emit(CHILD, 1500, {
       type: 'run.start',
@@ -512,8 +511,6 @@ describe('sessionFold', () => {
     expect(child.transcript.rows).toHaveLength(1);
     expect(first.kind === 'assistant' && first.text.full).toBe('Hello');
     expect(first.kind === 'assistant' && first.streaming).toBe(true);
-    expect(streaming.inflight.get(`${CHILD}/response-1`)).toBe('Hello');
-    expect(streaming.inflight.get(`${CHILD}/response-2`)).toBe('Ear');
     // A streaming reply is not settled and not yet the latest line.
     expect(child.transcript.settledRows).toBe(0);
     expect(child.latestLine).toBeNull();
@@ -534,7 +531,6 @@ describe('sessionFold', () => {
     );
     const third = stream(buffered, CHILD).transcript.rows[2];
     expect(third.kind === 'assistant' && third.text.full).toBe('Buffer');
-    expect(buffered.inflight.get(`${CHILD}/response-3`)).toBe('Buffer');
 
     // Durable text wins: the finalizing row drops its entry and a late chunk
     // cannot reopen it; a replacement chunk truncates at `from`.
@@ -551,8 +547,7 @@ describe('sessionFold', () => {
       'Hello world',
     );
     expect(rows[1].kind === 'assistant' && rows[1].text.full).toBe('Late');
-    expect(settled.inflight.has(`${CHILD}/response-1`)).toBe(false);
-    // A terminal status ends every live row.
+    // A terminal status ends every live row: a later chunk reaches none.
     const done = fold(
       settled,
       tail(
@@ -564,7 +559,7 @@ describe('sessionFold', () => {
         }),
       ),
     );
-    expect(done.inflight.size).toBe(0);
+    expect(fold(done, chunk('response-2', 4, 5, '!'))).toBe(done);
   });
 
   it('keeps listing facts in commit order and transcript rows in seq order, whichever read delivers them', () => {
@@ -746,7 +741,6 @@ describe('sessionFold', () => {
     const childBefore = stream(before, CHILD);
     const rowsBefore = childBefore.transcript.rows;
     const rowCount = rowsBefore.length;
-    const key = `${CHILD}/late`;
     const after = fold(before, [
       tail({
         aggregateId: qualifyAggregateId('stream', CHILD),
@@ -779,11 +773,11 @@ describe('sessionFold', () => {
     expect(before.streams.get(CHILD)).toBe(childBefore);
     expect(childBefore.transcript.rows).toBe(rowsBefore);
     expect(rowsBefore).toHaveLength(rowCount);
-    expect(before.inflight.has(key)).toBe(false);
     // The next level holds the writes ...
     const childAfter = stream(after, CHILD);
     expect(childAfter.transcript.rows).toHaveLength(rowCount + 1);
-    expect(after.inflight.get(key)).toBe('Late!!');
+    const late = childAfter.transcript.rows.find((row) => row.id === 'late');
+    expect(late?.kind === 'assistant' && late.text.full).toBe('Late!!');
     expect(after.streams).not.toBe(before.streams);
     // ... and shares every branch it did not touch by reference.
     expect(after.streams.get(PROCESS)).toBe(before.streams.get(PROCESS));
@@ -791,11 +785,10 @@ describe('sessionFold', () => {
       stream(before, PROCESS).transcript.rows,
     );
     expect(after.policy).toBe(before.policy);
-    expect(after.latest).toBe(before.latest);
     expect(after.queuedFollowUps).toBe(before.queuedFollowUps);
     // A copy belongs to a write, not to an entry: a settled log row projects
-    // a row and nothing else, so the touched stream's own task groups and
-    // the session's in-flight map (which never held its key) keep theirs.
+    // a row and nothing else, so the touched stream's own task groups keep
+    // theirs.
     const logged = fold(
       after,
       tail({
@@ -822,6 +815,5 @@ describe('sessionFold', () => {
     expect(childLogged.transcript.taskGroups).toBe(
       childAfter.transcript.taskGroups,
     );
-    expect(logged.inflight).toBe(after.inflight);
   });
 });

@@ -86,9 +86,3 @@ export const FileListEntrySchema = z.object({
 });
 
 export type FileListEntry = z.infer<typeof FileListEntrySchema>;
-
-const StreamLogTextDeltaSchema = z.strictObject({
-  id: z.string().min(1),
-  appendText: z.string().min(1),
-});
-export type StreamLogTextDelta = z.infer<typeof StreamLogTextDeltaSchema>;

@@ -9,15 +9,13 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
-import { StreamLog, type StreamLogDelta } from '@shared/session/traceEntries';
+import { StreamLog } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
-import { createListenerSet } from '@utils/core/listenerSet';
 
 type TranscriptDatabase = Pick<
   Context.Service.Shape<typeof Database>,
   'readAggregate' | 'readListing'
 >;
-type StreamLogListener = (streamId: StreamTabId, delta: StreamLogDelta) => void;
 export type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
@@ -71,7 +69,6 @@ export class StreamLogStore {
   private readonly streams = new Map<StreamTabId, StreamState>();
   private readonly known = new Set<StreamTabId>();
   private readonly releaseRequests = new Set<StreamTabId>();
-  private readonly listeners = createListenerSet<StreamLogListener>();
   private readonly gate = Semaphore.makeUnsafe(1);
 
   private constructor(
@@ -106,9 +103,6 @@ export class StreamLogStore {
     return new StreamLogStore({ kind: 'ephemeral', reason: normalized });
   }
 
-  onChange(listener: StreamLogListener): () => void {
-    return this.listeners.add(listener);
-  }
   get(streamId: StreamTabId): StreamLog | undefined {
     return this.streams.get(streamId)?.log;
   }
@@ -215,7 +209,6 @@ export class StreamLogStore {
       }
       this.known.add(streamId);
       Object.assign(this.ensureStreamState(streamId), entries);
-      this.notify(streamId, true);
     });
   }
 
@@ -246,7 +239,9 @@ export class StreamLogStore {
         state.fold ??= createTranscriptFold(state.log);
         applyEvent(state.log, state.fold, event);
         state.seq = event.seq;
-        this.notify(streamId);
+        // Nothing here reads the log's change buffers; drain them so they do
+        // not grow with the resident log.
+        state.log.drainEmission();
       }),
     );
   }
@@ -369,12 +364,5 @@ export class StreamLogStore {
       this.streams.set(streamId, state);
     }
     return state;
-  }
-
-  private notify(streamId: StreamTabId, reset = false): void {
-    const log = this.get(streamId);
-    if (log === undefined) return;
-    const delta = { ...log.drainEmission(), reset };
-    for (const listener of this.listeners) listener(streamId, delta);
   }
 }

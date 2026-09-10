@@ -22,7 +22,6 @@ import {
   ExecutionIdSchema,
   GoalStateSchema,
   InquiryThreadUpdatedEventSchema,
-  LocalRuntimeStateSchema,
   OwnerIdSchema,
   PermissionPayloadSchema,
   PlanSchema,
@@ -217,19 +216,6 @@ const SessionViewSchema = z.object({
    *  Created when the aggregate enters the subscription set, deleted with
    *  its transcript tier on eviction; never a commit ordinal. */
   folded: z.map(AggregateIdSchema, z.int().nonnegative()),
-  /** Current sequence-row claims for the checked resident scope. */
-  claims: z.map(AggregateIdSchema, OwnerIdSchema.nullable()),
-  /** One entry per `${aggregate}/${listing type}`: the commit of the latest
-   *  listing fact folded for it, so a replayed older one is ignored. The
-   *  lifecycle entry outlives its stream: it is what keeps a tombstone
-   *  final when a read replays the `run.start` beneath it. */
-  latest: z.map(z.string(), CommitOrdinalSchema),
-  /** Live text per `${stream}/${row}`, beside the rows rather than inside
-   *  them: a chunk can reach the fold before its row (5.2). A row paints
-   *  its durable text joined with this entry; the entry goes when the row
-   *  finalizes, the stream ends, the stream is removed, or its transcript
-   *  tier is evicted. */
-  inflight: z.map(z.string(), z.string()),
   /** Paper-level aggregate; a rail badge reads it and derives nothing. */
   rollup: z.object({
     running: z.int().nonnegative(),
@@ -240,8 +226,6 @@ const SessionViewSchema = z.object({
   /** Latest snapshot per run. */
   policy: z.map(StreamTabIdSchema, ApprovalPolicySnapshotSchema),
   inquiries: z.array(InquiryThreadUpdatedEventSchema),
-  /** This process's local truth: a fold input, never durable. */
-  local: LocalRuntimeStateSchema,
   queuedFollowUps: z.map(StreamTabIdSchema, z.array(z.string())),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
@@ -258,14 +242,10 @@ export function emptySessionView(key: string, cursor = 0): SessionView {
     order: [],
     cursor,
     folded: new Map(),
-    claims: new Map(),
-    latest: new Map(),
-    inflight: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },
     approvals: [],
     policy: new Map(),
     inquiries: [],
-    local: { self: [], dead: [], unreadable: [] },
     queuedFollowUps: new Map(),
   };
 }
