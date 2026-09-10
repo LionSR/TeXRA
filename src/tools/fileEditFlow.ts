@@ -16,7 +16,9 @@ import {
 } from '@tools/pathResolution';
 import {
   appendApprovalDiffNote,
-  requestAndWriteApprovedEdit,
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
+  writeApprovedContent,
   type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -228,18 +230,13 @@ interface ApprovedFileEditRequest {
   proposedContent: string;
   sourceTool: string;
   present: (edit: AppliedFileEdit) => FileEditPresentation;
-  beforeWrite?: () => void | Promise<void>;
-  afterWrite?: (edit: AppliedFileEdit) => void | Promise<void>;
-  startLine?: 'approval' | 'omit';
-  diffSeparator?: string;
 }
 
 /**
- * Apply an approved edit and shape its canonical tool result.
- *
- * Callers declare presentation and the few lifecycle hooks that are genuinely
- * tool-specific; approval, writing, rejection, diff notes, and edit metadata
- * remain one invariant pipeline.
+ * Request approval for an edit, write the approved content (the user's
+ * adjustments if any, else the proposal), and shape the canonical tool
+ * result. Callers declare only the presentation; approval, writing,
+ * rejection, diff notes, and edit metadata remain one invariant pipeline.
  */
 export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   function* ({
@@ -249,48 +246,40 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     proposedContent,
     sourceTool,
     present,
-    beforeWrite,
-    afterWrite,
-    startLine = 'omit',
-    diffSeparator,
   }: ApprovedFileEditRequest): Effect.fn.Return<ToolResult, unknown> {
-    const outcome = yield* hostPort(() =>
-      requestAndWriteApprovedEdit({
+    const approval = yield* hostPort(() =>
+      requestToolEditApproval({
         path,
-        displayPath,
         originalContent,
         proposedContent,
         sourceTool,
-        beforeWrite,
       }),
     );
-    if ('rejected' in outcome) {
-      return outcome.rejected;
+    if (approval.action !== 'apply') {
+      return buildApprovalRejectedResult(displayPath, sourceTool, approval);
     }
 
-    const edit: AppliedFileEdit = outcome;
-    yield* hostPort(() => afterWrite?.(edit));
-    const presentation = present(edit);
+    const written = yield* hostPort(() =>
+      writeApprovedContent(path, originalContent, approval.appliedContent),
+    );
+    const presentation = present({ approval, ...written });
     const output = appendApprovalDiffNote(
       presentation.output,
       displayPath,
       proposedContent,
-      edit.appliedContent,
-      diffSeparator,
+      written.appliedContent,
     );
 
     return {
       status: 'executed',
       summary: presentation.summary,
       output,
-      userPatch: edit.approval.userPatch,
+      userPatch: approval.userPatch,
       edits: [
         {
           path: displayPath,
-          lineChanges: edit.approval.lineChanges,
-          ...(startLine === 'approval' && {
-            startLine: edit.approval.startLine,
-          }),
+          lineChanges: approval.lineChanges,
+          startLine: approval.startLine,
         },
       ],
     };

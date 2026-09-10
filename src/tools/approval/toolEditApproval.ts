@@ -310,18 +310,16 @@ export async function writeApprovedContent(
 /**
  * Append the unified user-adjustment diff note to a base output message, or
  * return the base message unchanged when the user made no adjustments.
- * `separator` defaults to a blank line between the base message and the note.
  */
 export function appendApprovalDiffNote(
   baseOutput: string,
   path: string,
   proposedContent: string,
   appliedContent: string,
-  separator: string = '\n\n',
 ): string {
   const diffBody = unifiedDiffText(proposedContent, appliedContent);
   return diffBody
-    ? `${baseOutput}${separator}User adjustments to ${path}:\n\n\`\`\`diff\n${diffBody}\n\`\`\``
+    ? `${baseOutput}\n\nUser adjustments to ${path}:\n\n\`\`\`diff\n${diffBody}\n\`\`\``
     : baseOutput;
 }
 
@@ -362,52 +360,4 @@ export function buildApprovalRejectedResult(
     summary,
     ...(feedback && { userInstruction: feedback }),
   });
-}
-
-interface WrittenApprovedEdit extends WriteApprovedContentResult {
-  approval: AcceptedToolEditApprovalResult;
-}
-
-/**
- * Full approve-then-write handshake for a proposed edit: request approval,
- * then write the resolved content (the user's adjustments if any, else the
- * proposal). `sourceTool` is named once and the rejection message is uniform
- * across every straight-through edit call site.
- *
- * Returns `{ rejected }` (a {@link ToolResult} to return directly) when the
- * user declines. `beforeWrite` covers work that must happen only after
- * acceptance, such as creating a new file's parent directory.
- */
-export async function requestAndWriteApprovedEdit(request: {
-  path: string;
-  displayPath: string;
-  originalContent: string;
-  proposedContent: string;
-  sourceTool: string;
-  beforeWrite?: () => void | Promise<void>;
-}): Promise<{ rejected: ToolResult } | WrittenApprovedEdit> {
-  const { path, displayPath, originalContent, proposedContent, sourceTool } =
-    request;
-
-  const approval = await requestToolEditApproval({
-    path,
-    originalContent,
-    proposedContent,
-    sourceTool,
-  });
-
-  if (approval.action !== 'apply') {
-    return {
-      rejected: buildApprovalRejectedResult(displayPath, sourceTool, approval),
-    };
-  }
-
-  await request.beforeWrite?.();
-
-  const written = await writeApprovedContent(
-    path,
-    originalContent,
-    approval.appliedContent,
-  );
-  return { approval, ...written };
 }

@@ -84,7 +84,6 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
     originalContent,
     proposedContent: replacement.content,
     sourceTool: 'edit_file',
-    startLine: 'approval',
     present: () => ({
       summary: `Edited ${displayPath}: replaced ${replacement.count} ${occurrenceWord}`,
       output: `Replaced ${replacement.count} ${occurrenceWord}.`,
