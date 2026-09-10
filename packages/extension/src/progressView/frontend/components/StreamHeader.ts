@@ -382,15 +382,11 @@ export class StreamHeader extends LitElement {
     if (stream.category !== 'workflow') return '';
     return formatWorkflowRunContext({
       stream: {
-        name: stream.id,
         label: stream.label,
         model: stream.model ?? undefined,
         modelLabel: stream.modelLabel ?? undefined,
         executionId: stream.executionId,
         description: stream.description ?? undefined,
-        creationTimestamp: stream.runStartedAt ?? 0,
-        identity: stream.identity ?? undefined,
-        agentCategory: stream.category,
       },
       files: stream.files,
       compileFailures: stream.compileFailures,

@@ -1508,9 +1508,6 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(yield* db.readAggregate(id, 3)).toEqual(
           rows.filter((row) => row.aggregateId === id && row.seq >= 3),
         );
-        expect(yield* db.aggregatesAfterCommit([other], 1, 8)).toEqual([
-          rows[1],
-        ]);
         expect(
           yield* db.aggregateState([
             id,

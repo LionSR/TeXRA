@@ -40,7 +40,6 @@ import { PlanSchema } from './plan';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RunIdentitySchema } from './runIdentity';
 import {
-  RunOutcomeSchema,
   StreamPhaseSchema,
   StreamSubstateSchema,
   UserFollowUpSupportSchema,

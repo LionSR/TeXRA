@@ -4,20 +4,16 @@
  * keyed by workspace storage root: one session per root and one only,
  * built on the one `ManagedRuntime` each process makes at its entry
  * (`installProcessRuntime`). A root's entry is the complete session: the
- * root-scoped services (the database event log,
- * the fold, the three local sources, the owner-liveness prober, and the
- * transcript bridge) and the `SessionHandle` built over them, whose request
- * handler admits on that graph. Every opener (the hosts' default session,
+ * root-scoped services (the database event log, the session event reads and
+ * publications, the fold, the session inputs, the three local sources, and
+ * the owner-liveness prober) and the `SessionHandle` built over them, whose
+ * request handler admits on that graph. The handle layer opens the root's
+ * transcript store and its snapshot store over that log and hands both to
+ * the handle. Every opener (the hosts' default session,
  * the desktop's papers, the SDK) resolves its root here, so opening a root
  * twice returns one handle, and the map is the one owner of its lifetime:
  * an open borrows, `close` settles and releases, and the runtime's disposal
  * releases whatever is still open.
- *
- * One piece of this file exists only until the persistence cutover and is
- * marked so: the transcript bridge, which turns the root's transcript
- * store's change feed into in-flight text. Source events in the database
- * supply durable transcript history; the remaining bridge is removed with
- * the transcript file writer.
  */
 import {
   Context,
@@ -101,8 +97,8 @@ const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
 /**
  * Which session an entry is: its storage root, the value `SessionView.key`
  * carries, together with what the opener supplied for building it (the
- * roots, the root's transcript store the graph reads and bridges, the
- * sidecar store, the response text policy, the host it is born with).
+ * roots, the transcript store mode the graph opens its stores with, the
+ * response text policy, the host interactions it is born with).
  * Equal and hashed by the storage root alone: two opens of one root resolve
  * one session, over what the first of them supplied. Nothing store-bound
  * can be injected past that boundary (PR #11893, agent SDK architecture
@@ -762,13 +758,11 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * caller's first await, and only the entry's build does. The owner it
  * installs answers in Effect except for the two synchronous faces the
  * unconverted hosts still take: `openSync` builds under `runSync`, so
- * everything a root's graph does at build time, the history import
- * included, must complete inside the scheduler's yield budget
- * (`Scheduler.MaxOpsBeforeYield` steps per yield) or the open reads as
- * asynchronous and throws; an opener whose identity is still pending opens
- * through the Effect face. The import appends the whole history in one call
- * for that reason; moving it to row open (#11907) is what removes the
- * history pass from here.
+ * everything a root's graph does at build time (opening the database,
+ * reading the startup listing, opening the transcript store) must complete
+ * inside the scheduler's yield budget (`Scheduler.MaxOpsBeforeYield` steps
+ * per yield) or the open reads as asynchronous and throws; an opener whose
+ * identity is still pending opens through the Effect face.
  */
 export function installProcessRuntime(
   processStart: string | undefined | Promise<string | undefined>,

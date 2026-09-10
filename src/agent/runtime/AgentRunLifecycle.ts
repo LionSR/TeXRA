@@ -696,9 +696,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     const run = Effect.gen(function* () {
       // `run.start` is already out: the launch context published it at its
       // reservation commit point. Publish the run config before the RUNNING
-      // transition so progress backends can create the initial
-      // StreamExecutionState with the real category when the transition-owned
-      // run-start side effects fire.
+      // transition so the fold already carries the stream's real category when
+      // the transition-owned run-start side effects fire.
       ctx.logger.emit({
         type: 'run.config',
         streamId,

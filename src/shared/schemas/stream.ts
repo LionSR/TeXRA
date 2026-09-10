@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { RunIdentitySchema } from './runIdentity';
 import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
@@ -118,7 +117,7 @@ export type StreamSubstate = z.infer<typeof StreamSubstateSchema>;
  * Wire-level lifecycle status of a stream that has no phase in this process:
  * its execution lease is held by another TeXRA process, or its run state
  * could not be read at startup. Not a `StreamPhase`: phases are facts about
- * runs live here. `StreamMetadata.statusDetail` carries the reason; renderers
+ * runs live here. `StreamView.statusDetail` carries the reason; renderers
  * show it read-only and Delete is the only run control that applies.
  */
 export const STREAM_LIFECYCLE_UNAVAILABLE = 'unavailable' as const;
@@ -135,12 +134,6 @@ export type StreamLifecycleStatus =
   | typeof STREAM_LIFECYCLE_READY
   | typeof STREAM_LIFECYCLE_UNAVAILABLE;
 
-export const StreamLifecycleStatusSchema = z.union([
-  StreamPhaseSchema,
-  z.literal(STREAM_LIFECYCLE_READY),
-  z.literal(STREAM_LIFECYCLE_UNAVAILABLE),
-]);
-
 export const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */
   workingDirectory: z.string(),
@@ -150,48 +143,3 @@ export const WorktreeInfoSchema = z.object({
   dirty: z.boolean().optional(),
 });
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
-
-/**
- * The identity and storage pointers carried by each stream tab.
- */
-const StreamIdentityFieldsSchema = z.object({
-  /** The run's identity, verbatim from `run.start` or the durable store. */
-  identity: RunIdentitySchema.optional(),
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
-  /** The agent's execution mode (agent runs only) — display/routing data
-   * beside the identity, sourced from the run's config. */
-  agentCategory: AgentCategorySchema.optional(),
-  isRemote: z.boolean().optional(),
-  creationTimestamp: z.number(),
-  executionId: ExecutionIdSchema.optional(),
-  parentStreamId: StreamTabIdSchema.optional(),
-  /** AI-generated summary of what this session aims to accomplish. */
-  description: z.string().optional(),
-});
-/**
- * One flat wire shape per stream tab. The parsed {@link RunIdentitySchema}
- * struct travels verbatim — renderers key on `identity.kind` instead of
- * inferring ownership from whichever optional field is present — and hosts
- * add display fields beside it, never re-encodings of it. `identity` is
- * absent only for a run that never emitted `run.start` (legacy meta, hosts
- * driving the store by hand); absent renders as pending, never as a default
- * kind.
- */
-const StreamTabInfoSchema = StreamIdentityFieldsSchema.extend({
-  name: z.string(),
-  /**
-   * Canonical display name. When `identity` is present, every producer must
-   * set this to `runIdentityDisplayName(identity)`. Only identity-less legacy
-   * or pending streams may use the stream-id-derived fallback.
-   */
-  label: z.string(),
-  model: z.string().optional(),
-  modelLabel: z.string().optional(),
-  /** Full, untruncated command that spawned a process stream. */
-  command: z.string().optional(),
-  /** Git worktree / PR context for streams whose agents operate in a
-   * worktree other than the workspace root. Surfaced as a chip on the tab. */
-  worktree: WorktreeInfoSchema.optional(),
-});
-export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;

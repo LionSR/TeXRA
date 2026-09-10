@@ -564,7 +564,7 @@ export function projectTranscriptRow(
     // demand from the log (the CLI's `/status`), not a transcript row, and
     // `internal` is a durable marker (the workflow plan) that
     // nothing renders. Context utilization is a status surface on both hosts —
-    // the CLI reads it off `StreamExecutionState.contextState` and the webview
+    // the CLI reads it off `StreamView.context` and the webview
     // off the raw entry in `logSlice` — so it has no transcript row either.
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
     case MESSAGE_TYPES.ACTIVE_SKILLS:

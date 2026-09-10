@@ -69,10 +69,7 @@ export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
   }
 }
 
-export type WebviewRuntime = ManagedRuntime.ManagedRuntime<
-  WebviewSessions,
-  never
->;
+type WebviewRuntime = ManagedRuntime.ManagedRuntime<WebviewSessions, never>;
 
 /**
  * Make the one Effect runtime of this webview over its session family (PRD

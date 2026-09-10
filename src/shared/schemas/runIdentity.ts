@@ -6,7 +6,7 @@ import { getCleanAgentName } from './agent';
 /**
  * What kind of thing owns a stream, declared once at the launch site and
  * persisted once by `registerExecution` (`ExecutionMeta.identity`). The struct
- * itself travels — on `run.start`, on `StreamTabInfo`, on roster rows — and
+ * itself travels: on `run.start`, on `StreamView`, on roster rows, and
  * hosts add display fields beside it, never re-encodings of it.
  *
  * This is NOT `AgentCategory`: category is the agent's execution-mode fact

@@ -706,11 +706,6 @@ export class SessionHandle {
     );
   }
 
-  /** Stream existence from the committed view, after publication settlement. */
-  hasStream(streamId: StreamTabId): boolean {
-    return SubscriptionRef.getUnsafe(this.view).streams.has(streamId);
-  }
-
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
     return this.transcripts.acceptCommitted(event).pipe(

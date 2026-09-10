@@ -205,7 +205,7 @@ const program = Effect.gen(function* () {
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Runtime`  | The composed process: the platform and its workspace roots. `Runtime.layer(platform)` provides it and `Sessions`, with this scope as the lifetime of the hold it takes on that composition. |
 | `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?, signal?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                   |
-| `Session`  | `start`, `request`, `view.changes`, `events`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                |
+| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                          |
 | `Run`      | `executionId`, `streamId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its stream published and its trace live.                  |
 
 `session.view.changes` publishes the fold's levels as values: each is
