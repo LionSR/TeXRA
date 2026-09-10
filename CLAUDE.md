@@ -62,7 +62,10 @@ Things the tree won't tell you:
   `@adapter-until` marker, since the owner ruled there are no temporary
   adapters, and admits a new `Effect.run*` file only under
   `packages/{extension,desktop,cli,agent}/src/` or `src/tools/**/*Tool.ts`,
-  R1's three boundary kinds). The invariant to hold is "never widen a
+  R1's three boundary kinds), and `pure-tier-kernel-suites` (suites a source
+  scan classes as host-free but which read the host through the module under
+  test, so they run in the isolated `kernel` Vitest project — see AGENTS.md
+  "Test tiers"). The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not
   another lint rule. npm publication is deliberately held until a named external

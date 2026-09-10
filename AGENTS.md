@@ -129,22 +129,27 @@ When updating CHANGELOG.md:
 `vitest.config.mjs` runs suites in two projects, and a suite's cost is decided
 by what it reaches, not by how many tests it has:
 
-- **`pure`** — suites of host-free modules (`utils`, `shared`, `latex`,
-  `model`, `schemas`, the architecture ratchets, …): no setup file, no fake
-  platform, one module registry shared between files. Roughly 8x cheaper per
-  suite than `kernel`, and deterministic, because nothing in it installs or
-  replaces anything.
+- **`pure`** — suites that reach no host: no setup file, no fake platform, no
+  DOM, one module registry shared between files. Roughly 8x cheaper per suite
+  than `kernel`, and deterministic, because nothing in it installs or replaces
+  anything.
 - **`kernel`** — everything that needs a host: the fake platform installed per
-  file, each file in its own module registry.
+  file, each file in its own module registry. The DOM suites (`progressView`,
+  `settings`, `frontend`, `desktop`, `webview`) live here too; a Lit element
+  class is bound to the window that first loaded it.
 
 Membership is computed from the suite's source, not declared. A suite under a
-pure directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
-repository module or imports `@platform/*` or a support module that installs
-a host — then it is `kernel`. So the practical rule for a new suite: test the
-module directly, provide dependencies as values or layers, and do not mock
-repository modules. A `vi.mock` is what moves your suite to the slow tier;
-removing it moves it back. The tier is not a target to opt into — write the
-suite the durable way and it lands there.
+`pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
+repository module, imports `@platform/*` or a support module that installs a
+host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What a
+source scan cannot see — a module under test that reads `platform()` or the
+workspace roots itself, a pair of suites sharing terminal state — is found by
+running the suite alone with no host and kept by name in
+`config/ratchets/pure-tier-kernel-suites.json`, shrink-only. So the practical
+rule for a new suite: test the module directly, provide dependencies as values
+or layers, and do not mock repository modules. A `vi.mock` is what moves your
+suite to the slow tier; removing it moves it back. The tier is not a target to
+opt into — write the suite the durable way and it lands there.
 
 ### Scoping the test run
 

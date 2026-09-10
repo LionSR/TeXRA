@@ -1,9 +1,15 @@
 # Kernel suite wall time: the module registry, not the tests
 
 Status: proposed — measured 2026-09-10. The `pure` tier (D1) landed the same
-day in `vitest.config.mjs`; the `kernel` flip (D2) is blocked on moving the
-state that leaks between suites behind Effect layers, which is the 1.0
-direction anyway.
+day in `vitest.config.mjs`: 276 of 741 suites, membership computed from each
+suite's source, 276/276 green in default order and under file-order shuffles
+(seeds 7 and 11), ~27s for the tier. The 37 suites a scan cannot classify —
+modules under test that read the host themselves, one pair sharing terminal
+state — are kept by name in `config/ratchets/pure-tier-kernel-suites.json`,
+found by running each candidate alone with no host (a deterministic fail).
+That list is D2's worklist in priority order. The `kernel` flip (D2) is
+blocked on moving the state that leaks between suites behind Effect layers,
+which is the 1.0 direction anyway.
 
 Correction to the first baseline below: the ">45 min unfinished" run was not a
 clean measurement. A clean full run of the current isolated config on the same
