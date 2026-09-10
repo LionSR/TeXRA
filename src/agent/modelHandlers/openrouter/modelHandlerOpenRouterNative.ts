@@ -261,7 +261,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     if (useStreaming) {
-      const runRequestSpy: ChatRequest & { stream: true } = {
+      const streamRequest: ChatRequest & { stream: true } = {
         ...request,
         stream: true,
         streamOptions: { includeUsage: true },
@@ -272,7 +272,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
       try {
         const stream = await client.chat.send(
-          { chatRequest: runRequestSpy },
+          { chatRequest: streamRequest },
           { signal },
         );
         if (!isOpenRouterChatStream(stream)) {

@@ -230,7 +230,7 @@ describe('runtime skills', () => {
 
     const trace = new TraceEmitter();
     const store = new StreamLog();
-    const runId = 'stream:bounded-skills' as RunId;
+    const runId = 'bounded-skills' as RunId;
 
     attachTestTranscriptFold(trace, runId, store);
 

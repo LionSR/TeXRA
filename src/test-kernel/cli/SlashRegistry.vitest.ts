@@ -32,7 +32,7 @@ import {
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
 import {
-  CLI_LOCAL_STREAM_ID,
+  CLI_LOCAL_RUN_ID,
   notices,
   noticesFor,
 } from '@cli/chat/tui/state/transcript';
@@ -536,7 +536,7 @@ describe('slashRegistry', () => {
         copyableMessageArchived: true,
       });
       expect(
-        noticesFor(notices.get(), CLI_LOCAL_STREAM_ID).map(({ row }) =>
+        noticesFor(notices.get(), CLI_LOCAL_RUN_ID).map(({ row }) =>
           transcriptRowHeadline(row),
         ),
       ).toEqual([instruction]);

@@ -140,7 +140,7 @@ async function launchToolUseRun(
       // A child (a run with a parent) takes the subagent prompt and may park
       // at WAITING for its loop; the fresh launch and the resume both read
       // the same edge.
-      isSubagent: shared.parentRunId !== undefined,
+      parentRunId: shared.parentRunId,
       tools: shared.tools,
       onProgress: (update) => {
         if (update.kind === 'overview') {
@@ -365,7 +365,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 }
 
 // A WAITING result is reachable only for a child: `{ kind: 'waiting' }` is
-// minted solely behind `ToolUseWaitNode`'s `isSubagent` check, which is the
+// minted solely behind `ToolUseWaitNode`'s `parentRunId` check, which is the
 // parent edge, so a caller that names a parent admits WAITING and one that
 // names none never sees it. Resume paths need no flag at all — whether a
 // resumed run is a child comes from the persisted `run.start`, so

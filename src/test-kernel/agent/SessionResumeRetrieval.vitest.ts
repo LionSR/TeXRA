@@ -271,7 +271,8 @@ function buildResponseResumeData(
 interface PersistedFlowRunOptions {
   readonly attachment?: Partial<ToolUseFlowAttachment>;
   readonly session?: SessionHandle;
-  readonly isSubagent?: boolean;
+  /** Omitted runs as a child of `parent0`; `null` runs as a root. */
+  readonly parentRunId?: RunId | null;
   readonly stopAfterCycle?: boolean;
   readonly config?: AgentConfig;
   readonly modelHandler?: Record<string, unknown>;
@@ -344,7 +345,10 @@ async function runPersistedFlow(
           onRoundFinalized: () => {},
           ...(resume !== undefined && { resume }),
           drainedFollowUps: options.drainedFollowUps,
-          isSubagent: options.isSubagent ?? true,
+          parentRunId:
+            options.parentRunId === null
+              ? undefined
+              : (options.parentRunId ?? ('parent0' as RunId)),
           tools: options.tools,
           onIdle: options.onIdle,
           takePendingFollowUps: options.takePendingFollowUps,
@@ -817,7 +821,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     const result = await runPersistedFlow(runId, undefined, {
       config,
-      isSubagent: false,
+      parentRunId: null,
       stopAfterCycle: true,
       modelHandler: responseModelHandler([
         {
@@ -896,7 +900,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const runId = 'ab000f' as RunId;
 
     const result = await runPersistedFlow(runId, undefined, {
-      isSubagent: false,
+      parentRunId: null,
       stopAfterCycle: true,
       modelHandler: responseModelHandler([{ text: 'fresh answer' }]),
     });
@@ -1411,7 +1415,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         },
       },
       session: createProcessSession(),
-      isSubagent: false,
+      parentRunId: null,
       onIdle: () => flowContext?.interrupt(),
     });
 

@@ -39,7 +39,7 @@ import {
   resetCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
-  CLI_LOCAL_STREAM_ID,
+  CLI_LOCAL_RUN_ID,
   notices,
   noticesFor,
 } from '@cli/chat/tui/state/transcript';
@@ -169,12 +169,12 @@ describe('InputBar slash submit', () => {
       const form = activeForm.get()?.render(() => undefined, 20) as {
         props?: { onPersist?: () => void };
       };
-      expect(noticesFor(notices.get(), CLI_LOCAL_STREAM_ID)).toEqual([]);
+      expect(noticesFor(notices.get(), CLI_LOCAL_RUN_ID)).toEqual([]);
 
       form.props?.onPersist?.();
 
       expect(
-        noticesFor(notices.get(), CLI_LOCAL_STREAM_ID).map(({ row }) => ({
+        noticesFor(notices.get(), CLI_LOCAL_RUN_ID).map(({ row }) => ({
           kind: row.kind,
           text: transcriptRowHeadline(row),
         })),

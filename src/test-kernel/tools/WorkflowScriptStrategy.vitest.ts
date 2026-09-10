@@ -584,7 +584,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
   });
 
   it('targets the attempt-specific run id after a durable retry advances it', async () => {
-    // After a retry, the re-run registers its child stream under an
+    // After a retry, the re-run registers its child run under an
     // attempt-specific id (not the logical id) — the id the roster exposes.
     // The control bridge must follow that id, not the stale logical one.
     const logicalRunId = grandchildRunId;

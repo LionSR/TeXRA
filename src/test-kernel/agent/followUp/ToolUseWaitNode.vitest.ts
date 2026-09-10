@@ -49,7 +49,7 @@ type WaitNodeModelHandlerOverrides = Omit<
 };
 
 type WaitNodeServiceOverrides = Partial<
-  Pick<ToolUseServices, 'isSubagent' | 'onFollowUpConsumed' | 'onIdle'>
+  Pick<ToolUseServices, 'parentRunId' | 'onFollowUpConsumed' | 'onIdle'>
 > & {
   fileService?: Partial<ToolUseServices['fileService']>;
   logger?: AgentTrace;
@@ -170,7 +170,7 @@ describe('ToolUseWaitNode', () => {
       const waitForFollowUp = vi.fn();
 
       const services = createWaitNodeServices({
-        isSubagent: true,
+        parentRunId: generateRunId(),
         session: {
           ...(hasQueuedFollowUp ? { hasQueuedFollowUp: () => true } : {}),
           waitForFollowUp,
@@ -207,7 +207,7 @@ describe('ToolUseWaitNode', () => {
       },
     ];
     const services = createWaitNodeServices({
-      isSubagent: true,
+      parentRunId: generateRunId(),
       modelHandler: {
         createUserFollowUpMessages,
       },
@@ -255,7 +255,7 @@ describe('ToolUseWaitNode', () => {
     // `stopAfterCycle` is injected through `services.toolPolicy`; no
     // AsyncLocalStorage frame is installed for this cycle.
     const services = createWaitNodeServices({
-      isSubagent: true,
+      parentRunId: generateRunId(),
       stopAfterCycle: true,
     });
 
@@ -273,7 +273,7 @@ describe('ToolUseWaitNode', () => {
 
     const services = createWaitNodeServices({
       signal: AbortSignal.abort(),
-      isSubagent: true,
+      parentRunId: generateRunId(),
     });
 
     const node = new ToolUseWaitNode().setServices(services);
@@ -295,7 +295,6 @@ describe('ToolUseWaitNode', () => {
     const waitForFollowUp = vi.fn(async () => null);
 
     const services = createWaitNodeServices({
-      isSubagent: false,
       onIdle,
       session: { waitForFollowUp },
     });
@@ -403,7 +402,6 @@ describe('ToolUseWaitNode', () => {
     const recorded = recordTraceEvents(logger);
     const waitForFollowUp = vi.fn();
     const services = createWaitNodeServices({
-      isSubagent: false,
       logger,
       ownerSession,
       runId,
@@ -463,7 +461,6 @@ describe('ToolUseWaitNode', () => {
     const ownerSession = sessionWithInteractions(undefined);
     const runStatus = ownerSession.status;
     const services = createWaitNodeServices({
-      isSubagent: false,
       modelHandler: {
         createUserFollowUpMessages,
       },
@@ -535,7 +532,6 @@ describe('ToolUseWaitNode', () => {
     const createUserFollowUpMessages = appendUserFollowUpMessages();
     const waitForFollowUp = vi.fn(async () => null);
     const services = createWaitNodeServices({
-      isSubagent: false,
       modelHandler: {
         createUserFollowUpMessages,
       },
@@ -622,7 +618,8 @@ describe('ToolUseWaitNode', () => {
 
   it('does not let a subagent drive the parent goal continuation loop', async () => {
     // A subagent cycle always exits WAITING before the goal-continuation path,
-    // which is gated `!isSubagent` and sits after the subagent-suspend branch.
+    // which is gated on the run having no parent and sits after the
+    // subagent-suspend branch.
     // So a subagent can never synthesize a continuation against the PARENT's
     // goal, structurally rather than by any check on waitForFollowUp.
     const runId = generateRunId();
@@ -632,7 +629,7 @@ describe('ToolUseWaitNode', () => {
 
     const waitForFollowUp = vi.fn(async () => null);
     const services = createWaitNodeServices({
-      isSubagent: true,
+      parentRunId: generateRunId(),
       runId,
       session: {
         waitForFollowUp,
@@ -703,7 +700,6 @@ describe('ToolUseWaitNode', () => {
     const recorded = recordSessionEvents(ownerSession);
     const waitForFollowUp = vi.fn(async () => null);
     const services = createWaitNodeServices({
-      isSubagent: false,
       ownerSession,
       runId,
       session: {
@@ -848,7 +844,7 @@ describe('ToolUseWaitNode', () => {
 
     const batch = [{ text: 'try the other lemma', origin: 'user' as const }];
     const services = createWaitNodeServices({
-      isSubagent: true,
+      parentRunId: generateRunId(),
       ownerSession,
       runId,
       modelHandler: {
@@ -897,7 +893,7 @@ describe('ToolUseWaitNode', () => {
     const applicationError = new Error('follow-up media is unreadable');
     const batch = [{ text: 'use this diagram', origin: 'user' as const }];
     const services = createWaitNodeServices({
-      isSubagent: true,
+      parentRunId: generateRunId(),
       ownerSession,
       runId,
       modelHandler: {
@@ -944,7 +940,7 @@ describe('ToolUseWaitNode', () => {
     shared.lastError = { message: 'boom', userRetryable: false };
     const waitForFollowUp = vi.fn();
     const services = createWaitNodeServices({
-      isSubagent: true,
+      parentRunId: generateRunId(),
       session: { waitForFollowUp },
     });
     const node = new ToolUseWaitNode().setServices(services);

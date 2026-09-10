@@ -92,7 +92,7 @@ interface StreamHandlerConfig {
 }
 
 /**
- * Factory functions for creating runs.
+ * Factory functions for creating token streams.
  */
 interface RunFactories {
   createThinkingStream: () => ReturnType<AgentTrace['openRun']>;
@@ -178,7 +178,7 @@ export class AnthropicStreamHandler {
   }
 
   /**
-   * Finalizes all remaining runs and clears state.
+   * Finalizes all remaining streams and clears state.
    * Call this with the canonical final-response compaction outcome.
    * Sets finalized flag to prevent processing any subsequent events.
    */
@@ -187,7 +187,7 @@ export class AnthropicStreamHandler {
     // Set flag first to prevent processing any events that arrive during cleanup
     this.state.finalized = true;
 
-    // Finalize any remaining thinking runs
+    // Finalize any remaining thinking streams
     for (const s of this.thinkingStreams.values()) {
       s.finalize();
     }
@@ -333,13 +333,13 @@ export class AnthropicStreamHandler {
   private handleBlockStop(
     event: Extract<BetaRawMessageStreamEvent, { type: 'content_block_stop' }>,
   ): void {
-    // Finalize thinking runs immediately on block stop
+    // Finalize thinking streams immediately on block stop
     const thinking = this.thinkingStreams.get(event.index);
     if (thinking) {
       thinking.finalize();
       this.thinkingStreams.delete(event.index);
     }
-    // Text runs: don't finalize here - wait for non-text block or end
+    // Text streams: don't finalize here - wait for non-text block or end
   }
 
   /**

@@ -38,7 +38,7 @@ import {
 } from '@cli/chat/tui/commands/slashRegistry';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
-  CLI_LOCAL_STREAM_ID,
+  CLI_LOCAL_RUN_ID,
   notices,
   noticesFor,
 } from '@cli/chat/tui/state/transcript';
@@ -184,13 +184,13 @@ function createContext(
   };
 }
 
-function lastEntryText(runId: RunId = CLI_LOCAL_STREAM_ID): string | undefined {
+function lastEntryText(runId: RunId = CLI_LOCAL_RUN_ID): string | undefined {
   const last = noticesFor(notices.get(), runId).at(-1)?.row;
   return last && transcriptRowHeadline(last);
 }
 
 function localEntries(): readonly TranscriptRow[] {
-  return noticesFor(notices.get(), CLI_LOCAL_STREAM_ID).map(({ row }) => row);
+  return noticesFor(notices.get(), CLI_LOCAL_RUN_ID).map(({ row }) => row);
 }
 
 function localEntryPairs(): Array<{ kind: string; text: string }> {

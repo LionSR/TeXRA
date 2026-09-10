@@ -106,7 +106,7 @@ describe('run-scoped tool overlay', () => {
             onModelChanged: () => {},
             interrupt: () => {},
             onRoundFinalized: () => {},
-            isSubagent: true,
+            parentRunId: 'parent0' as RunId,
             tools: [tool('first'), tool('second')],
           },
           new MapToolRegistry({ first: tool('first') }),
@@ -177,7 +177,7 @@ describe('run-scoped tool overlay', () => {
           onModelChanged: () => {},
           interrupt: () => {},
           onRoundFinalized: () => {},
-          isSubagent: true,
+          parentRunId: 'parent0' as RunId,
         },
         new MapToolRegistry({
           bash: approvalGatedTool('bash'),

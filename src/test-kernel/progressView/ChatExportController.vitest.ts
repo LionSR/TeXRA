@@ -110,7 +110,7 @@ describe('ChatExportController.exportAsHtml', () => {
     const templatePath = await writeTemplate();
 
     const outcome = await Effect.runPromise(
-      controller.exportAsHtml('eec404', templatePath),
+      controller.exportAsHtml('eec404' as RunId, templatePath),
     );
 
     expect(outcome).toEqual({ status: 'config_missing' });

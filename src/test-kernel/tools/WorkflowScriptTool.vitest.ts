@@ -814,7 +814,7 @@ return null`;
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
-  it('validates files and binds them to the live workflow run stream', async () => {
+  it('validates files and binds them to the live workflow run', async () => {
     const files = {
       inputFiles: ['paper.tex'],
       contextFiles: ['references.bib'],
@@ -824,7 +824,7 @@ return null`;
 
     expect(result.status).toBe('executed');
     // The durable record stays honest (no file lists); the binding rides the
-    // checkpoint and the live stream config the agent steps consume.
+    // checkpoint and the live run config the agent steps consume.
     expect(mocks.createChildRun).toHaveBeenCalledWith(
       currentSession(),
       runIdFor('tool-test'),

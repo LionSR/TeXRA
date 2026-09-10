@@ -28,7 +28,11 @@ import {
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import { aggregateId } from '@shared/schemas';
-import type { RetryErrorInfo, SubagentProgressUpdate } from '@shared/schemas';
+import type {
+  RetryErrorInfo,
+  RunId,
+  SubagentProgressUpdate,
+} from '@shared/schemas';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -73,14 +77,14 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
    */
   takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   onFollowUpConsumed?: () => void;
-  /** When true, the subagent prompt variant is used and every completed model
-   *  cycle suspends at WAITING (see `ToolUseWaitNode`) instead of blocking
-   *  in-flow for the next follow-up. The caller derives it from the run's
-   *  parent edge (`parentRunId !== undefined`); this flow and its services
-   *  carry only the derived switch. A resumed flow may first consume
+  /** The launching run when this run is a delegated child. When set, the
+   *  subagent prompt variant is used and every completed model cycle suspends
+   *  at WAITING (see `ToolUseWaitNode`) instead of blocking in-flow for the
+   *  next follow-up. The flow and its services carry the parent edge itself,
+   *  not a derived boolean. A resumed flow may first consume
    *  `drainedFollowUps`; the child-run loop still owns delivery and every later
    *  turn boundary. */
-  isSubagent?: boolean;
+  parentRunId?: RunId;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
@@ -560,7 +564,7 @@ export async function runToolUseFlow(
 
     // `FlowTransition.WAITING` is only ever produced by `ToolUseWaitNode`
     // suspending a subagent cycle (see its doc comment) — no further gating
-    // needed here; the wait node's own `isSubagent`/`stopAfterCycle` check is
+    // needed here; the wait node's own `parentRunId`/`stopAfterCycle` check is
     // the single source of truth for whether a suspension is legitimate.
     // A recorded `lastError` still outranks it: a run that failed is terminal,
     // and reporting it as suspended would park a failure instead of surfacing

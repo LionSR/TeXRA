@@ -39,7 +39,7 @@ import {
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
-import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import { CLI_LOCAL_RUN_ID } from '@cli/chat/tui/state/transcript';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -1206,10 +1206,10 @@ describe('CLI conversation transcript', () => {
     ).toEqual({ ownerKey: 'root', runId: STREAM_ID });
     expect(
       staticScrollbackTarget({
-        activeRunId: CLI_LOCAL_STREAM_ID,
+        activeRunId: CLI_LOCAL_RUN_ID,
         rootRunId: undefined,
       }),
-    ).toEqual({ ownerKey: 'root', runId: CLI_LOCAL_STREAM_ID });
+    ).toEqual({ ownerKey: 'root', runId: CLI_LOCAL_RUN_ID });
     expect(
       staticScrollbackTarget({
         activeRunId: STREAM_ID,

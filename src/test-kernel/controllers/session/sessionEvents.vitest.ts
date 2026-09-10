@@ -544,7 +544,7 @@ describe('Sessions owner', () => {
         expect(
           SubscriptionRef.getUnsafe(view.ref).runs.get(RUN)?.readOnly,
         ).toBe(false);
-        const request = { kind: 'stream.stop', runId: RUN } as const;
+        const request = { kind: 'run.stop', runId: RUN } as const;
         const refused = yield* requests.request(request).pipe(Effect.flip);
         expect(refused._tag).toBe('NotOwner');
         expect(stopAgentRun).not.toHaveBeenCalled();

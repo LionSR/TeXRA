@@ -386,7 +386,7 @@ function installOwnerSession(): {
     value: {
       request: (req: RuntimeRequest) =>
         Effect.gen(function* (): Effect.fn.Return<Outcome> {
-          if (req.kind === 'stream.stop') {
+          if (req.kind === 'run.stop') {
             yield* session.runs.stopAgentRun(req.runId, {
               detachActiveChildren: req.detachActiveChildren ?? undefined,
             });
@@ -671,7 +671,7 @@ describe('createChatSessionController', () => {
       GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
     );
     expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'stream.stop',
+      kind: 'run.stop',
       runId: 'a11111',
       detachActiveChildren: true,
     });
@@ -692,7 +692,7 @@ describe('createChatSessionController', () => {
       cause: 'Run interrupted.',
     });
     expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'stream.stop',
+      kind: 'run.stop',
       runId: 'b00001',
       detachActiveChildren: true,
     });
@@ -714,7 +714,7 @@ describe('createChatSessionController', () => {
       cause: 'Run interrupted.',
     });
     expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'stream.stop',
+      kind: 'run.stop',
       runId: 'ca0001',
       detachActiveChildren: true,
     });
@@ -1471,7 +1471,7 @@ describe('createChatSessionController', () => {
     expect(session.interruptedRunId).toBe('aaaaaa');
     expect(mocks.request).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'stream.stop',
+        kind: 'run.stop',
         runId: 'd00001',
       }),
     );

@@ -353,7 +353,7 @@ export abstract class ModelHandler<
   /**
    * Indicates whether background mode is active for this handler.
    * Background mode runs requests asynchronously and polls for completion.
-   * Override in handlers that support background run.
+   * Override in handlers that support background execution.
    *
    * Not foldable into a single predicate (#7101 triage): the two overriding
    * handlers compute this with materially different formulas, not just
@@ -379,7 +379,7 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Convenience wrapper for thinking runs.
+   * Convenience wrapper for thinking streams.
    *
    * Stream-timing contract: subscribers read `stream.start` as "this phase
    * began" (the CLI lights its thinking indicator from it; a started output
@@ -400,7 +400,7 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Convenience wrapper for output runs (timing contract above). When
+   * Convenience wrapper for output streams (timing contract above). When
    * output streaming is disabled the stream still announces the response
    * phase (start/end) but withholds the content — workflow runs extract and
    * log the output separately instead of streaming it.
