@@ -1,8 +1,11 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { hostPort } from '@common/hostPort';
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   buildBashApprovalRejectedResult,
@@ -48,6 +51,44 @@ const SendToTerminalInputSchema = z.strictObject({
 
 type SendToTerminalInput = z.infer<typeof SendToTerminalInputSchema>;
 
+const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
+  input: SendToTerminalInput,
+) {
+  const terminal = getSetupPlatform().terminal;
+  if (!terminal) {
+    return yield* Effect.fail(
+      new ToolError(
+        'VS Code integrated terminal execution is unavailable in this host.',
+      ),
+    );
+  }
+  const command = input.command.trim();
+
+  const approval = yield* hostPort(() => requestBashApproval({ command }));
+  if (approval.action !== 'approve') {
+    return buildBashApprovalRejectedResult(command, approval);
+  }
+
+  const name = TERMINAL_NAME_PREFIX + input.label.trim();
+  const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
+
+  const { exitCode, output, timedOut } = yield* hostPort(() =>
+    terminal.runCommand({
+      name,
+      command,
+      timeoutMs,
+    }),
+  );
+
+  const exitLabel = exitCode === undefined ? 'unknown' : String(exitCode);
+  const summary = timedOut
+    ? `"${name}" timed out after ${Math.round(timeoutMs / 1000)}s`
+    : `"${name}" exited ${exitLabel}`;
+  const outputText = output.trim() ? `\n\n${output}` : '';
+
+  return executed(summary + outputText, summary);
+});
+
 export class SendToTerminalTool extends defineTool({
   name: 'send_to_terminal',
   // Requires a VS Code terminal.
@@ -56,35 +97,7 @@ export class SendToTerminalTool extends defineTool({
   description: `Run a command in a VS Code integrated terminal: use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. Returns an exit code and an ANSI-stripped output tail of up to ${TERMINAL_OUTPUT_MAX_CHARS} characters when shell integration is active (bash/zsh/pwsh/fish in VS Code-launched terminals); returns an undefined exit code with empty output otherwise: re-probe with \`verify_setup\` to confirm what actually happened. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
   schema: SendToTerminalInputSchema,
 }) {
-  protected async execute(input: SendToTerminalInput): Promise<ToolResult> {
-    const terminal = getSetupPlatform().terminal;
-    if (!terminal) {
-      throw new ToolError(
-        'VS Code integrated terminal execution is unavailable in this host.',
-      );
-    }
-    const command = input.command.trim();
-
-    const approval = await requestBashApproval({ command });
-    if (approval.action !== 'approve') {
-      return buildBashApprovalRejectedResult(command, approval);
-    }
-
-    const name = TERMINAL_NAME_PREFIX + input.label.trim();
-    const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
-
-    const { exitCode, output, timedOut } = await terminal.runCommand({
-      name,
-      command,
-      timeoutMs,
-    });
-
-    const exitLabel = exitCode === undefined ? 'unknown' : String(exitCode);
-    const summary = timedOut
-      ? `"${name}" timed out after ${Math.round(timeoutMs / 1000)}s`
-      : `"${name}" exited ${exitLabel}`;
-    const outputText = output.trim() ? `\n\n${output}` : '';
-
-    return executed(summary + outputText, summary);
+  protected execute(input: SendToTerminalInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(sendToTerminal(input));
   }
 }

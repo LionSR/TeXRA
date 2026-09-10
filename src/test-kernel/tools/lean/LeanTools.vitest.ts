@@ -124,7 +124,9 @@ describe('Lean external tool status', () => {
     });
 
     await expect(
-      lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      effectRuntime().runPromise(
+        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      ),
     ).resolves.toBeUndefined();
 
     registerLeanServer({
@@ -134,12 +136,16 @@ describe('Lean external tool status', () => {
       status: 'starting',
     });
     await expect(
-      lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      effectRuntime().runPromise(
+        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      ),
     ).resolves.toBe('1 server active');
 
     updateLeanServer('direct:/running', { status: 'running' });
     await expect(
-      lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      effectRuntime().runPromise(
+        lean!.statusLabel!({ extensionAvailable: false, lakeAvailable: true }),
+      ),
     ).resolves.toBe('1 server active');
   });
 });

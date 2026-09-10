@@ -373,10 +373,14 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         // Same availability gate as delegate_agent/delegate_workflow: a run model
         // the active credentials cannot serve fails here, with the available list,
         // instead of mid-run on the first provider call.
-        const runModel = yield* runPhase(() =>
-          selectAvailableDelegationModel({
-            parentModel: parent.model,
-          }),
+        const runModel = yield* selectAvailableDelegationModel({
+          parentModel: parent.model,
+          withScope: <T>(read: () => T) => withRunContext(parent, read),
+        }).pipe(
+          // Same annotation `runPhase` puts on every other phase failure.
+          Effect.mapError((error) =>
+            workflowScriptToolError(error, scriptPath),
+          ),
         );
 
         const runConfigPayload: AgentConfigPayload = {

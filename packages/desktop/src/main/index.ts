@@ -852,7 +852,7 @@ function createWindow(options: {
       onboarding: requireOnboardingIpc(),
       openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: async () => {
-        await refreshToolAvailability();
+        await effectRuntime().runPromise(refreshToolAvailability());
       },
       logger: console,
     });
@@ -1157,10 +1157,13 @@ function createWindow(options: {
           buildItems: async (cachedResults) => {
             const { buildToolDashboardItems } =
               await import('@controllers/settingsView/ToolDashboardData');
-            return buildToolDashboardItems('desktop', cachedResults);
+            return effectRuntime().runPromise(
+              buildToolDashboardItems('desktop', cachedResults),
+            );
           },
           getCachedCheckResults: async () => getLastCheckResults() ?? undefined,
-          refreshAvailability: refreshToolAvailability,
+          refreshAvailability: () =>
+            effectRuntime().runPromise(refreshToolAvailability()),
           planTerminalAction: async (toolId, kind) => {
             const { planToolTerminalAction } =
               await import('@controllers/settingsView/ToolDashboardData');

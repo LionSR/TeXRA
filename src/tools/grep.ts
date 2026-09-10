@@ -1,11 +1,15 @@
 // Node imports
+import { AsyncLocalStorage } from 'node:async_hooks';
 import * as nodePath from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - tools
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { hostPort } from '@common/hostPort';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
@@ -109,6 +113,109 @@ export function buildArguments(
   return args;
 }
 
+/**
+ * The per-call context this tool reads from the caller's turn: the batch's
+ * abort signal and the working directory.
+ */
+interface GrepPorts {
+  readonly signal: AbortSignal | undefined;
+  readonly toolRoot: () => string | undefined;
+}
+
+const runGrep = Effect.fn('GrepTool.execute')(function* (
+  ports: GrepPorts,
+  input: GrepInput,
+): Effect.fn.Return<ToolResult, unknown> {
+  const { output_mode: outputMode } = input;
+  const root = ports.toolRoot();
+  const { path, display } = resolveAndFormat(input.path ?? undefined, root);
+  const gitignore = yield* getGitignoreMatcher();
+  const args = buildArguments(input, outputMode);
+  const applyWorkspaceIgnores = !nodePath.isAbsolute(path.relative);
+  const ignoreArgs = applyWorkspaceIgnores
+    ? gitignore.ignoreFiles.flatMap((ignoreFile) => [
+        '--ignore-file',
+        ignoreFile,
+      ])
+    : [];
+
+  // `--` ends rg option parsing so the LLM-controlled pattern can't be read as
+  // a flag — e.g. `--pre=<cmd>` would run <cmd> as a preprocessor on every
+  // searched file (code execution via this non-approval-gated tool). Our own
+  // flags in args/ignoreArgs precede it and are unaffected; a leading-dash
+  // literal pattern (e.g. "-foo") now searches correctly instead of erroring.
+  const command = [
+    'rg',
+    ...args,
+    ...ignoreArgs,
+    '--',
+    input.pattern,
+    path.fsPath,
+  ];
+
+  const result = yield* hostPort(() =>
+    executeCommand(command, {
+      cwd: root,
+      channel: CHANNEL,
+      truncate: false,
+      maxBuffer: GREP_MAX_BUFFER_CHARS,
+      // Cancellation for the owning agent run — parallel batches must be
+      // able to terminate large-repo rg subprocesses on interrupt.
+      signal: ports.signal,
+    }),
+  );
+
+  if (result.outputLimitExceeded) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Search output exceeded the ${GREP_MAX_BUFFER_CHARS.toLocaleString()}-character retained-output ceiling.\n` +
+          `Narrow the search path or pattern, or use glob/type filters. ` +
+          `Pagination with offset/head_limit does not avoid draining the total ripgrep output.`,
+      ),
+    );
+  }
+
+  // ripgrep exit codes: 0 = matches found, 1 = no matches, 2+ = error
+  const exitCode = result.exitCode;
+  if (exitCode >= 2) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Regex error: ${result.stderr || `exit code ${exitCode}`}.\n` +
+          `To fix, either:\n` +
+          `- Escape special regex characters in the pattern (e.g. \\., \\(, \\{)\n` +
+          `- Set literal: true for exact string matching: { "literal": true }`,
+      ),
+    );
+  }
+
+  // Filter empty lines consistently for counting and pagination
+  const allLines = splitOutputLines(result.stdout);
+  const totalCount = allLines.length;
+
+  if (totalCount === 0) {
+    return executed(
+      `No matches found for "${input.pattern}" in ${display}. ` +
+        `Try a broader pattern, { "-i": true } for case-insensitive, or search a wider directory.`,
+      `No matches for "${input.pattern}" in ${display}`,
+    );
+  }
+
+  // Apply pagination to filtered lines for consistent offset calculation
+  const offset = input.offset ?? 0;
+  const limit = input.head_limit;
+  const end = limit ? offset + limit : undefined;
+  const paginatedLines = allLines.slice(offset, end);
+  const returnedCount = paginatedLines.length;
+
+  const summary = `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`;
+  const hasMore = offset + returnedCount < totalCount;
+  const output = hasMore
+    ? `${paginatedLines.join('\n')}\n\n[Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.]`
+    : paginatedLines.join('\n');
+
+  return executed(output, summary);
+});
+
 export class GrepTool extends defineTool({
   name: 'grep',
   parallelSafe: true,
@@ -116,88 +223,13 @@ export class GrepTool extends defineTool({
     'Search file contents using regex patterns. For surrounding lines use -C with output_mode "content".',
   schema: GrepInputSchema,
 }) {
-  protected async execute(input: GrepInput): Promise<ToolResult> {
-    const { output_mode: outputMode } = input;
-    const root = currentToolRoot();
-    const { path, display } = resolveAndFormat(input.path ?? undefined, root);
-    const gitignore = await getGitignoreMatcher();
-    const args = buildArguments(input, outputMode);
-    const applyWorkspaceIgnores = !nodePath.isAbsolute(path.relative);
-    const ignoreArgs = applyWorkspaceIgnores
-      ? gitignore.ignoreFiles.flatMap((ignoreFile) => [
-          '--ignore-file',
-          ignoreFile,
-        ])
-      : [];
-
-    // `--` ends rg option parsing so the LLM-controlled pattern can't be read as
-    // a flag — e.g. `--pre=<cmd>` would run <cmd> as a preprocessor on every
-    // searched file (code execution via this non-approval-gated tool). Our own
-    // flags in args/ignoreArgs precede it and are unaffected; a leading-dash
-    // literal pattern (e.g. "-foo") now searches correctly instead of erroring.
-    const command = [
-      'rg',
-      ...args,
-      ...ignoreArgs,
-      '--',
-      input.pattern,
-      path.fsPath,
-    ];
-
-    const result = await executeCommand(command, {
-      cwd: root,
-      channel: CHANNEL,
-      truncate: false,
-      maxBuffer: GREP_MAX_BUFFER_CHARS,
-      // Cancellation for the owning agent run — parallel batches must be
-      // able to terminate large-repo rg subprocesses on interrupt.
+  protected execute(input: GrepInput): Promise<ToolResult> {
+    // The working directory belongs to the calling turn, so it is bound here
+    // and handed to the program rather than read from a fiber.
+    const ports: GrepPorts = {
       signal: getCurrentToolCallContext()?.signal,
-    });
-
-    if (result.outputLimitExceeded) {
-      throw new ToolError(
-        `Search output exceeded the ${GREP_MAX_BUFFER_CHARS.toLocaleString()}-character retained-output ceiling.\n` +
-          `Narrow the search path or pattern, or use glob/type filters. ` +
-          `Pagination with offset/head_limit does not avoid draining the total ripgrep output.`,
-      );
-    }
-
-    // ripgrep exit codes: 0 = matches found, 1 = no matches, 2+ = error
-    const exitCode = result.exitCode;
-    if (exitCode >= 2) {
-      throw new ToolError(
-        `Regex error: ${result.stderr || `exit code ${exitCode}`}.\n` +
-          `To fix, either:\n` +
-          `- Escape special regex characters in the pattern (e.g. \\., \\(, \\{)\n` +
-          `- Set literal: true for exact string matching: { "literal": true }`,
-      );
-    }
-
-    // Filter empty lines consistently for counting and pagination
-    const allLines = splitOutputLines(result.stdout);
-    const totalCount = allLines.length;
-
-    if (totalCount === 0) {
-      return executed(
-        `No matches found for "${input.pattern}" in ${display}. ` +
-          `Try a broader pattern, { "-i": true } for case-insensitive, or search a wider directory.`,
-        `No matches for "${input.pattern}" in ${display}`,
-      );
-    }
-
-    // Apply pagination to filtered lines for consistent offset calculation
-    const offset = input.offset ?? 0;
-    const limit = input.head_limit;
-    const end = limit ? offset + limit : undefined;
-    const paginatedLines = allLines.slice(offset, end);
-    const returnedCount = paginatedLines.length;
-
-    const summary = `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`;
-    const hasMore = offset + returnedCount < totalCount;
-    const output = hasMore
-      ? `${paginatedLines.join('\n')}\n\n[Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.]`
-      : paginatedLines.join('\n');
-
-    return executed(output, summary);
+      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+    };
+    return effectRuntime().runPromise(runGrep(ports, input));
   }
 }

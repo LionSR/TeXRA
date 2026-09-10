@@ -347,7 +347,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       openToolInstallUrl: (message) => this.openExternalUrl(message.url),
       installToolExtension: (message) =>
         this.latexHandlers.installExtension(message.extensionId),
-      recheckToolStatus: () => refreshToolAvailability(),
+      recheckToolStatus: () =>
+        effectRuntime().runPromise(refreshToolAvailability()),
       toggleTool: async (message) => {
         await setToolEnabled(message.toolId, message.enabled);
         await this.withActiveWebview((w) =>
@@ -839,7 +840,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const cachedResults = options?.skipChecks
       ? (getLastCheckResults() ?? undefined)
       : undefined;
-    const items = await buildToolDashboardItems('extension', cachedResults);
+    const items = await effectRuntime().runPromise(
+      buildToolDashboardItems('extension', cachedResults),
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       items,

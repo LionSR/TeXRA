@@ -345,14 +345,14 @@ export function createDesktopSettingsIpc(
     });
     await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
     await postGitHubTokenStatus();
-    await refreshToolAvailability();
+    await effectRuntime().runPromise(refreshToolAvailability());
   }
 
   async function removeGitHubToken(): Promise<void> {
     await options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
     await options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
     await postGitHubTokenStatus();
-    await refreshToolAvailability();
+    await effectRuntime().runPromise(refreshToolAvailability());
   }
 
   async function postGitHubSubscriptions(): Promise<void> {

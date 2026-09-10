@@ -1,8 +1,11 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import { hostPort } from '@common/hostPort';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolResult, ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import {
@@ -50,6 +53,52 @@ const WolframInputSchema = z.strictObject({
 
 type WolframInput = z.infer<typeof WolframInputSchema>;
 
+const runWolfram = Effect.fn('WolframTool.execute')(function* (
+  input: WolframInput,
+) {
+  const command = wolframApprovalCommand(input.code);
+  const approval = yield* hostPort(() => requestBashApproval({ command }));
+  if (approval.action !== 'approve') {
+    return buildBashApprovalRejectedResult(command, approval);
+  }
+
+  getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady?.();
+
+  const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
+  const result = yield* hostPort(() =>
+    runToolWithCheck('wolframscript', ['-code', input.code], {
+      showError: false,
+      truncate: false,
+      timeout: effectiveTimeout,
+      channel: 'WolframTool',
+    }),
+  );
+  if (!result) {
+    return yield* Effect.fail(new ToolError(WOLFRAM_NOT_INSTALLED_ERROR));
+  }
+  if (result.success) {
+    return executed(result.stdout, wolframRunSummary(input.code));
+  }
+
+  const parts: string[] = [];
+  if (result.timedOut) {
+    parts.push(
+      `Execution timed out after ${effectiveTimeout / 1000}s.\n` +
+        `To fix: increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }`,
+    );
+  }
+  if (result.exitCode !== 0) {
+    parts.push(`exit code ${result.exitCode}`);
+  }
+  if (result.stderr) parts.push(`<stderr>${result.stderr}</stderr>`);
+  if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
+
+  const details = parts.join('\n') || 'No error details available';
+  return yield* Effect.fail(
+    new ToolError(`Wolfram execution failed: ${details}`),
+  );
+});
+
 export class WolframTool extends defineTool({
   name: 'wolfram',
   requiresApproval: true,
@@ -58,47 +107,7 @@ export class WolframTool extends defineTool({
   description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each execution starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. Compute and print actual results: do not hardcode expected values in Print statements; use VerificationTest or assertions so output reflects real computation.`,
   schema: WolframInputSchema,
 }) {
-  protected async execute(input: WolframInput): Promise<ToolResult> {
-    const command = wolframApprovalCommand(input.code);
-    const approval = await requestBashApproval({ command });
-    if (approval.action !== 'approve') {
-      return buildBashApprovalRejectedResult(command, approval);
-    }
-
-    getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady?.();
-
-    const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
-    const result = await runToolWithCheck(
-      'wolframscript',
-      ['-code', input.code],
-      {
-        showError: false,
-        truncate: false,
-        timeout: effectiveTimeout,
-        channel: 'WolframTool',
-      },
-    );
-    if (!result) {
-      throw new ToolError(WOLFRAM_NOT_INSTALLED_ERROR);
-    }
-    if (result.success) {
-      return executed(result.stdout, wolframRunSummary(input.code));
-    }
-
-    const parts: string[] = [];
-    if (result.timedOut) {
-      parts.push(
-        `Execution timed out after ${effectiveTimeout / 1000}s.\n` +
-          `To fix: increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }`,
-      );
-    }
-    if (result.exitCode !== 0) {
-      parts.push(`exit code ${result.exitCode}`);
-    }
-    if (result.stderr) parts.push(`<stderr>${result.stderr}</stderr>`);
-    if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
-
-    const details = parts.join('\n') || 'No error details available';
-    throw new ToolError(`Wolfram execution failed: ${details}`);
+  protected execute(input: WolframInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(runWolfram(input));
   }
 }

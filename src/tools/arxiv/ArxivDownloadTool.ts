@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { hostPort } from '@common/hostPort';
 import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
 import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
@@ -27,10 +28,12 @@ function formatDirEntry(name: string, type: number): string {
 }
 
 /** List the freshly-extracted source directory, skipping VCS noise. */
-async function listExtractedEntries(dirFsPath: string): Promise<string> {
-  const entries = await WorkspaceFS.readDir(dirFsPath);
+const listExtractedEntries = Effect.fn('listExtractedEntries')(function* (
+  dirFsPath: string,
+): Effect.fn.Return<string, unknown> {
+  const entries = yield* hostPort(() => WorkspaceFS.readDir(dirFsPath));
   const dirRelative = toPosixPath(WorkspaceFS.relativePath(dirFsPath) || '.');
-  const gitignore = await getGitignoreMatcher();
+  const gitignore = yield* getGitignoreMatcher();
   const formatted = entries
     .filter(([name]) => {
       if (DEFAULT_HIDDEN_NAMES.has(name)) return false;
@@ -41,7 +44,7 @@ async function listExtractedEntries(dirFsPath: string): Promise<string> {
     .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([name, type]) => formatDirEntry(name, type));
   return formatted.length > 0 ? formatted.join('\n') : NO_ENTRIES_MESSAGE;
-}
+});
 
 const ArxivDownloadInputSchema = z.strictObject({
   id: z.string().describe('arXiv identifier or URL for the source archive.'),
@@ -87,10 +90,7 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
 
   // A listing failure degrades to a note in the output, not a tool error:
   // the download itself already succeeded.
-  const listingOutput = yield* Effect.tryPromise({
-    try: () => listExtractedEntries(downloadResult.path),
-    catch: (err) => err,
-  }).pipe(
+  const listingOutput = yield* listExtractedEntries(downloadResult.path).pipe(
     Effect.catch((err) =>
       Effect.succeed(`Failed to list directory: ${toErrorMessage(err)}`),
     ),

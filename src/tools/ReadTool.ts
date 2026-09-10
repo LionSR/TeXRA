@@ -1,8 +1,14 @@
+// Node imports
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { hostPort } from '@common/hostPort';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
@@ -115,6 +121,17 @@ const ATTACHMENT_COPY: Record<
   },
 };
 
+/**
+ * The per-call context this tool reads from the caller's turn: the batch's
+ * abort signal, the working directory, and the read tracker that gates
+ * later edits.
+ */
+interface ReadPorts {
+  readonly signal: AbortSignal | undefined;
+  readonly toolRoot: () => string | undefined;
+  readonly recordRead: (path: string) => void;
+}
+
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   parallelSafe: true,
@@ -122,13 +139,30 @@ export class ReadFileTool extends defineTool({
     'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,
 }) {
-  protected async execute(input: ReadInput): Promise<ToolResult> {
+  protected execute(input: ReadInput): Promise<ToolResult> {
+    // The read tracker and the working directory belong to the calling turn,
+    // so they are bound here and handed to the program rather than read from
+    // a fiber. `toolRoot` stays a thunk so the abort check still comes first.
+    const context = getCurrentToolCallContext();
+    const ports: ReadPorts = {
+      signal: context?.signal,
+      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+      recordRead: AsyncLocalStorage.bind(recordToolFileRead),
+    };
+    return effectRuntime().runPromise(this.read(ports, input));
+  }
+
+  private readonly read = Effect.fn('ReadFileTool.execute')(function* (
+    this: ReadFileTool,
+    ports: ReadPorts,
+    input: ReadInput,
+  ): Effect.fn.Return<ToolResult, unknown> {
     // Local reads finish in milliseconds, so no mid-read cancellation is
     // needed — but a queued call must not start after the batch aborted.
-    if (getCurrentToolCallContext()?.signal?.aborted) {
-      throw new ToolError('Cancelled before execution.');
+    if (ports.signal?.aborted) {
+      return yield* Effect.fail(new ToolError('Cancelled before execution.'));
     }
-    const root = currentToolRoot();
+    const root = ports.toolRoot();
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
       root,
@@ -137,12 +171,12 @@ export class ReadFileTool extends defineTool({
 
     const attachmentKind = this.getAttachmentConfig(resolved.absolute);
     if (attachmentKind) {
-      const result = await this.returnBinaryAttachment(
+      const result = yield* this.returnBinaryAttachment(
         input,
         attachmentKind,
         resolved,
       );
-      recordToolFileRead(filePath);
+      ports.recordRead(filePath);
       return result;
     }
 
@@ -152,21 +186,25 @@ export class ReadFileTool extends defineTool({
     let lines: string[];
 
     if (hasExtension(input.path, '.eml')) {
-      const stats = await WorkspaceFS.stat(filePath);
+      const stats = yield* hostPort(() => WorkspaceFS.stat(filePath));
       if (stats.size > MAX_EML_BYTES) {
-        throw new ToolError(
-          `EML file exceeds maximum size of ${formatBytes(MAX_EML_BYTES)}.`,
+        return yield* Effect.fail(
+          new ToolError(
+            `EML file exceeds maximum size of ${formatBytes(MAX_EML_BYTES)}.`,
+          ),
         );
       }
-      const raw = await WorkspaceFS.read(filePath);
-      const { text, images } = await parseEml(raw);
+      const raw = yield* hostPort(() => WorkspaceFS.read(filePath));
+      const { text, images } = yield* parseEml(raw);
       lines = splitContentLines(text);
       emlImages = images;
     } else {
-      lines = splitContentLines(await WorkspaceFS.read(filePath));
+      lines = splitContentLines(
+        yield* hostPort(() => WorkspaceFS.read(filePath)),
+      );
     }
 
-    recordToolFileRead(filePath);
+    ports.recordRead(filePath);
 
     const range = input.range;
     const totalLines = lines.length;
@@ -200,7 +238,7 @@ export class ReadFileTool extends defineTool({
     }
 
     return result;
-  }
+  });
 
   private getAttachmentConfig(filePath: string): AttachmentKind | null {
     const mimeType = getMimeType(filePath)?.toLowerCase();
@@ -229,17 +267,21 @@ export class ReadFileTool extends defineTool({
     return null;
   }
 
-  private async returnBinaryAttachment(
+  private readonly returnBinaryAttachment = Effect.fn(
+    'ReadFileTool.returnBinaryAttachment',
+  )(function* (
     input: ReadInput,
     kind: AttachmentKind,
     resolved: WorkspacePathResolution,
-  ): Promise<ToolResult> {
+  ): Effect.fn.Return<ToolResult, unknown> {
     const copy = ATTACHMENT_COPY[kind];
-    const attachment = await buildFileAttachment({
-      filePath: resolved.fsPath,
-      description: `${copy.label} returned by read_file tool.`,
-      resolved,
-    });
+    const attachment = yield* hostPort(() =>
+      buildFileAttachment({
+        filePath: resolved.fsPath,
+        description: `${copy.label} returned by read_file tool.`,
+        resolved,
+      }),
+    );
 
     const baseSummary = `Attached ${copy.label} ${attachment.path}.`;
     const summary = input.range
@@ -250,5 +292,5 @@ export class ReadFileTool extends defineTool({
       : copy.coreOutput;
 
     return { status: 'executed', summary, output, files: [attachment] };
-  }
+  });
 }

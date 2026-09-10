@@ -1,9 +1,16 @@
+// Node imports
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import {
   currentToolRoot,
@@ -21,6 +28,30 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { defineTool } from './core/define';
 
 const log = createLog('DiagnosticsTool');
+
+/**
+ * The host capabilities and working directory this tool reads from the
+ * session, resolved in the caller's run context before the program runs.
+ */
+interface DiagnosticsPorts {
+  /**
+   * Reads the active working directory, bound to the calling turn. It stays a
+   * thunk so each command asks for it exactly where it did before: parsing
+   * rejects a relative working directory, and "add" reports that failure as
+   * its own.
+   */
+  readonly toolRoot: () => string | undefined;
+  readonly readDiagnostics: HostInteractions['readDiagnostics'];
+  readonly addCriticism: HostInteractions['addCriticism'];
+}
+
+/** Resolve an input path to an absolute path against the active working directory. */
+function resolveAbsolutePath(
+  filePath: string,
+  root: string | undefined,
+): string {
+  return resolveWorkspaceRelativePath(filePath, root).absolute;
+}
 
 const DiagnosticsPathSchema = z
   .string()
@@ -89,101 +120,125 @@ export class DiagnosticsTool extends defineTool({
     'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
   schema: DiagnosticsInputSchema,
 }) {
-  protected async execute(input: DiagnosticsInput): Promise<ToolResult> {
-    if (input.command === 'add') {
-      return this.addCriticism(input);
-    }
-    return this.readDiagnostics(input);
+  protected execute(input: DiagnosticsInput): Promise<ToolResult> {
+    // The session and working directory belong to the calling turn, so they
+    // are read here and handed to the program rather than from a fiber.
+    const interactions = currentSession().interactions;
+    const ports: DiagnosticsPorts = {
+      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+      readDiagnostics: interactions.readDiagnostics,
+      addCriticism: interactions.addCriticism,
+    };
+    return effectRuntime().runPromise(
+      input.command === 'add'
+        ? this.addCriticism(ports, input)
+        : this.readDiagnostics(ports, input),
+    );
   }
 
-  /** Resolve an input path to an absolute path against the active working directory. */
-  private resolveAbsolutePath(filePath: string): string {
-    return resolveWorkspaceRelativePath(filePath, currentToolRoot()).absolute;
-  }
-
-  private async readDiagnostics(
+  private readonly readDiagnostics = Effect.fn(
+    'DiagnosticsTool.readDiagnostics',
+  )(function* (
+    ports: DiagnosticsPorts,
     input: Extract<DiagnosticsInput, { command: 'list' | 'count' }>,
-  ): Promise<ToolResult> {
+  ): Effect.fn.Return<ToolResult, ToolError> {
     const { command, path } = input;
-    const diagnosticsPath = this.resolveAbsolutePath(path);
-    const linter = currentSession().interactions.readDiagnostics;
+    const diagnosticsPath = resolveAbsolutePath(path, ports.toolRoot());
+    const linter = ports.readDiagnostics;
     if (!linter) {
-      throw new ToolError(
-        'Diagnostics capability unavailable: this session has no diagnostics provider.',
+      return yield* Effect.fail(
+        new ToolError(
+          'Diagnostics capability unavailable: this session has no diagnostics provider.',
+        ),
       );
     }
 
-    try {
-      const messages = await linter(diagnosticsPath);
-      const counts = countBySeverity(messages);
-      const header = `${diagnosticsPath}: ${formatCounts(counts)}`;
-      const summary = `Diagnostics ${command} for ${diagnosticsPath}`;
+    const messages = yield* hostPort(() => linter(diagnosticsPath)).pipe(
+      Effect.catch((error) => {
+        const detail = toErrorMessage(error);
+        log.error(
+          `Failed to collect diagnostics for ${diagnosticsPath}: ${detail}`,
+        );
+        return Effect.fail(
+          new ToolError(`Failed to collect diagnostics: ${detail}`),
+        );
+      }),
+    );
+    const counts = countBySeverity(messages);
+    const header = `${diagnosticsPath}: ${formatCounts(counts)}`;
+    const summary = `Diagnostics ${command} for ${diagnosticsPath}`;
 
-      const baseDiagnostics = {
-        path: diagnosticsPath,
-        command,
-        severity: counts,
-      };
+    const baseDiagnostics = {
+      path: diagnosticsPath,
+      command,
+      severity: counts,
+    };
 
-      if (command === 'count') {
-        return {
-          status: 'executed',
-          summary,
-          output: header,
-          diagnostics: baseDiagnostics,
-        };
-      }
-
-      const messageDetails =
-        messages.length > 0 ? `\n\n${formatMessageList(messages)}` : '';
+    if (command === 'count') {
       return {
         status: 'executed',
         summary,
-        output: `${header}${messageDetails}`,
-        diagnostics: { ...baseDiagnostics, messages },
+        output: header,
+        diagnostics: baseDiagnostics,
       };
-    } catch (error) {
-      const detail = toErrorMessage(error);
-      log.error(
-        `Failed to collect diagnostics for ${diagnosticsPath}: ${detail}`,
-      );
-      throw new ToolError(`Failed to collect diagnostics: ${detail}`);
-    }
-  }
-
-  private async addCriticism(
-    input: Extract<DiagnosticsInput, { command: 'add' }>,
-  ): Promise<ToolResult> {
-    const { path, line, message, severity, confidence } = input;
-    const addCriticismSink = currentSession().interactions.addCriticism;
-    if (!addCriticismSink) {
-      throw new ToolError(
-        'Diagnostics add capability unavailable: this session has no criticism sink.',
-      );
     }
 
-    try {
-      const absolutePath = this.resolveAbsolutePath(path);
-      const result = addCriticismSink({
-        absolutePath,
-        line,
-        message,
-        severity,
-        confidence,
+    const messageDetails =
+      messages.length > 0 ? `\n\n${formatMessageList(messages)}` : '';
+    return {
+      status: 'executed',
+      summary,
+      output: `${header}${messageDetails}`,
+      diagnostics: { ...baseDiagnostics, messages },
+    };
+  });
+
+  private readonly addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(
+    function* (
+      ports: DiagnosticsPorts,
+      input: Extract<DiagnosticsInput, { command: 'add' }>,
+    ): Effect.fn.Return<ToolResult, ToolError> {
+      const { path, line, message, severity, confidence } = input;
+      const addCriticismSink = ports.addCriticism;
+      if (!addCriticismSink) {
+        return yield* Effect.fail(
+          new ToolError(
+            'Diagnostics add capability unavailable: this session has no criticism sink.',
+          ),
+        );
+      }
+
+      // Path resolution shares the sink's failure report: both are the "add"
+      // command failing before it could annotate anything.
+      const added = yield* Effect.try({
+        try: () => {
+          const absolutePath = resolveAbsolutePath(path, ports.toolRoot());
+          return {
+            absolutePath,
+            result: addCriticismSink({
+              absolutePath,
+              line,
+              message,
+              severity,
+              confidence,
+            }),
+          };
+        },
+        catch: (error) => {
+          const detail = toErrorMessage(error);
+          log.error(`Failed to add criticism: ${detail}`);
+          return new ToolError(`Failed to add criticism: ${detail}`);
+        },
       });
-      if (!result.accepted) {
+      if (!added.result.accepted) {
         return executed(
           'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',
           'Criticism not accepted',
         );
       }
-      const where = result.resolvedPath || absolutePath;
+      const where = added.result.resolvedPath || added.absolutePath;
       const summary = `Added criticism for ${where}:${line} (S${severity}/C${confidence})`;
       return executed(summary, summary);
-    } catch (error) {
-      const detail = toErrorMessage(error);
-      log.error(`Failed to add criticism: ${detail}`);
-      throw new ToolError(`Failed to add criticism: ${detail}`);
-    }
-  }
+    },
+  );
 }

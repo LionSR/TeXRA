@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -44,10 +45,12 @@ describe('GrepTool execution', () => {
   });
 
   function mockWorkspaceGitignore(): void {
-    vi.spyOn(gitignoreUtils, 'getGitignoreMatcher').mockResolvedValue({
-      ignores: () => false,
-      ignoreFiles: ['/workspace/.gitignore'],
-    });
+    vi.spyOn(gitignoreUtils, 'getGitignoreMatcher').mockReturnValue(
+      Effect.succeed({
+        ignores: () => false,
+        ignoreFiles: ['/workspace/.gitignore'],
+      }),
+    );
   }
 
   it('preserves total-count and offset/head_limit pagination semantics', async () => {

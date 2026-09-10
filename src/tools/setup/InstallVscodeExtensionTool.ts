@@ -1,10 +1,10 @@
-// Node imports
-import { setTimeout as delay } from 'node:timers/promises';
-
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { hostPort } from '@common/hostPort';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
@@ -23,6 +23,9 @@ const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
   LEAN4_EXTENSION_ID,
 ]);
 
+/** Grace period before re-reading the extension registry after an install. */
+const REGISTRATION_GRACE_MS = 250;
+
 const InstallVscodeExtensionInputSchema = z.strictObject({
   extensionId: z
     .string()
@@ -36,41 +39,37 @@ type InstallVscodeExtensionInput = z.infer<
   typeof InstallVscodeExtensionInputSchema
 >;
 
-export class InstallVscodeExtensionTool extends defineTool({
-  name: 'install_vscode_extension',
-  // Requires VS Code extensions.
-  unavailableHosts: ['cli', 'desktop'],
-  requiresApproval: true,
-  description: `Install a VS Code extension from the Marketplace. Allowlisted: James-Yu.latex-workshop, leanprover.lean4. Blocks other extension IDs. Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
-  schema: InstallVscodeExtensionInputSchema,
-}) {
-  protected async execute(
-    input: InstallVscodeExtensionInput,
-  ): Promise<ToolResult> {
+const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
+  function* (input: InstallVscodeExtensionInput) {
     const platform = getSetupPlatform();
     const id = input.extensionId.trim();
 
     if (!ALLOWED_EXTENSIONS.has(id)) {
-      throw new ToolError(
-        `Extension "${id}" is not in the setup allowlist. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}.`,
+      return yield* Effect.fail(
+        new ToolError(
+          `Extension "${id}" is not in the setup allowlist. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}.`,
+        ),
       );
     }
 
-    if (!platform.extensions) {
-      throw new ToolError('This host cannot install VS Code extensions.');
+    const extensions = platform.extensions;
+    if (!extensions) {
+      return yield* Effect.fail(
+        new ToolError('This host cannot install VS Code extensions.'),
+      );
     }
-    if (platform.extensions.isInstalled(id)) {
+    if (extensions.isInstalled(id)) {
       return executed(
         `The "${id}" extension is already installed. No action taken.`,
         `Extension ${id} already installed`,
       );
     }
 
-    await platform.extensions.install(id);
+    yield* hostPort(() => extensions.install(id));
 
     // Give VS Code a brief moment to register the new extension.
-    await delay(250);
-    const installed = platform.extensions.isInstalled(id);
+    yield* Effect.sleep(REGISTRATION_GRACE_MS);
+    const installed = extensions.isInstalled(id);
 
     return executed(
       installed
@@ -80,5 +79,18 @@ export class InstallVscodeExtensionTool extends defineTool({
         ? `Installed extension ${id}`
         : `Install issued for ${id} (verify manually)`,
     );
+  },
+);
+
+export class InstallVscodeExtensionTool extends defineTool({
+  name: 'install_vscode_extension',
+  // Requires VS Code extensions.
+  unavailableHosts: ['cli', 'desktop'],
+  requiresApproval: true,
+  description: `Install a VS Code extension from the Marketplace. Allowlisted: James-Yu.latex-workshop, leanprover.lean4. Blocks other extension IDs. Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
+  schema: InstallVscodeExtensionInputSchema,
+}) {
+  protected execute(input: InstallVscodeExtensionInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(installExtension(input));
   }
 }

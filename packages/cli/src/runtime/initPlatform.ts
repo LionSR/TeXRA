@@ -375,9 +375,11 @@ export async function initCliPlatform(
     // below), so upgrading users are not affected. Mirrors the
     // extension/desktop ordering — same seeding function, CLI's own version
     // key since the CLI tracks its bundled-agent version independently.
-    await seedDisabledToolDefaults(
-      stateStores.globalState,
-      GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+    await effectRuntime().runPromise(
+      seedDisabledToolDefaults(
+        stateStores.globalState,
+        GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+      ),
     );
 
     if (context.installSignalHandlers !== false) {

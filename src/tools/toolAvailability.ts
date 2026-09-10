@@ -14,13 +14,20 @@
  *     `getUnavailableToolNamesCached()`
  */
 
+// Third-party imports
+import { Deferred, Effect } from 'effect';
+
 // Local imports
+import { hostPort } from '@common/hostPort';
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
-import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
+import {
+  EXTERNAL_TOOL_DEFS,
+  type ExternalToolDef,
+} from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -77,22 +84,23 @@ export function getDisabledToolNames(): ReadonlySet<string> {
  * the extension/desktop, `CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION` for the
  * CLI) because each tracks its own bundled-agent version independently.
  */
-export async function seedDisabledToolDefaults(
-  state: StateStore,
-  versionStateKey: string,
-): Promise<void> {
-  const lastKnownVersion = state.get<string>(versionStateKey);
-  const disabledTools = state.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
-  if (lastKnownVersion !== undefined || disabledTools !== undefined) return;
+export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
+  function* (state: StateStore, versionStateKey: string) {
+    const lastKnownVersion = state.get<string>(versionStateKey);
+    const disabledTools = state.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
+    if (lastKnownVersion !== undefined || disabledTools !== undefined) return;
 
-  const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
-    (def) => def.id,
-  );
-  await state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
-  log.info(
-    `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
-  );
-}
+    const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
+      (def) => def.id,
+    );
+    yield* hostPort(() =>
+      state.update(GlobalStateKey.DISABLED_TOOLS, defaults),
+    );
+    log.info(
+      `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
+    );
+  },
+);
 
 /**
  * Run all external tool checks in parallel.
@@ -100,7 +108,7 @@ export async function seedDisabledToolDefaults(
  * availability cache.
  *
  * Concurrent calls are coalesced: while a probe is in flight, additional
- * callers share the same Promise and receive its results. If any caller
+ * callers join the same deferred and receive its results. If any caller
  * arrives AFTER the active probe started reading inputs, a follow-up probe
  * is scheduled so the cache ultimately reflects the most recent state and
  * a stale probe can't overwrite a fresh one by finishing last.
@@ -112,103 +120,122 @@ export async function seedDisabledToolDefaults(
  * @returns Per-group results with availability status and an optional
  *   human-readable `statusDetail`.
  */
-let inflightProbe: Promise<ExternalToolCheckResult[]> | null = null;
+let inflightProbe: Deferred.Deferred<ExternalToolCheckResult[]> | null = null;
 let pendingRerun = false;
-export function runExternalToolChecks(): Promise<ExternalToolCheckResult[]> {
-  if (inflightProbe) {
-    pendingRerun = true;
-    return inflightProbe;
-  }
-  inflightProbe = (async () => {
-    let results: ExternalToolCheckResult[] = [];
-    try {
-      do {
-        pendingRerun = false;
-        results = await runProbes();
-        lastResults = results;
-      } while (pendingRerun);
-    } finally {
-      inflightProbe = null;
+export function runExternalToolChecks(): Effect.Effect<
+  ExternalToolCheckResult[]
+> {
+  return Effect.suspend(() => {
+    if (inflightProbe) {
+      pendingRerun = true;
+      return Deferred.await(inflightProbe);
     }
-    return results;
-  })();
-  return inflightProbe;
+    // The deferred is claimed here, synchronously, before the first suspension
+    // point: a caller that arrives while this probe runs must find the slot
+    // taken and join it rather than start a second probe.
+    const deferred = Deferred.makeUnsafe<ExternalToolCheckResult[]>();
+    inflightProbe = deferred;
+    return probeUntilSettled.pipe(
+      Effect.onExit((exit) => {
+        inflightProbe = null;
+        return Deferred.done(deferred, exit);
+      }),
+    );
+  });
 }
 
-async function runProbes(): Promise<ExternalToolCheckResult[]> {
-  return Promise.all(
-    EXTERNAL_TOOL_DEFS.map(
-      async ({
-        id,
-        tools,
-        name,
-        probe,
-        check,
-        statusLabel: getStatusLabel,
-        detailCheck,
-        comingSoon,
-      }): Promise<ExternalToolCheckResult> => {
-        // Run check/status/detail from one shared probe result. Some groups
-        // (Codex, Zotero, GitHub PR) touch async local state, so running the
-        // callbacks independently can duplicate the same probe work.
-        let probeResult: unknown;
-        let probedStatus: 'available' | 'not-found' | 'unknown';
-        let probeFailed = false;
-        let probeFailure: unknown;
-        try {
-          probeResult = await probe?.();
-          probedStatus = (await check(probeResult)) ? 'available' : 'not-found';
-        } catch (error) {
-          probeFailed = true;
-          probeFailure = error;
-          probedStatus = 'unknown';
-          log.warn(`Availability probe failed for ${name}`, { data: error });
-        }
-        const statusDetail = !probeFailed
-          ? await resolveOptionalStatus(
-              detailCheck,
-              probeResult,
-              name,
-              'status detail',
-            )
-          : `Availability check failed: ${toErrorMessage(probeFailure)}`;
-        const statusLabel = !probeFailed
-          ? await resolveOptionalStatus(
-              getStatusLabel,
-              probeResult,
-              name,
-              'status label',
-            )
-          : undefined;
-        return {
-          id,
-          tools,
-          name,
-          status: comingSoon ? 'coming-soon' : probedStatus,
-          detected:
-            probedStatus === 'unknown' ? null : probedStatus === 'available',
-          statusLabel,
-          statusDetail,
-        };
-      },
+const probeUntilSettled = Effect.gen(function* () {
+  let results: ExternalToolCheckResult[] = [];
+  do {
+    pendingRerun = false;
+    results = yield* runProbes;
+    lastResults = results;
+  } while (pendingRerun);
+  return results;
+});
+
+const runProbes: Effect.Effect<ExternalToolCheckResult[]> = Effect.suspend(() =>
+  // Same fan-out as the Promise.all this replaces: every group probes at once
+  // and no group's failure cancels a sibling, because each one resolves to a
+  // result of its own below.
+  Effect.forEach(EXTERNAL_TOOL_DEFS, probeToolGroup, {
+    concurrency: 'unbounded',
+  }),
+);
+
+const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
+  id,
+  tools,
+  name,
+  probe,
+  check,
+  statusLabel: getStatusLabel,
+  detailCheck,
+  comingSoon,
+}: ExternalToolDef): Effect.fn.Return<ExternalToolCheckResult, never> {
+  // Run check/status/detail from one shared probe result. Some groups
+  // (Codex, Zotero, GitHub PR) touch async local state, so running the
+  // callbacks independently can duplicate the same probe work.
+  const probed = yield* Effect.gen(function* () {
+    const probeResult = probe ? yield* probe() : undefined;
+    const available = yield* check(probeResult);
+    return { failure: undefined, probeResult, available };
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        log.warn(`Availability probe failed for ${name}`, { data: error });
+        return { failure: { error }, probeResult: undefined, available: false };
+      }),
     ),
   );
-}
+  const detectedStatus = probed.available ? 'available' : 'not-found';
+  const probedStatus: 'available' | 'not-found' | 'unknown' = probed.failure
+    ? 'unknown'
+    : detectedStatus;
+  const statusDetail = probed.failure
+    ? `Availability check failed: ${toErrorMessage(probed.failure.error)}`
+    : yield* resolveOptionalStatus(
+        detailCheck,
+        probed.probeResult,
+        name,
+        'status detail',
+      );
+  const statusLabel = probed.failure
+    ? undefined
+    : yield* resolveOptionalStatus(
+        getStatusLabel,
+        probed.probeResult,
+        name,
+        'status label',
+      );
+  return {
+    id,
+    tools,
+    name,
+    status: comingSoon ? 'coming-soon' : probedStatus,
+    detected: probedStatus === 'unknown' ? null : probedStatus === 'available',
+    statusLabel,
+    statusDetail,
+  };
+});
 
-async function resolveOptionalStatus(
+function resolveOptionalStatus(
   getStatus:
-    ((probeResult?: unknown) => Promise<string | undefined>) | undefined,
+    | ((probeResult?: unknown) => Effect.Effect<string | undefined, unknown>)
+    | undefined,
   probeResult: unknown,
   toolName: string,
   field: string,
-): Promise<string | undefined> {
-  if (!getStatus) return undefined;
-  try {
-    return await getStatus(probeResult);
-  } catch (error) {
-    log.warn(`Failed to resolve ${field} for ${toolName}`, { data: error });
-    return undefined;
-  }
+): Effect.Effect<string | undefined> {
+  if (!getStatus) return Effect.succeed(undefined);
+  return getStatus(probeResult).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        log.warn(`Failed to resolve ${field} for ${toolName}`, { data: error });
+        return undefined;
+      }),
+    ),
+  );
 }
 
 /** Build the set of unavailable tool names from external check results only. */
@@ -243,10 +270,12 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * `runExternalToolChecks`, so the dashboard-load probe and a refresh-triggered
  * probe can't race.
  */
-export async function refreshToolAvailability(): Promise<void> {
-  await runExternalToolChecks();
-  appSignals.emit('toolAvailabilityChanged', undefined);
-}
+export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
+  function* () {
+    yield* runExternalToolChecks();
+    appSignals.emit('toolAvailabilityChanged', undefined);
+  },
+);
 
 /**
  * Non-blocking read — derives the unavailable tool names from the last check

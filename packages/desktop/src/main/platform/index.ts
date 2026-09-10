@@ -223,9 +223,11 @@ export async function initializeElectronPlatform(
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the
   // extension's ordering (extension.ts) — same key, same seeding function.
-  await seedDisabledToolDefaults(
-    globalStateStore,
-    GlobalStateKey.LAST_KNOWN_VERSION,
+  await effectRuntime().runPromise(
+    seedDisabledToolDefaults(
+      globalStateStore,
+      GlobalStateKey.LAST_KNOWN_VERSION,
+    ),
   );
 
   const resourcesPath = resolveResourcesPath(mainDirname);

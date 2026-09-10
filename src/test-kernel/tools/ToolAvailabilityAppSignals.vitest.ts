@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 afterEach(() => {
@@ -15,7 +16,7 @@ describe('tool availability app signals', () => {
           tools: [],
           name: 'Test tool',
           category: 'ai-agents',
-          check: vi.fn(async () => true),
+          check: vi.fn(() => Effect.succeed(true)),
         },
       ],
     }));
@@ -27,7 +28,7 @@ describe('tool availability app signals', () => {
     });
 
     try {
-      await refreshToolAvailability();
+      await Effect.runPromise(refreshToolAvailability());
 
       expect(events).toEqual([undefined]);
     } finally {
@@ -43,7 +44,7 @@ describe('tool availability app signals', () => {
           tools: ['present'],
           name: 'Present tool',
           category: 'ai-agents',
-          check: vi.fn(async () => true),
+          check: vi.fn(() => Effect.succeed(true)),
         },
         {
           id: 'missing-tool',
@@ -51,7 +52,7 @@ describe('tool availability app signals', () => {
           name: 'Missing tool',
           category: 'ai-agents',
           toggleable: true,
-          check: vi.fn(async () => false),
+          check: vi.fn(() => Effect.succeed(false)),
         },
       ],
     }));
@@ -60,7 +61,7 @@ describe('tool availability app signals', () => {
 
     expect([...getUnavailableToolNamesCached()]).toEqual([]);
 
-    await runExternalToolChecks();
+    await Effect.runPromise(runExternalToolChecks());
 
     // Toggling a tool on or off never changes this set — it reports missing
     // external dependencies only — so there is nothing to rebuild after a
@@ -76,27 +77,27 @@ describe('tool availability app signals', () => {
           tools: ['broken'],
           name: 'Broken probe',
           category: 'ai-agents',
-          probe: vi.fn(async () => {
-            throw new Error('invalid local configuration');
-          }),
-          check: vi.fn(async () => true),
-          statusLabel: vi.fn(async () => 'Needs setup'),
+          probe: vi.fn(() =>
+            Effect.fail(new Error('invalid local configuration')),
+          ),
+          check: vi.fn(() => Effect.succeed(true)),
+          statusLabel: vi.fn(() => Effect.succeed('Needs setup')),
         },
         {
           id: 'broken-detail',
           tools: ['present'],
           name: 'Broken detail',
           category: 'ai-agents',
-          check: vi.fn(async () => true),
-          detailCheck: vi.fn(async () => {
-            throw new Error('status command crashed');
-          }),
+          check: vi.fn(() => Effect.succeed(true)),
+          detailCheck: vi.fn(() =>
+            Effect.fail(new Error('status command crashed')),
+          ),
         },
       ],
     }));
     const { runExternalToolChecks } = await import('@tools/toolAvailability');
 
-    await expect(runExternalToolChecks()).resolves.toEqual([
+    await expect(Effect.runPromise(runExternalToolChecks())).resolves.toEqual([
       expect.objectContaining({
         id: 'broken-probe',
         status: 'unknown',

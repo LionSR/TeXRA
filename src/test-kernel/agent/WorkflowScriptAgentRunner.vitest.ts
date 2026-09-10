@@ -258,7 +258,9 @@ describe('createWorkflowScriptAgentRunner', () => {
       category: 'workflow',
       path: `/agents/${name}.yml`,
     }));
-    mocks.selectAvailableDelegationModel.mockResolvedValue('child-model');
+    mocks.selectAvailableDelegationModel.mockReturnValue(
+      Effect.succeed('child-model'),
+    );
     mocks.workspaceExists.mockResolvedValue(true);
     mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
@@ -424,6 +426,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/figure.pdf');
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
+      withScope: expect.any(Function),
     });
     expect(mocks.executeStableSubagentInBand).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -503,16 +506,20 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.selectAvailableDelegationModel).toHaveBeenNthCalledWith(1, {
       requestedModel: 'economy-model',
       parentModel: 'parent-model',
+      withScope: expect.any(Function),
     });
     expect(mocks.selectAvailableDelegationModel).toHaveBeenNthCalledWith(2, {
       requestedModel: 'strong-model',
       parentModel: 'parent-model',
+      withScope: expect.any(Function),
     });
   });
 
   it('fails the workflow when a declared model is unavailable', async () => {
-    mocks.selectAvailableDelegationModel.mockRejectedValueOnce(
-      new Error('Model "missing-model" is not currently available.'),
+    mocks.selectAvailableDelegationModel.mockReturnValueOnce(
+      Effect.fail(
+        new Error('Model "missing-model" is not currently available.'),
+      ),
     );
     mocks.workspaceExists.mockResolvedValue(false);
     const runner = defaultRunner();
@@ -533,7 +540,9 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it('preserves delegation failures when no model is declared', async () => {
     const selectionError = new Error('No delegation models are available.');
-    mocks.selectAvailableDelegationModel.mockRejectedValueOnce(selectionError);
+    mocks.selectAvailableDelegationModel.mockReturnValueOnce(
+      Effect.fail(selectionError),
+    );
     const runner = defaultRunner();
 
     await expect(
@@ -937,6 +946,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
+      withScope: expect.any(Function),
     });
     expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
