@@ -163,6 +163,27 @@ is the parent edge spelled as a boolean a fourth time, and it is deleted. The
 five persisted carriers of the parent pointer collapse to the `run.start`
 row; "is a direct child of X" has one implementation, over the fold.
 
+#### 3.2.1 Correction, verified against the code on 2026-09-10
+
+Two claims in 3.2 do not hold, and implementing them literally changes behavior.
+
+**The edge is two facts, not one.** A run has a creation edge and a current edge.
+
+- The creation edge is immutable. `run.start` records it, `ExecutionMeta.parentExecutionId` persists it, and `hasPersistedParent` in `src/agent/storage/executionLifecycle.ts` reads it when a run resumes.
+- The current edge is mutable. `ExecutionRegistry.detachActiveChildren` runs when an orchestrator is stopped without killing its children. It calls `handle.detach()`, which makes the handle its own parent, and publishes `setParentStream { parentStreamId: null }`, which the session fold applies to the view's `parentId`. Detach publishes on the stream aggregate and never touches the execution metadata. `setParentStream` is also a record type in the frozen CLI NDJSON vocabulary.
+
+So the persisted carriers do not all collapse onto `run.start`, and `setParentStream` is not deleted. What does collapse is the duplicate pair: once a run's stream id is its run id, `parentStreamId` and `parentExecutionId` hold the same value on every carrier that has both. `setParentStream` stays as the one "current parent changed" fact.
+
+**`isSubagent` and `isChildExecution` read different edges.**
+
+- `isChildExecution` is the current edge (`_parentStreamId !== childStreamId`), so a detached child answers false.
+- The tool-use flow's `isSubagent` is the creation edge. It is captured once at launch, re-derived from `hasPersistedParent` on resume, and never re-read. It decides three behaviors in `ToolUseWaitNode`: stop immediately after an error, skip the root-only idle notification, and suspend through the child-run loop instead of waiting for follow-ups. A detached child therefore keeps delivering through the follow-up queue, as `detachActiveChildren` documents.
+- The persisted result event's `isSubagent` is written from the current edge, so a detached child's final result reports top level and the terminal toast treats its failure like a root run's.
+
+Deriving the flow's `isSubagent` from the current edge would flip a detached child into root mode mid-flight: goal continuation, `waitForFollowUp`, and root idle notifications. The two readings stay separate.
+
+This correction does not change the section's conclusion about `background`. Whether it equals the creation edge on every launch path is proven by the pass that deletes it.
+
 ### 3.3 Phase, outcome, and tool-call status
 
 `RunPhase` is `running`, `waiting`, and the three `RunOutcome` values. It is
