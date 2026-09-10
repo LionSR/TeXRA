@@ -295,6 +295,21 @@ export function createFlushableDebounce(
   };
 }
 
+/** A running interval. `dispose()` stops it; safe to call more than once. */
+export interface Ticker {
+  dispose(): void;
+}
+
+/** Thin `setInterval`/`clearInterval` wrapper exposing lifecycle as an object. */
+export function createTicker(intervalMs: number, onTick: () => void): Ticker {
+  const timer = setInterval(onTick, intervalMs);
+  return {
+    dispose() {
+      clearInterval(timer);
+    },
+  };
+}
+
 /**
  * Coalesce concurrent async requests for the same key: return a resolved
  * value from `resolved` if present, otherwise share one in-flight promise

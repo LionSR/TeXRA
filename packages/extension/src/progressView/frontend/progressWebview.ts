@@ -8,6 +8,7 @@
  * conversation.
  */
 import { resolveSelected } from '@shared/session/surface';
+import { createTicker } from '@utils/core';
 
 import { createSessionSurfaces } from './sessionSurfaces';
 import { webviewStorage } from './webviewStorage';
@@ -63,16 +64,16 @@ export function mountProgressWebview(app: ProgressApp): void {
     sessions.hostRequest(sessionKey, { kind: 'setActiveView', view: shown });
   };
   const unsubscribe = sessions.onChange(assign);
-  const clock = window.setInterval(() => {
+  const clock = createTicker(1000, () => {
     app.nowMs = Date.now();
-  }, 1000);
+  });
   assign();
 
   window.addEventListener(
     'pagehide',
     () => {
       window.removeEventListener('message', receive);
-      window.clearInterval(clock);
+      clock.dispose();
       unsubscribe();
       sessions.dispose();
     },

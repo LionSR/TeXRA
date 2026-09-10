@@ -8,7 +8,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -23,6 +23,7 @@ import {
   type GrokAuthStatus,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
+import { TickerController } from '@shared/litControllers/TickerController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -79,31 +80,18 @@ export class SubscriptionsTab extends LitElement {
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
     null;
   @property({ attribute: false }) copilotModels: CopilotRouteInfo[] = [];
-  @state() private now = 0;
 
-  private clock: ReturnType<typeof setInterval> | undefined;
+  private readonly _ticker = new TickerController(this, 60_000);
 
   override connectedCallback(): void {
     super.connectedCallback();
-    this.refreshNow();
-    this.clock = setInterval(() => this.refreshNow(), 60_000);
     postMessage(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE, {
       forceRefresh: false,
     });
   }
 
-  override disconnectedCallback(): void {
-    if (this.clock !== undefined) clearInterval(this.clock);
-    this.clock = undefined;
-    super.disconnectedCallback();
-  }
-
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
-    if (changedProperties.has('usage')) this.refreshNow();
-  }
-
-  private refreshNow(): void {
-    this.now = Date.now();
+    if (changedProperties.has('usage')) this._ticker.refresh();
   }
 
   override render(): TemplateResult {
@@ -138,12 +126,12 @@ export class SubscriptionsTab extends LitElement {
           .auth=${this.chatgptAuth}
           .contextWindow=${this.chatgptCodexContextWindow}
           .usage=${this.usage?.chatgpt ?? null}
-          .now=${this.now}
+          .now=${this._ticker.now}
         ></subscription-section>
         <subscription-section
           .provider=${GROK_SUBSCRIPTION_SECTION}
           .auth=${this.grokAuth}
-          .now=${this.now}
+          .now=${this._ticker.now}
         ></subscription-section>
         ${CODING_PLAN_SUBSCRIPTIONS.map((section) =>
           this.renderCodingPlanSection(section),
@@ -211,7 +199,7 @@ export class SubscriptionsTab extends LitElement {
           </div>
           <subscription-usage-row
             .snapshot=${this.usage?.[section.usageProvider] ?? null}
-            .now=${this.now}
+            .now=${this._ticker.now}
           ></subscription-usage-row>
         </div>
       </section>
