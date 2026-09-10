@@ -224,8 +224,7 @@ async function runHistoryDelete(
     // process-bookkeeping entries and agent-spawned child runs — don't add the
     // visibility filter here.
     const session = await initializeCliTranscriptSession();
-    const count = (await effectRuntime().runPromise(listRuns(session)))
-      .length;
+    const count = (await effectRuntime().runPromise(listRuns(session))).length;
     writeTextStderr(
       `Refusing to delete ${formatResultCount(count, 'stored run')}. Re-run with --yes to confirm.`,
     );
@@ -283,14 +282,14 @@ async function runHistoryDelete(
 }
 
 const historyListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List stored executions' },
+  meta: { name: 'list', description: 'List stored runs' },
   args: {
     ...GLOBAL_ARGS,
     limit: {
       type: 'string',
       alias: 'n',
       valueHint: 'count',
-      description: 'Show at most this many executions',
+      description: 'Show at most this many runs',
     },
   },
   run: async (context, ctx) => {
@@ -352,7 +351,7 @@ const historyShowCommand = defineCliCommand({
 });
 
 const historyDeleteCommand = defineCliCommand({
-  meta: { name: 'delete', description: 'Delete stored executions' },
+  meta: { name: 'delete', description: 'Delete stored runs' },
   args: {
     ...GLOBAL_ARGS,
     id: {
@@ -362,7 +361,7 @@ const historyDeleteCommand = defineCliCommand({
     },
     all: {
       type: 'boolean',
-      description: 'Delete all stored executions (requires --yes to confirm)',
+      description: 'Delete all stored runs (requires --yes to confirm)',
     },
     yes: {
       type: 'boolean',
@@ -387,7 +386,7 @@ const historyDeleteCommand = defineCliCommand({
 });
 
 export const historyCommand = defineCommand({
-  meta: { name: 'history', description: 'Inspect stored executions' },
+  meta: { name: 'history', description: 'Inspect stored runs' },
   args: {
     ...GLOBAL_ARGS,
   },

@@ -205,8 +205,7 @@ export class StreamLogStore {
 
   private loadEntries(runId: RunId) {
     return Effect.gen({ self: this }, function* () {
-      if (this.get(runId) !== undefined || this.database === undefined)
-        return;
+      if (this.get(runId) !== undefined || this.database === undefined) return;
       const entries = foldEntries(
         yield* this.database.readAggregate(aggregateId('run', runId), 0),
       );
@@ -273,10 +272,7 @@ export class StreamLogStore {
     );
   }
 
-  private retainRun(
-    runId: RunId,
-    ownerKey: string,
-  ): TranscriptResidencyLease {
+  private retainRun(runId: RunId, ownerKey: string): TranscriptResidencyLease {
     if (!ownerKey.trim()) {
       throw new Error(
         'Transcript run residency requires a non-empty owner key.',
@@ -286,7 +282,7 @@ export class StreamLogStore {
     const current = this.runs.get(runId)?.runOwner;
     if (current && current.ownerKey !== ownerKey) {
       throw new Error(
-        `Transcript stream ${runId} is already owned by another run.`,
+        `Transcript run ${runId} is already owned by another run.`,
       );
     }
     const ownership =

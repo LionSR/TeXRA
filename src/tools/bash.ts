@@ -56,10 +56,7 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 // Local file imports
 import { defineTool } from './core/define';
 import { nullishWithDefault } from './core/inputSchema';
-import {
-  childRunDescription,
-  createChildRun,
-} from './delegation/childRun';
+import { childRunDescription, createChildRun } from './delegation/childRun';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
 import { parseWorkingDirectory } from './pathResolution';
 
@@ -78,11 +75,11 @@ const SHELL_BACKGROUNDING_PATTERN =
   /(?:^|[\s;])nohup\b[^\n;]*(?<![>&])&(?![>&])/;
 const SHELL_BACKGROUNDING_MESSAGE =
   'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
-  'Do not emulate background run inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
+  'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
 
 interface BoundedOutputCapture {
   append(chunk: string): void;
-  text(runName: 'stdout' | 'stderr'): string | null;
+  text(streamName: 'stdout' | 'stderr'): string | null;
   /** Retained leading window (up to `headChars`). */
   readonly head: string;
   /** Retained trailing window (up to `tailChars`). */
@@ -169,7 +166,7 @@ function createBoundedOutputCapture(
       appendText(withoutTrailingWhitespace);
       appendPendingWhitespace(text.slice(withoutTrailingWhitespace.length));
     },
-    text(runName: 'stdout' | 'stderr'): string | null {
+    text(streamName: 'stdout' | 'stderr'): string | null {
       if (!hasNonWhitespace) return null;
       if (totalChars <= tail.length) return tail || null;
 
@@ -180,7 +177,7 @@ function createBoundedOutputCapture(
           ? appendTail('', tail, tail.length - overlapChars)
           : tail;
       return elidedChars > 0
-        ? `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${runName} ...]\n\n${nonOverlappingTail}`
+        ? `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]\n\n${nonOverlappingTail}`
         : head + nonOverlappingTail;
     },
   };
@@ -215,7 +212,7 @@ const BashInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Optional human-readable purpose for the command. Ignored by run.',
+      'Optional human-readable purpose for the command. Ignored by execution.',
     ),
   timeout: z
     .int()
@@ -234,7 +231,7 @@ type BashInput = z.infer<typeof BashInputSchema>;
 
 /**
  * The child-run strategy for one background shell command: a single terminal
- * turn that runs the process, runs its output into the child's tab, and
+ * turn that runs the process, streams its output into the child's tab, and
  * hands the loop the formatted delivery and result manifest. Everything else a
  * background child needs — the follow-up queue claim, the wake-aware parent
  * delivery, report persistence, the interrupt target, and terminal
@@ -411,10 +408,7 @@ export class BashTool extends defineTool({
     const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
 
     if (input.run_in_background) {
-      const { runId } = requireLiveRun(
-        'bash run_in_background',
-        runContext,
-      );
+      const { runId } = requireLiveRun('bash run_in_background', runContext);
       return effectRuntime().runPromise(
         this.executeBackground(
           currentSession(),

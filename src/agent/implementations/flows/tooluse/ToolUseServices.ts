@@ -22,15 +22,13 @@ export interface ToolUseServices extends BaseFlowContextInit {
   readonly getPendingStructuredOutput?: () => ToolUseRunShared['structured'];
   /** Report assistant text produced by a non-skipped cycle in this invocation. */
   readonly onCycleResponse?: (response: string) => void;
-  /** True when this agent was launched as a subagent by an orchestrator. */
-  readonly isSubagent?: boolean;
   /**
    * Root-run-only notification: fires with the latest assistant response at
    * every cycle boundary (not just a genuine block), before the flow either
    * continues immediately (a follow-up is already queued) or blocks on
    * `session.waitForFollowUp()`. Used by hosts that project a live
    * transcript outside the flow's own event stream — e.g. the CLI syncing
-   * its terminal transcript. Never fires in subagent mode, which has its own
+   * its terminal transcript. Never fires for a child run, which has its own
    * WAITING-suspend delivery path instead.
    */
   readonly onIdle?: () => void;

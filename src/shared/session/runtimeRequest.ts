@@ -6,9 +6,9 @@
  * and response a bridge posts (8.4) arrive with that bridge.
  *
  * Arm tags are `group.action` throughout, so two groups cannot claim one
- * tag. Every stream-scoped arm names a bare `runId`: a `RunId`
- * names one run for its whole life (decision 9), so a request that waits
- * while its stream is deleted can only miss, never land on a different run.
+ * tag. Every run-scoped arm names a bare `runId`: a `RunId` names one run
+ * for its whole life (decision 9), so a request that waits while its run is
+ * deleted can only miss, never land on a different run.
  * The union carries the arms the runtime answers today; a lane that routes
  * another retained command adds its arm with its handler.
  */
@@ -21,12 +21,12 @@ import {
   UserQuestionAnswersSchema,
 } from '@shared/schemas';
 
-const streamScoped = { runId: RunIdSchema };
+const runScoped = { runId: RunIdSchema };
 
-/** A decision names the stream its `approval.requested` carries and the
+/** A decision names the run its `approval.requested` carries and the
  *  `approvalId` that fact carries: domain identity, never the envelope's
  *  correlation id. */
-const decision = { ...streamScoped, approvalId: z.string().min(1) };
+const decision = { ...runScoped, approvalId: z.string().min(1) };
 
 const RejectionSchema = z.object({
   action: z.literal('reject'),
@@ -35,15 +35,15 @@ const RejectionSchema = z.object({
 
 export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
   z.object({
-    kind: z.literal('stream.stop'),
-    ...streamScoped,
+    kind: z.literal('run.stop'),
+    ...runScoped,
     detachActiveChildren: z.boolean().nullish(),
   }),
-  z.object({ kind: z.literal('stream.delete'), ...streamScoped }),
-  z.object({ kind: z.literal('stream.compact'), ...streamScoped }),
+  z.object({ kind: z.literal('run.delete'), ...runScoped }),
+  z.object({ kind: z.literal('run.compact'), ...runScoped }),
   z.object({
     kind: z.literal('followUp.send'),
-    ...streamScoped,
+    ...runScoped,
     text: z.string().min(1),
     displayText: z.string().nullish(),
     mediaFiles: z.array(z.string()).nullish(),
@@ -109,11 +109,11 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     ]),
   }),
   /** An external inquiry's terminal answers: persisted on the thread, then
-   *  the run continues from it. The aggregate is the thread; the stream is
-   *  the run the thread belongs to. */
+   *  the run continues from it. The aggregate is the thread; the `runId`
+   *  names the run the thread belongs to. */
   z.object({
     kind: z.literal('externalInquiry.submit'),
-    ...streamScoped,
+    ...runScoped,
     threadId: InquiryThreadIdSchema,
     turnIndex: z.int().positive(),
     answer: z.string(),
@@ -121,7 +121,7 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('externalInquiry.drop'),
-    ...streamScoped,
+    ...runScoped,
     threadId: InquiryThreadIdSchema,
     turnIndex: z.int().positive(),
     feedback: z.string().nullish(),
@@ -132,7 +132,7 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('policy.set'),
     change: z.object({
       field: z.literal('bypass'),
-      ...streamScoped,
+      ...runScoped,
       bypass: z.enum(APPROVAL_BYPASS_KINDS),
       enabled: z.boolean(),
     }),
@@ -144,7 +144,7 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
    *  child list, focus, and kill already share. */
   z.object({
     kind: z.literal('workflow.control'),
-    ...streamScoped,
+    ...runScoped,
     childRunId: RunIdSchema,
     action: z.enum(['skip', 'retry']),
   }),

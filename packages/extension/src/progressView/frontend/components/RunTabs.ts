@@ -501,7 +501,7 @@ export class RunTabs extends LitElement {
         break;
       case 'delete':
         this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'stream.delete', runId }),
+          SessionUiEvents.runtime({ kind: 'run.delete', runId }),
         );
         break;
       case 'resume':

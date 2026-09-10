@@ -57,6 +57,7 @@ import {
   TODO_STATUS,
   TOOL_USE_STATUS,
   USER_FOLLOW_UP_SUPPORT,
+  RunIdSchema,
   type InquiryThreadId,
   type NormalizedToolUse,
   type PlanApprovalPermission,
@@ -171,10 +172,9 @@ import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
-const STREAM_ID = 'harness-stream-1' as RunId;
+const HARNESS_RUN_ID = RunIdSchema.parse('aaaa0001f10e');
 const HARNESS_MODEL = 'harness-model';
-const RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID =
-  'harness-workflow-agent-a' as RunId;
+const RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID = RunIdSchema.parse('aaaa000af10e');
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
@@ -414,7 +414,7 @@ const harnessRuntimeSession = initializeDefaultSession({
 });
 harnessRuntimeSession.setApprovalPolicy(HARNESS_INITIAL_APPROVAL_POLICY);
 const harnessFollowUpLease = defaultSession().followUps.claimLive(
-  STREAM_ID,
+  HARNESS_RUN_ID,
   'flow',
 )!;
 const harnessFollowUpQueue =
@@ -457,7 +457,7 @@ const HARNESS_ORCHESTRATION_HISTORY: readonly CliHistoryEntry[] =
   SHOW_ORCHESTRATION_HISTORY
     ? [
         {
-          id: 'cccccccccccc' as RunId,
+          id: RunIdSchema.parse('cccccccccccc'),
           timestamp: '2026-06-06T00:02:00Z',
           agent: 'orchestrator',
           model: HARNESS_MODEL,
@@ -628,7 +628,7 @@ function publish(...drafts: SessionEventDraft[]): void {
 }
 
 // The TUI reads the session fold (PRD 10.1): bind it and subscribe every
-// stream's transcript tier the way `runChat` does.
+// run's transcript tier the way `runChat` does.
 HARNESS_DISPOSERS.push(bindSessionView(session().view));
 {
   let subscribed = '';
@@ -660,10 +660,10 @@ HARNESS_DISPOSERS.push(
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
-const harnessStreams = new Set<RunId>();
+const harnessRuns = new Set<RunId>();
 const harnessLogs = new Map<RunId, StreamLog>();
 
-/** Mint a stream: its `run.start` existence fact (PRD 6, item 2), then the
+/** Mint a run: its `run.start` existence fact (PRD 6, item 2), then the
  *  `run.config` launch fact a real run publishes next, which names the model
  *  an agent runs on (a child's scrollback header waits for it). */
 function seedRun(
@@ -682,8 +682,8 @@ function seedRun(
     >['userFollowUpSupport'];
   } = {},
 ): void {
-  if (harnessStreams.has(runId)) return;
-  harnessStreams.add(runId);
+  if (harnessRuns.has(runId)) return;
+  harnessRuns.add(runId);
   const identity = options.identity ?? {
     kind: 'agent' as const,
     agent: options.agent ?? 'harness-agent',
@@ -712,7 +712,7 @@ function seedRun(
   }
 }
 
-/** Place a stream in a phase: the status fact every renderer folds. */
+/** Place a run in a phase: the status fact every renderer folds. */
 function seedPhase(runId: RunId, phase: RunPhase, runStartedAt?: number): void {
   seedRun(runId);
   publish({
@@ -737,7 +737,7 @@ function removeRun(runId: RunId): void {
     type: 'run.removed',
     aggregateId: qualifyAggregateId('run', runId),
   });
-  harnessStreams.delete(runId);
+  harnessRuns.delete(runId);
 }
 
 /** Publish complete fixture rows on the event plane. */
@@ -760,17 +760,17 @@ function seedRows(
   );
 }
 
-/** Every stream under `rootId`, the root first. */
+/** Every run under `rootId`, the root first. */
 function descendantsOf(rootId: RunId): RunId[] {
   const view = currentView();
   const out: RunId[] = [];
   const pending = [rootId];
   while (pending.length > 0) {
     const id = pending.shift()!;
-    const stream = view.runs.get(id);
-    if (!stream) continue;
+    const run = view.runs.get(id);
+    if (!run) continue;
     out.push(id);
-    pending.push(...stream.childIds);
+    pending.push(...run.childIds);
   }
   return out;
 }
@@ -935,7 +935,7 @@ function seedLiveToolOnlyTranscript(): void {
       },
     });
   }
-  seedRows(STREAM_ID, entries);
+  seedRows(HARNESS_RUN_ID, entries);
 }
 
 function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
@@ -989,7 +989,7 @@ function seedSubagentFollowupTranscript(): void {
       text: `<orchestrator-followup>${text}</orchestrator-followup>`,
     });
   }
-  seedRows(STREAM_ID, entries);
+  seedRows(HARNESS_RUN_ID, entries);
 }
 
 function makeChildEntries(
@@ -1027,7 +1027,7 @@ function makeEditApprovalRequest() {
       originalContent: [...context, 'Old acknowledgment.'].join('\n'),
       proposedContent: [...context, 'Revised acknowledgment.'].join('\n'),
       sourceTool: 'edit_file',
-      runId: STREAM_ID,
+      runId: HARNESS_RUN_ID,
     };
   }
 
@@ -1054,7 +1054,7 @@ function makeEditApprovalRequest() {
       '\\end{document}',
     ].join('\n'),
     sourceTool: 'harness',
-    runId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
   };
 }
 
@@ -1066,15 +1066,15 @@ function makeBashApprovalPayload(index = 1) {
     cwd: HARNESS_CWD,
     allowBypass: true,
     runId: SHOW_WORKFLOW_RUNNING
-      ? RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID
-      : STREAM_ID,
+      ? RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID
+      : HARNESS_RUN_ID,
   };
 }
 
 function makeRetryApprovalPayload(): RetryPermission {
   return {
     requestId: `harness-retry-${nanoid()}`,
-    runId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     operation: 'Model request',
     model: HARNESS_MODEL,
     errorMessage: RETRY_APPROVAL_CHATGPT
@@ -1098,7 +1098,7 @@ function makeRetryApprovalPayload(): RetryPermission {
 function makePlanApprovalPayload(): PlanApprovalPermission {
   return {
     requestId: 'harness-plan-approval',
-    runId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
       objective: PLAN_APPROVAL_OBJECTIVE,
@@ -1109,7 +1109,7 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
 function makeAgentProposalPayload() {
   return {
     requestId: 'harness-agent-proposal',
-    runId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     agentCategory: AgentCategory.ToolUse,
     agent: 'review',
     model: 'deepseekT',
@@ -1122,7 +1122,7 @@ function makeAgentProposalPayload() {
 function makeUserQuestionPayload(): UserQuestionPermission {
   return {
     requestId: 'harness-user-question',
-    runId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     allowBypass: false,
     context: USER_QUESTION_CONTEXT,
     questions: [
@@ -1231,8 +1231,8 @@ async function appendHarnessPlanDecision(
   result: PlanApprovalResult,
 ): Promise<void> {
   if (result.action === 'approve_and_goal') {
-    await GoalStore.start(STREAM_ID, PLAN_APPROVAL_OBJECTIVE);
-    seedPhase(STREAM_ID, RUN_PHASE.RUNNING);
+    await GoalStore.start(HARNESS_RUN_ID, PLAN_APPROVAL_OBJECTIVE);
+    seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
   }
@@ -1242,7 +1242,7 @@ async function appendHarnessPlanDecision(
 }
 
 // Queued follow-ups or active (non-idle) todos simulate an in-flight run;
-// idle todos instead park the stream in a waiting state.
+// idle todos instead park the run in a waiting state.
 const HARNESS_RUN_ACTIVE =
   QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS);
 const HARNESS_RUN_IDLE = SHOW_TODOS && SHOW_IDLE_TODOS;
@@ -1271,21 +1271,21 @@ sessionMeta.set({
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
-seedRun(STREAM_ID);
-activeRunIdSignal.set(STREAM_ID);
-rootRunId.set(STREAM_ID);
-seedRows(STREAM_ID, harnessInitialEntries());
+seedRun(HARNESS_RUN_ID);
+activeRunIdSignal.set(HARNESS_RUN_ID);
+rootRunId.set(HARNESS_RUN_ID);
+seedRows(HARNESS_RUN_ID, harnessInitialEntries());
 if (QUEUED_FOLLOW_UPS.length > 0) {
   publish({
     type: 'updateQueuedFollowUps',
-    aggregateId: qualifyAggregateId('run', STREAM_ID),
+    aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
     messages: QUEUED_FOLLOW_UPS,
   });
 }
 const HARNESS_INITIAL_STREAM_STATUS = harnessInitialRunStatus();
 if (HARNESS_INITIAL_STREAM_STATUS) {
   seedPhase(
-    STREAM_ID,
+    HARNESS_RUN_ID,
     HARNESS_INITIAL_STREAM_STATUS,
     // Backdated so the status bar shows a plausible elapsed time.
     HARNESS_RUN_ACTIVE ? Date.now() - 42_000 : undefined,
@@ -1301,16 +1301,16 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 }
 
 async function seedRunningWorkflow(): Promise<void> {
-  const childRunId = 'aaaa0002f10e' as RunId;
-  const firstAgentRunId = RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID;
-  const secondAgentRunId = 'harness-workflow-agent-b' as RunId;
+  const childRunId = RunIdSchema.parse('aaaa0002f10e');
+  const firstAgentRunId = RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID;
+  const secondAgentRunId = RunIdSchema.parse('aaaa000bf10e');
   seedRun(childRunId, {
     category: AgentCategory.Workflow,
     identity: {
       kind: 'multiAgentWorkflow',
       workflowName: 'live-workflow-validation',
     },
-    parentRunId: STREAM_ID,
+    parentRunId: HARNESS_RUN_ID,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
@@ -1375,10 +1375,10 @@ async function seedRunningWorkflow(): Promise<void> {
 }
 
 function seedRunningProcessChild(): void {
-  const childRunId = 'aaaa0003f10e' as RunId;
+  const childRunId = RunIdSchema.parse('aaaa0003f10e');
   seedRun(childRunId, {
     identity: { kind: 'process', tool: 'bash' },
-    parentRunId: STREAM_ID,
+    parentRunId: HARNESS_RUN_ID,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedDescription(childRunId, 'sleep 30');
@@ -1390,7 +1390,7 @@ if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
   const nestedStartedAt = startedAt + 24_000;
   const nestedStrategyChild = {
-    runId: 'aaaa0004f10e' as RunId,
+    runId: RunIdSchema.parse('aaaa0004f10e'),
     identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
     status: RUN_PHASE.RUNNING,
@@ -1398,21 +1398,21 @@ if (SHOW_CHILDREN) {
   };
   const childRuns = [
     {
-      runId: 'aaaa0005f10e' as RunId,
+      runId: RunIdSchema.parse('aaaa0005f10e'),
       identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
       status: RUN_PHASE.RUNNING,
       startedAt,
     },
     {
-      runId: 'aaaa0006f10e' as RunId,
+      runId: RunIdSchema.parse('aaaa0006f10e'),
       identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
       status: RUN_PHASE.WAITING,
       startedAt: startedAt - 123_000,
     },
     {
-      runId: 'aaaa0007f10e' as RunId,
+      runId: RunIdSchema.parse('aaaa0007f10e'),
       identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
       status: RUN_PHASE.RUNNING,
@@ -1428,17 +1428,17 @@ if (SHOW_CHILDREN) {
       : child,
   );
   seedPhase(
-    STREAM_ID,
+    HARNESS_RUN_ID,
     RUN_PHASE.RUNNING,
     // One run window across every later active phase: a scenario that
     // already seeded an initial RUNNING keeps that backdated start.
-    runViewOf(currentView(), STREAM_ID)?.runStartedAt ?? startedAt,
+    runViewOf(currentView(), HARNESS_RUN_ID)?.runStartedAt ?? startedAt,
   );
   for (const child of childRuns) {
     const runId = child.runId;
     seedRun(runId, {
       identity: child.identity,
-      parentRunId: STREAM_ID,
+      parentRunId: HARNESS_RUN_ID,
     });
     seedDescription(runId, `${child.agentName} sub-workflow`);
     seedRows(runId, makeChildEntries(child.agentName, child.runId));
@@ -1464,7 +1464,7 @@ if (SHOW_CHILDREN) {
     const nestedRunId = nestedStrategyChild.runId;
     seedRun(nestedRunId, {
       identity: nestedStrategyChild.identity,
-      parentRunId: 'aaaa0005f10e' as RunId,
+      parentRunId: RunIdSchema.parse('aaaa0005f10e'),
     });
     seedDescription(nestedRunId, 'localChecker nested proof check');
     seedRows(
@@ -1509,12 +1509,12 @@ if (SHOW_TODOS) {
   publish(
     {
       type: 'updateTodos',
-      aggregateId: qualifyAggregateId('run', STREAM_ID),
+      aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
       todos: [...workPlan.todos],
     },
     {
       type: 'updatePlan',
-      aggregateId: qualifyAggregateId('run', STREAM_ID),
+      aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
       plan: workPlan.plan,
     },
   );
@@ -1545,7 +1545,7 @@ if (SHOW_EDIT_APPROVAL) {
 }
 
 // The running workflow exists before its agent asks below: a request names
-// a stream the fold already holds, the way a real run's does.
+// a run the fold already holds, the way a real run's does.
 if (SHOW_WORKFLOW_RUNNING) {
   await seedRunningWorkflow();
 }
@@ -1553,7 +1553,7 @@ if (SHOW_WORKFLOW_RUNNING) {
 if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
-    const runId = permission.runId as RunId;
+    const runId = permission.runId;
     return session().interactions.requestBashApproval({
       runId,
       command: permission.command,
@@ -1583,7 +1583,7 @@ if (SHOW_BASH_APPROVAL) {
     const timer = setInterval(() => {
       pollCount += 1;
       const activeRunId = activeRunIdSignal.get();
-      if (activeRunId === undefined || activeRunId === STREAM_ID) {
+      if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) {
         if (pollCount >= 200) clearInterval(timer);
         return;
       }
@@ -1618,7 +1618,7 @@ if (SHOW_EXTERNAL_INQUIRY) {
     question: EXTERNAL_INQUIRY_QUESTION,
     threadId: EXTERNAL_INQUIRY_THREAD_ID,
     allowBypass: false,
-    runId: STREAM_ID,
+    runId: HARNESS_RUN_ID,
     sessionLinks: null,
     transcript: null,
   });
@@ -1626,7 +1626,7 @@ if (SHOW_EXTERNAL_INQUIRY) {
     type: 'inquiryThreadUpdated',
     aggregateId: qualifyAggregateId('inquiry', EXTERNAL_INQUIRY_THREAD_ID),
     threadId: EXTERNAL_INQUIRY_THREAD_ID,
-    parentRunId: STREAM_ID,
+    parentRunId: HARNESS_RUN_ID,
     status: 'open',
     lastQuestionPreview: EXTERNAL_INQUIRY_QUESTION.slice(0, 80),
     lastActivityIso: new Date().toISOString(),
@@ -1670,18 +1670,21 @@ function markHarnessInterrupted(): void {
   canInterrupt = false;
   rootRunPending.set(false);
   session().interactions.cancel({ cause: 'Session interrupted.' });
-  appendHarnessAssistantTranscript('Harness interrupt requested.', STREAM_ID);
-  for (const runId of descendantsOf(STREAM_ID)) {
-    const stream = runViewOf(currentView(), runId);
-    if (stream && isInFlightPhase(stream.status)) {
+  appendHarnessAssistantTranscript(
+    'Harness interrupt requested.',
+    HARNESS_RUN_ID,
+  );
+  for (const runId of descendantsOf(HARNESS_RUN_ID)) {
+    const run = runViewOf(currentView(), runId);
+    if (run && isInFlightPhase(run.status)) {
       seedPhase(runId, RUN_PHASE.CANCELLED);
     }
   }
 }
 
-function markHarnessStreamInterrupted(runId: RunId): void {
+function markHarnessRunInterrupted(runId: RunId): void {
   session().interactions.cancel({ runId, cause: 'Run interrupted.' });
-  if (runId === STREAM_ID) {
+  if (runId === HARNESS_RUN_ID) {
     canInterrupt = false;
     rootRunPending.set(false);
   }
@@ -1706,7 +1709,7 @@ function appendHarnessTranscript(
     explicitRunId ??
     resolveLocalTranscriptRunId({
       activeRunId: activeRunIdSignal.get(),
-      fallbackRunId: STREAM_ID,
+      fallbackRunId: HARNESS_RUN_ID,
       parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
       rootRunId: rootRunId.get(),
     });
@@ -1757,7 +1760,7 @@ function markHarnessRunStopped(runId: RunId): void {
   if (!child) return;
   appendHarnessAssistantTranscript(
     `Harness kill requested for ${runId}.`,
-    STREAM_ID,
+    HARNESS_RUN_ID,
   );
   appendHarnessAssistantTranscript(
     'Harness kill requested for this sub-workflow.',
@@ -1787,20 +1790,20 @@ function handleHarnessSubmit(line: string): void {
 function appendHarnessStatus(): void {
   const meta = sessionMeta.get();
   const view = currentView();
-  const runId = activeRunIdSignal.get() ?? STREAM_ID;
-  const stream = runViewOf(view, runId);
+  const runId = activeRunIdSignal.get() ?? HARNESS_RUN_ID;
+  const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: cumulativeUsageOf(stream)?.usageRoute,
+        usageRoute: cumulativeUsageOf(run)?.usageRoute,
       }),
       approvalPolicy: harnessRuntimeSession.approvalPolicy,
       approvalBypasses: view.policy.get(runId)?.bypasses,
-      statusLabel: stream?.statusLabel,
-      activeChildSessions: runningChildCount(view, stream),
+      statusLabel: run?.statusLabel,
+      activeChildSessions: runningChildCount(view, run),
       goal: GoalStore.getForRun(runId),
       // The harness never emits an ACTIVE_SKILLS snapshot.
       activeSkills: [],
@@ -1813,12 +1816,12 @@ function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   session().interactions.cancel({ cause: 'Session interrupted.' });
   harnessFollowUpQueue.drainItems();
-  void GoalStore.forget(STREAM_ID);
+  void GoalStore.forget(HARNESS_RUN_ID);
   for (const runId of [...currentView().runs.keys()]) {
     removeRun(runId);
   }
   resetCliState(meta);
-  activeRunIdSignal.set(STREAM_ID);
+  activeRunIdSignal.set(HARNESS_RUN_ID);
   // Mirror the real /clear handler (runChatTui.tsx): erase the terminal
   // outside Ink, then notify the erase epoch so the transcript rebuilds
   // after the reset state commits and repaints the session header.
@@ -1938,10 +1941,10 @@ registerBuiltinSlashCommands({
   },
 });
 // Mirror the real publisher's run facts: an interruptible harness run is a
-// pending root-run claim on the harness stream, so the status bar derives
+// pending root-run claim on the harness run, so the status bar derives
 // the Ctrl-C stop hint from these signals exactly as `texra chat` does.
 rootRunPending.set(canInterrupt);
-claimedRunId.set(canInterrupt ? STREAM_ID : undefined);
+claimedRunId.set(canInterrupt ? HARNESS_RUN_ID : undefined);
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);
@@ -1965,7 +1968,7 @@ function renderHarnessApp(): React.JSX.Element {
       }
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
-      onInterruptRun={markHarnessStreamInterrupted}
+      onInterruptRun={markHarnessRunInterrupted}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
     />
@@ -1976,9 +1979,9 @@ function renderHarnessApp(): React.JSX.Element {
 if (process.env.HARNESS_SESSION_TREE === '1') {
   const { log, events } = buildScenario();
   const recordedCount = log.events.length;
-  const waiting = 'eeeeeeeeeeee' as RunId;
-  const interrupted = 'ffffffffffff' as RunId;
-  const nested = '111111111111' as RunId;
+  const waiting = RunIdSchema.parse('eeeeeeeeeeee');
+  const interrupted = RunIdSchema.parse('ffffffffffff');
+  const nested = RunIdSchema.parse('111111111111');
   log.emit(PROCESS, 10_000_000, {
     type: 'status',
     phase: RUN_PHASE.RUNNING,

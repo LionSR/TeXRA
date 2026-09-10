@@ -25,9 +25,6 @@ import type PQueue from 'p-queue';
 
 const log = createLog('RunLease');
 
-/** A run id names its claim directory; the brand's hex alphabet admits no path separator. */
-const LeaseRunIdSchema = RunIdSchema;
-
 /**
  * One claim on a run, stored at
  * `runLeases/<runId>/<ownerToken>.json`. The file name is the
@@ -41,7 +38,7 @@ const LeaseRunIdSchema = RunIdSchema;
  */
 export const RunLeaseSchema = z.strictObject({
   version: z.literal(3),
-  runId: LeaseRunIdSchema,
+  runId: RunIdSchema,
   ownerToken: z.uuid(),
   acquiredAt: z.int().nonnegative(),
   owner: LeaseOwnerSchema,
@@ -137,12 +134,10 @@ function ownershipKey(root: string, runId: RunId): string {
 }
 
 function claimDir(root: string, runId: RunId): string {
-  const safeRunId = LeaseRunIdSchema.parse(runId);
-  return path.join(
-    root,
-    WORKSPACE_STORAGE_LAYOUT.runLeases,
-    safeRunId,
-  );
+  // A run id names its claim directory; the brand's hex alphabet admits no
+  // path separator.
+  const safeRunId = RunIdSchema.parse(runId);
+  return path.join(root, WORKSPACE_STORAGE_LAYOUT.runLeases, safeRunId);
 }
 
 function claimPath(root: string, runId: RunId, ownerToken: string) {
@@ -179,10 +174,7 @@ async function readClaimFile(
  * that vanishes between the listing and its read belongs to a claimant that
  * backed out or released, and is simply not reported.
  */
-async function readClaims(
-  runId: RunId,
-  root: string,
-): Promise<StoredClaim[]> {
+async function readClaims(runId: RunId, root: string): Promise<StoredClaim[]> {
   const claims: StoredClaim[] = [];
   let entries: [string, number][];
   try {
@@ -327,8 +319,7 @@ async function unlinkOwnClaim(
 }
 
 type ClaimOutcome =
-  | { readonly status: 'claimed'; readonly record: RunLeaseRecord }
-  | LeaseHeld;
+  { readonly status: 'claimed'; readonly record: RunLeaseRecord } | LeaseHeld;
 
 /**
  * The lock-free claim protocol. Nothing on disk is ever renamed or
@@ -356,10 +347,7 @@ async function claimLease(
   reap: LeaseReapPolicy,
 ): Promise<ClaimOutcome> {
   for (let round = 0; round < MAX_CLAIM_ROUNDS; round += 1) {
-    const present = await reapClaims(
-      await judgeClaims(runId, root),
-      reap,
-    );
+    const present = await reapClaims(await judgeClaims(runId, root), reap);
     if (present.length > 0) return heldBy(present);
     const record = RunLeaseSchema.parse({
       version: 3,
@@ -467,9 +455,7 @@ async function runWithValidatedOwnership<T>(
  * Validate local ownership against the persisted record at a durability
  * boundary. A pure fencing check: nothing is written and no clock is read.
  */
-export async function validateOwnedRunLease(
-  runId: RunId,
-): Promise<void> {
+export async function validateOwnedRunLease(runId: RunId): Promise<void> {
   const key = ownershipKey(storageRoot(), runId);
   const lease = ownedLeases.get(key);
   if (!lease || lease.releasing) {
@@ -561,9 +547,7 @@ export function acquireResumedRunLease(
 }
 
 /** Release this process's lease, but never remove a later owner's record. */
-export async function releaseOwnedRunLease(
-  runId: RunId,
-): Promise<void> {
+export async function releaseOwnedRunLease(runId: RunId): Promise<void> {
   await Promise.all(
     [...ownedLeases.values()]
       .filter((lease) => lease.runId === runId)
@@ -589,9 +573,7 @@ async function releaseOwnership(ownership: OwnedRunLease): Promise<void> {
  * Who holds `runId` on disk. Reads only: dead claims are reported as
  * absent here and unlinked by the next claim, never by this call.
  */
-export async function inspectRunLease(
-  runId: RunId,
-): Promise<RunLeasePresence> {
+export async function inspectRunLease(runId: RunId): Promise<RunLeasePresence> {
   const root = storageRoot();
   const judged = await judgeClaims(runId, root);
   const local = ownedLeases.get(ownershipKey(root, runId));

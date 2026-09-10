@@ -3,13 +3,13 @@
  * fallback, a skill activation, a slash-command result). They are not
  * events and never fold; they are Surface (PRD one-fold-three-renderers,
  * 9), one list of `{ runId, afterSeq, row }`, and the conversation panes
- * merge them into the stream's folded rows by `afterSeq` at render: a join
+ * merge them into the run's folded rows by `afterSeq` at render: a join
  * of two inputs ordered by the same transcript seq, so a row the fold's
  * residency cap drops never shifts a notice.
  */
 import { signal } from '@lit-labs/signals';
 
-import type { RunId } from '@shared/schemas';
+import { RunIdSchema, type RunId } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { RequestError } from '@shared/session/requestErrors';
 import {
@@ -20,8 +20,12 @@ import {
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
 
-/** Where notices land before the root run has a stream. */
-export const CLI_LOCAL_STREAM_ID = 'cli-local' as RunId;
+/**
+ * Where notices land before the root run exists. A reserved 8-hex id: real
+ * run ids are 12 hex (generated) or 24 (derived), so it can never collide,
+ * and it is minted through the schema rather than forged with a cast.
+ */
+export const CLI_LOCAL_RUN_ID = RunIdSchema.parse('c1110ca1');
 
 export interface LocalNotice {
   readonly runId: RunId;
@@ -96,7 +100,7 @@ function appendLocalTranscriptEntry(
     explicitRunId ??
     resolveLocalTranscriptRunId({
       activeRunId: active,
-      fallbackRunId: CLI_LOCAL_STREAM_ID,
+      fallbackRunId: CLI_LOCAL_RUN_ID,
       parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
       rootRunId: rootRunId.get(),
     });
@@ -132,30 +136,28 @@ export function resolveLocalTranscriptRunId({
   return parentOf(activeRunId) ?? activeRunId;
 }
 
-/** The pre-run notices become the root's opening rows once it has a stream. */
+/** The pre-run notices become the root's opening rows once it exists. */
 export function moveLocalTranscriptToRun(runId: RunId): void {
-  if (runId === CLI_LOCAL_STREAM_ID) return;
+  if (runId === CLI_LOCAL_RUN_ID) return;
   const current = notices.get();
-  if (!current.some((notice) => notice.runId === CLI_LOCAL_STREAM_ID)) {
+  if (!current.some((notice) => notice.runId === CLI_LOCAL_RUN_ID)) {
     return;
   }
   notices.set(
     current.map((notice) =>
-      notice.runId === CLI_LOCAL_STREAM_ID
+      notice.runId === CLI_LOCAL_RUN_ID
         ? { ...notice, runId, afterSeq: 0 }
         : notice,
     ),
   );
-  if (activeRunId.get() === CLI_LOCAL_STREAM_ID) focusRun(runId);
+  if (activeRunId.get() === CLI_LOCAL_RUN_ID) focusRun(runId);
 }
 
 export function clearLocalTranscript(): void {
   const current = notices.get();
-  const kept = current.filter(
-    (notice) => notice.runId !== CLI_LOCAL_STREAM_ID,
-  );
+  const kept = current.filter((notice) => notice.runId !== CLI_LOCAL_RUN_ID);
   if (kept.length !== current.length) notices.set(kept);
-  if (activeRunId.get() === CLI_LOCAL_STREAM_ID) {
+  if (activeRunId.get() === CLI_LOCAL_RUN_ID) {
     activeRunId.set(undefined);
   }
 }
@@ -170,7 +172,7 @@ export function noticesFor(
 }
 
 /**
- * The stream's folded rows with its notices inserted after the last row
+ * The run's folded rows with its notices inserted after the last row
  * whose seq is at or below their `afterSeq`, in notice order; a notice
  * takes that row's settlement key so the pane's settlement ordering keeps it
  * in place.
@@ -233,7 +235,7 @@ export function describeRequestError(error: RequestError): string {
   }
 }
 
-/** A refused runtime request, worded into the stream it named. */
+/** A refused runtime request, worded into the run it named. */
 export function appendLocalRequestRefusal(
   error: RequestError,
   runId: RunId,

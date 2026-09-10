@@ -17,8 +17,8 @@ import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
 
 /**
- * Process-lifetime owner of desktop stream resumption. One process holds a
- * session per open paper; a stream resumes in the session whose transcripts
+ * Process-lifetime owner of desktop run resumption. One process holds a
+ * session per open paper; a run resumes in the session whose transcripts
  * hold it, inside that session's scope. The open-session set is read from
  * the paper registry, so a closing paper stops being a resume target the
  * moment the registry drops it.
@@ -73,10 +73,10 @@ export class DesktopProcessResumeOwner {
       }
       return this.shuttingDown || transcriptMissing || !this.isOpen(session);
     };
-    // The resident transcript index is a cache of this process; the stream may
+    // The resident transcript index is a cache of this process; the run may
     // have been deleted from the durable transcript store by another process
     // since it was loaded. Read the store before resuming: neither the lease
-    // (a deleted stream holds none) nor the run lane (in-process only)
+    // (a deleted run holds none) nor the run lane (in-process only)
     // sees that fact.
     if (isCancellationRequested()) return false;
     const result = await effectRuntime().runPromise(
@@ -86,8 +86,7 @@ export class DesktopProcessResumeOwner {
             try: () => import('@tools/registry'),
             catch: ensureError,
           });
-          const exists =
-            yield* session.transcripts.hasAuthoritativeRun(runId);
+          const exists = yield* session.transcripts.hasAuthoritativeRun(runId);
           if (!exists) return false;
           return yield* resumeRunWithRefusalNotice(runId, {
             session,
@@ -107,7 +106,7 @@ export class DesktopProcessResumeOwner {
     if (Exit.isSuccess(result)) return result.value;
     const error = Cause.squash(result.cause);
     if (isCancellationRequested()) return false;
-    this.logger.error(`Failed to resume desktop stream ${runId}`, {
+    this.logger.error(`Failed to resume desktop run ${runId}`, {
       data: toLogData(error),
     });
     const primaryError = primaryAgentError(error);

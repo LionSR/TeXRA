@@ -223,7 +223,7 @@ const spawn = Effect.fn('nodeChildProcessSpawner.spawn')(function* (
     return yield* PlatformError.badArgument({
       module: MODULE,
       method: 'spawn',
-      description: 'Child process has no stdio runs',
+      description: 'Child process has no stdio streams',
     });
   }
 

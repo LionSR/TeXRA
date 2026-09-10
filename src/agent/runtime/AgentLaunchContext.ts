@@ -107,7 +107,7 @@ interface AgentLaunchInput {
    * attaches here, ahead of the instruction log, the root stage, and the
    * launch warnings.
    */
-  onStreamResolved?: (runId: RunId, trace: AgentTrace) => void;
+  onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
   /** The launching run, when this run is a delegated child of another. */
   parentRunId?: RunId;
   /** A workflow-script run's resume anchor, stamped on `run.start`
@@ -423,8 +423,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     yield* failIfAborted(input.signal);
     const modelCell = new ModelCell(modelHandler, config.model);
 
-    const residency =
-      yield* session.transcripts.acquireRunResidency(runId);
+    const residency = yield* session.transcripts.acquireRunResidency(runId);
     const rawRunTrace = createRunTrace(residency);
     // The composed trace enters the store BEFORE session attachment, so a
     // failed attachment still disposes the raw trace through the store.
@@ -466,7 +465,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       try: () => session.settlePublications(),
       catch: ensureError,
     });
-    input.onStreamResolved?.(runId, runTrace.trace);
+    input.onRunResolved?.(runId, runTrace.trace);
 
     // Log the initial instruction as a user message so both workflow and
     // tool-use tabs display it inline with the stream log (no separate panel).

@@ -97,10 +97,10 @@ export class ChatExportController {
     'ChatExportController.buildExportInput',
   )(function* (
     this: ChatExportController,
-    historyId: string,
+    runId: RunId,
   ): Effect.fn.Return<ExportInputResult, Error> {
     const { config, exportInput } = yield* loadChatExportInput(
-      historyId as RunId,
+      runId,
       this.deps.session,
     );
 
@@ -119,11 +119,11 @@ export class ChatExportController {
    * Format and write a Markdown export.
    */
   async exportAsMarkdown(
-    historyId: string,
+    runId: RunId,
     exportInput: ChatExportInput,
   ): Promise<ChatExportResult> {
     return this.writeExport(
-      historyId,
+      runId,
       generateExportFilename(exportInput, 'md'),
       formatChatAsMarkdown(exportInput),
     );
@@ -137,11 +137,11 @@ export class ChatExportController {
    * can decide whether to open the PDF or fall back to the `.tex` source.
    */
   async exportAsLatex(
-    historyId: string,
+    runId: RunId,
     exportInput: ChatExportInput,
   ): Promise<LatexExportResult> {
     const { storagePath, absolutePath } = await this.writeExport(
-      historyId,
+      runId,
       generateExportFilename(exportInput, 'tex'),
       formatChatAsLatex(exportInput, this.deps.latexPreamble),
     );
@@ -169,13 +169,10 @@ export class ChatExportController {
   readonly exportAsHtml = Effect.fn('ChatExportController.exportAsHtml')(
     function* (
       this: ChatExportController,
-      historyId: string,
+      runId: RunId,
       standaloneTemplatePath: string,
     ): Effect.fn.Return<HtmlExportOutcome, Error> {
-      const traceResult = yield* assembleTrace(
-        historyId as RunId,
-        this.deps.session,
-      );
+      const traceResult = yield* assembleTrace(runId, this.deps.session);
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
       }
@@ -215,7 +212,7 @@ export class ChatExportController {
       return {
         status: 'ok',
         result: yield* Effect.tryPromise({
-          try: () => this.writeExport(historyId, filename, html),
+          try: () => this.writeExport(runId, filename, html),
           catch: ensureError,
         }),
       };
@@ -224,13 +221,13 @@ export class ChatExportController {
 
   /** Write an export payload into the run's storage directory. */
   private async writeExport(
-    historyId: string,
+    runId: RunId,
     filename: string,
     content: string,
   ): Promise<ChatExportResult> {
-    const storagePath = `executions/${historyId}/${filename}`;
+    const storagePath = `executions/${runId}/${filename}`;
     return runWithWorkspaceRoots(this.deps.session.roots, async () => {
-      await StorageFS.ensureDir(`executions/${historyId}`);
+      await StorageFS.ensureDir(`executions/${runId}`);
       await StorageFS.write(storagePath, content);
       return { storagePath, absolutePath: StorageFS.fullPath(storagePath) };
     });

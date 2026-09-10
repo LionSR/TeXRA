@@ -713,6 +713,9 @@ describe('sessionFold', () => {
     expect(detached.runs.has(ghost)).toBe(false);
     expect(runView(detached, CHILD).parentId).toBeNull();
     expect(runView(detached, CHILD).ancestors).toStrictEqual([]);
+    // Promoted to top level, the detached child takes its creation-time
+    // place in the listing rather than being appended to the end.
+    expect(detached.order).toStrictEqual([PROCESS, CHILD, ROOT]);
   });
 
   it('publishes an immutable level and shares its untouched branches with the next (D5)', () => {

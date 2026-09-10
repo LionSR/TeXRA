@@ -21,16 +21,14 @@ const nonce = 'texra-webview-smoke';
 // load. It renders nothing until the host answers its `subscribe` with an
 // events frame carrying the host snapshot, so each progress view carries a
 // session fixture: the bridge shim below plays the host, answering every
-// subscribe with the fixture's events (listing rows for every stream, the
+// subscribe with the fixture's events (listing rows for every run, the
 // transcript tier for the aggregates the subscribe named), the way
 // `SessionFramer` cuts a frame.
 const SESSION_KEY = '/tmp/texra-smoke/project';
 const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
 const NOW = 1_783_353_600_000;
-const STREAM = 'research#smoke0000001';
-const EXECUTION = 'a1b2c3d4e5f6';
-const CHILD_STREAM = 'reviewer#smoke0000002';
-const CHILD_EXECUTION = 'b1b2c3d4e5f6';
+const RUN = 'a1b2c3d4e5f6';
+const CHILD_RUN = 'b1b2c3d4e5f6';
 
 const hostSnapshot = {
   project: {
@@ -98,16 +96,16 @@ function sessionLog() {
   const entrySeqs = new Map();
   let commit = 0;
   const emit = (logicalId, at, body) => {
-    const aggregateId = JSON.stringify(['stream', logicalId]);
+    const aggregateId = JSON.stringify(['run', logicalId]);
     const seq = (seqs.get(aggregateId) ?? 0) + 1;
     seqs.set(aggregateId, seq);
     commit += 1;
     events.push({ aggregateId, seq, commit, ownerId: OWNER, at, ...body });
   };
-  const entry = (streamId, at, fields) => {
-    const seqNo = (entrySeqs.get(streamId) ?? 0) + 1;
-    entrySeqs.set(streamId, seqNo);
-    emit(streamId, at, {
+  const entry = (runId, at, fields) => {
+    const seqNo = (entrySeqs.get(runId) ?? 0) + 1;
+    entrySeqs.set(runId, seqNo);
+    emit(runId, at, {
       type: 'transcript.entry',
       entry: { seqNo, level: 'info', timestamp: at, type: 'log', ...fields },
     });
@@ -115,15 +113,14 @@ function sessionLog() {
   return { events, emit, entry };
 }
 
-function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
+function startRun(log, { runId, agent, at, parentRunId }) {
   const parentCreation = log.events.find(
     (event) =>
       event.type === 'run.start' &&
-      event.aggregateId === JSON.stringify(['stream', parentStreamId]),
+      event.aggregateId === JSON.stringify(['run', parentRunId]),
   );
-  log.emit(streamId, at, {
+  log.emit(runId, at, {
     type: 'run.start',
-    executionId,
     identity: { kind: 'agent', agent },
     category: 'toolUse',
     isRemote: false,
@@ -132,23 +129,17 @@ function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
       policy: 'ask',
       bypasses: { bash: false, toolEdit: false, superYolo: false },
     },
-    ...(parentStreamId
-      ? {
-          parentStreamId,
-          parentStartCommit: parentCreation?.commit,
-          parentExecutionId: parentCreation?.executionId,
-        }
-      : {}),
+    parent: parentRunId
+      ? { id: parentRunId, startCommit: parentCreation.commit }
+      : null,
   });
-  log.emit(streamId, at, {
+  log.emit(runId, at, {
     type: 'run.activate',
     category: 'toolUse',
     isRemote: false,
-    background: false,
   });
-  log.emit(streamId, at, {
+  log.emit(runId, at, {
     type: 'run.config',
-    executionId,
     config: {
       agentCategory: 'toolUse',
       model: 'deepseekT',
@@ -156,7 +147,7 @@ function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
       inputFiles: ['main.tex'],
     },
   });
-  log.emit(streamId, at, {
+  log.emit(runId, at, {
     type: 'status',
     phase: 'running',
     cause: 'lifecycle',
@@ -167,45 +158,43 @@ function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
 function conversationEvents({ approval = false } = {}) {
   const log = sessionLog();
   startRun(log, {
-    streamId: STREAM,
-    executionId: EXECUTION,
+    runId: RUN,
     agent: 'research',
     at: NOW,
   });
-  log.emit(STREAM, NOW + 500, {
-    type: 'updateStreamDescription',
+  log.emit(RUN, NOW + 500, {
+    type: 'updateRunDescription',
     description: 'Check citation coverage and suggest BibTeX entries.',
   });
-  log.entry(STREAM, NOW, {
+  log.entry(RUN, NOW, {
     id: 'msg-1',
     messageType: 'userMessage',
     text: 'hello world',
   });
-  log.entry(STREAM, NOW + 1000, {
+  log.entry(RUN, NOW + 1000, {
     id: 'msg-2',
     messageType: 'modelResponse',
     text: 'I will inspect the manuscript and report missing citations.',
   });
-  log.emit(STREAM, NOW + 1500, {
+  log.emit(RUN, NOW + 1500, {
     type: 'conversation.progress',
     progress: { toolCallCount: 1 },
   });
   if (approval) {
     startRun(log, {
-      streamId: CHILD_STREAM,
-      executionId: CHILD_EXECUTION,
+      runId: CHILD_RUN,
       agent: 'reviewer',
       at: NOW + 2000,
-      parentStreamId: STREAM,
+      parentRunId: RUN,
     });
-    log.emit(STREAM, NOW + 3000, {
+    log.emit(RUN, NOW + 3000, {
       type: 'approval.requested',
       requestId: 'smoke-tool-edit-approval',
       payload: {
         kind: 'toolEdit',
         data: {
           requestId: 'smoke-tool-edit-approval',
-          streamId: STREAM,
+          runId: RUN,
           allowBypass: true,
           path: '/tmp/texra-smoke/main.tex',
           relativePath: 'main.tex',
@@ -216,7 +205,7 @@ function conversationEvents({ approval = false } = {}) {
         },
       },
     });
-    log.entry(STREAM, NOW + 3000, {
+    log.entry(RUN, NOW + 3000, {
       id: 'msg-3',
       messageType: 'modelResponse',
       text: 'I found a one-line correction and need approval before editing main.tex.',
@@ -262,7 +251,7 @@ const views = [
     session: {
       host: hostSnapshot,
       events: conversationEvents(),
-      selected: STREAM,
+      selected: RUN,
     },
   },
   {
@@ -278,7 +267,7 @@ const views = [
     session: {
       host: hostSnapshot,
       events: conversationEvents({ approval: true }),
-      selected: STREAM,
+      selected: RUN,
     },
   },
   {

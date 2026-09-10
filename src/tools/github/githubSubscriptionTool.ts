@@ -86,7 +86,7 @@ const GitHubSubscriptionInputSchema = z.discriminatedUnion('command', [
   z.looseObject({
     command: z
       .literal('list')
-      .describe('List active subscriptions on this stream.'),
+      .describe('List active subscriptions on this run.'),
   }),
   z.looseObject({
     command: z
@@ -262,8 +262,8 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   // A worker following that literal path would land on IssuePollingSource
   // even when N is actually a PR — losing reviews, line comments, CI.
   // If either source already knows the entity's type (because some other
-  // stream is already subscribed), skip the disambiguation GET and bind
-  // directly. The bind itself MUST still run — it's per-stream and the
+  // run is already subscribed), skip the disambiguation GET and bind
+  // directly. The bind itself MUST still run — it's per-run and the
   // binder dedupes the (runId, key) pair correctly. Mirrors GitHub's
   // own /issues/N → /pull/N redirect behavior on github.com.
   const issueSlug = issueRef(slugOf(target), target.issueNumber);
@@ -376,8 +376,8 @@ function execList(): ToolResult {
   ];
   if (all.length === 0) {
     return executed(
-      'No active subscriptions on this stream.',
-      'No active subscriptions on this stream.',
+      'No active subscriptions on this run.',
+      'No active subscriptions on this run.',
     );
   }
   return executed(
@@ -579,13 +579,13 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
 export class GitHubSubscriptionTool extends defineTool({
   name: 'github_subscription',
   description: [
-    'Manage GitHub activity subscriptions for the current agent stream.',
+    'Manage GitHub activity subscriptions for the current agent run.',
     'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (detailed, worker-friendly).',
     'Commands:',
     '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a repo-wide merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once: typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened: the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
     'For PR subscriptions, min_annotation_level controls inline check annotations: "failure" (default) sends failures only, "warning" includes warnings, and "notice" includes every annotation.',
     '- unsubscribe: stop watching the path.',
-    '- list: list active subscriptions on this stream.',
+    '- list: list active subscriptions on this run.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
     'Bot-authored events are dropped end-to-end by policy.',
     `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, ${MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS} concurrent issue subscriptions, ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repo subscriptions per process. Poll interval ≈ ${GITHUB_POLL_INTERVAL_MS / 1000}s. Requires a GitHub token: set it via /config → GitHub token (CLI), the settings Git tab (VS Code / desktop), or GITHUB_TOKEN / GH_TOKEN.`,

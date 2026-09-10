@@ -229,8 +229,8 @@ function durable<T extends string, S extends z.ZodRawShape>(
  * database inside the child's creation transaction so a logical id a
  * workflow-script retry reuses can never redirect the child to a later
  * incarnation of its parent. Everything else that used to spell the edge
- * (`parentRunId`, `parentRunId`, `isSubagent`, `background`) is
- * `parent !== null`, computed from the fold or the handle.
+ * (`parentStreamId`, `parentExecutionId`, `isSubagent`,
+ * `background`) is `parent !== null`, computed from the fold or the handle.
  */
 const RunParentSchema = z.object({
   id: RunIdSchema,
@@ -242,8 +242,8 @@ export type RunParent = z.infer<typeof RunParentSchema>;
  * Per-run launch facts. Existence fact: a run exists iff its `run.start`
  * exists, once per incarnation, seq 1 of its aggregate (decision 9); the
  * aggregate's logical id is the run id, so the row carries no second copy of
- * it. `identity` and `worktree` are nullish only on the legacy importer's
- * events (contract C3); live emitters always know them. `category`,
+ * it. `worktree` is absent for a run that executes in the workspace itself
+ * rather than in a dedicated worktree. `category`,
  * `isRemote`, and `userFollowUpSupport` are explicit on every run: the
  * launcher knows them for an agent, a process, and a workflow script alike,
  * and the fold reads them verbatim and derives nothing (PRD 6, item 6). The
@@ -365,16 +365,14 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * One transcript row, in the recorder's persisted row format: the only
    * transcript-tier arm before the cutover. The trace's flow rows replace it
    * when the event table lands (`2026-09-04-agent-runtime-on-effect.md`,
-   * section 2.1); the legacy importer normalizes old logs into the same arm
-   * (decision 5). Subject to the residency rule: folded for subscribed
+   * section 2.1). Subject to the residency rule: folded for subscribed
    * aggregates only (PRD 5.2).
    */
   durable('transcript.entry', { entry: StreamLogEntrySchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
     schema.extend({
       /** Stamped at publication (`SessionHandle.publish`), so a draft does
-       * not carry it. Imported transcript.entry rows already contain their
-       * recorded presentation. */
+       * not carry it. */
       transcriptDebug: z.boolean().optional(),
       aggregateId: AggregateIdSchema.refine(
         (key) => aggregateTarget(key).kind === 'run',

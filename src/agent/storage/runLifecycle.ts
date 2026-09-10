@@ -101,8 +101,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
   const lease = yield* Effect.tryPromise({
-    try: () =>
-      runInSession(session, () => acquireFreshRunLease(runId)),
+    try: () => runInSession(session, () => acquireFreshRunLease(runId)),
     catch: ensureError,
   });
   let releaseClaims: Effect.Effect<void, Error> = Effect.void;
@@ -116,10 +115,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
       // this read only words the refusal before the transaction opens.
       if (
         options.parentRunId !== undefined &&
-        (yield* getRunRecords(
-          session,
-          options.parentRunId,
-        ).readMeta()) === null
+        (yield* getRunRecords(session, options.parentRunId).readMeta()) === null
       )
         return yield* Effect.fail(
           new Error(`Parent run ${options.parentRunId} is unavailable.`),
@@ -214,10 +210,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
       lease === 'existing'
         ? Effect.void
         : Effect.tryPromise({
-            try: () =>
-              runInSession(session, () =>
-                releaseOwnedRunLease(runId),
-              ),
+            try: () => runInSession(session, () => releaseOwnedRunLease(runId)),
             catch: ensureError,
           }),
     );
@@ -246,23 +239,17 @@ export const acquireResumedRunOwnership = Effect.fn(
   runId: RunId,
 ): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
   const lease = yield* Effect.tryPromise({
-    try: () =>
-      runInSession(session, () => acquireResumedRunLease(runId)),
+    try: () => runInSession(session, () => acquireResumedRunLease(runId)),
     catch: ensureError,
   });
   const releaseLease =
     lease === 'existing'
       ? Effect.void
       : Effect.tryPromise({
-          try: () =>
-            runInSession(session, () =>
-              releaseOwnedRunLease(runId),
-            ),
+          try: () => runInSession(session, () => releaseOwnedRunLease(runId)),
           catch: ensureError,
         });
-  const claims = yield* Effect.exit(
-    session.acquireRunClaims(runId),
-  );
+  const claims = yield* Effect.exit(session.acquireRunClaims(runId));
   if (Exit.isFailure(claims)) {
     const release = yield* Effect.exit(releaseLease);
     return yield* Effect.fail(
@@ -433,49 +420,55 @@ export const readPersistedRunRecord = (
   getRunRecords(session, runId).readRunRecord();
 
 /** Child labels and parentage come from the same immutable launch fact. */
-export const readRunChildren = Effect.fn('readRunChildren')(
-  function* (
-    session: SessionHandle,
-    runId: RunId,
-  ): Effect.fn.Return<ChildRecord[], Error> {
-    const rows = yield* session.readRunChildren(runId);
-    const own = aggregateId('run', runId);
-    const parent = rows.find(
-      (row) => row.type === 'run.start' && row.aggregateId === own,
-    );
-    if (parent?.type !== 'run.start') return [];
-    const closed = new Set(
-      rows
-        .filter((row) => row.type === 'run.removed')
-        .map((row) => row.aggregateId),
-    );
-    if (closed.has(parent.aggregateId)) return [];
-    const labels = new Map<AggregateId, string>();
-    for (const row of rows) {
-      if (row.type === 'run.launchLabel')
-        labels.set(row.aggregateId, row.label);
-    }
-    return rows.flatMap((row) => {
-      if (
-        row.type !== 'run.start' ||
-        row.parent === null ||
-        row.parent.startCommit !== parent.commit ||
-        row.parent.id !== runId ||
-        closed.has(row.aggregateId)
-      )
-        return [];
-      const target = aggregateTarget(row.aggregateId);
-      if (target.kind !== 'run') return [];
-      const label = labels.get(row.aggregateId);
-      if (label === undefined)
-        throw new Error(`Child launch label missing for ${target.id}`);
-      return [
-        {
-          id: target.id,
-          agent: label,
-          timestamp: new Date(row.at).toISOString(),
-        },
-      ];
-    });
-  },
-);
+export const readRunChildren = Effect.fn('readRunChildren')(function* (
+  session: SessionHandle,
+  runId: RunId,
+): Effect.fn.Return<ChildRecord[], Error> {
+  const rows = yield* session.readRunChildren(runId);
+  const own = aggregateId('run', runId);
+  const parent = rows.find(
+    (row) => row.type === 'run.start' && row.aggregateId === own,
+  );
+  if (parent?.type !== 'run.start') return [];
+  const closed = new Set(
+    rows
+      .filter((row) => row.type === 'run.removed')
+      .map((row) => row.aggregateId),
+  );
+  if (closed.has(parent.aggregateId)) return [];
+  // A `run.detach` severs the edge the child's `run.start` recorded, so a
+  // detached child is no longer listed under its former parent: the same
+  // rule `runMetaFromEvents` and the session fold apply.
+  const detached = new Set(
+    rows
+      .filter((row) => row.type === 'run.detach')
+      .map((row) => row.aggregateId),
+  );
+  const labels = new Map<AggregateId, string>();
+  for (const row of rows) {
+    if (row.type === 'run.launchLabel') labels.set(row.aggregateId, row.label);
+  }
+  return rows.flatMap((row) => {
+    if (
+      row.type !== 'run.start' ||
+      row.parent === null ||
+      row.parent.startCommit !== parent.commit ||
+      row.parent.id !== runId ||
+      closed.has(row.aggregateId) ||
+      detached.has(row.aggregateId)
+    )
+      return [];
+    const target = aggregateTarget(row.aggregateId);
+    if (target.kind !== 'run') return [];
+    const label = labels.get(row.aggregateId);
+    if (label === undefined)
+      throw new Error(`Child launch label missing for ${target.id}`);
+    return [
+      {
+        id: target.id,
+        agent: label,
+        timestamp: new Date(row.at).toISOString(),
+      },
+    ];
+  });
+});

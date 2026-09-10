@@ -1,8 +1,8 @@
 /**
  * Tool for viewing and managing run history, generated files, and
- * running processes. Supports viewing past executions, waiting for status
- * changes, reading output from background processes, and killing running
- * executions.
+ * running processes. Supports viewing past runs, waiting for status
+ * changes, reading output from background processes, and killing live
+ * runs.
  */
 
 // Node imports
@@ -210,7 +210,7 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
 export class ExecutionsTool extends defineTool({
   name: 'executions',
   slow: true,
-  description: `View run history and manage running executions.
+  description: `View run history and manage live runs.
 
 Paths:
 ${EXECUTION_PATH_LIST}
@@ -219,9 +219,9 @@ Use "current" as {id} to access the active run.
 Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit 100).
 Use view_range: [start, end] to paginate file and background-command output content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
-Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
-Use action: "kill" on /executions/{id} to terminate a running run.
-Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for executions you launched. Use action: "wait" only when you cannot proceed without a status change.`,
+Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
+Use action: "kill" on /executions/{id} to terminate a live run.
+Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,
 }) {
   /**
@@ -262,7 +262,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    // /executions - list all executions
+    // /executions - list all runs
     if (!id) {
       if (input.action === 'kill') {
         return yield* Effect.fail(
@@ -387,7 +387,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     return Effect.succeed(result.data);
   }
 
-  /** Wait for executions to change status, with timeout. */
+  /** Wait for runs to change status, with timeout. */
   private readonly waitForAnyChange = Effect.fn(
     'ExecutionsTool.waitForAnyChange',
   )(function* (
@@ -398,7 +398,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const candidateIds = ids?.length
       ? unique(ids)
       : context.session.runs.getActiveIds();
-    // Exclude executions that are already effectively done
+    // Exclude runs that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
     const pendingIds = candidateIds.filter(
       (id) => !context.inRunScope(() => shouldSkipWait(id)),
@@ -445,7 +445,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       runId: RunId,
       options: RunSummaryOptions = {},
     ) {
-      // Check in-memory handle first (free) — running executions have everything we need
+      // Check in-memory handle first (free) — a live run has everything we need
       const session = context.session;
       const handle = session.runs.getHandle(runId);
 
@@ -755,7 +755,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     function* (this: ExecutionsTool, context: RunToolContext, runId: RunId) {
       const children = yield* readRunChildren(context.session, runId);
       if (children.length === 0) {
-        return executed(`No child executions found for ${runId}.`);
+        return executed(`No child runs found for .`);
       }
 
       const lines = yield* this.formatChildren(context, children);
@@ -846,7 +846,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * This is the only route readable *while the command runs*: `/report` and
    * `/result` are written at completion, and the completion follow-up carries
    * only a 20-line preview, so without this the middle of a long build log is
-   * unreachable even after the run ends. Restricted to process executions —
+   * unreachable even after the run ends. Restricted to process runs —
    * an agent run's rows are a model transcript, which `/conversation` already
    * renders properly.
    */

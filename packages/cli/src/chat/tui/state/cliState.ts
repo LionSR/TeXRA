@@ -25,7 +25,7 @@ import type { PastedImageEntry } from '../input/draftAttachments';
 
 // Data model for the CLI TUI's signal-backed state. Mirrors the webview's
 // `progressState` shape — same primitives (`@lit-labs/signals`), same shape
-// (one record per stream + an `activeRunId`) so future feature parity is a
+// (one record per run + an `activeRunId`) so future feature parity is a
 // port, not a rewrite.
 
 /**
@@ -81,9 +81,9 @@ function defaultSessionMeta(): SessionMeta {
 // focusSlice
 // ---------------------------------------------------------------------------
 
-// Which stream is focused / rooted, and whether starting a new root run is
+// Which run is focused / rooted, and whether starting a new root run is
 // currently available. Focus moves only through `focusRun`;
-// stream-lifecycle side effects that touch these signals alongside others
+// run-lifecycle side effects that touch these signals alongside others
 // (e.g. `removeRun`) live in the `removeRun` section below.
 
 /** The Surface's selection as written by `focusRun`; renders read
@@ -91,10 +91,10 @@ function defaultSessionMeta(): SessionMeta {
 export const activeRunId = signal<RunId | undefined>(undefined);
 
 /**
- * The stream the transcript and status bar show: the Surface's selection
- * resolved against the view (PRD 9). The selected stream while the view
- * holds it; the first top-level stream once it has left; the selection
- * itself while the view holds no stream at all (the pre-run local
+ * The run the transcript and status bar show: the Surface's selection
+ * resolved against the view (PRD 9). The selected run while the view
+ * holds it; the first top-level run once it has left; the selection
+ * itself while the view holds no run at all (the pre-run local
  * conversation is a Surface-only id). A computed rather than an effect that
  * clears a stale selection, and a signal rather than a per-render derivation
  * so every component reads one answer.
@@ -109,10 +109,10 @@ export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
 );
 
 /**
- * Move transcript/status focus onto a stream. Sole focus writer: a stream
+ * Move transcript/status focus onto a run. Sole focus writer: a run
  * identity tombstoned by `removeRun`, or retired by `resetCliState`, is
  * never focused, so a fact that arrives after the row is gone cannot pull the
- * view onto a stream that no longer exists. `onlyIfUnset` is for the facts
+ * view onto a run that no longer exists. `onlyIfUnset` is for the facts
  * that adopt focus only while nothing holds it (the first log sync, the first
  * local transcript row).
  */
@@ -133,8 +133,8 @@ export type SessionListRow =
       readonly label: string;
     }
   | {
-      readonly kind: 'stream';
-      readonly stream: RunView;
+      readonly kind: 'run';
+      readonly run: RunView;
       readonly depth: number;
       readonly expanded: boolean;
     };
@@ -151,36 +151,36 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     recent: [],
   };
   for (const id of view.order) {
-    const stream = view.runs.get(id)!;
-    groups[stream.group].push(stream);
+    const run = view.runs.get(id)!;
+    groups[run.group].push(run);
   }
-  const append = (stream: RunView, depth: number): void => {
+  const append = (run: RunView, depth: number): void => {
     const open =
-      stream.category !== AgentCategory.Workflow &&
-      (stream.forceExpanded || expanded.get(stream.id) === true);
-    rows.push({ kind: 'stream', stream, depth, expanded: open });
+      run.category !== AgentCategory.Workflow &&
+      (run.forceExpanded || expanded.get(run.id) === true);
+    rows.push({ kind: 'run', run, depth, expanded: open });
     // A workflow's calls belong to its existing popup.
     if (open) {
-      for (const id of stream.childIds) append(view.runs.get(id)!, depth + 1);
+      for (const id of run.childIds) append(view.runs.get(id)!, depth + 1);
     }
   };
   for (const runs of Object.values(groups)) {
     const first = runs.at(0);
     if (!first) continue;
     rows.push({ kind: 'group', label: RUN_GROUP_LABELS[first.group] });
-    for (const stream of runs) append(stream, 0);
+    for (const run of runs) append(run, 0);
   }
   return rows;
 });
 
-/** Stream shortcuts follow the visible tree and skip section headings. */
+/** Run shortcuts follow the visible tree and skip section headings. */
 export const sessionListRunIds = computed(() =>
   sessionListRows
     .get()
-    .flatMap((row) => (row.kind === 'stream' ? [row.stream.id] : [])),
+    .flatMap((row) => (row.kind === 'run' ? [row.run.id] : [])),
 );
 
-/** The top-level stream the current session rooted at. */
+/** The top-level run the current session rooted at. */
 export const rootRunId = signal<RunId | undefined>(undefined);
 /** Whether the root session holds an unfinished run claim (run promise
  *  pending). Published only by `TuiSession`, so renders read the session
@@ -244,7 +244,7 @@ export function closeInfoPane(): void {
   INFO_PANE_QUEUE.set(INFO_PANE_QUEUE.get().slice(1));
 }
 
-/** Passive reader target. Holding the captured stream id rather than a text
+/** Passive reader target. Holding the captured run id rather than a text
  * snapshot keeps each reader live even if transcript focus moves elsewhere. */
 interface WorkPlanReaderRequest {
   readonly revision: number;
@@ -269,7 +269,7 @@ type ForegroundReaderTarget =
 const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
 let WORK_PLAN_REQUEST_REVISION = 0;
 /** The open reader, resolved against the view like the selection: a reader
- *  whose stream has left the view is closed. */
+ *  whose run has left the view is closed. */
 export const foregroundReader: Signal.Computed<
   ForegroundReaderTarget | undefined
 > = computed(() => {
@@ -305,7 +305,7 @@ const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
   filterEditing: false,
 };
 
-/** The view belongs to the workflow stream, not to the mounted reader:
+/** The view belongs to the workflow run, not to the mounted reader:
  *  closing the popup to look at one of its agents and coming back lands
  *  where the user left it; only a different workflow starts fresh. */
 const WORKFLOW_POPUP_VIEW = signal<{
@@ -316,7 +316,7 @@ export const workflowPopupView: Signal.Computed<WorkflowPopupView> = computed(
   () => WORKFLOW_POPUP_VIEW.get().view,
 );
 
-/** Open the workflow popup on a workflow-script stream. A workflow is never
+/** Open the workflow popup on a workflow-script run. A workflow is never
  *  a viewport: this is the one way to look inside one (see
  *  `presentRun`). */
 export function openWorkflowPopup(runId: RunId): void {
@@ -393,7 +393,7 @@ export function closeForegroundReader(): void {
 
 /** True while the slash-command palette is mounted in the InputBar. App-level
  *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
- *  with stream-focus Tab. */
+ *  with run-focus Tab. */
 export const slashPaletteOpen = signal<boolean>(false);
 export const reverseSearchOpen = signal<boolean>(false);
 

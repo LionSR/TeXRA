@@ -6,10 +6,11 @@ This note explains how TeXRA runs agents, and — more importantly — how the
 ## How TeXRA runs agents
 
 Every agent run flows through one entry point: `texra.execute` command →
-`executeAgent(config, executionId?, options?)`. The runtime takes an
-`AgentConfig` (agent name, model, instruction, and optional input / memory /
-working-directory fields), resolves the YAML, and dispatches one of two
-flow shapes:
+`runAgent`, which assigns the run id and calls
+`executeAgent(definition, runId, options)`. The runtime takes a
+`PreparedAgentDefinition` (agent name, model, instruction, and optional input
+/ memory / working-directory fields), resolves the YAML, and dispatches one of
+two flow shapes:
 
 - **Workflow flow** for `agentCategory: workflow`. Fixed rounds, each round
   consumes `userRequest[i]`. Operates on `inputFiles` (or the active editor

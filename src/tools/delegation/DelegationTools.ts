@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 /**
- * Tools for delegating agent executions from tool-use agents.
+ * Tools for delegating agent runs from tool-use agents.
  * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
  * - delegate_agent: For tool-use agents (new delegation or resume via execution_id)
  *
