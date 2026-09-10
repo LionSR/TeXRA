@@ -102,17 +102,17 @@ describe('RunStatusMachine', () => {
       expect(machine.transition(runId, RUN_PHASE.RUNNING, 'lifecycle')).toBe(
         true,
       );
-      expect(machine.getStreamState(runId)?.runStartedAt).toBe(1_000);
+      expect(machine.getRunState(runId)?.runStartedAt).toBe(1_000);
 
       vi.setSystemTime(5_000);
       expect(machine.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(true);
-      expect(machine.getStreamState(runId)).toEqual({
+      expect(machine.getRunState(runId)).toEqual({
         phase: RUN_PHASE.WAITING,
       });
 
       vi.setSystemTime(15_000);
       expect(machine.transition(runId, RUN_PHASE.RUNNING, 'resume')).toBe(true);
-      expect(machine.getStreamState(runId)?.runStartedAt).toBe(15_000);
+      expect(machine.getRunState(runId)?.runStartedAt).toBe(15_000);
     } finally {
       vi.useRealTimers();
     }

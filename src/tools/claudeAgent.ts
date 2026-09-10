@@ -180,7 +180,7 @@ function claudeCostLines(turn: TurnResult): string[] | undefined {
 }
 
 // ============================================================================
-// Stream tab helpers
+// Tool log helpers
 // ============================================================================
 
 type ClaudeToolLogRef = ToolUseCardRef & {

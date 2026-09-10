@@ -133,7 +133,7 @@ vi.mock('@tools/delegation/delegationAvailability', async (importOriginal) => ({
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
-const parentRunId = '7154scripttool' as RunId;
+const parentRunId = '7154c4700700' as RunId;
 const script = `export const meta = {
   name: 'tool-test',
   description: 'tests the workflow script tool',

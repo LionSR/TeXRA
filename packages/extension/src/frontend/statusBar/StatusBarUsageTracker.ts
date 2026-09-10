@@ -1,4 +1,4 @@
-// Local imports - stream state
+// Local imports - run state
 import type { SessionHandle } from '@agent/runtime';
 import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
 import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
@@ -10,7 +10,7 @@ import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
  * Holds no state of its own: the session status plane is the one writer of
  * which runs are in flight, and the session's `RunSnapshotStore` is the
  * one accumulator of per-run usage. Both getters read those planes live, so
- * a stream leaving flight drops out of the total without any bookkeeping
+ * a run leaving flight drops out of the total without any bookkeeping
  * here, and the summing rule has a single home (`sumUsageStats`).
  */
 export class StatusBarUsageTracker {

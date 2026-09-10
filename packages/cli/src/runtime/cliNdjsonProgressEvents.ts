@@ -1,3 +1,10 @@
+/**
+ * The 0.40 wire's stream and execution ids are one run id: this module keeps
+ * the frozen key names (`streamId`, `executionId`, `childStreamId`,
+ * `parentStreamId`, `storageKey`) over that one value until S5 versions the
+ * projection.
+ */
+
 import type { agentConfigToTaskState } from '@agent/runtime';
 import type {
   AddOutputFilesPayload,
@@ -15,20 +22,11 @@ import type {
   UpdateTodosPayload,
 } from '@shared/schemas';
 
-/**
- * The 0.40 wire's stream and execution ids are one run id: this module keeps
- * the frozen key names (`streamId`, `executionId`, `childStreamId`,
- * `parentStreamId`, `storageKey`) over that one value until S5 versions the
- * projection.
- */
-type StreamTabId = RunId;
-type ExecutionId = RunId;
-
 /** The frozen `updateStreamUsage` line: `storageKey` is the run the usage
  *  belongs to, under the field name the 0.40 wire promised. */
 export interface UpdateStreamUsagePayload {
-  streamId: StreamTabId;
-  storageKey: ExecutionId;
+  streamId: RunId;
+  storageKey: RunId;
   usage: ExtendedTokenUsageStats;
 }
 
@@ -55,7 +53,8 @@ export interface CliNdjsonActiveChildRow {
   /** Tool that spawned this child (e.g. "bash", "codex"); omitted for a
    *  native agent child. */
   readonly toolName?: string;
-  /** Only on `kind: 'subagent'` rows — subagents own a stream tab. */
+  /** Only on `kind: 'subagent'` rows — the child's own run id, spelled the
+   *  way the 0.40 wire promised. */
   readonly childStreamId?: string;
 }
 
@@ -66,7 +65,7 @@ export interface CliNdjsonActiveChildRow {
  * the NDJSON boundary alone keeps the record name and fields.
  */
 interface CliNdjsonSetActiveStreamPayload {
-  readonly streamId: StreamTabId;
+  readonly streamId: RunId;
   readonly agentCategory?: AgentCategory;
   readonly isRemote?: boolean;
   /** Present, and true, only on a delegated child's activation: the parent
@@ -88,7 +87,7 @@ export interface CliNdjsonProgressEventPayloads {
   // Run/stream progress.
   setActiveStream: CliNdjsonSetActiveStreamPayload;
   updateStreamStatus: {
-    streamId: StreamTabId;
+    streamId: RunId;
     status: RunPhase;
     /** Diagnostic transition cause retained for public output. */
     cause?: string;
@@ -98,55 +97,55 @@ export interface CliNdjsonProgressEventPayloads {
     substate?: RunSubstate;
   };
   addOutputFiles: {
-    streamId: StreamTabId;
+    streamId: RunId;
     filesByRound: AddOutputFilesPayload['filesByRound'];
   };
   updateMissingOutputs: {
-    streamId: StreamTabId;
+    streamId: RunId;
     filesByRound: UpdateMissingOutputsPayload['filesByRound'];
   };
   updateCompileFailures: {
-    streamId: StreamTabId;
+    streamId: RunId;
     filesByRound: UpdateCompileFailuresPayload['filesByRound'];
   };
   setTaskState: {
-    streamId: StreamTabId;
-    executionId?: ExecutionId;
+    streamId: RunId;
+    executionId?: RunId;
     taskState: TaskState;
   };
   updateStreamUsage: UpdateStreamUsagePayload;
   /** Inquiry thread state changed (open, answered, dropped, or resume outcome).
    *  The internal edge is the asking run under the 0.40 key. */
   inquiryThreadUpdated: Omit<InquiryThreadUpdatedEvent, 'parentRunId'> & {
-    readonly parentStreamId: StreamTabId | null;
+    readonly parentStreamId: RunId | null;
   };
-  updateTodos: { streamId: StreamTabId; todos: UpdateTodosPayload['todos'] };
-  updatePlan: { streamId: StreamTabId; plan: UpdatePlanPayload['plan'] };
+  updateTodos: { streamId: RunId; todos: UpdateTodosPayload['todos'] };
+  updatePlan: { streamId: RunId; plan: UpdatePlanPayload['plan'] };
   updateConversationProgress: {
-    streamId: StreamTabId;
+    streamId: RunId;
     progress: ConversationProgress;
   };
   /** Round advance projected from stage.start with kind round. */
-  updateRoundStage: { streamId: StreamTabId; roundStage: RoundStage };
-  updateQueuedFollowUps: { streamId: StreamTabId };
-  goalPaused: { streamId: StreamTabId };
+  updateRoundStage: { streamId: RunId; roundStage: RoundStage };
+  updateQueuedFollowUps: { streamId: RunId };
+  goalPaused: { streamId: RunId };
   updateActiveSubagents: {
-    parentStreamId: StreamTabId;
+    parentStreamId: RunId;
     children: CliNdjsonActiveChildRow[];
   };
-  updateStreamDescription: { streamId: StreamTabId; description: string };
+  updateStreamDescription: { streamId: RunId; description: string };
   setParentStream: {
-    childStreamId: StreamTabId;
-    parentStreamId: StreamTabId | null;
+    childStreamId: RunId;
+    parentStreamId: RunId | null;
   };
 
   /**
-   * Request the progress view to remove a stream tab. This is used by
-   * short-lived child streams that should auto-close once their work is done.
+   * Request the progress view to remove a run. This is used by short-lived
+   * child runs that should auto-close once their work is done.
    */
-  removeStream: { streamId: StreamTabId };
+  removeStream: { streamId: RunId };
 
-  goalStateChanged: { streamId: StreamTabId };
+  goalStateChanged: { streamId: RunId };
 }
 
 export type CliNdjsonProgressEvent = keyof CliNdjsonProgressEventPayloads;
