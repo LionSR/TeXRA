@@ -13,7 +13,8 @@ lease goes. It does not say what happens to the lane, and the lane is the half
 that carries the load-bearing invariant.
 
 This note maps the authorities, states the coupling that is currently
-unwritten, and proposes the shape ownership should take after the persistence
+unwritten, asks which of the three survive contact with Effect's own
+primitives, and proposes the shape ownership should take after the persistence
 cutover.
 
 ## 1. The authorities today
@@ -120,7 +121,41 @@ dependencies. `leaseOwnerLiveness.ts` stays; `Database.ts` already uses it.
 Not covered anywhere: the lane, the three in-run `assertOwnedExecutionLease`
 fences that have no stated database successor, and F3's unwritten dependency.
 
-## 4. Proposed direction
+## 4. What Effect subsumes, and what it cannot
+
+Effect's primitives are all single-runtime: `Scope` for lifetime, fibers and
+interruption for cancellation, `Semaphore`/`Deferred`/`Queue` for coordination.
+That line runs straight through this subject, and it decides which of the three
+mechanisms survive.
+
+| Concern                                   | Still needed          | Why                                                                                                                                                                                                                 |
+| ----------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| In-process ordering per execution id      | Yes, as one primitive | Generations arrive from independent callers — a host stop, a resume command, a delete. They are not nested fibers, so scope structure alone does not order them.                                                    |
+| `ExecutionLanes` as a class               | No                    | It is a second implementation of [`withPerKeyLane`](../../../../src/utils/core/perKeyQueue.ts#L108), plus a gate that exists only because a scope closes early, plus a hand-rolled interrupt.                       |
+| The `live` gate and `holdLive`            | No                    | Artifacts of F4: the WAITING branch returns from its scope while its generation continues.                                                                                                                          |
+| `disposeAll(error)` refusing queued steps | No                    | Scope interruption. Lanes held in the session's `Scope` interrupt their parked fibers when the session closes; the `waiting` set of refusal `Deferred`s is that written by hand.                                    |
+| Cross-process execution ownership         | Yes                   | Two TeXRA processes can open one workspace, and `proveOwnerLiveness` contemplates another _host_ sharing the storage directory (`unprovable`, hostname compare). No Effect primitive crosses a process boundary.    |
+| The file-lease protocol                   | No                    | Not because of Effect — because SQLite already carries the same fact with the same liveness proof, transactionally.                                                                                                 |
+| The release choreography                  | No                    | `SessionHandle.releaseExecutionLease` aggregates four independent releases by hand because four things were acquired without a scope. `Effect.acquireRelease` unwinds them in order and aggregates causes for free. |
+
+So Effect answers "is the lane needed" with: the _coordination_ is, the
+_object_ is not, and most of its surface area is compensation that disappears
+once the generation's scope matches the generation's lifetime. It answers "is
+the lease needed" with: not as a mechanism, but its removal is the database's
+work, not Effect's.
+
+Three things Effect does not touch, and that stay whatever the runtime is:
+durability, crash recovery, and the liveness verdict itself — including
+`unprovable`, which is a deliberate refusal to guess about another machine. Nor
+does it help the case the 1.0 plan already flags: a process dying mid-external
+side effect cannot be made exactly-once by a transaction.
+
+One honest limit on D3 below. Keeping a run parked at WAITING inside its own
+scope removes the _in-process_ compensation only. A process that exits while a
+run is parked takes its fibers with it; resume-after-exit still reads the
+durable record, exactly as it does today.
+
+## 5. Proposed direction
 
 **D1 — one durable authority.** The sequence-row claim is it. Delete the lease
 with the KV cutover, per the 1.0 plan. Nothing new is designed here; the point
@@ -153,7 +188,7 @@ its own scope, not as an entry looked up by id in a process-global map. That
 removes the unwritten dependency rather than documenting it, and drops the nine
 ALS wrappers with it.
 
-## 5. What this deletes
+## 6. What this deletes
 
 `executionLease.ts` (653 lines) and its claim protocol; `executionLanes.ts`'s
 `live` gate, `waiting` refusals and `holdLive`; `AgentExecutionHandle.suspend`
@@ -163,7 +198,7 @@ wrappers; and `SessionHandle.releaseExecutionLease`'s four-way failure
 aggregation, which exists because four independent things have to be released
 in order.
 
-## 6. For the owner to rule
+## 7. For the owner to rule
 
 1. Does D3 (WAITING stays inside the generation's scope) belong in the 1.0
    cutover, or after it? It is the item that makes D2 cheap, and the item most
