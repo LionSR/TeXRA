@@ -84,9 +84,6 @@ export const EMPTY_DRAFT: Draft = Object.freeze({
   images: Object.freeze([]),
 });
 
-const ExpansionOverrideSchema = z.enum(['expanded', 'collapsed']);
-type ExpansionOverride = z.infer<typeof ExpansionOverrideSchema>;
-
 /**
  * The desktop workbench layout rides in the surface as the desktop's own
  * record: `packages/desktop` declares its shape and the shared record only
@@ -121,8 +118,9 @@ export interface Surface {
   readonly launch: LaunchSurface;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
-  /** The user's override on the stream tree; `forceExpanded` outranks it. */
-  readonly expanded: ReadonlyMap<StreamTabId, ExpansionOverride>;
+  /** The user's expansion choice per stream in the tree, absent until they
+   *  make one; `forceExpanded` outranks it. */
+  readonly expanded: ReadonlyMap<StreamTabId, boolean>;
   /** Task groups and workflow row groups inside a transcript, per stream. */
   readonly groups: ReadonlyMap<StreamTabId, ReadonlyMap<string, boolean>>;
   /** Never persisted. */
@@ -146,7 +144,10 @@ function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
  * The persisted form: interaction state only, per view and session. A
  * missing field takes its default before validation (`prefault`), because
  * a surface saved by an older build is still a valid surface; a corrupt
- * field fails the parse loudly rather than becoming a silent default.
+ * field fails the parse loudly rather than becoming a silent default. A
+ * surface whose `expanded` entries still hold the retired `'expanded'` /
+ * `'collapsed'` strings is such a field: `PersistedState` warns with the
+ * failing key and resets that session's whole record to these defaults.
  */
 export const PersistedSurfaceSchema = z.object({
   selected: StreamTabIdSchema.nullable().prefault(null),
@@ -154,7 +155,7 @@ export const PersistedSurfaceSchema = z.object({
   /** Text only; image bytes are not persisted. */
   drafts: entries(StreamTabIdSchema, z.string()),
   inquiryDrafts: entries(z.string(), InquiryDraftSchema),
-  expanded: entries(StreamTabIdSchema, ExpansionOverrideSchema),
+  expanded: entries(StreamTabIdSchema, z.boolean()),
   groups: entries(StreamTabIdSchema, entries(z.string(), z.boolean())),
   phase: entries(StreamTabIdSchema, z.string()),
   drawerOpen: z.boolean().prefault(false),
@@ -397,7 +398,7 @@ export type SurfaceAction =
   | {
       readonly kind: 'expand';
       readonly streamId: StreamTabId;
-      readonly override: ExpansionOverride;
+      readonly expanded: boolean;
     }
   | {
       readonly kind: 'group';
@@ -480,7 +481,7 @@ export function applySurfaceAction(
     case 'expand':
       return {
         ...surface,
-        expanded: withEntry(surface.expanded, action.streamId, action.override),
+        expanded: withEntry(surface.expanded, action.streamId, action.expanded),
       };
     case 'group':
       return {

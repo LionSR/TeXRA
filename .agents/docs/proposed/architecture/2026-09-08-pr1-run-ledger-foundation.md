@@ -167,7 +167,7 @@ null` (:1616) _before_ `applyOwnArm`, so the new cases are unreachable no-ops
   event in the repo, and the second mandatory edit outside the new files.
 - `redactTraceDraft`
   ([traceRedaction.ts:10](../../../../src/shared/session/traceRedaction.ts))
-  ends in `default: return event` (:82-83), so execution rows pass through
+  ends in `default: return event` (:82-83), so ledger rows pass through
   unscrubbed. That is C3's second owner, held today only by a `default:` arm,
   and PR 1's test pins it.
 - `databaseLayer('ephemeral')`
@@ -196,7 +196,7 @@ change what the rows can honestly claim.
    transactions, including the `model.message response` row that is supposed
    to make a paid response survivable, and including the `model.message
 attempt` row that is supposed to make an in-flight generation attributable.
-   PR 1 states the durability level it actually gets. Whether the execution
+   PR 1 states the durability level it actually gets. Whether the run
    aggregate deserves `synchronous = FULL` is open decision 10.
 2. **`SessionEvents.publish` is `Effect.orDie`.**
    [`SessionEvents.ts:99-102`](../../../../src/agent/runtime/SessionEvents.ts)
@@ -221,9 +221,8 @@ event_sequence.owner_id = excluded.owner_id AND closed = 0`, reach the
 ### 1.7 Recorded, not blocking
 
 1. **`z.url()` on `deployment.endpoint`** admits userinfo and `?api-key=`. The
-   execution aggregate is never scrubbed and lives until explicit user
-   deletion. PR 1 adds a write-boundary assertion; the durable fix is open
-   decision 1.
+   run aggregate is never scrubbed and lives until explicit user deletion.
+   PR 1 adds a write-boundary assertion; the durable fix is open decision 1.
 2. **Replay is hostage to a user-editable string.** `sameModelOrigin` compares
    `endpoint` and `credentialScope` byte-for-byte and a mismatch is a hard
    `unsupported`. PR 1 records the origin verbatim and surfaces a mismatch as
@@ -257,14 +256,20 @@ is display-visible, and it reaches the viewer through the session vocabulary.
 
 ### 2.2 The table
 
-| Row                | Aggregate | Written when                                                                                                                                                                                                  | Fold effect                                            | Frozen?          |
-| ------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------- |
-| `flow.step`        | stream    | round begin/end; turn ready/begin/end; response ready/processed; results/output ready; `waiting`; `halted`                                                                                                    | sets coordinates and `halt`                            | yes              |
-| `model.message`    | execution | five variants, below                                                                                                                                                                                          | the only row that grows provider history               | yes, after L6    |
-| `model.compaction` | execution | a handler returns a history that is not a prefix extension; a reflection round opens; a mid-run model switch re-encodes                                                                                       | replaces history; sets or invalidates the continuation | **no**, see §2.5 |
-| `tool.intent`      | execution | unconditionally at the barrier dispatch site, before any non-parallel-safe call starts. **Not** from an approval hook: `onExecutionReady` covers three tools while most of the fifty are barriers             | opens outcome-unknown state                            | yes              |
-| `tool.result`      | execution | after each call settles, one row per call, duplicates and synthetic skips included                                                                                                                            | settles a call, applies its state ops exactly once     | yes              |
-| `flow.snapshot`    | execution | once before the first external activity; at `turn.end`/`round.end`; before `waiting`; before a manual-retry prompt; before calling `observe`; whenever bytes appended since the last snapshot exceed its size | restores what no row carries; **asserts** what rows do | **no**, see §2.6 |
+Every row lands on the one `run` aggregate keyed by the run id (§3.1). The
+class column is the split above, and it is what decides which fold reads a row:
+`foldRunState` reads all six. All six also reach `sessionFold.ts` as explicit
+named cases, where in PR 1 every one of them is inert because `listingTypeOf`
+returns `null`; PR 3 gives the display-visible one real handling (§4.1).
+
+| Row                | Row class       | Written when                                                                                                                                                                                                  | Fold effect                                            | Frozen?          |
+| ------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------- |
+| `flow.step`        | display-visible | round begin/end; turn ready/begin/end; response ready/processed; results/output ready; `waiting`; `halted`                                                                                                    | sets coordinates and `halt`                            | yes              |
+| `model.message`    | ledger-private  | five variants, below                                                                                                                                                                                          | the only row that grows provider history               | yes, after L6    |
+| `model.compaction` | ledger-private  | a handler returns a history that is not a prefix extension; a reflection round opens; a mid-run model switch re-encodes                                                                                       | replaces history; sets or invalidates the continuation | **no**, see §2.5 |
+| `tool.intent`      | ledger-private  | unconditionally at the barrier dispatch site, before any non-parallel-safe call starts. **Not** from an approval hook: `onExecutionReady` covers three tools while most of the fifty are barriers             | opens outcome-unknown state                            | yes              |
+| `tool.result`      | ledger-private  | after each call settles, one row per call, duplicates and synthetic skips included                                                                                                                            | settles a call, applies its state ops exactly once     | yes              |
+| `flow.snapshot`    | ledger-private  | once before the first external activity; at `turn.end`/`round.end`; before `waiting`; before a manual-retry prompt; before calling `observe`; whenever bytes appended since the last snapshot exceed its size | restores what no row carries; **asserts** what rows do | **no**, see §2.6 |
 
 ### 2.3 The money window, and what closes it
 
@@ -892,11 +897,11 @@ Added to `SessionEventDraftSchema`, unexported, payload nested:
 
 ```ts
   durable('flow.step', { payload: FlowStepPayloadSchema }),
-  durable('model.message', { payload: ModelMessagePayloadSchema }, 'execution'),
-  durable('model.compaction', { payload: ModelCompactionPayloadSchema }, 'execution'),
-  durable('tool.intent', { payload: ToolIntentPayloadSchema }, 'execution'),
-  durable('tool.result', { payload: ToolResultPayloadSchema }, 'execution'),
-  durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }, 'execution'),
+  durable('model.message', { payload: ModelMessagePayloadSchema }),
+  durable('model.compaction', { payload: ModelCompactionPayloadSchema }),
+  durable('tool.intent', { payload: ToolIntentPayloadSchema }),
+  durable('tool.result', { payload: ToolResultPayloadSchema }),
+  durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }),
 ```
 
 and to `listingTypeOf`'s `return null` group:
@@ -911,7 +916,13 @@ and to `listingTypeOf`'s `return null` group:
       return null;
 ```
 
-`AggregateKeySchema` already admits `'execution'`. `LISTING_TYPES`
+All six take the `run` aggregate kind: one run owns one aggregate, so no arm
+names a kind of its own. That kind does not exist yet. At `main`,
+`AggregateKeySchema`
+([sessionEvent.ts:98-110](../../../../src/shared/schemas/sessionEvent.ts)) has
+no `run` arm and `durable(type, shape, kind = 'stream')` (:186-190) defaults to
+`stream`, so adding `'run'` to the kind enum and moving `durable`'s default are
+edits S1 of the one run model owns, and PR 1 cannot merge before S1 lands. `LISTING_TYPES`
 ([Database.ts:138](../../../../src/controllers/session/Database.ts)) is derived
 from `listingTypeOf`, so the six stay out of the cold listing with no SQL
 change, so a large snapshot never lands in every renderer's listing read.
@@ -931,9 +942,10 @@ Beside `sessionEvents.ts` and `database.ts`, which declare their tags in
 
 ```ts
 /**
- * The run ledger: the only reader of execution-aggregate payloads and the
- * only writer of the run rows. Three operations, each a boundary §2.2 or
- * §2.3 names.
+ * The run ledger: the only reader of ledger-private payloads and the only
+ * writer of the run rows. Three operations, each a boundary §2.2 or §2.3
+ * names, each taking the run id and qualifying its own aggregate access with
+ * `aggregateId('run', run)`.
  *
  * Stateless by construction. The loop holds the `RunState`; the ledger folds
  * the batch it just committed onto the state it was handed. That is what
@@ -942,23 +954,10 @@ Beside `sessionEvents.ts` and `database.ts`, which declare their tags in
  */
 import { Context, Data, Effect } from 'effect';
 
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { DatabaseReadFailed } from './database';
 import type { RunLedgerDraft, RunState } from './runStateFold';
 import { RunLedgerInconsistent } from './runStateFold';
-
-/**
- * Both aggregate keys of one run, passed rather than looked up. `run.start`
- * names its `executionId`, but nothing on the execution aggregate names its
- * stream, so a one-argument signature would need a reverse index, a second
- * source of truth for an edge the launcher already owns. This is a deviation
- * from §2.1's "accepts the logical execution id and qualifies its database
- * reads internally", and it is listed in §8.
- */
-export interface RunAggregates {
-  readonly executionId: ExecutionId;
-  readonly streamId: StreamTabId;
-}
 
 /**
  * A refusal the ledger itself decided. Read failures are NOT folded into
@@ -980,7 +979,7 @@ export class RunLedgerRefused extends Data.TaggedError('RunLedgerRefused')<{
     | 'unprepared-history' // §2.5, if option (a) is taken
     | 'batch-contract' // a precondition of `appendBatch` was violated
     | 'inconsistent'; // the rows do not fold (see `cause`)
-  readonly executionId: ExecutionId;
+  readonly runId: RunId;
   readonly detail: string;
   readonly cause?: RunLedgerInconsistent;
 }> {}
@@ -990,39 +989,38 @@ export class RunLedger extends Context.Service<
   {
     /**
      * The claim gate, called before any resume side effect: resume acquires
-     * the current claims for the execution and stream aggregates first, then
-     * calls `load`. Without it a second process can fold a run's state,
-     * re-dispatch a barrier tool, and learn only at its first append that the
-     * claim never moved, after the side effect.
+     * the run aggregate's current claim first, then calls `load`. Without it
+     * a second process can fold a run's state, re-dispatch a barrier tool,
+     * and learn only at its first append that the claim never moved, after
+     * the side effect.
      */
     readonly acquire: (
-      run: RunAggregates,
+      run: RunId,
     ) => Effect.Effect<void, RunLedgerRefused | DatabaseReadFailed>;
 
     /**
-     * Fold a run's rows into its state. `null` only when the execution
-     * aggregate is empty: that is the loop's fresh-run branch and, for a
+     * Fold a run's rows into its state. `null` only when the run aggregate
+     * carries no ledger row: that is the loop's fresh-run branch and, for a
      * pre-0.41 run, the honest "recorded before the run ledger" answer,
-     * distinct from "checkpoint corrupt". Execution rows without an initial
+     * distinct from "checkpoint corrupt". Ledger rows without an initial
      * `flow.snapshot` are not that case. They are a malformed aggregate and
      * fail `inconsistent`, because folding an `attempt` or a `response` into
-     * a fresh run is how a paid invocation gets issued twice. PR 1 reads both
-     * aggregates in full; the snapshot-anchored read is PR 2's optimization,
-     * and `foldRunState`'s `state` parameter is what makes it a drop-in
-     * rather than a second fold.
+     * a fresh run is how a paid invocation gets issued twice. PR 1 reads the
+     * run aggregate in full; the snapshot-anchored read is PR 2's
+     * optimization, and `foldRunState`'s `state` parameter is what makes it a
+     * drop-in rather than a second fold.
      */
     readonly load: (
-      run: RunAggregates,
+      run: RunId,
     ) => Effect.Effect<RunState | null, RunLedgerRefused | DatabaseReadFailed>;
 
     /**
-     * Commit one ordered batch, possibly across both aggregates, in one
-     * transaction, and return the state the loop continues from: `state`
-     * folded with the rows the publisher actually committed. Failure of any
-     * member commits none.
+     * Commit one ordered batch in one transaction, and return the state the
+     * loop continues from: `state` folded with the rows the publisher
+     * actually committed. Failure of any member commits none.
      *
      * Preconditions, checked before publish and failing `batch-contract`:
-     *   - a `flow.snapshot` is the last execution row of its batch, except
+     *   - a `flow.snapshot` is the last ledger row of its batch, except
      *     when a `flow.step` follows it in the same transaction;
      *   - a `model.compaction` immediately precedes the `model.message`
      *     `response` row that used it, when both are present;
@@ -1037,7 +1035,7 @@ export class RunLedger extends Context.Service<
      *     never committed, and the delivery is what clears them.
      */
     readonly appendBatch: (
-      run: RunAggregates,
+      run: RunId,
       state: RunState | null,
       rows: readonly RunLedgerDraft[],
     ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseReadFailed>;
@@ -1046,8 +1044,8 @@ export class RunLedger extends Context.Service<
 ```
 
 `RunLedgerDraft` is defined in `runStateFold.ts` as the discriminated union of
-the six ledger arms plus the named stream-aggregate arms a batch has to commit
-atomically with them: `tool.end`, which settles with its `tool.result`, and
+the six ledger arms plus the named display arms a batch has to commit atomically
+with them: `tool.end`, which settles with its `tool.result`, and
 `approval.requested` / `approval.resolved`, whose recovery binding is the
 snapshot committed in the same batch. Publishing those companions separately
 is the crash window where a settled tool keeps an active card, or an approval
@@ -1102,9 +1100,9 @@ export const runLedgerLayer: Layer.Layer<
   Effect.gen(function* () {
     const events = yield* SessionEvents; // writes: the one transaction
     const log = yield* Database; // reads and claims
-    // acquire     -> log.acquireClaims([execution, stream])
-    // load        -> log.readAggregate(execution, 1) ++ log.readAggregate(stream, 1),
-    //                merged in commit order, then foldRunState(null, rows)
+    // acquire     -> log.acquireClaims([aggregateId('run', run)])
+    // load        -> log.readAggregate(aggregateId('run', run), 1),
+    //                then foldRunState(null, rows)
     // appendBatch -> preconditions, write-boundary rules, events.publish(drafts),
     //                then foldRunState(state, committed)
   }),
@@ -1119,8 +1117,8 @@ fallback:
    type-check and the check becomes vacuous, which is the point: it is an
    assertion over the imported schema, not a second declaration of it. Never a
    `?? null`.
-2. **Endpoint hygiene.** Every `deployment.endpoint` reaching an execution row
-   is asserted to carry no userinfo, no query string and no fragment, failing
+2. **Endpoint hygiene.** Every `deployment.endpoint` reaching a ledger row is
+   asserted to carry no userinfo, no query string and no fragment, failing
    `unsafe-endpoint`. `z.url()` permits `?api-key=` and `#api-key=` alike, this
    row is never scrubbed and lives until explicit user deletion; the assertion
    is the only thing between a mistyped base URL and a permanent plaintext
@@ -1215,10 +1213,10 @@ and PR 3 gives `flow.step` real handling.
  * order in any output value. Every value it produces comes from a row. It
  * applies no redaction: display redaction is a later boundary.
  *
- * `rows` must be strictly increasing in `commit` across both aggregates; the
- * fold does not reorder them. `state` is `null` for a cold fold and the
- * previous level for an incremental one, and the two are the same
- * computation, and that equality is what the ledger test pins.
+ * `rows` must be strictly increasing in `commit`; the fold does not reorder
+ * them. `state` is `null` for a cold fold and the previous level for an
+ * incremental one, and the two are the same computation, and that equality is
+ * what the ledger test pins.
  *
  * Returns a typed inconsistency rather than throwing or defaulting: a
  * snapshot that disagrees with the rows below it is corruption, not a state
@@ -1236,7 +1234,7 @@ export class RunLedgerInconsistent extends Data.TaggedError(
     | 'out-of-order' // commits not strictly increasing
     | 'stale-snapshot' // a snapshot contradicts rows already folded
     | 'orphan-settlement' // a tool.result under no pending response
-    | 'unknown-execution-row' // an unrecognized type on the execution aggregate
+    | 'unknown-run-row' // an unrecognized type on the run aggregate
     | 'dangling-binding' // an approval binding names no row
     | 'mismatched-delivery'; // a delivering append does not settle its response
   readonly detail: string;
@@ -1270,12 +1268,17 @@ and the unresolved approvals with their recovery bindings resolved.
 | `flow.step`                                          | sets the step and each coordinate it carries (asserted non-decreasing, so a round-end step is emitted before the snapshot that opens the next round, never after it); records the halt outcome on `'halted'`.                                                                                                                                          |
 | `flow.snapshot`                                      | §4.4.                                                                                                                                                                                                                                                                                                                                                  |
 | `approval.requested` / `approval.resolved`           | maintain the approval map by request id. A `model-retry` binding must match the pending retry's request id; a `tool-outcome` binding must match a pending intent's `approvalRequestId`. An inconsistent binding is `dangling-binding`, a resume refusal with a diagnostic, never consent.                                                              |
-| every other stream-aggregate type                    | ignored by an explicit named list.                                                                                                                                                                                                                                                                                                                     |
-| an unrecognized type on the **execution** aggregate  | `unknown-execution-row`.                                                                                                                                                                                                                                                                                                                               |
+| every other display row type                         | ignored by an explicit named list.                                                                                                                                                                                                                                                                                                                     |
+| any other unrecognized row type                      | `unknown-run-row`.                                                                                                                                                                                                                                                                                                                                     |
 
 That last pair is the design: display rows are ignored _by name_; anything
-unrecognized on the execution aggregate is a failure, never a `default: return
-state`.
+else unrecognized is a failure, never a `default: return state`. Note what one
+aggregate costs here. While display rows lived on a different aggregate, an
+unrecognized type was safe by construction. Now the named list is the only
+thing between a newly added display arm and a resume refusal, and the steps
+this note is sequenced against add them: S2 of the one run model adds `run.end`
+and `run.description`, S3 adds `request.opened` and `request.decided`. Each must
+extend the list in the same pull request that adds the arm.
 
 ### 4.4 The snapshot rule: reconcile, never overwrite
 
@@ -1291,7 +1294,7 @@ error anywhere. So:
   family state contains the usage accumulator (§2.7), which `tool.result` `add`
   operations do mutate. Until open decision 12 is answered, this rule is
   unsound for that one field.**
-- **Reference fields**, `SnapshotReferencesSchema`: **if no execution rows
+- **Reference fields**, `SnapshotReferencesSchema`: **if no ledger rows
   were folded before this snapshot, adopt; otherwise assert equal and fail
   `stale-snapshot` on any difference.** A cold full read has already folded the
   rows that establish them, so the snapshot is checked; PR 2's
@@ -1332,15 +1335,17 @@ type.**
    one a duplicate), `tool.intent`, two `tool.result` batches each with its
    `tool.end`, the delivering `append`, then `flow.snapshot` +
    `flow.step turn.end`. Assert the `RunState` returned by the last
-   `appendBatch` deep-equals a fresh `RunLedger.load` on the same aggregates.
+   `appendBatch` deep-equals a fresh `RunLedger.load` on the same run.
    _Why it earns its place:_ this is the lane's central invariant, and nothing
    else checks it.
-2. **The execution aggregate is byte-exact.** Read the stored `data` column
-   back and assert the `TurnResult` is identical to the one appended, including
+2. **The ledger rows are byte-exact.** Read the stored `data` column back and
+   assert the `TurnResult` is identical to the one appended, including
    thinking signatures and encrypted reasoning, and that a secret-shaped string
-   inside the turn content survives unchanged while the same string in a
-   `tool.start` on the stream aggregate is redacted.
-   _Why it earns its place:_ it fails the day someone routes execution rows
+   inside the turn content survives unchanged while the same string in a `log`
+   display row is redacted. (`redactTraceDraft` has no `tool.start` arm today:
+   that type falls through its `default: return event`, so tool input is not
+   scrubbed on any display arm.)
+   _Why it earns its place:_ it fails the day someone routes ledger rows
    through `redactTraceDraft`, which is C3's second owner and is currently held
    only by a `default:` arm
    ([traceRedaction.ts:82-83](../../../../src/shared/session/traceRedaction.ts)).
@@ -1356,22 +1361,22 @@ type.**
 Plain vitest, no Effect runtime, hand-built row arrays, one table-driven
 `it.each` over the acceptance table PR 1 owes the reviewer:
 
-| Crash point                                          | Recovered by                                                                                                               | Explicitly **not** recovered                                                                                                                                                                        |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| between `tool.intent` and the adapter call (barrier) | the intent row with no matching `tool.result`, giving outcome-unknown                                                      | whether the tool ran. `tool.intent` is evidence that execution was **admitted**, never that it happened. The resume rule must raise a `tool-outcome` approval and must never fabricate `cancelled`. |
-| after a paid response, before the turn-end snapshot  | the `response` row plus the preceding snapshot's phase                                                                     | nothing; the rule is "process the committed response, never re-invoke".                                                                                                                             |
-| during generation, before the `response` row         | the `attempt` and `identified` rows: the invocation is attributable, and for `openai-responses` retrievable                | the response content. And, under `synchronous = NORMAL`, an OS crash can lose the `attempt` row itself (§1.6.1).                                                                                    |
-| approval requested, never resolved                   | the existing approval arms **plus** the binding in `pendingRetry.requestId` / `pendingIntents[].approvalRequestId`         | anything, without the binding: the approval payload names no call and no invocation, so a resumed process could only retire it as `interrupted`, which is forbidden for these two purposes.         |
-| compaction that replaced history mid-run             | `model.compaction` (`keepPrefix`, `messages`, continuation)                                                                | nothing from the snapshot alone: snapshots omit messages.                                                                                                                                           |
-| a completed run being continued                      | a `flow.snapshot` existing, full stop; the outcome does not enter it                                                       | n/a                                                                                                                                                                                                 |
-| pre-0.41 run                                         | zero execution rows, so `load` returns `null`, worded "recorded before the run ledger", distinct from "checkpoint corrupt" | n/a                                                                                                                                                                                                 |
+| Crash point                                          | Recovered by                                                                                                            | Explicitly **not** recovered                                                                                                                                                                        |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| between `tool.intent` and the adapter call (barrier) | the intent row with no matching `tool.result`, giving outcome-unknown                                                   | whether the tool ran. `tool.intent` is evidence that execution was **admitted**, never that it happened. The resume rule must raise a `tool-outcome` approval and must never fabricate `cancelled`. |
+| after a paid response, before the turn-end snapshot  | the `response` row plus the preceding snapshot's phase                                                                  | nothing; the rule is "process the committed response, never re-invoke".                                                                                                                             |
+| during generation, before the `response` row         | the `attempt` and `identified` rows: the invocation is attributable, and for `openai-responses` retrievable             | the response content. And, under `synchronous = NORMAL`, an OS crash can lose the `attempt` row itself (§1.6.1).                                                                                    |
+| approval requested, never resolved                   | the existing approval arms **plus** the binding in `pendingRetry.requestId` / `pendingIntents[].approvalRequestId`      | anything, without the binding: the approval payload names no call and no invocation, so a resumed process could only retire it as `interrupted`, which is forbidden for these two purposes.         |
+| compaction that replaced history mid-run             | `model.compaction` (`keepPrefix`, `messages`, continuation)                                                             | nothing from the snapshot alone: snapshots omit messages.                                                                                                                                           |
+| a completed run being continued                      | a `flow.snapshot` existing, full stop; the outcome does not enter it                                                    | n/a                                                                                                                                                                                                 |
+| pre-0.41 run                                         | zero ledger rows, so `load` returns `null`, worded "recorded before the run ledger", distinct from "checkpoint corrupt" | n/a                                                                                                                                                                                                 |
 
 Plus the loudness cases: out-of-order commits; a snapshot naming a settled
 intent (`stale-snapshot`); a `tool.result` under no pending response
 (`orphan-settlement`); a `model-retry` binding naming no pending retry
-(`dangling-binding`); an unknown execution-aggregate type. And two guards that
-keep the union widening honest: `listingTypeOf` returns `null` for all six, and
-`redactTraceDraft` returns an execution draft unchanged.
+(`dangling-binding`); an unknown row type on the run aggregate. And two guards
+that keep the union widening honest: `listingTypeOf` returns `null` for all six,
+and `redactTraceDraft` returns a ledger draft unchanged.
 
 The fixture comment records the **measured serialized byte size** of one
 realistic reflection snapshot and one tool-use snapshot, so PR 2 has a number
@@ -1393,7 +1398,7 @@ consumes**, and needs no new entry in `config/ratchets/knip-baseline.json`:
 | `runState.ts`'s relocated schemas                                                                                | `runLedgerEvent.ts` and the agent modules that imported them before the move                                    |
 | `toolResult.ts`'s newly exported `ExecutedToolResultSchema`, `ErrorToolResultSchema`, `ToolFileAttachmentSchema` | `runLedgerEvent.ts`                                                                                             |
 | `foldRunState`, `RunState`, `RunLedgerDraft`, `RunLedgerInconsistent`                                            | `src/agent/runtime/RunLedger.ts`                                                                                |
-| `RunLedger`, `RunAggregates`, `RunLedgerRefused`                                                                 | `src/agent/runtime/RunLedger.ts`                                                                                |
+| `RunLedger`, `RunLedgerRefused`                                                                                  | `src/agent/runtime/RunLedger.ts`                                                                                |
 | `runLedgerLayer`                                                                                                 | `sessionGraphLayer` in `sessionLayer.ts`                                                                        |
 | `PreparedHistorySchema` (L1)                                                                                     | `foldRunState` / `appendBatch`, per §4.5                                                                        |
 
@@ -1474,6 +1479,17 @@ conversion of `flow_<id>.json` into rows. The 0.41 owner ruling removed it.
 Numbered by how expensive they are to reverse after the first row is written.
 Decisions 10 to 12 are new, added by the review; the rest carry forward.
 
+**0. One aggregate per run.** _(Before PR 1 is implemented.)_ This note now
+declares every row on one `run` aggregate keyed by the run id, which is what
+removes the two-key deviation earlier drafts carried. That shape is the
+recommendation of the
+[one run model](2026-09-10-one-run-model.md), not yet a ruling: its §7 item 1
+still puts it to the owner, and it is the one place that note departs from a
+ratified detail, the one-fold PRD's per-kind sequence. If the owner instead
+keeps two aggregate kinds sharing one logical id, §2.2, §2.8, §3.1 and §4.3
+here revert to naming a kind per row class, and the counter and claim this
+shape deletes come back.
+
 **1. Is the durable route binding the literal deployment, or an opaque route
 id?** _(Before PR 1 merges; after rows exist it is a row rewrite.)_
 `BindingSchema` puts `deployment: { endpoint: z.url(), credentialScope }` on
@@ -1514,15 +1530,12 @@ sites; (b) two fields with the refinement; (c) two fields, no refinement.
 parse already happens.
 
 **5. Deviations from §2.1's payload sketches.** Sign off or send back. There are
-**six**, not the five the original listed; the review caught the missing one:
-`sourceResponseCommit` becomes a runtime-minted `responseId`;
+**five**: `sourceResponseCommit` becomes a runtime-minted `responseId`;
 `messageBaseCommit` is dropped (PR 2 adds it back as an optional hint);
 `flow.step.continuation` becomes `continuationIndex`; the enumerated
 state-slice mutation set becomes a general path vocabulary, required by
-`recordSubagentCost`; `model.message` gains `attempt`/`identified`/`accepted`;
-and **`RunLedger.load` takes a two-aggregate `RunAggregates` rather than "the
-logical execution id, qualifying its reads internally"**. **Recommendation:
-accept all six**, with the sixth argued at §3.1.
+`recordSubagentCost`; and `model.message` gains
+`attempt`/`identified`/`accepted`. **Recommendation: accept all five.**
 
 **6. Should `SessionEvents.publish` gain a typed failure channel?** Today it is
 `Effect.orDie` (SessionEvents.ts:99-102), so the single-owner refusal enforced
@@ -1553,12 +1566,12 @@ stays a separate ten-value enum.** Steps are transitions and phases are states.
 Both are closed and the fold switches them with no `default`, so a new member
 is a compile-time decision, not a data migration.
 
-**10. Does the execution aggregate need `PRAGMA synchronous = FULL`?** _(New.)_
+**10. Does the run aggregate need `PRAGMA synchronous = FULL`?** _(New.)_
 `NORMAL` (Database.ts:950) is justified in-file only against `kill -9`, and the
 rows that make a paid response survivable are exactly the rows an OS crash can
 lose. _Options:_ (a) leave `NORMAL` and state the limit in the PR body and in
 §0.1; (b) `FULL` for the whole database and accept the write-latency cost on
-every stream row; (c) a per-transaction `synchronous` change around execution
+every display row; (c) a per-transaction `synchronous` change around ledger
 batches. **Recommendation: (a) for PR 1**, but the ruling must be written down
 in §0.1 rather than left implicit, because every "durable" claim in this lane
 inherits it.

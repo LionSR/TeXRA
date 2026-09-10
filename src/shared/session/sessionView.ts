@@ -156,8 +156,8 @@ const StreamViewCommonSchema = z.object({
   approval: z.enum(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable (5.2). */
   readOnly: z.boolean(),
-  /** This stream or a descendant needs the user; outranks a collapsed
-   *  override. */
+  /** This stream or a descendant needs the user; outranks the surface's
+   *  collapsed choice. */
   forceExpanded: z.boolean(),
   group: StreamGroupSchema,
   usage: RunUsageMapSchema,

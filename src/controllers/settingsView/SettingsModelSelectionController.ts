@@ -1,6 +1,9 @@
-import { ModelProvider, type ModelConfig, ReasoningEffort } from 'llm-zoo';
+import { ModelProvider, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
-import { LEVEL_TO_EFFORT, supportsReasoningLevel } from '@model/reasoningLevel';
+import {
+  reasoningEffortOverrides,
+  supportsReasoningLevel,
+} from '@model/reasoningLevel';
 import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
@@ -20,9 +23,7 @@ import {
   type CopilotRouteInfo,
   type ModelOptionData,
   type ModelSelectionItem,
-  type ReasoningLevel,
   type UpdateModelSelectionMessage,
-  ReasoningLevelSchema,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
@@ -52,12 +53,6 @@ interface SettingsModelSelectionData {
   preferShortModelNames: boolean;
   copilotModels: CopilotRouteInfo[];
 }
-
-const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
-  Object.entries(LEVEL_TO_EFFORT).map(
-    ([level, effort]) => [effort, level as ReasoningLevel] as const,
-  ),
-);
 
 /** Membership form of the order the Models tab groups by. */
 const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
@@ -127,9 +122,9 @@ export class SettingsModelSelectionController {
 
   async setReasoningLevel(input: {
     modelName: string;
-    level: ReasoningLevel | null;
+    level: ReasoningEffort | null;
   }): Promise<void> {
-    const overrides = { ...this.getReasoningLevelOverrides() };
+    const overrides = { ...this.getStoredReasoningLevels() };
     if (input.level == null) {
       delete overrides[input.modelName];
     } else {
@@ -141,7 +136,12 @@ export class SettingsModelSelectionController {
     );
   }
 
-  private getReasoningLevelOverrides(): Record<string, string> {
+  /**
+   * The stored override record as written, so a rewrite carries every entry
+   * back to storage. Reads that need the effort go through
+   * `reasoningEffortOverrides`.
+   */
+  private getStoredReasoningLevels(): Record<string, string> {
     return this.deps.globalState.get<Record<string, string>>(
       GlobalStateKey.REASONING_LEVELS,
       {},
@@ -153,7 +153,7 @@ export class SettingsModelSelectionController {
     preferredCopilotModels: ReadonlySet<string>,
   ): Promise<ModelSelectionItem[]> {
     const enabledSet = new Set(getEnabledModels(this.deps.globalState));
-    const reasoningOverrides = this.getReasoningLevelOverrides();
+    const reasoningOverrides = reasoningEffortOverrides(this.deps.globalState);
 
     // Resolve availability (personal-key, subscription) once for the
     // models this host shows, via the same shared computation the CLI picker
@@ -230,31 +230,23 @@ export class SettingsModelSelectionController {
   private addReasoningLevelData(
     item: ModelSelectionItem,
     config: ModelConfig,
-    override: string | undefined,
+    override: ReasoningEffort | undefined,
   ): void {
     if (!supportsReasoningLevel(config)) return;
 
     item.supportsReasoningLevel = true;
-    const supportedLevels = config.capabilities.supportedReasoningEfforts
-      ?.map((effort) => EFFORT_TO_LEVEL.get(effort))
-      .filter((level): level is ReasoningLevel => level !== undefined);
+    const supportedLevels = config.capabilities.supportedReasoningEfforts;
     if (supportedLevels?.length) {
-      item.supportedReasoningLevels = supportedLevels;
+      item.supportedReasoningLevels = [...supportedLevels];
     }
 
-    const defaultLevel = EFFORT_TO_LEVEL.get(
-      config.capabilities.reasoningEffort,
-    );
-    if (defaultLevel) {
-      item.defaultReasoningLevel = defaultLevel;
-    }
+    item.defaultReasoningLevel = config.capabilities.reasoningEffort;
 
-    const parsed = ReasoningLevelSchema.safeParse(override);
     if (
-      parsed.success &&
-      (!supportedLevels?.length || supportedLevels.includes(parsed.data))
+      override !== undefined &&
+      (!supportedLevels?.length || supportedLevels.includes(override))
     ) {
-      item.reasoningLevel = parsed.data;
+      item.reasoningLevel = override;
     }
   }
 }

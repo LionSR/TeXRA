@@ -1,4 +1,4 @@
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
@@ -27,7 +27,10 @@ import {
 } from '@utils/config/providerConfig';
 
 import { hasUsableApiKey, type ApiProvider } from './apiProviders';
-import { LEVEL_TO_EFFORT, supportsReasoningLevel } from './reasoningLevel';
+import {
+  reasoningEffortOverrides,
+  supportsReasoningLevel,
+} from './reasoningLevel';
 import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
@@ -262,7 +265,7 @@ async function getPersonalAccessKindForModel(
 }
 
 interface ModelAvailabilityContext {
-  reasoningLevels: Readonly<Record<string, string>>;
+  reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   hasOpenRouter: boolean;
   useOpenRouter: boolean;
@@ -393,10 +396,7 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
       hasApiKey('kimiCode'),
     ]);
   return {
-    reasoningLevels: globalState.get<Record<string, string>>(
-      GlobalStateKey.REASONING_LEVELS,
-      {},
-    ),
+    reasoningLevels: reasoningEffortOverrides(globalState),
     hasUsableApiKey: hasApiKey,
     hasOpenRouter,
     useOpenRouter,
@@ -543,8 +543,7 @@ async function buildModelOptionData(
       const defaultLevel =
         REASONING_LEVEL_LABELS[optionConfig.capabilities.reasoningEffort];
       if (supportsReasoningLevel(optionConfig)) {
-        const override = ctx.reasoningLevels[model];
-        const effort = override ? LEVEL_TO_EFFORT[override] : undefined;
+        const effort = ctx.reasoningLevels[model];
         reasoning =
           effort === undefined
             ? `Default (${defaultLevel})`

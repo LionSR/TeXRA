@@ -99,7 +99,7 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
         editedFile: 'main_polish.tex',
       },
     },
-    { kind: 'expand', streamId: ROOT, override: 'expanded' },
+    { kind: 'expand', streamId: ROOT, expanded: true },
     {
       kind: 'draft',
       streamId: CHILD,
@@ -163,14 +163,14 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     return sidebar(view, surface(view, { kind: 'select', streamId: CHILD }));
   },
   // ExtE-Tree: the drawer with the root collapsed under its rollup pill,
-  // nothing pending to force the path open (the override says collapsed).
+  // nothing pending to force the path open (the surface says collapsed).
   'ext-tree': () => {
     const view = withoutApproval();
     return sidebar(
       view,
       surface(
         view,
-        { kind: 'expand', streamId: ROOT, override: 'collapsed' },
+        { kind: 'expand', streamId: ROOT, expanded: false },
         { kind: 'select', streamId: ROOT },
         { kind: 'drawer', open: true },
       ),
@@ -183,7 +183,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       view,
       surface(
         view,
-        { kind: 'expand', streamId: ROOT, override: 'collapsed' },
+        { kind: 'expand', streamId: ROOT, expanded: false },
         { kind: 'select', streamId: GRANDCHILD },
         { kind: 'drawer', open: true },
       ),
@@ -197,7 +197,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       view,
       surface(
         view,
-        { kind: 'expand', streamId: ROOT, override: 'collapsed' },
+        { kind: 'expand', streamId: ROOT, expanded: false },
         { kind: 'select', streamId: CHILD },
         { kind: 'drawer', open: true },
       ),
