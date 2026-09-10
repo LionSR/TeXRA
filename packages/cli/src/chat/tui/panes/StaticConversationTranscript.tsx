@@ -10,11 +10,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { createLog } from '@logger/logUtils';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import type { SessionView } from '@shared/session/sessionView';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -717,6 +719,16 @@ interface StaticTranscriptBuildResult {
   readonly trimmed: boolean;
 }
 
+const log = createLog('StaticConversationTranscript');
+const DUPLICATE_ROW_ID_REPORT_CAP = 1000;
+/** Row ids already reported as duplicates, so a persistently-colliding id is
+ *  logged once instead of once per rebuild. `upsertRow` (sessionFold) and the
+ *  local-notice counter (`transcript.ts`) both guarantee unique ids; a
+ *  collision here means one of those invariants broke upstream. */
+const duplicateRowIdsReported = createBoundedIdSet(
+  DUPLICATE_ROW_ID_REPORT_CAP,
+);
+
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): StaticTranscriptBuildResult {
@@ -749,7 +761,15 @@ export function buildStaticTranscriptItems(
   );
   const seen = new Set<string>();
   for (const entry of orderedStaticEntries) {
-    if (seen.has(entry.id)) continue;
+    if (seen.has(entry.id)) {
+      if (!duplicateRowIdsReported.has(entry.id)) {
+        duplicateRowIdsReported.add(entry.id);
+        log.warn(
+          `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in a static rebuild; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
+        );
+      }
+      continue;
+    }
     seen.add(entry.id);
     items.push({ id: entry.id, kind: 'entry', entry });
   }
@@ -1017,7 +1037,15 @@ export function advanceStaticTranscriptState(
   if (plan.appended.length > 0) {
     const seenIds = new Set(nextItems.map((item) => item.id));
     for (const entry of plan.appended) {
-      if (seenIds.has(entry.id)) continue;
+      if (seenIds.has(entry.id)) {
+        if (!duplicateRowIdsReported.has(entry.id)) {
+          duplicateRowIdsReported.add(entry.id);
+          log.warn(
+            `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in an incremental append; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
+          );
+        }
+        continue;
+      }
       const item: StaticTranscriptItem = {
         id: entry.id,
         kind: 'entry',
