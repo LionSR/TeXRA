@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -78,7 +77,7 @@ describe('trace-viewer TraceDataSchema', () => {
       const executionId = 'abc12345' as RunId;
       const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
-      const streamId = getStreamTabId('review', { executionId });
+      const streamId = executionId;
       const session = createTestSession();
       publishTestRunStart(session, streamId, executionId);
       yield* Effect.promise(() => session.settlePublications());

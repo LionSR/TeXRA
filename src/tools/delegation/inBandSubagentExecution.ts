@@ -175,7 +175,7 @@ const executeInBand = Effect.fn('executeInBand')(
     const workingDirectory = config.workingDirectory ?? undefined;
     const store = runInSession(options.session, () => getRunStore(executionId));
 
-    const { childStreamId } = yield* registerChildRun(options.session, {
+    yield* registerChildRun(options.session, {
       executionId,
       config,
       agentName: options.agentName,
@@ -198,7 +198,7 @@ const executeInBand = Effect.fn('executeInBand')(
         session: options.session,
         executionId,
         parentStreamId: options.parentStreamId,
-        childStreamId,
+        childStreamId: executionId,
         agentName: options.agentName,
         recordCost: options.onCost,
         // The parent is blocked awaiting this child, so it rides the parent's

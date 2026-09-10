@@ -71,9 +71,7 @@ describe('execution registration and finalization', () => {
           userFollowUpSupport: 'nativeInteractive',
         });
         expect(
-          yield* Effect.promise(() =>
-            getRunStore(executionId).listKeys(),
-          ),
+          yield* Effect.promise(() => getRunStore(executionId).listKeys()),
         ).toEqual([]);
       }),
   );
@@ -87,9 +85,9 @@ describe('execution registration and finalization', () => {
           Effect.die(failure),
         );
         expect(failureOf(yield* Effect.exit(register()))).toBe(failure);
-        expect(
-          yield* inSession(() => inspectRunLease(executionId)),
-        ).toEqual({ status: 'free' });
+        expect(yield* inSession(() => inspectRunLease(executionId))).toEqual({
+          status: 'free',
+        });
         expect(
           yield* getRunRecords(session, executionId).readMeta(),
         ).toBeNull();
@@ -117,9 +115,7 @@ describe('execution registration and finalization', () => {
             ),
           ),
         ).toBe(failure);
-        const lease = yield* inSession(() =>
-          inspectRunLease(executionId),
-        );
+        const lease = yield* inSession(() => inspectRunLease(executionId));
         expect(lease.status).toBe(alreadyOwned ? 'owned' : 'free');
       }),
   );
@@ -144,9 +140,9 @@ describe('execution registration and finalization', () => {
         ).toBeInstanceOf(Error);
         yield* session.acquireExecutionClaims(executionId, options.streamId);
         yield* getRunRecords(session, executionId).writeReport('owned');
-        expect(
-          yield* getRunRecords(session, executionId).readReport(),
-        ).toBe('owned');
+        expect(yield* getRunRecords(session, executionId).readReport()).toBe(
+          'owned',
+        );
       }),
   );
 
@@ -162,12 +158,10 @@ describe('execution registration and finalization', () => {
             ),
           ),
         ).toBeInstanceOf(Error);
-        yield* getRunRecords(session, executionId).writeReport(
+        yield* getRunRecords(session, executionId).writeReport('still owned');
+        expect(yield* getRunRecords(session, executionId).readReport()).toBe(
           'still owned',
         );
-        expect(
-          yield* getRunRecords(session, executionId).readReport(),
-        ).toBe('still owned');
       }),
   );
 
@@ -189,9 +183,9 @@ describe('execution registration and finalization', () => {
             ),
           ),
         ).toBeInstanceOf(Error);
-        expect(
-          yield* inSession(() => inspectRunLease(executionId)),
-        ).toEqual({ status: 'free' });
+        expect(yield* inSession(() => inspectRunLease(executionId))).toEqual({
+          status: 'free',
+        });
       }),
   );
 

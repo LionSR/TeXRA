@@ -60,7 +60,6 @@ const testSession = {
   // ExecutionRegistry; this suite never tracks real handles, so lookups miss.
   executions: {
     getHandle: () => undefined,
-    getAgentHandleByStream: () => undefined,
   },
 } as unknown as SessionHandle;
 const CodexThreads = codexThreadsFor(testSession);
@@ -226,7 +225,6 @@ describe('codex tool - atomic resume fallback', () => {
       runStreamed: vi.fn(),
     };
     const executions = {
-      getAgentHandleByStream: () => undefined,
       getHandle: () => undefined,
     } as any;
     const getStrategy = captureRunLoopStrategy();

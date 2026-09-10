@@ -68,9 +68,9 @@ describe('main-view execution launch controller', () => {
         request,
       });
 
-      expect(
-        yield* prepareMainViewRunLaunch(message, createHost()),
-      ).toEqual(request);
+      expect(yield* prepareMainViewRunLaunch(message, createHost())).toEqual(
+        request,
+      );
       expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
     }),
   );
@@ -159,9 +159,7 @@ describe('main-view execution launch controller', () => {
         });
         const message = teamMessage();
 
-        expect(yield* prepareMainViewRunLaunch(message, host)).toEqual(
-          request,
-        );
+        expect(yield* prepareMainViewRunLaunch(message, host)).toEqual(request);
         expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
         expect(mocks.prepareMainViewTeamExecutionRequest).toHaveBeenCalledWith(
           message,

@@ -986,7 +986,7 @@ describe('executionRegistry', () => {
       trackInterruptibleHandle(
         registry,
         {
-          executionId: 'exec-root-stop-policy-test',
+          executionId: rootRunId,
           parentStreamId: rootRunId,
           childStreamId: rootRunId,
         },
@@ -1103,7 +1103,7 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
       expect(
-        registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
+        registry.getHandle('exec-grandchild-detach-kill-test')?.parentStreamId,
       ).toBe(grandchildStreamId);
       expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
         type: 'setParentStream',
@@ -1130,7 +1130,7 @@ describe('executionRegistry', () => {
       trackInterruptibleHandle(
         registry,
         {
-          executionId: 'exec-root-detach-stop-policy-test',
+          executionId: rootRunId,
           parentStreamId: rootRunId,
           childStreamId: rootRunId,
         },
@@ -1166,10 +1166,12 @@ describe('executionRegistry', () => {
       expect(grandchildInterrupt).not.toHaveBeenCalled();
       expect(registry.getActiveChildren(rootRunId)).toHaveLength(0);
       expect(
-        registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
+        registry.getHandle('exec-child-detach-stop-policy-test')
+          ?.parentStreamId,
       ).toBe(childStreamId);
       expect(
-        registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
+        registry.getHandle('exec-grandchild-detach-stop-policy-test')
+          ?.parentStreamId,
       ).toBe(childStreamId);
       expect(registry.getActiveChildren(childStreamId)).toEqual([
         expect.objectContaining({ childStreamId: grandchildStreamId }),
@@ -1212,7 +1214,7 @@ describe('executionRegistry', () => {
       trackInterruptibleHandle(
         registry,
         {
-          executionId: 'exec-child-focused-stop-test',
+          executionId: childStreamId,
           parentStreamId: rootRunId,
           childStreamId,
         },
@@ -1245,12 +1247,14 @@ describe('executionRegistry', () => {
       expect(rootInterrupt).not.toHaveBeenCalled();
       expect(siblingInterrupt).not.toHaveBeenCalled();
       expect(descendantInterrupt).not.toHaveBeenCalled();
-      expect(registry.getAgentHandleByStream(rootRunId)).toBe(rootHandle);
-      expect(registry.getAgentHandleByStream(siblingStreamId)).toBe(
+      expect(registry.getHandle('exec-root-focused-stop-test')).toBe(
+        rootHandle,
+      );
+      expect(registry.getHandle('exec-sibling-focused-stop-test')).toBe(
         siblingHandle,
       );
       expect(
-        registry.getAgentHandleByStream(descendantStreamId)?.parentStreamId,
+        registry.getHandle('exec-descendant-focused-stop-test')?.parentStreamId,
       ).toBe(descendantStreamId);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(rootRunId)).toBeUndefined();
@@ -1446,7 +1450,7 @@ describe('executionRegistry', () => {
 
       expect(childInterrupt).not.toHaveBeenCalled();
       expect(
-        registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
+        registry.getHandle('exec-child-ownerless-detach-test')?.parentStreamId,
       ).toBe(childStreamId);
       expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
         type: 'setParentStream',
@@ -1501,12 +1505,11 @@ describe('executionRegistry', () => {
 
   it('clears live tool-use context while the handle remains tracked', () => {
     const { registry } = createRegistry();
-    const executionId = 'exec-live-flow-context-test';
     const streamId = 'stream-live-flow-context-test' as StreamTabId;
     const context = createLiveToolUseFlowContext();
 
     try {
-      const handle = createHandle(executionId, streamId, streamId, {
+      const handle = createHandle(streamId, streamId, streamId, {
         agentName: 'test-tool-use',
       });
 
@@ -1518,7 +1521,7 @@ describe('executionRegistry', () => {
       handle.detachToolUseFlow(context);
 
       expect(registry.getToolUseFlowContext(streamId)).toBeUndefined();
-      expect(registry.getAgentHandleByStream(streamId)).toBe(handle);
+      expect(registry.getHandle(streamId)).toBe(handle);
     } finally {
       registry.dispose();
     }
@@ -1552,17 +1555,14 @@ describe('executionRegistry', () => {
         streamId,
       });
 
-      const handle = createHandle(
-        'exec-manual-compaction-test',
-        streamId,
-        streamId,
-        { agentName: 'test-tool-use' },
-      );
+      const handle = createHandle(streamId, streamId, streamId, {
+        agentName: 'test-tool-use',
+      });
       handle.attachToolUseFlow(context);
       registry.track(handle);
 
       const unsupportedHandle = createHandle(
-        'exec-manual-compaction-unsupported-test',
+        unsupportedStreamId,
         unsupportedStreamId,
         unsupportedStreamId,
         { agentName: 'test-tool-use' },
@@ -1598,12 +1598,9 @@ describe('executionRegistry', () => {
     const context = createLiveToolUseFlowContext();
 
     try {
-      const activeHandle = createHandle(
-        'exec-follow-up-active-test',
-        activeRunId,
-        activeRunId,
-        { agentName: 'test-tool-use' },
-      );
+      const activeHandle = createHandle(activeRunId, activeRunId, activeRunId, {
+        agentName: 'test-tool-use',
+      });
       activeHandle.attachToolUseFlow(context);
       registry.track(activeHandle);
       seedStreamStatusForTest(streamStatus, activeRunId, {

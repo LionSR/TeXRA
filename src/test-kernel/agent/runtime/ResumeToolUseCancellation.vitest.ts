@@ -388,9 +388,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         });
 
         expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(
-          executionId,
-        );
+        expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(executionId);
         expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
         expect(order).toEqual([
           'attach',

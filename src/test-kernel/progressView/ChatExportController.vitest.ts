@@ -7,7 +7,6 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -84,10 +83,9 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 
 function persistTranscriptEntry(
   executionId: RunId,
-  agent: string,
 ): Effect.Effect<StreamTabId> {
   return Effect.gen(function* () {
-    const streamId = getStreamTabId(agent, { executionId });
+    const streamId = executionId;
     yield* session.commit([
       {
         type: 'log',
@@ -131,16 +129,12 @@ describe('ChatExportController.exportAsHtml', () => {
         const templatePath = yield* Effect.promise(() => writeTemplate());
         const executionId = 'eec001' as RunId;
         const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-        publishTestRunStart(
-          session,
-          getStreamTabId(executionConfig.agent, { executionId }),
-          executionId,
-        );
+        publishTestRunStart(session, executionId, executionId);
         yield* Effect.promise(() => session.settlePublications());
         yield* getRunRecords(session, executionId).writeRunRecord(
           executionConfig,
         );
-        const streamId = yield* persistTranscriptEntry(executionId, 'review');
+        const streamId = yield* persistTranscriptEntry(executionId);
 
         const outcome = yield* controller.exportAsHtml(
           executionId,
@@ -168,17 +162,10 @@ describe('ChatExportController.exportAsHtml', () => {
   it.live('throws when the standalone template bundle is missing', () =>
     Effect.gen(function* () {
       const executionId = 'eec002' as RunId;
-      publishTestRunStart(
-        session,
-        getStreamTabId(config().agent, { executionId }),
-        executionId,
-      );
+      publishTestRunStart(session, executionId, executionId);
       yield* Effect.promise(() => session.settlePublications());
       yield* getRunRecords(session, executionId).writeRunRecord(config());
-      const streamId = yield* persistTranscriptEntry(
-        executionId,
-        'orchestrator',
-      );
+      const streamId = yield* persistTranscriptEntry(executionId);
 
       const failure = yield* Effect.flip(
         controller.exportAsHtml(executionId, '/nonexistent/index.html'),
@@ -211,17 +198,10 @@ describe('ChatExportController.buildExportInput', () => {
   it.live('returns ok when config and transcript are stored', () =>
     Effect.gen(function* () {
       const executionId = 'eec001' as RunId;
-      publishTestRunStart(
-        session,
-        getStreamTabId(config().agent, { executionId }),
-        executionId,
-      );
+      publishTestRunStart(session, executionId, executionId);
       yield* Effect.promise(() => session.settlePublications());
       yield* getRunRecords(session, executionId).writeRunRecord(config());
-      const streamId = yield* persistTranscriptEntry(
-        executionId,
-        'orchestrator',
-      );
+      const streamId = yield* persistTranscriptEntry(executionId);
 
       expect(yield* controller.buildExportInput(executionId)).toMatchObject({
         status: 'ok',
@@ -234,15 +214,9 @@ describe('ChatExportController.buildExportInput', () => {
     () =>
       Effect.gen(function* () {
         const executionId = 'eec003' as RunId;
-        publishTestRunStart(
-          session,
-          getStreamTabId(config().agent, { executionId }),
-          executionId,
-        );
+        publishTestRunStart(session, executionId, executionId);
         yield* Effect.promise(() => session.settlePublications());
-        yield* getRunRecords(session, executionId).writeRunRecord(
-          config(),
-        );
+        yield* getRunRecords(session, executionId).writeRunRecord(config());
 
         expect(yield* controller.buildExportInput(executionId)).toEqual({
           status: 'conversation_missing',

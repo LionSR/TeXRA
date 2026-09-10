@@ -49,7 +49,6 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 
 import { getRunRecords, getRunStore } from '@agent/storage';
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   startChildRunLoop,
@@ -535,14 +534,9 @@ describe('childRunLoop E2E fixtures', () => {
         return formattedDelivery.promise;
       },
     );
-    publishTestRunStart(
-      session,
-      getStreamTabId('codex', { executionId }),
-      executionId,
-    );
+    publishTestRunStart(session, executionId, executionId);
     const childStream = await Effect.runPromise(
       createChildRun(session, executionId, PARENT_STREAM_ID, {
-        streamPrefix: 'codex',
         run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         userFollowUpSupport: 'terminalBacked',
         description: 'Keep a background child running',
@@ -1116,14 +1110,9 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
     const executionId = 'fa11ed01' as RunId;
-    publishTestRunStart(
-      session,
-      getStreamTabId('codex', { executionId }),
-      executionId,
-    );
+    publishTestRunStart(session, executionId, executionId);
     const childStream = await Effect.runPromise(
       createChildRun(session, executionId, PARENT_STREAM_ID, {
-        streamPrefix: 'codex',
         run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
         userFollowUpSupport: 'terminalBacked',
         description: 'Fail a turn, then take an interrupt',
@@ -1132,7 +1121,7 @@ describe('childRunLoop E2E fixtures', () => {
     );
     trackedExecutionIds.add(executionId);
     const childStreamId = childStream.childStreamId;
-    const handle = session.executions.getAgentHandleByStream(childStreamId);
+    const handle = session.executions.getHandle(executionId);
     const { strategy, rejectTurn } = createFakeStrategy();
     // Fires between the turn failure landing FAILED on the stream phase and
     // the loop's finalize, so the loop reports an interrupted run for a stream

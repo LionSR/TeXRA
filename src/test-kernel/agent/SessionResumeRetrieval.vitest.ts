@@ -126,9 +126,7 @@ async function writeFlowRecord(
   });
 }
 
-function readFlowRecord(
-  executionId: RunId,
-): Promise<FlowRecord | undefined> {
+function readFlowRecord(executionId: RunId): Promise<FlowRecord | undefined> {
   return getRunStore(executionId).read<FlowRecord>(flowKey(executionId));
 }
 
@@ -837,8 +835,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     'returns a response produced by a real resumed model cycle: $name',
     async ({ prior, fresh }) => {
       const suffix = prior === fresh ? 'identical' : 'different';
-      const executionId =
-        `abc-flow-fresh-resumed-response-${suffix}` as RunId;
+      const executionId = `abc-flow-fresh-resumed-response-${suffix}` as RunId;
       const streamId =
         `chat@gpt54#abc-flow-fresh-resumed-response-${suffix}` as StreamTabId;
       const resume = buildResponseResumeData(executionId, streamId, prior);

@@ -45,10 +45,7 @@ describe('deriveResumability', () => {
 
   function writeFlow(executionId: RunId) {
     return Effect.promise(() =>
-      getRunStore(executionId).write(
-        flowKey(executionId),
-        BASE_FLOW_RECORD,
-      ),
+      getRunStore(executionId).write(flowKey(executionId), BASE_FLOW_RECORD),
     );
   }
 
@@ -219,10 +216,7 @@ describe('deriveResumability', () => {
           legacyOwner: { host: 'extension' },
         };
         yield* Effect.promise(() =>
-          getRunStore(executionId).write(
-            flowKey(executionId),
-            legacyRecord,
-          ),
+          getRunStore(executionId).write(flowKey(executionId), legacyRecord),
         );
 
         const decision = yield* deriveResumability(executionId, session);

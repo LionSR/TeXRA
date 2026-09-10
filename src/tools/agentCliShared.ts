@@ -8,7 +8,6 @@ import { type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/ExecutionHandle';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   startChildRunLoop,
   runWithOwnedRunLeaseLaunchGuard,
@@ -248,7 +247,6 @@ interface AgentCliLaunchParams {
   parentStreamId: StreamTabId;
   parentExecutionId: RunId | undefined;
   agentName: string;
-  streamPrefix: string;
   description: string;
   config: AgentConfig;
   registerFailedMessage: string;
@@ -284,9 +282,6 @@ export const launchAgentCliSession = Effect.fn(
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const executionId = generateRunId();
-      const childStreamId = getStreamTabId(params.streamPrefix, {
-        executionId,
-      });
       // An external CLI drives this agent: the CLI is both the agent name and the
       // driving tool, and `identity.tool` is what gates native-only affordances
       // (resume/rerun) off for this cohort.
@@ -304,7 +299,7 @@ export const launchAgentCliSession = Effect.fn(
         params.config,
         params.agentName,
         {
-          streamId: childStreamId,
+          streamId: executionId,
           identity,
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
           parentExecutionId: params.parentExecutionId,
@@ -343,7 +338,6 @@ export const launchAgentCliSession = Effect.fn(
             executionId,
             params.parentStreamId,
             {
-              streamPrefix: params.streamPrefix,
               run: identity,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
               description: params.description,

@@ -9,11 +9,7 @@ import {
   type ResultMeta,
 } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  aggregateId,
-  type StreamTabId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId, type StreamTabId, type RunId } from '@shared/schemas';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -87,10 +83,7 @@ function persistCompletedChild(
       StorageFS.ensureDir(`executions/${childRunId}/r1`),
     );
     yield* Effect.promise(() =>
-      StorageFS.write(
-        `executions/${childRunId}/${relativePath}`,
-        'draft',
-      ),
+      StorageFS.write(`executions/${childRunId}/${relativePath}`, 'draft'),
     );
     return absolutePath;
   });
@@ -106,11 +99,7 @@ describe('resolveChildRunOutput', () => {
         const absolutePath = yield* persistCompletedChild();
 
         expect(
-          yield* resolveChildRunOutput(
-            parentRunId,
-            absolutePath,
-            session,
-          ),
+          yield* resolveChildRunOutput(parentRunId, absolutePath, session),
         ).toEqual({
           kind: 'runStorage',
           absolutePath,
@@ -138,10 +127,7 @@ describe('resolveChildRunOutput', () => {
         const absolutePath = yield* persistCompletedChild();
         const undeclaredPath = absolutePath.replace('draft.tex', 'notes.tex');
         yield* Effect.promise(() =>
-          StorageFS.write(
-            `executions/${childRunId}/r1/notes.tex`,
-            'notes',
-          ),
+          StorageFS.write(`executions/${childRunId}/r1/notes.tex`, 'notes'),
         );
 
         const failure = yield* Effect.flip(
@@ -168,11 +154,7 @@ describe('resolveChildRunOutput', () => {
   it.effect('rejects paths outside run storage', () =>
     Effect.gen(function* () {
       const failure = yield* Effect.flip(
-        resolveChildRunOutput(
-          parentRunId,
-          '/workspace/draft.tex',
-          session,
-        ),
+        resolveChildRunOutput(parentRunId, '/workspace/draft.tex', session),
       );
       expect(failure.message).toContain('not inside task-run storage');
     }),

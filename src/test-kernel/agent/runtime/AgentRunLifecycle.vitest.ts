@@ -12,10 +12,7 @@ import {
   releaseOwnedRunLease,
 } from '@agent/storage/executionLease';
 import { RunStatusMachine } from '@agent/runtime/StreamStatusService';
-import {
-  RunHandle,
-  type AgentRunHandle,
-} from '@agent/runtime/ExecutionHandle';
+import { RunHandle, type AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,

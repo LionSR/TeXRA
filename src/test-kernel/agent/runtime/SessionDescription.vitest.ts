@@ -100,11 +100,7 @@ describe('session description helpers', () => {
     () =>
       Effect.gen(function* () {
         const session = createTestSession();
-        publishTestRunStart(
-          session,
-          'stream-workflow',
-          'a0b0c1' as RunId,
-        );
+        publishTestRunStart(session, 'stream-workflow', 'a0b0c1' as RunId);
         yield* Effect.promise(() => session.settlePublications());
         const recorded = recordSessionEvents(session);
         const handler = mockToolUseAnswer('Correcting derivation signs');
@@ -123,8 +119,7 @@ describe('session description helpers', () => {
           '<agent-purpose>Corrects a draft</agent-purpose>',
         );
         expect(
-          (yield* getRunRecords(session, 'a0b0c1').readMeta())
-            ?.description,
+          (yield* getRunRecords(session, 'a0b0c1').readMeta())?.description,
         ).toBe('Correcting derivation signs');
         yield* Effect.promise(() => session.settlePublications());
         expect(yield* Effect.promise(() => recorded.read())).toMatchObject([

@@ -9,11 +9,7 @@ import {
   isCliRunResumable as isCliRunResumableEffect,
   type CliRunResumabilityFacts,
 } from '@cli/runtime/toolUseResumeData';
-import {
-  RUN_OUTCOME,
-  type RunId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type StreamTabId } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
@@ -78,8 +74,7 @@ describe('CLI listing resumability', () => {
     'does not advertise a row with %s, without reading its state',
     ([description, overrides]) =>
       Effect.gen(function* () {
-        const executionId =
-          `gate-${description.replaceAll(' ', '-')}` as RunId;
+        const executionId = `gate-${description.replaceAll(' ', '-')}` as RunId;
         // A continuable record is on disk, so reading it would answer `true`.
         // Only the two free facts can produce the `false` asserted below.
         yield* Effect.promise(() =>
@@ -102,8 +97,7 @@ describe('CLI listing resumability', () => {
     'advertises %s without parsing its checkpoint',
     ([description, overrides]) =>
       Effect.gen(function* () {
-        const executionId =
-          `free-${description.replaceAll(' ', '-')}` as RunId;
+        const executionId = `free-${description.replaceAll(' ', '-')}` as RunId;
         // A terminal rejection is on disk, so a parse would answer `false`.
         // Only the short-circuit can produce the `true` asserted below.
         yield* Effect.promise(() =>

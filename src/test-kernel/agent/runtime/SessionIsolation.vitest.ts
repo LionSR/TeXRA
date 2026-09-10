@@ -147,9 +147,9 @@ describe('session isolation', () => {
         ] as const;
         const closures = live.map(([session, executionId]) =>
           vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {
-            expect(
-              runInSession(session, () => ownsRunLease(executionId)),
-            ).toBe(true);
+            expect(runInSession(session, () => ownsRunLease(executionId))).toBe(
+              true,
+            );
           }),
         );
         try {
@@ -194,9 +194,9 @@ describe('session isolation', () => {
           expect(storageMocks.settledUnder.get('a0da01')).toBe('/storage/a');
           expect(storageMocks.settledUnder.get('b0db01')).toBe('/storage/b');
           for (const [session, executionId] of live) {
-            expect(
-              runInSession(session, () => ownsRunLease(executionId)),
-            ).toBe(false);
+            expect(runInSession(session, () => ownsRunLease(executionId))).toBe(
+              false,
+            );
           }
         } finally {
           sessionA.dispose();

@@ -40,9 +40,7 @@ describe('execution metadata updates', () => {
           ],
           { concurrency: 'unbounded' },
         );
-        expect(
-          yield* getRunRecords(session, id).readMeta(),
-        ).toMatchObject({
+        expect(yield* getRunRecords(session, id).readMeta()).toMatchObject({
           description: 'A described session',
           outcome: 'completed',
         });

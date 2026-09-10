@@ -67,7 +67,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { RunHandle } from '@agent/runtime/ExecutionHandle';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -229,9 +228,7 @@ describe('runAgent execution ownership', () => {
       CONFIG,
       CONFIG.agent,
       expect.objectContaining({
-        streamId: getStreamTabId(CONFIG.agent, {
-          executionId: EXECUTION_ID,
-        }),
+        streamId: EXECUTION_ID,
       }),
     );
     expect(mocks.executeAgent).toHaveBeenCalledOnce();

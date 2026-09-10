@@ -48,7 +48,6 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 import { TraceEmitter } from '@agent/trace';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { registerRun } from '@agent/storage/executionLifecycle';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   executeAgent,
@@ -141,7 +140,7 @@ async function captureStartedLaunch(
     if (!options.resumed)
       await Effect.runPromise(
         registerRun(session, 'f1e501', config, 'chat', {
-          streamId: getStreamTabId(config.agent, { executionId: 'f1e501' }),
+          streamId: 'f1e501',
           identity: { kind: 'agent', agent: 'chat' },
           background: options.isSubagent ?? false,
         }),
@@ -262,7 +261,7 @@ describe('native agent launch activation', () => {
     'starts a resumed $label launch at the commit point and fails it on the same path',
     async ({ isSubagent }) => {
       const executionId = 'ae5010' as RunId;
-      const streamId = 'resumed-stream' as StreamTabId;
+      const streamId: StreamTabId = executionId;
       mocks.hasPersistedParent.mockReturnValueOnce(Effect.succeed(isSubagent));
       const resume = createToolUseResumeData({
         executionId,

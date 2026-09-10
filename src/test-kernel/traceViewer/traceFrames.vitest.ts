@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -184,7 +183,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       Effect.gen(function* () {
         const executionId = 'abc124' as RunId;
         const config = parseConfig(AgentCategory.Workflow);
-        const streamId = getStreamTabId(config.agent, { executionId });
+        const streamId = executionId;
         const session = createTestSession();
         publishTestRunStart(session, streamId, executionId);
         yield* Effect.promise(() => session.settlePublications());

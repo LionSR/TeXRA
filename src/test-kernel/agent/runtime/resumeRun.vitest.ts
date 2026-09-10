@@ -151,64 +151,67 @@ describe('resumeRun tool-use queue ownership', () => {
       }),
   );
 
-  it.live(
-    'claims stream recovery before reading committed stream metadata',
-    () =>
-      Effect.gen(function* () {
-        const session = createSession();
-        const preload = createDeferred<void>();
-        const preloadStarted = createDeferred<void>();
-        vi.mocked(session.snapshots.preload).mockReturnValueOnce(
-          Effect.promise(() => {
-            preloadStarted.resolve();
-            return preload.promise;
-          }),
-        );
-
-        const resumed = yield* Effect.forkChild(
-          resumeStream(STREAM, { session, executeWorkflow }),
-        );
-        yield* Effect.promise(() => preloadStarted.promise);
-        expect(
-          session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
-        ).toEqual({ kind: 'queued' });
-
-        preload.resolve();
-        expect(yield* Fiber.join(resumed)).toEqual({
-          started: true,
-          delivered: true,
-          outcome: RUN_OUTCOME.COMPLETED,
-        });
-        const options = resumeToolUseFromResumeDataMock.mock
-          .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
-        expect(options.drainedFollowUps?.map((item) => item.text)).toEqual([
-          'raced',
-        ]);
-      }),
-  );
-
-  it.live('preserves raced input when stream lookup finds no execution', () =>
+  it.live('claims stream recovery before reading the run records', () =>
     Effect.gen(function* () {
       const session = createSession();
-      const preload = createDeferred<void>();
-      const preloadStarted = createDeferred<void>();
-      vi.mocked(session.snapshots.preload).mockReturnValueOnce(
-        Effect.promise(() => {
-          preloadStarted.resolve();
-          return preload.promise;
-        }),
-      );
+      const records = createDeferred<void>();
+      const readStarted = createDeferred<void>();
+      getExecutionStoreMock.mockReturnValue({
+        readConfig: async () => snapshot().agentConfig,
+        readMeta: async () => {
+          readStarted.resolve();
+          await records.promise;
+          return { streamId: STREAM };
+        },
+        exists: async () => false,
+      });
 
       const resumed = yield* Effect.forkChild(
         resumeStream(STREAM, { session, executeWorkflow }),
       );
-      yield* Effect.promise(() => preloadStarted.promise);
+      yield* Effect.promise(() => readStarted.promise);
       expect(
         session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
       ).toEqual({ kind: 'queued' });
 
-      vi.mocked(session.snapshots.getRunMetadata).mockReturnValue({});
-      preload.resolve();
+      records.resolve();
+      expect(yield* Fiber.join(resumed)).toEqual({
+        started: true,
+        delivered: true,
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
+      const options = resumeToolUseFromResumeDataMock.mock
+        .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
+      expect(options.drainedFollowUps?.map((item) => item.text)).toEqual([
+        'raced',
+      ]);
+    }),
+  );
+
+  it.live('preserves raced input when the stream has no run records', () =>
+    Effect.gen(function* () {
+      const session = createSession();
+      const records = createDeferred<void>();
+      const readStarted = createDeferred<void>();
+      getExecutionStoreMock.mockReturnValue({
+        readConfig: async () => null,
+        readMeta: async () => {
+          readStarted.resolve();
+          await records.promise;
+          return null;
+        },
+        exists: async () => false,
+      });
+
+      const resumed = yield* Effect.forkChild(
+        resumeStream(STREAM, { session, executeWorkflow }),
+      );
+      yield* Effect.promise(() => readStarted.promise);
+      expect(
+        session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
+      ).toEqual({ kind: 'queued' });
+
+      records.resolve();
       expect(yield* Fiber.join(resumed)).toEqual({ failed: 'not_resumable' });
       expect(session.followUps.getAll(STREAM)).toEqual(['raced']);
     }),

@@ -255,9 +255,7 @@ export class AgentCliSessionRegistry {
     const interrupted = new Set<RunId>();
     const interrupt = (entry: AgentCliSessionEntry): void => {
       if (interrupted.has(entry.executionId)) return;
-      const handle = this.executions.getAgentHandleByStream(
-        entry.childStreamId,
-      );
+      const handle = this.executions.getHandle(entry.executionId);
       if (!handle) return;
       interrupted.add(entry.executionId);
       handle.interrupt();

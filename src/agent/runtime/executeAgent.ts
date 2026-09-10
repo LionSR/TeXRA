@@ -346,8 +346,8 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   ) => Promise<RunOutcome | void>;
   /** Cancel launch preparation before the per-run handle is available. */
   launchSignal?: AbortSignal;
-  /** Registration-stamped stream identity for a resumed workflow launch. */
-  streamTabIdOverride?: StreamTabId;
+  /** A later turn of an already registered run: commit only its new activation. */
+  resumed?: boolean;
   /** The caller owns presentation for failures before the run lifecycle. */
   suppressErrorNotification?: boolean;
   /**
@@ -412,7 +412,7 @@ export function executeAgent(
     const ctx = yield* buildAgentLaunchContext({
       definition,
       executionId,
-      streamTabIdOverride: options.streamTabIdOverride,
+      resumed: options.resumed,
       onStreamResolved: options.onStreamResolved,
       isSubagent: options.isSubagent,
       parentStreamId: options.parentStreamId,
@@ -582,7 +582,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
         const ctx = yield* buildAgentLaunchContext({
           definition,
           executionId: resume.executionId,
-          streamTabIdOverride: resume.streamId,
+          resumed: true,
           modelHandlerCompatibilityKey:
             resume.shared.modelHandlerCompatibilityKey,
           isSubagent,

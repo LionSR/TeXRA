@@ -437,26 +437,6 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   return { ok: true, outcome: status.value };
 });
 
-/**
- * The execution→stream foreign key: the `streamId` stamped on execution
- * metadata at registration. A row without one has no persisted stream, so
- * archive readers never fall back to re-deriving a stream from names or
- * sidecar scans. This is the ONE resolution site; completed-run readers
- * and the trace assembler share it instead of each re-deriving
- * `readMeta() → meta.streamId`.
- *
- * The resolved branch carries the already-read `meta` so a caller that also
- * needs other metadata fields (the trace assembler) does not pay a second
- * `readMeta()`. Absence is a plain `null`: no execution metadata at all and
- * metadata predating stamped streams are the same answer to every caller.
- */
-export const resolveStreamTabIdForRun = Effect.fn('resolveStreamTabIdForRun')(
-  function* (executionId: RunId, session: SessionHandle) {
-    const meta = yield* getRunRecords(session, executionId).readMeta();
-    return meta ? { streamId: meta.streamId, meta } : null;
-  },
-);
-
 /** Read the canonical run configuration from the owning database. */
 export const readRunLaunchRecord = (
   executionId: RunId,

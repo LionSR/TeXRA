@@ -362,7 +362,7 @@ export class RequestPanels extends LitElement {
     const streamId = permission.data.streamId;
     if (!streamId) return panel;
     // If the run's stream was evicted, skip the group caption rather than
-    // show the raw `agent#executionId` handle.
+    // show the raw run id.
     const label = this.view?.streams.get(streamId)?.label;
     if (!label) return panel;
     return html`

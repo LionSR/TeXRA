@@ -9,7 +9,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId,
@@ -31,11 +30,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  assembleTrace,
-  RunLogStore,
-  RunSnapshotStore,
-} from '@transcript';
+import { assembleTrace, RunLogStore, RunSnapshotStore } from '@transcript';
 
 const tempDirs = useTempDirs();
 let session: ReturnType<typeof createTestSession>;
@@ -71,13 +66,10 @@ function writeExecution(
   executionConfig: AgentConfig = config(),
 ) {
   return Effect.gen(function* () {
-    const streamId =
-      meta.streamId ?? getStreamTabId(executionConfig.agent, { executionId });
+    const streamId = meta.streamId ?? executionId;
     publishTestRunStart(session, streamId, executionId);
     yield* Effect.promise(() => session.settlePublications());
-    yield* getRunRecords(session, executionId).writeRunRecord(
-      executionConfig,
-    );
+    yield* getRunRecords(session, executionId).writeRunRecord(executionConfig);
     if (meta.outcome)
       yield* session.commit([
         {
@@ -113,25 +105,18 @@ describe('assembleTrace', () => {
   });
 
   it.effect(
-    'resolves a registered execution from its metadata without any sidecar scan (#9590 A1)',
+    'resolves a registered run by its run id without any sidecar scan (#9590 A1)',
     () =>
       Effect.gen(function* () {
         const executionId = 'abc900abc900' as RunId;
         const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-        // Registered under a stream the config would NOT derive: proves the
-        // read comes from execution metadata, not from agent/model
-        // reconstruction.
-        const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
-        yield* registerRun(
-          session,
-          executionId,
-          executionConfig,
-          'review',
-          {
-            streamId: registeredId,
-            identity: { kind: 'agent', agent: 'review' },
-          },
-        );
+        // The run id is also the stream id, so the read needs no sidecar scan
+        // or agent/model reconstruction.
+        const registeredId = executionId as StreamTabId;
+        yield* registerRun(session, executionId, executionConfig, 'review', {
+          streamId: registeredId,
+          identity: { kind: 'agent', agent: 'review' },
+        });
         yield* Effect.promise(() => releaseOwnedRunLease(executionId));
         yield* appendLogEntry(registeredId, 'registered row');
 
@@ -148,12 +133,12 @@ describe('assembleTrace', () => {
   );
 
   it.effect(
-    'assembles a full trace document from the streamId stamped on execution metadata',
+    'assembles a full trace document from the run id stamped on its metadata',
     () =>
       Effect.gen(function* () {
         const executionId = 'aa11bb22cc33' as RunId;
         const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-        const streamId = getStreamTabId('review', { executionId });
+        const streamId = executionId;
 
         yield* writeExecution(
           executionId,
@@ -196,18 +181,15 @@ describe('assembleTrace', () => {
 
   it.effect('returns config_missing when no config was ever written', () =>
     Effect.gen(function* () {
-      const result = yield* assembleTrace(
-        'exec-no-config' as RunId,
-        session,
-      );
+      const result = yield* assembleTrace('exec-no-config' as RunId, session);
       expect(result).toEqual({ status: 'config_missing' });
     }),
   );
 
-  it.effect('exports a registered stream with an empty transcript', () =>
+  it.effect('exports a registered run with an empty transcript', () =>
     Effect.gen(function* () {
       const executionId = 'eec000001' as RunId;
-      const streamId = getStreamTabId('orchestrator', { executionId });
+      const streamId = executionId;
       yield* writeExecution(executionId, { streamId });
 
       const result = yield* assembleTrace(executionId, session);
@@ -217,23 +199,17 @@ describe('assembleTrace', () => {
   );
 
   it.effect(
-    'resolves a tool-format child stream through its stamped metadata, not name derivation',
+    'resolves a background child run through its stamped metadata',
     () =>
       Effect.gen(function* () {
-        // Background child streams (bash/codex/claude subagents, see
-        // @tools/delegation/childStream.createChildStream) share
-        // getStreamTabId's format but carry a tool-specific prefix, disjoint
-        // from any agent name — the stamped meta.streamId is the only mapping
-        // that reaches them.
+        // Every run, including a background tool child, uses its run id as the
+        // stream id. The metadata remains the authoritative stamped mapping.
         const executionId = 'eec000002' as RunId;
         const executionConfig = config({
           agent: 'orchestrator',
           model: 'deepseekT',
         });
-        const actualChildStreamId = `bash@tool#${executionId}` as StreamTabId;
-        expect(actualChildStreamId).not.toBe(
-          getStreamTabId('orchestrator', { executionId }),
-        );
+        const actualChildStreamId = executionId as StreamTabId;
         yield* writeExecution(
           executionId,
           { outcome: 'completed', streamId: actualChildStreamId },

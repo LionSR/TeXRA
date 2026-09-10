@@ -11,7 +11,6 @@ import { getRunRecords, registerRun } from '@agent/storage';
 import { inspectRunLease } from '@agent/storage/executionLease';
 import { runInSession } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
@@ -20,6 +19,7 @@ import {
   type RunId,
   type StreamTabId,
   AgentCategory,
+  runIdentityName,
 } from '@shared/schemas';
 import {
   clearStreamStatusForTest,
@@ -46,21 +46,22 @@ import {
 
 const executionId = 'c11111' as RunId;
 const parentStreamId = 'stream:parent' as StreamTabId;
-const childStreamId = 'bash#c11111' as StreamTabId;
+const childStreamId: StreamTabId = executionId;
 const loopExecutionId = 'c11113' as RunId;
-const loopChildStreamId = 'codex#c11113' as StreamTabId;
+const loopChildStreamId: StreamTabId = loopExecutionId;
 const stoppedExecutionId = 'c11114' as RunId;
-const stoppedChildStreamId = 'codex#c11114' as StreamTabId;
+const stoppedChildStreamId: StreamTabId = stoppedExecutionId;
 const cancelledExecutionId = 'c11115' as RunId;
-const cancelledChildStreamId = 'codex#c11115' as StreamTabId;
+const cancelledChildStreamId: StreamTabId = cancelledExecutionId;
 const failedExecutionId = 'c11116' as RunId;
-const failedChildStreamId = 'codex#c11116' as StreamTabId;
+const failedChildStreamId: StreamTabId = failedExecutionId;
 const noProjectionAutoCloseExecutionId = 'c11118' as RunId;
-const noProjectionAutoCloseChildStreamId = 'bash#c11118' as StreamTabId;
+const noProjectionAutoCloseChildStreamId: StreamTabId =
+  noProjectionAutoCloseExecutionId;
 const workflowRelaunchExecutionId = 'c11119' as RunId;
-const workflowRelaunchChildStreamId = 'workflow-script#c11119' as StreamTabId;
+const workflowRelaunchChildStreamId: StreamTabId = workflowRelaunchExecutionId;
 const setupRetryExecutionId = 'c11120' as RunId;
-const setupRetryChildStreamId = 'workflow-script#c11120' as StreamTabId;
+const setupRetryChildStreamId: StreamTabId = setupRetryExecutionId;
 const config = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -74,9 +75,9 @@ const createRegisteredChildStream = Effect.fn('createRegisteredChildStream')(
       session,
       executionId,
       options.config,
-      options.streamPrefix,
+      runIdentityName(options.run),
       {
-        streamId: getStreamTabId(options.streamPrefix, { executionId }),
+        streamId: executionId,
         identity: options.run,
         userFollowUpSupport: options.userFollowUpSupport,
         parentStreamId,
@@ -106,7 +107,6 @@ const createRegisteredChildStream = Effect.fn('createRegisteredChildStream')(
 function startBashChild(executionId: RunId) {
   return Effect.runPromise(
     createRegisteredChildStream(defaultSession(), executionId, parentStreamId, {
-      streamPrefix: 'bash',
       run: { kind: 'process', tool: 'bash' },
       userFollowUpSupport: 'unsupported',
       description: 'Run a background bash command',
@@ -118,7 +118,6 @@ function startBashChild(executionId: RunId) {
 function startCodexChild(executionId: RunId, description: string) {
   return Effect.runPromise(
     createRegisteredChildStream(defaultSession(), executionId, parentStreamId, {
-      streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'codex', tool: 'codex' },
       userFollowUpSupport: 'terminalBacked',
       description,
@@ -236,7 +235,6 @@ describe('child stream progress events', () => {
         workflowRelaunchExecutionId,
         parentStreamId,
         {
-          streamPrefix: 'workflow-script',
           run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
           userFollowUpSupport: 'unsupported',
           description: 'Run a named child task',
@@ -258,7 +256,6 @@ describe('child stream progress events', () => {
         workflowRelaunchExecutionId,
         parentStreamId,
         {
-          streamPrefix: 'workflow-script',
           run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
           userFollowUpSupport: 'unsupported',
           description: 'Resume the named child task',
@@ -306,7 +303,6 @@ describe('child stream progress events', () => {
         throw new Error('execution setup failed');
       });
     const options = {
-      streamPrefix: 'workflow-script',
       run: {
         kind: 'multiAgentWorkflow' as const,
         workflowName: 'retry-setup',
@@ -387,7 +383,6 @@ describe('child stream progress events', () => {
         workflowRelaunchExecutionId,
         parentStreamId,
         {
-          streamPrefix: 'workflow-script',
           run: {
             kind: 'multiAgentWorkflow',
             workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
@@ -408,9 +403,7 @@ describe('child stream progress events', () => {
       }),
     );
     expect(
-      defaultSession().executions.getAgentHandleByStream(
-        workflowRelaunchChildStreamId,
-      ),
+      defaultSession().executions.getHandle(workflowRelaunchChildStreamId),
     ).toMatchObject({
       agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
       category: AgentCategory.Workflow,
@@ -512,7 +505,6 @@ describe('child stream progress events', () => {
               parentStreamId,
               parentExecutionId: undefined,
               agentName: 'codex',
-              streamPrefix: 'codex',
               description: 'Cancelled admission',
               config,
               registerFailedMessage: 'registration failed',
@@ -565,9 +557,7 @@ describe('child stream progress events', () => {
         const recorded = recordSessionEvents(session);
         let childStream: ChildRun | undefined;
         let childExecutionId: RunId | undefined;
-        let handle: ReturnType<
-          typeof session.executions.getAgentHandleByStream
-        >;
+        let handle: ReturnType<typeof session.executions.getHandle>;
 
         try {
           // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
@@ -579,7 +569,6 @@ describe('child stream progress events', () => {
                 parentStreamId,
                 parentExecutionId: undefined,
                 agentName: 'codex',
-                streamPrefix: 'codex',
                 description: 'Fail during synchronous loop setup',
                 config,
                 registerFailedMessage: 'registration failed',
@@ -587,9 +576,7 @@ describe('child stream progress events', () => {
                 startLoop: (context) => {
                   childStream = context.childStream;
                   childExecutionId = context.executionId;
-                  handle = session.executions.getAgentHandleByStream(
-                    context.childStream.childStreamId,
-                  );
+                  handle = session.executions.getHandle(context.executionId);
                   throw setupError;
                 },
                 summary: 'unreachable',
@@ -633,8 +620,7 @@ describe('child stream progress events', () => {
       loopExecutionId,
       'Run a long-lived Codex child loop',
     );
-    const handle =
-      defaultSession().executions.getAgentHandleByStream(loopChildStreamId);
+    const handle = defaultSession().executions.getHandle(loopChildStreamId);
     expect(handle).toBeDefined();
     // From here on: the launch's own facts are not the loop's.
     const recorded = recordSessionEvents(defaultSession());
@@ -686,8 +672,7 @@ describe('child stream progress events', () => {
       stoppedExecutionId,
       'Run a stopped Codex child loop',
     );
-    const handle =
-      defaultSession().executions.getAgentHandleByStream(stoppedChildStreamId);
+    const handle = defaultSession().executions.getHandle(stoppedChildStreamId);
     expect(handle).toBeDefined();
     seedStreamStatusForTest(defaultSession().status, stoppedChildStreamId, {
       phase: STREAM_PHASE.CANCELLED,
@@ -725,7 +710,7 @@ describe('child stream progress events', () => {
       cancelledExecutionId,
       'Run an interrupted Codex child loop',
     );
-    const handle = defaultSession().executions.getAgentHandleByStream(
+    const handle = defaultSession().executions.getHandle(
       cancelledChildStreamId,
     );
     expect(handle).toBeDefined();
@@ -747,8 +732,7 @@ describe('child stream progress events', () => {
       failedExecutionId,
       'Run a failing Codex child loop',
     );
-    const handle =
-      defaultSession().executions.getAgentHandleByStream(failedChildStreamId);
+    const handle = defaultSession().executions.getHandle(failedChildStreamId);
     expect(handle).toBeDefined();
 
     await Effect.runPromise(

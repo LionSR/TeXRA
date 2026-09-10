@@ -162,34 +162,21 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('starts a new child generation for an authorized retry', () => {
     const queues = new ToolUseFollowUpQueue();
-    const executionId = 'retry-execution' as RunId;
-    const id = stream(`stream#${executionId}`);
-    const first = queues.claimChildRun(id, executionId)!;
+    const id = stream('retry-execution');
+    const first = queues.claimChildRun(id)!;
     queues.release(first, 'terminal');
 
     expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
       kind: 'refused',
     });
 
-    const retry = queues.claimChildRun(id, executionId);
+    const retry = queues.claimChildRun(id);
     expect(retry).toBeDefined();
     expect(retry?.kind).toBe('child');
     expect(
       queues.submit(id, { text: 'current generation' }, 'live_owner'),
     ).toEqual({ kind: 'queued' });
     expect(queues.hasLiveOwner(id)).toBe(true);
-  });
-
-  it('refuses a child claim for an unrelated execution', () => {
-    const queues = new ToolUseFollowUpQueue();
-    const executionId = 'owned-execution' as RunId;
-    const id = stream(`stream#${executionId}`);
-    const first = queues.claimChildRun(id, executionId)!;
-    queues.release(first, 'terminal');
-
-    expect(() =>
-      queues.claimChildRun(id, 'unrelated-execution' as RunId),
-    ).toThrow('does not belong to execution');
   });
 
   it('deletion invalidates a live generation', () => {
@@ -206,14 +193,13 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('refuses to rebuild entries after dispose', () => {
     const queues = new ToolUseFollowUpQueue();
-    const executionId = 'disposed-execution' as RunId;
-    const childId = stream(`stream#${executionId}`);
+    const childId = stream('disposed-execution');
     const liveId = stream('stream:disposed-live');
     queues.claimLive(liveId, 'flow');
     queues.dispose();
 
     expect(queues.claimLive(liveId, 'flow')).toBeUndefined();
-    expect(queues.claimChildRun(childId, executionId)).toBeUndefined();
+    expect(queues.claimChildRun(childId)).toBeUndefined();
     expect(queues.claimRecovery(liveId, true)).toBeUndefined();
     expect(queues.submit(liveId, { text: 'late' }, 'recoverable')).toEqual({
       kind: 'refused',

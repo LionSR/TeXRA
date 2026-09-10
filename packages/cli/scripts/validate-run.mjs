@@ -986,11 +986,22 @@ prompts:
     );
     assertSuccess(result, 'texra agents run workflow script NDJSON');
     const records = parseNdjson(result.stdout, 'workflow-script run NDJSON');
+    // The public roster names a workflow-script child by its spawning tool,
+    // `delegate_multi_agents`; the child's stream id is its run id.
+    const workflowChildIds = new Set(
+      records.flatMap((record) =>
+        record.kind === 'progress' && record.event === 'updateActiveSubagents'
+          ? record.payload.children
+              .filter((child) => child.toolName === 'delegate_multi_agents')
+              .map((child) => child.childStreamId)
+          : [],
+      ),
+    );
     const workflowCompletedIndex = records.findIndex(
       (record) =>
         record.kind === 'progress' &&
         record.event === 'updateStreamStatus' &&
-        record.payload?.streamId?.startsWith('workflow-script#') &&
+        workflowChildIds.has(record.payload?.streamId) &&
         record.payload?.status === 'completed',
     );
     const parentResultIndex = records.findIndex(
@@ -1000,9 +1011,7 @@ prompts:
       workflowCompletedIndex >= 0 && parentResultIndex > workflowCompletedIndex,
       'workflow-script run should wait for and return the terminal child report to the headless parent',
     );
-    const childId = records[workflowCompletedIndex].payload.streamId.slice(
-      'workflow-script#'.length,
-    );
+    const childId = records[workflowCompletedIndex].payload.streamId;
     const history = run(
       process.execPath,
       [

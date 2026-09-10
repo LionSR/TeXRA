@@ -209,7 +209,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const { childStreamId } = yield* registerChildRun(parentSession, {
+      yield* registerChildRun(parentSession, {
         executionId,
         config,
         agentName,
@@ -237,7 +237,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         session: parentSession,
         executionId,
         parentStreamId,
-        childStreamId,
+        childStreamId: executionId,
         agentName,
         recordCost,
         buildLaunch: () =>

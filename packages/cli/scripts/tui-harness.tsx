@@ -684,7 +684,7 @@ function seedStream(
   const executionId = (options.executionId ?? generateRunId()) as RunId;
   const identity = options.identity ?? {
     kind: 'agent' as const,
-    agent: streamId.split('#')[0] ?? streamId,
+    agent: streamId,
   };
   publish({
     type: 'run.start',
@@ -2001,26 +2001,26 @@ function renderHarnessApp(): React.JSX.Element {
 if (process.env.HARNESS_SESSION_TREE === '1') {
   const { log, events } = buildScenario();
   const recordedCount = log.events.length;
-  const waiting = 'waiting#eeeeeeeeeeee' as StreamTabId;
-  const interrupted = 'interrupted#ffffffffffff' as StreamTabId;
-  const nested = 'nested#111111111111' as StreamTabId;
+  const waiting = 'eeeeeeeeeeee' as StreamTabId;
+  const interrupted = 'ffffffffffff' as StreamTabId;
+  const nested = '111111111111' as StreamTabId;
   log.emit(PROCESS, 10_000_000, {
     type: 'status',
     phase: STREAM_PHASE.RUNNING,
     cause: 'harness',
   });
-  for (const [id, owner, parentStreamId] of [
-    [waiting, OWNER, undefined],
-    [interrupted, OTHER_OWNER, undefined],
-    [nested, OTHER_OWNER, waiting],
+  for (const [id, agent, owner, parentStreamId] of [
+    [waiting, 'waiting', OWNER, undefined],
+    [interrupted, 'interrupted', OTHER_OWNER, undefined],
+    [nested, 'nested', OTHER_OWNER, waiting],
   ] as const) {
     log.emit(
       id,
       10_000_000,
       {
         type: 'run.start',
-        executionId: id.split('#')[1]!,
-        identity: { kind: 'agent', agent: id.split('#')[0]! },
+        executionId: id,
+        identity: { kind: 'agent', agent },
         category: AgentCategory.ToolUse,
         isRemote: false,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

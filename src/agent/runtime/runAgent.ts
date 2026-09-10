@@ -20,7 +20,6 @@ import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { RunHandle } from './ExecutionHandle';
 import { runInSession } from './RunContext';
-import { getStreamTabId } from './streamTab';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
 
@@ -114,18 +113,16 @@ export const runAgent = Effect.fn('runAgent')(function* (
     launchAbortController,
   );
   const launchSignal = launchAbortController.signal;
-  const launchStreamId =
-    prior?.streamId ?? getStreamTabId(request.config.agent, { executionId });
   const launchHandle = runSession.executions.getHandle(executionId)
     ? undefined
     : new RunHandle(
         {
-          streamId: launchStreamId,
+          streamId: executionId,
           executionId,
           identity: { kind: 'agent', agent: request.config.agent },
           category: request.config.agentCategory,
         },
-        launchStreamId,
+        executionId,
       );
   const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
     interrupt: () => launchAbortController.abort(),
@@ -161,7 +158,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
         if (shouldRegister) {
           yield* registerRun(runSession, executionId, config, config.agent, {
-            streamId: launchStreamId,
+            streamId: executionId,
             identity: { kind: 'agent', agent: config.agent },
             userFollowUpSupport,
           });
@@ -169,7 +166,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
           yield* acquireResumedRunOwnership(
             runSession,
             executionId,
-            launchStreamId,
+            executionId,
           );
         }
 
@@ -182,7 +179,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
               ...executeAgentOptions,
               launchSignal,
               session: runSession,
-              streamTabIdOverride: prior?.streamId,
+              resumed: !shouldRegister,
               userFollowUpSupport,
               onRun: async (handle) => {
                 lifecycleStarted = true;

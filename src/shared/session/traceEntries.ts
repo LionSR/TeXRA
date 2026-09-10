@@ -9,10 +9,7 @@ import {
 } from '@shared/schemas';
 import { clamp, isObject } from '@utils/core';
 
-export type RunLogAppendInput = Omit<
-  RunLogEntry,
-  'seqNo' | 'settlementSeqNo'
->;
+export type RunLogAppendInput = Omit<RunLogEntry, 'seqNo' | 'settlementSeqNo'>;
 export type RunLogUpdatePatch = Partial<
   Omit<RunLogEntry, 'id' | 'seqNo' | 'settlementSeqNo'>
 >;

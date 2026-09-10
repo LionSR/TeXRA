@@ -217,7 +217,7 @@ export class RunRegistry {
    */
   handleStatus(streamId: StreamTabId): void {
     if (this.disposed) return;
-    const handle = this.getAgentHandleByStream(streamId);
+    const handle = this.handles.get(streamId);
     if (!handle) return;
     this.notifyWaiters(handle.executionId);
     if (handle.isChildExecution) {
@@ -424,15 +424,6 @@ export class RunRegistry {
     };
   }
 
-  getAgentHandleByStream(streamId: StreamTabId): RunHandle | undefined {
-    for (const handle of this.handles.values()) {
-      if (handle.childStreamId === streamId) {
-        return handle;
-      }
-    }
-    return undefined;
-  }
-
   getAgentHandles(): RunHandle[] {
     return [...this.handles.values()];
   }
@@ -440,7 +431,7 @@ export class RunRegistry {
   getToolUseFlowContext(
     streamId: StreamTabId,
   ): LiveToolUseFlowContext | undefined {
-    return this.getAgentHandleByStream(streamId)?.getToolUseFlow();
+    return this.handles.get(streamId)?.getToolUseFlow();
   }
 
   /**
@@ -692,7 +683,7 @@ export class RunRegistry {
     streamId: StreamTabId,
     options: ExecutionStopOptions = {},
   ): Effect.Effect<void> {
-    const rootHandle = this.getAgentHandleByStream(streamId);
+    const rootHandle = this.handles.get(streamId);
     // Shared across the child sweep and the root cascade so each execution in
     // the chain is interrupted exactly once.
     const visited = new Set<string>();

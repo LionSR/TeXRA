@@ -58,10 +58,8 @@ const writeMetadata = (
         .mockReturnValue(Date.parse(meta.timestamp));
       yield* Effect.gen(function* () {
         const parentStreamId = meta.parentExecutionId
-          ? (yield* getRunRecords(
-              session,
-              meta.parentExecutionId,
-            ).readMeta())?.streamId
+          ? (yield* getRunRecords(session, meta.parentExecutionId).readMeta())
+              ?.streamId
           : undefined;
         yield* session.commit([
           {
@@ -328,9 +326,9 @@ describe('execution listing normalization', () => {
       // The raw listing still carries the child so tool-facing callers can walk
       // the lineage; only the history-listing filter drops it.
       expect(entries.map(({ id }) => id)).toEqual([childId, rootId]);
-      expect(
-        entries.filter(isUserVisibleRun).map(({ id }) => id),
-      ).toEqual([rootId]);
+      expect(entries.filter(isUserVisibleRun).map(({ id }) => id)).toEqual([
+        rootId,
+      ]);
     }),
   );
 

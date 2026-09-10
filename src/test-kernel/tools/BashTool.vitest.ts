@@ -311,7 +311,7 @@ function launchedIds(result: ToolResult): {
   return {
     output,
     executionId: /Execution ID: (\S+)/.exec(output)?.[1],
-    childStreamId: /Stream tab: (\S+)/.exec(output)?.[1] as
+    childStreamId: /Execution ID: (\S+)/.exec(output)?.[1] as
       StreamTabId | undefined,
   };
 }

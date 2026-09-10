@@ -73,7 +73,7 @@ describe('tool-use follow-up progress events', () => {
 
   function trackToolUseFlow({
     stream = streamId,
-    executionId = `exec-${stream}`,
+    executionId = stream,
     session,
   }: {
     readonly stream?: StreamTabId;

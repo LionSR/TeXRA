@@ -24,7 +24,6 @@ import {
   type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -37,17 +36,12 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { ChildRun } from './childStream';
 
 /**
- * Register a native agent child and take its owned-execution lease, minting
- * the one stream id the child is addressed by.
- *
- * That id must match the one `buildAgentLaunchContext` derives for this
- * executionId (AgentLaunchContext.ts's `getStreamTabId` call), or the loop
- * acquires the wrong follow-up queue/interrupt slot. That id derives
- * from the canonical config's `agent`, never from `agentName`, which callers
- * resolve differently (an approved override's display name vs. its registry
- * name) and which reaches only the durable child row. Minting it here is what
- * keeps the two in step: while each launch site derived its own, the
- * invariant could only be stated as a comment asking the copies to agree.
+ * Register a native agent child and take its owned-execution lease. The child
+ * is addressed by its run id, the id `buildAgentLaunchContext` publishes its
+ * stream under. The stream's identity names the canonical config's `agent`,
+ * never `agentName`, which callers resolve differently (an approved
+ * override's display name vs. its registry name) and which reaches only the
+ * durable child row.
  */
 export const registerChildRun = Effect.fn('registerChildExecution')(function* (
   session: SessionHandle,
@@ -59,17 +53,15 @@ export const registerChildRun = Effect.fn('registerChildExecution')(function* (
     readonly userFollowUpSupport: UserFollowUpSupport;
     readonly parentExecutionId?: RunId;
   },
-): Effect.fn.Return<{ readonly childStreamId: StreamTabId }, Error> {
+): Effect.fn.Return<void, Error> {
   const { executionId, config } = input;
-  const childStreamId = getStreamTabId(config.agent, { executionId });
   yield* registerRun(session, executionId, config, input.agentName, {
-    streamId: childStreamId,
+    streamId: executionId,
     identity: { kind: 'agent', agent: config.agent },
     userFollowUpSupport: input.userFollowUpSupport,
     parentExecutionId: input.parentExecutionId,
     background: true,
   });
-  return { childStreamId };
 });
 
 /** The strategy wiring a launch site supplies inside the guard. */
