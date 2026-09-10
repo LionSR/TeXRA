@@ -596,15 +596,27 @@ const heldSession = (root: string) =>
 /**
  * Resolve once every execution the registry holds has left it. Interrupting
  * this fiber — which is what the close budget below does — detaches the
- * registry listeners with it, so a bounded wait leaves none behind. The loop
- * reads registry state only, so it needs no session scope of its own.
+ * registry listeners with it, so a bounded wait leaves none behind. The
+ * registry state is re-read once those listeners are attached, closing the
+ * window between the read below and a registration the fiber only reaches a
+ * scheduler step later: `raceAllFirst` starts its arms immediately and in
+ * order, so the wait registers first and the re-check then sees a last
+ * execution that left inside the window, instead of waiting out the whole
+ * close budget for a notification that can no longer come. The loop reads
+ * registry state only, so it needs no session scope of its own.
  */
 const untilSettled = (executions: ExecutionRegistry): Effect.Effect<void> =>
   Effect.gen(function* () {
     for (;;) {
       const active = executions.getActiveIds();
       if (active.length === 0) return;
-      yield* executions.waitForAnyChange(active);
+      const alreadySettled = Effect.suspend(() =>
+        executions.getActiveIds().length === 0 ? Effect.void : Effect.never,
+      );
+      yield* Effect.raceAllFirst([
+        executions.waitForAnyChange(active).pipe(Effect.asVoid),
+        alreadySettled,
+      ]);
     }
   });
 

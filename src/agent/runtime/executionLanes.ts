@@ -7,13 +7,14 @@
  *
  * A lane is a `Deferred` hand-off chain, not a queue: each entrant swaps its
  * own `Deferred` in as the lane's tail synchronously when its effect starts,
- * waits for its predecessor's, and completes its own in `ensuring`. That gives
- * FIFO admission for free and makes the whole wait interruptible — a caller
- * whose fiber is interrupted while queued hands its successor the wait for
- * whoever actually holds the lane, instead of leaving a task behind in a
- * queue nobody can reach. It is the same shape as `withPerKeyLane`
- * (`@utils/core/perKeyQueue`), with the two facts this scheduler adds on top:
- * the generation gate (`live`) and refusal at session disposal.
+ * waits for its predecessor's, and completes its own in its release
+ * finalizer. That gives FIFO admission for free and makes the whole wait
+ * interruptible — a caller whose fiber is interrupted while queued hands its
+ * successor the wait for whoever actually holds the lane, instead of leaving a
+ * task behind in a queue nobody can reach. It is the same shape as
+ * `withPerKeyLane` (`@utils/core/perKeyQueue`), with the two facts this
+ * scheduler adds on top: the generation gate (`live`) and refusal at session
+ * disposal.
  */
 
 import { Data, Deferred, Effect } from 'effect';
@@ -65,18 +66,7 @@ export class ExecutionLanes {
     hasRetainedOwner: () => boolean,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
-    return Effect.suspend(() => {
-      // The ownership check and the claim are one synchronous step. A launch
-      // either owns the slot already or queues behind this operation's hold.
-      const lane = this.lanes.get(executionId);
-      if (
-        hasRetainedOwner() ||
-        (lane !== undefined && (lane.live.size > 0 || lane.fibers > 0))
-      ) {
-        return Effect.fail(new ExecutionBusy({ executionId }));
-      }
-      return this.onLane(executionId, operation);
-    });
+    return this.onLane(executionId, operation, hasRetainedOwner);
   }
 
   /** Hold a generation's lane until its Effect and finalizers settle. */
@@ -132,17 +122,27 @@ export class ExecutionLanes {
    * wait for the predecessor and for the live generation, then hold the lane
    * until `operation` and the finalizers it registered settle — which is why
    * the hold is released by the scope rather than by `operation` returning.
+   *
+   * `refuseWhenOwned` makes the claim conditional: `claim` reports the refusal
+   * instead of taking a place, so nothing was acquired and nothing is released.
    */
   private onLane<A, E, R>(
     executionId: string,
     operation: Effect.Effect<A, E, R>,
+    refuseWhenOwned?: () => boolean,
   ): Effect.Effect<A, E | Error, R> {
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const admitted = yield* Effect.acquireRelease(
-          Effect.sync(() => this.claim(executionId)),
-          (claim) => Effect.sync(claim.release),
+          Effect.sync(() => this.claim(executionId, refuseWhenOwned)),
+          (claim) =>
+            Effect.sync(() => {
+              if (!(claim instanceof ExecutionBusy)) claim.release();
+            }),
         );
+        if (admitted instanceof ExecutionBusy) {
+          return yield* Effect.fail(admitted);
+        }
         yield* admitted.entry;
         return yield* operation;
       }),
@@ -154,11 +154,32 @@ export class ExecutionLanes {
    * so that admission order is call order; `entry` is what the caller waits
    * on, and `release` hands the lane to the successor however the caller
    * left — returned, failed, or interrupted mid-wait.
+   *
+   * A caller that passes `refuseWhenOwned` refuses competing local ownership
+   * rather than queueing behind it: the ownership check reads the lane in the
+   * same synchronous step as the tail swap below, so no launch can claim the
+   * lane between the two. Refusing leaves the lane exactly as it was found —
+   * no entry, no tail link, no `fibers` count, not even a lane on an execution
+   * that had none — since it returns before any of them is touched.
    */
-  private claim(executionId: string): {
-    readonly entry: Effect.Effect<void, Error>;
-    readonly release: () => void;
-  } {
+  private claim(
+    executionId: string,
+    refuseWhenOwned: (() => boolean) | undefined,
+  ):
+    | ExecutionBusy
+    | {
+        readonly entry: Effect.Effect<void, Error>;
+        readonly release: () => void;
+      } {
+    const occupied = this.lanes.get(executionId);
+    if (
+      refuseWhenOwned !== undefined &&
+      (refuseWhenOwned() ||
+        (occupied !== undefined &&
+          (occupied.live.size > 0 || occupied.fibers > 0)))
+    ) {
+      return new ExecutionBusy({ executionId });
+    }
     const mine = Deferred.makeUnsafe<void>();
     const refusal = Deferred.makeUnsafe<never, Error>();
     const lane = this.laneFor(executionId);

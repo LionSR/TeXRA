@@ -181,7 +181,7 @@ async function waitForChildren(session: SessionHandle): Promise<void> {
   while (true) {
     const active = session.executions.getActiveIds();
     if (active.length === 0) return;
-    await session.executions.waitForAnyChange(active);
+    await Effect.runPromise(session.executions.waitForAnyChange(active));
   }
 }
 
