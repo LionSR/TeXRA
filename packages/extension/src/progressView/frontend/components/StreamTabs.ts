@@ -53,7 +53,6 @@ const TONE_ICONS: Record<StreamView['tone'], TeXRAIconName> = {
   neutral: 'circle',
 };
 
-
 function buildTooltip(stream: StreamView): string {
   const modelDisplay =
     stream.identity.kind === 'agent' && stream.model
