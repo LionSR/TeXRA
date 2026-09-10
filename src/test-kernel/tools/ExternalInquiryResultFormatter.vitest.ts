@@ -9,7 +9,6 @@ function manifestWithSessionLinks(
   return {
     threadId: 'thread-1',
     parentRunId: null,
-    parentRunId: null,
     status: 'answered',
     createdAt: '2026-05-16T00:00:00.000Z',
     updatedAt: '2026-05-16T00:00:00.000Z',

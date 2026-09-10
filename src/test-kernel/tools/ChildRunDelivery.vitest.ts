@@ -15,7 +15,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 describe('child run delivery', () => {
   beforeEach(() => vi.clearAllMocks());

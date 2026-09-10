@@ -128,15 +128,10 @@ function seedRun(
   } = {},
 ): void {
   const current = seeded.get(id);
-  seeded.set(
-    id,
-    makeRunView({ ...(current ?? {}), ...over, id }) as RunView,
-  );
+  seeded.set(id, makeRunView({ ...(current ?? {}), ...over, id }) as RunView);
   syncSeededView();
 }
-function transcriptOf(
-  rows: readonly TranscriptRow[],
-): RunView['transcript'] {
+function transcriptOf(rows: readonly TranscriptRow[]): RunView['transcript'] {
   return {
     rows: [...rows],
     taskGroups: [],
@@ -204,15 +199,14 @@ function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
 }
 
 function runningChild(
-  runId: string,
+  runId: RunId,
   agentName: string,
-  childRunId: RunId,
-): ActiveChildInfo {
+): ActiveChildInfo & { readonly childRunId: RunId } {
   return {
     runId,
     agentName,
     identity: { kind: 'agent' as const, agent: agentName },
-    childRunId,
+    childRunId: runId,
     status: RUN_PHASE.RUNNING,
   };
 }
@@ -220,12 +214,11 @@ function runningChild(
 // Seed the child rosters and parent edges through the session event fold.
 function seedChildRoster(
   parentRunId: RunId,
-  rows: readonly ActiveChildInfo[],
+  rows: readonly (ActiveChildInfo & { readonly childRunId: RunId })[],
 ): void {
   seedRun(parentRunId);
   for (const row of rows) {
     seedRun(row.childRunId, {
-      runId: row.runId,
       label: row.agentName,
       identity: row.identity,
       status: row.status ?? RUN_PHASE.COMPLETED,
@@ -233,12 +226,8 @@ function seedChildRoster(
     seedParentEdge(row.childRunId, parentRunId);
   }
 }
-function seedParentEdge(
-  runId: RunId,
-  parentRunId: RunId | null,
-): void {
-  const parent =
-    parentRunId === null ? undefined : seeded.get(parentRunId);
+function seedParentEdge(runId: RunId, parentRunId: RunId | null): void {
+  const parent = parentRunId === null ? undefined : seeded.get(parentRunId);
   seedRun(runId, {
     parentId: parentRunId,
     ancestors:
@@ -261,12 +250,8 @@ function seedChildHierarchy(): void {
   seedRootRun();
   setRunning(CHILD, GRANDCHILD);
   markToolUseAgent(CHILD, GRANDCHILD);
-  seedChildRoster(ROOT, [
-    runningChild('escape-child-run', 'child', CHILD),
-  ]);
-  seedChildRoster(CHILD, [
-    runningChild('escape-grandchild-run', 'grandchild', GRANDCHILD),
-  ]);
+  seedChildRoster(ROOT, [runningChild(CHILD, 'child')]);
+  seedChildRoster(CHILD, [runningChild(GRANDCHILD, 'grandchild')]);
   seedParentEdge(CHILD, ROOT);
   seedParentEdge(GRANDCHILD, CHILD);
 }
@@ -278,9 +263,7 @@ function finishNestedHierarchyAndFocusRoot(): void {
   focusRun(ROOT);
 }
 
-function appProps(
-  onInterruptRun: (runId: RunId) => void,
-): AppProps {
+function appProps(onInterruptRun: (runId: RunId) => void): AppProps {
   return {
     onSubmit: vi.fn(),
     onKillRun: vi.fn(),
@@ -374,7 +357,7 @@ describe('App foreground Escape ownership', () => {
     setRunning(WORKFLOW, CHILD);
     seedChildRoster(ROOT, [
       {
-        ...runningChild('workflow-run', 'workflow', WORKFLOW),
+        ...runningChild(WORKFLOW, 'workflow'),
         identity: { kind: 'multiAgentWorkflow', workflowName: 'workflow' },
       },
     ]);
@@ -393,9 +376,7 @@ describe('App foreground Escape ownership', () => {
         }),
       ]),
     });
-    seedChildRoster(WORKFLOW, [
-      runningChild('child-run', 'inspect', CHILD),
-    ]);
+    seedChildRoster(WORKFLOW, [runningChild(CHILD, 'inspect')]);
     seedParentEdge(CHILD, WORKFLOW);
     markToolUseAgent(CHILD);
     seedApproval({

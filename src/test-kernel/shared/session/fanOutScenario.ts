@@ -112,7 +112,9 @@ export class Log {
   ): DisplaySessionEvent {
     const key =
       body.type === 'inquiryThreadUpdated'
-        ? qualifyAggregateId('inquiry', runId)
+        ? // An inquiry aggregate is keyed by its thread id, a plain logical
+          // id; this scenario threads one per run.
+          qualifyAggregateId('inquiry', runId as string)
         : qualifyAggregateId('run', runId);
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
@@ -168,11 +170,7 @@ export class Log {
     };
   }
 
-  entry(
-    runId: RunId,
-    at: number,
-    entry: EntryFixture,
-  ): StreamLogEntry {
+  entry(runId: RunId, at: number, entry: EntryFixture): StreamLogEntry {
     const seqNo = (this.entrySeq.get(runId) ?? 0) + 1;
     this.entrySeq.set(runId, seqNo);
     const full: StreamLogEntry = {
@@ -561,14 +559,14 @@ export function buildScenario({ proposal = false } = {}) {
 /**
  * The fan-out mid-flight, owned by this process: `review` running with its
  * `inspect` call open, `search` waiting on the bash approval, `lint` done,
- * the `bash` process stream leading the order.
+ * the `bash` process run leading the order.
  */
 export function fanOutView(): SessionView {
   return foldAll([...buildScenario().pending, local({ self: [OWNER] })]);
 }
 
 /** Every recorded event of one aggregate re-owned: what the log holds when
- *  another process ran that stream. */
+ *  another process ran that run. */
 function ownedBy(
   inputs: readonly FoldInput[],
   aggregateId: RunId,
@@ -839,7 +837,7 @@ function boardProgress(entry: BoardCall): WorkflowCallProgress {
 /**
  * A workflow run mid-flight for the run board: the `review` root with its
  * `Scout` phase closed, `Review` open with every row kind, `Verify` and
- * `Report` declared by the plan marker. Each running call's child stream
+ * `Report` declared by the plan marker. Each running call's child run
  * carries the facts the board joins (start time, tokens, tool calls, the
  * latest line); the waiting call's child holds a bash approval.
  */

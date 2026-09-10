@@ -3,10 +3,12 @@ import * as assert from 'node:assert';
 import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunOutcome } from '@shared/schemas';
+import { RunIdSchema, type RunOutcome } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
+
+const RUN_ID = RunIdSchema.parse('ec1000000001');
 
 const mocks = vi.hoisted(() => ({
   inspectRunLease: vi.fn(),
@@ -63,9 +65,7 @@ describe('getRunStatusInfo', () => {
     async ({ outcome, expected }) => {
       persisted({ outcome }, 'no-checkpoint');
 
-      const info = await Effect.runPromise(
-        getRunStatusInfo('exec-1', session),
-      );
+      const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
 
       assert.strictEqual(info.status, expected);
     },
@@ -77,7 +77,7 @@ describe('getRunStatusInfo', () => {
     persisted(null, 'no-checkpoint');
 
     const info = await Effect.runPromise(
-      getRunStatusInfo('exec-1', session, {
+      getRunStatusInfo(RUN_ID, session, {
         outcome: 'completed',
       }),
     );
@@ -91,9 +91,7 @@ describe('getRunStatusInfo', () => {
   it('costs one lease read and one stat for a settled row', async () => {
     persisted({}, 'no-checkpoint');
 
-    const info = await Effect.runPromise(
-      getRunStatusInfo('exec-1', session, {}),
-    );
+    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session, {}));
 
     assert.strictEqual(info.status, 'unknown');
     assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
@@ -110,9 +108,7 @@ describe('getRunStatusInfo', () => {
       owner: { pid: 5150, hostname: 'other-host' },
     });
 
-    const info = await Effect.runPromise(
-      getRunStatusInfo('exec-1', session, {}),
-    );
+    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session, {}));
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /pid 5150 on other-host/);
@@ -123,9 +119,7 @@ describe('getRunStatusInfo', () => {
     persisted({}, 'checkpoint');
     mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
 
-    const info = await Effect.runPromise(
-      getRunStatusInfo('exec-1', session),
-    );
+    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'cancelled');
     // Presence, not validity: a stat cannot promise the record can be resumed.
@@ -142,9 +136,7 @@ describe('getRunStatusInfo', () => {
       owner: { pid: 4242, hostname: 'other-host' },
     });
 
-    const info = await Effect.runPromise(
-      getRunStatusInfo('exec-1', session),
-    );
+    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /pid 4242 on other-host/);
@@ -155,9 +147,7 @@ describe('getRunStatusInfo', () => {
     persisted({}, 'checkpoint');
     mocks.inspectRunLease.mockResolvedValue({ status: 'owned' });
 
-    const info = await Effect.runPromise(
-      getRunStatusInfo('exec-1', session),
-    );
+    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /no live run/);
@@ -170,9 +160,7 @@ describe('getRunStatusInfo', () => {
     persisted({ outcome: 'completed' }, 'checkpoint');
     mocks.inspectRunLease.mockResolvedValue({ status: 'owned' });
 
-    const info = await Effect.runPromise(
-      getRunStatusInfo('exec-1', session),
-    );
+    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'completed');
   });
@@ -181,9 +169,7 @@ describe('getRunStatusInfo', () => {
     persisted({}, 'checkpoint');
     mocks.inspectRunLease.mockRejectedValue(new Error('lease corrupt'));
 
-    const info = await Effect.runPromise(
-      getRunStatusInfo('exec-1', session),
-    );
+    const info = await Effect.runPromise(getRunStatusInfo(RUN_ID, session));
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /cannot read \(lease corrupt\)/);
@@ -195,18 +181,14 @@ describe('turnAttributionNote', () => {
     vi.clearAllMocks();
   });
 
-  it('does not call an accepted turn running once its stream is terminal', async () => {
-    // The handle outlives the stream's terminal phase, so handle presence
+  it('does not call an accepted turn running once its run is terminal', async () => {
+    // The handle outlives the run's terminal phase, so handle presence
     // alone must not word the note as "still running".
-    const handle = testRunHandle({
-      runId: 'exec-1',
-      parentRunId: 'stream-1',
-      agent: 'test',
-    });
+    const handle = testRunHandle({ runId: RUN_ID, agent: 'test' });
     session.runs.track(handle);
-    seedRunStatusForTest(session.status, 'stream-1', { phase: 'completed' });
+    seedRunStatusForTest(session.status, RUN_ID, { phase: 'completed' });
     const store = {
-      getRunId: () => 'exec-1',
+      getRunId: () => RUN_ID,
       readTurnState: async () => ({
         activeTurn: { token: 'turn-2' },
         lastCompletedTurn: { token: 'turn-1' },

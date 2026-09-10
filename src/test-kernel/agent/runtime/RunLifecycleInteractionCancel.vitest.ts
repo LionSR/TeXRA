@@ -10,15 +10,15 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
-  type RunId,
   type Plan,
-  type RunOutcome,
   type RunId,
+  type RunOutcome,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { generateRunId } from '@utils/core';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -32,22 +32,16 @@ vi.mock('@agent/storage', () => ({
 
 const plan: Plan = { objective: 'Finish the run.' };
 
-let caseCounter = 0;
-
 function lifecycleCase(): {
   session: SessionHandle;
   ctx: AgentLaunchContext;
   runId: RunId;
-  runId: RunId;
 } {
-  const n = caseCounter++;
-  const runId = `exec:run-cancel-${n}` as RunId;
-  const runId = `stream:run-cancel-${n}` as RunId;
+  const runId = generateRunId();
   const session = createTestSession();
   return {
     session,
-    ctx: createTestLaunchContext({ runId, runId, session }),
-    runId,
+    ctx: createTestLaunchContext({ runId, session }),
     runId,
   };
 }
@@ -67,10 +61,9 @@ function requestApproval(
 
 function toolUseRun<Outcome extends RunOutcome | typeof RUN_PHASE.WAITING>(
   runId: RunId,
-  runId: RunId,
   outcome: Outcome,
 ) {
-  return { category: 'toolUse' as const, outcome, runId, runId };
+  return { category: 'toolUse' as const, outcome, runId };
 }
 
 async function expectRunEndedRejection(
@@ -95,16 +88,12 @@ describe('run lifecycle host-interaction cancel', () => {
   });
 
   it('settles a pending approval when the run completes', async () => {
-    const { session, ctx, runId, runId } = lifecycleCase();
-    const pending = requestApproval(
-      session,
-      'approval:completed-run',
-      runId,
-    );
+    const { session, ctx, runId } = lifecycleCase();
+    const pending = requestApproval(session, 'approval:completed-run', runId);
 
     await Effect.runPromise(
       runFlowWithLifecycle(ctx, async () =>
-        toolUseRun(runId, runId, RUN_OUTCOME.COMPLETED),
+        toolUseRun(runId, RUN_OUTCOME.COMPLETED),
       ),
     );
 
@@ -113,7 +102,7 @@ describe('run lifecycle host-interaction cancel', () => {
   });
 
   it('settles and untracks the run after native interruption joins the active flow', async () => {
-    const { session, ctx, runId, runId } = lifecycleCase();
+    const { session, ctx, runId } = lifecycleCase();
     const started = createDeferred<RunHandle>();
     const aborted = createDeferred();
     const released = createDeferred();
@@ -127,7 +116,7 @@ describe('run lifecycle host-interaction cancel', () => {
         await aborted.promise;
         await released.promise;
         stopped.resolve();
-        return toolUseRun(runId, runId, RUN_OUTCOME.CANCELLED);
+        return toolUseRun(runId, RUN_OUTCOME.CANCELLED);
       }),
     );
     const handle = await started.promise;
@@ -164,12 +153,12 @@ describe('run lifecycle host-interaction cancel', () => {
   });
 
   it('settles a pending approval when the run parks at WAITING', async () => {
-    const { session, ctx, runId, runId } = lifecycleCase();
+    const { session, ctx, runId } = lifecycleCase();
     const pending = requestApproval(session, 'approval:waiting-run', runId);
 
     const result = await Effect.runPromise(
       runFlowWithLifecycle(ctx, async () =>
-        toolUseRun(runId, runId, RUN_PHASE.WAITING),
+        toolUseRun(runId, RUN_PHASE.WAITING),
       ),
     );
 
@@ -178,12 +167,12 @@ describe('run lifecycle host-interaction cancel', () => {
     session.dispose();
   });
 
-  it("leaves another stream's pending approval untouched", async () => {
-    const { session, ctx, runId, runId } = lifecycleCase();
-    const otherRunId = `${runId}:sibling` as RunId;
+  it("leaves another run's pending approval untouched", async () => {
+    const { session, ctx, runId } = lifecycleCase();
+    const otherRunId = generateRunId();
     const sibling = requestApproval(
       session,
-      'approval:sibling-stream',
+      'approval:sibling-run',
       otherRunId,
     );
     let settled = false;
@@ -193,7 +182,7 @@ describe('run lifecycle host-interaction cancel', () => {
 
     await Effect.runPromise(
       runFlowWithLifecycle(ctx, async () =>
-        toolUseRun(runId, runId, RUN_OUTCOME.COMPLETED),
+        toolUseRun(runId, RUN_OUTCOME.COMPLETED),
       ),
     );
     await Promise.resolve();
@@ -204,7 +193,7 @@ describe('run lifecycle host-interaction cancel', () => {
   });
 
   it('cancels after the runner finishes unwinding, so a flow releases its follow-up queue first', async () => {
-    const { session, ctx, runId, runId } = lifecycleCase();
+    const { session, ctx, runId } = lifecycleCase();
     const order: string[] = [];
     const cancelSpy = vi
       .spyOn(session.interactions, 'cancel')
@@ -216,7 +205,7 @@ describe('run lifecycle host-interaction cancel', () => {
       await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () => {
           try {
-            return toolUseRun(runId, runId, RUN_OUTCOME.COMPLETED);
+            return toolUseRun(runId, RUN_OUTCOME.COMPLETED);
           } finally {
             order.push('flow-teardown');
           }
@@ -235,18 +224,14 @@ describe('run lifecycle host-interaction cancel', () => {
   });
 
   it('is harmless after an interrupt-time cancel already settled the approval', async () => {
-    const { session, ctx, runId, runId } = lifecycleCase();
-    const pending = requestApproval(
-      session,
-      'approval:interrupted-run',
-      runId,
-    );
+    const { session, ctx, runId } = lifecycleCase();
+    const pending = requestApproval(session, 'approval:interrupted-run', runId);
 
     const result = await Effect.runPromise(
       runFlowWithLifecycle(ctx, async () => {
         // What `flowContext.interrupt` does while the flow is still live.
         session.interactions.cancel({ runId, cause: 'Run interrupted.' });
-        return toolUseRun(runId, runId, RUN_OUTCOME.CANCELLED);
+        return toolUseRun(runId, RUN_OUTCOME.CANCELLED);
       }),
     );
 
@@ -261,7 +246,7 @@ describe('run lifecycle host-interaction cancel', () => {
   });
 
   it('keeps the published outcome when a host adapter throws on cancel', async () => {
-    const { session, ctx, runId, runId } = lifecycleCase();
+    const { session, ctx, runId } = lifecycleCase();
     const detach = session.interactions.use({
       cancel: () => {
         throw new Error('host cancel boom');
@@ -272,7 +257,7 @@ describe('run lifecycle host-interaction cancel', () => {
       await expect(
         Effect.runPromise(
           runFlowWithLifecycle(ctx, async () =>
-            toolUseRun(runId, runId, RUN_OUTCOME.COMPLETED),
+            toolUseRun(runId, RUN_OUTCOME.COMPLETED),
           ),
         ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });

@@ -1025,10 +1025,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
       new Promise<string>((resolve, reject) => {
         invocations.push(invocation);
         invocation.report?.({
-          childRunId: childRunIdFor(
-            invocation.index,
-            invocations.length,
-          ),
+          childRunId: childRunIdFor(invocation.index, invocations.length),
         });
         if (invocations.length === 2) resolve('fresh result');
         rejectOnAbort(invocation, reject);
@@ -2391,8 +2388,7 @@ return 'done'`,
         invocation.report?.({
           agent: 'writer',
           model: 'model-a',
-          childRunId: 'abcdef123456',
-          childRunId: 'writer#abcdef123456',
+          childRunId: 'abcdef123456' as RunId,
         });
         return 'drafted';
       },
@@ -2412,7 +2408,6 @@ return 'done'`,
           agent: 'writer',
           model: 'model-a',
           childRunId: 'abcdef123456',
-          childRunId: 'writer#abcdef123456',
           attempts: [{ number: 1, id: 'abcdef123456' }],
         },
         { id: 'review', status: 'skipped' },

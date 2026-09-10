@@ -104,7 +104,7 @@ return null`,
 phase('Work')
 return await agent('work', { id: 'work-call' })`,
       runAgent: async (invocation) => {
-        invocation.report?.({ childRunId: 'aaaaaaaaaaaa' });
+        invocation.report?.({ childRunId: 'aaaaaaaaaaaa' as RunId });
         return 'done';
       },
       onSnapshot,
@@ -140,9 +140,7 @@ return await agent('work', { id: 'work-call' })`,
       calls: Array<Record<string, unknown>>;
     };
     legacy.calls[0]!.stageTitle = 'Work';
-    expect(WorkflowRunSnapshotSchema.safeParse(legacy).success).toBe(
-      false,
-    );
+    expect(WorkflowRunSnapshotSchema.safeParse(legacy).success).toBe(false);
 
     const active = structuredClone(
       snapshots.find(
@@ -154,9 +152,7 @@ return await agent('work', { id: 'work-call' })`,
     active.stages[0]!.id = '';
     active.calls[0]!.stageId = '';
     active.currentStageId = '';
-    expect(WorkflowRunSnapshotSchema.safeParse(active).success).toBe(
-      false,
-    );
+    expect(WorkflowRunSnapshotSchema.safeParse(active).success).toBe(false);
   });
 
   it('records queued work before admission and starts attempts only inside the queue slot', async () => {
@@ -215,7 +211,9 @@ return await agent('retry secret', { label: 'Retry task' })`,
       runAgent: async (invocation) => {
         attempts += 1;
         invocation.report?.({
-          childRunId: attempts === 1 ? 'aaaaaaaaaaaa' : 'bbbbbbbbbbbb',
+          childRunId: (attempts === 1
+            ? 'aaaaaaaaaaaa'
+            : 'bbbbbbbbbbbb') as RunId,
         });
         await new Promise<void>((resolve, reject) => {
           releases.push(resolve);

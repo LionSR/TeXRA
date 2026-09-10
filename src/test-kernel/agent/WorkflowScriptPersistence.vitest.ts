@@ -23,7 +23,6 @@ import {
   WorkflowRunSnapshotSchema,
   deriveWorkflowCounts,
   type RunId,
-  type RunId,
   type WorkflowRunSnapshot,
 } from '@shared/schemas';
 import {
@@ -48,11 +47,7 @@ let session: SessionHandle;
 beforeEach(async () => {
   clearStoreCache();
   session = createProcessSession();
-  publishTestRunStart(
-    session,
-    'workflow-test-stream' as RunId,
-    runId,
-  );
+  publishTestRunStart(session, runId);
   await session.settlePublications();
 });
 function writeWorkflowRunSnapshot(
@@ -215,9 +210,7 @@ describe('workflow-script persistence', () => {
       } as unknown as WorkflowRunSnapshot;
 
       await expect(
-        Promise.resolve().then(() =>
-          writeWorkflowRunSnapshot(runId, workflow),
-        ),
+        Promise.resolve().then(() => writeWorkflowRunSnapshot(runId, workflow)),
       ).rejects.toThrow();
       await expect(
         Effect.runPromise(getRunRecords(session, runId).readMeta()),
@@ -510,13 +503,11 @@ return await agent('run planned call', { id: 'planned-call' })`;
       expect(prior.status).toBe('skipped');
       Object.assign(prior, {
         childRunId: 'aaaaaaaaaaaa',
-        childRunId: 'prior#aaaaaaaaaaaa',
         model: 'prior-model',
         costUsd: 1.25,
       });
       Object.assign(prior.attempts[0]!, {
         id: prior.childRunId,
-        childRunId: prior.childRunId,
         model: prior.model,
         costUsd: prior.costUsd,
       });
@@ -540,12 +531,10 @@ return await agent('run planned call', { id: 'planned-call' })`;
         updatedAt: '2026-01-02T00:00:00.000Z',
       });
       expect(snapshots[0]?.calls[0]?.childRunId).toBeUndefined();
-      expect(snapshots[0]?.calls[0]?.childRunId).toBeUndefined();
       expect(snapshots[0]?.calls[0]?.model).toBeUndefined();
       expect(snapshots[0]?.calls[0]?.costUsd).toBe(1.25);
       expect(snapshots[0]?.calls[0]?.attempts[0]).toMatchObject({
         id: 'aaaaaaaaaaaa',
-        childRunId: 'prior#aaaaaaaaaaaa',
         model: 'prior-model',
         costUsd: 1.25,
       });
@@ -572,8 +561,7 @@ return await agent('run dynamic call', { id: 'dynamic-call' })`;
         script: resumeScript,
         runAgent: async (invocation) => {
           invocation.report?.({
-            childRunId: 'bbbbbbbbbbbb',
-            childRunId: 'prior#bbbbbbbbbbbb',
+            childRunId: 'bbbbbbbbbbbb' as RunId,
             model: 'prior-model',
             costUsd: 2.5,
           });
@@ -601,12 +589,10 @@ return await agent('run dynamic call', { id: 'dynamic-call' })`;
         updatedAt: '2026-02-02T00:00:00.000Z',
       });
       expect(snapshots[0]?.calls[0]?.childRunId).toBeUndefined();
-      expect(snapshots[0]?.calls[0]?.childRunId).toBeUndefined();
       expect(snapshots[0]?.calls[0]?.model).toBeUndefined();
       expect(snapshots[0]?.calls[0]?.costUsd).toBe(2.5);
       expect(snapshots[0]?.calls[0]?.attempts[0]).toMatchObject({
         id: 'bbbbbbbbbbbb',
-        childRunId: 'prior#bbbbbbbbbbbb',
         model: 'prior-model',
         costUsd: 2.5,
       });
@@ -666,8 +652,7 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
         script: originalScript,
         runAgent: async (invocation) => {
           invocation.report?.({
-            childRunId: 'cccccccccccc',
-            childRunId: 'prior#cccccccccccc',
+            childRunId: 'cccccccccccc' as RunId,
             model: 'prior-model',
             costUsd: 3.75,
           });
@@ -720,14 +705,12 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       expect(rerunSnapshots.length).toBeGreaterThan(0);
       for (const snapshot of rerunSnapshots) {
         expect(snapshot.calls[0]?.childRunId).toBeUndefined();
-        expect(snapshot.calls[0]?.childRunId).toBeUndefined();
         // The rerun shows the script's own declaration, never the model the
         // prior attempt resolved.
         expect(snapshot.calls[0]?.model).toBe('changed-model');
         expect(snapshot.calls[0]?.costUsd).toBe(3.75);
         expect(snapshot.calls[0]?.attempts[0]).toMatchObject({
           id: 'cccccccccccc',
-          childRunId: 'prior#cccccccccccc',
           model: 'prior-model',
           costUsd: 3.75,
         });
@@ -749,12 +732,10 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
         error: 'replacement failed before reporting cost',
       });
       expect(call.childRunId).toBeUndefined();
-      expect(call.childRunId).toBeUndefined();
       expect(call.costUsd).toBe(3.75);
       expect(call.attempts).toEqual([
         expect.objectContaining({
           id: 'cccccccccccc',
-          childRunId: 'prior#cccccccccccc',
           model: 'prior-model',
           costUsd: 3.75,
         }),
@@ -781,7 +762,6 @@ return await agent('retry metadata')`,
         });
         if (attempt === 1) {
           invocation.report?.({ model: 'abandoned-model' });
-          invocation.report?.({ childRunId: 'writer#aaaaaaaaaaaa' });
           await new Promise<void>((_resolve, reject) =>
             invocation.signal.addEventListener(
               'abort',
@@ -803,20 +783,21 @@ return await agent('retry metadata')`,
     const result = await run;
     const call = result.snapshot.calls[0];
 
-    // The replacement attempt reported no model or stream, so the abandoned
-    // attempt's values must not survive on the call it replaced.
+    // The replacement attempt reported no model, so the abandoned attempt's
+    // model must not survive on the call it replaced; the call now carries the
+    // replacement's own run id.
     expect(call).toMatchObject({
       status: 'failed',
       error: 'replacement failed early',
     });
     expect(call?.model).toBeUndefined();
-    expect(call?.childRunId).toBeUndefined();
+    expect(call?.childRunId).toBe('attempt-2');
     // The abandoned attempt keeps its own record.
     expect(call?.attempts).toMatchObject([
       {
         number: 1,
         model: 'abandoned-model',
-        childRunId: 'writer#aaaaaaaaaaaa',
+        id: 'attempt-1',
       },
       { number: 2 },
     ]);
@@ -1246,21 +1227,18 @@ return [a, b, c]`;
         agent: 'agent-a',
         model: 'model-a',
         childRunId: 'aaaaaaaaaaaa' as RunId,
-        childRunId: 'agent-a#aaaaaaaaaaaa',
         costUsd: 10,
       },
       B: {
         agent: 'agent-b',
         model: 'model-b',
         childRunId: 'bbbbbbbbbbbb' as RunId,
-        childRunId: 'agent-b#bbbbbbbbbbbb',
         costUsd: 20,
       },
       C: {
         agent: 'agent-c',
         model: 'model-c',
         childRunId: 'cccccccccccc' as RunId,
-        childRunId: 'agent-c#cccccccccccc',
         costUsd: 30,
       },
     } as const;
@@ -1279,7 +1257,6 @@ return [a, b, c]`;
         agent: 'agent-n',
         model: 'model-n',
         childRunId: 'nnnnnnnnnnnn' as RunId,
-        childRunId: 'agent-n#nnnnnnnnnnnn',
         costUsd: 1,
       });
       return 'result:N';
@@ -1303,13 +1280,11 @@ return [a, b, c]`;
         agent: 'agent-a',
         model: 'model-a',
         childRunId: 'aaaaaaaaaaaa',
-        childRunId: 'agent-a#aaaaaaaaaaaa',
         costUsd: 10,
         attempts: [
           {
             number: 1,
             id: 'aaaaaaaaaaaa',
-            childRunId: 'agent-a#aaaaaaaaaaaa',
             model: 'model-a',
             costUsd: 10,
           },
@@ -1321,13 +1296,11 @@ return [a, b, c]`;
         agent: 'agent-n',
         model: 'model-n',
         childRunId: 'nnnnnnnnnnnn',
-        childRunId: 'agent-n#nnnnnnnnnnnn',
         costUsd: 1,
         attempts: [
           {
             number: 1,
             id: 'nnnnnnnnnnnn',
-            childRunId: 'agent-n#nnnnnnnnnnnn',
             model: 'model-n',
             costUsd: 1,
           },
@@ -1339,13 +1312,11 @@ return [a, b, c]`;
         agent: 'agent-b',
         model: 'model-b',
         childRunId: 'bbbbbbbbbbbb',
-        childRunId: 'agent-b#bbbbbbbbbbbb',
         costUsd: 20,
         attempts: [
           {
             number: 1,
             id: 'bbbbbbbbbbbb',
-            childRunId: 'agent-b#bbbbbbbbbbbb',
             model: 'model-b',
             costUsd: 20,
           },
@@ -1357,13 +1328,11 @@ return [a, b, c]`;
         agent: 'agent-c',
         model: 'model-c',
         childRunId: 'cccccccccccc',
-        childRunId: 'agent-c#cccccccccccc',
         costUsd: 30,
         attempts: [
           {
             number: 1,
             id: 'cccccccccccc',
-            childRunId: 'agent-c#cccccccccccc',
             model: 'model-c',
             costUsd: 30,
           },
@@ -1448,7 +1417,6 @@ return await agent('proven result')`;
             agent: 'proven-agent',
             model: 'proven-model',
             childRunId: 'pppppppppppp' as RunId,
-            childRunId: 'proven#pppppppppppp',
             costUsd: 7,
           });
           return 'cached result';
@@ -1479,13 +1447,11 @@ return await agent('proven result')`;
         agent: 'proven-agent',
         model: 'proven-model',
         childRunId: 'pppppppppppp',
-        childRunId: 'proven#pppppppppppp',
         costUsd: 7,
         attempts: [
           {
             number: 1,
             id: 'pppppppppppp',
-            childRunId: 'proven#pppppppppppp',
             model: 'proven-model',
             costUsd: 7,
             completedAt: expect.any(String),
@@ -1513,7 +1479,6 @@ return await agent('same position')`;
             agent: 'stale-agent',
             model: 'stale-model',
             childRunId: 'ssssssssssss' as RunId,
-            childRunId: 'stale#ssssssssssss',
             costUsd: 9,
           });
           return 'stale result';
@@ -1530,7 +1495,6 @@ return await agent('same position')`;
             agent: 'fresh-agent',
             model: 'fresh-model',
             childRunId: 'ffffffffffff' as RunId,
-            childRunId: 'fresh#ffffffffffff',
             costUsd: 1,
           });
           return 'fresh result';
@@ -1544,13 +1508,11 @@ return await agent('same position')`;
           agent: 'fresh-agent',
           model: 'fresh-model',
           childRunId: 'ffffffffffff',
-          childRunId: 'fresh#ffffffffffff',
           costUsd: 1,
           attempts: [
             {
               number: 1,
               id: 'ffffffffffff',
-              childRunId: 'fresh#ffffffffffff',
               model: 'fresh-model',
               costUsd: 1,
             },

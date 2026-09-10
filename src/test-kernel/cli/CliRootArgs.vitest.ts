@@ -46,7 +46,7 @@ import {
   resolveKnownCliModelId,
 } from '@cli/runtime/cliConfig';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
-import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, AgentCategory, type RunId } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -834,8 +834,7 @@ describe('CLI root argument routing', () => {
         {
           outcome: RUN_OUTCOME.FAILED,
           category: AgentCategory.Workflow,
-          runId: 'run-without-output',
-          runId: 'stream-without-output',
+          runId: 'run-without-output' as RunId,
           outputs: [],
           compileFailures: [],
         },
@@ -940,8 +939,7 @@ describe('CLI root argument routing', () => {
         {
           outcome: RUN_OUTCOME.COMPLETED,
           category: AgentCategory.Workflow,
-          runId: 'completed-without-output',
-          runId: 'completed-stream-without-output',
+          runId: 'completed-without-output' as RunId,
           outputs: [],
           compileFailures: [],
         },
@@ -960,8 +958,7 @@ describe('CLI root argument routing', () => {
       {
         outcome: RUN_OUTCOME.CANCELLED,
         category: AgentCategory.Workflow,
-        runId: 'stopped-without-output',
-        runId: 'stopped-stream-without-output',
+        runId: 'stopped-without-output' as RunId,
         outputs: [],
         compileFailures: [],
       },

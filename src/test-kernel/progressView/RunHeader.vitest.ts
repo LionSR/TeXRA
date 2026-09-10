@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { RunHeader } from '@progressView/frontend/components/RunHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
+import type { RunId } from '@shared/schemas/identifiers';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { SurfaceAction } from '@shared/session/surface';
@@ -26,10 +27,10 @@ interface Mounted {
   readonly requests: (RuntimeRequest | HostRequest)[];
 }
 
-function runOfEvent(view: SessionView, id: string): RunView {
-  const stream = view.runs.get(id);
-  if (!stream) throw new Error(`fixture has no stream ${id}`);
-  return stream;
+function runOfEvent(view: SessionView, id: RunId): RunView {
+  const run = view.runs.get(id);
+  if (!run) throw new Error(`fixture has no run ${id}`);
+  return run;
 }
 
 async function mountHeader(

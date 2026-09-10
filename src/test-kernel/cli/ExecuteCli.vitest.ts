@@ -12,7 +12,7 @@ import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
 } from '@shared/schemas';
-import type { RunId, RunId, TodoItem } from '@shared/schemas';
+import type { RunId, TodoItem } from '@shared/schemas';
 import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -122,16 +122,14 @@ const COMPLETED_RUN = {
   category: 'toolUse',
   runId: 'exec-1',
   outcome: 'completed',
-  runId: 'stream-1',
 } as const;
 
 const COMPLETED_WORKFLOW_RUN: Parameters<
   NonNullable<RunAgentOptions['openWorkflowOutput']>
 >[0] = {
   category: 'workflow',
-  runId: 'exec-1',
+  runId: 'exec-1' as RunId,
   outcome: 'completed',
-  runId: 'stream-1',
   outputs: [],
   compileFailures: [],
 };
@@ -194,15 +192,13 @@ function stubHangingRun(handleOptions: (options: LeaseOptions) => void): {
   mocks.runAgent.mockImplementation(async (request, options: LeaseOptions) => {
     handleOptions(options);
     const runId = request.runId as RunId;
-    const runId = `chat#${runId}` as RunId;
     const launchHandle = new RunHandle(
       {
-        runId,
         runId,
         identity: { kind: 'agent', agent: 'chat' },
         category: 'toolUse',
       },
-      runId,
+      null,
     );
     launchHandle.attachInterruptHandler({ interrupt: () => undefined });
     options.session?.runs.track(launchHandle);
@@ -538,7 +534,6 @@ describe('executeCliRequest', () => {
         category: 'toolUse',
         runId: 'exec-1',
         status: 'completed',
-        runId: 'stream-1',
       };
     });
 
@@ -668,7 +663,7 @@ describe('executeCliRequest', () => {
     { label: 'fresh', kind: 'fresh' },
     { label: 'resumed', kind: 'resume' },
   ] as const)(
-    'marks $label owned executions interrupted during platform shutdown',
+    'marks $label owned runs interrupted during platform shutdown',
     async ({ kind }) => {
       const { platform, executeCliRequest } = await installFakePlatform();
       const { flushSpy } = await spyOnArtifactFlush();
@@ -746,7 +741,6 @@ describe('executeCliRequest', () => {
           category: 'toolUse',
           runId: 'exec-1',
           outcome: 'cancelled',
-          runId: 'stream-1',
         },
       });
       expect(mocks.finalizeRun).toHaveBeenCalledOnce();
@@ -1060,7 +1054,6 @@ describe('executeCliRequest', () => {
         category: 'toolUse',
         runId: 'exec-1',
         outcome: 'cancelled',
-        runId: 'stream-1',
       },
     });
     expect(mocks.finalizeRun).toHaveBeenCalledOnce();
@@ -1069,7 +1062,7 @@ describe('executeCliRequest', () => {
     expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
   });
 
-  it('removes the shutdown status hook after owned executions finish', async () => {
+  it('removes the shutdown status hook after owned runs finish', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const request = baseRequest();
 

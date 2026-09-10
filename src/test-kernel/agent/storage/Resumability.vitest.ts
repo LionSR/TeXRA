@@ -16,7 +16,6 @@ import {
 } from '@agent/node/persistedFlow';
 import {
   aggregateId,
-  type RunId,
   RUN_OUTCOME,
   type RunId,
   type RunOutcome,
@@ -43,25 +42,21 @@ describe('deriveResumability', () => {
   });
 
   async function writeFlow(runId: RunId): Promise<void> {
-    await getRunStore(runId).write(
-      flowKey(runId),
-      BASE_FLOW_RECORD,
-    );
+    await getRunStore(runId).write(flowKey(runId), BASE_FLOW_RECORD);
   }
 
   async function writeMeta(
     runId: RunId,
     { outcome }: { outcome?: RunOutcome },
   ): Promise<void> {
-    const runId = `stream-${runId}` as RunId;
-    publishTestRunStart(session, runId, runId);
+    publishTestRunStart(session, runId);
     await session.settlePublications();
     if (outcome) {
       await Effect.runPromise(
         session.commit([
           {
             type: 'status',
-            aggregateId: aggregateId('stream', runId),
+            aggregateId: aggregateId('run', runId),
             phase: outcome,
             cause: 'test outcome',
           },
@@ -202,10 +197,7 @@ describe('deriveResumability', () => {
       ...BASE_FLOW_RECORD,
       legacyOwner: { host: 'extension' },
     };
-    await getRunStore(runId).write(
-      flowKey(runId),
-      legacyRecord,
-    );
+    await getRunStore(runId).write(flowKey(runId), legacyRecord);
 
     const decision = await Effect.runPromise(
       deriveResumability(runId, session),

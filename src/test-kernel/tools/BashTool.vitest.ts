@@ -161,7 +161,7 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
 
 /**
  * Build the tool-use round services shared by every case. Only the tool name,
- * logger, stream id, registry, and interruption hooks vary between tests.
+ * logger, run id, registry, and interruption hooks vary between tests.
  */
 function roundServices(opts: {
   toolName: string;
@@ -189,7 +189,7 @@ function roundServices(opts: {
     userVarChannels: {},
     toolPolicy: createToolPolicy(),
     logger: opts.logger,
-    fileService: new TaskRunFileService('deadbeef'),
+    fileService: new TaskRunFileService('deadbeef' as RunId),
     toolRegistry: opts.toolRegistry,
     onRoundFinalized: () => {},
     run: AgentRunStateSnapshotSchema.parse({}),
@@ -301,24 +301,19 @@ const BASH_PLATFORM_OPTIONS = {
   config: { 'texra.toolUse.requireBashApproval': false },
 } as const;
 
-/** The run and child-stream ids a background launch reports in its output. */
+/** The one run id a background launch reports in its output. */
 function launchedIds(result: ToolResult): {
   output: string;
-  runId: string | undefined;
-  childRunId: RunId | undefined;
+  runId: RunId | undefined;
 } {
   const output = String(result.output ?? '');
   return {
     output,
-    runId: /Run ID: (\S+)/.exec(output)?.[1],
-    childRunId: /Stream tab: (\S+)/.exec(output)?.[1] as
-      RunId | undefined,
+    runId: /Run ID: (\S+)/.exec(output)?.[1] as RunId | undefined,
   };
 }
 
-function launchBackgroundBash(
-  parentRunId: RunId,
-): Promise<ToolResult> {
+function launchBackgroundBash(parentRunId: RunId): Promise<ToolResult> {
   publishTestRunStart(defaultSession(), parentRunId);
   return withToolEnvironment(
     {
@@ -372,7 +367,7 @@ describe('BashTool', () => {
 
     const options = roundServices({
       toolName: 'bash',
-      logger: createTestRunTrace('BashToolTest', new StreamLog()).trace,
+      logger: createTestRunTrace('bash-tool' as RunId, new StreamLog()).trace,
       runId: 'bash-tool' as RunId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
     });
@@ -709,7 +704,7 @@ describe('BashTool', () => {
     );
   });
 
-  it('wakes a WAITING parent stream when a background bash run completes', async () => {
+  it('wakes a WAITING parent run when a background bash run completes', async () => {
     // Regression: background bash delivery used a bespoke sendFollowUp call
     // with no wake step, so a parent suspended WAITING on the job never
     // resumed — every other child-run type routes through the shared
@@ -738,7 +733,7 @@ describe('BashTool', () => {
       await vi.waitFor(() => {
         assert.ok(
           tryResumeRun.mock.calls.length > 0,
-          'Background bash completion should wake the WAITING parent stream',
+          'Background bash completion should wake the WAITING parent run',
         );
       });
       assert.equal(tryResumeRun.mock.calls[0]?.[0], parentRunId);
@@ -762,7 +757,7 @@ describe('BashTool', () => {
     const parentRunId = 'bash-tool-bg-finalize-before-wake' as RunId;
     let releaseResume: (() => void) | undefined;
     let handleAtResumeTime: unknown;
-    let runId = '';
+    let runId = '' as RunId;
     const tryResumeRun = vi.fn().mockImplementation(async () => {
       handleAtResumeTime = defaultSession().runs.getHandle(runId);
       await new Promise<void>((resolve) => {
@@ -783,10 +778,7 @@ describe('BashTool', () => {
       const launchResult = await launchBackgroundBash(parentRunId);
       assert.equal(launchResult.status, 'executed');
       const launched = launchedIds(launchResult);
-      assert.ok(
-        launched.runId,
-        'Launch output should report a run id',
-      );
+      assert.ok(launched.runId, 'Launch output should report a run id');
       runId = launched.runId;
 
       await vi.waitFor(() => {
@@ -799,10 +791,7 @@ describe('BashTool', () => {
       // (finalized), never still RUNNING, so a resumed parent that waits on
       // it right now resolves immediately instead of racing its own wake.
       assert.equal(handleAtResumeTime, undefined);
-      assert.equal(
-        defaultSession().runs.getHandle(runId),
-        undefined,
-      );
+      assert.equal(defaultSession().runs.getHandle(runId), undefined);
     } finally {
       releaseResume?.();
       detachBackgroundRun(recorded, parentRunId, parentRunId);
@@ -842,7 +831,7 @@ describe('BashTool', () => {
 
   it('finalizes the background child when the completion path throws before its normal finalize', async () => {
     // Nothing else finalizes a background child: before the latch, an
-    // unexpected throw on the completion path left the child stream RUNNING
+    // unexpected throw on the completion path left the child run RUNNING
     // forever, with its interrupt handler still attached to a dead process.
     const resolveCommand = holdCommand();
     vi.spyOn(bashDelivery, 'formatBashDelivery').mockImplementation(() => {
@@ -853,9 +842,8 @@ describe('BashTool', () => {
     const recorded = recordSessionEvents(defaultSession());
 
     const launchResult = await launchBackgroundBash(parentRunId);
-    const { output, runId, childRunId } = launchedIds(launchResult);
+    const { output, runId } = launchedIds(launchResult);
     assert.ok(runId, output);
-    assert.ok(childRunId, output);
 
     resolveCommand(DONE_EXEC_RESULT);
 
@@ -864,7 +852,7 @@ describe('BashTool', () => {
         (await recorded.read()).some(
           (event) =>
             event.type === 'status' &&
-            event.aggregateId === aggregateId('stream', childRunId) &&
+            event.aggregateId === aggregateId('run', runId) &&
             event.phase === RUN_PHASE.FAILED,
         ),
         true,
@@ -872,7 +860,7 @@ describe('BashTool', () => {
     });
     assert.equal(defaultSession().runs.getHandle(runId), undefined);
 
-    detachBackgroundRun(recorded, parentRunId, childRunId);
+    detachBackgroundRun(recorded, parentRunId, runId);
   });
 
   it('persists a killed background command as interrupted, not failed', async () => {
@@ -882,19 +870,15 @@ describe('BashTool', () => {
     const recorded = recordSessionEvents(defaultSession());
 
     const launchResult = await launchBackgroundBash(parentRunId);
-    const { output, runId, childRunId } = launchedIds(launchResult);
+    const { output, runId } = launchedIds(launchResult);
     assert.ok(runId, output);
-    assert.ok(childRunId, output);
 
-    // The user stop lands CANCELLED on the stream phase; only afterwards does
+    // The user stop lands CANCELLED on the run phase; only afterwards does
     // the killed process report its non-zero exit.
     const stopped = defaultSession().runs.kill(runId);
     assert.equal(stopped.accepted, true);
     const stopSettlement = Effect.runPromise(stopped.settlement);
-    assert.equal(
-      defaultSession().status.get(childRunId),
-      RUN_PHASE.CANCELLED,
-    );
+    assert.equal(defaultSession().status.get(runId), RUN_PHASE.CANCELLED);
     resolveCommand({
       success: false,
       stdout: '',
@@ -911,7 +895,7 @@ describe('BashTool', () => {
         RUN_OUTCOME.CANCELLED,
       );
     });
-    detachBackgroundRun(recorded, parentRunId, childRunId);
+    detachBackgroundRun(recorded, parentRunId, runId);
   });
 
   it('accepts optional command descriptions without passing them to the shell', async () => {

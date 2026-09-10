@@ -22,10 +22,9 @@ interface RunAgentOptions {
   readonly onStreamResolved?: (runId: string, trace: unknown) => void;
 }
 
-/** A session view stream entry as the package's fold keys it. */
+/** A session view run entry as the package's fold keys it. */
 interface FakeRunView {
   readonly id: string;
-  readonly runId: string;
   readonly ancestors: readonly { readonly id: string }[];
   readonly childIds: readonly string[];
   readonly durableOutcome: 'completed' | null;
@@ -44,7 +43,7 @@ const mocks = vi.hoisted(() => ({
   })),
   detachEvents: vi.fn(),
   disposeRuntime: vi.fn(async () => {}),
-  runId: 'run-1',
+  runId: 'ae0001',
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
   eventListener: undefined as ((event: unknown) => void) | undefined,
@@ -84,6 +83,14 @@ vi.mock('@agent/core/definition/AgentConfig', () => ({
   AgentConfigSchema: { parse: (value: unknown) => value },
 }));
 
+// The package mints the run's one id before it launches, and keys the run's
+// transcript port and view lookups on it: pinning it here is what lets the
+// suite name the run it started.
+vi.mock('@utils/core', async (importActual) => ({
+  ...(await importActual<typeof import('@utils/core')>()),
+  generateRunId: () => mocks.runId,
+}));
+
 vi.mock('@agent/index', () => ({
   loadAgents: mocks.loadAgents,
   resolveAgent: () => ({
@@ -104,8 +111,8 @@ vi.mock('@agent/runtime', async () => {
   const { Deferred, Effect, Stream, SubscriptionRef } = await import('effect');
   const { emptySessionView } = await import('@shared/session/sessionView');
   class FakeSession {
-    readonly executions = { getHandle: mocks.getRunHandle };
-    /** The session's view level: the pre-launch session, no stream yet. */
+    readonly runs = { getHandle: mocks.getRunHandle };
+    /** The session's view level: the pre-launch session, no run yet. */
     readonly view = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({
         ...emptySessionView('package'),
@@ -206,6 +213,7 @@ vi.mock('@transcript/StreamLogStore', () => ({
 }));
 
 // Local imports - package API under test
+import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import {
   runAgent,
@@ -245,24 +253,20 @@ function sessionView(): SubscriptionRef.SubscriptionRef<FakeSessionView> {
   return mocks.sessionView as SubscriptionRef.SubscriptionRef<FakeSessionView>;
 }
 
-/** Fold one stream into the session view, as its `run.start` would: the
- *  fold keeps `childIds` and `ancestors` in sync, so entering a stream with
+/** Fold one run into the session view, as its `run.start` would: the
+ *  fold keeps `childIds` and `ancestors` in sync, so entering a run with
  *  ancestors also links it onto its immediate parent's `childIds`. */
-function enterRun(
-  id: string,
-  stream: Partial<FakeRunView> = {},
-): Promise<void> {
-  const ancestors = stream.ancestors ?? [];
+function enterRun(id: string, run: Partial<FakeRunView> = {}): Promise<void> {
+  const ancestors = run.ancestors ?? [];
   const parentId = ancestors.at(-1)?.id;
   return Effect.runPromise(
     SubscriptionRef.update(sessionView(), (current) => {
       const runs = new Map(current.runs).set(id, {
         id,
-        runId: mocks.runId,
         ancestors: [],
         childIds: [],
         durableOutcome: null,
-        ...stream,
+        ...run,
       });
       const parent = parentId === undefined ? undefined : runs.get(parentId);
       if (parentId !== undefined && parent) {
@@ -282,19 +286,19 @@ function completeRunView(): Promise<void> {
     SubscriptionRef.update(sessionView(), (current) => ({
       ...current,
       runs: new Map(
-        [...current.runs].map(([id, stream]) => [
+        [...current.runs].map(([id, run]) => [
           id,
-          { ...stream, durableOutcome: 'completed' as const },
+          { ...run, durableOutcome: 'completed' as const },
         ]),
       ),
     })),
   );
 }
 
-/** The run's stream entering the session, then its final view folding. */
+/** The run entering the session, then its final view folding. */
 async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
-  options.onStreamResolved?.('stream-1', TRACE);
-  await enterRun('stream-1');
+  options.onStreamResolved?.('ae0001', TRACE);
+  await enterRun('ae0001');
   await options.onRun?.(HANDLE);
   await completeRunView();
   return RESULT;
@@ -348,11 +352,11 @@ describe('agent package run lifecycle', () => {
   it('delivers the launch events: the trace is subscribed when the stream resolves, before the run handle exists', async () => {
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('stream-1', TRACE);
+        options.onStreamResolved?.('ae0001', TRACE);
         // The instruction log, the root stage, and the launch warnings fire
         // here, before `onRun`.
         mocks.eventListener?.(EVENT);
-        await enterRun('stream-1');
+        await enterRun('ae0001');
         await options.onRun?.(HANDLE);
         await completeRunView();
         return RESULT;
@@ -370,8 +374,8 @@ describe('agent package run lifecycle', () => {
   it('discards trace events when the caller only awaits the result', async () => {
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('stream-1', TRACE);
-        await enterRun('stream-1');
+        options.onStreamResolved?.('ae0001', TRACE);
+        await enterRun('ae0001');
         await options.onRun?.(HANDLE);
         mocks.eventListener?.(EVENT);
         await completeRunView();
@@ -504,7 +508,7 @@ describe('agent package run lifecycle', () => {
 
         const seen = yield* program;
         expect(seen.result).toBe(RESULT);
-        expect(seen.runId).toBe('stream-1');
+        expect(seen.runId).toBe('ae0001');
         // One session per storage root, held by the runtime's own owner: the
         // Effect surface resolved the session the Promise entry ran on, and the
         // package built no registry of its own.
@@ -533,7 +537,7 @@ describe('agent package run lifecycle', () => {
         const observations: string[] = [];
         mocks.runValidatedAgent.mockImplementationOnce(async () => {
           await new Promise<void>((resolve) => {
-            // The native run owns this handle before it reserves a stream.
+            // The native run owns this handle before it reserves a run id.
             // Interruption reaches that owner while registration is masked.
             mocks.getRunHandle.mockReturnValue({
               interrupt: () => {
@@ -564,9 +568,7 @@ describe('agent package run lifecycle', () => {
           yield* Deferred.await(aborted);
           expect(observations).toEqual(['aborted']);
           expect(interruption.pollUnsafe()).toBeUndefined();
-          expect(mocks.getRunHandle).toHaveBeenCalledWith(
-            expect.any(String),
-          );
+          expect(mocks.getRunHandle).toHaveBeenCalledWith(expect.any(String));
           finishCleanup();
           yield* Fiber.join(interruption);
           expect(observations).toEqual(['aborted', 'settled']);
@@ -684,7 +686,7 @@ describe('agent package run lifecycle', () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => runAgent(INPUT).result);
         const interest = [
-          { id: aggregateId('stream', 'stream-1'), fromSeq: 0 },
+          { id: aggregateId('run', 'ae0001' as RunId), fromSeq: 0 },
         ];
 
         const program = Effect.gen(function* () {
@@ -706,8 +708,8 @@ describe('agent package run lifecycle', () => {
         expect(reader[1]?.[1]).toEqual([]);
         // The run's port is the run's: the reader never touched it, so the
         // README's residency contract still holds for a finished run.
-        expect(ports.filter(([port]) => port === 'sdk/stream-1')).toEqual([
-          ['sdk/stream-1', interest],
+        expect(ports.filter(([port]) => port === 'sdk/ae0001')).toEqual([
+          ['sdk/ae0001', interest],
         ]);
       }),
   );
@@ -718,8 +720,8 @@ describe('agent package run lifecycle', () => {
       Effect.gen(function* () {
         mocks.runValidatedAgent.mockImplementationOnce(
           async (_input: unknown, options: RunAgentOptions) => {
-            options.onStreamResolved?.('stream-1', TRACE);
-            await enterRun('stream-1');
+            options.onStreamResolved?.('ae0001', TRACE);
+            await enterRun('ae0001');
             await options.onRun?.(HANDLE);
             return RESULT;
           },
@@ -745,8 +747,8 @@ describe('agent package run lifecycle', () => {
     let finishRun: ((result: typeof RESULT) => void) | undefined;
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('stream-1', TRACE);
-        await enterRun('stream-1');
+        options.onStreamResolved?.('ae0001', TRACE);
+        await enterRun('ae0001');
         await options.onRun?.(HANDLE);
         return await new Promise<typeof RESULT>((resolve) => {
           finishRun = resolve;
@@ -776,16 +778,16 @@ describe('agent package run lifecycle', () => {
 
   it('reads the session view: `view` skips the levels before the run, subscribes its transcript, then ends with the view holding its durable outcome', async () => {
     let finishRun: ((result: typeof RESULT) => void) | undefined;
-    let enterRun: (() => void) | undefined;
+    let landRunStart: (() => void) | undefined;
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('stream-1', TRACE);
+        options.onStreamResolved?.('ae0001', TRACE);
         // The fold lands the run's `run.start` asynchronously: the session's
         // current level predates the run until this resolves.
         await new Promise<void>((resolve) => {
-          enterRun = resolve;
+          landRunStart = resolve;
         });
-        await enterRun('stream-1');
+        await enterRun('ae0001');
         await options.onRun?.(HANDLE);
         return await new Promise<typeof RESULT>((resolve) => {
           finishRun = resolve;
@@ -796,27 +798,27 @@ describe('agent package run lifecycle', () => {
     const run = runAgent(INPUT);
     const views = run.view[Symbol.asyncIterator]();
     const first = views.next();
-    await vi.waitFor(() => expect(enterRun).toBeDefined());
-    // The run's stream is subscribed as soon as it exists in the session.
+    await vi.waitFor(() => expect(landRunStart).toBeDefined());
+    // The run's transcript is subscribed as soon as it exists in the session.
     expect(mocks.setTranscriptSubscriptions).toHaveBeenCalledWith(
-      'sdk/stream-1',
-      [{ id: aggregateId('stream', 'stream-1'), fromSeq: 0 }],
+      'sdk/ae0001',
+      [{ id: aggregateId('run', 'ae0001' as RunId), fromSeq: 0 }],
     );
-    enterRun?.();
+    landRunStart?.();
     const view = (await first).value as SessionView;
-    expect(
-      [...view.runs.values()].map((stream) => stream.runId),
-    ).toContain(HANDLE.runId);
+    expect([...view.runs.values()].map((run) => run.id)).toContain(
+      HANDLE.runId,
+    );
 
     // A descendant joining the view joins the run's subscription.
-    await enterRun('stream-2', { ancestors: [{ id: 'stream-1' }] });
+    await enterRun('ae0002', { ancestors: [{ id: 'ae0001' }] });
     await views.next();
     await vi.waitFor(() =>
       expect(mocks.setTranscriptSubscriptions).toHaveBeenLastCalledWith(
-        'sdk/stream-1',
+        'sdk/ae0001',
         [
-          { id: '["stream","stream-1"]', fromSeq: 0 },
-          { id: '["stream","stream-2"]', fromSeq: 0 },
+          { id: '["run","ae0001"]', fromSeq: 0 },
+          { id: '["run","ae0002"]', fromSeq: 0 },
         ],
       ),
     );
@@ -834,7 +836,7 @@ describe('agent package run lifecycle', () => {
 
     await completeRunView();
     const last = (await views.next()).value as SessionView;
-    expect(last.runs.get('stream-1')?.durableOutcome).toBe('completed');
+    expect(last.runs.get('ae0001' as RunId)?.durableOutcome).toBe('completed');
     await expect(views.next()).resolves.toEqual({
       done: true,
       value: undefined,

@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/runTab';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -51,16 +50,14 @@ function trace(
 ): Record<string, unknown> {
   return {
     runId: 'abcdef',
-    runId: 'stream-1',
     config: config(),
     meta: {
       schemaVersion: 1,
       timestamp: '2026-01-01T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
-      runId: 'stream-1',
     },
     entries: [],
-    snapshot: { runId: 'stream-1' },
+    snapshot: { runId: 'abcdef' },
     ...overrides,
   };
 }
@@ -76,9 +73,8 @@ describe('trace-viewer TraceDataSchema', () => {
     const runId = 'abc12345' as RunId;
     const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
 
-    const runId = getStreamTabId('review', { runId });
     const session = createTestSession();
-    publishTestRunStart(session, runId, runId);
+    publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, runId).writeRunRecord(runConfigRecord),
@@ -86,14 +82,14 @@ describe('trace-viewer TraceDataSchema', () => {
     session.publish([
       {
         type: 'log',
-        aggregateId: aggregateId('stream', runId),
+        aggregateId: aggregateId('run', runId),
         message: 'hello',
         level: LOG_LEVELS.INFO,
         messageType: MESSAGE_TYPES.DEFAULT,
       },
       {
         type: 'status',
-        aggregateId: aggregateId('stream', runId),
+        aggregateId: aggregateId('run', runId),
         phase: 'completed',
         cause: 'lifecycle',
       },
@@ -108,7 +104,6 @@ describe('trace-viewer TraceDataSchema', () => {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.runId).toBe(runId);
-    expect(parsed.data.runId).toBe(runId);
     expect(parsed.data.meta?.outcome).toBe('completed');
     expect(parsed.data.entries).toHaveLength(1);
 
@@ -118,7 +113,7 @@ describe('trace-viewer TraceDataSchema', () => {
 
   it('rejects a trace missing required top-level fields', () => {
     // config, meta, entries and snapshot all missing.
-    expectTraceRejected({ runId: 'abcdef', runId: 'stream-1' });
+    expectTraceRejected({ runId: 'abcdef' });
   });
 
   it('applies source config defaults to legacy traces', () => {
@@ -142,7 +137,6 @@ describe('trace-viewer TraceDataSchema', () => {
         meta: {
           timestamp: '2026-07-05T00:00:00.000Z',
           identity: { kind: 'agent', agent: 'assistant' },
-          runId: 'stream-1',
           terminalStatus: CLI_RUN_STATUS.ERROR,
           delegationDepth: 2,
         },
@@ -168,7 +162,7 @@ describe('trace-viewer TraceDataSchema', () => {
     const incompatible = trace({
       snapshot: {
         schemaVersion: 999,
-        runId: 'stream-1',
+        runId: 'abcdef',
         outputFilesByRound: {},
         missingOutputsByRound: {},
         compileFailuresByRound: {},
@@ -219,7 +213,7 @@ describe('trace-viewer TraceDataSchema', () => {
     const parsed = parseTraceData(
       trace({
         snapshot: {
-          runId: 'stream-1',
+          runId: 'abcdef',
           activeSubagents: [],
           activeProcesses: [],
           processes: [],

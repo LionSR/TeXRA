@@ -9,7 +9,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
+import { STATUS_DISPLAY, TODO_STATUS, type RunId } from '@shared/schemas';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import {
   formatListingLine,
@@ -66,9 +66,9 @@ describe('tool status formatting', () => {
     const entry: RunListingEntry = {
       kind: 'run',
       identity: { kind: 'process', tool: 'bash' },
-      id: '16c0f3f748e4',
+      id: '16c0f3f748e4' as RunId,
       timestamp: '2026-05-15T23:42:06.000Z',
-      parentRunId: 'fcf5150d37c6',
+      parentRunId: 'fcf5150d37c6' as RunId,
       record: AgentConfigSchema.parse({
         agent: 'bash',
         model: 'gemini31p',

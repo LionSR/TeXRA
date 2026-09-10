@@ -22,14 +22,19 @@ import {
   viewWith,
 } from './fixtures/sessionViewFixture';
 
-function bashPayload(runId: string, requestId = `bash-${runId}`) {
+const RUN_A = 'run-a' as RunId;
+const RUN_B = 'run-b' as RunId;
+const WORKFLOW = 'workflow' as RunId;
+const WORKFLOW_CHILD = 'workflow-child' as RunId;
+
+function bashPayload(runId: RunId | '', requestId = `bash-${runId}`) {
   return {
     kind: 'bash',
     data: { requestId, allowBypass: true, runId, command: 'echo ok' },
   } satisfies ApprovalPayload;
 }
 
-function questionPayload(runId: string) {
+function questionPayload(runId: RunId) {
   return {
     kind: 'userQuestion',
     data: {
@@ -43,9 +48,9 @@ function questionPayload(runId: string) {
 
 /** The view after each payload's `approval.requested` folded, in order. */
 function viewOfApprovals(...payloads: readonly ApprovalPayload[]): SessionView {
-  const runs = [...new Set(payloads.map((p) => p.data.runId))].map((id) =>
-    makeRunView({ id }),
-  );
+  const runs = [...new Set(payloads.map((p) => p.data.runId))]
+    .filter((id): id is RunId => id !== '')
+    .map((id) => makeRunView({ id }));
   return viewWith(runs, {
     approvals: payloads.map((payload) => ({
       runId: payload.data.runId as RunId,
@@ -60,8 +65,8 @@ afterEach(() => resetCliState());
 
 describe('CLI approval surface', () => {
   it("shows the fold's first outstanding approval and reads the rest as attention", () => {
-    const first = bashPayload('stream-a');
-    const second = questionPayload('stream-b');
+    const first = bashPayload(RUN_A);
+    const second = questionPayload(RUN_B);
     const view = viewOfApprovals(first, second);
     seedView(view);
 
@@ -73,8 +78,8 @@ describe('CLI approval surface', () => {
   });
 
   it('drops a request the moment the fold resolves it', () => {
-    const first = bashPayload('stream-a');
-    const second = bashPayload('stream-b');
+    const first = bashPayload(RUN_A);
+    const second = bashPayload(RUN_B);
     seedView(viewOfApprovals(first, second));
     expect(currentApproval.get()?.payload).toEqual(first);
 
@@ -85,31 +90,31 @@ describe('CLI approval surface', () => {
     expect(currentApproval.get()).toBeUndefined();
   });
 
-  it('promotes a stream to the head without settling or re-presenting', () => {
-    const a = bashPayload('stream-a');
-    const b1 = bashPayload('stream-b', 'bash-b-1');
-    const b2 = bashPayload('stream-b', 'bash-b-2');
+  it('promotes a run to the head without settling or re-presenting', () => {
+    const a = bashPayload(RUN_A);
+    const b1 = bashPayload(RUN_B, 'bash-b-1');
+    const b2 = bashPayload(RUN_B, 'bash-b-2');
     const view = viewOfApprovals(a, b1, b2);
     seedView(view);
     expect(currentApproval.get()?.payload).toEqual(a);
 
-    promoteApprovalsForRun('stream-b' as RunId);
+    promoteApprovalsForRun(RUN_B);
     expect(currentApproval.get()?.payload).toEqual(b1);
     expect(attentionRequests(view).map((r) => r.requestId)).toEqual([
       'bash-b-1',
       'bash-b-2',
-      'bash-stream-a',
+      'bash-run-a',
     ]);
   });
 
   it("promotes the requests of a workflow popup's children with it", () => {
-    const a = bashPayload('stream-a');
-    const child = bashPayload('workflow-child');
+    const a = bashPayload(RUN_A);
+    const child = bashPayload(WORKFLOW_CHILD);
     const view = viewOfApprovals(a, child);
     seedView(view);
 
-    promoteApprovalsForRun('workflow' as RunId, {
-      includeRunIds: new Set(['workflow-child' as RunId]),
+    promoteApprovalsForRun(WORKFLOW, {
+      includeRunIds: new Set([WORKFLOW_CHILD]),
     });
     expect(currentApproval.get()?.payload).toEqual(child);
   });
@@ -120,24 +125,22 @@ describe('CLI approval surface', () => {
       data: {
         requestId: 'edit-1',
         allowBypass: true,
-        runId: 'stream-a',
+        runId: RUN_A,
         path: 'paper.tex',
         summary: 'Edit paper.tex',
         diff: '',
         sourceTool: 'edit',
       },
     } as unknown as ApprovalPayload;
-    const bash = bashPayload('stream-a');
+    const bash = bashPayload(RUN_A);
     seedView(viewOfApprovals(edit, bash));
 
     expect(currentApproval.get()?.payload).toEqual(bash);
   });
 
-  it('extracts stream ids from every approval payload used by the TUI', () => {
-    expect(approvalPayloadRunId(bashPayload('stream-a'))).toBe('stream-a');
-    expect(approvalPayloadRunId(questionPayload('stream-b'))).toBe(
-      'stream-b',
-    );
+  it('extracts run ids from every approval payload used by the TUI', () => {
+    expect(approvalPayloadRunId(bashPayload(RUN_A))).toBe('run-a');
+    expect(approvalPayloadRunId(questionPayload(RUN_B))).toBe('run-b');
     expect(approvalPayloadRunId(bashPayload(''))).toBeUndefined();
   });
 });

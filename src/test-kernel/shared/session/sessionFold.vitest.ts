@@ -1,5 +1,5 @@
 // The pure fold over a recorded fan-out session: a workflow-script root, one
-// child agent run with a grandchild of its own, a background process stream.
+// child agent run with a grandchild of its own, a background process run.
 // The scenario (`fanOutScenario.ts`) is the commit-ordered event log a
 // publisher would replay; every assertion compares the fold's output to the
 // existing shared folds it must reproduce, so the two can never drift.
@@ -51,9 +51,9 @@ import {
   tail,
 } from './fanOutScenario';
 
-function stream(view: SessionView, id: RunId): RunView {
+function runView(view: SessionView, id: RunId): RunView {
   const found = view.runs.get(id);
-  if (!found) throw new Error(`stream ${id} missing from the view`);
+  if (!found) throw new Error(`run ${id} missing from the view`);
   return found;
 }
 
@@ -90,11 +90,11 @@ describe('sessionFold', () => {
     const log = new Log();
     const start = log.emit(CHILD, 1000, {
       type: 'run.start',
-      runId: 'bbbbbbbbbbbb',
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
       isRemote: false,
+      parent: null,
     });
     const stage = log.emit(CHILD, 1010, {
       type: 'stage.start',
@@ -159,17 +159,17 @@ describe('sessionFold', () => {
       read: 'listing',
       event: stage,
     });
-    expect(stream(listing, CHILD).transcript.rows).toEqual([]);
-    expect(listing.folded.get(qualifyAggregateId('stream', CHILD))).toBe(0);
+    expect(runView(listing, CHILD).transcript.rows).toEqual([]);
+    expect(listing.folded.get(qualifyAggregateId('run', CHILD))).toBe(0);
     const replay = foldAll(
       log.events.map((event) => ({ _tag: 'event', read: 'aggregate', event })),
       listing,
     );
-    expect(stream(replay, CHILD).transcript).toEqual(
-      stream(live, CHILD).transcript,
+    expect(runView(replay, CHILD).transcript).toEqual(
+      runView(live, CHILD).transcript,
     );
-    expect(stream(replay, CHILD).transcript.rows).toHaveLength(3);
-    expect(stream(replay, CHILD).transcript.rows).toEqual(
+    expect(runView(replay, CHILD).transcript.rows).toHaveLength(3);
+    expect(runView(replay, CHILD).transcript.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: 'assistant',
@@ -185,15 +185,15 @@ describe('sessionFold', () => {
     });
     const filtered = fold(live, tail(hidden));
     expect(filtered.runs).toBe(live.runs);
-    expect(filtered.folded.get(qualifyAggregateId('stream', CHILD))).toBe(
+    expect(filtered.folded.get(qualifyAggregateId('run', CHILD))).toBe(
       hidden.seq,
     );
   });
 
   it('reproduces topology, order, labels, and launch facts from run.start', () => {
     const view = foldAll(scenario.events);
-    const root = stream(view, ROOT);
-    const child = stream(view, CHILD);
+    const root = runView(view, ROOT);
+    const child = runView(view, CHILD);
 
     expect(view.key).toBe('paper');
     const expectedOrder = [...view.runs.values()]
@@ -206,14 +206,13 @@ describe('sessionFold', () => {
 
     expect(root.label).toBe(runIdentityDisplayName(ROOT_IDENTITY));
     expect(root.category).toBe(AgentCategory.Workflow);
-    expect(root.runId).toBe('aaaaaaaaaaaa');
     expect(root.worktree).toStrictEqual({
       workingDirectory: '/paper',
       branch: 'main',
     });
     expect(root.inputFiles).toStrictEqual(['draft.tex']);
     expect(root.childIds).toStrictEqual([CHILD]);
-    // The commit ordinal of the stream's run.start, never a clock.
+    // The commit ordinal of the run's run.start, never a clock.
     expect(root.createdAt).toBe(1);
     // The initial snapshot rides run.start; a child without one has no entry.
     expect(view.policy.get(ROOT)).toStrictEqual(ROOT_POLICY);
@@ -221,39 +220,39 @@ describe('sessionFold', () => {
     expect(child.parentId).toBe(ROOT);
     expect(child.ancestors).toStrictEqual([{ id: ROOT, label: 'review' }]);
     expect(child.childIds).toStrictEqual([GRANDCHILD]);
-    expect(stream(view, GRANDCHILD).ancestors).toStrictEqual([
+    expect(runView(view, GRANDCHILD).ancestors).toStrictEqual([
       { id: ROOT, label: 'review' },
       { id: CHILD, label: child.label },
     ]);
-    expect(stream(view, GRANDCHILD)).toMatchObject({ outputs: {} });
+    expect(runView(view, GRANDCHILD)).toMatchObject({ outputs: {} });
     expect(child.label).toBe(runIdentityDisplayName(CHILD_IDENTITY));
     expect(child.model).toBe('claude-sonnet-4-5');
     expect(child.followUpSupport).toBe('nativeInteractive');
     expect(child.ownerId).toBe(OWNER);
     // Process runs carry the command, never a model.
-    expect(stream(view, PROCESS).command).toBe('npm test');
-    expect(stream(view, PROCESS).model).toBeNull();
-    expect(stream(view, PROCESS).category).toBe(AgentCategory.ToolUse);
+    expect(runView(view, PROCESS).command).toBe('npm test');
+    expect(runView(view, PROCESS).model).toBeNull();
+    expect(runView(view, PROCESS).category).toBe(AgentCategory.ToolUse);
     // The tail advanced the cursor to the last commit.
     expect(view.cursor).toBe(scenario.log.events.length);
   });
 
   it('folds the transcript through the shared row, group, and run reducers', () => {
     const view = foldAll(scenario.events);
-    const root = stream(view, ROOT);
-    const child = stream(view, CHILD);
+    const root = runView(view, ROOT);
+    const child = runView(view, CHILD);
 
     expect(root.transcript.taskGroups).toStrictEqual(
       taskGroupsOf(scenario.rootEntries),
     );
     expect(root.transcript.rows).toStrictEqual(rowsOf(scenario.rootEntries));
     // The transcript tier retained the rows: the aggregate's newest seq.
-    expect(view.folded.get(qualifyAggregateId('stream', ROOT))).toBe(
+    expect(view.folded.get(qualifyAggregateId('run', ROOT))).toBe(
       Math.max(
         ...scenario.log.events
           .filter(
             (e) =>
-              e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+              e.aggregateId === qualifyAggregateId('run', ROOT) &&
               (e.type === 'transcript.entry' ||
                 e.type === 'status' ||
                 isTranscriptEvent(e)),
@@ -287,14 +286,14 @@ describe('sessionFold', () => {
     expect(child.transcript.run).toBeNull();
     // A frame derives each board once at its end and lands the same model.
     const batched = fold(emptySessionView('paper'), scenario.events);
-    expect(stream(batched, ROOT).transcript.run).toStrictEqual(
+    expect(runView(batched, ROOT).transcript.run).toStrictEqual(
       root.transcript.run,
     );
   });
 
   it('settles status copy, rollups, groups, and the durable outcome from status and result', () => {
     const pending = foldAll([...scenario.pending, alive]);
-    const rootPending = stream(pending, ROOT);
+    const rootPending = runView(pending, ROOT);
     expect(rootPending.status).toBe(RUN_PHASE.RUNNING);
     expect(rootPending.statusLabel).toBe('Running');
     expect(rootPending.tone).toBe('running');
@@ -309,7 +308,7 @@ describe('sessionFold', () => {
       running: 1,
       finished: 1,
     });
-    expect(stream(pending, CHILD).rollup).toStrictEqual({
+    expect(runView(pending, CHILD).rollup).toStrictEqual({
       total: 1,
       running: 0,
       finished: 1,
@@ -321,16 +320,16 @@ describe('sessionFold', () => {
     });
 
     const settled = foldAll(scenario.events);
-    const root = stream(settled, ROOT);
+    const root = runView(settled, ROOT);
     expect(root.status).toBe(RUN_PHASE.COMPLETED);
     expect(root.statusLabel).toBe('Completed');
     expect(root.tone).toBe('success');
     expect(root.group).toBe('recent');
     expect(root.forceExpanded).toBe(false);
     expect(root.rollup).toStrictEqual({ total: 2, running: 0, finished: 2 });
-    expect(stream(settled, CHILD).runStartedAt).toBeNull();
+    expect(runView(settled, CHILD).runStartedAt).toBeNull();
     expect(settled.approvals).toStrictEqual([]);
-    // No liveness verdict: the current process-stream claimant is unprovable.
+    // No liveness verdict: the current process-run claimant is unprovable.
     expect(settled.rollup).toStrictEqual({
       running: 0,
       waiting: 0,
@@ -351,8 +350,8 @@ describe('sessionFold', () => {
         }),
       ),
     );
-    expect(stream(stopped, CHILD).status).toBe(RUN_PHASE.CANCELLED);
-    expect(stream(stopped, CHILD).durableOutcome).toBeNull();
+    expect(runView(stopped, CHILD).status).toBe(RUN_PHASE.CANCELLED);
+    expect(runView(stopped, CHILD).durableOutcome).toBeNull();
     const ended = fold(
       stopped,
       tail(
@@ -360,33 +359,30 @@ describe('sessionFold', () => {
           type: 'result',
           agentName: 'custom:search',
           outcome: 'cancelled',
-          runId: 'bbbbbbbbbbbb',
           category: AgentCategory.ToolUse,
-          isSubagent: true,
         }),
       ),
     );
-    expect(stream(ended, CHILD).durableOutcome).toBe('cancelled');
+    expect(runView(ended, CHILD).durableOutcome).toBe('cancelled');
     // For a run this process does not own, the terminal phase is the story.
-    expect(stream(foldAll(scenario.events), CHILD).durableOutcome).toBe(
+    expect(runView(foldAll(scenario.events), CHILD).durableOutcome).toBe(
       'completed',
     );
-    expect(stream(pending, GRANDCHILD).durableOutcome).toBe('completed');
+    expect(runView(pending, GRANDCHILD).durableOutcome).toBe('completed');
   });
 
   it('folds a pending approval to waiting only with a held owner', () => {
     const withOwner = foldAll([...scenario.pending, alive]);
-    expect(withOwner.local.self).toStrictEqual([OWNER]);
-    expect(stream(withOwner, CHILD).group).toBe('waiting');
-    expect(stream(withOwner, CHILD).approval).toBe('own');
-    expect(stream(withOwner, CHILD).forceExpanded).toBe(true);
-    expect(stream(withOwner, CHILD).readOnly).toBe(false);
-    expect(stream(withOwner, CHILD).statusLabel).toBe('Running');
-    expect(stream(withOwner, CHILD).statusDetail).toBeNull();
-    expect(stream(withOwner, ROOT).approval).toBe('descendant');
-    expect(stream(withOwner, ROOT).group).toBe('running');
+    expect(runView(withOwner, CHILD).group).toBe('waiting');
+    expect(runView(withOwner, CHILD).approval).toBe('own');
+    expect(runView(withOwner, CHILD).forceExpanded).toBe(true);
+    expect(runView(withOwner, CHILD).readOnly).toBe(false);
+    expect(runView(withOwner, CHILD).statusLabel).toBe('Running');
+    expect(runView(withOwner, CHILD).statusDetail).toBeNull();
+    expect(runView(withOwner, ROOT).approval).toBe('descendant');
+    expect(runView(withOwner, ROOT).group).toBe('running');
     // The path to the decision is forced open.
-    expect(stream(withOwner, ROOT).forceExpanded).toBe(true);
+    expect(runView(withOwner, ROOT).forceExpanded).toBe(true);
     expect(withOwner.approvals.map((a) => a.requestId)).toStrictEqual([
       'req-1',
     ]);
@@ -396,7 +392,7 @@ describe('sessionFold', () => {
     // stays listed, so a resume can re-ask; the copy is what says
     // interrupted, and the interrupted path is forced open too.
     const interrupted = foldAll([...scenario.pending, nobody]);
-    const child = stream(interrupted, CHILD);
+    const child = runView(interrupted, CHILD);
     expect(child.group).toBe('interrupted');
     expect(child.approval).toBe('none');
     expect(child.status).toBe(RUN_PHASE.RUNNING);
@@ -405,15 +401,15 @@ describe('sessionFold', () => {
     expect(child.statusDetail).toMatch(/resume/i);
     expect(child.readOnly).toBe(false);
     expect(child.forceExpanded).toBe(true);
-    expect(stream(interrupted, ROOT).group).toBe('interrupted');
-    expect(stream(interrupted, ROOT).approval).toBe('none');
-    expect(stream(interrupted, ROOT).forceExpanded).toBe(true);
+    expect(runView(interrupted, ROOT).group).toBe('interrupted');
+    expect(runView(interrupted, ROOT).approval).toBe('none');
+    expect(runView(interrupted, ROOT).forceExpanded).toBe(true);
     expect(interrupted.approvals).toHaveLength(1);
-    // A stream with only its run.start (its process died before the first
+    // A run with only its run.start (its process died before the first
     // status) is non-terminal and ownerless: interrupted, and resumable.
-    expect(stream(interrupted, PROCESS).status).toBe('ready');
-    expect(stream(interrupted, PROCESS).group).toBe('interrupted');
-    expect(stream(withOwner, PROCESS).group).toBe('recent');
+    expect(runView(interrupted, PROCESS).status).toBe('ready');
+    expect(runView(interrupted, PROCESS).group).toBe('interrupted');
+    expect(runView(withOwner, PROCESS).group).toBe('recent');
     expect(interrupted.rollup).toStrictEqual({
       running: 0,
       waiting: 0,
@@ -422,23 +418,23 @@ describe('sessionFold', () => {
 
     // A current claim without a liveness verdict remains held as unprovable.
     const unknown = foldAll(scenario.pending);
-    expect(stream(unknown, CHILD).group).toBe('waiting');
-    expect(stream(unknown, CHILD).readOnly).toBe(true);
+    expect(runView(unknown, CHILD).group).toBe('waiting');
+    expect(runView(unknown, CHILD).readOnly).toBe(true);
   });
 
   it('reads another live process as held and read-only, and an unreadable run as an overlay', () => {
     const held = foldAll([...scenario.pending, local({ dead: [] })]);
-    const child = stream(held, CHILD);
+    const child = runView(held, CHILD);
     // Somebody holds the run: waiting, not interrupted; but not ours to act on.
     expect(child.group).toBe('waiting');
     expect(child.readOnly).toBe(true);
     expect(child.statusDetail).toContain('pid 4242');
-    expect(stream(held, ROOT).readOnly).toBe(true);
-    expect(stream(held, ROOT).group).toBe('running');
+    expect(runView(held, ROOT).readOnly).toBe(true);
+    expect(runView(held, ROOT).group).toBe('running');
     // The holder becomes us: the same owner, still held, now ours to act on.
     const taken = fold(held, local({ self: [OWNER] }));
-    expect(stream(taken, CHILD).readOnly).toBe(false);
-    expect(stream(taken, ROOT).readOnly).toBe(false);
+    expect(runView(taken, CHILD).readOnly).toBe(false);
+    expect(runView(taken, ROOT).readOnly).toBe(false);
 
     const unreadable = foldAll([
       ...scenario.pending,
@@ -447,33 +443,33 @@ describe('sessionFold', () => {
         unreadable: [{ runId: PROCESS, detail: 'meta.json is unreadable' }],
       }),
     ]);
-    expect(stream(unreadable, PROCESS).readOnly).toBe(true);
-    expect(stream(unreadable, PROCESS).statusDetail).toBe(
+    expect(runView(unreadable, PROCESS).readOnly).toBe(true);
+    expect(runView(unreadable, PROCESS).statusDetail).toBe(
       'meta.json is unreadable',
     );
-    expect(stream(unreadable, CHILD).readOnly).toBe(false);
+    expect(runView(unreadable, CHILD).readOnly).toBe(false);
 
     // The overlay lifts with the next snapshot; the owner change touches
     // exactly the runs that owner holds.
     const lifted = fold(unreadable, local({ self: [OWNER] }));
-    expect(stream(lifted, PROCESS).readOnly).toBe(false);
-    expect(stream(lifted, PROCESS).statusDetail).toBeNull();
+    expect(runView(lifted, PROCESS).readOnly).toBe(false);
+    expect(runView(lifted, PROCESS).statusDetail).toBeNull();
     const foreign = fold(lifted, local({ self: [OTHER_OWNER] }));
-    expect(stream(foreign, CHILD).group).toBe('waiting');
-    expect(stream(foreign, CHILD).readOnly).toBe(true);
+    expect(runView(foreign, CHILD).group).toBe('waiting');
+    expect(runView(foreign, CHILD).readOnly).toBe(true);
     const dead = fold(foreign, local({ self: [OTHER_OWNER], dead: [OWNER] }));
-    expect(stream(dead, CHILD).group).toBe('interrupted');
+    expect(runView(dead, CHILD).group).toBe('interrupted');
   });
 
-  it('keeps live text in inflight by offsets and joins it to its row whichever arrives first', () => {
+  it('keeps live text by offsets and joins it to its row whichever arrives first', () => {
     const log = new Log();
     log.emit(CHILD, 1500, {
       type: 'run.start',
-      runId: 'bbbbbbbbbbbb',
       identity: CHILD_IDENTITY,
       category: AgentCategory.ToolUse,
       isRemote: false,
       userFollowUpSupport: 'unsupported',
+      parent: null,
     });
     const chunk = (
       rowId: string,
@@ -507,19 +503,17 @@ describe('sessionFold', () => {
       chunk('response-1', 3, 5, 'lo'),
       chunk('response-1', 0, 3, 'Hel'),
     ]);
-    const child = stream(streaming, CHILD);
+    const child = runView(streaming, CHILD);
     const [first] = child.transcript.rows;
     expect(child.transcript.rows).toHaveLength(1);
     expect(first.kind === 'assistant' && first.text.full).toBe('Hello');
     expect(first.kind === 'assistant' && first.streaming).toBe(true);
-    expect(streaming.inflight.get(`${CHILD}/response-1`)).toBe('Hello');
-    expect(streaming.inflight.get(`${CHILD}/response-2`)).toBe('Ear');
     // A streaming reply is not settled and not yet the latest line.
     expect(child.transcript.settledRows).toBe(0);
     expect(child.latestLine).toBeNull();
     // The row that arrives after its chunks projects with them.
     const view = fold(streaming, response('response-2', '', 'running'));
-    const second = stream(view, CHILD).transcript.rows[1];
+    const second = runView(view, CHILD).transcript.rows[1];
     expect(second.kind === 'assistant' && second.text.full).toBe('Ear');
     // An entry that folds carrying buffered text seeds the held text, so the
     // bridge's re-delivery of that text from offset zero is a no-op and a
@@ -532,9 +526,8 @@ describe('sessionFold', () => {
       ],
       view,
     );
-    const third = stream(buffered, CHILD).transcript.rows[2];
+    const third = runView(buffered, CHILD).transcript.rows[2];
     expect(third.kind === 'assistant' && third.text.full).toBe('Buffer');
-    expect(buffered.inflight.get(`${CHILD}/response-3`)).toBe('Buffer');
 
     // Durable text wins: the finalizing row drops its entry and a late chunk
     // cannot reopen it; a replacement chunk truncates at `from`.
@@ -546,13 +539,12 @@ describe('sessionFold', () => {
       ],
       view,
     );
-    const rows = stream(settled, CHILD).transcript.rows;
+    const rows = runView(settled, CHILD).transcript.rows;
     expect(rows[0].kind === 'assistant' && rows[0].text.full).toBe(
       'Hello world',
     );
     expect(rows[1].kind === 'assistant' && rows[1].text.full).toBe('Late');
-    expect(settled.inflight.has(`${CHILD}/response-1`)).toBe(false);
-    // A terminal status ends every live row.
+    // A terminal status ends every live row: a later chunk reaches none.
     const done = fold(
       settled,
       tail(
@@ -564,24 +556,24 @@ describe('sessionFold', () => {
         }),
       ),
     );
-    expect(done.inflight.size).toBe(0);
+    expect(fold(done, chunk('response-2', 4, 5, '!'))).toBe(done);
   });
 
   it('keeps listing facts in commit order and transcript rows in seq order, whichever read delivers them', () => {
     const settled = foldAll(scenario.events);
     const rootStatus = scenario.log.events.find(
       (e) =>
-        e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+        e.aggregateId === qualifyAggregateId('run', ROOT) &&
         e.type === 'status',
     )!;
     const rootStart = scenario.log.events.find(
       (e) =>
-        e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+        e.aggregateId === qualifyAggregateId('run', ROOT) &&
         e.type === 'run.start',
     )!;
     const rootEntry = scenario.log.events.find(
       (e) =>
-        e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+        e.aggregateId === qualifyAggregateId('run', ROOT) &&
         e.type === 'transcript.entry',
     )!;
     // An aggregate read replaying an older status, start, or row after the
@@ -610,8 +602,8 @@ describe('sessionFold', () => {
     // Nothing subscribed: listing facts fold, rows do not, and `folded`
     // never learns a dropped row.
     const listingOnly = foldAll(scenario.events.slice(1));
-    expect(stream(listingOnly, ROOT).status).toBe(RUN_PHASE.COMPLETED);
-    expect(stream(listingOnly, ROOT).transcript.rows).toStrictEqual([]);
+    expect(runView(listingOnly, ROOT).status).toBe(RUN_PHASE.COMPLETED);
+    expect(runView(listingOnly, ROOT).transcript.rows).toStrictEqual([]);
     expect(listingOnly.folded.size).toBe(0);
 
     // Subscribing later reopens from the seq the subscription names.
@@ -630,13 +622,13 @@ describe('sessionFold', () => {
       set: subscriptions,
     });
     expect(runOnly.folded.has(run)).toBe(false);
-    expect(stream(runOnly, ROOT).transcript).toEqual(
-      stream(full, ROOT).transcript,
+    expect(runView(runOnly, ROOT).transcript).toEqual(
+      runView(full, ROOT).transcript,
     );
     const evicted = fold(full, subscribe(CHILD));
-    expect(evicted.folded.has(qualifyAggregateId('stream', ROOT))).toBe(false);
-    expect(evicted.folded.has(qualifyAggregateId('stream', CHILD))).toBe(true);
-    const root = stream(evicted, ROOT);
+    expect(evicted.folded.has(qualifyAggregateId('run', ROOT))).toBe(false);
+    expect(evicted.folded.has(qualifyAggregateId('run', CHILD))).toBe(true);
+    const root = runView(evicted, ROOT);
     expect(root.transcript.rows).toStrictEqual([]);
     expect(root.transcript.taskGroups).toStrictEqual([]);
     expect(root.transcript.run?.phases).toStrictEqual([]);
@@ -647,7 +639,7 @@ describe('sessionFold', () => {
     expect(evicted.policy.get(ROOT)).toStrictEqual(ROOT_POLICY);
   });
 
-  it('re-roots the children of a tombstoned stream, keeps the tombstone final, and closes the listing at the marker', () => {
+  it('re-roots the children of a tombstoned run, keeps the tombstone final, and closes the listing at the marker', () => {
     const removed = scenario.log.emit(ROOT, 3000, {
       type: 'run.removed',
       runIds: [],
@@ -655,19 +647,19 @@ describe('sessionFold', () => {
     const view = foldAll([tail(removed)], foldAll(scenario.events));
     expect(view.runs.has(ROOT)).toBe(false);
     expect(view.policy.has(ROOT)).toBe(false);
-    expect(view.folded.has(qualifyAggregateId('stream', ROOT))).toBe(false);
+    expect(view.folded.has(qualifyAggregateId('run', ROOT))).toBe(false);
     expect(view.order).toStrictEqual([PROCESS, CHILD]);
-    expect(stream(view, CHILD).parentId).toBeNull();
-    expect(stream(view, CHILD).ancestors).toStrictEqual([]);
-    expect(stream(view, GRANDCHILD).ancestors).toStrictEqual([
-      { id: CHILD, label: stream(view, CHILD).label },
+    expect(runView(view, CHILD).parentId).toBeNull();
+    expect(runView(view, CHILD).ancestors).toStrictEqual([]);
+    expect(runView(view, GRANDCHILD).ancestors).toStrictEqual([
+      { id: CHILD, label: runView(view, CHILD).label },
     ]);
 
     // A read replaying the run.start beneath the tombstone does not
-    // recreate the stream: the lifecycle pair shares one latest entry.
+    // recreate the run: the lifecycle pair shares one latest entry.
     const rootStart = scenario.log.events.find(
       (e) =>
-        e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+        e.aggregateId === qualifyAggregateId('run', ROOT) &&
         e.type === 'run.start',
     )!;
     const replayed = fold(view, {
@@ -677,11 +669,11 @@ describe('sessionFold', () => {
     });
     expect(replayed.runs.has(ROOT)).toBe(false);
 
-    // Listing hydration is authoritative: at the marker, a stream no
+    // Listing hydration is authoritative: at the marker, a run no
     // listing row named is gone with everything a tombstone clears.
     const processStart = scenario.log.events.find(
       (e) =>
-        e.aggregateId === qualifyAggregateId('stream', PROCESS) &&
+        e.aggregateId === qualifyAggregateId('run', PROCESS) &&
         e.type === 'run.start',
     )!;
     const pruned = foldAll(
@@ -704,53 +696,50 @@ describe('sessionFold', () => {
     expect(pruned.policy.size).toBe(0);
   });
 
-  it('mints a stream from run.start alone', () => {
-    const ghost = 'ghost#eeeeeeeeeeee' as RunId;
+  it('mints a run from run.start alone', () => {
+    const ghost = 'eeeeeeeeeeee' as RunId;
     const settled = foldAll(scenario.events);
     const stamp = { seq: 1, commit: 99, ownerId: OWNER, at: 4000 };
     const facts: FoldInput[] = [
       tail({
         ...stamp,
-        aggregateId: qualifyAggregateId('stream', ghost),
+        aggregateId: qualifyAggregateId('run', ghost),
         type: 'updateRunDescription',
         description: 'boo',
       }),
       tail({
         ...stamp,
-        aggregateId: qualifyAggregateId('stream', PROCESS),
-        seq: 3,
-        commit: 100,
-        type: 'setParentStream',
-        parentRunId: ghost,
+        aggregateId: qualifyAggregateId('run', CHILD),
+        seq: settled.folded.get(qualifyAggregateId('run', CHILD))! + 1,
+        commit: 200,
+        type: 'run.detach',
       }),
     ];
     // The run.start alone states resume eligibility: a plain tool-use agent
     // can be resumed natively; a workflow root and a process child cannot.
-    expect(stream(settled, CHILD).resumeEligible).toBe(true);
-    expect(stream(settled, ROOT).resumeEligible).toBe(false);
-    expect(stream(settled, PROCESS).resumeEligible).toBe(false);
-    // A fact alone cannot advance the finite-read cursor;
-    // a parent edge to one leaves the child top-level with no dangling edge.
+    expect(runView(settled, CHILD).resumeEligible).toBe(true);
+    expect(runView(settled, ROOT).resumeEligible).toBe(false);
+    expect(runView(settled, PROCESS).resumeEligible).toBe(false);
+    // A fact alone cannot advance the finite-read cursor, and it mints
+    // nothing; severing the edge leaves the child top-level.
     const ignored = fold(settled, facts[0]);
     expect(ignored.runs).toBe(settled.runs);
     expect(ignored.cursor).toBe(settled.cursor);
-    const reparented = fold(settled, facts[1]);
-    expect(reparented.runs.has(ghost)).toBe(false);
-    expect(reparented.order).toStrictEqual([PROCESS, ROOT]);
-    expect(stream(reparented, PROCESS).parentId).toBeNull();
-    expect(stream(reparented, PROCESS).ancestors).toStrictEqual([]);
+    const detached = fold(settled, facts[1]);
+    expect(detached.runs.has(ghost)).toBe(false);
+    expect(runView(detached, CHILD).parentId).toBeNull();
+    expect(runView(detached, CHILD).ancestors).toStrictEqual([]);
   });
 
   it('publishes an immutable level and shares its untouched branches with the next (D5)', () => {
     const before = foldAll(scenario.events);
-    const childBefore = stream(before, CHILD);
+    const childBefore = runView(before, CHILD);
     const rowsBefore = childBefore.transcript.rows;
     const rowCount = rowsBefore.length;
-    const key = `${CHILD}/late`;
     const after = fold(before, [
       tail({
-        aggregateId: qualifyAggregateId('stream', CHILD),
-        seq: before.folded.get(qualifyAggregateId('stream', CHILD))! + 1,
+        aggregateId: qualifyAggregateId('run', CHILD),
+        seq: before.folded.get(qualifyAggregateId('run', CHILD))! + 1,
         commit: 200,
         ownerId: OWNER,
         at: 4000,
@@ -779,28 +768,27 @@ describe('sessionFold', () => {
     expect(before.runs.get(CHILD)).toBe(childBefore);
     expect(childBefore.transcript.rows).toBe(rowsBefore);
     expect(rowsBefore).toHaveLength(rowCount);
-    expect(before.inflight.has(key)).toBe(false);
     // The next level holds the writes ...
-    const childAfter = stream(after, CHILD);
+    const childAfter = runView(after, CHILD);
     expect(childAfter.transcript.rows).toHaveLength(rowCount + 1);
-    expect(after.inflight.get(key)).toBe('Late!!');
+    const late = childAfter.transcript.rows.find((row) => row.id === 'late');
+    expect(late?.kind === 'assistant' && late.text.full).toBe('Late!!');
     expect(after.runs).not.toBe(before.runs);
     // ... and shares every branch it did not touch by reference.
     expect(after.runs.get(PROCESS)).toBe(before.runs.get(PROCESS));
-    expect(stream(after, PROCESS).transcript.rows).toBe(
-      stream(before, PROCESS).transcript.rows,
+    expect(runView(after, PROCESS).transcript.rows).toBe(
+      runView(before, PROCESS).transcript.rows,
     );
     expect(after.policy).toBe(before.policy);
-    expect(after.latest).toBe(before.latest);
     expect(after.queuedFollowUps).toBe(before.queuedFollowUps);
     // A copy belongs to a write, not to an entry: a settled log row projects
-    // a row and nothing else, so the touched stream's own task groups and
-    // the session's in-flight map (which never held its key) keep theirs.
+    // a row and nothing else, so the touched run's own task groups keep
+    // theirs.
     const logged = fold(
       after,
       tail({
-        aggregateId: qualifyAggregateId('stream', CHILD),
-        seq: before.folded.get(qualifyAggregateId('stream', CHILD))! + 2,
+        aggregateId: qualifyAggregateId('run', CHILD),
+        seq: before.folded.get(qualifyAggregateId('run', CHILD))! + 2,
         commit: 201,
         ownerId: OWNER,
         at: 4100,
@@ -817,11 +805,10 @@ describe('sessionFold', () => {
         },
       }),
     );
-    const childLogged = stream(logged, CHILD);
+    const childLogged = runView(logged, CHILD);
     expect(childLogged.transcript.rows).not.toBe(childAfter.transcript.rows);
     expect(childLogged.transcript.taskGroups).toBe(
       childAfter.transcript.taskGroups,
     );
-    expect(logged.inflight).toBe(after.inflight);
   });
 });

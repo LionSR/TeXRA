@@ -1,16 +1,10 @@
-// Regression coverage for the childRunId derivation `executeSubagent`
-// hands to `startChildRunLoop`: it must match the id `buildAgentLaunchContext`
-// actually reserves for the runId (AgentLaunchContext.ts's
-// `reservedRunId`, computed from the RAW `configPayload.agent`/
-// `configPayload.model` — the id that always wins over any later
-// recomputation), not a parallel formula keyed off the `agentName` parameter,
-// which callers may resolve differently from `configPayload.agent` (e.g. a
-// display name vs. the config's own registry name).
+// Regression coverage for `executeSubagent`'s child run launch: it refuses to
+// start a child when the parent run context carries no session, and it reports
+// a detached run-loop rejection through the `childRunLoop` channel log.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
-import { getStreamTabId } from '@agent/runtime/runTab';
 import type { RunId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
@@ -76,8 +70,7 @@ vi.mock('@agent/runtime/RunContext', () => {
   return {
     tryUseRunContext: mocks.tryUseRunContext,
     runInSession: (_session: unknown, operation: () => unknown) => operation(),
-    getRunContextRunId: (context: any) =>
-      readRunContextField(context, 'runId'),
+    getRunContextRunId: (context: any) => readRunContextField(context, 'runId'),
     getRunContextSession: (context: any) =>
       readRunContextField(context, 'session'),
   };
@@ -93,7 +86,7 @@ vi.mock('@tools/approval', () => ({
 
 import { executeSubagent } from '@tools/delegation/subagentRun';
 
-describe('executeSubagent childRunId derivation', () => {
+describe('executeSubagent child run launch', () => {
   const orchestratorRunId = 'orchestrator-stream' as RunId;
 
   const defaultPayload = {
@@ -142,59 +135,6 @@ describe('executeSubagent childRunId derivation', () => {
       diagnostics: { type: 'missing_session' },
     });
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
-
-  it('derives childRunId from configPayload.agent, not the (possibly different) agentName parameter', async () => {
-    const configPayload = {
-      agent: 'proof-checker', // the config's own registry name
-      model: 'gpt5',
-      agentCategory: 'toolUse',
-      instruction: 'Check the proof.',
-    };
-    // A caller-resolved display name that intentionally differs from
-    // configPayload.agent — this is the exact mismatch the review flagged.
-    const agentName = 'Proof Checker (display)';
-
-    await Effect.runPromise(
-      executeSubagent(
-        mocks.tryUseRunContext(),
-        mocks.getCurrentToolCallContext(),
-        configPayload as never,
-        agentName,
-        orchestratorRunId,
-      ),
-    );
-
-    expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
-    const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
-      {
-        childRunId: RunId;
-        runId: string;
-        parentRunId: RunId;
-      },
-    ];
-    expect(loopParams.parentRunId).toBe(orchestratorRunId);
-    expect(mocks.registerRun).toHaveBeenCalledWith(
-      mocks.tryUseRunContext().session,
-      loopParams.runId,
-      expect.any(Object),
-      agentName,
-      expect.objectContaining({
-        parentRunId: 'parent-exec',
-        runId: loopParams.childRunId,
-      }),
-    );
-    const expectedChildRunId = getStreamTabId(configPayload.agent, {
-      runId: loopParams.runId as never,
-    });
-    expect(loopParams.childRunId).toBe(expectedChildRunId);
-    // Confirms the bug the review flagged would have actually mismatched:
-    // the OLD (agentName-keyed) formula produces a different id.
-    expect(loopParams.childRunId).not.toBe(
-      getStreamTabId(agentName, {
-        runId: loopParams.runId as never,
-      }),
-    );
   });
 
   it('logs a detached run-loop rejection through the childRunLoop channel log', async () => {

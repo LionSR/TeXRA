@@ -15,12 +15,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import * as logger from '@logger/logUtils';
-import {
-  aggregateId,
-  type RunId,
-  type RunMeta,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId, type RunId, type RunMeta } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -42,16 +37,11 @@ function config(
 let session: SessionHandle;
 async function writeMetadata(
   id: RunId,
-  meta: Omit<RunMeta, 'schemaVersion' | 'runId'> & {
-    runId?: RunId;
-  },
+  meta: Omit<RunMeta, 'schemaVersion'>,
 ): Promise<void> {
   const existing = await Effect.runPromise(
     getRunRecords(session, id).readMeta(),
   );
-  const runId = (meta.runId ??
-    existing?.runId ??
-    `stream-${id}`) as RunId;
   if (!existing) {
     const clock = vi
       .spyOn(Date, 'now')
@@ -61,22 +51,13 @@ async function writeMetadata(
         session.commit([
           {
             type: 'run.start',
-            aggregateId: aggregateId('stream', runId),
-            runId: id,
+            aggregateId: aggregateId('run', id),
             identity: meta.identity,
             category: 'toolUse',
             isRemote: false,
             userFollowUpSupport: 'unsupported',
-            parentRunId: meta.parentRunId
-              ? (
-                  await Effect.runPromise(
-                    getRunRecords(
-                      session,
-                      meta.parentRunId,
-                    ).readMeta(),
-                  )
-                )?.runId
-              : undefined,
+            parent:
+              meta.parentRunId === undefined ? null : { id: meta.parentRunId },
           },
         ]),
       );
@@ -99,7 +80,7 @@ async function writeMetadata(
       session.commit([
         {
           type: 'status',
-          aggregateId: aggregateId('stream', runId),
+          aggregateId: aggregateId('run', id),
           phase: meta.outcome,
           cause: 'test outcome',
         },
@@ -200,7 +181,6 @@ describe('run listing normalization', () => {
         identity: { kind: 'agent', agent: 'assistant' },
         record: agentConfig,
         checkpointPresent: false,
-        runId: `stream-${id}`,
       },
     ]);
     expect(entries.filter(isUserVisibleRun)).toHaveLength(1);
@@ -246,7 +226,6 @@ describe('run listing normalization', () => {
     expect(entries[2]).toEqual({
       kind: 'incomplete',
       id: incompleteId,
-      runId: `stream-${incompleteId}`,
       timestamp: '2026-07-15T07:00:00.000Z',
       checkpointPresent: false,
     });
@@ -283,11 +262,7 @@ describe('run listing normalization', () => {
   it('keeps agent-spawned child runs out of history listings', async () => {
     const rootId = 'eee111' as RunId;
     const childId = 'fff222' as RunId;
-    await writeRun(
-      rootId,
-      '2026-07-15T10:00:00.000Z',
-      config('orchestrator'),
-    );
+    await writeRun(rootId, '2026-07-15T10:00:00.000Z', config('orchestrator'));
     await writeRun(
       childId,
       '2026-07-15T10:05:00.000Z',
@@ -305,7 +280,7 @@ describe('run listing normalization', () => {
     ]);
   });
 
-  it('projects agent runs and stream ids for latexdiff run discovery', async () => {
+  it('projects agent runs for latexdiff run discovery', async () => {
     const rootId = 'ab1001' as RunId;
     const childId = 'ab1002' as RunId;
     const processId = 'ab1003' as RunId;
@@ -313,7 +288,6 @@ describe('run listing normalization', () => {
     await writeMetadata(rootId, {
       timestamp: '2026-07-15T10:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
-      runId: 'assistant@deepseekT#ab1001',
     });
     await Effect.runPromise(
       rootStore.writeRunRecord(config('assistant', ['main.tex'])),
@@ -353,11 +327,5 @@ describe('run listing normalization', () => {
         inputFiles: ['child.tex'],
       },
     ]);
-    expect(await Effect.runPromise(discovery.readRunId(rootId))).toBe(
-      'assistant@deepseekT#ab1001',
-    );
-    expect(await Effect.runPromise(discovery.readRunId(childId))).toBe(
-      `stream-${childId}`,
-    );
   });
 });

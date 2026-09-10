@@ -10,13 +10,12 @@ import {
 import {
   RUN_OUTCOME,
   type RunId,
-  type RunId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
-const runId = '7154progress' as RunId;
+const runId = '7154aaaaaaaa' as RunId;
 const meta = `export const meta = {
   name: 'progress-test',
   description: 'tests workflow progress projection',

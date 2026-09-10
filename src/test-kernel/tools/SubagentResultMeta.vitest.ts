@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ResultMetaSchema } from '@agent/storage/resultMeta';
 import { buildAgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   buildSubagentFailureResultMeta,
   buildSubagentResultMeta,
@@ -13,7 +13,6 @@ const baseResult: AgentFlowResult = {
   category: 'toolUse',
   outcome: 'completed',
   runId: 'abcdefabcdef' as RunId,
-  runId: 'stream:tu' as RunId,
 };
 
 describe('subagent result metadata', () => {

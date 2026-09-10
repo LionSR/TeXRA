@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { finalizeRun, getRunRecords } from '@agent/storage';
-import { aggregateId } from '@shared/schemas';
+import { aggregateId, type RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -10,10 +10,10 @@ import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
 let session: ReturnType<typeof createTestSession>;
-const id = 'bbb001';
+const id = 'bbb001' as RunId;
 beforeEach(async () => {
   session = createTestSession();
-  publishTestRunStart(session, 'stream:metadata', id);
+  publishTestRunStart(session, id);
   await session.settlePublications();
 });
 

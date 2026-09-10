@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { buildSubagentResult } from '@tools/delegation/subagentResults';
 
 // A tool-use flow result carrying a value captured by the submit_output
@@ -16,7 +16,6 @@ function toolUseFlowResult(
     category: 'toolUse',
     outcome: 'completed',
     runId: 'exec-structured' as RunId,
-    runId: 'stream-structured' as RunId,
     response: 'done',
     structured,
   };

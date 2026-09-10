@@ -8,11 +8,7 @@ import {
   type ResultMeta,
 } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  aggregateId,
-  type RunId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId, type RunId } from '@shared/schemas';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -63,20 +59,18 @@ async function persistCompletedChild(
   const absolutePath = StorageFS.fullPath(
     `executions/${childRunId}/${relativePath}`,
   );
-  const parentRunId = `stream-${parentId}` as RunId;
-  publishTestRunStart(session, parentRunId, parentId);
+  publishTestRunStart(session, parentId);
   await session.settlePublications();
   await Effect.runPromise(
     session.commit([
       {
         type: 'run.start',
-        aggregateId: aggregateId('stream', `stream-${childRunId}`),
-        runId: childRunId,
-        parentRunId,
+        aggregateId: aggregateId('run', childRunId),
         identity: { kind: 'agent', agent: 'draft' },
         category: 'workflow',
         isRemote: false,
         userFollowUpSupport: 'unsupported',
+        parent: { id: parentId },
       },
     ]),
   );
@@ -86,10 +80,7 @@ async function persistCompletedChild(
     ),
   );
   await StorageFS.ensureDir(`executions/${childRunId}/r1`);
-  await StorageFS.write(
-    `executions/${childRunId}/${relativePath}`,
-    'draft',
-  );
+  await StorageFS.write(`executions/${childRunId}/${relativePath}`, 'draft');
   return absolutePath;
 }
 
@@ -124,10 +115,7 @@ describe('resolveChildRunOutput', () => {
   it('rejects files that are present but absent from the result manifest', async () => {
     const absolutePath = await persistCompletedChild();
     const undeclaredPath = absolutePath.replace('draft.tex', 'notes.tex');
-    await StorageFS.write(
-      `executions/${childRunId}/r1/notes.tex`,
-      'notes',
-    );
+    await StorageFS.write(`executions/${childRunId}/r1/notes.tex`, 'notes');
 
     await expect(
       Effect.runPromise(
@@ -150,11 +138,7 @@ describe('resolveChildRunOutput', () => {
   it('rejects paths outside run storage', async () => {
     await expect(
       Effect.runPromise(
-        resolveChildRunOutput(
-          parentRunId,
-          '/workspace/draft.tex',
-          session,
-        ),
+        resolveChildRunOutput(parentRunId, '/workspace/draft.tex', session),
       ),
     ).rejects.toThrow('not inside task-run storage');
   });

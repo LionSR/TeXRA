@@ -54,9 +54,9 @@ describe('collectResumeTargets', () => {
   it('lists running and finished plain tool-use subagents', () => {
     const view = viewWith([
       root(),
-      child({ id: 'rev', label: 'reviewer' }),
+      child({ id: 'rev' as RunId, label: 'reviewer' }),
       child({
-        id: 'flow',
+        id: 'flow' as RunId,
         label: 'builder',
         category: AgentCategory.Workflow,
       }),
@@ -73,7 +73,7 @@ describe('collectResumeTargets', () => {
     const view = viewWith([
       root(),
       child({
-        id: 'sh',
+        id: 'sh' as RunId,
         label: 'bash',
         identity: { kind: 'process', tool: 'bash' },
       }),
@@ -262,15 +262,12 @@ describe('formatResumeHint', () => {
     'includes the $usageRoute session cost in the full hint',
     ({ usageRoute, cost, expected }) => {
       expect(
-        formatResumeHint(
-          [{ runId: 'root', label: 'main', isRoot: true }],
-          {
-            inputTokens: 100,
-            outputTokens: 20,
-            cost,
-            usageRoute,
-          } satisfies TokenUsageStats,
-        ),
+        formatResumeHint([{ runId: 'root', label: 'main', isRoot: true }], {
+          inputTokens: 100,
+          outputTokens: 20,
+          cost,
+          usageRoute,
+        } satisfies TokenUsageStats),
       ).toBe(
         [
           'Token usage: total=120 input=100 output=20',
@@ -297,7 +294,7 @@ describe('collectResumeUsage', () => {
         cacheReadInputTokens: 7,
       }),
       child({
-        id: 'rev',
+        id: 'rev' as RunId,
         usage: {
           'rev-usage': {
             inputTokens: 40,

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { type CompileFailure, type OutputFileInfo } from '@shared/schemas';
+import {
+  type CompileFailure,
+  type OutputFileInfo,
+  type RunId,
+} from '@shared/schemas';
 import {
   formatWorkflowRunContext,
   type WorkflowRunContextInput,
@@ -30,7 +34,7 @@ function output(overrides: Partial<OutputFileInfo> = {}): OutputFileInfo {
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.tex',
       relativePath: 'answer.tex',
-      runId: 'a1b2c3d4',
+      runId: 'a1b2c3d4' as RunId,
     },
     ...overrides,
   };
@@ -46,13 +50,13 @@ function compileFailure(
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.tex',
       relativePath: 'answer.tex',
-      runId: 'a1b2c3d4',
+      runId: 'a1b2c3d4' as RunId,
     },
     log: {
       kind: 'runStorage',
       absolutePath: '/tmp/exec/answer.log',
       relativePath: 'answer.log',
-      runId: 'a1b2c3d4',
+      runId: 'a1b2c3d4' as RunId,
     },
     logRelativePath: 'answer.log',
     ...overrides,

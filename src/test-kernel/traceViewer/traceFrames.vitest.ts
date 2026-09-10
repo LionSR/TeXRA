@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/runTab';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -16,7 +15,6 @@ import {
   RUN_PHASE,
   RunSnapshotSchema,
   StreamLogEntrySchema,
-  type RunId,
   type RunId,
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
@@ -50,14 +48,12 @@ function foldTrace(trace: TraceDocument) {
     session: 'trace',
     generation: 1,
     cursor: 0,
-    aggregates: [
-      { id: qualifyAggregateId('stream', trace.runId), fromSeq: 0 },
-    ],
+    aggregates: [{ id: qualifyAggregateId('run', trace.runId), fromSeq: 0 }],
   });
   const view = fold(emptySessionView('trace', 0), [
     {
       _tag: 'subscriptions',
-      set: [{ id: qualifyAggregateId('stream', trace.runId), fromSeq: 0 }],
+      set: [{ id: qualifyAggregateId('run', trace.runId), fromSeq: 0 }],
     },
     ...frame.events,
     { _tag: 'local', local: { self: [], dead: [], unreadable: [] } },
@@ -99,16 +95,14 @@ function legacyTrace(
   snapshotStatus: string | undefined,
   category: AgentCategory = AgentCategory.Workflow,
 ): TraceDocument {
-  const runId = 'stream:legacy-trace' as RunId;
+  const runId = 'abc123' as RunId;
   return {
-    runId: 'abc123' as RunId,
     runId,
     config: parseConfig(category),
     meta: {
       schemaVersion: 1,
       timestamp: '2026-01-01T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'assistant' },
-      runId,
     },
     entries: [],
     snapshot: RunSnapshotSchema.parse({
@@ -178,9 +172,8 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
     const runId = 'abc124' as RunId;
     const config = parseConfig(AgentCategory.Workflow);
-    const runId = getStreamTabId(config.agent, { runId });
     const session = createTestSession();
-    publishTestRunStart(session, runId, runId);
+    publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, runId).writeRunRecord(config),
@@ -188,13 +181,13 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     session.publish([
       {
         type: 'stage.start',
-        aggregateId: qualifyAggregateId('stream', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         id: 'terminal-stage',
         label: 'Legacy run',
       },
       {
         type: 'stage.end',
-        aggregateId: qualifyAggregateId('stream', runId),
+        aggregateId: qualifyAggregateId('run', runId),
         id: 'terminal-stage',
         status: 'failed',
       },
@@ -368,16 +361,14 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   });
 
   it('projects a process export instruction into the fold command', () => {
-    const runId = 'bash@stream:process-trace' as RunId;
+    const runId = 'abc125' as RunId;
     const trace: TraceDocument = {
-      runId: 'abc125' as RunId,
       runId,
       config: { name: 'bash', instruction: 'ls -la' },
       meta: {
         schemaVersion: 1,
         timestamp: '2026-01-01T00:00:00.000Z',
         identity: { kind: 'process', tool: 'bash' },
-        runId,
       },
       entries: [],
       snapshot: RunSnapshotSchema.parse({ runId }),

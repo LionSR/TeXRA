@@ -4,11 +4,11 @@ import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
   RUN_OUTCOME,
-  type RunId,
   type OutputFileSummary,
   type RunId,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { generateRunId } from '@utils/core';
 
 const OUTPUT = {
   round: 0,
@@ -26,8 +26,7 @@ function workflowResult(
   return {
     category: 'workflow',
     outcome,
-    runId: 'auto-open-output' as RunId,
-    runId: 'workflow@gpt54#auto-open-output' as RunId,
+    runId: generateRunId(),
     outputs: [OUTPUT],
     compileFailures: [],
   };

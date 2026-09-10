@@ -174,8 +174,7 @@ function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   };
   return Object.assign(renderer, {
     runs,
-    set: (runId: string, over: Partial<RunView>) =>
-      setMany([[runId, over]]),
+    set: (runId: string, over: Partial<RunView>) => setMany([[runId, over]]),
     setMany,
     detach,
   });
@@ -299,7 +298,7 @@ async function publishRun(
   session: SessionHandle,
   overrides: RunConfigOverrides = {},
 ): Promise<void> {
-  const runId = (overrides.runId ?? 'stream-1') as RunId;
+  const runId = (overrides.runId ?? 'e5e5e5') as RunId;
   const agent = overrides.agent ?? 'polish';
   session.publish([
     {
@@ -779,11 +778,7 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(
-      renderer,
-      'child-stream',
-      'Current review task',
-    );
+    await handleRunDescription(renderer, 'child-stream', 'Current review task');
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
     await handleRunStatus(renderer, 'child-stream', RUN_PHASE.WAITING);
     await handleRunStatus(renderer, 'child-stream', RUN_PHASE.RUNNING);
@@ -799,16 +794,8 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(
-      renderer,
-      'waiting-child',
-      'Idle review task',
-    );
-    await handleRunDescription(
-      renderer,
-      'running-child',
-      'Active review task',
-    );
+    await handleRunDescription(renderer, 'waiting-child', 'Idle review task');
+    await handleRunDescription(renderer, 'running-child', 'Active review task');
     await handleActiveSubagents(renderer, 'root-stream', [
       subagentChild({
         childRunId: 'waiting-child',
@@ -867,11 +854,7 @@ describe('CLI run progress renderer', () => {
     const renderer = plainRenderer(output);
 
     await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(
-      renderer,
-      'child-stream',
-      'Current review task',
-    );
+    await handleRunDescription(renderer, 'child-stream', 'Current review task');
     await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
     await handleRunConfig(renderer, {
       runId: 'child-stream',
@@ -1011,7 +994,7 @@ describe('CLI run progress renderer', () => {
       // The session's graph is fresh: let its fold subscribe before the
       // facts land, so each fact paints as its own level.
       await settle();
-      await publishRun(session, { runId: 'gate-stream' });
+      await publishRun(session, { runId: 'a1a1a1' });
       detach();
       await host.close();
     });
@@ -1031,13 +1014,13 @@ describe('CLI run progress renderer', () => {
         }),
       );
       const detach = host.attachRunProgressRenderer(session);
-      await publishRun(session, { runId: 'status-line-stream' });
+      await publishRun(session, { runId: 'b2b2b2' });
       await session.settlePublications();
       // Status travels only as a session fact (run-scope status is no longer
       // representable), so exactly one line renders for the transition.
       session.publishStatus({
         type: 'status',
-        runId: 'status-line-stream' as RunId,
+        runId: 'b2b2b2' as RunId,
         phase: RUN_PHASE.COMPLETED,
         cause: RUN_TRANSITION_CAUSE.LIFECYCLE,
       });
@@ -1063,7 +1046,7 @@ describe('CLI run progress renderer', () => {
       );
 
       const detach = host.attachRunProgressRenderer(session);
-      await publishRun(session, { runId: 'prompt-stream' });
+      await publishRun(session, { runId: 'c3c3c3' });
       host.prepareInteractivePrompt?.();
       await Promise.resolve();
       detach();
@@ -1086,7 +1069,7 @@ describe('CLI run progress renderer', () => {
           }),
         );
         const detach = host.attachRunProgressRenderer(session);
-        await publishRun(session, { runId: 'json-stream' });
+        await publishRun(session, { runId: 'd4d4d4' });
         detach();
         await host.close();
       });
@@ -1180,11 +1163,11 @@ describe('CLI run progress renderer', () => {
       // The roster is the registry's, not the log's: the projection hears
       // it through `onChildActivity`, so the case plays the listener.
       let roster:
-        | ((parentRunId: RunId, items: ActiveChildInfo[]) => void)
-        | undefined;
+        ((parentRunId: RunId, items: ActiveChildInfo[]) => void) | undefined;
       const detach = attachCliSessionProgressProjection({
         events: session.events,
         now: () => session.now(),
+        view: session.view,
         runs: {
           onChildActivity: (listener) => {
             roster = listener;

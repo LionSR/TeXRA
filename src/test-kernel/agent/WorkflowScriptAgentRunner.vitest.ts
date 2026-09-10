@@ -10,7 +10,7 @@ import type { WorkflowAgentInvocation } from '@agent/workflowScript';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
@@ -114,12 +114,10 @@ vi.mock('@utils/files/absoluteFS', () => ({
 }));
 
 const parentRunId = 'aaaaaa111111' as RunId;
-const parentRunId = 'stream:workflow-script' as RunId;
 // The detached workflow-run's own identity — grandchild agent() calls re-root
 // here, not on the orchestrator (#8712).
 const runId = 'run0run0run0' as RunId;
-const runId = 'workflow-script#run0run0run0' as RunId;
-const run = { runId, runId };
+const run = { runId };
 const defaultAgent = {
   name: 'correct',
   source: 'builtInWorkflow',
@@ -163,8 +161,6 @@ function parentContext(): LaunchRunContext {
     runtimeUnavailableTools: ['user_question'],
     runScope: {
       runId: parentRunId,
-      runId: parentRunId,
-      agentName: 'orchestrator',
       workingDirectory: '/workspace',
       delegationAgentScope: {
         workflow: ['builtInWorkflow:correct'],
@@ -407,10 +403,8 @@ describe('createWorkflowScriptAgentRunner', () => {
         options.onActiveRunId?.(options.runId);
         const prepared = await options.prepare();
         mocks.preparedOptions.push(prepared);
-        expect(reported(report, 'childRunId')).toEqual([]);
-        prepared.onStreamResolved?.(
-          `correct@child-model#${options.runId}` as RunId,
-        );
+        expect(reported(report, 'childRunId')).toEqual([options.runId]);
+        prepared.onStreamResolved?.(options.runId);
         return { runId: 'bbbbbb222222', result };
       },
     );
@@ -468,9 +462,6 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect.stringMatching(/^[a-f0-9]{24}$/),
     ]);
     expect(reported(report, 'costUsd')).toEqual([result.cost]);
-    expect(reported(report, 'childRunId')).toEqual([
-      expect.stringMatching(/^correct@child-model#[a-f0-9]{24}$/),
-    ]);
   });
 
   it('treats missing workspace files as run-fatal configuration', async () => {
@@ -783,12 +774,6 @@ describe('createWorkflowScriptAgentRunner', () => {
   it('does not report recovered stable child cost as live run', async () => {
     const onCost = vi.fn();
     const report = reportSpy();
-    const recoveredRunId = 'correct@child-model#bbbbbb222222' as RunId;
-    mocks.readRunMeta.mockReturnValueOnce(
-      Effect.succeed({
-        runId: recoveredRunId,
-      }),
-    );
     mocks.executeStableSubagentInBand.mockResolvedValueOnce({
       runId: 'bbbbbb222222',
       result: { ...result, cost: 0.25 },
@@ -801,25 +786,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     // Recovered durable children never fire onActiveRunId — re-attach the
     // known child id, but do not charge the synthetic resume attempt.
     expect(reported(report, 'childRunId')).toEqual(['bbbbbb222222']);
-    expect(reported(report, 'childRunId')).toEqual([recoveredRunId]);
     expect(reported(report, 'costUsd')).toEqual([]);
-  });
-
-  it('keeps a recovered result when navigation metadata cannot be read', async () => {
-    const report = reportSpy();
-    mocks.readRunMeta.mockReturnValueOnce(
-      Effect.fail(new Error('metadata unavailable')),
-    );
-    mocks.executeStableSubagentInBand.mockResolvedValueOnce({
-      runId: 'bbbbbb222222',
-      result,
-    });
-    const runner = defaultRunner();
-
-    await expect(runner({ ...invocation(), index: 3, report })).resolves.toBe(
-      result,
-    );
-    expect(reported(report, 'childRunId')).toEqual([]);
   });
 
   it('rejects a tool-use default agent used as a workflow agent', async () => {

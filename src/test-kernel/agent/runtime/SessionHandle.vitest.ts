@@ -12,17 +12,13 @@ import { type Plan, type RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createRecordingHost } from '../progressTestUtils';
+import { generateRunId } from '@utils/core';
 
 const plan: Plan = { objective: 'Compose the per-session runtime owners.' };
 
-function trackAgent(
-  session: SessionHandle,
-  runId: string,
-  runId: RunId,
-): RunHandle {
+function trackAgent(session: SessionHandle, runId: RunId): RunHandle {
   const handle = testRunHandle({
     runId,
-    parentRunId: runId,
     agent: 'orchestrator',
   });
   session.runs.track(handle);
@@ -172,19 +168,17 @@ describe('SessionHandle', () => {
     const a = createTestSession();
     const b = createTestSession();
     try {
-      const handle = trackAgent(
-        a,
-        'exec:isolated',
-        'stream:isolated' as RunId,
-      );
-      expect(a.runs.getHandle('exec:isolated')).toBe(handle);
-      expect(b.runs.getHandle('exec:isolated')).toBeUndefined();
+      const isolated = generateRunId();
+      const runB = generateRunId();
+      const handle = trackAgent(a, isolated);
+      expect(a.runs.getHandle(isolated)).toBe(handle);
+      expect(b.runs.getHandle(isolated)).toBeUndefined();
 
       // Disposing A leaves B's separate registry untouched.
-      const handleB = trackAgent(b, 'exec:b', 'stream:b' as RunId);
+      const handleB = trackAgent(b, runB);
       a.dispose();
-      expect(a.runs.getHandle('exec:isolated')).toBeUndefined();
-      expect(b.runs.getHandle('exec:b')).toBe(handleB);
+      expect(a.runs.getHandle(isolated)).toBeUndefined();
+      expect(b.runs.getHandle(runB)).toBe(handleB);
     } finally {
       b.dispose();
     }
@@ -195,7 +189,7 @@ describe('SessionHandle', () => {
     const b = createTestSession();
     const hostA = createRecordingHost();
     const hostB = createRecordingHost();
-    const runId = 'stream:cleanup-scope' as RunId;
+    const runId = generateRunId();
     a.interactions.use(hostA.interactions);
     b.interactions.use(hostB.interactions);
 
@@ -269,18 +263,18 @@ describe('SessionHandle', () => {
       .mockImplementation(() => {
         throw failure;
       });
-    const executions = vi.spyOn(session.runs, 'dispose');
+    const runs = vi.spyOn(session.runs, 'dispose');
     expect(() => session.dispose()).toThrow(failure);
     expect(interactions).toHaveBeenCalledOnce();
-    expect(executions).toHaveBeenCalledOnce();
+    expect(runs).toHaveBeenCalledOnce();
   });
 
   it('rejects run work registered after disposal', () => {
     const session = createTestSession();
     session.dispose();
 
-    expect(() =>
-      trackAgent(session, 'exec:late', 'stream:late' as RunId),
-    ).toThrow('Cannot register run work after session disposal.');
+    expect(() => trackAgent(session, generateRunId())).toThrow(
+      'Cannot register run work after session disposal.',
+    );
   });
 });

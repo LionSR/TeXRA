@@ -14,18 +14,10 @@ import {
   settleLiveSessionRuns,
 } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import {
-  acquireFreshRunLease,
-  ownsRunLease,
-} from '@agent/storage/runLease';
+import { acquireFreshRunLease, ownsRunLease } from '@agent/storage/runLease';
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import {
-  RUN_OUTCOME,
-  aggregateId,
-  type RunId,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, aggregateId, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -38,6 +30,7 @@ import {
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { createTestLaunchContext } from './launchContextTestUtils';
+import { generateRunId } from '@utils/core';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn().mockResolvedValue({ ok: true }),
@@ -60,10 +53,7 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
         input: { runId: string },
       ) =>
         Effect.sync(() => {
-          storageMocks.settledUnder.set(
-            input.runId,
-            session.roots.storage,
-          );
+          storageMocks.settledUnder.set(input.runId, session.roots.storage);
           return { ok: true, outcome: 'cancelled' };
         }),
     ),
@@ -143,19 +133,16 @@ describe('session isolation', () => {
     ] as const;
     const closures = live.map(([session, runId]) =>
       vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {
-        expect(
-          runInSession(session, () => ownsRunLease(runId)),
-        ).toBe(true);
+        expect(runInSession(session, () => ownsRunLease(runId))).toBe(true);
       }),
     );
     try {
       for (const [session, runId] of live) {
-        const runId = `stream:${runId}` as RunId;
-        publishTestRunStart(session, runId, runId);
+        publishTestRunStart(session, runId);
         session.publish([
           {
             type: 'stage.start',
-            aggregateId: aggregateId('stream', runId),
+            aggregateId: aggregateId('run', runId),
             id: `stage:${runId}`,
             label: 'Running stage',
           },
@@ -165,7 +152,6 @@ describe('session isolation', () => {
           session.runs.track(
             testRunHandle({
               runId,
-              parentRunId: `stream:${runId}` as RunId,
               agent: 'assistant',
             }),
           );
@@ -178,7 +164,7 @@ describe('session isolation', () => {
         settleLiveSessionRuns(new AbortController().signal),
       );
       for (const [index, [, runId]] of live.entries()) {
-        expect(closures[index]).toHaveBeenCalledWith(`stream:${runId}`, {
+        expect(closures[index]).toHaveBeenCalledWith(runId, {
           type: 'stage.end',
           id: `stage:${runId}`,
           status: RUN_OUTCOME.CANCELLED,
@@ -187,9 +173,7 @@ describe('session isolation', () => {
       expect(storageMocks.settledUnder.get('a0da01')).toBe('/storage/a');
       expect(storageMocks.settledUnder.get('b0db01')).toBe('/storage/b');
       for (const [session, runId] of live) {
-        expect(
-          runInSession(session, () => ownsRunLease(runId)),
-        ).toBe(false);
+        expect(runInSession(session, () => ownsRunLease(runId))).toBe(false);
       }
     } finally {
       sessionA.dispose();
@@ -199,13 +183,11 @@ describe('session isolation', () => {
 
   it('a handle interrupt target lands in the run session only', async () => {
     const sessionB = createTestSession();
-    const runId = 'exec:iso-interrupt' as RunId;
-    const runId = 'stream:iso-interrupt' as RunId;
+    const runId = generateRunId();
     const interrupt = vi.fn();
     try {
       const handle = testRunHandle({
         runId,
-        parentRunId: runId,
         agent: 'assistant',
       });
       handle.attachInterruptHandler({ interrupt });
@@ -215,9 +197,7 @@ describe('session isolation', () => {
       expect(stop.accepted).toBe(true);
       await Effect.runPromise(stop.settlement);
       expect(interrupt).toHaveBeenCalledOnce();
-      expect(
-        defaultSession().runs.getHandle(runId),
-      ).toBeUndefined();
+      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
       sessionB.dispose();
     }
@@ -228,10 +208,8 @@ describe('session isolation', () => {
       globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
     });
     const runId = 'e15001' as RunId;
-    const runId = 'stream:iso-track' as RunId;
     const sessionB = createTestSession();
     const ctx = createTestLaunchContext({
-      runId,
       runId,
       session: sessionB,
     });
@@ -241,13 +219,10 @@ describe('session isolation', () => {
         runFlowWithLifecycle(ctx, async () => {
           // Mid-run: the handle is registered in session B's registry only.
           expect(sessionB.runs.getHandle(runId)).toBeDefined();
-          expect(
-            defaultSession().runs.getHandle(runId),
-          ).toBeUndefined();
+          expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
           return {
             category: 'toolUse',
             outcome: RUN_OUTCOME.COMPLETED,
-            runId,
             runId,
           };
         }),
@@ -255,9 +230,7 @@ describe('session isolation', () => {
 
       // After completion the run session untracked it; default never saw it.
       expect(sessionB.runs.getHandle(runId)).toBeUndefined();
-      expect(
-        defaultSession().runs.getHandle(runId),
-      ).toBeUndefined();
+      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
       clearRunStatusForTest(sessionB.status, runId);
       sessionB.dispose();

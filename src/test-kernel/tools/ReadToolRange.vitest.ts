@@ -10,7 +10,7 @@ import type { RunId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ReadFileTool } from '@tools/ReadTool';
 
-const EXECUTION_ID = 'read-range-exec';
+const RUN_ID = 'read-range-exec' as RunId;
 
 /** 10 lines: "line 1" … "line 10". */
 const SMALL = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n');
@@ -22,8 +22,7 @@ async function callRead(input: unknown) {
   const tool = new ReadFileTool();
   return withRunContext(
     createRunContext({
-      runId: `stream:${EXECUTION_ID}` as RunId,
-      runId: EXECUTION_ID,
+      runId: RUN_ID,
     }),
     () => tool.call(input),
   );

@@ -102,8 +102,7 @@ describe('CLI agents run command', () => {
       ok: true,
       result: {
         category: AgentCategory.ToolUse,
-        runId: 'exec-1',
-        runId: 'stream-1',
+        runId: 'run-1',
         outcome: RUN_OUTCOME.COMPLETED,
         response: 'Correct.',
         workingDirectory: '/tmp/project',
@@ -159,8 +158,7 @@ describe('CLI agents run command', () => {
     const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
     expect(emission?.json).toEqual({
       category: AgentCategory.ToolUse,
-      runId: 'exec-1',
-      runId: 'stream-1',
+      runId: 'run-1',
       outcome: RUN_OUTCOME.COMPLETED,
       response: 'Correct.',
       workingDirectory: '/tmp/project',
@@ -168,7 +166,6 @@ describe('CLI agents run command', () => {
     // `outcome` is the only terminal fact the headless JSON publishes.
     expect(Object.keys(emission?.json ?? {})).toEqual([
       'category',
-      'runId',
       'runId',
       'outcome',
       'response',
@@ -218,8 +215,7 @@ describe('CLI agents run command', () => {
       ok: true,
       result: {
         category: AgentCategory.ToolUse,
-        runId: 'exec-interrupted',
-        runId: 'stream-interrupted',
+        runId: 'run-interrupted',
         outcome: RUN_OUTCOME.CANCELLED,
         workingDirectory: '/tmp/project',
       },

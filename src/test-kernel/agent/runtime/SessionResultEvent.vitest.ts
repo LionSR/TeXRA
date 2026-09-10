@@ -9,12 +9,7 @@ import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import {
-  RUN_OUTCOME,
-  RUN_PHASE,
-  type RunId,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { clearRunStatusForTest } from '@test/support/runStatusTestUtils';
@@ -23,6 +18,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
+import { generateRunId } from '@utils/core';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn().mockResolvedValue({ ok: true }),
@@ -50,7 +46,6 @@ function setupResultCase(session?: ReturnType<typeof createTestSession>): {
   const n = counter++;
   const ctx = createTestLaunchContext({
     runId: `e${n.toString(16).padStart(5, '0')}` as RunId,
-    runId: `stream:result-${n}` as RunId,
     logger,
     session,
   });
@@ -62,7 +57,6 @@ function completedRun(ctx: AgentLaunchContext) {
   return {
     category: 'toolUse',
     outcome: RUN_OUTCOME.COMPLETED,
-    runId: ctx.runScope.runId,
     runId: ctx.runScope.runId,
   } as const;
 }
@@ -100,7 +94,6 @@ describe('terminal result event', () => {
       expectSingleResult(results, ctx, {
         outcome: 'completed',
         category: 'toolUse',
-        isSubagent: false,
       });
       expect(results[0].error).toBeUndefined();
       // One disposal owner for the run's model handler: the cell closes
@@ -190,7 +183,7 @@ describe('terminal result event', () => {
       await expect(
         Effect.runPromise(
           runFlowWithLifecycle(ctx, explodedRun, {
-            isSubagent: true,
+            parentRunId: generateRunId(),
             onError: () => {
               throw new Error('delivery hook boom');
             },
@@ -257,7 +250,6 @@ describe('terminal result event', () => {
           category: 'toolUse',
           outcome: RUN_OUTCOME.CANCELLED,
           runId: ctx.runScope.runId,
-          runId: ctx.runScope.runId,
         })),
       );
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
@@ -297,28 +289,26 @@ describe('terminal result event', () => {
     }
   });
 
-  it('marks subagent runs and bridges results to session.onResult', async () => {
+  it('bridges a child run result to session.onResult', async () => {
     const session = createTestSession();
     const onResult = vi.fn();
     const { logger, ctx, runStatus } = setupResultCase(session);
-    publishTestRunStart(
-      session,
-      ctx.runScope.runId,
-      ctx.runScope.runId,
-    );
+    const parentRunId = publishTestRunStart(session);
+    publishTestRunStart(session, ctx.runScope.runId, { parent: parentRunId });
     const detach = session.attachRunTrace(logger, ctx.runScope.runId);
     session.onResult(onResult);
     try {
       await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
-          isSubagent: true,
+          parentRunId,
         }),
       );
       await session.settlePublications();
       expect(onResult).toHaveBeenCalledOnce();
       expect(onResult.mock.calls[0][0]).toMatchObject({
         type: 'result',
-        isSubagent: true,
+        runId: ctx.runScope.runId,
+        outcome: 'completed',
       });
     } finally {
       detach();

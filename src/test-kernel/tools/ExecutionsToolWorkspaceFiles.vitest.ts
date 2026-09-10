@@ -14,12 +14,8 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import {
-  RUN_PHASE,
-  DEFAULT_TOOL_CONFIG,
-  aggregateId,
-} from '@shared/schemas';
-import type { RunId, RunId, TodoItem } from '@shared/schemas';
+import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
+import { RunIdSchema, type RunId, type TodoItem } from '@shared/schemas';
 import {
   createFakeKv,
   createFakeRunRecords,
@@ -203,16 +199,14 @@ describe('ExecutionsTool', () => {
     expect(result.error).toContain("must not contain '..'");
   });
 
-  it('does not duplicate auto-delivered live subagent reports for the parent stream', async () => {
+  it('does not duplicate auto-delivered live subagent reports for the parent run', async () => {
     const session = createTestSession();
-    const runId = 'abc123';
-    const parentRunId = 'stream:parent-report-suppression' as RunId;
-    const childRunId = 'stream:child-report-suppression' as RunId;
-    const otherRunId = 'stream:other-report-reader' as RunId;
+    const parentRunId = RunIdSchema.parse('ba5e0000000a');
+    const childRunId = RunIdSchema.parse('c41d0000000a');
+    const otherRunId = RunIdSchema.parse('0f1e0000000a');
     const handle = testRunHandle({
-      runId,
-      parentRunId,
-      childRunId,
+      runId: childRunId,
+      parent: parentRunId,
       agent: 'review',
     });
 
@@ -236,7 +230,7 @@ describe('ExecutionsTool', () => {
         }),
         () =>
           new ExecutionsTool().call({
-            path: `/executions/${runId}`,
+            path: `/executions/${childRunId}`,
             action: 'wait',
           }),
       );
@@ -247,7 +241,7 @@ describe('ExecutionsTool', () => {
         }),
         () =>
           new ExecutionsTool().call({
-            path: `/executions/${runId}`,
+            path: `/executions/${childRunId}`,
             action: 'wait',
           }),
       );
@@ -255,7 +249,9 @@ describe('ExecutionsTool', () => {
       expect(parentWaitResult.output).toContain(
         'Result: delivered automatically to this parent stream as a follow-up message.',
       );
-      expect(parentWaitResult.output).toContain('/executions/abc123/report');
+      expect(parentWaitResult.output).toContain(
+        `/executions/${childRunId}/report`,
+      );
       expect(parentWaitResult.output).not.toContain(
         '<subagent-result>full report',
       );
@@ -273,19 +269,17 @@ describe('ExecutionsTool', () => {
   it('reads running task lists from session snapshot state', () =>
     withTempStorage(async () => {
       const session = createTestSession();
-      const runId = 'abc124';
-      const parentRunId = 'stream:parent-live-todos' as RunId;
-      const childRunId = 'stream:child-live-todos' as RunId;
+      const parentRunId = RunIdSchema.parse('ba5e0000000b');
+      const childRunId = RunIdSchema.parse('c41d0000000b');
       const handle = testRunHandle({
-        runId,
-        parentRunId,
-        childRunId,
+        runId: childRunId,
+        parent: parentRunId,
         agent: 'review',
       });
 
       try {
         publishTestRunStart(session, parentRunId);
-        publishTestRunStart(session, childRunId, runId);
+        publishTestRunStart(session, childRunId, { parent: parentRunId });
         await session.settlePublications();
         session.runs.track(handle);
         seedRunStatusForTest(session.status, childRunId, {
@@ -294,7 +288,7 @@ describe('ExecutionsTool', () => {
         session.publish([
           {
             type: 'updateTodos',
-            aggregateId: aggregateId('stream', childRunId),
+            aggregateId: aggregateId('run', childRunId),
             todos: [
               {
                 content: 'Read live snapshot state',
@@ -312,10 +306,10 @@ describe('ExecutionsTool', () => {
           () =>
             Promise.all([
               new ExecutionsTool().call({
-                path: `/executions/${runId}`,
+                path: `/executions/${childRunId}`,
               }),
               new ExecutionsTool().call({
-                path: `/executions/${runId}/todos`,
+                path: `/executions/${childRunId}/todos`,
               }),
             ]),
         );
@@ -334,16 +328,14 @@ describe('ExecutionsTool', () => {
     withTempStorage(async () => {
       const session = createTestSession();
       const runId = 'abc123' as RunId;
-      const childRunId = `codex#${runId}` as RunId;
-      const callerRunId = 'stream:unrelated-report-reader' as RunId;
+      const callerRunId = RunIdSchema.parse('ca11e0000001');
 
       try {
-        publishTestRunStart(session, childRunId, runId);
+        publishTestRunStart(session, runId);
         await session.settlePublications();
         mocks.readMeta.mockResolvedValue({
           ...toolUseMeta,
           identity: { kind: 'agent', agent: 'review' },
-          runId: childRunId,
           parentRunId: 'parent123',
         });
         mocks.readConfig.mockResolvedValue(config);
@@ -453,12 +445,11 @@ describe('ExecutionsTool', () => {
       await withTempStorage(async () => {
         const runId = 'abc123' as RunId;
         const session = createTestSession();
-        const runId = `codex#${runId}` as RunId;
-        publishTestRunStart(session, runId, runId);
+        publishTestRunStart(session, runId);
         session.publish([
           {
             type: 'updateTodos',
-            aggregateId: aggregateId('stream', runId),
+            aggregateId: aggregateId('run', runId),
             todos: [
               {
                 content: 'Read the committed task list',
@@ -469,7 +460,7 @@ describe('ExecutionsTool', () => {
           },
         ]);
         await session.settlePublications();
-        mocks.readMeta.mockResolvedValue({ ...toolUseMeta, runId });
+        mocks.readMeta.mockResolvedValue(toolUseMeta);
         mocks.readConfig.mockResolvedValue(config);
         const result = await withRunContext(
           createRunContext({ runId, session }),

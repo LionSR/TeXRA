@@ -9,11 +9,7 @@ import {
   notifyFollowUpSent,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import {
-  RUN_PHASE,
-  RUN_SUBSTATE,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_PHASE, RUN_SUBSTATE, type RunId } from '@shared/schemas';
 import {
   clearAllRunStatusesForTest,
   seedRunStatusForTest,
@@ -29,7 +25,7 @@ import {
   recordSessionEvents,
 } from '../progressTestUtils';
 
-const runId = 'stream:follow-up' as RunId;
+const runId = 'run:follow-up' as RunId;
 
 let paperCount = 0;
 
@@ -46,7 +42,7 @@ describe('tool-use follow-up progress events', () => {
   const unsubscribeFollowUpObservers: Array<() => void> = [];
   const trackedRuns: Array<{
     readonly session: SessionHandle;
-    readonly runId: string;
+    readonly runId: RunId;
   }> = [];
   const sessions = new Set<SessionHandle>();
 
@@ -71,19 +67,11 @@ describe('tool-use follow-up progress events', () => {
   }
 
   function trackToolUseFlow({
-    stream = runId,
-    runId = `exec-${stream}`,
     session,
   }: {
-    readonly stream?: RunId;
-    readonly runId?: string;
     readonly session?: SessionHandle;
   } = {}): void {
-    const handle = testRunHandle({
-      runId,
-      parentRunId: stream,
-      agent: 'search',
-    });
+    const handle = testRunHandle({ runId, agent: 'search' });
     const owner = session ?? defaultSession();
     handle.attachToolUseFlow({
       ownerSession: owner,
@@ -154,7 +142,7 @@ describe('tool-use follow-up progress events', () => {
   it('breaks a blocking wait when the owning session emits followUpSent', () => {
     const session = trackSession();
     const onFollowUp = vi.fn();
-    const otherRun = 'stream:other' as RunId;
+    const otherRun = 'run:other' as RunId;
 
     let cleanup: () => void = () => {};
     withRunContext(createRunContext({ session, runId }), () => {
@@ -202,11 +190,9 @@ describe('tool-use follow-up progress events', () => {
     const recorded = recordSessionEvents(session);
 
     const result = await Effect.runPromise(
-      submitFollowUp(
-        'stream:no-follow-up-session' as RunId,
-        'cannot deliver',
-        { session },
-      ),
+      submitFollowUp('run:no-follow-up-session' as RunId, 'cannot deliver', {
+        session,
+      }),
     );
 
     expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
@@ -214,7 +200,7 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('queues follow-ups for resuming runs through registry admission', async () => {
-    const resumingRunId = 'stream:resuming-follow-up' as RunId;
+    const resumingRunId = 'run:resuming-follow-up' as RunId;
 
     seedRunStatusForTest(defaultSession().status, resumingRunId, {
       phase: RUN_PHASE.RUNNING,

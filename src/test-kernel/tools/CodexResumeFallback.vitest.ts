@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { codexThreadsFor } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
@@ -43,7 +43,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 vi.mock('@agent/runtime/RunContext', () => ({
   runInSession: (_session: unknown, run: () => unknown) => run(),
   getRunContextRunId: (ctx: any) => ctx?.runId,
-  getRunContextRunId: (ctx: any) => ctx?.runId,
   getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
   getRunContextInteractions: (ctx: any) => ctx?.interactions,
 }));
@@ -58,9 +57,8 @@ const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   // The session-keyed registry resolves live handles through its session's
   // RunRegistry; this suite never tracks real handles, so lookups miss.
-  executions: {
+  runs: {
     getHandle: () => undefined,
-    getAgentHandleByStream: () => undefined,
   },
 } as unknown as SessionHandle;
 const CodexThreads = codexThreadsFor(testSession);
@@ -110,9 +108,8 @@ vi.mock('@tools/codexImport', () => ({
 import { CodexTool } from '@tools/codex';
 import { createFakeAgentCliChildRun } from '../support/agentCliResumeTestUtils';
 
-const parentRunId = 'stream:parent' as RunId;
-const childRunId = 'stream:codex-child' as RunId;
-const runId = 'parent-exec' as RunId;
+const parentRunId = 'parent-run' as RunId;
+const childRunId = 'codex-child-run' as RunId;
 
 function completedChildRunLoop() {
   return Effect.forkDetach(Effect.void);
@@ -122,7 +119,6 @@ function toolContext(runContext: Record<string, unknown> = {}): unknown {
   return {
     runContext: {
       runId: parentRunId,
-      runId,
       workingDirectory: undefined,
       interactions: { name: 'fake-runtime-host' },
       ...runContext,
@@ -163,7 +159,7 @@ describe('codex tool - atomic resume fallback', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
-    CodexThreads.releaseByRunId(runId);
+    CodexThreads.releaseByRunId(parentRunId);
     CodexThreads.release('stale-thread');
   });
 
@@ -225,8 +221,7 @@ describe('codex tool - atomic resume fallback', () => {
       id: 'stale-thread',
       runStreamed: vi.fn(),
     };
-    const executions = {
-      getAgentHandleByStream: () => undefined,
+    const runs = {
       getHandle: () => undefined,
     } as any;
     const getStrategy = captureRunLoopStrategy();
@@ -263,7 +258,7 @@ describe('codex tool - atomic resume fallback', () => {
       },
     );
     const firstResult = await first;
-    getStrategy()?.onTurnSuccess?.({}, { executions } as any);
+    getStrategy()?.onTurnSuccess?.({}, { runs } as any);
     const secondResult = await second;
 
     expect(firstResult.status).toBe('executed');

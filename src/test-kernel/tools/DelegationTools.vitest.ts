@@ -17,8 +17,7 @@ vi.mock('@agent/runtime/RunContext', () => {
     context?.kind === 'launch' ? context.runScope[field] : context?.[field];
   return {
     tryUseRunContext: mocks.tryUseRunContext,
-    getRunContextRunId: (context: any) =>
-      readRunContextField(context, 'runId'),
+    getRunContextRunId: (context: any) => readRunContextField(context, 'runId'),
   };
 });
 
@@ -157,15 +156,13 @@ describe('DelegationTools', () => {
 });
 
 describe('DelegateAgentTool resume ownership', () => {
-  const runId = 'exec-resume-ownership';
-  const parentRunId = 'parent-stream' as RunId;
-  const childRunId = 'child-stream' as RunId;
+  const runId = 'resume-ownership-run' as RunId;
+  const parentRunId = 'parent-run' as RunId;
 
   function makeHandle(): RunHandle {
     return testRunHandle({
       runId,
-      parentRunId,
-      childRunId,
+      parent: parentRunId,
       agent: 'review',
       category: AgentCategory.ToolUse,
       trace: { emit: vi.fn() } as never,
@@ -178,7 +175,7 @@ describe('DelegateAgentTool resume ownership', () => {
       runId: parentRunId,
     } as never);
     mocks.currentSession.mockReturnValue({
-      executions: { getHandle: () => makeHandle() },
+      runs: { getHandle: () => makeHandle() },
     } as never);
     mocks.deliverChildRunFollowUp.mockReturnValue(
       Effect.succeed({ kind: 'delivered' }),

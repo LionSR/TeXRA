@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { RunIdSchema } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -68,14 +69,15 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await mkdir(draftDir, { recursive: true });
     await writeFile(draftAbsolute, workspaceOriginal);
 
-    const fileService = new TaskRunFileService('run-1');
+    const runId = RunIdSchema.parse('a1a1a1a1a1a1');
+    const fileService = new TaskRunFileService(runId);
 
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(draftAbsolute, 'Draft/Draft.tex'),
       { snapshot: true },
     );
 
-    const snapshotPath = getOriginalSnapshotPath('run-1', 'Draft/Draft.tex');
+    const snapshotPath = getOriginalSnapshotPath(runId, 'Draft/Draft.tex');
     await expect(readFile(snapshotPath, 'utf8')).resolves.toBe(
       workspaceOriginal,
     );
@@ -83,7 +85,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await fileService.ensureMirroredInRoundDir(1);
 
     const roundFilePath = path.join(
-      getRunDir('run-1'),
+      getRunDir(runId),
       'r1',
       'Draft',
       'Draft.tex',
@@ -121,21 +123,22 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     const stylePath = path.join(workspaceDir, 'macros.sty');
     await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
 
-    const fileService = new TaskRunFileService('run-2');
+    const runId = RunIdSchema.parse('b2b2b2b2b2b2');
+    const fileService = new TaskRunFileService(runId);
 
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(stylePath, 'macros.sty'),
     );
 
-    const snapshotPath = getOriginalSnapshotPath('run-2', 'macros.sty');
+    const snapshotPath = getOriginalSnapshotPath(runId, 'macros.sty');
     await expect(stat(snapshotPath)).rejects.toMatchObject({ code: 'ENOENT' });
 
     await fileService.ensureMirroredInRoundDir(1);
 
-    const roundFilePath = path.join(getRunDir('run-2'), 'r1', 'macros.sty');
+    const roundFilePath = path.join(getRunDir(runId), 'r1', 'macros.sty');
     await expectSymlinkTargeting(
       roundFilePath,
-      path.join(getRunDir('run-2'), 'macros.sty'),
+      path.join(getRunDir(runId), 'macros.sty'),
     );
   });
 
@@ -148,7 +151,8 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     const stylePath = path.join(workspaceDir, 'macros.sty');
     await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
 
-    const fileService = new TaskRunFileService('run-3');
+    const runId = RunIdSchema.parse('c3c3c3c3c3c3');
+    const fileService = new TaskRunFileService(runId);
 
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(stylePath, 'macros.sty'),
@@ -157,7 +161,7 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     await fileService.ensureMirroredInDiffRoundDir(2);
 
     const diffRoundFilePath = path.join(
-      getRunDir('run-3'),
+      getRunDir(runId),
       'diff',
       'r2',
       'macros.sty',

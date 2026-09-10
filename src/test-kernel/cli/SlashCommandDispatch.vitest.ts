@@ -96,10 +96,7 @@ function ensureRun(
   over: Partial<Omit<RunView, 'category'>> = {},
 ): void {
   const current = seeded.get(id);
-  seeded.set(
-    id,
-    makeRunView({ ...(current ?? {}), ...over, id }) as RunView,
-  );
+  seeded.set(id, makeRunView({ ...(current ?? {}), ...over, id }) as RunView);
   syncSeededView();
 }
 beforeAll(bindTestSessionView);
@@ -124,7 +121,6 @@ function seedChildRoster(
         ...(parent?.ancestors ?? []),
         { id: parentRunId, label: parentRunId },
       ],
-      runId: row.runId,
       label: row.agentName,
       identity: row.identity,
       status: row.status ?? RUN_PHASE.COMPLETED,
@@ -188,9 +184,7 @@ function createContext(
   };
 }
 
-function lastEntryText(
-  runId: RunId = CLI_LOCAL_STREAM_ID,
-): string | undefined {
+function lastEntryText(runId: RunId = CLI_LOCAL_STREAM_ID): string | undefined {
   const last = noticesFor(notices.get(), runId).at(-1)?.row;
   return last && transcriptRowHeadline(last);
 }
@@ -968,11 +962,7 @@ describe('handleTuiSlashCommand', () => {
     ensureRun(parentRunId, { status: RUN_PHASE.WAITING });
     ensureRun(runningChildId, { status: RUN_PHASE.RUNNING });
     ensureRun(waitingChildId, { status: RUN_PHASE.WAITING });
-    const rosterRow = (
-      childRunId: RunId,
-      index: number,
-      status: RunPhase,
-    ) => ({
+    const rosterRow = (childRunId: RunId, index: number, status: RunPhase) => ({
       runId: `child-exec-${index}`,
       identity: { kind: 'agent' as const, agent: `critic-${index}` },
       agentName: `critic-${index}`,
@@ -1002,10 +992,7 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands();
     const session = createSession();
     const rootRunId = 'stream-root' as RunId;
-    const childRunIds = [
-      'stream-child-1',
-      'stream-child-2',
-    ] as RunId[];
+    const childRunIds = ['stream-child-1', 'stream-child-2'] as RunId[];
     activeRunId.set(rootRunId);
     ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
     for (const [index, childRunId] of childRunIds.entries()) {
@@ -1027,9 +1014,7 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/status', createContext(session));
 
-    expect(lastEntryText(rootRunId)).not.toContain(
-      'active background tasks:',
-    );
+    expect(lastEntryText(rootRunId)).not.toContain('active background tasks:');
   });
 
   it('reports the owning workflow count while a background task is focused', async () => {
@@ -1118,10 +1103,7 @@ describe('handleTuiSlashCommand', () => {
       startedAt: index + 1,
       childRunId,
     });
-    seedChildRoster(
-      rootRunId,
-      [parentRunId, ...rootSiblingIds].map(rosterRow),
-    );
+    seedChildRoster(rootRunId, [parentRunId, ...rootSiblingIds].map(rosterRow));
     seedChildRoster(parentRunId, [rosterRow(grandchildId, 3)]);
 
     await handleTuiSlashCommand('/status', createContext(session));

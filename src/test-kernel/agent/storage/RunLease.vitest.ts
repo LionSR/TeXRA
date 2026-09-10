@@ -4,11 +4,7 @@ import * as os from 'node:os';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  clearStoreCache,
-  finalizeRun,
-  getRunStore,
-} from '@agent/storage';
+import { clearStoreCache, finalizeRun, getRunStore } from '@agent/storage';
 import {
   RunLeaseActiveError,
   RunLeaseLostError,
@@ -70,10 +66,7 @@ async function readLeaseRecords(
       .filter((name) => name.endsWith('.json'))
       .sort()
       .map((name) =>
-        StorageFS.readJson(
-          `${runLeaseDir(runId)}/${name}`,
-          RunLeaseSchema,
-        ),
+        StorageFS.readJson(`${runLeaseDir(runId)}/${name}`, RunLeaseSchema),
       ),
   );
   return records;
@@ -365,9 +358,10 @@ describe('cross-process run leases', () => {
       status: 'held',
       owner: record,
     });
-    await expect(
-      runWithInactiveRunLease(runId, operation),
-    ).resolves.toEqual({ status: 'active', owner: record });
+    await expect(runWithInactiveRunLease(runId, operation)).resolves.toEqual({
+      status: 'active',
+      owner: record,
+    });
     expect(operation).not.toHaveBeenCalled();
     await expect(acquireResumedRunLease(runId)).rejects.toThrow(
       `Run ${runId} is held by another TeXRA process (pid ${record.pid} on ${record.hostname}).`,
@@ -408,9 +402,7 @@ describe('cross-process run leases', () => {
     const [record, ...rest] = await readLeaseRecords(runId);
     expect(rest).toEqual([]);
     expect(
-      (await StorageFS.readDir(runLeaseDir(runId))).map(
-        ([name]) => name,
-      ),
+      (await StorageFS.readDir(runLeaseDir(runId))).map(([name]) => name),
     ).toEqual([`${record!.ownerToken}.json`]);
   });
 
@@ -445,9 +437,7 @@ describe('cross-process run leases', () => {
     const [winner, ...rest] = await readLeaseRecords(runId);
     expect(rest).toEqual([]);
     expect(
-      await StorageFS.exists(
-        runLeasePath(runId, winner!.ownerToken),
-      ),
+      await StorageFS.exists(runLeasePath(runId, winner!.ownerToken)),
     ).toBe(true);
     expect(ownsRunLease(runId)).toBe(true);
   });
@@ -479,9 +469,7 @@ describe('cross-process run leases', () => {
       return originalReadDir(target);
     });
 
-    await expect(acquireFreshRunLease(runId)).resolves.toBe(
-      'acquired',
-    );
+    await expect(acquireFreshRunLease(runId)).resolves.toBe('acquired');
     ownedRunIds.add(runId);
     expect(readsAfterPublish).toBe(3);
     const [record, ...rest] = await readLeaseRecords(runId);
@@ -509,9 +497,7 @@ describe('cross-process run leases', () => {
     });
     expect(ownsRunLease(runId)).toBe(false);
     expect(await StorageFS.exists(runLeasePath(runId))).toBe(false);
-    expect(
-      await StorageFS.exists(runLeasePath(runId, liveToken)),
-    ).toBe(true);
+    expect(await StorageFS.exists(runLeasePath(runId, liveToken))).toBe(true);
     expect(await readLeaseRecords(runId)).toHaveLength(1);
   });
 
@@ -519,9 +505,9 @@ describe('cross-process run leases', () => {
     const runId = 'd8644d' as RunId;
     await writeForeignLease(runId);
 
-    await expect(
-      acquireResumedRunLease(runId),
-    ).rejects.toBeInstanceOf(RunLeaseActiveError);
+    await expect(acquireResumedRunLease(runId)).rejects.toBeInstanceOf(
+      RunLeaseActiveError,
+    );
   });
 
   it('starts a resume only after the previous generation has released its lease', async () => {
@@ -557,9 +543,7 @@ describe('cross-process run leases', () => {
           }),
         ),
       );
-      await vi.waitFor(() =>
-        expect(ownsRunLease(runId)).toBe(true),
-      );
+      await vi.waitFor(() => expect(ownsRunLease(runId)).toBe(true));
       const firstToken = await readToken();
 
       const second = Effect.runPromise(
@@ -611,7 +595,7 @@ describe('cross-process run leases', () => {
       status: 'owned',
     });
     const session = createProcessSession();
-    publishTestRunStart(session, `stream:${runId}`, runId);
+    publishTestRunStart(session, runId);
     await session.settlePublications();
     await Effect.runPromise(
       finalizeRun(session, {
@@ -634,9 +618,7 @@ describe('cross-process run leases', () => {
     await acquire(runId);
     vi.spyOn(StorageFS, 'delete').mockRejectedValueOnce(deletionError);
 
-    await expect(releaseOwnedRunLease(runId)).rejects.toBe(
-      deletionError,
-    );
+    await expect(releaseOwnedRunLease(runId)).rejects.toBe(deletionError);
     ownedRunIds.delete(runId);
 
     expect(ownsRunLease(runId)).toBe(false);
@@ -649,10 +631,7 @@ describe('cross-process run leases', () => {
   it('releases only when the persisted owner still matches', async () => {
     const runId = 'e8644e' as RunId;
     await acquire(runId);
-    await writeForeignLease(
-      runId,
-      '00000000-0000-4000-8000-000000000002',
-    );
+    await writeForeignLease(runId, '00000000-0000-4000-8000-000000000002');
 
     await releaseOwnedRunLease(runId);
     ownedRunIds.delete(runId);
@@ -667,9 +646,7 @@ describe('cross-process run leases', () => {
     await acquire(runId);
     await displaceLease(runId, '00000000-0000-4000-8000-000000000004');
 
-    await expect(writeRun(runId)).rejects.toBeInstanceOf(
-      RunLeaseLostError,
-    );
+    await expect(writeRun(runId)).rejects.toBeInstanceOf(RunLeaseLostError);
 
     expect(ownsRunLease(runId)).toBe(false);
     await expect(
@@ -684,9 +661,7 @@ describe('cross-process run leases', () => {
     const runId = 'e86446' as RunId;
     await writeForeignLease(runId);
 
-    await expect(writeRun(runId)).rejects.toBeInstanceOf(
-      RunLeaseLostError,
-    );
+    await expect(writeRun(runId)).rejects.toBeInstanceOf(RunLeaseLostError);
   });
 
   it('rejects validation when release starts during its record read', async () => {
@@ -716,9 +691,7 @@ describe('cross-process run leases', () => {
     await deletionStarted.promise;
 
     // Maintenance is itself a claim held by this live process.
-    await expect(
-      acquireResumedRunLease(runId),
-    ).rejects.toMatchObject({
+    await expect(acquireResumedRunLease(runId)).rejects.toMatchObject({
       name: 'RunLeaseActiveError',
       owner: { pid: process.pid },
     });

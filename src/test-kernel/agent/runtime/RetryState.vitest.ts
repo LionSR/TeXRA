@@ -45,7 +45,7 @@ import {
   RUN_PHASE,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { StreamLog } from '@shared/session/traceEntries';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -116,6 +116,13 @@ function testRetryModelCell(
     } as TestRetryServices['modelCell']['handler'],
     swap: () => {},
   };
+}
+
+let retryRunCounter = 0;
+
+/** Run ids are hex, so each scenario takes the next id in sequence. */
+function retryRunId(): RunId {
+  return `ac${(retryRunCounter++).toString(16).padStart(4, '0')}` as RunId;
 }
 
 /** Every retry-node scenario's services; cases override what they drive. */
@@ -214,8 +221,6 @@ async function withRetryRunContext<T>(
   const context = createRunContext({
     runScope: createRunScope({
       runId,
-      runId: `${runId}-run` as RunId,
-      agentName: 'retry-test',
       session,
       signal: new AbortController().signal,
     }),
@@ -254,7 +259,7 @@ async function captureModelRetry(
   model = 'openai:test',
   clientCredentialIdentity = 'credential-a',
 ): Promise<CapturedModelRetry> {
-  const runId = 'model-retry-policy' as RunId;
+  const runId = retryRunId();
   const session = createTestSession();
   const run = vi.spyOn(session.modelRetries, 'run');
   const client = {};
@@ -446,7 +451,7 @@ describe('ModelInvocationNode retry', () => {
     await installPlatform({
       config: { 'texra.model.retry.maxAttempts': 0 },
     });
-    const runId = 'retry-diagnostics' as RunId;
+    const runId = retryRunId();
     const logger = new TraceEmitter();
     const transcript = new StreamLog();
 
@@ -534,7 +539,6 @@ describe('ModelInvocationNode retry', () => {
       expect(diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            runId: 'deadbeef',
             runId,
             automaticAttemptLimit: 1,
             credentialRoute: 'api-key',
@@ -577,7 +581,7 @@ describe('ModelInvocationNode retry', () => {
     await installPlatform({
       config: { 'texra.model.retry.maxAttempts': 0 },
     });
-    const runId = 'retry-client-preparation' as RunId;
+    const runId = retryRunId();
     const logger = new TraceEmitter();
     const events = collectRetryLifecycleEvents(logger);
     const getClient = vi
@@ -642,7 +646,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('records a resolved result rejected by the invocation boundary as failed', async () => {
-    const runId = 'retry-invalid-result' as RunId;
+    const runId = retryRunId();
     const logger = new TraceEmitter();
     const events = collectRetryLifecycleEvents(logger);
     const session = createTestSession();
@@ -677,7 +681,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('treats user aborts as cancellations instead of failed invocations', () => {
-    const { node } = createRetryNode('retry-user-abort' as RunId);
+    const { node } = createRetryNode(retryRunId());
     const abort = new DOMException('Request aborted', 'AbortError');
 
     expect(node.shouldAutoRetry(abort)).toBe(false);
@@ -685,7 +689,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('does not claim an unprompted retryable fallback was already logged', () => {
-    const { node } = createRetryNode('retry-unprompted' as RunId);
+    const { node } = createRetryNode(retryRunId());
     const error = new OpenAIAPIError(
       503,
       { message: 'transient provider failure' },
@@ -735,7 +739,7 @@ describe('ModelInvocationNode retry', () => {
     vi.useFakeTimers();
     try {
       const node = new StatuslessServerErrorNode().setServices(
-        retryServices('retry-delay' as RunId) as never,
+        retryServices(retryRunId()) as never,
       );
       const retry = node._exec(undefined);
       const delayMs = RETRY_BACKOFF_SECONDS * 1000;
@@ -775,7 +779,7 @@ describe('ModelInvocationNode retry', () => {
       // another attempt.
       const runController = new AbortController();
       const node = new InterruptibleBackoffNode().setServices(
-        retryServices('retry-interrupt' as RunId, {
+        retryServices(retryRunId(), {
           signal: runController.signal,
         }) as never,
       );
@@ -800,7 +804,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('does not prompt for a manual retry after cancellation', async () => {
-    const runId = 'retry-cancelled' as RunId;
+    const runId = retryRunId();
     const { node, requestRetry } = createRetryNode(runId);
 
     await expect(
@@ -820,7 +824,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('does not issue a model request when the run is interrupted after prep', async () => {
-    const runId = 'model-interrupt-after-prep' as RunId;
+    const runId = retryRunId();
     const session = createTestSession();
     const controller = new AbortController();
     const createResponse = vi.fn(async () => ({ response: 'too late' }));
@@ -1110,9 +1114,8 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('updates the run session status during manual retry', async () => {
-    const runId = 'retry-state-owner' as RunId;
-    const { node, session, runStatus, requestRetry } =
-      createRetryNode(runId);
+    const runId = retryRunId();
+    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
 
     requestRetry.mockResolvedValueOnce({ action: 'retry' });
 
@@ -1142,7 +1145,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('marks a Kimi Code-routed failed handler on the retry request', async () => {
-    const runId = 'retry-state-kimi-code-routed' as RunId;
+    const runId = retryRunId();
     const { node, session, runStatus, requestRetry } = createRetryNode(
       runId,
       undefined,
@@ -1175,7 +1178,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('marks a non-Kimi-Code kimi3 failed handler as not routed', async () => {
-    const runId = 'retry-state-kimi3-open-platform' as RunId;
+    const runId = retryRunId();
     const { node, session, runStatus, requestRetry } = createRetryNode(
       runId,
       undefined,
@@ -1204,7 +1207,7 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('resolves manual retries through the session host interactions', async () => {
-    const runId = 'retry-state-session-bridge' as RunId;
+    const runId = retryRunId();
     const session = createTestSession();
     const recording = createRecordingHost();
     session.interactions.use(recording.interactions);
@@ -1239,9 +1242,8 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('stops the stream after manual retry cancellation', async () => {
-    const runId = 'retry-state-cancel' as RunId;
-    const { node, session, runStatus, requestRetry } =
-      createRetryNode(runId);
+    const runId = retryRunId();
+    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
 
     requestRetry.mockResolvedValueOnce({ action: 'cancel' });
 
@@ -1261,9 +1263,8 @@ describe('ModelInvocationNode retry', () => {
   });
 
   it('classifies a policy/headless retry denial as failed, not cancelled (#7331)', async () => {
-    const runId = 'retry-state-deny' as RunId;
-    const { node, session, runStatus, requestRetry } =
-      createRetryNode(runId);
+    const runId = retryRunId();
+    const { node, session, runStatus, requestRetry } = createRetryNode(runId);
 
     requestRetry.mockResolvedValueOnce({
       action: 'deny',
@@ -1344,7 +1345,7 @@ describe('ModelInvocationNode retry', () => {
 
     it('swaps a coding-routed dual-backend handler onto its Moonshot config', async () => {
       await installPlatform();
-      const runId = 'retry-kimi-fallback' as RunId;
+      const runId = retryRunId();
       const retired = new ModelHandlerKimi(kimiCodeRoutedConfig());
       const retiredDispose = vi.spyOn(retired, 'dispose');
       const { node, modelCell, session } = kimiFallbackNode(
@@ -1380,7 +1381,7 @@ describe('ModelInvocationNode retry', () => {
 
     it('rebinds instead of swapping for a Kimi Code-exclusive model', async () => {
       await installPlatform();
-      const runId = 'retry-kimi-exclusive' as RunId;
+      const runId = retryRunId();
       const exclusive = new ModelHandlerKimi(
         MODEL_CONFIGS.kimiCoding as ResolvedModelConfig,
       );

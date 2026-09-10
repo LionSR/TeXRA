@@ -102,12 +102,14 @@ function requestNewProofEdit(): ReturnType<typeof requestToolEditApproval> {
   });
 }
 
+const ROOT_RUN = 'run-root' as RunId;
+
 function agentProposal(
   overrides: Partial<AgentProposalPermission> = {},
 ): AgentProposalPermission {
   const base = {
     requestId: 'proposal-1',
-    runId: 'root@deepseekT#abc',
+    runId: ROOT_RUN,
     agent: 'review',
     model: 'deepseekT',
     instruction: 'Please check this proof.',
@@ -205,7 +207,7 @@ describe('shared retry and human-input decisions', () => {
       const result = yield* Effect.promise(async () =>
         createHeadlessCliHostInteractions(ctx).requestRetry?.({
           requestId: 'transient-retry',
-          runId: 'test-stream' as RunId,
+          runId: 'test-run' as RunId,
           operation: 'Model request',
           errorMessage: 'stream dropped before first token',
         }),
@@ -364,7 +366,7 @@ describe('approval prompt hooks', () => {
           threadId: 'ei_aabbccdd0011',
           question: 'May I ask an external model to verify this proof?',
           allowBypass: false,
-          runId: 'root@deepseekT#abc',
+          runId: ROOT_RUN,
           sessionLinks: null,
           transcript: null,
         }),
@@ -387,7 +389,7 @@ describe('approval prompt hooks', () => {
 describe('requestRetry classification (#7331)', () => {
   const retryRequest: HostRetryRequest = {
     requestId: 'headless-retry',
-    runId: 'root@deepseekT#abc' as RunId,
+    runId: ROOT_RUN,
     operation: 'Model invocation',
     errorMessage: 'stream dropped before first token',
   };

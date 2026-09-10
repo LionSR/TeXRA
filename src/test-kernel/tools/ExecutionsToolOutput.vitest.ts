@@ -9,11 +9,7 @@ import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
-import {
-  getRunStore,
-  getRunRecords,
-  registerRun,
-} from '@agent/storage';
+import { getRunStore, getRunRecords, registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
@@ -24,9 +20,9 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecResult,
+  RunIdSchema,
   type RunId,
   type WorkflowRunSnapshot,
-  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import {
@@ -60,7 +56,7 @@ import {
   recordSessionEvents,
 } from '../agent/progressTestUtils';
 
-const PARENT_STREAM_ID = 'executions-output-parent' as RunId;
+const PARENT_RUN_ID = RunIdSchema.parse('ba5e00000001');
 
 type ExecChunkSink = Pick<
   Parameters<typeof execUtils.executeCommand>[1] & object,
@@ -68,7 +64,7 @@ type ExecChunkSink = Pick<
 >;
 
 interface BackgroundRun {
-  readonly runId: string;
+  readonly runId: RunId;
   /** Settle the mocked process and wait for its completion follow-up. */
   readonly finish: () => Promise<void>;
 }
@@ -103,10 +99,10 @@ async function launchBackgroundRun(
 
   const { host } = createRecordingHost();
   const recorded = recordSessionEvents(defaultSession());
-  publishTestRunStart(defaultSession(), PARENT_STREAM_ID);
+  publishTestRunStart(defaultSession(), PARENT_RUN_ID);
   const launched = await withToolEnvironment(
     {
-      run: { runId: PARENT_STREAM_ID, session: defaultSession() },
+      run: { runId: PARENT_RUN_ID, session: defaultSession() },
       call: { tracker: new FileInteractionState() },
     },
     () =>
@@ -119,8 +115,9 @@ async function launchBackgroundRun(
   assert.equal(launched.status, 'executed');
   await outputEmitted;
   await defaultSession().settlePublications();
-  const runId = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
-  assert.ok(runId, 'Background launch should report its run ID');
+  const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
+  assert.ok(reported, 'Background launch should report its run ID');
+  const runId = RunIdSchema.parse(reported);
 
   return {
     runId,
@@ -143,7 +140,7 @@ async function launchBackgroundRun(
 }
 
 async function readOutput(
-  runId: string,
+  runId: RunId,
   viewRange?: [number, number],
 ): Promise<{ status: string; output?: string; error?: string }> {
   await defaultSession().settlePublications();
@@ -153,12 +150,9 @@ async function readOutput(
   });
 }
 
-/** Register a process-identity bash run and return its stream id. */
-async function registerProcessRun(
-  instruction: string,
-): Promise<{ runId: string; runId: RunId }> {
+/** Register a process-identity bash run and return its run id. */
+async function registerProcessRun(instruction: string): Promise<RunId> {
   const runId = generateRunId();
-  const runId = `bash@tool#${runId}` as RunId;
   await Effect.runPromise(
     registerRun(
       defaultSession(),
@@ -169,20 +163,17 @@ async function registerProcessRun(
         agentCategory: AgentCategory.ToolUse,
       }),
       'bash',
-      {
-        runId,
-        identity: { kind: 'process', tool: 'bash' },
-      },
+      { identity: { kind: 'process', tool: 'bash' } },
     ),
   );
-  return { runId, runId };
+  return runId;
 }
 
 /** Register a multi-agent-workflow run and return its id. */
 async function registerWorkflowRun(
   name: string,
   model?: string,
-): Promise<string> {
+): Promise<RunId> {
   const runId = generateRunId();
   await Effect.runPromise(
     registerRun(
@@ -194,10 +185,7 @@ async function registerWorkflowRun(
         ...(model ? { model } : {}),
       },
       name,
-      {
-        runId: `workflow-script#${runId}` as RunId,
-        identity: { kind: 'multiAgentWorkflow', workflowName: name },
-      },
+      { identity: { kind: 'multiAgentWorkflow', workflowName: name } },
     ),
   );
   return runId;
@@ -320,8 +308,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('renders consecutive untagged legacy rows standalone', async () => {
-    const { runId, runId } =
-      await registerProcessRun('legacy command');
+    const runId = await registerProcessRun('legacy command');
     const session = defaultSession();
     let seqNo = 0;
     const append = (
@@ -332,7 +319,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       session.publish([
         {
           type: 'transcript.entry',
-          aggregateId: aggregateId('stream', runId),
+          aggregateId: aggregateId('run', runId),
           entry: {
             seqNo: ++seqNo,
             id,
@@ -436,7 +423,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('points at /report when a registered process has no output yet', async () => {
-    const { runId } = await registerProcessRun('sleep 1');
+    const runId = await registerProcessRun('sleep 1');
 
     const result = await readOutput(runId);
 
@@ -458,10 +445,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           agentCategory: AgentCategory.ToolUse,
         }),
         'chat',
-        {
-          runId: `chat@model#${runId}` as RunId,
-          identity: { kind: 'agent', agent: 'chat' },
-        },
+        { identity: { kind: 'agent', agent: 'chat' } },
       ),
     );
 
@@ -504,18 +488,17 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             stageId: longStageId,
             agent: 'writer',
             files: { input: longFiles, context: [], media: [] },
-            childRunId: 'abcdef123456',
+            childRunId: 'abcdef123456' as RunId,
             attempts: [
               {
                 number: 1,
-                id: '111111111111',
+                id: '111111111111' as RunId,
                 startedAt: timestamp,
                 completedAt: timestamp,
               },
               {
                 number: 2,
-                id: '222222222222',
-                childRunId: 'writer#222222222222',
+                id: '222222222222' as RunId,
                 model: 'historical-model',
                 costUsd: 0.2,
                 startedAt: timestamp,
@@ -523,8 +506,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
               },
               {
                 number: 3,
-                id: 'abcdef123456',
-                childRunId: 'writer#abcdef123456',
+                id: 'abcdef123456' as RunId,
                 model: 'replacement-model',
                 costUsd: 0.3,
                 startedAt: timestamp,
@@ -555,7 +537,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(output.includes('"stageBlocked": 0'));
     assert.ok(output.includes('"childRunId": "abcdef123456"'));
     assert.ok(output.includes('"number": 3'));
-    assert.ok(output.includes('"childRunId": "writer#222222222222"'));
+    assert.ok(output.includes('"id": "222222222222"'));
     assert.ok(output.includes('"model": "historical-model"'));
     assert.ok(output.includes('"costUsd": 0.2'));
     assert.ok(output.includes('"error": "Failure '));
@@ -768,10 +750,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
   });
 
   it('shows one model for a workflow run in both the listing and its summary', async () => {
-    const runId = await registerWorkflowRun(
-      'model-parity',
-      'parity-model-1',
-    );
+    const runId = await registerWorkflowRun('model-parity', 'parity-model-1');
 
     const summary = await new ExecutionsTool().call({
       path: `/executions/${runId}`,
@@ -816,9 +795,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     });
     const completedOutput = completed.output ?? '';
     assert.ok(completedOutput.includes('Category: process'));
-    assert.ok(
-      completedOutput.includes(`/executions/${run.runId}/output`),
-    );
+    assert.ok(completedOutput.includes(`/executions/${run.runId}/output`));
   });
 
   it('errors on an unknown run id', async () => {

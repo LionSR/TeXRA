@@ -89,17 +89,14 @@ describe('runCompileCheck', () => {
   });
 
   it('counts a per-file exception as a failure, never a silent skip', async () => {
-    const runId = 'compile-exception';
+    const runId = 'compile-exception' as RunId;
     // No file is seeded at the tex path, so AbsoluteFS.read throws ENOENT
     // before compileLatex2Pdf is ever invoked.
     await initLatexPlatform({});
 
     const outputState = seedMainTexOutput(runId);
 
-    const result = await runCompileCheck(
-      compileContext(runId, outputState),
-      0,
-    );
+    const result = await runCompileCheck(compileContext(runId, outputState), 0);
 
     const failures = compileFailuresOf(result.compileResult);
     expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
@@ -117,7 +114,7 @@ describe('runCompileCheck', () => {
   });
 
   it('treats a fragment with no \\documentclass as a graceful skip, not a failure', async () => {
-    const runId = 'compile-fragment';
+    const runId = 'compile-fragment' as RunId;
     const texPath = path.join(runDir(runId), 'r0', 'chunk.tex');
     await initLatexPlatform({
       [texPath]: '\\section{Included fragment}\n',
@@ -128,10 +125,7 @@ describe('runCompileCheck', () => {
       outputFile(runId, path.join('r0', 'chunk.tex'), 'chunk.tex', 0),
     ];
 
-    const result = await runCompileCheck(
-      compileContext(runId, outputState),
-      0,
-    );
+    const result = await runCompileCheck(compileContext(runId, outputState), 0);
 
     expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
     expect(compileFailuresOf(result.compileResult)).toHaveLength(0);
@@ -145,7 +139,7 @@ describe('runCompileCheck', () => {
   // through, unmodified, into the persisted failure excerpt -- it is not
   // read from disk a second time.
   it('sources the failing log tail from compileLatex2Pdf, not a separate disk read', async () => {
-    const runId = 'compile-tail-passthrough';
+    const runId = 'compile-tail-passthrough' as RunId;
     await seedCompilableMainTex(runId);
 
     // Zero-padded so containment checks below can't be fooled by numeric
@@ -168,7 +162,7 @@ describe('runCompileCheck', () => {
   });
 
   it('truncates the combined excerpt to the last 12000 characters', async () => {
-    const runId = 'compile-char-truncation';
+    const runId = 'compile-char-truncation' as RunId;
     await seedCompilableMainTex(runId);
 
     // 150 lines * 101 chars (100 + newline) stays under the 200-line cap but
@@ -199,7 +193,7 @@ describe('runCompileCheck', () => {
   });
 
   it('clears a stale failure log once a later attempt at the same round succeeds', async () => {
-    const runId = 'compile-stale-log';
+    const runId = 'compile-stale-log' as RunId;
     await seedCompilableMainTex(runId);
 
     mocks.compileLatex2Pdf.mockResolvedValueOnce({
@@ -232,7 +226,7 @@ describe('runCompileCheck', () => {
   });
 
   it('gives colliding-after-sanitization paths distinct, non-clobbering log slots', async () => {
-    const runId = 'compile-collision';
+    const runId = 'compile-collision' as RunId;
     // Both sanitize (non [a-zA-Z0-9._-] -> "_") to the same "dir_a_b.tex":
     // "dir/a:b.tex" (":" -> "_") and "dir/a_b.tex" ("/" -> "_", "_" already
     // allowed). Without a disambiguating hash, the second file's log write
@@ -257,10 +251,7 @@ describe('runCompileCheck', () => {
       outputFile(runId, pathB, 'a_b.tex', 0),
     ];
 
-    const result = await runCompileCheck(
-      compileContext(runId, outputState),
-      0,
-    );
+    const result = await runCompileCheck(compileContext(runId, outputState), 0);
 
     expect(compileFailuresOf(result.compileResult)).toHaveLength(2);
     const [failureA, failureB] = compileFailuresOf(result.compileResult);
@@ -280,7 +271,7 @@ describe('runCompileCheck', () => {
     // Simulates a bug in compileOne's own pre-compile bookkeeping (path/hash
     // computation), which runs before compileOne's internal try/catch and so
     // can only be caught by runCompileCheck's outer per-file backstop.
-    const runId = 'compile-outer-backstop';
+    const runId = 'compile-outer-backstop' as RunId;
     await seedCompilableMainTex(runId);
 
     const schemasModule = await import('@shared/schemas');

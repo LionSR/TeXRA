@@ -11,10 +11,7 @@ import {
   releaseOwnedRunLease,
 } from '@agent/storage/runLease';
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
-import {
-  RunHandle,
-  type AgentRunHandle,
-} from '@agent/runtime/RunHandle';
+import { RunHandle, type AgentRunHandle } from '@agent/runtime/RunHandle';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
@@ -35,7 +32,7 @@ import {
   agentKey,
   AgentCategory,
 } from '@shared/schemas';
-import type { RunId, RunOutcome, RunId } from '@shared/schemas';
+import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -78,9 +75,7 @@ const channelTraceMocks = vi.hoisted(() => ({
 // (not the `@agent/storage` barrel). Spy only that leaf to avoid re-export
 // recursion through a dual mock.
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@agent/storage/runLifecycle')
-  >()),
+  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
   finalizeRun: storageMocks.finalizeRun,
 }));
 vi.mock('@agent/storage', () => ({
@@ -115,57 +110,43 @@ async function initLifecycleTestPlatform(firstRunDone: boolean) {
 let lifecycleFixtureCounter = 0;
 
 function lifecycleFixture(
-  slug: string,
   agent = 'test-agent',
   category: AgentCategory = AgentCategory.ToolUse,
 ): {
-  runId: RunId;
   runId: RunId;
   runStatus: RunStatusMachine;
   ctx: AgentLaunchContext;
 } {
   const runId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
-  const runId = `stream-${slug}` as RunId;
   return {
     runId,
-    runId,
     runStatus: defaultSession().status,
-    ctx: createTestLaunchContext({ runId, runId, agent, category }),
+    ctx: createTestLaunchContext({ runId, agent, category }),
   };
 }
 
-function toolUseResult(
-  runId: RunId,
-  runId: RunId,
-  outcome: RunOutcome,
-): ToolUseFlowResult {
-  return { category: 'toolUse', outcome, runId, runId };
+/** The launching run a subagent fixture names as its parent edge. */
+const PARENT_RUN_ID = 'aa0001' as RunId;
+
+function toolUseResult(runId: RunId, outcome: RunOutcome): ToolUseFlowResult {
+  return { category: 'toolUse', outcome, runId };
 }
 
-function workflowResult(
-  runId: RunId,
-  runId: RunId,
-  outcome: RunOutcome,
-): WorkflowFlowResult {
+function workflowResult(runId: RunId, outcome: RunOutcome): WorkflowFlowResult {
   return {
     category: 'workflow',
     outcome,
-    runId,
     runId,
     outputs: [],
     compileFailures: [],
   };
 }
 
-function waitingResult(
-  runId: RunId,
-  runId: RunId,
-): WaitingToolUseFlowResult {
+function waitingResult(runId: RunId): WaitingToolUseFlowResult {
   return {
     category: 'toolUse',
     outcome: RUN_PHASE.WAITING,
-    runId,
     runId,
   };
 }
@@ -205,15 +186,12 @@ function parkNextFinalize(): { started: () => boolean; release: () => void } {
 }
 
 /** Publish the run and open stage that a suspended teardown must close. */
-function seedOpenRunGroup(
-  ctx: AgentLaunchContext,
-  runId: RunId,
-): string {
+function seedOpenRunGroup(ctx: AgentLaunchContext, runId: RunId): string {
   const parentStageId = ctx.parentStage.id;
   if (!parentStageId)
     throw new Error('The fixture parent stage must carry an id.');
   const session = ctx.runScope.session;
-  publishTestRunStart(session, runId, ctx.runScope.runId);
+  publishTestRunStart(session, runId);
   session.publishRunEvent(runId, {
     type: 'stage.start',
     id: parentStageId,
@@ -229,8 +207,7 @@ describe('runFlowWithLifecycle', () => {
   // `workflow` on both without either side re-deriving the string.
   it('reports the config agent category on the handle and terminal result', async () => {
     await initLifecycleTestPlatform(true);
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-workflow-category',
+    const { runId, runStatus, ctx } = lifecycleFixture(
       'polish',
       AgentCategory.Workflow,
     );
@@ -240,8 +217,7 @@ describe('runFlowWithLifecycle', () => {
       const result = await Effect.runPromise(
         runFlowWithLifecycle(
           ctx,
-          async () =>
-            workflowResult(runId, runId, RUN_OUTCOME.COMPLETED),
+          async () => workflowResult(runId, RUN_OUTCOME.COMPLETED),
           {
             onRun: async (handle) => {
               expect(handle.category).toBe('workflow');
@@ -263,17 +239,14 @@ describe('runFlowWithLifecycle', () => {
 
   it('stops the Lean servers attributed to a run when the run ends', async () => {
     await initLifecycleTestPlatform(true);
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-lean-server-stop',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
 
     try {
       const result = await Effect.runPromise(
         runFlowWithLifecycle(
           ctx,
-          async () =>
-            toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED),
+          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
           { onRunEnd: stopSessionsForRun },
         ),
       );
@@ -286,18 +259,14 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('does not stop the Lean servers when a tool-use run parks at WAITING', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-lean-server-stop-waiting',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => waitingResult(runId, runId),
-          { onRunEnd: stopSessionsForRun },
-        ),
+        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+          onRunEnd: stopSessionsForRun,
+        }),
       );
 
       // WAITING is a suspension, not a terminal run end: the server must
@@ -316,30 +285,25 @@ describe('runFlowWithLifecycle', () => {
     {
       label:
         'does not complete first-run onboarding for qualified setup sessions',
-      slug: 'setup-agent',
       agent: agentKey('builtInToolUse', SETUP_AGENT_NAME),
       expectedDone: false,
     },
     {
       label: 'completes first-run onboarding for non-setup completed sessions',
-      slug: 'non-setup-agent',
       agent: 'assistant',
       expectedDone: true,
     },
   ] as const;
 
-  for (const { label, slug, agent, expectedDone } of onboardingCases) {
+  for (const { label, agent, expectedDone } of onboardingCases) {
     it(label, async () => {
       const fake = await initLifecycleTestPlatform(false);
-      const { runId, runId, runStatus, ctx } = lifecycleFixture(
-        `lifecycle-${slug}`,
-        agent,
-      );
+      const { runId, runStatus, ctx } = lifecycleFixture(agent);
 
       try {
         await Effect.runPromise(
           runFlowWithLifecycle(ctx, async () =>
-            toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED),
+            toolUseResult(runId, RUN_OUTCOME.COMPLETED),
           ),
         );
 
@@ -354,16 +318,13 @@ describe('runFlowWithLifecycle', () => {
 
   it('persists terminal state before updating onboarding state', async () => {
     const fake = await initLifecycleTestPlatform(false);
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'terminal-before-onboarding',
-      'assistant',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture('assistant');
     const updateOnboarding = vi.spyOn(fake.globalState, 'update');
 
     try {
       await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED),
+          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
         ),
       );
 
@@ -382,9 +343,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('finalizes the status machine owned by the run session', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-status-owner',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
     try {
       // The lifecycle owns the whole transition (RUNNING on entry, terminal
@@ -392,7 +351,7 @@ describe('runFlowWithLifecycle', () => {
       expect(runStatus).toBe(ctx.runScope.session.status);
       await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED),
+          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
         ),
       );
 
@@ -403,10 +362,8 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('projects run config before the RUNNING status projection', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-run-config-before-running',
-    );
-    publishTestRunStart(ctx.runScope.session, runId, runId);
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    publishTestRunStart(ctx.runScope.session, runId);
     const trace = new TraceEmitter();
     const detachTrace = ctx.runScope.session.attachRunTrace(trace, runId);
     // One plane in commit order: run.config and the status fact both land
@@ -418,7 +375,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED),
+          toolUseResult(runId, RUN_OUTCOME.COMPLETED),
         ),
       );
 
@@ -428,7 +385,7 @@ describe('runFlowWithLifecycle', () => {
       const runningIndex = (await recorded.read()).findIndex(
         (event) =>
           event.type === 'status' &&
-          event.aggregateId === qualifyAggregateId('stream', runId) &&
+          event.aggregateId === qualifyAggregateId('run', runId) &&
           event.phase === RUN_PHASE.RUNNING,
       );
 
@@ -442,9 +399,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('admits run start from a stale terminal phase via resume semantics', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-stale-terminal-start',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
     try {
       seedRunStatusForTest(runStatus, runId, {
@@ -454,7 +409,7 @@ describe('runFlowWithLifecycle', () => {
       await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () => {
           expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-          return toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED);
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
         }),
       );
 
@@ -465,9 +420,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('clears a stale resuming substate when a resumed run starts', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-resuming-substate-start',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
     try {
       seedRunStatusForTest(runStatus, runId, {
@@ -479,7 +432,7 @@ describe('runFlowWithLifecycle', () => {
         runFlowWithLifecycle(ctx, async () => {
           expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
           expect(runStatus.getSubstate(runId)).toBeUndefined();
-          return toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED);
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
         }),
       );
 
@@ -490,9 +443,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('does not emit a status event when starting an already-running stream with no substate', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-steady-running-no-substate',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
     const recorded = recordSessionEvents(ctx.runScope.session);
     try {
@@ -505,7 +456,7 @@ describe('runFlowWithLifecycle', () => {
           expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
           expect(runStatus.getSubstate(runId)).toBeUndefined();
           expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
-          return toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED);
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
         }),
       );
 
@@ -516,9 +467,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('delivers subagent aborts through the terminal callback', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-subagent-abort',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     ctx.attachedMemoryMisses = [
       { path: '/memories/missing.md', reason: 'not found' },
     ];
@@ -531,7 +480,7 @@ describe('runFlowWithLifecycle', () => {
           async () => {
             throw new DOMException('Request aborted', 'AbortError');
           },
-          { isSubagent: true, onError },
+          { parentRunId: PARENT_RUN_ID, onError },
         ),
       );
 
@@ -546,9 +495,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('keeps subagent errors registered until terminal delivery runs', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-subagent-error-registered',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const onError = vi.fn(() => {
       expect(defaultSession().runs.getHandle(runId)).toBeDefined();
     });
@@ -560,16 +507,14 @@ describe('runFlowWithLifecycle', () => {
           async () => {
             throw new Error('subagent failed');
           },
-          { isSubagent: true, onError },
+          { parentRunId: PARENT_RUN_ID, onError },
         ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
       expect(onError).toHaveBeenCalledOnce();
-      expect(
-        defaultSession().runs.getHandle(runId),
-      ).toBeUndefined();
+      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
       defaultSession().runs.untrack(runId);
       clearRunStatusForTest(runStatus, runId);
@@ -577,9 +522,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('keeps native subagent WAITING results registered and nonterminal', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-subagent-waiting',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const onError = vi.fn();
     await acquireResumedRunLease(runId);
 
@@ -589,12 +532,12 @@ describe('runFlowWithLifecycle', () => {
           ctx,
           async () => {
             expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
-            expect(
-              runStatus.transition(runId, RUN_PHASE.WAITING, 'wait'),
-            ).toBe(true);
-            return waitingResult(runId, runId);
+            expect(runStatus.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(
+              true,
+            );
+            return waitingResult(runId);
           },
-          { isSubagent: true, onError },
+          { parentRunId: PARENT_RUN_ID, onError },
         ),
       );
 
@@ -619,18 +562,15 @@ describe('runFlowWithLifecycle', () => {
     // persist await with the handle still tracked. Only the WAITING branch
     // parks a handle, so there is no suspension for the stop to find and
     // nothing the exit has to remember to clear.
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-completed-not-suspended',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const parked = parkNextFinalize();
 
     try {
       const running = Effect.runPromise(
         runFlowWithLifecycle(
           ctx,
-          async () =>
-            toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED),
-          { isSubagent: true },
+          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
+          { parentRunId: PARENT_RUN_ID },
         ),
       );
       await vi.waitFor(() => expect(parked.started()).toBe(true));
@@ -645,9 +585,7 @@ describe('runFlowWithLifecycle', () => {
       const result = await running;
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
-      expect(
-        defaultSession().runs.getHandle(runId),
-      ).toBeUndefined();
+      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
     } finally {
       defaultSession().runs.untrack(runId);
       clearRunStatusForTest(runStatus, runId);
@@ -655,9 +593,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('carries workflowPhase on the first child roster emission', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-workflow-phase',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const parentRunId = 'parent-lifecycle-workflow-phase' as RunId;
     const rosters = recordChildRosters(ctx.runScope.session.runs);
     // `track()` emits the roster synchronously, so onRun — which fires after
@@ -668,10 +604,8 @@ describe('runFlowWithLifecycle', () => {
       await Effect.runPromise(
         runFlowWithLifecycle(
           ctx,
-          async () =>
-            toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED),
+          async () => toolUseResult(runId, RUN_OUTCOME.COMPLETED),
           {
-            isSubagent: true,
             parentRunId,
             workflowPhase: 'Reduce',
             onRun: async () => {
@@ -697,21 +631,17 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('carries a stop requested by onRun on the run signal', async () => {
-    const { runId, runId, ctx } = lifecycleFixture(
-      'lifecycle-early-stop',
-    );
+    const { runId, ctx } = lifecycleFixture();
 
     const result = await Effect.runPromise(
       runFlowWithLifecycle(
         ctx,
         async () => {
-          expect(defaultSession().status.get(runId)).toBe(
-            RUN_PHASE.CANCELLED,
-          );
+          expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
           // linkAbortSignals has separate pre-aborted replay coverage; this
           // lifecycle test proves the signal already carries the early stop.
           expect(ctx.runScope.signal.aborted).toBe(true);
-          return toolUseResult(runId, runId, RUN_OUTCOME.CANCELLED);
+          return toolUseResult(runId, RUN_OUTCOME.CANCELLED);
         },
         {
           onRun: async () => {
@@ -732,9 +662,7 @@ describe('runFlowWithLifecycle', () => {
   // the start-time claim this run would adopt the previous run's COMPLETED as
   // its own verdict and drop its abort facts.
   it('does not adopt a previous run terminal phase when a stop lands before start', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-stale-phase-early-stop',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     let terminalResult: AgentRunHandle['result'] | undefined;
 
     try {
@@ -782,12 +710,10 @@ describe('runFlowWithLifecycle', () => {
   // stop that already reads CANCELLED on the stream is this run's outcome too,
   // so a run that never ran must not publish a RUNNING blip on the way out.
   it('publishes no RUNNING blip when the stop that beat run start already cancelled the stream', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-early-stop-no-blip',
-    );
-    publishTestRunStart(ctx.runScope.session, runId, runId);
+    const { runId, runStatus, ctx } = lifecycleFixture();
+    publishTestRunStart(ctx.runScope.session, runId);
     const recorded = recordSessionEvents(ctx.runScope.session, {
-      aggregateId: qualifyAggregateId('stream', runId),
+      aggregateId: qualifyAggregateId('run', runId),
     });
 
     try {
@@ -823,9 +749,7 @@ describe('runFlowWithLifecycle', () => {
   // was interrupted keeps the record that makes it resumable, even when its own
   // report reached completion first.
   it('keeps the flow record of a stopped run whose report says completed', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-stop-during-completion',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
     try {
       const result = await Effect.runPromise(
@@ -834,7 +758,7 @@ describe('runFlowWithLifecycle', () => {
           expect(stop.accepted).toBe(true);
           await Effect.runPromise(stop.settlement);
           expect(runStatus.get(runId)).toBe(RUN_PHASE.CANCELLED);
-          return toolUseResult(runId, runId, RUN_OUTCOME.COMPLETED);
+          return toolUseResult(runId, RUN_OUTCOME.COMPLETED);
         }),
       );
 
@@ -857,9 +781,7 @@ describe('runFlowWithLifecycle', () => {
   // The parent's delivery is a projection of the same terminal fact as the
   // persisted history, so a stopped child never arrives formatted as a failure.
   it('delivers a stopped subagent as cancelled when its flow reports a failure', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-subagent-stop-then-failure',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const onError = vi.fn();
 
     try {
@@ -872,7 +794,7 @@ describe('runFlowWithLifecycle', () => {
             await Effect.runPromise(stop.settlement);
             throw new Error('child exited with code 143');
           },
-          { isSubagent: true, onError },
+          { parentRunId: PARENT_RUN_ID, onError },
         ),
       );
 
@@ -892,12 +814,10 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('lets a stop/kill tear down a subagent suspended at WAITING (issue #7287)', async () => {
-    const { runId, runId, ctx } = lifecycleFixture(
-      'lifecycle-subagent-waiting-kill',
-    );
+    const { runId, ctx } = lifecycleFixture();
     const parentStageId = seedOpenRunGroup(ctx, runId);
     const recorded = recordSessionEvents(ctx.runScope.session, {
-      aggregateId: qualifyAggregateId('stream', runId),
+      aggregateId: qualifyAggregateId('run', runId),
     });
     const followUpsTerminalize = vi.spyOn(
       ctx.runScope.session.followUps,
@@ -906,11 +826,9 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => waitingResult(runId, runId),
-          { isSubagent: true },
-        ),
+        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+          parentRunId: PARENT_RUN_ID,
+        }),
       );
 
       expect(result.outcome).toBe(RUN_PHASE.WAITING);
@@ -947,12 +865,8 @@ describe('runFlowWithLifecycle', () => {
       );
       traceEmit.mockRestore();
 
-      expect(
-        defaultSession().runs.getHandle(runId),
-      ).toBeUndefined();
-      expect(defaultSession().status.get(runId)).toBe(
-        RUN_PHASE.CANCELLED,
-      );
+      expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
+      expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
       expect(followUpsTerminalize).toHaveBeenCalledWith(runId);
       await vi.waitFor(() =>
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
@@ -982,9 +896,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('runs run-end cleanup when waiting stage publication fails', async () => {
-    const { runId, runId, ctx } = lifecycleFixture(
-      'lifecycle-waiting-transcript-failure-run-end',
-    );
+    const { runId, ctx } = lifecycleFixture();
     const stopSessionsForRun = vi.fn(async (_runId: RunId) => {});
     seedOpenRunGroup(ctx, runId);
     await ctx.runScope.session.settlePublications();
@@ -994,11 +906,9 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await Effect.runPromise(
-        runFlowWithLifecycle(
-          ctx,
-          async () => waitingResult(runId, runId),
-          { onRunEnd: stopSessionsForRun },
-        ),
+        runFlowWithLifecycle(ctx, async () => waitingResult(runId), {
+          onRunEnd: stopSessionsForRun,
+        }),
       );
       expect(result.outcome).toBe(RUN_PHASE.WAITING);
       const waitingHandle = takeWaitingHandle(runId);
@@ -1034,15 +944,13 @@ describe('runFlowWithLifecycle', () => {
     ] as const;
 
     for (const expected of cases) {
-      const { runId, runId, runStatus, ctx } = lifecycleFixture(
-        `outcome-${expected.outcome}`,
-      );
+      const { runId, runStatus, ctx } = lifecycleFixture();
       const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
       try {
         const result = await Effect.runPromise(
           runFlowWithLifecycle(ctx, async () =>
-            toolUseResult(runId, runId, expected.outcome),
+            toolUseResult(runId, expected.outcome),
           ),
         );
 
@@ -1067,22 +975,16 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('finalizes an outcome-only failure without fabricating provider error facts', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'outcome-only-failure',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
     const emit = vi.spyOn(ctx.logger, 'emit');
     const onError = vi.fn();
 
     try {
-      const carriedResult = toolUseResult(
-        runId,
-        runId,
-        RUN_OUTCOME.FAILED,
-      );
+      const carriedResult = toolUseResult(runId, RUN_OUTCOME.FAILED);
       const result = await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () => carriedResult, {
-          isSubagent: true,
+          parentRunId: PARENT_RUN_ID,
           onError,
         }),
       );
@@ -1112,9 +1014,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('projects a thrown abort as cancelled on its own stage outcome', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'outcome-thrown-abort',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
     try {
@@ -1138,9 +1038,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('projects an unexpected throw as failed', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'outcome-thrown-error',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
     try {
@@ -1165,17 +1063,15 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('terminalizes a waiting stream when the lifecycle catch path fails', async () => {
-    const { runId, runStatus, ctx } = lifecycleFixture(
-      'outcome-waiting-thrown-error',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
 
     try {
       await expect(
         Effect.runPromise(
           runFlowWithLifecycle(ctx, async () => {
-            expect(
-              runStatus.transition(runId, RUN_PHASE.WAITING, 'wait'),
-            ).toBe(true);
+            expect(runStatus.transition(runId, RUN_PHASE.WAITING, 'wait')).toBe(
+              true,
+            );
             throw new Error('wait node failed');
           }),
         ),
@@ -1188,13 +1084,10 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('passes flow-carried terminal results to subagent error delivery', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-subagent-flow-error',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const carriedResult = {
       category: 'toolUse' as const,
       outcome: RUN_OUTCOME.FAILED,
-      runId,
       runId,
       totalCostUsd: 0.73,
       error: { message: 'subagent failed', userRetryable: false },
@@ -1208,7 +1101,7 @@ describe('runFlowWithLifecycle', () => {
 
       const result = await Effect.runPromise(
         runFlowWithLifecycle(ctx, async () => carriedResult, {
-          isSubagent: true,
+          parentRunId: PARENT_RUN_ID,
           onError,
         }),
       );
@@ -1225,9 +1118,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('publishes the structured error facts a flow carried out on its result', async () => {
-    const { runId, runId, runStatus, ctx } = lifecycleFixture(
-      'lifecycle-carried-flow-error',
-    );
+    const { runId, runStatus, ctx } = lifecycleFixture();
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
     const emit = vi.spyOn(ctx.logger, 'emit');
 
@@ -1237,7 +1128,6 @@ describe('runFlowWithLifecycle', () => {
           runFlowWithLifecycle(ctx, async () => ({
             category: 'toolUse' as const,
             outcome: RUN_OUTCOME.FAILED,
-            runId,
             runId,
             response: 'partial answer',
             error: {
@@ -1277,9 +1167,7 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('classifies a carried missing-api-key failure through the canonical discriminant', async () => {
-    const { runId, runId, ctx } = lifecycleFixture(
-      'lifecycle-carried-missing-key',
-    );
+    const { runId, ctx } = lifecycleFixture();
     const emit = vi.spyOn(ctx.logger, 'emit');
 
     try {
@@ -1288,7 +1176,6 @@ describe('runFlowWithLifecycle', () => {
           runFlowWithLifecycle(ctx, async () => ({
             category: 'toolUse' as const,
             outcome: RUN_OUTCOME.FAILED,
-            runId,
             runId,
             response: '',
             // The retry-state flatten drops the Error and its Symbol marker;
@@ -1317,17 +1204,15 @@ describe('runFlowWithLifecycle', () => {
 });
 
 /** The handle, status machine, and untrack spy every finalize test drives. */
-function finalizeFixture(slug: string): {
-  runId: string;
+function finalizeFixture(): {
   runId: RunId;
   runStatus: RunStatusMachine;
   handle: ReturnType<typeof testRunHandle>;
-  untrack: Mock<(runId: string) => void>;
+  untrack: Mock<(runId: RunId) => void>;
 } {
-  const runId = `exec-${slug}`;
-  const runId = `stream-${slug}` as RunId;
+  const runId =
+    `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
   return {
-    runId,
     runId,
     runStatus: new RunStatusMachine(
       () => {},
@@ -1335,13 +1220,15 @@ function finalizeFixture(slug: string): {
     ),
     handle: testRunHandle({
       runId,
-      parentRunId: runId,
+      parent: PARENT_RUN_ID,
       agent: 'test-agent',
       trace: noopTrace,
     }),
-    untrack: vi.fn<(runId: string) => void>(),
+    untrack: vi.fn<(runId: RunId) => void>(),
   };
 }
+
+let finalizeFixtureCounter = 0;
 
 describe('finalizeRunTerminal', () => {
   // The exactly-once guard must be an atomic, synchronous claim — not a
@@ -1350,8 +1237,7 @@ describe('finalizeRunTerminal', () => {
   // handle) would otherwise both pass the check before the first settles and
   // double-publish persist/emit/settle/untrack.
   it('finalizes exactly once when two callers race across the persist await', async () => {
-    const { runId, runId, runStatus, handle, untrack } =
-      finalizeFixture('finalize-race');
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
     const traceEmit = vi.spyOn(noopTrace, 'emit');
     // Park the first caller at its persist await so the second caller arrives
     // while the first has not yet emitted or settled anything.
@@ -1364,10 +1250,9 @@ describe('finalizeRunTerminal', () => {
       const params = {
         session: defaultSession(),
         handle,
-        executions: { untrack },
+        runs: { untrack },
         runStatus,
         outcome: RUN_OUTCOME.COMPLETED,
-        isSubagent: false,
         trace: noopTrace,
         persistence: { kind: 'finalize', flowRecord: 'delete' },
       } as const;
@@ -1385,7 +1270,6 @@ describe('finalizeRunTerminal', () => {
         event: {
           type: 'result',
           outcome: RUN_OUTCOME.COMPLETED,
-          runId,
           runId,
         },
       });
@@ -1409,8 +1293,7 @@ describe('finalizeRunTerminal', () => {
   });
 
   it('flushes display artifacts before publishing and untracking', async () => {
-    const { runId, runId, runStatus, handle, untrack } =
-      finalizeFixture('finalize-artifact-order');
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
     let releaseFlush: (() => void) | undefined;
     const flushArtifacts = vi.fn(
       () =>
@@ -1431,10 +1314,9 @@ describe('finalizeRunTerminal', () => {
         finalizeRunTerminal({
           session: defaultSession(),
           handle,
-          executions: { untrack },
+          runs: { untrack },
           runStatus,
           outcome: RUN_OUTCOME.COMPLETED,
-          isSubagent: false,
           trace: noopTrace,
           persistence: { kind: 'skip' },
           flushArtifacts,
@@ -1457,8 +1339,7 @@ describe('finalizeRunTerminal', () => {
   });
 
   it('settles and untracks once while reporting terminal metadata failure', async () => {
-    const { runId, runId, runStatus, handle, untrack } =
-      finalizeFixture('finalize-metadata-failure');
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
     const durabilityError = new Error('metadata disk write failed');
     storageMocks.finalizeRun.mockReturnValueOnce(
       Effect.succeed({
@@ -1477,10 +1358,9 @@ describe('finalizeRunTerminal', () => {
         finalizeRunTerminal({
           session: defaultSession(),
           handle,
-          executions: { untrack },
+          runs: { untrack },
           runStatus,
           outcome: RUN_OUTCOME.FAILED,
-          isSubagent: false,
           trace: noopTrace,
           persistence: { kind: 'finalize', flowRecord: 'preserve' },
         }),
@@ -1519,8 +1399,7 @@ describe('finalizeRunTerminal', () => {
   // killed then reports its own non-zero exit as a failure — so the phase, not
   // the report, has to decide, and no caller may cross-check it for itself.
   it('resolves the terminal outcome from an already-cancelled stream phase', async () => {
-    const { runId, runId, runStatus, handle, untrack } =
-      finalizeFixture('finalize-stopped');
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
     const stage = { end: vi.fn() };
 
     try {
@@ -1532,11 +1411,10 @@ describe('finalizeRunTerminal', () => {
         finalizeRunTerminal({
           session: defaultSession(),
           handle,
-          executions: { untrack },
+          runs: { untrack },
           runStatus,
           outcome: RUN_OUTCOME.FAILED,
           error: { kind: 'unexpected', message: 'exited with code 143' },
-          isSubagent: false,
           stage,
           trace: noopTrace,
           persistence: { kind: 'finalize', flowRecord: 'delete' },
@@ -1546,7 +1424,6 @@ describe('finalizeRunTerminal', () => {
       expect(finalized?.event).toMatchObject({
         type: 'result',
         outcome: RUN_OUTCOME.CANCELLED,
-        runId,
         runId,
       });
       // Error facts classified for a failure that the phase says never
@@ -1575,8 +1452,7 @@ describe('finalizeRunTerminal', () => {
   // published FAILED is a terminal fact a later stop cannot rewrite, so a
   // caller reporting `cancelled` does not get to relabel it.
   it('keeps an already-failed stream phase over a later cancelled report', async () => {
-    const { runId, runId, runStatus, handle, untrack } =
-      finalizeFixture('finalize-failed-then-stopped');
+    const { runId, runStatus, handle, untrack } = finalizeFixture();
 
     try {
       seedRunStatusForTest(runStatus, runId, {
@@ -1587,10 +1463,9 @@ describe('finalizeRunTerminal', () => {
         finalizeRunTerminal({
           session: defaultSession(),
           handle,
-          executions: { untrack },
+          runs: { untrack },
           runStatus,
           outcome: RUN_OUTCOME.CANCELLED,
-          isSubagent: false,
           trace: noopTrace,
           persistence: { kind: 'skip' },
         }),
@@ -1599,7 +1474,6 @@ describe('finalizeRunTerminal', () => {
       expect(finalized?.event).toMatchObject({
         type: 'result',
         outcome: RUN_OUTCOME.FAILED,
-        runId,
         runId,
       });
       expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);

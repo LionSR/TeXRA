@@ -24,7 +24,7 @@ import {
   AgentCategory,
   agentMatchesIdentifier,
 } from '@shared/schemas';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
@@ -123,9 +123,7 @@ vi.mock('@agent/storage/childRunDeliveryPersistence', () => ({
       try: async () => {
         await mocks.getRunStore(runId).writeReport(message);
         if (resultMeta !== undefined)
-          await mocks
-            .getRunStore(runId)
-            .writeResultMeta(resultMeta);
+          await mocks.getRunStore(runId).writeResultMeta(resultMeta);
       },
       catch: ensureError,
     }),
@@ -143,10 +141,10 @@ vi.mock('@tools/approval', () => ({
   }),
 }));
 
-const PARENT_STREAM_ID = 'parent-stream' as RunId;
-const CHILD_STREAM_ID = 'child-stream' as RunId;
+const PARENT_RUN_ID = 'parent-run' as RunId;
+const CHILD_RUN_ID = 'child-run' as RunId;
 
-/** The run context shared by nearly every case (stream/stopAfterCycle/session vary). */
+/** The run context shared by nearly every case (run/stopAfterCycle/session vary). */
 function parentRunContext(
   overrides: Partial<{
     runId: RunId;
@@ -156,8 +154,7 @@ function parentRunContext(
   }> = {},
 ): RunContext {
   return createRunContext({
-    runId: PARENT_STREAM_ID,
-    runId: 'parent-exec',
+    runId: PARENT_RUN_ID,
     modelCell: { modelId: 'deepseekT' },
     session: defaultSession(),
     ...overrides,
@@ -206,14 +203,13 @@ async function delegateWithProposalDecision(decision: ProposalResult) {
   }
 }
 
-const STABLE_PARENT_EXECUTION_ID = 'abcdef123456' as RunId;
-const IN_BAND_LOGICAL_EXECUTION_ID = 'aaaaaa111111' as RunId;
+const STABLE_PARENT_RUN_ID = 'abcdef123456' as RunId;
+const IN_BAND_LOGICAL_RUN_ID = 'aaaaaa111111' as RunId;
 
 type PreparedInBandSubagentOptions = Effect.Success<
   ReturnType<Parameters<typeof executeStableSubagentInBand>[0]['prepare']>
 >;
 type InBandSubagentRunOptions = PreparedInBandSubagentOptions & {
-  parentRunId: RunId;
   signal?: AbortSignal;
 };
 
@@ -228,8 +224,7 @@ function delegationOptions(
       model: 'deepseekT',
     },
     agentName: 'review',
-    parentRunId: STABLE_PARENT_EXECUTION_ID,
-    parentRunId: PARENT_STREAM_ID,
+    parentRunId: STABLE_PARENT_RUN_ID,
     session: defaultSession(),
     ...overrides,
   };
@@ -238,12 +233,12 @@ function delegationOptions(
 /** Run the typed required-result path the way production callers reach it. */
 function runInBand(
   options: InBandSubagentRunOptions,
-  runId: RunId = IN_BAND_LOGICAL_EXECUTION_ID,
+  runId: RunId = IN_BAND_LOGICAL_RUN_ID,
 ) {
-  const { parentRunId, signal, ...prepared } = options;
+  const { signal, ...prepared } = options;
   return executeStableSubagentInBand({
     runId,
-    parentRunId,
+    parentRunId: prepared.parentRunId,
     session: prepared.session,
     signal,
     prepare: () => Effect.succeed(prepared),
@@ -262,8 +257,7 @@ function mockExecuteAgentErrorOnce(
     const failed = {
       category: 'toolUse',
       outcome: 'failed',
-      runId: 'child-exec',
-      runId: 'child-stream',
+      runId: CHILD_RUN_ID,
       totalCostUsd,
       ...extra,
     };
@@ -294,15 +288,14 @@ function mockWaitingChildOnce(
   } = {},
 ): void {
   mocks.executeAgent.mockImplementationOnce(
-    async (_config, runId: string, runOptions) => {
+    async (_config, runId: RunId, runOptions) => {
       const handle = testRunHandle({
         runId,
-        parentRunId: PARENT_STREAM_ID,
-        childRunId: CHILD_STREAM_ID,
+        parent: PARENT_RUN_ID,
         agent: 'review',
       });
       defaultSession().runs.track(handle);
-      runOptions.onStreamResolved?.(CHILD_STREAM_ID);
+      runOptions.onStreamResolved?.(runId);
       runOptions.onRun?.(handle);
       options.afterRun?.(handle);
       return {
@@ -311,7 +304,6 @@ function mockWaitingChildOnce(
         response: 'The proof is correct.',
         files: [],
         runId,
-        runId: CHILD_STREAM_ID,
         ...(options.memoryMisses ? { memoryMisses: options.memoryMisses } : {}),
       };
     },
@@ -325,7 +317,7 @@ function stableAttempt(
   return {
     schemaVersion: 1,
     logicalRunId,
-    parentRunId: STABLE_PARENT_EXECUTION_ID,
+    parentRunId: STABLE_PARENT_RUN_ID,
     phase,
   } as const;
 }
@@ -364,15 +356,13 @@ function emptyChildStore() {
 function completedChildStore(
   logicalRunId: RunId,
   result: unknown,
-  parentRunId: string = STABLE_PARENT_EXECUTION_ID,
+  parentRunId: string = STABLE_PARENT_RUN_ID,
 ) {
   return {
     listKeys: vi
       .fn()
       .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
-    read: vi
-      .fn()
-      .mockResolvedValue(stableAttempt(logicalRunId, 'committed')),
+    read: vi.fn().mockResolvedValue(stableAttempt(logicalRunId, 'committed')),
     readMeta: vi.fn(async () => null),
     readResultMeta: vi.fn().mockResolvedValue({
       producer: 'subagent',
@@ -387,7 +377,7 @@ function completedChildStore(
 /** Route parent reads to the sequence store and every child read elsewhere. */
 function useStableStores(sequenceStore: unknown, childStore: unknown): void {
   mocks.getRunStore.mockImplementation((runId: RunId) =>
-    runId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+    runId === STABLE_PARENT_RUN_ID ? sequenceStore : childStore,
   );
 }
 
@@ -398,7 +388,7 @@ function stableSequenceStore(logicalRunId: RunId, nextAttempt = 0) {
       : {
           schemaVersion: 1 as const,
           logicalRunId,
-          parentRunId: STABLE_PARENT_EXECUTION_ID,
+          parentRunId: STABLE_PARENT_RUN_ID,
           nextAttempt,
         };
   return {
@@ -451,10 +441,7 @@ describe('headless delegation', () => {
     mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForRun.mockReturnValue(false);
     mocks.inspectRunLease.mockResolvedValue({ status: 'free' });
-    const memoryStores = new Map<
-      RunId,
-      ReturnType<typeof memoryRunStore>
-    >();
+    const memoryStores = new Map<RunId, ReturnType<typeof memoryRunStore>>();
     mocks.getRunStore.mockImplementation((runId: RunId) => {
       let store = memoryStores.get(runId);
       if (!store) {
@@ -466,8 +453,7 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockResolvedValue({
       category: 'toolUse',
       outcome: 'completed',
-      runId: 'child-exec',
-      runId: 'child-stream',
+      runId: CHILD_RUN_ID,
       response: 'The proof is correct.',
       files: [],
     });
@@ -493,11 +479,11 @@ describe('headless delegation', () => {
             model: 'deepseekT',
           },
         });
-        const { parentRunId, signal, ...prepared } = options;
+        const { signal, ...prepared } = options;
         const run = () =>
           executeStableSubagentInBandEffect({
-            runId: IN_BAND_LOGICAL_EXECUTION_ID,
-            parentRunId,
+            runId: IN_BAND_LOGICAL_RUN_ID,
+            parentRunId: prepared.parentRunId,
             session: prepared.session,
             signal,
             prepare: () => Effect.succeed(prepared),
@@ -533,8 +519,8 @@ describe('headless delegation', () => {
       session.runs.untrack(runId);
       await Effect.runPromise(session.runs.kill(runId).settlement);
     }
-    session.followUps.terminalize(PARENT_STREAM_ID);
-    session.followUps.terminalize(CHILD_STREAM_ID);
+    session.followUps.terminalize(PARENT_RUN_ID);
+    session.followUps.terminalize(CHILD_RUN_ID);
     await waitForChildren(session);
     restoreAgentEngine();
   });
@@ -556,8 +542,7 @@ describe('headless delegation', () => {
       }),
       expect.any(String),
       expect.objectContaining({
-        isSubagent: true,
-        parentRunId: 'parent-stream',
+        parentRunId: PARENT_RUN_ID,
         session: expect.any(Object),
         stopAfterCycle: true,
       }),
@@ -580,8 +565,7 @@ describe('headless delegation', () => {
       return {
         category: 'toolUse',
         outcome: 'completed',
-        runId: 'child-exec',
-        runId: 'child-stream',
+        runId: CHILD_RUN_ID,
         response: 'done',
         files: [],
       };
@@ -634,7 +618,7 @@ describe('headless delegation', () => {
       expect.objectContaining({ agent: 'review' }),
       'review',
       expect.objectContaining({
-        parentRunId: STABLE_PARENT_EXECUTION_ID,
+        parentRunId: STABLE_PARENT_RUN_ID,
         runId: expect.stringContaining(`#${result.runId}`),
       }),
     );
@@ -642,7 +626,7 @@ describe('headless delegation', () => {
       expect.objectContaining({
         producer: 'subagent',
         agentName: 'review',
-        parentRunId: STABLE_PARENT_EXECUTION_ID,
+        parentRunId: STABLE_PARENT_RUN_ID,
         wallTimeMs: expect.any(Number),
         // The loop stamps turn attribution on every manifest it persists —
         // scripted children included (this closed item 10's turnToken gap).
@@ -706,9 +690,7 @@ describe('headless delegation', () => {
       cause: commitError,
     });
 
-    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(
-      logicalRunId,
-    );
+    expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(logicalRunId);
     expect(childStore.write).toHaveBeenCalledWith(
       'stable-subagent-attempt',
       expect.objectContaining({ phase: 'launched' }),
@@ -751,7 +733,7 @@ describe('headless delegation', () => {
   it('records a failed child cost once for durable in-band run', async () => {
     const onCost = vi.fn();
     mockExecuteAgentErrorOnce(0.61, {
-      runId: IN_BAND_LOGICAL_EXECUTION_ID,
+      runId: IN_BAND_LOGICAL_RUN_ID,
       response: 'Partial review.',
     });
 
@@ -778,21 +760,20 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockResolvedValueOnce({
       category: 'toolUse',
       outcome: RUN_PHASE.WAITING,
-      runId: IN_BAND_LOGICAL_EXECUTION_ID,
-      runId: 'child-stream',
+      runId: IN_BAND_LOGICAL_RUN_ID,
       response: 'Waiting for clarification.',
       totalCostUsd: 0.73,
     });
 
     await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
-      `Single-cycle subagent ${IN_BAND_LOGICAL_EXECUTION_ID} unexpectedly suspended.`,
+      `Single-cycle subagent ${IN_BAND_LOGICAL_RUN_ID} unexpectedly suspended.`,
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.any(Object),
-      IN_BAND_LOGICAL_EXECUTION_ID,
+      IN_BAND_LOGICAL_RUN_ID,
       expect.objectContaining({
-        isSubagent: true,
+        parentRunId: STABLE_PARENT_RUN_ID,
         stopAfterCycle: true,
       }),
     );
@@ -831,7 +812,7 @@ describe('headless delegation', () => {
     await expect(
       executeStableSubagentInBand({
         runId: stableRunId,
-        parentRunId: STABLE_PARENT_EXECUTION_ID,
+        parentRunId: STABLE_PARENT_RUN_ID,
         session: defaultSession(),
         prepare,
       }),
@@ -856,19 +837,16 @@ describe('headless delegation', () => {
     };
     const sequenceStore = stableSequenceStore(logicalRunId, 2);
     const missingStore = emptyChildStore();
-    const completedStore = completedChildStore(
-      logicalRunId,
-      persistedResult,
-    );
+    const completedStore = completedChildStore(logicalRunId, persistedResult);
     mocks.getRunStore.mockImplementation((runId: RunId) => {
-      if (runId === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
+      if (runId === STABLE_PARENT_RUN_ID) return sequenceStore;
       return runId === logicalRunId ? missingStore : completedStore;
     });
     const prepare = vi.fn();
 
     const recovered = await executeStableSubagentInBand({
       runId: logicalRunId,
-      parentRunId: STABLE_PARENT_EXECUTION_ID,
+      parentRunId: STABLE_PARENT_RUN_ID,
       session: defaultSession(),
       prepare,
     });
@@ -900,7 +878,7 @@ describe('headless delegation', () => {
     await expect(
       executeStableSubagentInBand({
         runId: stableRunId,
-        parentRunId: STABLE_PARENT_EXECUTION_ID,
+        parentRunId: STABLE_PARENT_RUN_ID,
         session: defaultSession(),
         prepare: vi.fn(),
       }),
@@ -917,9 +895,7 @@ describe('headless delegation', () => {
       listKeys: vi
         .fn()
         .mockResolvedValue(['stable-subagent-attempt', 'config']),
-      read: vi
-        .fn()
-        .mockResolvedValue(stableAttempt(logicalRunId, 'committed')),
+      read: vi.fn().mockResolvedValue(stableAttempt(logicalRunId, 'committed')),
     });
 
     await expect(
@@ -951,7 +927,7 @@ describe('headless delegation', () => {
       const stores = new Map<RunId, Record<string, unknown>>();
       const sequenceStore = stableSequenceStore(logicalRunId, 1);
       mocks.getRunStore.mockImplementation((id: RunId) => {
-        if (id === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
+        if (id === STABLE_PARENT_RUN_ID) return sequenceStore;
         let store = stores.get(id);
         if (store) return store;
         store =
@@ -970,10 +946,7 @@ describe('headless delegation', () => {
         return store;
       });
 
-      const completed = await runInBand(
-        delegationOptions(),
-        logicalRunId,
-      );
+      const completed = await runInBand(delegationOptions(), logicalRunId);
 
       expect(completed.runId).not.toBe(logicalRunId);
       expect(mocks.executeAgent).toHaveBeenCalledOnce();
@@ -1017,7 +990,7 @@ describe('headless delegation', () => {
     const sequenceStore = stableSequenceStore(logicalRunId);
     const priorOutcomes = ['failed', 'cancelled'] as const;
     mocks.getRunStore.mockImplementation((id: RunId) => {
-      if (id === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
+      if (id === STABLE_PARENT_RUN_ID) return sequenceStore;
       let store = stores.get(id);
       if (store) return store;
       const priorOutcome = priorOutcomes[stores.size];
@@ -1045,7 +1018,7 @@ describe('headless delegation', () => {
       expect.anything(),
       'review',
       expect.objectContaining({
-        parentRunId: STABLE_PARENT_EXECUTION_ID,
+        parentRunId: STABLE_PARENT_RUN_ID,
         runId: expect.stringContaining(`#${completed.runId}`),
       }),
     );
@@ -1059,7 +1032,6 @@ describe('headless delegation', () => {
       category: 'toolUse',
       outcome: 'cancelled',
       runId: logicalRunId,
-      runId: 'child-stream',
       response: '',
       files: [],
     });
@@ -1191,8 +1163,7 @@ describe('headless delegation', () => {
       const failed = {
         category: 'toolUse',
         outcome: 'failed',
-        runId: 'child-exec',
-        runId: 'child-stream',
+        runId: CHILD_RUN_ID,
         files: [42],
       } as never;
       await options.onRunError?.(new Error('review model failed'), failed);
@@ -1219,8 +1190,7 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockResolvedValueOnce({
       category: 'toolUse',
       outcome: 'completed',
-      runId: 'child-exec',
-      runId: 'child-stream',
+      runId: CHILD_RUN_ID,
       files: [42],
     });
 
@@ -1251,8 +1221,7 @@ describe('headless delegation', () => {
       return {
         category: 'toolUse',
         outcome: 'cancelled',
-        runId: 'child-exec',
-        runId: 'child-stream',
+        runId: CHILD_RUN_ID,
       };
     });
 
@@ -1430,7 +1399,7 @@ describe('headless delegation', () => {
     const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
     expect(executeOptions).toEqual(
       expect.objectContaining({
-        isSubagent: true,
+        parentRunId: PARENT_RUN_ID,
         onRun: expect.any(Function),
         session: expect.any(Object),
       }),
@@ -1551,7 +1520,7 @@ describe('headless delegation', () => {
       ],
     });
 
-    await withRunContext(parentRunContext({ runId: PARENT_STREAM_ID }), () =>
+    await withRunContext(parentRunContext({ runId: PARENT_RUN_ID }), () =>
       callDelegateReview(),
     );
 
@@ -1573,11 +1542,11 @@ describe('headless delegation', () => {
       // same ordering a real stop-with-detach produces mid-turn.
       afterRun: (handle) => {
         capturedHandle = handle;
-        defaultSession().runs.detachActiveChildren(PARENT_STREAM_ID);
+        defaultSession().runs.detachActiveChildren(PARENT_RUN_ID);
       },
     });
 
-    await withRunContext(parentRunContext({ runId: PARENT_STREAM_ID }), () =>
+    await withRunContext(parentRunContext({ runId: PARENT_RUN_ID }), () =>
       callDelegateReview(),
     );
 
@@ -1586,8 +1555,8 @@ describe('headless delegation', () => {
         expect.stringContaining('The proof is correct.'),
       );
     });
-    expect(capturedHandle?.deliveryTargetRunId).toBeUndefined();
-    expect(defaultSession().followUps.getAll(PARENT_STREAM_ID)).toEqual([]);
-    expect(defaultSession().followUps.getAll(CHILD_STREAM_ID)).toEqual([]);
+    expect(capturedHandle?.deliveryTarget).toBeUndefined();
+    expect(defaultSession().followUps.getAll(PARENT_RUN_ID)).toEqual([]);
+    expect(defaultSession().followUps.getAll(CHILD_RUN_ID)).toEqual([]);
   });
 });

@@ -30,6 +30,7 @@ import {
   bashApprovalRequest,
   toolEditApprovalRequest,
 } from '../progressTestUtils';
+import { generateRunId } from '@utils/core';
 
 /**
  * Plan approval, proposal, and retry requests travel `session.interactions`
@@ -39,7 +40,7 @@ import {
  * installed into a real `SessionHandle` slot.
  */
 
-const runId = 'stream:interactions-test' as RunId;
+const runId = generateRunId();
 const plan: Plan = { objective: 'Route approvals through the session port.' };
 const proposal: AgentProposal = {
   agentCategory: AgentCategory.ToolUse,
@@ -81,14 +82,18 @@ function createPortSession(): {
   const setApprovalBypassState = vi.fn();
   const shown = new Map<
     string,
-    { kind: SettledInteractionKind; runId: string }
+    { kind: SettledInteractionKind; runId: RunId | undefined }
   >();
   const pending = <K extends SettledInteractionKind>(
     kind: K,
-    request: { requestId: string; runId: string },
+    // A question asked outside any run carries the empty run id.
+    request: { requestId: string; runId: RunId | '' },
   ): Promise<never> => {
     uiEvents.push({ event: `show:${kind}`, id: request.requestId });
-    shown.set(request.requestId, { kind, runId: request.runId });
+    shown.set(request.requestId, {
+      kind,
+      runId: request.runId === '' ? undefined : request.runId,
+    });
     return new Promise(() => {});
   };
   const interactions: HostInteractions = {
@@ -813,15 +818,11 @@ describe('session.interactions request bookkeeping', () => {
   it('a stream-scoped cancel settles every pending request for that stream only', async () => {
     const { session, submitPlanDecision, submitProposalDecision } =
       createPortSession();
-    const otherRunId = 'stream:interactions-other' as RunId;
+    const otherRunId = generateRunId();
     try {
       const pendingPlan = requestPlan(session, 'approval:cleanup');
       const pendingProposal = requestProposal(session, 'proposal:cleanup');
-      const surviving = requestPlan(
-        session,
-        'approval:survives',
-        otherRunId,
-      );
+      const surviving = requestPlan(session, 'approval:survives', otherRunId);
 
       session.interactions.cancel({ runId, cause: 'Run ended.' });
 

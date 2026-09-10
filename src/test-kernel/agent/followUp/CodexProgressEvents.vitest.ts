@@ -8,12 +8,7 @@ import {
   CODEX_THREAD_TOOL,
   CODEX_TURN_TOOL,
 } from '@shared/schemas';
-import type {
-  RunId,
-  RunId,
-  TodoItem,
-  TokenUsageStats,
-} from '@shared/schemas';
+import type { RunId, TodoItem, TokenUsageStats } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
@@ -27,8 +22,7 @@ import type {
   ThreadEvent,
 } from '@openai/codex-sdk';
 
-const runId = 'stream:codex-child' as RunId;
-const runId = 'exec:codex-child' as RunId;
+const runId = 'run:codex-child' as RunId;
 
 const todos: TodoItem[] = [
   {
@@ -91,7 +85,7 @@ describe('codex progress events', () => {
     const recorded = recordTraceEvents(trace);
 
     publishCodexTodos(runId, todos, trace);
-    publishAgentCliStreamUsage(runId, runId, usage, trace);
+    publishAgentCliStreamUsage(runId, usage, trace);
 
     expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
@@ -103,9 +97,6 @@ describe('codex progress events', () => {
       {
         payload: {
           runId,
-          // Usage is keyed by storage key alone; an agent-CLI child's is its
-          // run id.
-          storageKey: runId,
           usage,
         },
       },
@@ -179,12 +170,7 @@ describe('codex progress events', () => {
       turnCompleted(5, 2),
     ]);
 
-    const result = await runStreamedTurn(
-      thread,
-      'Do the thing',
-      runId,
-      logger,
-    );
+    const result = await runStreamedTurn(thread, 'Do the thing', runId, logger);
 
     expect(result.finalResponse).toBe('Done.');
 

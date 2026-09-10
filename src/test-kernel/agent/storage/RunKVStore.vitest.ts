@@ -13,14 +13,14 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   aggregateId,
   AgentConfigFieldsSchema,
+  type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
-const runId = 'abcdef';
-const runId = 'stream:abcdef';
+const runId = 'abcdef' as RunId;
 let session: ReturnType<typeof createTestSession>;
 const run = <A, E>(effect: Effect.Effect<A, E>) =>
   effectRuntime().runPromise(effect);
@@ -31,13 +31,12 @@ beforeEach(async () => {
     session.commit([
       {
         type: 'run.start',
-        aggregateId: aggregateId('stream', runId),
-        runId,
+        aggregateId: aggregateId('run', runId),
         identity: { kind: 'agent', agent: 'worker' },
         userFollowUpSupport: 'unsupported',
         isRemote: false,
         category: 'toolUse',
-        background: false,
+        parent: null,
       },
     ]),
   );
@@ -88,7 +87,7 @@ describe('canonical run records', () => {
         yield* session.commit([
           {
             type: 'status',
-            aggregateId: aggregateId('stream', runId),
+            aggregateId: aggregateId('run', runId),
             phase: 'completed',
             cause: 'lifecycle',
           },
@@ -97,7 +96,7 @@ describe('canonical run records', () => {
         yield* session.commit([
           {
             type: 'run.removed',
-            aggregateId: aggregateId('stream', runId),
+            aggregateId: aggregateId('run', runId),
           },
         ]);
         expect(
@@ -110,11 +109,9 @@ describe('canonical run records', () => {
           ]),
         ).toEqual([null, null, null, [], null]);
         const retained = yield* Stream.runCollect(
-          session.events.aggregate(aggregateId('stream', runId), 1),
+          session.events.aggregate(aggregateId('run', runId), 1),
         );
-        expect(retained.some((row) => row.type === 'run.removed')).toBe(
-          true,
-        );
+        expect(retained.some((row) => row.type === 'run.removed')).toBe(true);
       }),
   );
 
@@ -141,19 +138,17 @@ describe('canonical run records', () => {
   });
 
   it('joins child labels through the declared creation edge', async () => {
-    const childId = '123abc';
+    const childId = '123abc' as RunId;
     await run(
       session.commit([
         {
           type: 'run.start',
-          aggregateId: aggregateId('stream', 'stream:child'),
-          runId: childId,
+          aggregateId: aggregateId('run', childId),
           identity: { kind: 'agent', agent: 'assistant' },
           category: 'toolUse',
-          background: true,
           userFollowUpSupport: 'unsupported',
           isRemote: false,
-          parentRunId: runId,
+          parent: { id: runId },
         },
         {
           type: 'run.launchLabel',

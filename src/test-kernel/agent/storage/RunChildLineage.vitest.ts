@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { hasPersistedParent } from '@agent/storage/runLifecycle';
-import { aggregateId } from '@shared/schemas';
+import { getRunRecords } from '@agent/storage';
+import { aggregateId, type RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,
@@ -14,44 +14,43 @@ beforeEach(() => {
   session = createTestSession();
 });
 
-describe('hasPersistedParent', () => {
-  it('returns false for roots and absent executions', async () => {
-    publishTestRunStart(session, 'root', 'aaa001');
+const readParentRunId = (runId: RunId) =>
+  Effect.runPromise(
+    getRunRecords(session, runId)
+      .readMeta()
+      .pipe(Effect.map((meta) => meta?.parentRunId)),
+  );
+
+describe('persisted parent edge', () => {
+  it('is absent for roots and for runs that were never started', async () => {
+    publishTestRunStart(session, 'aaa001' as RunId);
     await session.settlePublications();
-    expect(await Effect.runPromise(hasPersistedParent('aaa001', session))).toBe(
-      false,
-    );
-    expect(await Effect.runPromise(hasPersistedParent('aaa002', session))).toBe(
-      false,
-    );
+    expect(await readParentRunId('aaa001' as RunId)).toBeUndefined();
+    expect(await readParentRunId('aaa002' as RunId)).toBeUndefined();
   });
   it('retains parent identity in the child creation even when reads exclude parent history', async () => {
-    publishTestRunStart(session, 'parent', 'aaa0ff');
+    publishTestRunStart(session, 'aaa0ff' as RunId);
     await session.settlePublications();
     const rows = await Effect.runPromise(
       session.commit([
         {
           type: 'run.start',
-          aggregateId: aggregateId('stream', 'child'),
-          runId: 'aaa010',
-          parentRunId: 'parent',
+          aggregateId: aggregateId('run', 'aaa010' as RunId),
           identity: { kind: 'agent', agent: 'assistant' },
           category: 'toolUse',
           isRemote: false,
           userFollowUpSupport: 'unsupported',
+          parent: { id: 'aaa0ff' as RunId },
         },
       ]),
     );
     expect(rows[0]).toMatchObject({
-      parentRunId: 'aaa0ff',
-      parentStartCommit: 1,
+      parent: { id: 'aaa0ff', startCommit: 1 },
     });
     const ownRows = await Effect.runPromise(
-      session.readRunRecords('aaa010'),
+      session.readRunRecords('aaa010' as RunId),
     );
     expect(ownRows).toHaveLength(1);
-    expect(await Effect.runPromise(hasPersistedParent('aaa010', session))).toBe(
-      true,
-    );
+    expect(await readParentRunId('aaa010' as RunId)).toBe('aaa0ff');
   });
 });

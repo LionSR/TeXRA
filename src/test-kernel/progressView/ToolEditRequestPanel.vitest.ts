@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ToolEditRequestPanel } from '@progressView/frontend/components/ToolEditRequestPanel';
+import { RunIdSchema } from '@shared/schemas/identifiers';
 import type { ToolEditPermission } from '@shared/schemas';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
@@ -12,6 +13,8 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
+const RUN_ID = RunIdSchema.parse('aaaaaaaaaaaa');
+
 function createPermission(
   data: Partial<ToolEditPermission> = {},
 ): ToolEditRequestPanel['permission'] {
@@ -20,7 +23,7 @@ function createPermission(
     data: {
       requestId: 'request-1',
       allowBypass: false,
-      runId: '',
+      runId: RUN_ID,
       path: '/workspace/example.ts',
       relativePath: 'example.ts',
       sourceTool: 'edit',
@@ -203,7 +206,7 @@ describe('tool-edit-request-panel', () => {
 
   it('passes canBypass to the split button and "a" emits approveSession', async () => {
     const element = await mountPanel(
-      createPermission({ allowBypass: true, runId: 'stream-1' }),
+      createPermission({ allowBypass: true, runId: RUN_ID }),
     );
     const actions = recordPermissionActions(element);
 
@@ -219,7 +222,7 @@ describe('tool-edit-request-panel', () => {
 
   it('ignores "a" while the rejection feedback box is open', async () => {
     const element = await mountPanel(
-      createPermission({ allowBypass: true, runId: 'stream-1' }),
+      createPermission({ allowBypass: true, runId: RUN_ID }),
     );
     const actions = recordPermissionActions(element);
 

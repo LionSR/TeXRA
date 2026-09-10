@@ -334,11 +334,9 @@ describe('AgentLaunchContext', () => {
 
   it('projects model changes into the active run context', async () => {
     const session = {} as SessionHandle;
-    const runId = 'launch-context-run';
+    const runId = 'launch-context-run' as RunId;
     const runScope = createRunScope({
-      runId: 'launch-context-stream',
       runId,
-      agentName: 'chat',
       session,
       signal: new AbortController().signal,
     });
@@ -354,7 +352,7 @@ describe('AgentLaunchContext', () => {
         stopAfterCycle: true,
       }),
       config: {
-        agent: runScope.agentName,
+        agent: 'chat',
         model: 'deepseekT',
       },
     } as unknown as AgentLaunchContext;
@@ -385,9 +383,7 @@ describe('AgentLaunchContext', () => {
   it('projects an empty tool policy as absent ambient fields', async () => {
     const session = {} as SessionHandle;
     const runScope = createRunScope({
-      runId: 'launch-context-defaults',
-      runId: 'launch-context-defaults-run',
-      agentName: 'chat',
+      runId: 'launch-context-defaults' as RunId,
       session,
       signal: new AbortController().signal,
     });
@@ -397,7 +393,7 @@ describe('AgentLaunchContext', () => {
       logger: noopTrace,
       modelCell,
       toolPolicy: createToolPolicy(),
-      config: { agent: runScope.agentName, model: 'deepseekT' },
+      config: { agent: 'chat', model: 'deepseekT' },
     } as unknown as AgentLaunchContext;
 
     await withLaunchRunContext(ctx, {}, async () => {
@@ -443,7 +439,6 @@ describe('AgentLaunchContext', () => {
     try {
       await Effect.runPromise(
         registerRun(session, EXECUTION_ID, config, 'chat', {
-          runId: `chat#${EXECUTION_ID}`,
           identity: { kind: 'agent', agent: 'chat' },
         }),
       );
@@ -464,8 +459,10 @@ describe('AgentLaunchContext', () => {
         expect(
           (await recording.read()).slice(0, 3).map((event) => event.type),
         ).toEqual(['run.start', 'run.activate', 'status']);
+        // One aggregate, one counter: the status is the fifth durable row of
+        // the creation batch.
         expect((await recording.read())[2]).toMatchObject({
-          seq: 3,
+          seq: 5,
           phase: RUN_PHASE.RUNNING,
           substate: RUN_SUBSTATE.STARTING,
           runStartedAt: expect.any(Number),
@@ -495,7 +492,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({
       responseTextProcessing,
     });
-    publishTestRunStart(session, 'late-assembly-stream', EXECUTION_ID);
+    publishTestRunStart(session, EXECUTION_ID);
     const terminalEvents = recordSessionEvents(session);
     const stage = noopTrace.openStage('Run');
     const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
@@ -538,7 +535,7 @@ describe('AgentLaunchContext', () => {
           }),
           runId: EXECUTION_ID,
           session,
-          streamTabIdOverride: 'late-assembly-stream',
+          resumed: true,
           suppressErrorNotification: true,
           modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
         }),
@@ -552,9 +549,7 @@ describe('AgentLaunchContext', () => {
       );
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
       expect(handler.dispose).toHaveBeenCalledOnce();
-      expect(session.status.get('late-assembly-stream')).toBe(
-        RUN_PHASE.FAILED,
-      );
+      expect(session.status.get(EXECUTION_ID)).toBe(RUN_PHASE.FAILED);
       expect(detachTrace).toHaveBeenCalledOnce();
       await expect(detachTrace.mock.results[0]?.value).resolves.toContainEqual(
         expect.objectContaining({ type: 'status', phase: RUN_PHASE.FAILED }),

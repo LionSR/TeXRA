@@ -7,7 +7,7 @@ import { Deferred, Effect, Layer, ManagedRuntime } from 'effect';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import { RunIdSchema, type ExternalInquiryPermission } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTestSession,
@@ -15,7 +15,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { ExternalInquiryTool } from '@tools/inquiry/ExternalInquiryTool';
 
-const STREAM = 'stream:inquiry-host-interaction' as RunId;
+const RUN_ID = RunIdSchema.parse('a5c000000001');
 
 describe('ExternalInquiryTool host interaction dispatch', () => {
   // Tool writes a new inquiry record to storage; keep state isolated.
@@ -23,7 +23,7 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
 
   it('surfaces a rejected openExternalInquiry() as a tool error instead of an unhandled rejection', async () => {
     const session = createTestSession();
-    const parentLease = session.followUps.claimLive(STREAM, 'flow')!;
+    const parentLease = session.followUps.claimLive(RUN_ID, 'flow')!;
     session.interactions.use({
       cancel: () => {},
       openExternalInquiry: () =>
@@ -32,7 +32,7 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
 
     try {
       const result = await withRunContext(
-        createRunContext({ runId: STREAM, session }),
+        createRunContext({ runId: RUN_ID, session }),
         () =>
           new ExternalInquiryTool().call({
             command: 'ask',
@@ -58,19 +58,21 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const owners = ['first', 'second'].map((name) => {
+          const owners = [
+            { name: 'first', id: RunIdSchema.parse('a5c000000011') },
+            { name: 'second', id: RunIdSchema.parse('a5c000000012') },
+          ].map(({ name, id }) => {
             const session = createTestSession();
-            const stream = `stream:inquiry-${name}` as RunId;
-            const runId = publishTestRunStart(session, stream);
-            const lease = session.followUps.claimLive(stream, 'flow')!;
-            const received: { question: string; runId?: RunId }[] = [];
+            const runId = publishTestRunStart(session, id);
+            const lease = session.followUps.claimLive(runId, 'flow')!;
+            const received: ExternalInquiryPermission[] = [];
             session.interactions.use({
               cancel: () => {},
               openExternalInquiry: async (permission) => {
                 received.push(permission);
               },
             });
-            return { name, session, stream, runId, lease, received };
+            return { name, session, runId, lease, received };
           });
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => {
@@ -106,7 +108,6 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
             withRunContext(
               createRunContext({
                 session: owner.session,
-                runId: owner.stream,
                 runId: owner.runId,
               }),
               () => new DispatchInquiry().dispatch(owner.name),
@@ -131,7 +132,7 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
                 question,
                 runId,
               })),
-            ).toEqual([{ question: owner.name, runId: owner.stream }]);
+            ).toEqual([{ question: owner.name, runId: owner.runId }]);
           }
         }),
       ),

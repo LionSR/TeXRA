@@ -18,6 +18,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { createRunTrace } from '@transcript';
 import { createRecordingHost } from '../progressTestUtils';
+import { generateRunId } from '@utils/core';
 
 const plan: Plan = { objective: 'Scope session-owned state.' };
 
@@ -25,13 +26,13 @@ describe('session-owned transcripts and follow-up queues', () => {
   it("writes run trace entries to the launching session's transcript store only", async () => {
     const launching = createTestSession();
     const sibling = createTestSession();
-    const runId = 'stream:session-transcript-owner' as RunId;
+    const runId = generateRunId();
 
     try {
       publishTestRunStart(launching, runId);
       await launching.settlePublications();
       const lease = await Effect.runPromise(
-        launching.transcripts.acquireRunResidency(runId, runId),
+        launching.transcripts.acquireRunResidency(runId),
       );
       const handle = createRunTrace(lease);
       const detach = launching.attachRunTrace(handle.trace, runId);
@@ -61,11 +62,11 @@ describe('session-owned transcripts and follow-up queues', () => {
 
   it('commits partial streaming text when status closes the run', async () => {
     const session = createTestSession();
-    const runId = 'stream:partial-status-close' as RunId;
+    const runId = generateRunId();
     publishTestRunStart(session, runId);
     await session.settlePublications();
     const lease = await Effect.runPromise(
-      session.transcripts.acquireRunResidency(runId, runId),
+      session.transcripts.acquireRunResidency(runId),
     );
     const handle = createRunTrace(lease);
     const detach = session.attachRunTrace(handle.trace, runId);
@@ -97,7 +98,7 @@ describe('session-owned transcripts and follow-up queues', () => {
   it('keeps same-stream follow-up queues isolated by session', () => {
     const a = createTestSession();
     const b = createTestSession();
-    const runId = 'stream:session-followups' as RunId;
+    const runId = generateRunId();
 
     try {
       a.followUps.submit(runId, { text: 'from a' }, 'recoverable');
@@ -120,7 +121,7 @@ describe('approval reset scope', () => {
     const b = createTestSession();
     const hostA = createRecordingHost();
     const hostB = createRecordingHost();
-    const runId = 'stream:approval-scope' as RunId;
+    const runId = generateRunId();
     a.interactions.use(hostA.interactions);
     b.interactions.use(hostB.interactions);
 
@@ -157,16 +158,15 @@ describe('approval reset scope', () => {
 describe('sendFollowUp host-path session routing', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
     const processSession = createTestSession();
-    const parentRun = 'stream:fu-parent' as RunId;
+    const parentRun = generateRunId();
 
     try {
       // A child run is tracked in the explicit process session, as desktop
       // composition does instead of using the module default.
       processSession.runs.track(
         testRunHandle({
-          runId: 'exec:fu-child',
-          parentRunId: parentRun,
-          childRunId: 'stream:fu-child' as RunId,
+          runId: generateRunId(),
+          parent: parentRun,
           agent: 'orchestrator',
         }),
       );
@@ -183,7 +183,9 @@ describe('sendFollowUp host-path session routing', () => {
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
       // The default session does not own this run; selecting the actual
-      // session is required for desktop follow-up delivery.
+      // session is required for desktop follow-up delivery. With no live flow
+      // and no checkpoint of its own, the classification it falls back to is
+      // `finished`.
       await expect(
         Effect.runPromise(
           submitFollowUp(parentRun, 'continue', {
@@ -192,7 +194,7 @@ describe('sendFollowUp host-path session routing', () => {
         ),
       ).resolves.toEqual({
         status: 'failed',
-        reason: 'not_resumable',
+        reason: 'finished',
       });
     } finally {
       processSession.followUps.terminalize(parentRun);

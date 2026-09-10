@@ -85,9 +85,9 @@ import {
   AgentConfigFieldsSchema,
   LocalRuntimeStateSchema,
   RUN_PHASE,
+  RunIdSchema,
   type RunId,
   type SessionEventDraft,
-  type RunId,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
@@ -110,10 +110,10 @@ vi.mock('node:child_process', async (importOriginal) => {
 
 const SELF = '["test-host",4242,"self-start"]';
 const OTHER = '["test-host",4343,"other-start"]';
-const STREAM = 'stream:framing' as RunId;
-const EXECUTION = 'ab12cd' as RunId;
-const OLDER = 'stream:older' as RunId;
-const NEWER = 'stream:newer' as RunId;
+/** The run every case here is about; one id, the key of its one aggregate. */
+const RUN = RunIdSchema.parse('ab12cd');
+const OLDER = RunIdSchema.parse('ab12ce');
+const NEWER = RunIdSchema.parse('ef56ab');
 
 /** Wait on the fold's level until it holds a view `ready` accepts: the ref
  *  replays its current value on subscribe, so a view already there ends the
@@ -126,24 +126,24 @@ const settle = (
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
-  aggregateId: qualifyAggregateId('stream', STREAM),
-  runId: EXECUTION,
+  aggregateId: qualifyAggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
   category: AgentCategory.ToolUse,
   isRemote: false,
+  parent: null,
 };
 
 const waiting: SessionEventDraft = {
   type: 'status',
-  aggregateId: qualifyAggregateId('stream', STREAM),
+  aggregateId: qualifyAggregateId('run', RUN),
   phase: RUN_PHASE.WAITING,
   cause: 'wait',
 };
 
 const requested: SessionEventDraft = {
   type: 'approval.requested',
-  aggregateId: qualifyAggregateId('stream', STREAM),
+  aggregateId: qualifyAggregateId('run', RUN),
   requestId: 'req-1',
   payload: {
     kind: 'bash',
@@ -151,7 +151,7 @@ const requested: SessionEventDraft = {
       requestId: 'req-1',
       command: 'lake build',
       allowBypass: true,
-      runId: STREAM,
+      runId: RUN,
     },
   },
 };
@@ -191,17 +191,17 @@ const graph = (history: readonly SessionEventDraft[]) => {
   );
 };
 
-/** What a renderer would draw of each state: the stream's status and the
+/** What a renderer would draw of each state: the run's status and the
  *  outstanding approvals, at the state's cursor. */
 function drawn(view: SessionView) {
   return {
     cursor: view.cursor,
-    status: view.runs.get(STREAM)?.status ?? null,
+    status: view.runs.get(RUN)?.status ?? null,
     approvals: view.approvals.map((a) => a.requestId),
   };
 }
 
-/** The drawn states with the stream present, consecutive repeats
+/** The drawn states with the run present, consecutive repeats
  *  collapsed: a local-snapshot replay publishes a state nothing drawn
  *  differs in. */
 function drawnSequence(states: Iterable<ReturnType<typeof drawn>>) {
@@ -230,37 +230,35 @@ beforeAll(() => {
 });
 
 describe('session events and view', () => {
-  it.effect(
-    'keeps an inquiry independent of a removed stream with the same logical id',
-    () =>
-      Effect.gen(function* () {
-        const events = yield* SessionEvents;
-        const log = yield* Database;
-        const logicalId = 'ei_012345abcdef';
-        const stream = qualifyAggregateId('stream', logicalId);
-        const inquiry = qualifyAggregateId('inquiry', logicalId);
-        const committed = yield* events.publish([
-          { ...runStart, aggregateId: stream },
-          {
-            type: 'inquiryThreadUpdated',
-            aggregateId: inquiry,
-            threadId: logicalId,
-            parentRunId: null,
-            status: 'open',
-            lastQuestionPreview: 'Which boundary condition applies?',
-            lastActivityIso: '2026-09-06T12:00:00.000Z',
-            turnCount: 1,
-          },
-          { type: 'run.removed', aggregateId: stream },
-        ]);
-        expect(yield* log.readAll(0)).toEqual(committed);
-        expect((yield* log.aggregateState([stream]))[0]?.closed).toBe(true);
-        expect((yield* log.aggregateState([inquiry]))[0]?.closed).toBe(false);
-        const rows = yield* Stream.runCollect(events.aggregate(inquiry, 0));
-        expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
-          { type: 'inquiryThreadUpdated', seq: 1 },
-        ]);
-      }).pipe(Effect.provide(graph([]))),
+  it.effect('keeps an inquiry independent of the run it was asked under', () =>
+    Effect.gen(function* () {
+      const events = yield* SessionEvents;
+      const log = yield* Database;
+      const threadId = 'ei_012345abcdef';
+      const run = qualifyAggregateId('run', RUN);
+      const inquiry = qualifyAggregateId('inquiry', threadId);
+      const committed = yield* events.publish([
+        runStart,
+        {
+          type: 'inquiryThreadUpdated',
+          aggregateId: inquiry,
+          threadId,
+          parentRunId: null,
+          status: 'open',
+          lastQuestionPreview: 'Which boundary condition applies?',
+          lastActivityIso: '2026-09-06T12:00:00.000Z',
+          turnCount: 1,
+        },
+        { type: 'run.removed', aggregateId: run },
+      ]);
+      expect(yield* log.readAll(0)).toEqual(committed);
+      expect((yield* log.aggregateState([run]))[0]?.closed).toBe(true);
+      expect((yield* log.aggregateState([inquiry]))[0]?.closed).toBe(false);
+      const rows = yield* Stream.runCollect(events.aggregate(inquiry, 0));
+      expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
+        { type: 'inquiryThreadUpdated', seq: 1 },
+      ]);
+    }).pipe(Effect.provide(graph([]))),
   );
 
   it.effect(
@@ -268,15 +266,15 @@ describe('session events and view', () => {
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
-        const oldParent = qualifyAggregateId('stream', STREAM);
-        const newParentId = 'new-inquiry-parent' as RunId;
-        const newParent = qualifyAggregateId('stream', newParentId);
+        const oldParent = qualifyAggregateId('run', RUN);
+        const newParentId = RunIdSchema.parse('aabbccdd1122');
+        const newParent = qualifyAggregateId('run', newParentId);
         const inquiry = qualifyAggregateId('inquiry', 'ei_012345abcdef');
         const opened = {
           type: 'inquiryThreadUpdated' as const,
           aggregateId: inquiry,
           threadId: 'ei_012345abcdef',
-          parentRunId: STREAM,
+          parentRunId: RUN,
           status: 'open' as const,
           lastQuestionPreview: 'Which boundary condition applies?',
           lastActivityIso: '2026-09-07T12:00:00.000Z',
@@ -284,11 +282,7 @@ describe('session events and view', () => {
         };
         yield* db.appendAll([
           runStart,
-          {
-            ...runStart,
-            aggregateId: newParent,
-            runId: 'aabbccdd1122' as RunId,
-          },
+          { ...runStart, aggregateId: newParent },
           opened,
         ]);
         expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
@@ -357,7 +351,7 @@ describe('session events and view', () => {
       const view = yield* SessionViewService;
       // Every state the fold publishes, from before its marker until the
       // tail has folded both live publishes, drawn as it is published: a
-      // view's stream index is shared with the views after it. `changes`
+      // view's run index is shared with the views after it. `changes`
       // replays the state it holds on subscribe: the empty view before the
       // marker, or the marker's state when the fold got there first.
       const states = yield* Effect.forkScoped(
@@ -369,24 +363,24 @@ describe('session events and view', () => {
       );
       // The marker is out before the tail rows below are published, so
       // they reach the fold as the tail and not as part of its cold read.
-      yield* settle(view.ref, (v) => v.runs.has(STREAM));
+      yield* settle(view.ref, (v) => v.runs.has(RUN));
       yield* events.publish([
         {
           type: 'approval.resolved',
-          aggregateId: qualifyAggregateId('stream', STREAM),
+          aggregateId: qualifyAggregateId('run', RUN),
           requestId: 'req-1',
         },
       ]);
       yield* events.publish([
         {
           type: 'status',
-          aggregateId: qualifyAggregateId('stream', STREAM),
+          aggregateId: qualifyAggregateId('run', RUN),
           phase: RUN_PHASE.RUNNING,
           previousPhase: RUN_PHASE.WAITING,
           cause: 'resume',
         },
       ]);
-      // The first state with the stream in it has all of the history: no
+      // The first state with the run in it has all of the history: no
       // state with the run started but not yet waiting, or waiting with
       // no approval, is ever published. The anchor is the seeded log's
       // level, so the history is under it and the tail repeats none of it.
@@ -403,10 +397,10 @@ describe('session events and view', () => {
       Effect.gen(function* () {
         const view = yield* SessionViewService;
         const local = yield* LocalRuntimeSource;
-        yield* settle(view.ref, (v) => v.runs.has(STREAM));
+        yield* settle(view.ref, (v) => v.runs.has(RUN));
         // This process owns the run: it waits on the user.
         const own = yield* SubscriptionRef.get(view.ref);
-        expect(own.runs.get(STREAM)?.group).toBe('waiting');
+        expect(own.runs.get(RUN)?.group).toBe('waiting');
         expect(own.rollup).toMatchObject({ waiting: 1, interrupted: 0 });
         // The owner is another process that is gone: nothing can answer.
         yield* SubscriptionRef.set(local.ref, {
@@ -416,37 +410,34 @@ describe('session events and view', () => {
         });
         yield* settle(
           view.ref,
-          (v) => v.runs.get(STREAM)?.group === 'interrupted',
+          (v) => v.runs.get(RUN)?.group === 'interrupted',
         );
         const orphaned = yield* SubscriptionRef.get(view.ref);
-        expect(orphaned.runs.get(STREAM)?.group).toBe('interrupted');
-        expect(orphaned.runs.get(STREAM)?.readOnly).toBe(false);
+        expect(orphaned.runs.get(RUN)?.group).toBe('interrupted');
+        expect(orphaned.runs.get(RUN)?.readOnly).toBe(false);
         // The owner is another process that is alive: held, waiting on it.
         yield* SubscriptionRef.set(local.ref, {
           self: [OTHER],
           dead: [],
           unreadable: [],
         });
-        yield* settle(
-          view.ref,
-          (v) => v.runs.get(STREAM)?.readOnly === true,
-        );
+        yield* settle(view.ref, (v) => v.runs.get(RUN)?.readOnly === true);
         const held = yield* SubscriptionRef.get(view.ref);
-        expect(held.runs.get(STREAM)?.group).toBe('waiting');
-        expect(held.runs.get(STREAM)?.readOnly).toBe(true);
+        expect(held.runs.get(RUN)?.group).toBe('waiting');
+        expect(held.runs.get(RUN)?.readOnly).toBe(true);
         // A live process can release its claim without writing another event.
         const db = yield* Database;
-        const id = qualifyAggregateId('stream', STREAM);
+        const id = qualifyAggregateId('run', RUN);
         yield* db.releaseClaims([id]);
-        yield* settle(view.ref, (v) => v.runs.get(STREAM)?.ownerId === null);
+        yield* settle(view.ref, (v) => v.runs.get(RUN)?.ownerId === null);
         const released = yield* SubscriptionRef.get(view.ref);
         expect(released.cursor).toBe(held.cursor);
-        expect(released.runs.get(STREAM)?.group).toBe('interrupted');
-        expect(released.runs.get(STREAM)?.readOnly).toBe(false);
+        expect(released.runs.get(RUN)?.group).toBe('interrupted');
+        expect(released.runs.get(RUN)?.readOnly).toBe(false);
         expect((yield* db.readAggregate(id, 1))[0]?.ownerId).toBe(SELF);
       }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
-  it.effect('lists stored stream facts in commit order and on the wire', () =>
+  it.effect('lists stored run facts in commit order and on the wire', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;
       const log = yield* Database;
@@ -490,34 +481,26 @@ describe('session events and view', () => {
         frame.success,
         frame.success ? '' : JSON.stringify(frame.error.issues, null, 1),
       ).toBe(true);
-      // A stream born after the build enters through its own row alone,
+      // A run born after the build enters through its own row alone,
       // above the reserved space, so a renderer attached at open sees it
       // as new.
       yield* events.publish([
-        { ...runStart, aggregateId: qualifyAggregateId('stream', STREAM) },
+        { ...runStart, aggregateId: qualifyAggregateId('run', RUN) },
       ]);
-      yield* settle(view.ref, (v) => v.runs.has(STREAM));
+      yield* settle(view.ref, (v) => v.runs.has(RUN));
       const live = yield* SubscriptionRef.get(view.ref);
-      expect(live.runs.get(STREAM)?.createdAt).toBeGreaterThan(
+      expect(live.runs.get(RUN)?.createdAt).toBeGreaterThan(
         newer?.createdAt ?? 0,
       );
       expect(live.runs.size).toBe(3);
     }).pipe(
       Effect.provide(
         graph([
-          {
-            ...runStart,
-            runId: 'ab12ce',
-            aggregateId: qualifyAggregateId('stream', OLDER),
-          },
-          {
-            ...runStart,
-            runId: 'ab12cf',
-            aggregateId: qualifyAggregateId('stream', NEWER),
-          },
+          { ...runStart, aggregateId: qualifyAggregateId('run', OLDER) },
+          { ...runStart, aggregateId: qualifyAggregateId('run', NEWER) },
           {
             type: 'updateRunDescription',
-            aggregateId: qualifyAggregateId('stream', NEWER),
+            aggregateId: qualifyAggregateId('run', NEWER),
             description: 'the newer run',
           },
         ]),
@@ -547,7 +530,7 @@ describe('Sessions owner', () => {
         const stopAgentRun = vi.fn(() => Effect.void);
         const session = {
           view: view.ref,
-          executions: { stopAgentRun },
+          runs: { stopAgentRun },
         } as unknown as SessionHandle;
         const requests = sessionRequests(
           session,
@@ -557,23 +540,20 @@ describe('Sessions owner', () => {
         );
         // The displayed fold was built as SELF and considers this run writable.
         // This requesting process is OTHER; it must respect the current claim.
-        yield* settle(view.ref, (v) => v.runs.has(STREAM));
+        yield* settle(view.ref, (v) => v.runs.has(RUN));
         expect(
-          SubscriptionRef.getUnsafe(view.ref).runs.get(STREAM)?.readOnly,
+          SubscriptionRef.getUnsafe(view.ref).runs.get(RUN)?.readOnly,
         ).toBe(false);
-        const request = { kind: 'stream.stop', runId: STREAM } as const;
+        const request = { kind: 'stream.stop', runId: RUN } as const;
         const refused = yield* requests.request(request).pipe(Effect.flip);
         expect(refused._tag).toBe('NotOwner');
         expect(stopAgentRun).not.toHaveBeenCalled();
 
-        yield* db.releaseClaims([qualifyAggregateId('stream', STREAM)]);
+        yield* db.releaseClaims([qualifyAggregateId('run', RUN)]);
         yield* SubscriptionRef.update(view.ref, (v) => ({
           ...v,
           runs: new Map(
-            [...v.runs].map(([id, stream]) => [
-              id,
-              { ...stream, readOnly: true },
-            ]),
+            [...v.runs].map(([id, run]) => [id, { ...run, readOnly: true }]),
           ),
         }));
         // A released claim is not held, even while the display still says so.
@@ -601,14 +581,8 @@ describe('Sessions owner', () => {
     });
     return live;
   };
-  const track = (session: SessionHandle, runId: string) =>
-    session.runs.track(
-      testRunHandle({
-        runId,
-        parentRunId: `stream:${runId}` as RunId,
-        agent: 'chat',
-      }),
-    );
+  const track = (session: SessionHandle, runId: RunId) =>
+    session.runs.track(testRunHandle({ runId, agent: 'chat' }));
 
   // Real polling loops (`vi.waitFor`) on the process runtime's live work:
   // `it.live`, so nothing the session does waits on a test clock.
@@ -624,14 +598,10 @@ describe('Sessions owner', () => {
         try {
           session.publish([
             runStart,
-            {
-              ...runStart,
-              runId: 'ab12ce',
-              aggregateId: qualifyAggregateId('stream', OLDER),
-            },
+            { ...runStart, aggregateId: qualifyAggregateId('run', OLDER) },
             {
               type: 'run.removed',
-              aggregateId: qualifyAggregateId('stream', STREAM),
+              aggregateId: qualifyAggregateId('run', RUN),
             },
           ]);
           yield* Effect.promise(() =>
@@ -639,7 +609,7 @@ describe('Sessions owner', () => {
           );
           session.publishStatus({
             type: 'status',
-            runId: STREAM,
+            runId: RUN,
             phase: RUN_PHASE.COMPLETED,
             cause: 'lifecycle',
           });
@@ -654,9 +624,9 @@ describe('Sessions owner', () => {
           );
           expect(handleStatus).toHaveBeenCalledWith(OLDER);
           const received = yield* Effect.all(
-            [STREAM, OLDER].map((id) =>
+            [RUN, OLDER].map((id) =>
               Stream.runCollect(
-                session.events.aggregate(qualifyAggregateId('stream', id), 0),
+                session.events.aggregate(qualifyAggregateId('run', id), 0),
               ),
             ),
           );
@@ -665,7 +635,7 @@ describe('Sessions owner', () => {
           ).toEqual([
             expect.objectContaining({
               type: 'status',
-              aggregateId: qualifyAggregateId('stream', OLDER),
+              aggregateId: qualifyAggregateId('run', OLDER),
               phase: RUN_PHASE.WAITING,
               seq: 2,
               commit: 4,
@@ -674,13 +644,11 @@ describe('Sessions owner', () => {
           const result = {
             type: 'result',
             outcome: 'completed',
-            runId: EXECUTION,
-            runId: STREAM,
+            runId: RUN,
             agentName: 'chat',
             category: AgentCategory.ToolUse,
-            isSubagent: false,
           } as const;
-          session.publishRunEvent(STREAM, result);
+          session.publishRunEvent(RUN, result);
           session.publishRunEvent(OLDER, { ...result, runId: OLDER });
           yield* Effect.promise(() =>
             vi.waitFor(() => expect(onResult).toHaveBeenCalledOnce()),
@@ -694,7 +662,7 @@ describe('Sessions owner', () => {
             commit: 5,
           });
           const committed = yield* Stream.runCollect(
-            session.events.aggregate(qualifyAggregateId('stream', OLDER), 0),
+            session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
           );
           for (const event of committed)
             yield* session.receiveCommittedEvent({ ...event, ownerId: OTHER });
@@ -710,7 +678,7 @@ describe('Sessions owner', () => {
 
   // #12017's ownership fence must not reach the fold: the snapshot store is
   // an in-memory reading of the shared table, and its synchronous accessors
-  // are the runtime's answer for any stream, including one another process
+  // are the runtime's answer for any run, including one another process
   // owns.
   it.live(
     "folds another process's committed facts without firing local side effects",
@@ -719,18 +687,17 @@ describe('Sessions owner', () => {
         const session = open('/workspace/owner/foreign-fold');
         const onResult = vi.fn();
         const detachResult = session.onResult(onResult);
-        const foreign = 'stream:foreign' as RunId;
-        const aggregateId = qualifyAggregateId('stream', foreign);
-        const foreignRun = 'cd34ef' as RunId;
+        const foreign = RunIdSchema.parse('cd34ef');
+        const aggregateId = qualifyAggregateId('run', foreign);
         try {
           yield* session.receiveCommittedEvent({
             type: 'run.start',
             aggregateId,
-            runId: foreignRun,
             identity: { kind: 'agent', agent: 'chat' },
             userFollowUpSupport: 'unsupported',
             category: AgentCategory.ToolUse,
             isRemote: false,
+            parent: null,
             ownerId: OTHER,
             at: 0,
             seq: 1,
@@ -749,10 +716,8 @@ describe('Sessions owner', () => {
             type: 'result',
             aggregateId,
             outcome: 'completed',
-            runId: foreignRun,
             agentName: 'chat',
             category: AgentCategory.ToolUse,
-            isSubagent: false,
             ownerId: OTHER,
             at: 0,
             seq: 3,
@@ -760,7 +725,6 @@ describe('Sessions owner', () => {
           });
           expect(session.snapshots.hasProvenance(foreign)).toBe(true);
           expect(session.snapshots.getRunMetadata(foreign)).toMatchObject({
-            runId: foreignRun,
             description: 'a run in another process',
           });
           // Host presentation of a terminal result stays with the process
@@ -782,7 +746,7 @@ describe('Sessions owner', () => {
         yield* Effect.promise(() => session.settlePublications());
         const pending = session.interactions.requestPlanApproval({
           requestId: 'closing-plan',
-          runId: STREAM,
+          runId: RUN,
           plan: { objective: 'Settle the pending approval during close.' },
           goalEnabled: false,
         });
@@ -790,18 +754,18 @@ describe('Sessions owner', () => {
         expect(SubscriptionRef.getUnsafe(session.view).approvals).toHaveLength(
           1,
         );
-        track(session, 'exec:settled');
+        const settled = RunIdSchema.parse('aa0001');
+        track(session, settled);
         // The run completes: its driver untracks it as it unwinds.
-        session.runs.untrack('exec:settled');
+        session.runs.untrack(settled);
         // A native child between turns, detached from its stopped parent: its
         // activation is its only record, so the close must stop it itself, and
         // wait for the loop to release the activation after its last delivery.
         let releaseChild = (): void => {};
         const interrupt = vi.fn(() => releaseChild());
         releaseChild = session.runs.reserveChildActivation({
-          runId: 'exec:child' as RunId,
-          parentRunId: 'stream:exec:settled' as RunId,
-          childRunId: 'stream:exec:child' as RunId,
+          runId: RunIdSchema.parse('aa0002'),
+          parentRunId: settled,
           interrupt,
           detach: () => {},
           isDetached: () => true,
@@ -832,8 +796,7 @@ describe('Sessions owner', () => {
         const root = '/workspace/owner/waiting-teardown';
         const session = open(root);
         const handle = testRunHandle({
-          runId: 'exec:waiting-teardown',
-          parentRunId: 'stream:exec:waiting-teardown' as RunId,
+          runId: RunIdSchema.parse('aa0004'),
           agent: 'chat',
         });
         const release = yield* Deferred.make<void>();
@@ -846,9 +809,7 @@ describe('Sessions owner', () => {
         session.runs.track(handle);
         const closing = yield* Effect.forkChild(closeSession(root));
         yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(session.runs.getActiveIds()).toEqual([]),
-          ),
+          vi.waitFor(() => expect(session.runs.getActiveIds()).toEqual([])),
         );
         yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
         expect(yield* Fiber.join(closing)).toEqual({
@@ -869,7 +830,8 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const session = open('/workspace/owner/abandoned');
         // A run that ignores its interrupt: no handler, no driver to unwind it.
-        track(session, 'exec:slow');
+        const slow = RunIdSchema.parse('aa0003');
+        track(session, slow);
         const closing = yield* Effect.forkChild(
           closeSession('/workspace/owner/abandoned'),
         );
@@ -881,10 +843,10 @@ describe('Sessions owner', () => {
         yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
         expect(yield* Fiber.join(closing)).toEqual({
           settled: false,
-          abandoned: ['exec:slow'],
+          abandoned: [slow],
         });
         expect(isLive(session)).toBe(true);
-        session.runs.untrack('exec:slow');
+        session.runs.untrack(slow);
         yield* Effect.promise(() =>
           vi.waitFor(() => expect(isLive(session)).toBe(false)),
         );
@@ -918,8 +880,7 @@ describe('the C1 event table and the C6 publisher', () => {
 
   const olderStart: SessionEventDraft = {
     ...runStart,
-    runId: 'ab12ce',
-    aggregateId: qualifyAggregateId('stream', OLDER),
+    aggregateId: qualifyAggregateId('run', OLDER),
   };
 
   /** A connection of the kind another host process would open, on the file
@@ -964,14 +925,15 @@ describe('the C1 event table and the C6 publisher', () => {
         (opened) => Effect.sync(() => opened.close()),
       );
       connection.exec(`
-        CREATE TABLE accepted_execution (id TEXT PRIMARY KEY);
-        INSERT INTO accepted_execution VALUES ('ab12ce');
-        CREATE TABLE committed_execution (
-          id TEXT REFERENCES accepted_execution(id) DEFERRABLE INITIALLY DEFERRED
+        CREATE TABLE accepted_run (id TEXT PRIMARY KEY);
+        INSERT INTO accepted_run VALUES ('${OLDER}');
+        CREATE TABLE committed_run (
+          id TEXT REFERENCES accepted_run(id) DEFERRABLE INITIALLY DEFERRED
         );
-        CREATE TRIGGER validate_execution AFTER INSERT ON event
+        CREATE TRIGGER validate_run AFTER INSERT ON event
         BEGIN
-          INSERT INTO committed_execution VALUES (json_extract(NEW.data, '$.runId'));
+          INSERT INTO committed_run
+            VALUES (json_extract(NEW.aggregate_id, '$[1]'));
         END;
       `);
 
@@ -989,9 +951,9 @@ describe('the C1 event table and the C6 publisher', () => {
       expect(committed).toHaveLength(1);
       expect(committed[0]?.commit).toBe(1);
       expect(yield* database.readAll(0)).toEqual(committed);
-      expect(
-        connection.prepare('SELECT id FROM committed_execution').all(),
-      ).toEqual([{ id: 'ab12ce' }]);
+      expect(connection.prepare('SELECT id FROM committed_run').all()).toEqual([
+        { id: OLDER },
+      ]);
       expect(yield* SubscriptionRef.get(database.level)).toBe(1);
       expect(yield* SubscriptionRef.get(database.observedCommit)).toBe(1);
     }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
@@ -1095,10 +1057,10 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(
           [...first, ...second].map((e) => [e.aggregateId, e.seq, e.commit]),
         ).toEqual([
-          [qualifyAggregateId('stream', STREAM), 1, 1],
-          [qualifyAggregateId('stream', OLDER), 1, 2],
-          [qualifyAggregateId('stream', STREAM), 2, 3],
-          [qualifyAggregateId('stream', STREAM), 3, 4],
+          [qualifyAggregateId('run', RUN), 1, 1],
+          [qualifyAggregateId('run', OLDER), 1, 2],
+          [qualifyAggregateId('run', RUN), 2, 3],
+          [qualifyAggregateId('run', RUN), 3, 4],
         ]);
         // The writer is the process, stamped by the layer (C5), and `at` is
         // the layer's own clock: no caller passes either.
@@ -1108,17 +1070,15 @@ describe('the C1 event table and the C6 publisher', () => {
         // One wake per committed batch, independent of its event ordinal.
         expect(yield* SubscriptionRef.get(db.level)).toBe(2);
         expect(yield* db.currentCommit).toBe(4);
-        // A run has one owning stream. A conflicting creation rolls
-        // back its stream row as well as its event and sequence allocation.
-        const conflicting = qualifyAggregateId('stream', NEWER);
-        expect(
-          (yield* Effect.flip(
-            db.appendAll([{ ...runStart, aggregateId: conflicting }]),
-          ))._tag,
-        ).toBe('DatabaseWriteFailed');
-        expect(yield* db.aggregateState([conflicting])).toEqual([]);
-        expect(yield* db.currentCommit).toBe(4);
-        expect(yield* SubscriptionRef.get(db.level)).toBe(2);
+        // A run begins with exactly one `run.start` (decision 9): a second
+        // creation of a live run is refused, and the sequence it allocated
+        // rolls back with it.
+        expect((yield* Effect.flip(db.appendAll([runStart])))._tag).toBe(
+          'DatabaseWriteFailed',
+        );
+        expect((yield* db.appendAll([waiting]))[0]?.seq).toBe(4);
+        expect(yield* db.currentCommit).toBe(5);
+        expect(yield* SubscriptionRef.get(db.level)).toBe(3);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
@@ -1129,37 +1089,36 @@ describe('the C1 event table and the C6 publisher', () => {
       const storage = workspace();
       return Effect.gen(function* () {
         const db = yield* Database;
-        const child = {
+        const child: SessionEventDraft = {
           ...olderStart,
-          parentRunId: STREAM,
-          parentStartCommit: 999,
+          parent: { id: RUN },
         };
         // A missing parent rejects the complete batch, including the earlier
         // creation and the child's sequence reservation.
         const rejected = yield* Effect.flip(
           db.appendAll([
             runStart,
-            { ...child, parentRunId: 'stream:missing' as RunId },
+            { ...child, parent: { id: RunIdSchema.parse('ffff00') } },
           ]),
         );
         expect(rejected._tag).toBe('DatabaseWriteFailed');
         expect(yield* db.readAll(0)).toEqual([]);
         expect(yield* SubscriptionRef.get(db.level)).toBe(0);
 
-        // The parent can be created earlier in this same transaction. Its
-        // actual creation commit replaces any caller-supplied value.
+        // The parent can be created earlier in this same transaction. The
+        // database stamps its actual creation commit; the launcher names
+        // only the parent's id.
         const created = yield* db.appendAll([runStart, child]);
         expect(created[1]).toMatchObject({
-          parentRunId: STREAM,
-          parentStartCommit: created[0]?.commit,
+          parent: { id: RUN, startCommit: created[0]?.commit },
         });
         expect(yield* db.readAll(0)).toEqual(created);
-        expect(created[0]).not.toHaveProperty('parentStartCommit');
+        expect(created[0]).toMatchObject({ parent: null });
 
         yield* db.appendAll([
           {
             type: 'run.removed',
-            aggregateId: qualifyAggregateId('stream', STREAM),
+            aggregateId: qualifyAggregateId('run', RUN),
           },
         ]);
         const beforeRejectedChild = yield* db.currentCommit;
@@ -1167,7 +1126,10 @@ describe('the C1 event table and the C6 publisher', () => {
           db.appendAll([
             {
               ...child,
-              aggregateId: qualifyAggregateId('stream', 'stream:later-child'),
+              aggregateId: qualifyAggregateId(
+                'run',
+                RunIdSchema.parse('ab12d0'),
+              ),
             },
           ]),
         );
@@ -1235,61 +1197,47 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(observed.events).toEqual([
           {
             commit: 1,
-            aggregateId: qualifyAggregateId('stream', STREAM),
+            aggregateId: qualifyAggregateId('run', RUN),
             seq: 1,
             type: 'run.start.1',
             ownerId: SELF,
             at: now,
             data: JSON.stringify({
-              runId: EXECUTION,
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
               category: AgentCategory.ToolUse,
               isRemote: false,
+              parent: null,
             }),
           },
           {
             commit: 2,
-            aggregateId: qualifyAggregateId('stream', OLDER),
+            aggregateId: qualifyAggregateId('run', OLDER),
             seq: 1,
             type: 'run.start.1',
             ownerId: SELF,
             at: now,
             data: JSON.stringify({
-              runId: 'ab12ce',
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
               category: AgentCategory.ToolUse,
               isRemote: false,
+              parent: null,
             }),
           },
         ]);
-        // Creation claims each stream and its dependent run atomically.
-        // A run has no events until its first own append.
+        // Creation claims the run: one aggregate, one sequence row, and no
+        // parent link for a root.
         expect(observed.sequences).toEqual([
           {
-            aggregateId: qualifyAggregateId('run', EXECUTION),
-            seq: 0,
-            ownerId: SELF,
-            parentId: qualifyAggregateId('stream', STREAM),
-            closed: 0,
-          },
-          {
-            aggregateId: qualifyAggregateId('run', 'ab12ce'),
-            seq: 0,
-            ownerId: SELF,
-            parentId: qualifyAggregateId('stream', OLDER),
-            closed: 0,
-          },
-          {
-            aggregateId: qualifyAggregateId('stream', STREAM),
+            aggregateId: qualifyAggregateId('run', RUN),
             seq: 1,
             ownerId: SELF,
             parentId: null,
             closed: 0,
           },
           {
-            aggregateId: qualifyAggregateId('stream', OLDER),
+            aggregateId: qualifyAggregateId('run', OLDER),
             seq: 1,
             ownerId: SELF,
             parentId: null,
@@ -1350,7 +1298,6 @@ describe('the C1 event table and the C6 publisher', () => {
         const configured: SessionEventDraft = {
           type: 'run.config',
           aggregateId: runStart.aggregateId,
-          runId: EXECUTION,
           config,
         };
         const malformed = {
@@ -1449,7 +1396,7 @@ describe('the C1 event table and the C6 publisher', () => {
           raw.exec('PRAGMA foreign_keys = ON');
           raw
             .prepare('DELETE FROM event_sequence WHERE aggregate_id = ?')
-            .run(qualifyAggregateId('stream', STREAM));
+            .run(qualifyAggregateId('run', RUN));
           expect(raw.prepare('SELECT COUNT(*) AS n FROM event').get()?.n).toBe(
             0,
           );
@@ -1477,8 +1424,9 @@ describe('the C1 event table and the C6 publisher', () => {
       const storage = workspace();
       return Effect.gen(function* () {
         const db = yield* Database;
-        const id = qualifyAggregateId('stream', STREAM);
-        const other = qualifyAggregateId('stream', OLDER);
+        const id = qualifyAggregateId('run', RUN);
+        const other = qualifyAggregateId('run', OLDER);
+        const absent = qualifyAggregateId('run', RunIdSchema.parse('ab99ff'));
         const rows = yield* db.appendAll([
           runStart,
           olderStart,
@@ -1508,13 +1456,7 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(yield* db.readAggregate(id, 3)).toEqual(
           rows.filter((row) => row.aggregateId === id && row.seq >= 3),
         );
-        expect(
-          yield* db.aggregateState([
-            id,
-            other,
-            qualifyAggregateId('stream', 'absent'),
-          ]),
-        ).toEqual([
+        expect(yield* db.aggregateState([id, other, absent])).toEqual([
           {
             aggregateId: id,
             ownerId: SELF,
@@ -1534,16 +1476,14 @@ describe('the C1 event table and the C6 publisher', () => {
           { ...waiting, aggregateId: other },
           olderStart,
           runStart,
-          { ...waiting, aggregateId: qualifyAggregateId('stream', 'absent') },
+          { ...waiting, aggregateId: absent },
         ]) {
           expect((yield* Effect.flip(db.appendAll([draft])))._tag).toBe(
             'DatabaseWriteFailed',
           );
         }
         expect(yield* db.currentCommit).toBe(9);
-        expect(
-          yield* db.aggregateState([qualifyAggregateId('stream', 'absent')]),
-        ).toEqual([]);
+        expect(yield* db.aggregateState([absent])).toEqual([]);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
@@ -1559,7 +1499,7 @@ describe('the C1 event table and the C6 publisher', () => {
           type: 'inquiryThreadUpdated',
           aggregateId: inquiry,
           threadId: 'ei_012345abcdef',
-          parentRunId: STREAM,
+          parentRunId: RUN,
           status: 'open',
           lastQuestionPreview: 'Which boundary condition applies?',
           lastActivityIso: '2026-09-06T12:00:00.000Z',
@@ -1584,7 +1524,7 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(
           (yield* Effect.flip(
             first.appendAll([
-              { ...thread, parentRunId: 'stream:missing' as RunId },
+              { ...thread, parentRunId: RunIdSchema.parse('ffff00') },
             ]),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
@@ -1614,20 +1554,6 @@ describe('the C1 event table and the C6 publisher', () => {
         expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
           root,
         );
-        // Include another run owned by this stream in the recursive closure.
-        yield* Effect.sync(() => {
-          const raw = new DatabaseSync(join(storage, 'texra.db'));
-          try {
-            raw
-              .prepare(
-                `INSERT INTO event_sequence
-              (aggregate_id, seq, owner_id, parent_id) VALUES (?, 0, ?, ?)`,
-              )
-              .run(qualifyAggregateId('run', 'cd34ef'), SELF, root);
-          } finally {
-            raw.close();
-          }
-        });
         yield* first.releaseClaims([inquiry]);
         const removal: SessionEventDraft = {
           type: 'run.removed',
@@ -1668,7 +1594,7 @@ describe('the C1 event table and the C6 publisher', () => {
         ];
         expect(committed.at(-1)).toMatchObject({
           type: 'run.removed',
-          runIds: [EXECUTION, 'cd34ef'],
+          runIds: [RUN],
         });
         expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(
           committed.at(-1),
@@ -1733,27 +1659,19 @@ describe('the C1 event table and the C6 publisher', () => {
           ),
         ).toMatchObject({ _tag: 'DatabaseWriteFailed' });
         expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(tombstone);
-        const unrelated = {
+        const unrelated: SessionEventDraft = {
           ...runStart,
-          aggregateId: qualifyAggregateId('stream', NEWER),
-          runId: 'ef56ab',
+          aggregateId: qualifyAggregateId('run', NEWER),
         };
         yield* first.collectDeletion(root, tombstone.commit, (ids) =>
           Effect.gen(function* () {
-            expect(ids).toEqual([EXECUTION, 'cd34ef']);
+            expect(ids).toEqual([RUN]);
             // Cleanup holds its root claim, not the database write permit.
             // Unrelated runs remain writable while generated files are removed.
             yield* first.appendAll([unrelated]);
           }),
         );
-        expect(
-          yield* first.aggregateState([
-            root,
-            inquiry,
-            qualifyAggregateId('run', EXECUTION),
-            qualifyAggregateId('run', 'cd34ef'),
-          ]),
-        ).toEqual([]);
+        expect(yield* first.aggregateState([root, inquiry])).toEqual([]);
         expect(
           (yield* first.readAll(0)).map((event) => event.aggregateId),
         ).toEqual([olderStart.aggregateId, unrelated.aggregateId]);
@@ -1815,8 +1733,8 @@ describe('the C1 event table and the C6 publisher', () => {
       return Effect.gen(function* () {
         const first = yield* Database;
         const targets = [
-          qualifyAggregateId('stream', STREAM),
-          qualifyAggregateId('stream', OLDER),
+          qualifyAggregateId('run', RUN),
+          qualifyAggregateId('run', OLDER),
         ];
         yield* first.appendAll([runStart, olderStart]);
         yield* Effect.gen(function* () {
@@ -1856,14 +1774,12 @@ describe('the C1 event table and the C6 publisher', () => {
             'DatabaseWriteFailed',
           );
           expect((yield* second.appendAll([waiting]))[0]?.commit).toBe(3);
-          const otherRoot = qualifyAggregateId('stream', OLDER);
+          const otherRoot = qualifyAggregateId('run', OLDER);
           const otherStart = (yield* first.aggregateState([otherRoot]))[0]!
             .startCommit!;
           for (const mode of ['bulk', 'automatic'] as const) {
             expect(
-              yield* Effect.flip(
-                first.removeRun(otherRoot, mode, otherStart),
-              ),
+              yield* Effect.flip(first.removeRun(otherRoot, mode, otherStart)),
             ).toMatchObject({
               _tag: 'DatabaseWriteFailed',
               cause: { _tag: 'DatabaseClaimRefused', verdict: 'unprovable' },

@@ -67,7 +67,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
-import { getStreamTabId } from '@agent/runtime/runTab';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -96,7 +95,7 @@ const untrackRun = vi.fn((runId: RunId) => {
 // lease verbs, so the existing flush/release assertions keep
 // observing the same tree through its one owner.
 const SESSION = {
-  executions: {
+  runs: {
     track: trackRun,
     getHandle: vi.fn((runId) =>
       trackedHandle?.runId === runId ? trackedHandle : undefined,
@@ -104,8 +103,7 @@ const SESSION = {
     untrack: untrackRun,
     // No competing generation exists in this fixture; the lane is a passthrough.
     launchRun: vi.fn(
-      (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
-        operation,
+      (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
     ),
   },
   flushArtifacts,
@@ -117,7 +115,6 @@ const SESSION = {
 
 const EXECUTE_RESULT = {
   category: 'toolUse',
-  runId: EXECUTION_ID,
   runId: EXECUTION_ID,
   outcome: 'COMPLETED',
 };
@@ -221,7 +218,7 @@ describe('runAgent run ownership', () => {
     await launch({ kind: 'fresh' });
 
     expect(mocks.registerRun).toHaveBeenCalledOnce();
-    // #9590 obligation 1: registration carries the birth stream identity and
+    // #9590 obligation 1: registration carries the birth identity and
     // completes before the run — so before any transcript/snapshot fact.
     expect(mocks.registerRun).toHaveBeenCalledWith(
       SESSION,
@@ -229,15 +226,12 @@ describe('runAgent run ownership', () => {
       CONFIG,
       CONFIG.agent,
       expect.objectContaining({
-        runId: getStreamTabId(CONFIG.agent, {
-          runId: EXECUTION_ID,
-        }),
+        identity: { kind: 'agent', agent: CONFIG.agent },
       }),
     );
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
     expect(
-      mocks.registerRun.mock.invocationCallOrder[0] ??
-        Number.POSITIVE_INFINITY,
+      mocks.registerRun.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     ).toBeLessThan(mocks.executeAgent.mock.invocationCallOrder[0] ?? 0);
     expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
@@ -246,9 +240,7 @@ describe('runAgent run ownership', () => {
     await launch();
 
     expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.acquireResumedRunLease).toHaveBeenCalledWith(
-      EXECUTION_ID,
-    );
+    expect(mocks.acquireResumedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
     expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
   it.effect(
@@ -448,9 +440,7 @@ describe('runAgent run ownership', () => {
       );
       // A failed host hook never changes ownership: the one drain still runs
       // and releases the lease.
-      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(
-        EXECUTION_ID,
-      );
+      expect(mocks.releaseOwnedRunLease).toHaveBeenCalledWith(EXECUTION_ID);
       expect(flushArtifacts).toHaveBeenCalledOnce();
     },
   );

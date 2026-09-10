@@ -16,7 +16,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { appSignals } from '@eventBus/AppSignals';
 import { FileType, type FileStat } from '@platform/interfaces';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import {
@@ -36,7 +36,6 @@ let testApprovalHandler:
 let detachHostInteractions = (): void => {};
 
 const runId = 'abcdef' as RunId;
-const runId = 'stream:accept-run-files' as RunId;
 const workspacePath = '/workspace';
 const storagePath = '/storage';
 
@@ -101,7 +100,7 @@ function runAccept(
   files: { path: string; original: string }[],
   tracker = new FileInteractionState(),
 ) {
-  return withRunContext(createRunContext({ runId, runId }), () =>
+  return withRunContext(createRunContext({ runId }), () =>
     withToolFileInteractionContext({ tracker }, () =>
       tool.call({ execution_id: runId, files }),
     ),

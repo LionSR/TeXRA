@@ -58,7 +58,6 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
-  type RunId,
   AgentCategory,
 } from '@shared/schemas';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -73,10 +72,8 @@ import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 
-const PARENT_EXECUTION_ID = 'a9531a9531a9' as RunId;
-const OUTER_EXECUTION_ID = '0a95310a9531' as RunId;
-const OUTER_STREAM_ID = 'outer_9531@gpt54#0a95310a9531' as RunId;
-const PARENT_STREAM_ID = 'parent_9531#a9531a9531a9' as RunId;
+const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
+const OUTER_RUN_ID = '0a95310a9531' as RunId;
 const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
 const PARENT_MODEL = 'gpt54';
@@ -156,9 +153,6 @@ async function resumePersistedRun(
   recovery?: RecoveryContinuation,
 ): Promise<boolean> {
   resumedRuns.push(runId);
-  const runId = runId.slice(
-    runId.lastIndexOf('#') + 1,
-  ) as RunId;
   const resumed = await effectRuntime().runPromise(
     resumeRun(runId, {
       session,
@@ -203,9 +197,7 @@ async function waitForPersistedResult(
       );
       expect(report).toContain(expectedText);
       await expect(
-        Effect.runPromise(
-          getRunRecords(session, runId).readResultMeta(),
-        ),
+        Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
       ).resolves.toMatchObject({
         result: { response: expectedText },
       });
@@ -216,8 +208,7 @@ async function waitForPersistedResult(
 
 function childRunId(resultOutput: string | undefined): RunId {
   const match = resultOutput?.match(/Run ID: (\S+)/);
-  if (!match?.[1])
-    throw new Error('Delegation result omitted its run ID.');
+  if (!match?.[1]) throw new Error('Delegation result omitted its run ID.');
   return match[1] as RunId;
 }
 
@@ -308,26 +299,18 @@ async function launchWaitingChild(options: {
     workingDirectory: process.cwd(),
   });
   await Effect.runPromise(
-    registerRun(
-      session,
-      PARENT_EXECUTION_ID,
-      parentConfig,
-      PARENT_AGENT,
-      {
-        runId: PARENT_STREAM_ID,
-        identity: { kind: 'agent', agent: PARENT_AGENT },
-        parentRunId: OUTER_EXECUTION_ID,
-      },
-    ),
+    registerRun(session, PARENT_RUN_ID, parentConfig, PARENT_AGENT, {
+      identity: { kind: 'agent', agent: PARENT_AGENT },
+      parentRunId: OUTER_RUN_ID,
+    }),
   );
   await expect(
     Effect.runPromise(
       prepareAgentDefinition({ config: parentConfig, session }).pipe(
         Effect.flatMap((definition) =>
-          executeAgent(definition, PARENT_EXECUTION_ID, {
+          executeAgent(definition, PARENT_RUN_ID, {
             session,
-            isSubagent: true,
-            parentRunId: OUTER_STREAM_ID,
+            parentRunId: OUTER_RUN_ID,
           }),
         ),
       ),
@@ -338,13 +321,12 @@ async function launchWaitingChild(options: {
   });
 
   const parentContext = createRunContext({
-    runId: PARENT_STREAM_ID,
-    runId: PARENT_EXECUTION_ID,
+    runId: PARENT_RUN_ID,
     modelCell: new ModelCell({} as never, PARENT_MODEL),
     session,
   });
   const runAsParentOwner: ParentOwnerRunner = (operation) => {
-    assertOwnedRunLease(PARENT_EXECUTION_ID);
+    assertOwnedRunLease(PARENT_RUN_ID);
     return operation();
   };
   const launch = await runAsParentOwner(() =>
@@ -363,7 +345,7 @@ async function launchWaitingChild(options: {
             workingDirectory: process.cwd(),
           },
           CHILD_AGENT,
-          PARENT_STREAM_ID,
+          PARENT_RUN_ID,
         ),
       ),
     ),
@@ -390,7 +372,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // so the ephemeral default this file's setup installed gives way to it.
     teardownDefaultSession();
     session = initializeDefaultSession({});
-    publishTestRunStart(session, OUTER_STREAM_ID, OUTER_EXECUTION_ID);
+    publishTestRunStart(session, OUTER_RUN_ID);
     await session.settlePublications();
     childId = undefined;
     resumedRuns = [];
@@ -400,7 +382,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   afterEach(async () => {
     interruptActiveRuns(session);
     if (childId) await waitForLeaseRelease(childId);
-    await releaseOwnedRunLease(PARENT_EXECUTION_ID);
+    await releaseOwnedRunLease(PARENT_RUN_ID);
     teardownDefaultSession();
     clearInlineAgents();
     clearStoreCache();
@@ -461,7 +443,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     ]);
 
     const archivedParent = await Effect.runPromise(
-      readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+      readCompletedRunConversation(PARENT_RUN_ID, session),
     );
     const parentText = JSON.stringify(archivedParent.conversation);
     expect(parentText.match(/Result A\./g)).toHaveLength(1);
@@ -478,8 +460,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         },
       ]),
     );
-    expect(resumedRuns).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
-    expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+    expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
     expect(parentTurns).toHaveLength(0);
   }, 60_000);
 
@@ -492,8 +474,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // Turn 2 is answerless: the scripted transport ends the turn with no text,
     // so the resumed cycle completes without adding an assistant message.
     const childTurns = [{ text: 'Result A.' }, { text: '' }];
-    const { runId, parentContext, runAsParentOwner } =
-      await launchWaitingChild({ parentTurns, childTurns });
+    const { runId, parentContext, runAsParentOwner } = await launchWaitingChild(
+      { parentTurns, childTurns },
+    );
 
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
@@ -511,9 +494,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await vi.waitFor(
       async () => {
         await expect(
-          Effect.runPromise(
-            getRunRecords(session, runId).readResultMeta(),
-          ),
+          Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
         ).resolves.toMatchObject({
           result: { response: '' },
         });
@@ -545,12 +526,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     ]);
 
     const archivedParent = await Effect.runPromise(
-      readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+      readCompletedRunConversation(PARENT_RUN_ID, session),
     );
     const parentText = JSON.stringify(archivedParent.conversation);
     expect(parentText.match(/Result A\./g)).toHaveLength(1);
-    expect(resumedRuns).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
-    expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+    expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
     expect(parentTurns).toHaveLength(0);
   }, 60_000);
 
@@ -563,8 +544,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       { text: 'Parent received result B.' },
     ];
     const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-    const { runId, parentContext, runAsParentOwner } =
-      await launchWaitingChild({ parentTurns, childTurns });
+    const { runId, parentContext, runAsParentOwner } = await launchWaitingChild(
+      { parentTurns, childTurns },
+    );
 
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
@@ -607,13 +589,13 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
     // The parent received each distinct result exactly once.
     const archivedParent = await Effect.runPromise(
-      readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+      readCompletedRunConversation(PARENT_RUN_ID, session),
     );
     const parentText = JSON.stringify(archivedParent.conversation);
     expect(parentText.match(/Result A\./g)).toHaveLength(1);
     expect(parentText.match(/Result B\./g)).toHaveLength(1);
-    expect(resumedRuns).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
-    expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+    expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
     expect(parentTurns).toHaveLength(0);
   }, 60_000);
 
@@ -636,9 +618,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     const completed = turnState?.lastCompletedTurn;
     expect(completed?.token).toBeTruthy();
     await expect(
-      Effect.runPromise(
-        getRunRecords(session, runId).readResultMeta(),
-      ),
+      Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
       turnToken: completed!.token,
     });
@@ -651,7 +631,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     for (let replay = 0; replay < 100; replay++) {
       await Effect.runPromise(
         deliverChildRunFollowUp({
-          targetRunId: PARENT_STREAM_ID,
+          targetRunId: PARENT_RUN_ID,
           followUp: {
             text: report!,
             origin: 'subagent_result',
@@ -666,18 +646,18 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     const afterReplay = JSON.stringify(
       (
         await Effect.runPromise(
-          readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+          readCompletedRunConversation(PARENT_RUN_ID, session),
         )
       ).conversation,
     );
     expect(afterReplay.match(/Result A\./g)).toHaveLength(1);
-    expect(resumedRuns).toEqual([PARENT_STREAM_ID]);
-    expect(completedResumes).toEqual([PARENT_STREAM_ID]);
+    expect(resumedRuns).toEqual([PARENT_RUN_ID]);
+    expect(completedResumes).toEqual([PARENT_RUN_ID]);
 
     // A distinct delivery identity with identical text is a distinct turn.
     await Effect.runPromise(
       deliverChildRunFollowUp({
-        targetRunId: PARENT_STREAM_ID,
+        targetRunId: PARENT_RUN_ID,
         followUp: {
           text: report!,
           origin: 'subagent_result',
@@ -691,12 +671,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     const afterDistinct = JSON.stringify(
       (
         await Effect.runPromise(
-          readCompletedRunConversation(PARENT_EXECUTION_ID, session),
+          readCompletedRunConversation(PARENT_RUN_ID, session),
         )
       ).conversation,
     );
     expect(afterDistinct.match(/Result A\./g)).toHaveLength(2);
-    expect(resumedRuns).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
   }, 30_000);
 
   it('does not expose turn 1 as current when an accepted turn 2 is interrupted', async () => {
@@ -705,15 +685,16 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       releaseTurn2 = reject;
     });
     void turn2Gate.catch(() => {});
-    const { runId, parentContext, runAsParentOwner } =
-      await launchWaitingChild({
+    const { runId, parentContext, runAsParentOwner } = await launchWaitingChild(
+      {
         parentTurns: [
           { text: 'Parent ready.' },
           { text: 'Parent received result A.' },
         ],
         childTurns: [{ text: 'Result A.' }, 'hang'],
         childGate: turn2Gate,
-      });
+      },
+    );
     await waitForPersistedResult(runId, 'Result A.');
     await waitForCompletedResumes(1);
 
@@ -722,11 +703,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     expect(completed1?.token).toBeTruthy();
 
     // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
-    await queueSecondAssertionFollowUp(
-      parentContext,
-      runAsParentOwner,
-      runId,
-    );
+    await queueSecondAssertionFollowUp(parentContext, runAsParentOwner, runId);
 
     // Turn 2 was accepted: a pending-turn record marks it active, while the
     // persisted result still belongs to the latest completed turn (turn 1).
@@ -740,9 +717,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       { timeout: 10_000 },
     );
     await expect(
-      Effect.runPromise(
-        getRunRecords(session, runId).readResultMeta(),
-      ),
+      Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
       turnToken: completed1!.token,
       result: { response: 'Result A.' },
@@ -764,9 +739,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     expect(finalState?.lastCompletedTurn?.token).toBe(completed1!.token);
     expect(finalState?.activeTurn?.token).toBeTruthy();
     await expect(
-      Effect.runPromise(
-        getRunRecords(session, runId).readResultMeta(),
-      ),
+      Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
     ).resolves.toMatchObject({
       turnToken: completed1!.token,
       result: { response: 'Result A.', outcome: RUN_OUTCOME.CANCELLED },

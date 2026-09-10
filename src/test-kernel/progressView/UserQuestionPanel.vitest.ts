@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
+import { RunIdSchema } from '@shared/schemas/identifiers';
 import type { UserQuestionPrompt } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
@@ -10,6 +11,8 @@ import {
 useLitComponentTestDom(
   () => import('@progressView/frontend/components/UserQuestionPanel'),
 );
+
+const RUN_ID = RunIdSchema.parse('aaaaaaaaaaaa');
 
 function createPermission(
   questions: UserQuestionPrompt[] = [
@@ -25,7 +28,7 @@ function createPermission(
     data: {
       requestId: 'question-1',
       allowBypass: false,
-      runId: 'stream-1',
+      runId: RUN_ID,
       questions,
     },
   };

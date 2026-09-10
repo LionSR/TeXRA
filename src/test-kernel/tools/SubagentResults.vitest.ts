@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
   formatChildRunDelivery,
   formatChildRunError,
@@ -203,7 +203,7 @@ describe('formatSubagentDelivery', () => {
         files: ['/ws/paper.tex'],
       }),
       {
-        runId: 'abc123',
+        runId: 'abc123' as RunId,
         memoryMisses: [
           { path: '/memories/missing.md', reason: 'Path is missing' },
         ],
@@ -236,7 +236,7 @@ describe('formatSubagentDelivery', () => {
     });
 
     const delivery = formatSubagentDelivery('reviewer', result, {
-      runId: 'abc123',
+      runId: 'abc123' as RunId,
     });
 
     expect(delivery).toContain(
@@ -251,7 +251,7 @@ describe('formatSubagentDelivery', () => {
     });
 
     const delivery = formatSubagentDelivery('reviewer', result, {
-      runId: 'abc123',
+      runId: 'abc123' as RunId,
       memoryMisses: [
         {
           path: '/memories/missing.md',
@@ -283,7 +283,7 @@ describe('formatSubagentDelivery', () => {
     });
 
     const delivery = formatSubagentDelivery('polish', result, {
-      runId: 'abc123',
+      runId: 'abc123' as RunId,
     });
 
     expect(delivery).toContain(
@@ -300,7 +300,7 @@ describe('formatSubagentDelivery', () => {
   it('omits the diffs-unavailable element on clean deliveries', () => {
     expect(
       formatSubagentDelivery('polish', workflowResult(), {
-        runId: 'abc123',
+        runId: 'abc123' as RunId,
       }),
     ).not.toContain('diffs-unavailable');
   });
@@ -308,12 +308,12 @@ describe('formatSubagentDelivery', () => {
   it('emits canonical failed and cancelled statuses for orchestrators', () => {
     expect(
       formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.FAILED), {
-        runId: 'abc123',
+        runId: 'abc123' as RunId,
       }),
     ).toContain('status="failed"');
     expect(
       formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.CANCELLED), {
-        runId: 'abc123',
+        runId: 'abc123' as RunId,
       }),
     ).toContain('status="cancelled"');
   });

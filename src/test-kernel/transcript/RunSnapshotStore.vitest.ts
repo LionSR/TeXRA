@@ -1,4 +1,4 @@
-/** Stream state is a fold of committed rows, independent of the sidecar format. */
+/** Run state is a fold of committed rows, independent of the sidecar format. */
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { describe, expect } from 'vitest';
@@ -8,27 +8,27 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
   aggregateId,
   emptyUsageStats,
+  type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 
-const STREAM = 'chat#ab12cd';
-const EXECUTION = 'ab12cd';
+const RUN = 'ab12cd' as RunId;
 const start: SessionEventDraft = {
   type: 'run.start',
-  aggregateId: aggregateId('stream', STREAM),
-  runId: EXECUTION,
+  aggregateId: aggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
   category: 'toolUse',
   isRemote: false,
+  parent: null,
 };
 const usage: SessionEventDraft = {
   type: 'usage',
   aggregateId: start.aggregateId,
-  storageKey: EXECUTION,
+  runId: RUN,
   usage: { ...emptyUsageStats(), inputTokens: 7 },
 };
 const substrate = databaseLayer('ephemeral').pipe(
@@ -94,16 +94,16 @@ describe('RunSnapshotStore event fold', () => {
             filesByRound: { 1: [failure] },
           },
         ]);
-        yield* store.preload([STREAM]);
-        expect(store.getWorkPlan(STREAM)).toEqual({
+        yield* store.preload([RUN]);
+        expect(store.getWorkPlan(RUN)).toEqual({
           plan,
           todos,
           planSummary: 'Prove conservation.',
         });
-        expect(
-          store.getKnownFilePaths(STREAM, { workspaceOnly: true }),
-        ).toEqual(new Set(['/paper/main.tex']));
-        expect(store.getCompileFailures(STREAM)).toEqual({ 1: [failure] });
+        expect(store.getKnownFilePaths(RUN, { workspaceOnly: true })).toEqual(
+          new Set(['/paper/main.tex']),
+        );
+        expect(store.getCompileFailures(RUN)).toEqual({ 1: [failure] });
         const apply = store.attachSessionEvents();
         for (const event of yield* database.appendAll([
           {
@@ -123,16 +123,16 @@ describe('RunSnapshotStore event fold', () => {
           },
         ]))
           yield* apply(event);
-        expect(store.getOutputFiles(STREAM)).toEqual({});
-        expect(store.getMissingOutputs(STREAM)).toEqual({ 1: [] });
-        expect(store.getCompileFailures(STREAM)).toEqual({});
-        const cold = yield* store.read(STREAM);
-        expect(cold.outputFilesByRound).toEqual(store.getOutputFiles(STREAM));
+        expect(store.getOutputFiles(RUN)).toEqual({});
+        expect(store.getMissingOutputs(RUN)).toEqual({ 1: [] });
+        expect(store.getCompileFailures(RUN)).toEqual({});
+        const cold = yield* store.read(RUN);
+        expect(cold.outputFilesByRound).toEqual(store.getOutputFiles(RUN));
         expect(cold.missingOutputsByRound).toEqual(
-          store.getMissingOutputs(STREAM),
+          store.getMissingOutputs(RUN),
         );
         expect(cold.compileFailuresByRound).toEqual(
-          store.getCompileFailures(STREAM),
+          store.getCompileFailures(RUN),
         );
       }).pipe(Effect.provide(substrate)),
   );
@@ -152,20 +152,19 @@ describe('RunSnapshotStore event fold', () => {
             description: 'A conserved quantity',
           },
         ]);
-        const cold = yield* store.read(STREAM);
-        expect(cold.runUsage[EXECUTION]?.inputTokens).toBe(7);
-        expect(store.hasProvenance(STREAM)).toBe(false);
-        yield* store.preload([STREAM]);
+        const cold = yield* store.read(RUN);
+        expect(cold.runUsage[RUN]?.inputTokens).toBe(7);
+        expect(store.hasProvenance(RUN)).toBe(false);
+        yield* store.preload([RUN]);
         const apply = store.attachSessionEvents();
         for (const event of events) yield* apply(event);
-        expect(store.getRunUsage(STREAM).get(EXECUTION)?.inputTokens).toBe(7);
-        expect(store.getRunMetadata(STREAM)).toMatchObject({
-          runId: EXECUTION,
+        expect(store.getRunUsage(RUN).get(RUN)?.inputTokens).toBe(7);
+        expect(store.getRunMetadata(RUN)).toMatchObject({
           description: 'A conserved quantity',
         });
-        yield* store.requestEviction(STREAM);
-        expect(store.hasProvenance(STREAM)).toBe(false);
-        expect((yield* store.read(STREAM)).runUsage).toEqual(cold.runUsage);
+        yield* store.requestEviction(RUN);
+        expect(store.hasProvenance(RUN)).toBe(false);
+        expect((yield* store.read(RUN)).runUsage).toEqual(cold.runUsage);
       }).pipe(Effect.provide(substrate)),
   );
 
@@ -187,7 +186,7 @@ describe('RunSnapshotStore event fold', () => {
               return rows;
             }),
         });
-        const reader = yield* store.preload([STREAM]).pipe(Effect.forkChild);
+        const reader = yield* store.preload([RUN]).pipe(Effect.forkChild);
         yield* Deferred.await(reading);
         const committed = yield* database.appendAll([usage]);
         const apply = store.attachSessionEvents();
@@ -197,7 +196,7 @@ describe('RunSnapshotStore event fold', () => {
         yield* Deferred.succeed(release, undefined);
         yield* Fiber.join(reader);
         yield* Fiber.join(tail);
-        expect(store.getRunUsage(STREAM).get(EXECUTION)?.inputTokens).toBe(7);
+        expect(store.getRunUsage(RUN).get(RUN)?.inputTokens).toBe(7);
       }).pipe(Effect.provide(substrate)),
   );
 
@@ -211,17 +210,16 @@ describe('RunSnapshotStore event fold', () => {
         const apply = store.attachSessionEvents();
         for (const event of yield* database.appendAll([usage]))
           yield* apply(event);
-        expect(store.hasProvenance(STREAM)).toBe(false);
-        yield* store.preload([STREAM]);
-        expect(store.getRunIdMap().get(STREAM)).toBe(EXECUTION);
-        expect(yield* store.listPersistedRuns()).toEqual([STREAM]);
+        expect(store.hasProvenance(RUN)).toBe(false);
+        yield* store.preload([RUN]);
+        expect(store.hasProvenance(RUN)).toBe(true);
+        expect(yield* store.listPersistedRuns()).toEqual([RUN]);
         for (const event of yield* database.appendAll([
           { type: 'run.removed', aggregateId: start.aggregateId },
         ]))
           yield* apply(event);
-        expect(store.hasProvenance(STREAM)).toBe(false);
-        expect(store.getRunIdMap().has(STREAM)).toBe(false);
-        expect((yield* store.read(STREAM)).runUsage).toEqual({});
+        expect(store.hasProvenance(RUN)).toBe(false);
+        expect((yield* store.read(RUN)).runUsage).toEqual({});
         expect(yield* store.listPersistedRuns()).toEqual([]);
       }).pipe(Effect.provide(substrate)),
   );

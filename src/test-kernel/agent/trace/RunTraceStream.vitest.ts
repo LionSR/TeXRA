@@ -7,7 +7,11 @@ import {
   type AgentTrace,
   type AgentEvent,
 } from '@agent/trace';
-import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  type RunId,
+  type StreamLogEntry,
+} from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
@@ -24,7 +28,7 @@ function openDeferredThinking(
 /** Run against a fresh, test-local store. */
 function withStore(run: (store: StreamLog, logger: AgentTrace) => void): void {
   const store = new StreamLog();
-  const handle = createTestRunTrace('stream', store);
+  const handle = createTestRunTrace('stream' as RunId, store);
   try {
     run(store, handle.trace);
   } finally {
@@ -157,7 +161,7 @@ describe('AgentTrace stream output', () => {
 describe('tool-use card input redaction', () => {
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
     const store = new StreamLog();
-    const logger = createTestRunTrace('stream', store).trace;
+    const logger = createTestRunTrace('stream' as RunId, store).trace;
     const outer = logger.openStage('outer');
     const ref = await outer.within(async () =>
       startToolUseCard(logger, 'demoTool', { arg: 1 }),
@@ -185,7 +189,7 @@ describe('per-trace stage scope (cross-trace isolation)', () => {
 
     // Orchestrator trace with an active "Task:" stage — mirrors a subagent
     // launched from inside a delegation tool's stage scope.
-    const orchestrator = createTestRunTrace('orchestrator').trace;
+    const orchestrator = createTestRunTrace('orchestrator' as RunId).trace;
     const taskStage = orchestrator.openStage('Task: orchestrator');
 
     // Subagent run on a SEPARATE trace/stream, opened *inside* the
@@ -194,7 +198,7 @@ describe('per-trace stage scope (cross-trace isolation)', () => {
     // subagent's run stage is a root on its own stream with no extra flag.
     // (A module-level shared scope would orphan it under the cross-trace id.)
     await taskStage.within(async () => {
-      const subagent = createTestRunTrace('subagent', store).trace;
+      const subagent = createTestRunTrace('subagent' as RunId, store).trace;
       subagent.openStage('Run: subagent');
     });
 

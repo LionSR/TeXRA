@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
-const stream = (value: string) => value as RunId;
+const asRunId = (value: string) => value as RunId;
 
 function liveFlowQueue(id: string) {
   const queues = new ToolUseFollowUpQueue();
-  const runId = stream(id);
+  const runId = asRunId(id);
   queues.claimLive(runId, 'flow');
   return { queues, id: runId };
 }
@@ -72,7 +72,7 @@ describe('FollowUpQueue', () => {
 describe('ToolUseFollowUpQueue ownership', () => {
   it('allows exactly one live or recovery owner', () => {
     const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:exclusive');
+    const id = asRunId('run:exclusive');
     const child = queues.claimLive(id, 'child');
     expect(child).toBeDefined();
     expect(queues.claimLive(id, 'flow')).toBeUndefined();
@@ -86,7 +86,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('does not let a stale lease release a successor generation', () => {
     const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:generation');
+    const id = asRunId('run:generation');
     const child = queues.claimLive(id, 'child')!;
     queues.queue(child).enqueue({ text: 'before handoff' });
     queues.release(child, 'recoverable');
@@ -107,7 +107,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('enqueues live_owner notifications on a recoverable entry without claiming', () => {
     const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:live-notify');
+    const id = asRunId('run:live-notify');
     const child = queues.claimLive(id, 'child')!;
     queues.release(child, 'recoverable');
 
@@ -124,10 +124,10 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(recovery).toBeDefined();
   });
 
-  it('keeps sessions isolated for the same stream id', () => {
+  it('keeps sessions isolated for the same run id', () => {
     const a = new ToolUseFollowUpQueue();
     const b = new ToolUseFollowUpQueue();
-    const id = stream('stream:shared-id');
+    const id = asRunId('run:shared-id');
     const aLease = a.claimLive(id, 'flow')!;
     const bLease = b.claimLive(id, 'flow')!;
 
@@ -148,9 +148,9 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ).toEqual(['b']);
   });
 
-  it('forgets a terminal stream so a late live-owner submission is refused', () => {
+  it('forgets a terminal run so a late live-owner submission is refused', () => {
     const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:terminal');
+    const id = asRunId('run:terminal');
     const lease = queues.claimLive(id, 'flow')!;
     queues.release(lease, 'terminal');
 
@@ -162,16 +162,15 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('starts a new child generation for an authorized retry', () => {
     const queues = new ToolUseFollowUpQueue();
-    const runId = 'retry-run' as RunId;
-    const id = stream(`stream#${runId}`);
-    const first = queues.claimChildRun(id, runId)!;
+    const id = asRunId('retry-run');
+    const first = queues.claimChildRun(id)!;
     queues.release(first, 'terminal');
 
     expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
       kind: 'refused',
     });
 
-    const retry = queues.claimChildRun(id, runId);
+    const retry = queues.claimChildRun(id);
     expect(retry).toBeDefined();
     expect(retry?.kind).toBe('child');
     expect(
@@ -180,21 +179,9 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.hasLiveOwner(id)).toBe(true);
   });
 
-  it('refuses a child claim for an unrelated run', () => {
-    const queues = new ToolUseFollowUpQueue();
-    const runId = 'owned-run' as RunId;
-    const id = stream(`stream#${runId}`);
-    const first = queues.claimChildRun(id, runId)!;
-    queues.release(first, 'terminal');
-
-    expect(() =>
-      queues.claimChildRun(id, 'unrelated-run' as RunId),
-    ).toThrow('does not belong to run');
-  });
-
   it('deletion invalidates a live generation', () => {
     const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:deleted');
+    const id = asRunId('run:deleted');
     const lease = queues.claimLive(id, 'child')!;
 
     expect(queues.terminalize(id)).toBe(true);
@@ -206,14 +193,13 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it('refuses to rebuild entries after dispose', () => {
     const queues = new ToolUseFollowUpQueue();
-    const runId = 'disposed-run' as RunId;
-    const childId = stream(`stream#${runId}`);
-    const liveId = stream('stream:disposed-live');
+    const childId = asRunId('disposed-run');
+    const liveId = asRunId('run:disposed-live');
     queues.claimLive(liveId, 'flow');
     queues.dispose();
 
     expect(queues.claimLive(liveId, 'flow')).toBeUndefined();
-    expect(queues.claimChildRun(childId, runId)).toBeUndefined();
+    expect(queues.claimChildRun(childId)).toBeUndefined();
     expect(queues.claimRecovery(liveId, true)).toBeUndefined();
     expect(queues.submit(liveId, { text: 'late' }, 'recoverable')).toEqual({
       kind: 'refused',
@@ -224,7 +210,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
 describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   it('suppresses a replayed delivery id instead of appending it again', () => {
-    const { queues, id } = liveFlowQueue('stream:replay');
+    const { queues, id } = liveFlowQueue('run:replay');
     const delivery = childResult('exec-1:turn:1:delivery');
 
     expect(queues.submit(id, delivery, 'live_owner')).toEqual({
@@ -239,7 +225,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   });
 
   it('keeps distinct delivery ids distinct even with identical text', () => {
-    const { queues, id } = liveFlowQueue('stream:distinct-deliveries');
+    const { queues, id } = liveFlowQueue('run:distinct-deliveries');
 
     const first = queues.submit(
       id,
@@ -259,7 +245,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
 
   it('keeps suppressing a replayed id across a recoverable release', () => {
     const queues = new ToolUseFollowUpQueue();
-    const id = stream('stream:replay-across-release');
+    const id = asRunId('run:replay-across-release');
     const child = queues.claimLive(id, 'child')!;
     const delivery = childResult('d1');
     queues.submit(id, delivery, 'live_owner');
@@ -272,7 +258,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   });
 
   it('admits concurrent submissions of one delivery id at most once', () => {
-    const { queues, id } = liveFlowQueue('stream:concurrent-replay');
+    const { queues, id } = liveFlowQueue('run:concurrent-replay');
     const delivery = childResult('d1');
 
     const outcomes = [
@@ -291,7 +277,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   });
 
   it('never suppresses input that carries no delivery id', () => {
-    const { queues, id } = liveFlowQueue('stream:no-delivery-id');
+    const { queues, id } = liveFlowQueue('run:no-delivery-id');
 
     queues.submit(id, { text: 'repeat me' }, 'live_owner');
     queues.submit(id, { text: 'repeat me' }, 'live_owner');
