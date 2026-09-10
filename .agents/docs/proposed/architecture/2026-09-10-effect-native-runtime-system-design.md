@@ -1,161 +1,249 @@
 ---
 created: 2026-09-10
 status: proposed
+revision: 2
 ---
 
 # The Effect-native agent runtime: one system across every surface
 
-**Recommendation:** finish the runtime as one Effect program tree, not as a set of
-converted files. The tree has four scopes (process, session, run, call), twelve
-services, two `Effect.fn` loops, one durable append, and one place where a fiber's
-`Exit` becomes a run outcome. Every surface that touches a run today (the flow engine,
-both flow families, the tool runner, model handlers, follow-ups, approvals, child
-dispatch, workflow scripts, the trace, the three hosts, the SDK) is mapped below to its
-position in that tree and to the pinned Effect API it uses. Tools are already
-Effect-inside (43 of 43 `*Tool.ts` files run a fiber at `execute()`), which is why the
-next cut is the runner above them, not the tools.
+**Recommendation:** finish the runtime as one Effect program tree built from native
+`Context.Service` tags, `Layer` composition, and `Context.Reference` values, not as a
+set of converted files. The tree has four scopes (process, session, run, call), twenty
+tags across them, two `Effect.fn` loops, one durable append, and one place where a
+fiber's `Exit` becomes a run outcome. Every surface that touches a run today (the flow
+engine, both flow families, the tool runner, model handlers, follow-ups, approvals,
+child dispatch, workflow scripts, the trace, the view, the three hosts, the SDK) is
+mapped below to its position in that tree, to the layer that provides it, and to the
+pinned Effect API it uses. The run is replayable along its flow: the step vocabulary
+is the graph, one pure fold gives the state at any step, and replay is a layer swap.
+
+Revision 2 (same day) follows six deep read-only passes over the surfaces. It corrects
+revision 1 where the code disagreed with it (model invocation, requests, host counts,
+the `ToolCall` shape, the rc.112 table) and adds what the owner asked for: the layer
+graph and its composability (§3), replayability as a property (§6), and the peer designs
+already surveyed (OpenCode V2, Pi's harness, effect-agent) as references, cited from the
+[loop study][loop] rather than re-derived.
 
 This document does not restate the rules or the rows. The [migration PRD][prd] §7 owns
 R1 to R10, the [runtime proposal][runtime] §2.1 owns the row vocabulary and §2.3 the
 fold and resume rules, the [substrate decision][substrate] §6.1 owns C1 to C10, the
 [injection note][injection] §5 owns the carrier manifest, and the [one run
-model][onerun] §3.10 owns the names. Where those documents disagree, §7 says which
-reading this design takes and why. What is new here:
-
-1. the **fiber tree** (§2): which scope forks which fiber, what interrupts what, and
-   where a child run's lifetime is decided;
-2. the **service manifest as a single reconciled table** (§3), with the shape of each
-   service and the mechanism it deletes;
-3. the **two programs with their real signatures** (§4): success values, error
-   channels, requirements, and the three combinators tool dispatch needs;
-4. the **per-surface conversion map** (§5): for every runtime surface, its current
-   mechanism, its Effect form, and the boundary it lands on;
-5. an **rc.112 verification table** (§6): every Effect API this design names, checked
-   against `node_modules/effect@4.0.0-rc.112`, including the places where the
-   `effect-solutions` guides describe a newer API than the pin.
+model][onerun] §3.10 owns the names. Where those documents disagree, §9 says which
+reading this design takes and why.
 
 ## 1. Verified starting point (`main` at `c29238e6bd`, 2026-09-10)
 
-Measured by three parallel surveys of the tree; counts are direct references unless
-stated.
+Nine read-only passes; counts are direct references unless stated.
 
-| Fact                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Consequence                                                                                                                                                                              |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 526 files import `effect`; 478 `Effect.fn`, 351 `Effect.gen`, 269 `Stream.`, 147 `Deferred.`, 126 `Scope`/`Effect.scoped`, 67 `Queue.`, 54 `Data.TaggedError` classes, 18 `Context.Service` tags, one `ManagedRuntime.make` (`src/controllers/session/sessionLayer.ts:791`), one `LayerMap` (`:537`). `PubSub`, `Semaphore.make`, `Context.Reference`, `Schema.TaggedError`: **zero**.                                                                                                                                                  | The idiom is established. What is missing is not adoption but the runtime's own program tree.                                                                                            |
-| The Effect spine of a run stops at exactly one line: `runFlowWithLifecycle`'s `runner` parameter is `(handle, lifecycle) => Promise<AgentRuntimeFlowResult>` (`src/agent/runtime/AgentRunLifecycle.ts:478-481`). `runAgent.ts:95`, `executeAgent.ts:405` and `AgentLaunchContext.ts` are already `Effect.fn`.                                                                                                                                                                                                                           | The run layer (§3 row `Run`) is inserted at that line; nothing above it needs re-conversion.                                                                                             |
-| Below that line everything is Promise: `src/agent/node/index.ts` (158 LoC, `prep/exec/post`, clones every node per step at `:141-148`), `persistedFlow.ts` (517 LoC, one KV write plus one `structuredClone` of the whole conversation per node step, `:491-499`), `src/agent/implementations/flows/**` (8,315 LoC, **zero** `effect` imports), `ModelInvocationNode.ts` (846 LoC, `p-retry` batch at `:405-431`, unbounded manual-retry `for(;;)` at `:447-465`), `src/agent/modelHandlers/**` (21,061 LoC, `createResponse` Promise). | These are the deletion set. Their domain bodies (reflection `output/` ≈ 2,700 LoC, provider protocol code) are preserved as plain functions and `packages/llm` protocol modules.         |
-| Tools: `BaseTool.execute(input): Promise<ToolResult>` (`src/tools/core/base.ts:89`); 43 of 43 `*Tool.ts` are `effectRuntime().runPromise(Effect.fn(...))` at that edge (68 `run*` sites under `src/tools`). The single `.call()` site is `ToolUseDispatchNode.ts:314`, inside `withToolFileInteractionContext` (`:292`), under `PQueue({concurrency: 4})` + `Promise.all` (`:169`, `:189`) with `AbortSignal` polling (`:172`, `:194`, `:236`).                                                                                         | "Much of tools have been converted" is exactly right: the tool bodies are Effect; the **runner** is not. Converting the runner deletes 68 run sites and retires R1 boundary kind (b).    |
-| `packages/llm` (`@texra-ai/llm`, ~10k LoC) already defines the Effect-typed model contract: `Model.prepareTurn/streamTurn/generateTurn/background.*` return `Effect`/`Stream` with `ModelError extends Data.TaggedError` (`packages/llm/src/turn.ts:1610-1629`). Two production importers, neither on the run path.                                                                                                                                                                                                                     | `ModelInvoker` is written over `packages/llm`, not over `IModelHandler`. The handlers are retired with the loops, as the [delivery plan][plan] §7 package D already requires.            |
-| Five `AsyncLocalStorage` scopes (`workspaceRoots.ts:43`, `RunContext.ts:79`, `TraceEmitter.ts:58` per instance, `ToolFileInteractionContext.ts:49`, `executionLease.ts:131`) and 13 `AsyncLocalStorage.bind` re-entry sites (11 in tools, `executeAgent.ts:439`, `:618`). rc.112 has no ALS awareness: a fiber resumed from outside the `als.run()` frame reads `undefined`.                                                                                                                                                            | Every carrier converts in the same change that makes its readers fibers; the [injection note][injection] §5 disposition is adopted, with the name `Run` (§7).                            |
-| Human waits are promises held in memory: `SessionHostInteractions.pending: Set<…>` (`HostInteractions.ts:471`), `retryPrompt` blocks a node with no timeout (`ModelInvocationNode.ts:534`), `ModelRetryGate` is `p-defer` + `setTimeout` (337 LoC), `FollowUpQueue` is `p-defer`. Approval facts are durable rows; the prompt is not.                                                                                                                                                                                                   | One `Requests` service (§3) parks a run on a `Deferred` and re-parks from the fold after restart, which is the one-run-model §3.7 rule in Effect terms.                                  |
-| Child dispatch: native subagents re-enter the engine through a late-bound `provideAgentEngine` record installed at module load (`executeAgent.ts:743` → `nativeSubagentStrategy.ts:109`) to break an import cycle; workflow scripts run `PQueue` + one `AbortController` per call cascading from a run-level one + `pTimeout` at teardown (`runWorkflowScript.ts:328`, `:693-698`, `:949`).                                                                                                                                             | Child launch becomes a service yielded from context (`Runs`), which dissolves the cycle; the queue, controllers and timeout become `Semaphore`, fiber interruption and `Effect.timeout`. |
-| Ratchet rows on main: `platform()` 50/106, `setServices()` 6/6, `new AbortController(` 11/12, `p-queue` 11, `p-defer` 5, `p-retry` 3, `p-map` 1, `p-timeout` 1, `async-mutex` 1, below-boundary `Effect.run*` 11/27, `catch:effect-importer` 8/11, `dep:@agent/node` 25/27, `dep:@agent/modelHandlers` 9/28.                                                                                                                                                                                                                            | §8 says which rows each slice drives to zero. `setServices()`, `dep:@agent/node` and `p-retry` reach zero only in the atomic cut (§8 slice 3).                                           |
+| Fact                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Consequence                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 526 files import `effect`; 478 `Effect.fn`, 351 `Effect.gen`, 269 `Stream.`, 147 `Deferred.`, 126 `Scope`/`Effect.scoped`, 18 `Context.Service` tags, one `ManagedRuntime.make` (`sessionLayer.ts:791`), one `LayerMap` (`:537`). `PubSub`, `Semaphore.make`, `Context.Reference`: **zero**.                                                                                                                                                                                  | The idiom is established. What is missing is the runtime's own program tree and the layers that compose it.                                             |
+| The Effect spine of a run stops at one line: `runFlowWithLifecycle`'s `runner` is `(handle, lifecycle) => Promise<AgentRuntimeFlowResult>` (`AgentRunLifecycle.ts:478-481`). Below it: `src/agent/node/` (158 + 517 LoC), `implementations/flows/**` (8,315 LoC, zero `effect` imports), `ModelInvocationNode.ts` (846), `modelHandlers/**` (21,061).                                                                                                                         | The run layer is provided at that line; the code below it is the deletion set.                                                                          |
+| Tools: 54 `protected execute()` methods and 53 registry entries under `src/tools`; 62 `effectRuntime()` sites there. About 35 tools' `execute` is nothing but an `AsyncLocalStorage.bind` prelude plus `runPromise` (≈250 lines); 7 `Ports` interfaces exist only to type that capture. The single `.call()` site is `ToolUseDispatchNode.ts:314`.                                                                                                                            | Tool bodies are Effect; the runner is not. Converting the runner deletes ≈420 LoC of prelude and retires R1 boundary kind (b).                          |
+| `packages/llm` (10,116 LoC, six `Model` factories) already defines the Effect-typed model contract: `prepareTurn`/`streamTurn`/`generateTurn`/`background.*` return `Effect`/`Stream`, the terminal `completed` event carries a validated `TurnResult` (`turn.ts:1419-1466`), `ModelError extends Data.TaggedError` (`:1610`). Two production importers, neither on the run path. No factory for `vscode-lm`; no hosted-tool definitions; inline media only.                  | `ModelInvoker` is written over `packages/llm`. Four capabilities must be written into the package before the handlers can retire (§5.4).                |
+| Liveness has **six** authorities: `ExecutionRegistry.handles`, `StreamStatusMachine`'s in-memory phase map, `AgentExecutionHandle.terminalState`, `ExecutionLanes.live`, the `ownedLeases` process map plus claim files, and `event_sequence.owner_id`. A seventh registry, the module-global `liveSessions` set (`SessionHandle.ts:823`), sits beside the `Sessions` `LayerMap`.                                                                                             | One session service owns "is this run live and who may write" (§4 row 7). About 4,700 LoC of arbitration ceases to exist (§7.11).                       |
+| Human waits: seven request kinds go through one `enqueue` that creates a `new Promise` and adds to an in-memory `pending` set; the extension and desktop attachments implement one of the seven methods each, and `dispatch` auto-cancels a request whose method is missing (`HostInteractions.ts:936`). Six of seven kinds already decide through the fold plus `decision.*` arms of `RuntimeRequest`; tool-edit approval takes a second, 13-hop route through a controller. | One route for every kind (§5.5). The auto-cancel hazard (#12083) disappears by construction.                                                            |
+| Hosts: `effectRuntime()`/`run*` sites number about 124 (CLI, 45 files), 99 (extension, 24), 80 (desktop, 18). A typed, shared command vocabulary exists (`RuntimeRequest`, 16 arms, one handler `SessionRequests.handle`). A second vocabulary (`HostRequest`, 50+ arms) is dispatched three different ways, and the CLI re-implements its runtime subset as slash commands.                                                                                                  | Revision 1 undercounted by 4×. The hosts already share a view path (extension and desktop) and a command vocabulary; the cut is to finish both (§7.12). |
+| Four folds run over the same rows: `sessionFold` (1,882 LoC, the view), `createTranscriptFold` (instantiated twice, once inside the view and once in `StreamLogStore`), `StreamSnapshotStore`, `executionMetaFromEvents`. Redaction runs at three sites. Publication has seven entry methods, four of them fire-and-forget through `schedulePublication`.                                                                                                                     | One fold per question (one-run-model R1): the view fold and the run-state fold. Three private folds delete (§7.7).                                      |
+| Follow-ups: three in-memory layers (`FollowUpQueue` + `p-defer`, a per-stream lease map with a 1,000-entry dedup set and tombstones, `ToolUseSessionLifecycle`); **zero durable queue rows**. A crash loses every queued follow-up. Resume re-attaches through a third channel (`drainedFollowUps` + `takePendingFollowUps` threaded through four files).                                                                                                                     | Follow-ups become ledger rows plus one `Queue` per run (§7.8).                                                                                          |
+| Child dispatch: six entry paths, two launch primitives, one driver (`childRunLoop.ts`, 1,280 LoC). In-band and detached differ by four flags. A workflow `agent()` call is recorded four times (script journal, child result row, stable-attempt marker, workflow snapshot). Cancellation is an `AbortController` cascade attached to handles, not interruption.                                                                                                              | One launch operation with a `mode`; checkpoints become child result rows keyed by the existing content-addressed journal key (§7.9, §7.10).             |
+| SDK: `packages/agent/src/effect/sessions.ts` re-implements admission (an `admitted` `Deferred`, a two-window interrupt dance, a 512-event trace handover buffer with warn-and-drop) because no typed per-run launch or durable tail is available underneath.                                                                                                                                                                                                                  | The SDK becomes the same session services plus Promise rendering; ≈160 LoC of `sessions.ts` deletes (§7.13).                                            |
+| Ratchet rows: `platform()` 50/106, `setServices()` 6/6, `new AbortController(` 11/12, `p-queue` 11, `p-defer` 5, `p-retry` 3, `p-map` 1, `p-timeout` 1, `async-mutex` 1, below-boundary `Effect.run*` 11/27, `catch:effect-importer` 8/11, `dep:@agent/node` 25/27, `dep:@agent/modelHandlers` 9/28.                                                                                                                                                                          | §10 says which rows each slice drives to zero.                                                                                                          |
 
 ## 2. The fiber tree
 
-Effect's structured concurrency gives the runtime its lifetime model for free if, and
-only if, the fork sites are chosen deliberately. This is the tree; every later section
-places itself in it.
+Effect's structured concurrency gives the runtime its lifetime model for free if the
+fork sites are chosen deliberately. Every later section places itself in this tree.
 
 ```text
-process scope            ManagedRuntime (one per host; disposal registered into LifecycleHost, R6)
+process scope            ManagedRuntime (one per host root; disposal registered into LifecycleHost, R6)
 └─ session scope         Sessions LayerMap entry (exists: sessionLayer.ts:537)
-   │                       Database, SessionEvents, RunLedger, WorkspaceRoots, Requests, Runs
+   │                       Database, SessionEvents, RunLedger, SessionView, Runs, ModelRoutes, WorkspaceRoots
    ├─ run fiber  ───────  Runs.launch: FiberMap.run(runs, runId, program)   [forkIn session scope]
-   │  │                    Layer.effect(Run, …) provided around the program; Run owns
-   │  │                    identity, ModelCell, trace, policy, and the run's Scope
+   │  │                    Layer.scoped(Run, …) provided around the program; Run owns identity,
+   │  │                    the model selection Ref + its Scope.fork, trace, policy, overlay tools
    │  ├─ turn / round       plain Effect.gen inside runToolUse / runReflection (no fiber)
-   │  │  ├─ model call      ModelInvoker.invoke: one fiber = the calling fiber;
-   │  │  │                  the provider stream is consumed with Stream.runFold on it;
-   │  │  │                  AbortSignal derived only inside Effect.tryPromise((signal) => sdk…)
-   │  │  ├─ dispatch        Tools.dispatch: parallel-safe segment = Effect.forEach({concurrency: 4})
-   │  │  │  └─ tool call      one child fiber per call [forkChild via forEach];
-   │  │  │                     Effect.provideService(ToolCall, …) on that subtree;
-   │  │  │                     per-call cancel = interrupt that fiber; timeout = Effect.timeout
+   │  │  ├─ model call      ModelInvoker.invoke on the calling fiber; the provider Stream is
+   │  │  │                  consumed with Stream.tap (deltas to trace) and its terminal `completed`
+   │  │  │                  event is the TurnResult; AbortSignal only inside Effect.tryPromise
+   │  │  ├─ dispatch        parallel-safe segment = Effect.forEach({ concurrency: 4 })
+   │  │  │  └─ tool call      one child fiber per call; Effect.provideService(ToolCall, …);
+   │  │  │                     cancel = interrupt that fiber; bash additionally kills its
+   │  │  │                     process group from a release action (the one named exception)
    │  │  └─ human wait      Requests.open: Deferred.await on the calling fiber (run parks)
-   │  └─ settlement         Effect.onExit at the root: terminal rows appended under the lease,
-   │                        then Scope closes (finalizers: trace detach, lease release)
+   │  └─ settlement         Effect.onExit at the root: terminal rows appended under the lease;
+   │                        Scope closes (finalizers: trace detach, model scope, file fence)
    ├─ run fiber (child)     a delegated or scripted child is ANOTHER FiberMap entry under the
-   │                        SESSION scope, never a child of the parent run fiber (§5.9)
+   │                        SESSION scope, never a child of the parent run fiber (§7.9)
    └─ reader fibers         SessionView subscribers; detaching never touches run fibers
 ```
 
 Rules the tree encodes:
 
 - **A run is a session-scoped fiber, not a child of whoever launched it.** `Runs.launch`
-  forks into the session scope's `FiberMap` keyed by `RunId`. Host stop is
-  `FiberMap`-lookup then `Fiber.interrupt`. Closing the session interrupts every run
-  fiber in the map, which is the existing `SessionHandle.dispose` contract, now obtained
-  from `Scope` rather than from a teardown ledger.
-- **In-band delegation awaits; it does not parent.** A parent that dispatches an in-band
-  child yields `Deferred.await(child.result)`. If the parent is interrupted, the
-  `delegate` tool's finalizer decides, by the child's declared `mode` (`inband` |
-  `detached`, one-run-model §3.2), whether to interrupt the child's map entry. Nothing
-  depends on re-parenting a running fiber, which the [delivery plan][plan] §5 forbids.
+  forks into the session scope's `FiberMap` keyed by `RunId`. Host stop is a map lookup
+  then `Fiber.interrupt`. Closing the session interrupts every entry, which is the
+  existing `SessionHandle.dispose` contract obtained from `Scope` rather than from a
+  teardown ledger.
+- **In-band delegation awaits; it does not parent.** `Runs.launch` returns
+  `{ id, result: Deferred<ChildResult> }`. An in-band caller yields
+  `Deferred.await(result)`; a detached caller forks
+  `Deferred.await(result) *> FollowUps.offer(parent, format(result))` under the session
+  scope. If the parent is interrupted, the delegate tool's finalizer decides by the
+  child's declared `mode` (`inband` | `detached`, one-run-model §3.2) whether to
+  interrupt the child's map entry. Nothing depends on re-parenting a running fiber.
+- **The child strategy contract drops its `AbortSignal` parameters.** Today
+  `launch(ports, signal)` and `runTurn(followUps, ports, signal)`
+  (`childRunLoop.ts:212-227`) carry a signal that a `ChildRunInterruptible` controller
+  aborts. `Fiber.interrupt` on a map entry only becomes the cancel path once those
+  parameters are gone; renaming the fork does not pay that cut.
 - **The only `forkDetach` in the runtime is gone.** `AgentRunLifecycle.ts:541` forks the
-  `onRun` host callback detached; under the tree it is `forkIn(sessionScope)`, so it
-  is interrupted when the session closes instead of outliving the process.
+  `onRun` host callback detached; it becomes `forkIn(sessionScope)`.
 - **Interruption is the only cancellation.** `RunScope.signal`, the run
-  `AbortController` (`AgentLaunchContext.ts:510`), `linkAbortSignals`, per-call
-  signals in `ToolCallContext`, and the workflow-script controller cascade all delete.
-  Where a foreign SDK needs a signal, `Effect.tryPromise((signal) => …)` and
-  `Effect.promise((signal) => …)` derive one from the current fiber (rc.112 signatures,
-  §6). `Effect.abortSignal` (an `Effect<AbortSignal, never, Scope>`) covers the two
-  places that hand a signal to a long-lived object rather than a call.
-- **Masks are small.** The one uninterruptible region per activity is the append
-  handoff (`Effect.uninterruptibleMask((restore) => …)` with preparation under
-  `restore`), per [runtime][runtime] §2.4. `Effect.uninterruptible` already guards
-  settlement at `sessionLayer.ts:746`, `runAgent.ts:254`, `executeAgent.ts:538`; those
-  three sites remain and become the pattern's only other instances.
+  `AbortController` (`AgentLaunchContext.ts:510`), `linkAbortSignals`, the per-call
+  signal field (which is the run signal passed through, `ToolUseDispatchNode.ts:392`,
+  with 20 of 21 tool-side readers being pure forwarding), and the workflow-script
+  controller cascade all delete. Foreign SDKs get a signal from
+  `Effect.tryPromise((signal) => …)` or `Effect.promise((signal) => …)`;
+  `Effect.abortSignal` covers a long-lived foreign object. Bash's process-group teardown
+  (`execUtils.ts:207-375`) is preserved explicitly as the release of an
+  `Effect.acquireRelease` around the spawn.
+- **Masks are small.** The one uninterruptible region per activity is the append handoff
+  (`Effect.uninterruptibleMask((restore) => …)` with preparation under `restore`).
 
-## 3. Service manifest
+Peer confirmation, from the [loop study][loop] §3: OpenCode V2's runner is an
+`Effect.fn` while loop with no step cursor, tool settlement under `uninterruptibleMask`,
+and a durable input inbox promoted at safe boundaries; Pi's harness commits the
+assistant operation intent before provider I/O and settles interrupted results from
+recorded frames. Both are this tree. OpenCode starts tools while the stream is still
+open; this design commits the validated `TurnResult` first (contract 0.1), a deliberate
+difference the study already records.
 
-Twelve tags across four lifetimes. Each row names the shape (the methods a program
-yields), what it deletes, and the composition point. Ids follow the injection note's
-grammar (`@texra/<area>/<Name>`). Where the [runtime proposal][runtime] §2.4, the
-[injection note][injection] §5, and the [one run model][onerun] §3.10 name the same
-thing differently, the one-run-model name wins (§7 item 2).
+## 3. Layers: how the tree is composed
 
-| #   | Tag                                       | Lifetime | Shape (yielded API)                                                                                                                                                                                                                                                               | Deletes                                                                                                                                                                                     |
-| --- | ----------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | process tags per injection §5 rows 1 to 4 | process  | `Secrets`, `AppState`, `FileSystem` + `Path`, `SetupPlatform`, `ToolInjections`, `LogSink`, `HttpClient` (exists)                                                                                                                                                                 | `platform()` reads in the runtime; `processRuntime.ts` global once every host holds its runtime in a local                                                                                  |
-| 2   | `@texra/session/Database`                 | session  | exists (`src/shared/session/database.ts:84`)                                                                                                                                                                                                                                      | none                                                                                                                                                                                        |
-| 3   | `@texra/session/SessionEvents`            | session  | exists (`sessionEvents.ts:41`); `publishBatch` is the C6 transaction                                                                                                                                                                                                              | none                                                                                                                                                                                        |
-| 4   | `@texra/session/RunLedger`                | session  | `append(rows): Effect<RunState, LedgerRefused>`, `load(runId): Effect<RunState \| null, LedgerRefused>`; both fold with `foldRunState` ([PR1 note][pr1] §3)                                                                                                                       | `persistedFlow.ts`, `FlowRecord`, `flow_<id>` KV writes, the preservation ladder at `runToolUseFlow.ts:619-664`                                                                             |
-| 5   | `@texra/session/Runs`                     | session  | `launch(input): Effect<RunHandle, LaunchRefused>`, `interrupt(runId): Effect<void>`, `handle(runId): Effect<Option<RunHandle>>`; backed by `FiberMap<RunId>` + admission over ledger claims (C5)                                                                                  | `executionRegistry.ts` (924), `executionLanes.ts` (247), the late-bound `provideAgentEngine`, `AgentRunHandle` bookkeeping, the lease's live-ownership map (the file fence stays, §7)       |
-| 6   | `@texra/session/Requests`                 | session  | `open(req): Effect<RequestDecision, never, Scope>` (appends the opened row, registers a `Deferred` by `requestId`, awaits), `decide(id, decision): Effect<void, UnknownRequest>` (appends the decided row, completes the `Deferred`), `restore(runState): Effect<void>` on resume | `SessionHostInteractions.pending` set, `streamApprovalQueue.ts`, the seven per-kind Promise round-trips in `HostInteractions.ts`, `toolEditApproval.ts` waits, `p-defer` in `FollowUpQueue` |
-| 7   | `@texra/agent/Run`                        | run      | `id: RunId`, `parent`, `agent`, `workingDirectory`, `policy`, `model: ModelCell` (the one mutable seam, `swap`/`current` as `Ref`), `trace: AgentTrace`, `stage: Context.Reference<readonly string[]>` (per run, §5.7), `scope: Scope`                                            | `RunContext` ALS (47 readers), `RunScope`, `AgentCore`, `BaseFlowContextInit`, both `AsyncLocalStorage.bind` sites in `executeAgent.ts`, `Flow.setServices()`                               |
-| 8   | `@texra/agent/ModelInvoker`               | run      | `invoke(prepared): Effect<CompletedTurn, ModelFailure>` (automatic retry, route gate, manual-retry admission, compaction rows, delta streaming to the trace); `count(prepared): Effect<number, ModelFailure>`                                                                     | `ModelInvocationNode.ts` (846), `ModelRetryGate.ts` (337), `p-retry`, `auxiliaryRetry.ts`, the `IModelHandler` hierarchy once `packages/llm` serves every route                             |
-| 9   | `@texra/agent/Tools`                      | run      | `dispatch(calls, ctx): Effect<readonly ToolSettlement[]>` (never fails: a tool failure is a settlement), `registry` (overlay + `submit_output`), `endTurn: Latch`                                                                                                                 | `ToolUseDispatchNode.ts` (607), `PQueue` there, `ToolFileInteractionContext` ALS (43 sites), the 68 `effectRuntime().run*` sites in `src/tools`, `ToolTypes.ITool.call(): Promise`          |
-| 10  | `@texra/agent/FollowUps`                  | run      | `wait: Effect<Batch \| null>` (blocks on a per-run `Queue`; `null` on run end), `drain: Effect<Batch \| null>` (`Queue.poll`), `consume(batch): Effect<RunState, LedgerRefused>` (one C6 transaction: `model.message` rows + queue removal + `turn.ready`)                        | `ToolUseSessionLifecycle.ts`, `FollowUpQueue.ts`'s deferred, `ToolUseFollowUpQueueManager`'s in-memory dedup set, `waitForFollowUp`, `takePendingFollowUps` re-attachment loop              |
-| 11  | `@texra/agent/OutputPipeline`             | run      | reflection's six output managers behind one tag: `produce(state): Effect<OutputFacts, OutputError>`, `reconcile(pending): Effect<OutputFacts, OutputError>`                                                                                                                       | the four stateful manager objects in `ReflectionServices.ts`, three `effectRuntime().runPromise` boundaries in `MediaExtractionNode`, `TeXCountNode`, `LatexDiffManager`                    |
-| 12  | `@texra/agent/ToolCall`                   | call     | `{ callId, attempt, instruction, workPlan, hooks }`, provided with `Effect.provideService` around each tool fiber                                                                                                                                                                 | `ToolCallContext` and its ALS stack; the per-call `AbortSignal` field (the fiber is the cancel handle)                                                                                      |
+The owner's three requirements for this revision are one requirement. Native
+`Context.Service` tags are only useful if the layers that provide them compose, and
+composability is what makes replay (§6) a layer swap rather than a mode flag.
 
-Not services, on purpose: agent definition, prompt, setting, initial state (plain
-arguments); the six reflection output managers individually (one tag, row 11); node
-instance fields (generator locals); anything crossing `postMessage`. R2's four-part test
-is applied to every row above: each is independently acquired, scoped, or substituted in
-an existing test.
-
-Composition points are the three the injection note fixes (process layer, session
-`LayerMap` entry, `Layer.effect(Run, …)` inside `runAgent`) plus call-local
-`Effect.provideService`. No fourth.
-
-## 4. The two programs
-
-### 4.1 Signatures
+### 3.1 The layer graph
 
 ```ts
-// src/agent/runtime/loop/toolUse.ts
-export const runToolUse: (
-  start: ToolUseStart, // plain data: agent, prompt, setting, resume flag
-) => Effect.Effect<
-  RunOutcome, // 'completed' | 'waiting' | 'cancelled' | 'halted' (data, R7)
-  RunFailure, // LedgerRefused | ModelFailure | ToolsRefused  (typed, R7)
-  Run | RunLedger | ModelInvoker | Tools | FollowUps | Requests
+// process root, one per host (packages/{cli,desktop,extension,agent}/src)
+const processLayer = Layer.mergeAll(
+  Secrets.layer(adapters.secrets),
+  AppState.layer(adapters.state),
+  NodeFileSystem.layer,
+  NodePath.layer, // effect/platform-node, injection Q1
+  SetupPlatform.layer(adapters.setup),
+  ToolRegistry.layer, // 53 singleton tools + injections (§4 row 2)
+  LogSink.layer(adapters.log),
+  FetchHttpClient.layer,
+);
+
+// session, one LayerMap entry per workspace root (exists: sessionLayer.ts:481-537)
+const sessionLayer = (roots: WorkspaceRoots) =>
+  Layer.mergeAll(
+    Runs.layer,
+    ModelRoutes.layer,
+    SessionView.layer,
+    RunLedger.layer,
+  ).pipe(
+    Layer.provideMerge(SessionEvents.layer),
+    Layer.provideMerge(Database.layer(roots)),
+    Layer.provideMerge(Layer.succeed(WorkspaceRoots, roots)),
+  );
+
+// run, built once per launch inside Runs.launch (never hoisted: a hoisted layer would share
+// one model selection across runs, because Layer values memoize by reference)
+const runLayer = (launch: LaunchInput) =>
+  Layer.mergeAll(
+    ModelInvoker.layer,
+    FollowUps.layer,
+    OutputPipeline.layer,
+  ).pipe(Layer.provideMerge(Layer.scoped(Run, acquireRun(launch))));
+
+// call-local: not a layer, a subtree provision
+tool
+  .call(input)
+  .pipe(Effect.provideService(ToolCall, { callId, instruction, hooks }));
+```
+
+Three provision points and one subtree provision, exactly as the [injection
+note][injection] §3.1 fixes; no fourth. The arrows are `Layer.provideMerge`: a shorter
+lifetime is built from a longer one, never the reverse (R3). Each host root holds its
+`ManagedRuntime` in a local (`ManagedRuntime.make(processLayer)`), and
+`processRuntime.ts`'s throwing global accessor deletes when the last of the ≈300
+`effectRuntime()` reads is gone.
+
+### 3.2 What composability buys, concretely
+
+| Substitution                  | Layer swapped                                                              | Who uses it                                                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Headless SDK                  | `Requests.layerDenyAll` for `Requests`                                     | `packages/agent` (replaces the `HEADLESS_HOST` stub, `sessions.ts:208-214`)                                    |
+| Webview renderer              | `SessionView.layer` over a `SessionInputs` fed by frames instead of SQLite | `webviewSessionLayer.ts` already does this; it is the finished native root the injection note names            |
+| Replay from the ledger        | `ModelInvoker.layerReplay(ledger)`, `Tools.layerReplay(ledger)`            | §6: the viewer's stepper, deterministic tests, "re-run this turn with the recorded I/O"                        |
+| Test clock                    | `it.effect` provides `TestClock`; retry schedules advance without sleeping | `ModelInvoker`'s automatic retry, `ModelRoutes`' cooling                                                       |
+| Fake model, fake tools        | `Layer.succeed(ModelInvoker, …)`, `Layer.succeed(ToolRegistry, …)`         | every loop test; today these need `createFakePlatform` plus `setServices()` plus an ALS frame                  |
+| Process-scoped vs. run-scoped | `ToolRegistry` (process) + `Run.overlay` (run value)                       | the base registry is a singleton of stateless instances (`registry.ts:74-76`); only `submit_output` is per run |
+
+The rule for whether something is a tag or a value (R2, and the injection note's §5
+"explicitly not services" list) still applies. Agent definition, prompt, setting, initial
+state, and every per-visit local remain plain arguments. Twenty tags is the reviewed
+count.
+
+### 3.3 `Context.Reference` for the two defaulted ambient values
+
+Effect 4 has no `FiberRef`; `Context.Reference(key, { defaultValue })` is the
+request-scoped value with a default, read without a layer and overridden per subtree
+with `Effect.provideService`. Two carriers become references: the trace stage stack
+(held on `Run`, keyed per run so cross-trace inheritance cannot recur) and the lease
+maintenance set. Everything else that was ambient becomes a service whose absence fails
+to compile.
+
+## 4. Service manifest (revision 2)
+
+Twenty tags across four lifetimes. Each row names the shape a program yields, what it
+deletes, and the surveys' measured LoC where one exists. Ids follow
+`@texra/<area>/<Name>`.
+
+| #   | Tag                                                                                    | Lifetime | Shape (yielded API)                                                                                                                                                                                                                                                                      | Deletes                                                                                                                                                                                                                                                                                                |
+| --- | -------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `Secrets`, `AppState`, `SetupPlatform`, `LogSink`, `FileSystem` + `Path`, `HttpClient` | process  | per [injection note][injection] §5 rows 1 to 4, 13 to 15                                                                                                                                                                                                                                 | `platform()` reads; `processRuntime.ts` once every root holds its runtime in a local                                                                                                                                                                                                                   |
+| 2   | `@texra/tools/ToolRegistry`                                                            | process  | `base: MapToolRegistry` (53 singleton instances), `injections: readonly ToolInjection[]`                                                                                                                                                                                                 | `getDefaultToolRegistry` lazy singleton, `SharedToolInjectionRegistry` mutable array (`toolInjection.ts:34`)                                                                                                                                                                                           |
+| 3   | `@texra/session/Database`                                                              | session  | exists                                                                                                                                                                                                                                                                                   | none                                                                                                                                                                                                                                                                                                   |
+| 4   | `@texra/session/SessionEvents`                                                         | session  | exists; `publishBatch` is the C6 transaction and holds the publication `Semaphore(1)`; publications tracked in a `FiberSet`                                                                                                                                                              | `SessionHandle.schedulePublication` + `publications` + `settlePublications` (`:678-705`); the four fire-and-forget publish methods become awaited appends                                                                                                                                              |
+| 5   | `@texra/session/RunLedger`                                                             | session  | `append(rows): Effect<RunState, LedgerRefused>`, `load(runId): Effect<RunState \| null, LedgerRefused>`; both fold with `foldRunState` ([PR1 note][pr1] §3). One aggregate per run (§9 item 1).                                                                                          | `persistedFlow.ts`, `FlowRecord`, `flow_<id>` KV writes, the preservation ladder (`runToolUseFlow.ts:619-664`), `StreamSnapshotStore` (312), `executionMetaFromEvents` and its callers, KV `turn-state`                                                                                                |
+| 6   | `@texra/session/SessionView`                                                           | session  | exists (`SessionView.ts:51`): `ref: SubscriptionRef<SessionView>`, `changes: Stream`; the only consumer of `sessionFold.ts`                                                                                                                                                              | `StreamLogStore` (380) and its second `createTranscriptFold`; the six `SubscriptionRef.getUnsafe` pokes on hosts become `changes` readers                                                                                                                                                              |
+| 7   | `@texra/session/Runs`                                                                  | session  | `launch(spec): Effect<RunHandle, LaunchRefused>` where `RunHandle = { id, result: Deferred<ChildResult>, interrupt }`; `interrupt(runId)`; `handle(runId): Option<RunHandle>`; backed by `FiberMap<RunId>` and the ledger's C5 claims. **One implementation also provides tag 8.**       | `executionRegistry.ts` (924), `executionLanes.ts` (247), `waitingTermination.ts` (240), `executionInteractionOwnership.ts` (218), most of `ExecutionHandle.ts`, `StreamStatusService.ts`'s in-memory map, the `liveSessions` set, `provideAgentEngine`, `childRunBudget.ts`, `detachedChildRun.ts`     |
+| 8   | `@texra/session/Requests`                                                              | session  | `open(req, { policy, bypassed }): Effect<RequestDecision, never, Scope>`, `openDetached(req): Effect<RequestId>` (inquiry), `decide(id, decision)`, `restore(runState)`; one prompt at a time per stream via `Semaphore.withPermits(1)` with the bypass re-check inside the permit       | the seven `HostInteractions` request methods, `enqueue`/`dispatch`/`settleRequest`/`settleRetry`/`pending` (≈450 of 1,001), `streamApprovalQueue.ts` `enqueue` (≈200 of 376), the CLI `park()` stubs, `ToolEditApprovalController`'s second pending map, `p-defer` there                               |
+| 9   | `@texra/session/ModelRoutes`                                                           | session  | `withRoute(wire, model)(effect)`: cooling and probing per route key, two nested scopes, a version `Ref` per route for the staleness re-check                                                                                                                                             | `ModelRetryGate.ts` (337) and `SessionHandle.modelRetries`; must be session-scoped because the gate coordinates credential failures across concurrent runs (`SessionHandle.ts:231,300`)                                                                                                                |
+| 10  | `@texra/session/WorkspaceRoots`                                                        | session  | exists; widened per injection §5 row 5                                                                                                                                                                                                                                                   | `workspaceRoots.ts` ALS (after the filesystem ruling)                                                                                                                                                                                                                                                  |
+| 11  | `@texra/agent/Run`                                                                     | run      | `id`, `parent`, `agent`, `workingDirectory`, `policy`, `model: Ref<Selected>` with `Scope.fork` per selection (`swap = Scope.close(old) *> Ref.set(new)`), `trace`, `stage: Context.Reference`, `workspace` (tracker, work plan), `overlay: readonly ITool[]`, `endTurn: Latch`, `scope` | `RunContext` ALS (47 readers), `RunScope`, `AgentCore`, `BaseFlowContextInit`, `ModelCell.ts` (140, incl. the lazy-client memo), `AgentLaunchContext.ts`'s rollback ladder and `linkAbortSignals`, both `AsyncLocalStorage.bind` sites in `executeAgent.ts`, `Flow.setServices()`                      |
+| 12  | `@texra/agent/ModelInvoker`                                                            | run      | `prepare(request): Effect<ResolvedTurn, ModelError>`, `invoke(turn): Effect<TurnResult, ModelFailure>`, `count(turn)`, `submit(turn): Effect<RemoteOperation, ModelFailure>` (commits the handle before returning), `observe(op)`                                                        | `ModelInvocationNode.ts` (846), `helperModel.ts` (99), `auxiliaryRetry.ts`, `p-retry`, `IModelHandler` and `src/agent/modelHandlers/**` once §5.4's four gaps are closed in `packages/llm`                                                                                                             |
+| 13  | `@texra/agent/FollowUps`                                                               | run      | `wait: Effect<Batch \| null>` (`Queue.take`), `drain: Effect<Batch \| null>` (`Queue.poll`), `offer(row)`, `consume(batch): Effect<RunState, LedgerRefused>` (one C6 transaction: `followup.consumed` + `model.message` rows + `turn.ready`)                                             | `ToolUseFollowUpQueueManager.ts` (357), `FollowUpQueue.ts` (164), `ToolUseSessionLifecycle.ts` (93), the `drainedFollowUps`/`takePendingFollowUps` re-attachment (`resumeRun.ts:451-500`, four `executeAgent.ts` sites), the four `updateQueuedFollowUps` publishers, the goal-continuation race check |
+| 14  | `@texra/agent/OutputPipeline`                                                          | run      | `produce(state): Effect<OutputFacts, OutputError>`, `reconcile(pending)`                                                                                                                                                                                                                 | the four stateful managers in `ReflectionServices.ts`; three `effectRuntime().runPromise` boundaries in reflection nodes                                                                                                                                                                               |
+| 15  | `@texra/agent/ToolCall`                                                                | call     | `{ callId, instruction, hooks }` (three fields; `tracker`, `trace`, `workPlan` are run-lifetime and live on `Run`; the signal is the fiber; there is no `attempt` because dispatch never retries a tool)                                                                                 | `ToolFileInteractionContext.ts` (72), its 35 reader sites, the 7 `Ports` interfaces, 14 `AsyncLocalStorage.bind` sites in tools                                                                                                                                                                        |
+
+Corrections against revision 1: `SessionView` was missing and already exists as a tag;
+`Runs` and `Requests` are one implementation with two tags because a run is either
+executing (owns a fiber) or parked (owns a `Deferred`) and today that one fact is spread
+across five places; `ModelRoutes` moved from inside `ModelInvoker` to the session
+because the cooling state is cross-run; `Tools` split into a process-scoped registry and
+run-scoped values (`overlay`, `endTurn`) because no registered tool holds run state;
+revision 1's "`SessionInputs` feeds the follow-up queue" was a name collision with the
+existing fold-input tag and is withdrawn.
+
+## 5. The two programs
+
+### 5.1 Signatures
+
+```ts
+export const runToolUse: (start: ToolUseStart) => Effect.Effect<
+  RunOutcome, // 'completed' | 'waiting' | 'cancelled' | 'halted'  (data, R7)
+  RunFailure, // LedgerRefused | ModelFailure | ToolsRefused          (typed, R7)
+  Run | RunLedger | ModelInvoker | ToolRegistry | FollowUps | Requests
 >;
 
-// src/agent/runtime/loop/reflection.ts
 export const runReflection: (
   start: ReflectionStart,
 ) => Effect.Effect<
@@ -165,40 +253,29 @@ export const runReflection: (
 >;
 ```
 
-Three channels, three meanings (PRD R7):
+Success carries every product outcome, including the ones that arrive today as thrown
+sentinels. Error carries expected operational failures that end the attempt, each a
+`Data.TaggedError` with Zod-typed fields and no SDK object. Interruption is interruption:
+the root's `Effect.onExit` turns `Exit.hasInterrupts` into the `cancelled` terminal row.
+Defects are never caught below the root. The loop bodies are the [runtime
+proposal][runtime] §2.2 sketches; the turn and dispatch helpers they call are below.
 
-- **Success** carries every product outcome, including the ones that today arrive as
-  thrown sentinels: `waiting`, `cancelled` after a denied retry, `halted` after a
-  rejected output. Callers inspect data, not `Cause`.
-- **Error** carries expected operational failures that end the attempt: the ledger
-  refused an append (lease lost, C5), the model failed after the automatic schedule and
-  a denied manual retry, the tool registry could not be built. Each is a
-  `Data.TaggedError` with Zod-typed fields; none carries an SDK object.
-- **Interruption** is interruption. Host stop, session close, and process shutdown
-  reach the loop as `Fiber.interrupt`; the loop does not catch it, and the root's
-  `Effect.onExit` turns `Exit.hasInterrupts` into the `cancelled` terminal row.
-- **Defects** are programming errors and are never caught below the root.
-
-The loop bodies are the [runtime proposal][runtime] §2.2 sketches, unchanged in
-structure. What this section adds is the shape of the two helpers those sketches call
-and left open: the turn (§4.2) and dispatch (§4.3).
-
-### 4.2 A turn, with its one mask
+### 5.2 A turn, with its one mask
 
 ```ts
 const runTurn = Effect.fn('toolUse.turn')(function* (s: RunState) {
   const ledger = yield* RunLedger;
   const model = yield* ModelInvoker;
-  const tools = yield* Tools;
   const followUps = yield* FollowUps;
 
-  const queued = yield* followUps.drain; // non-blocking; consumed under the lease
+  const queued = yield* followUps.drain;
   if (queued) s = yield* followUps.consume(queued);
 
-  // Activity/append pair: preparation interruptible, handoff + append masked.
   s = yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const turn = yield* restore(model.invoke(prepare(s))); // CompletedTurn, validated
+      const turn = yield* restore(
+        model.invoke(yield* model.prepare(request(s))),
+      );
       return yield* ledger.append([
         ...compactionRows(turn),
         assistantRow(turn),
@@ -208,7 +285,7 @@ const runTurn = Effect.fn('toolUse.turn')(function* (s: RunState) {
   );
 
   if (s.pendingCalls.length === 0) return s;
-  const settlements = yield* tools.dispatch(s.pendingCalls, s); // never fails; appends per call
+  const settlements = yield* dispatch(s.pendingCalls, s); // never fails; appends per call
   return yield* ledger.append([
     pairedFollowUpMessages(settlements),
     snapshot(s),
@@ -217,33 +294,26 @@ const runTurn = Effect.fn('toolUse.turn')(function* (s: RunState) {
 });
 ```
 
-`Effect.uninterruptibleMask` is the rc.112 name (§6). The model call runs under
-`restore`, so a stop during streaming interrupts the provider request; only the
-committed response is durable. `Effect.fn('toolUse.turn')` gives every turn a span
-whose name the observability plane maps to the existing stage id (R9).
+### 5.3 Dispatch: three combinators, not one
 
-### 4.3 Dispatch: three combinators, not one
-
-`ToolUseDispatchNode` carries four product contracts the [injection note][injection]
-§3.3 and the [delivery plan][plan] §5 name as the one place a mechanical port loses
-behavior: barriers, parallel-safe segments, duplicate fan-out, result order, and the
-absence of fail-fast sibling interruption. In Effect they are:
+`ToolUseDispatchNode` carries four product contracts: barriers, parallel-safe segments,
+duplicate fan-out, result order, and the absence of fail-fast sibling interruption.
 
 ```ts
 const dispatch = Effect.fn('tools.dispatch')(function* (calls, state) {
-  const { registry, endTurn } = yield* Tools;
+  const { overlay, endTurn } = yield* Run;
+  const { base } = yield* ToolRegistry;
   const ledger = yield* RunLedger;
-  const results = new Map<CallId, ToolSettlement>(); // result order restored from `calls`
-  const primaries = new Map<Dedup, Deferred.Deferred<ToolSettlement>>();
+  const registry = overlayRegistry(base, overlay);
+  const results = new Map<CallId, ToolSettlement>();
+  const primaries = new Map<DedupKey, Deferred.Deferred<ToolSettlement>>();
 
   for (const segment of partition(calls)) {
-    // 1. segments: contiguous parallel-safe runs vs single barrier calls (existing rule)
     if (yield* endTurn.isOpen) break; // a terminal tool ended the turn; later calls get skip results
-
     const runOne = (call) =>
       Effect.gen(function* () {
         const dup = primaries.get(call.dedupKey);
-        if (dup) return yield* Deferred.await(dup); // 2. duplicates wait for their primary
+        if (dup) return yield* Deferred.await(dup); // duplicates wait for their primary
         const mine = yield* Deferred.make<ToolSettlement>();
         primaries.set(call.dedupKey, mine);
         if (segment.barrier) yield* ledger.append([intent(call)]); // tool.intent at the dispatch site
@@ -252,303 +322,364 @@ const dispatch = Effect.fn('tools.dispatch')(function* (calls, state) {
           .call(call.input)
           .pipe(
             Effect.provideService(ToolCall, callContext(call, state)),
-            Effect.timeout(call.timeout), // rc.112: fails with TimeoutError, mapped below
-            Effect.exit, // 3. a failure is a settlement, never a sibling interrupt
-            Effect.map(settlementOf(call)),
+            Effect.exit, // a failure or an interruption is a settlement, never a sibling interrupt
+            Effect.map(settlementOf(call)), // interrupted -> CANCELLED_CALL_ERROR, verbatim
           );
         yield* ledger.append([result(call, settlement), end(call)]);
         yield* Deferred.succeed(mine, settlement);
         return settlement;
       });
-
     const settled = segment.barrier
       ? [yield* runOne(segment.calls[0])]
       : yield* Effect.forEach(segment.calls, runOne, {
           concurrency: MAX_PARALLEL_TOOL_CALLS,
         });
-    settled.forEach((s, i) => results.set(segment.calls[i].id, s));
+    settled.forEach((r, i) => results.set(segment.calls[i].id, r));
   }
   return calls.map((c) => results.get(c.id) ?? skipped(c));
 });
 ```
 
-What each combinator buys and why the alternative loses behavior:
-
 - **`Effect.forEach` with `concurrency`** replaces `PQueue` for the parallel-safe
-  segment only. Because `runOne` never fails (its body ends in `Effect.exit`), `forEach`
-  cannot fail fast and cannot interrupt siblings, which is the current
-  `Promise.all`-over-settled-results behavior. A tool that throws produces the same
-  `{status:'error'}` settlement `BaseTool.call` produces today.
-- **`Deferred` per primary** replaces `_duplicateToPrimary`. A duplicate awaits its
-  primary's settlement and derives the same `duplicateOf` result; it never executes.
-  This is also what resume needs (§2.3 of the proposal), since an unpaired duplicate
-  can await a primary that resumed.
-- **`Latch` for `endTurn`** replaces the `TurnEnded` throw-and-catch. `submit_output`
-  or any terminal tool opens the latch; the loop checks it between segments, so the
-  current partition settles before the short-circuit, as today.
-- **Per-call `Effect.timeout`** replaces the per-call `AbortSignal` in
-  `ToolCallContext`; the fiber `forEach` forked is the cancel handle. Interrupting the
-  run interrupts the segment's fibers through the tree, and the `Exit` each `runOne`
-  observes carries the interruption, so the settlement is `cancelled` for calls still
-  running and unchanged for calls already settled, matching `post()`'s pairing rule
-  (`ToolUseDispatchNode.ts:534-543`).
+  segment only. `runOne` never fails (it ends in `Effect.exit`), so `forEach` cannot
+  fail fast or interrupt siblings.
+- **`Deferred` per primary** replaces `_duplicateToPrimary`; a duplicate awaits and
+  derives the same `duplicateOf` result, which resume also needs.
+- **`Latch` for `endTurn`** replaces the `TurnEnded` throw-and-catch; the current
+  partition settles before the short-circuit, as today.
+- **No per-call timeout.** Revision 1 wrote `Effect.timeout(call.timeout)`; there is no
+  such timeout today (`SdkToolCall` has no `timeout`, the dispatcher applies none), and
+  `src/tools/timeouts.ts` is a per-HTTP-request deadline that stays as it is. Adding one
+  would be new behavior and is dropped.
+- **Cancellation.** The fiber `forEach` forked is the cancel handle. An interrupted call
+  settles as the synthetic `CANCELLED_CALL_ERROR` result so every `tool_use` stays paired
+  (`ToolUseDispatchNode.ts:530-543`). Bash's `executeCommand` keeps its process-group
+  kill, wired as the release of an `Effect.acquireRelease` around the spawn.
 
-The tool contract that makes this possible is one line in `src/tools/core/base.ts`:
+The tool contract is one line in `src/tools/core/base.ts`:
 `protected abstract execute(input: T): Effect.Effect<ToolResult, never, ToolCall | Run>`
-(requirements as each tool actually needs them), with `call()` an `Effect.fn` that
-Zod-validates and maps `ZodError` to the existing diagnostics. The 43 `*Tool.ts`
-bodies are already `Effect.fn`; the change per tool is deleting the
-`effectRuntime().runPromise` wrapper and the `AsyncLocalStorage.bind` prelude. That
-retires R1 boundary kind (b), which the PRD ties to exactly this event ("when the tool
-runner is itself Effect-typed"), and answers injection Q4: yes, the dispatcher is the
-unit that retires the kind.
+(requirements narrowed per tool), with `call()` an `Effect.fn` that Zod-validates and
+maps `ZodError` to the existing diagnostics. Per tool the change is deleting the
+prelude and the `runPromise`; ≈9 lines each across 54 tools. That retires R1 boundary
+kind (b) and answers injection Q4.
 
-### 4.4 Model invocation
+### 5.4 Model invocation (corrected)
 
-`ModelInvoker.invoke` is one `Effect.fn` over `packages/llm`'s `Model`:
+`packages/llm` already produces the completed turn: the terminal `completed` event of
+`streamTurn` carries a `TurnResult` validated by five cross-field refinements
+(`turn.ts:1334-1415`). Revision 1's `Stream.runFold` into a `CompletedTurn` would have
+re-derived that value; it is withdrawn. `ResolvedTurn` is the prepared invocation
+(contract 0.1 row 2), so `invoke` takes the output of `prepare`.
 
 ```ts
-const invoke = Effect.fn('model.invoke')(function* (
-  prepared: PreparedInvocation,
-) {
+const invoke = Effect.fn('model.invoke')(function* (turn: ForegroundTurn) {
   const run = yield* Run;
-  const cell = yield* Ref.get(run.model); // the invocation binds one model (contract 0.1)
-  const attempt = cell.model.streamTurn(prepared).pipe(
+  const routes = yield* ModelRoutes;
+  const ledger = yield* RunLedger;
+  const selected = yield* Ref.get(run.model); // one invocation binds one model
+  const attempt = selected.model.streamTurn(turn).pipe(
     Stream.tap((ev) => deltaToTrace(run.trace, ev)), // live-only; the trace is the product surface (R9)
-    Stream.runFold(emptyTurn, foldTurnEvent), // -> CompletedTurn (validated by the package)
-    routeGate(cell.route), // Latch per route key: closed while a route cools, one probe fiber reopens it
+    Stream.filter((ev) => ev.kind === 'completed'),
+    Stream.runLast,
+    Effect.flatMap(
+      Option.match({
+        onNone: () => new ModelError({ kind: 'malformed-output' }),
+        onSome: (ev) => Effect.succeed(ev.result),
+      }),
+    ),
+    routes.withRoute(selected.wireRoute, selected.modelRoute),
     Effect.retry({
-      while: isAutoRetryable, // status-based transient classification, as today
+      while: isAutoRetryable,
       schedule: Schedule.spaced(retryWait).pipe(
         Schedule.recurs(maxAttempts - 1),
       ),
     }),
   );
-  return yield* manualRetryLoop(attempt); // durable admission, not a schedule (§4.5)
+  const result = yield* manualRetryLoop(attempt); // durable admission through Requests, not a schedule
+  yield* ledger.append([modelTurnRow(result, selected)]); // usage attributed once, here
+  return result;
 });
 ```
 
-- The automatic batch is `Effect.retry` with the `{ while, schedule }` options object;
-  `Schedule.spaced` + `Schedule.recurs` reproduce `p-retry`'s `factor: 1, randomize:
-false` batch exactly (the first evaluation is not a retry, so `recurs(n - 1)` gives
-  `n` attempts, as the rc.112 doc comment states). Background mode's floor of three
-  and the per-invocation re-read of `texra.model.retry.maxAttempts` stay as inputs to
-  `prepared`, not as fields on a node.
-- `ModelRetryGate`'s cooling and probing become a `Latch` per route key inside the
-  invoker: a failure closes the latch and forks one probe under the run scope; the
-  probe's success opens it. Waiters block on `Latch.whenOpen`. This is 337 lines of
-  `p-defer` + `setTimeout` replaced by two primitives and one schedule.
-- Provider SDK streaming enters once, at the foreign edge, in `packages/llm`:
-  `Stream.fromAsyncIterable` for `for await` SDKs (OpenAI Responses), `Stream.callback`
-  for event-callback SDKs (Anthropic's `.on()`), each with the SDK's `AbortSignal`
-  derived inside `Effect.tryPromise((signal) => …)`. Handlers' mutable
-  `compactionRequested` / `outputStreaming` / `lastAttemptUsageRoute` fields become
-  fields of `PreparedInvocation` and `CompletedTurn`.
-- Effect AI's `LanguageModel` / `Toolkit` / `Chat` (`effect/unstable/ai`, present at the
-  pin) are not adopted: its `Toolkit` decodes with Effect Schema, and its
-  `LanguageModel` dispatches tools while streaming, which contract 0.1 forbids (a
-  committed, validated response precedes any local dispatch). The
-  [comparison][aicmp] holds.
+What the model survey fixed or added:
 
-### 4.5 Human requests: park the run, keep the fact
+- **Retry layers.** Provider SDK retries are already clamped to zero on both the handlers
+  and the package (`SDK_RETRIES_DISABLED`, `maxRetries: 0`). The automatic batch is
+  `Effect.retry` with `{ while, schedule }`; `Schedule.spaced` + `Schedule.recurs`
+  reproduce `p-retry`'s fixed-interval batch exactly (the first evaluation is not a
+  retry). The manual loop is `Requests.open({ kind: 'retry' })` with the proposal's
+  `authorized` → `started` permit rows. The Kimi-Code credential fallback
+  (`ModelInvocationNode.ts:225-264`) is invoker policy, expressed as a `Ref.set` of a new
+  selection under a fresh `Scope.fork`. `auxiliaryRetry`'s SDK-side retries (eight
+  sites) disappear once counting, uploads and compaction summarization run under the
+  invoker.
+- **The route gate is a session service** (`ModelRoutes`, row 9): two nested route
+  scopes, a `Ref<version>` per route for the staleness re-check the current gate does
+  (`ModelRetryGate.ts:126-152`), a `Latch` per route for cooling, one probe fiber. About
+  60 LoC, not 10; still a fivefold cut.
+- **Usage is one row.** `model.turn` carries the package's `UsageSchema` object, the
+  resolved wire and usage routes, cost, response time, provider response id and returned
+  model. Run totals fold from those rows; `recordCycleMetrics`' in-place mutation,
+  `usageAccumulator`, and `UsageMonitor`'s live read of handler state delete;
+  `UsageLogService` subscribes to the row.
+- **Four gaps in `packages/llm` gate the handler retirement** and are named here so the
+  cut is not booked before they close: hosted tools (web search and fetch;
+  `ToolDefinitionSchema` admits only local functions; ≈400 LoC of handler code has no
+  home), media uploads (`InputPartSchema` is inline base64 only; provider file uploads
+  are an external operation and need an explicit package operation; ≈1,360 LoC of
+  attachment code relocates), compaction (≈1,320 LoC of mechanism moves into the loop as
+  ledger rows; the `updatedMessages` backchannel dies), and a `vscode-lm` `Model`
+  factory (546 LoC of handler with no package counterpart). `ModelError` also needs
+  `retryAfterMs`.
+- **Net:** of ≈23,000 LoC in handlers, node, gate, cell and factory, roughly 11,000
+  deletes outright, 2,700 relocates, and 950 is blocked on the four gaps.
 
-Every wait on a person (the seven `PERMISSION_KIND`s plus manual model retry) is
-`Requests.open`:
+### 5.5 Human requests (corrected)
+
+Every wait on a person is `Requests.open`, and every decision arrives as a
+`decision.*` arm of the existing `RuntimeRequest` vocabulary. The second route (a host
+attachment method plus a controller's pending map, 13 hops for tool-edit approval)
+deletes.
 
 ```ts
-const open = Effect.fn('requests.open')(function* (req: OpenRequest) {
+const open = Effect.fn('requests.open')(function* (
+  req: OpenRequest,
+  opts: { policy; bypassed },
+) {
   const ledger = yield* RunLedger;
-  const gate = yield* Deferred.make<RequestDecision>();
-  yield* ledger.append([requestOpened(req)]); // durable before the prompt is shown
-  pending.set(req.requestId, gate); // session-scoped Map; cleared by decide/restore
-  yield* Effect.addFinalizer(() =>
-    Effect.sync(() => pending.delete(req.requestId)),
+  const short = decideTexraApproval(opts); // allow/deny without a row, as every kind does today
+  if (short) return short;
+  return yield* perStream(req.streamId).withPermits(1)(
+    // one prompt at a time per stream
+    Effect.gen(function* () {
+      if (yield* bypassedNow(req)) return autoApprove(req); // re-checked inside the permit, as streamApprovalQueue.ts:142-164 does
+      const gate = yield* Deferred.make<RequestDecision>();
+      yield* ledger.append([requestOpened(req)]);
+      pending.set(req.requestId, gate);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => pending.delete(req.requestId)),
+      );
+      return yield* Deferred.await(gate);
+    }),
   );
-  return yield* Deferred.await(gate); // the run parks here; the fiber holds no promise
 });
 ```
 
-`decide` is a host command (one-run-model §2 R2): it appends `request.decided` and
-completes the `Deferred`. On resume, `Requests.restore(state)` re-registers a
-`Deferred` for every opened-without-decided request the fold reports and the loop
-re-parks on it, which is the durable-recovery binding the [proposal][runtime] §2.3
-requires for `model-retry` and `tool-outcome`. A decision for a run that is not parked
-is delivered as a follow-up (one-run-model §3.7 rule), which is `FollowUps.consume`.
-Manual model retry is the same primitive with `kind: 'model-retry'`; the proposal's
-`authorized` → `started` permit consumption is two rows appended around the next
-`invoke`, not a schedule.
+The tool survey found one contract revision 1 lost: the policy short-circuit before any
+row is written, and the per-stream serialization with the bypass re-checked at dispatch
+time, so "always allow" applies to calls already queued behind the prompt. Both are in
+the sketch above. Three carve-outs are named rather than forced through `open`:
 
-Until the `request.*` arms land, the same service writes today's
-`approval.requested` / `approval.resolved` rows; the service shape does not change
-when the vocabulary does.
+- **External inquiry** does not park the run: the tool returns after dispatch and the
+  answer arrives as a follow-up. It is `openDetached`, and its delivery is
+  `FollowUps.offer`, which also retires the separate continuation module
+  (one-run-model §3.7).
+- **Manual model retry** runs a `prepareRetry(selection)` step during the interaction
+  (`ModelInvocationNode.ts:565-572`). That is a decide-side effect on the invoker's
+  `Ref<Selected>`, expressed as the decision carrying the selection and the invoker
+  applying it before consuming the permit.
+- **Tool-edit approval** folds the user's edited content into the result
+  (`finalizeApprovalResult`). That fold, and each kind's rejection-to-`ToolResult`
+  mapping, stay tool-side; `open` returns the raw decision.
 
-## 5. Surface map
+Until the `request.*` arms land, the same service writes today's `approval.requested`
+and `approval.resolved` rows. `tool-outcome` is proposed vocabulary from the runtime
+proposal §2.3, not an existing kind.
 
-Each row: what exists, what it becomes, and the boundary it lands on. "Boundary" is one
-of R1's three kinds or "none" (Effect-typed end to end).
+## 6. Replayability
 
-| #    | Surface                                                                                               | Today                                                                                                        | Effect-native form                                                                                                                                                                                                              | Boundary                           |
-| ---- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| 5.1  | Flow engine `src/agent/node/`                                                                         | `BaseNode`/`Flow`/`PersistedFlow`, action strings, BFS cursor, one write + clone per step                    | **deleted**; the two loops in `src/agent/runtime/loop/`; `RunLedger.append` is the only write                                                                                                                                   | none                               |
-| 5.2  | Tool-use family (9 files, 2,704 LoC)                                                                  | prepare/cycle/wait nodes + inner round flow with non-persisted `ToolUseRoundShared`                          | `runToolUse` + `runTurn` (§4.2); round state is generator locals; WAITING is a returned outcome, not a parked cursor                                                                                                            | none                               |
-| 5.3  | Reflection family (11 files + `output/`)                                                              | `RoundPersistedFlow` + `ResponseCycleFlow` five-node fan-in                                                  | `runReflection` with `Effect.scoped` + `Effect.acquireRelease(openStage)` per round; `processCommittedResponse` and `produceOutput` are plain functions over `OutputPipeline`                                                   | none                               |
-| 5.4  | `ModelInvocationNode` + `ModelRetryGate` + handlers                                                   | Promise, `p-retry`, `p-defer`, mutable handler state, `createResponse` returns `{response, updatedMessages}` | `ModelInvoker` (§4.4) over `packages/llm`; `Stream` at the SDK edge only                                                                                                                                                        | foreign edge inside `packages/llm` |
-| 5.5  | Tool runner + tools                                                                                   | `ToolUseDispatchNode` (`PQueue`, `Promise.all`, signal polling); 43 tools run a fiber in `execute()`         | `Tools.dispatch` (§4.3); `execute()` returns `Effect`; `ToolCall` service replaces the ALS stack                                                                                                                                | none (kind (b) retired)            |
-| 5.6  | Approvals, retry prompt, ask_user, inquiry                                                            | Promise round-trips + in-memory pending set + a separate inquiry database and continuation module            | `Requests` (§4.5); inquiry keeps its cross-project record and loses its second protocol                                                                                                                                         | host command enters at kind (a)    |
-| 5.7  | Trace                                                                                                 | `TraceEmitter` synchronous listener set + per-instance ALS stage stack                                       | **stays synchronous** (the [interface findings][findings] §3 price a `PubSub` hub at ≥27 files and seven adapter-owned properties for one gained property); the stage stack becomes a per-run `Context.Reference` held on `Run` | none                               |
-| 5.8  | Follow-ups                                                                                            | `FollowUpQueue` (`p-defer`), `ToolUseSessionLifecycle` park/release, in-memory dedup                         | `FollowUps` (§3 row 10): `Queue.unbounded` per run fed by `SessionInputs`; durable queue rows unchanged; consumption is one C6 transaction                                                                                      | none                               |
-| 5.9  | Native delegation, `childRunLoop`, workflow-script `agent()`                                          | late-bound engine record, `PQueue`, controller cascade, `pTimeout`, script journal in `persistence.ts`       | `Runs.launch` from context (cycle dissolves); `Semaphore.withPermits` for script concurrency; `Effect.timeout` at teardown; child results as `Deferred`; script journal rows on the event table (proposal §2.4, PR 4)           | none                               |
-| 5.10 | `agentCreator`                                                                                        | linear `async` with `pRetry` around a helper completion                                                      | one `Effect.fn` with `Effect.retry`; uses `ModelInvoker.invoke` in helper mode (no session)                                                                                                                                     | none                               |
-| 5.11 | Session: `SessionHandle`, `HostInteractions`, `executionRegistry`, `executionLanes`, `executionLease` | mixed; two of five `effectRuntime()` sites in `src/agent` are here                                           | `Runs` + `Requests` absorb the registry, lanes and pending set; `SessionHandle` keeps the view `SubscriptionRef` and publication `Semaphore(1)`; the lease keeps only its file fence (ownership note F2)                        | none                               |
-| 5.12 | Hosts (CLI, extension, desktop)                                                                       | each root calls `installProcessRuntime`; handlers run fibers ad hoc (31/19/15 `effectRuntime` refs)          | each root builds one `Layer`, holds its `ManagedRuntime` in a local, and runs one program per host entry with `runtime.runPromiseExit(program, { signal })`; `LifecycleHost` keeps shutdown authority (R6)                      | kind (a)                           |
-| 5.13 | SDK `packages/agent`                                                                                  | `./effect` subpath already Effect-typed; root renders Promises/async iterables                               | unchanged in shape; `Sessions` gains `Runs`/`Requests` pass-through of the same operations; `RunFailure` union widens to the typed errors in §4.1                                                                               | kind (c)                           |
-| 5.14 | Tests                                                                                                 | six behavior suites pinned to the record format (13 of 17 engine-importing tests)                            | those 13 delete with the format; the behavior suites move to `it.effect` over `RunLedger`'s real layer and `TestClock` for retry/timeouts; no new tests for plumbing                                                            | none                               |
+The owner's requirement: the agent graph, like the flow, should be replayable. There is
+no graph interpreter (R4), but there is a graph: the ordered `flow.step` rows of a run
+are its executed path, and every other row hangs off a step. Replay is then three
+questions, answered by one fold and one layer swap.
 
-## 6. Effect rc.112 verification
+| Replay                                                  | Mechanism                                                                                                                                                                                                                                                                                                                                              | Who uses it                                                                                                  |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| **Resume**: continue after step k                       | `RunLedger.load` = latest `flow.snapshot` + tail rows folded by `foldRunState`; the loop switches on the folded phase. "State at step k" and "resume would continue after k" are the same fact (proposal §2.3).                                                                                                                                        | `Runs.launch({ kind: 'resume' })`, the CLI `resume` command, follow-up wake-ups                              |
+| **Inspect**: state at step k                            | The same fold, cut at step k's `commit`, rendered through the display redaction. The viewer's stepper walks the `flow.step` rows and re-folds; nothing is persisted per step (C10).                                                                                                                                                                    | run detail on the three hosts (PRD Phase 2 step 3)                                                           |
+| **Re-execute**: run the program again with recorded I/O | `runLayer` with `ModelInvoker.layerReplay(ledger)` and `Tools.layerReplay(ledger)`: `invoke` returns the committed `TurnResult` for the same invocation identity, `dispatch` returns the committed settlement for the same call id, and a divergence (a request the ledger has no answer for) fails with `ReplayDiverged`. The loop code is unchanged. | deterministic tests of loop logic, "why did this turn do that" debugging, regression fixtures from real runs |
 
-Every API this design names, checked in `node_modules/effect/dist/*.d.ts` at
-`4.0.0-rc.112` on 2026-09-10, and the `effect-solutions` guides (`basics`,
-`services-and-layers`, `error-handling`, `data-modeling`, `testing`, `config`) plus the
-Effect repository's `ai-docs` and `cookbooks/schedule.md` at
-`~/.local/share/effect-solutions/effect` (`3a1128c7`, 2026-07-14). The guides track
-Effect `main`, which is ahead of the pin; the third column records each divergence so
-nobody copies an example that does not compile here.
+Two rules make the third replay sound, both taken from the peer surveys:
 
-| Design use                   | rc.112 API (verified)                                                                                                                                                          | Guide divergence at the pin                                                                                                                                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Service tags                 | `Context.Service<Self, Shape>()(id)`; `Context.Reference(key, { defaultValue })` (`Context.d.ts:383`, `:1643`); `Context.ServiceClass`                                         | `Effect.Service` **does not exist** at the pin (0 matches in `Effect.d.ts`); the guide's note about it is for a newer release                                                                                            |
-| Layers                       | `Layer.effect`, `Layer.scoped`, `Layer.succeed`, `Layer.provide`, `Layer.provideMerge`, `Layer.mergeAll`, `Layer.fresh`, `LayerMap`                                            | none                                                                                                                                                                                                                     |
-| Runtime                      | `ManagedRuntime.make`; `runPromiseExit(effect, { signal })` (`RunOptions.signal`, `Effect.d.ts:16097`); `runFork`                                                              | none                                                                                                                                                                                                                     |
-| Forking                      | `Effect.forkChild`, `forkScoped`, `forkIn(scope)`, `forkDetach` (`Effect.d.ts:15817-15980`); `FiberMap.run/make/join`, `FiberSet`                                              | none (`forkDaemon` is gone; `forkDetach` is the global-scope fork)                                                                                                                                                       |
-| Interruption                 | `Effect.uninterruptibleMask`, `interruptibleMask`, `onInterrupt`, `onExit`, `ensuring`, `Effect.exit`; `Exit.hasInterrupts`; `Fiber.interrupt`                                 | none                                                                                                                                                                                                                     |
-| Cancellation to foreign SDKs | `Effect.tryPromise({ try: (signal) => … , catch })` and `Effect.promise((signal) => …)` (`:1169`, `:1240`); `Effect.abortSignal: Effect<AbortSignal, never, Scope>` (`:13384`) | none                                                                                                                                                                                                                     |
-| Retry                        | `Effect.retry({ while \| until \| times \| schedule })` (`Effect.d.ts:6486-6510`); `Effect.retryOrElse`                                                                        | v3 predicate combinators are gone; the options object is the only form                                                                                                                                                   |
-| Schedules                    | `Schedule.spaced`, `recurs`, `exponential`, `jittered`, `during`, `upTo`, `max`, `min`, `concat`, `addDelay`, `modifyDelay`, `passthrough`, `tap`                              | **`Schedule.both`, `Schedule.while`, `Schedule.andThen` do not exist** at the pin (the `basics` guide and the cookbook use them); use `recurs` piped after the delay schedule, `max`/`min`, and `Effect.retry`'s `while` |
-| Timeouts                     | `Effect.timeout`, `timeoutOption`, `timeoutOrElse`                                                                                                                             | none                                                                                                                                                                                                                     |
-| Concurrency                  | `Effect.forEach(xs, f, { concurrency, discard })` (`:14294`); `Semaphore.make/withPermits`; `PartitionedSemaphore`; `Latch.make/whenOpen/open/close`                           | none; `Effect.makeSemaphore` is not the v4 name (`Semaphore.make` is)                                                                                                                                                    |
-| Coordination                 | `Deferred.make/await/succeed/fail/interrupt`; `Queue.unbounded/bounded/offer/take/poll/end`; `PubSub.bounded/unbounded/subscribe`                                              | none                                                                                                                                                                                                                     |
-| Streams                      | `Stream.fromAsyncIterable(iter, onError)`, `Stream.callback((queue) => …)`, `Stream.tap`, `Stream.runFold`, `runFoldEffect`, `runForEach`, `toAsyncIterable`                   | none                                                                                                                                                                                                                     |
-| Errors                       | `Data.TaggedError(tag)<Fields>` (`Data.d.ts:966`), yieldable; `Effect.catch`, `catchTag`, `catchTags`, `catchCause`, `catchDefect`; `Cause.squash/pretty`                      | **`Schema.TaggedErrorClass` and `Schema.ErrorClass` do not exist** at the pin (`Schema.TaggedError` does, but §15 decision 8 keeps Zod); **`Effect.catchAll` does not exist** (`Effect.catch`, declared `catch_`)        |
-| Tracing                      | `Effect.fn(name)(gen, ...pipeables)`, `Effect.withSpan`, `Effect.annotateLogs`                                                                                                 | none                                                                                                                                                                                                                     |
-| Resources                    | `Effect.acquireRelease`, `acquireUseRelease`, `addFinalizer`, `Effect.scoped`, `Scope.make/close/fork`                                                                         | none                                                                                                                                                                                                                     |
-| Testing                      | `@effect/vitest` `it.effect` / `it.live` / `it.layer`; `TestClock.adjust` from `effect/testing`                                                                                | none (matches AGENTS.md's rule)                                                                                                                                                                                          |
-| Not adopted                  | `effect/unstable/workflow` (Effect Schema, memoized exits, memory engine only); `effect/unstable/ai`; `effect/unstable/eventlog`                                               | present at the pin; rejected for the reasons in PRD §13.C, the [findings][findings] §4, and §4.4 above                                                                                                                   |
+- **Tool re-execution needs two permissions, recorded and current** (Pi's harness,
+  [loop study][loop] §3, §5). A parallel-safe call re-runs on resume only if the
+  recorded settlement says the tool was parallel-safe when it ran and the currently
+  installed tool still declares it. A changed YAML cannot retroactively authorize an
+  unsafe recorded call. `foldRunState` stamps `parallelSafe` on each tool call from the
+  recorded row, and `dispatch` consults both.
+- **Deltas are live-only; the completed response is the replayable boundary** (OpenCode
+  V2's "text ended" rule, [loop study][loop] §3). The trace carries token deltas to
+  renderers and the ledger carries the `TurnResult`. Replay never needs a delta.
 
-Two further rc.112 facts that shape the design: `Context.Reference` is type-erased from
-`R` and overridden per subtree with `Effect.provideService`, which is why the stage
-stack can be a per-run reference without inflating every signature; and `Layer` values
-are memoized by reference, so the per-run layer is built once per launch inside
-`runAgent` and never hoisted to a module constant (a hoisted layer would share one
-`ModelCell` across runs).
+Replay is possible only because the loops re-yield their services from context instead
+of closing over them (§3): the same `runToolUse` runs against the live layers, the
+replay layers, and the test layers. That is the composability requirement stated the
+other way round.
 
-## 7. Where the corpus disagrees, and the reading taken
+## 7. Surface map (revision 2)
 
-Recommended options are taken and stated, per the owner's 2026-09-10 rule; each is one
-sentence the PR body repeats.
+Each row: what exists, what it becomes, what deletes (measured by the surface's survey,
+estimates marked ≈), and the boundary it lands on.
 
-1. **Aggregate count.** The [proposal][runtime] §2.1 and C2 use two aggregates per run;
-   the [one run model][onerun] §3.1 recommends one `run` aggregate. This design is
-   written over **one aggregate**: `RunLedger.load(runId)` reads one history,
-   `foldRunState` needs no cross-aggregate `commit` merge, and the `flow.step`
-   coordinate lives beside the state rows it orders. The proposal's `aggregatesAfterCommit`
-   tail read becomes the ordinary indexed read of one aggregate after the snapshot's
+| #    | Surface                                             | Effect-native form                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Deletes                                                                                                                                                                                                                                                                                                                                     | Boundary                        |
+| ---- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 7.1  | Flow engine `src/agent/node/`                       | deleted; two loops in `src/agent/runtime/loop/`; `RunLedger.append` is the only write                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 675 LoC                                                                                                                                                                                                                                                                                                                                     | none                            |
+| 7.2  | Tool-use family (9 files, 2,704 LoC)                | `runToolUse` + `runTurn` (§5.2); round state is generator locals; WAITING is a returned outcome                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | the node classes; bodies move                                                                                                                                                                                                                                                                                                               | none                            |
+| 7.3  | Reflection family (11 files + `output/`)            | `runReflection` with `Effect.scoped` + `acquireRelease(openStage)` per round; output helpers behind `OutputPipeline`                                                                                                                                                                                                                                                                                                                                                                                                                                                             | the five-node fan-in, `RoundPersistedFlow` (270), `ResponseCycleFlow` (633)                                                                                                                                                                                                                                                                 | none                            |
+| 7.4  | Model layer                                         | `ModelInvoker` (§5.4) over `packages/llm`; `ModelRoutes` at the session; `Ref<Selected>` + `Scope.fork` on `Run`                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | ≈11,000 LoC deleted, ≈2,700 relocated, ≈950 blocked on the four package gaps                                                                                                                                                                                                                                                                | foreign edge in `packages/llm`  |
+| 7.5  | Tool runner + tools                                 | `dispatch` (§5.3); `execute(): Effect`; `ToolCall` three fields; registry process-scoped, overlay per run                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | ≈420 LoC of prelude/ports/imports, `ToolFileInteractionContext.ts` 72, `ToolUseDispatchNode.ts` 607, ≈200 of `streamApprovalQueue.ts`, ≈120 across five approval entry points: **≈1,420**                                                                                                                                                   | none (kind (b) retired)         |
+| 7.6  | Approvals, retry, ask_user, inquiry                 | `Requests` (§5.5); every decision a `decision.*` `RuntimeRequest` arm                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | the host-method route: ≈450 of `HostInteractions.ts`, `ToolEditApprovalController`'s pending map, CLI `park()` stubs (≈150 of `subscribeApprovals.ts`); host-specific preview code (`desktopToolEditApproval.ts` 125, `VscodeToolEditApprovalHost.ts` 196, `approvalAdapter.ts` 314) stays as UI                                            | host command enters at kind (a) |
+| 7.7  | Trace, publication, view                            | `TraceEmitter` stays synchronous (the [findings][findings] §3 price a `PubSub` hub at ≥27 files for one gained property); stage stack → `Run.stage` reference; publication = `RunLedger.append`, one shape, awaited; one fold per question; redaction at the durable boundary only                                                                                                                                                                                                                                                                                               | `StreamLogStore` 380, `StreamSnapshotStore` 312, `executionMetaFromEvents` + callers ≈80, stage-scope machinery ≈70, publication bookkeeping ≈60, two of three redaction sites: **≈900**                                                                                                                                                    | none                            |
+| 7.8  | Follow-ups                                          | `FollowUps` (§4 row 13): `followup.queued`/`followup.consumed` ledger rows (dedup by `deliveryId` unique key, crash-safe), one `Queue.unbounded` per run, `Runs.handle(id)` as the only liveness predicate; goal continuation is an ordinary producer; `view.queuedFollowUps` folds from the rows                                                                                                                                                                                                                                                                                | ≈720 LoC replaced by ≈80                                                                                                                                                                                                                                                                                                                    | none                            |
+| 7.9  | Native delegation, `childRunLoop`, workflow scripts | one `Runs.launch(spec)` with `mode: 'inband' \| 'detached'` (the difference is four flags today); `Deferred<ChildResult>` replaces `onTurnSettled` + pending-delivery slots; `Semaphore.withPermits` replaces both concurrency limiters; `Effect.timeout` at scope close replaces `pTimeout`; `Cause` replaces the first-fault ledger; the agent-CLI/bash `childStream` variant stays a distinct spec, not a flag                                                                                                                                                                | `persistence.ts` 276, `checkpointKey.ts` 43, `stableSubagentAttempt.ts` 548, `childRunBudget.ts` 74, `childRunDelivery.ts` 36, `detachedChildRun.ts` 210: **≈1,190 deleted**; `childRunLoop.ts` 1,280 → ≈450, `inBandSubagentExecution.ts` 498 → ≈150, `runWorkflowScript.ts` 1,021 → ≈600: **≈1,600 collapsed**                            | none                            |
+| 7.10 | Workflow-script checkpoints                         | ordinary child result rows under the already-derived `deriveExecutionId({ checkpointId, key, parentExecutionId })`, keyed by the **content-addressed** journal key (a call ordinal would re-execute every call after an inserted sibling, a product regression); the journal becomes a query over child rows; the sandbox, `parallel()`'s realm-side `Promise.all`, the failure asymmetry, `maxAgentCalls`, dependency-identity refresh and the skip/retry control plane are preserved                                                                                           | the four-way duplication per `agent()` call; the KV `turn-state` row and its ordering semaphore ≈110                                                                                                                                                                                                                                        | none                            |
+| 7.11 | Session tier                                        | `SessionHandle` becomes a thin record `{ id, roots, events, ledger, runs, view }` (≈120 LoC) plus the approval-policy value; `Runs` owns liveness and admission; `StreamStatusMachine`'s map deletes because `foldRunState` is the reader; `finalizeFailedRun`'s classification survives as a pure `Exit → TerminalRow`                                                                                                                                                                                                                                                          | `executionRegistry` 924, `executionLanes` 247, `waitingTermination` 240, `executionInteractionOwnership` 218, ≈300 of `ExecutionHandle`, ≈450 of `executionLease` (the file fence survives), ≈700 of `AgentRunLifecycle`, ≈700 of `SessionHandle`, ≈250 of `StreamStatusService`, ≈120 of `AgentLaunchContext`: **≈4,680** against ≈600 new | none                            |
+| 7.12 | Hosts (CLI, extension, desktop)                     | each root builds one `Layer`, holds its `ManagedRuntime` in a local, runs one program per host entry with `runtime.runPromiseExit(program, { signal })`; the ≈12 runtime-touching `HostRequest` arms (`resume`, `runNew`, `runCompileFixer`, `exportTranscript`, `useOwnApiKey`, `toolEdit`, …) move to `RuntimeRequest` and are answered by `SessionRequests` for all three hosts; the CLI joins `SessionBridge` with an in-process port so `frameSubscription` is the one fold-to-UI path; the webview keeps its own fold runtime by design (the transport carries fold input) | ≈250 LoC each from `extensionHostRequests.ts` and `desktopHostRequests.ts`, most of `hostRunActions.ts` (472), the CLI's duplicate slash-command handlers, two of three CLI view adapters (≈700), the second `LifecycleHost` per extension activation, the `session.runPromise` field name collision                                        | kind (a)                        |
+| 7.13 | SDK `packages/agent`                                | `Sessions` = `open`/`close`/`list` over `WorkspaceRoots`; `Run` = `Runs.launch` + `SessionEvents.aggregate(id, 0)` tail + `SessionView.changes` slice; `Requests.layerDenyAll` for headless; `admitTools`/`admitInput` stay as package policy; shape of the Promise root unchanged                                                                                                                                                                                                                                                                                               | `TRACE_HANDOVER_EVENTS` buffer, `admitted` deferred + sentinel, the `uninterruptibleMask`/`spawned`/`interruptLaunch` dance, the private subscription drain, `HEADLESS_HOST`: ≈160 of `sessions.ts`'s 538                                                                                                                                   | kind (c)                        |
+| 7.14 | Tests                                               | the 13 engine tests pinned to the record format delete with it; the six behavior suites move to `it.effect` over the real `RunLedger` layer, `TestClock` for retry and cooling, `layerReplay` fixtures from real runs                                                                                                                                                                                                                                                                                                                                                            | none                                                                                                                                                                                                                                                                                                                                        | none                            |
+
+Across the six surveys the deletion pattern is the same: a durable fact exists, and a
+second in-memory structure holds the same fact because the durable one had no typed,
+awaitable, per-run reader. `RunLedger`, `Runs` and `SessionEvents.aggregate` remove the
+reason for all of them.
+
+## 8. Effect version and API verification (corrected)
+
+Pinned: `effect@4.0.0-rc.112` (released 2026-08-25). `effect@4.0.0-rc.113` was published
+on 2026-09-10 with a patch-only changelog (cache fixes, `Effect.all` union inference, a
+`Mime` module replacing the `mime` dependency, tool-approval retention in `Chat`); none
+of the names below changed. Recommendation: move the whole package family (`effect`,
+`@effect/vitest`, `@effect/platform-node`, `@effect/sql-sqlite-node`) to rc.113 in one
+dependency PR, which is the [delivery plan][plan] §2 rule applied to a patch release.
+
+**Correction to revision 1.** The local `effect-solutions` reference clone
+(`~/.local/share/effect-solutions/effect`, commit `3a1128c7`, 2026-07-14) is at
+`4.0.0-beta.98`, older than the pin, not newer. The names its guides show were renamed
+before rc.108: `Schema.TaggedErrorClass` → `Schema.TaggedError`, `Schema.ErrorClass` →
+`Schema.Error`, `Schedule.andThen` → `Schedule.concat`. `Effect.Service`,
+`Schedule.both`, `Schedule.while` and `Effect.catchAll` exist in neither. Refresh the
+clone before consulting it for code. Everything below was checked in
+`node_modules/effect/dist/*.d.ts` at rc.112 and re-checked in the rc.113 tarball.
+
+| Design use           | rc.112 / rc.113 API (verified)                                                                                                                                   | Note                                                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service tags         | `Context.Service<Self, Shape>()(id)`; `Context.Reference(key, { defaultValue })`; `Context.ServiceClass`                                                         | `Effect.Service` does not exist; there is no `FiberRef` module                                                                               |
+| Layers               | `Layer.effect`, `scoped`, `succeed`, `provide`, `provideMerge`, `mergeAll`, `fresh`, `launch`; `LayerMap`                                                        | values memoize by reference: never hoist the run layer                                                                                       |
+| Runtime              | `ManagedRuntime.make`; `runPromiseExit(effect, { signal })` (`RunOptions.signal`); `runFork`                                                                     | none                                                                                                                                         |
+| Forking              | `Effect.forkChild`, `forkScoped`, `forkIn(scope)`, `forkDetach`; `FiberMap.run/make/join`, `FiberSet`                                                            | `forkDaemon` is gone; `forkDetach` is the global-scope fork                                                                                  |
+| Interruption         | `Effect.uninterruptibleMask`, `interruptibleMask`, `onInterrupt`, `onExit`, `ensuring`, `exit`; `Exit.hasInterrupts`; `Fiber.interrupt`                          | none                                                                                                                                         |
+| Foreign cancellation | `Effect.tryPromise({ try: (signal) => …, catch })`, `Effect.promise((signal) => …)`, `Effect.abortSignal: Effect<AbortSignal, never, Scope>`                     | none                                                                                                                                         |
+| Retry                | `Effect.retry({ while \| until \| times \| schedule })`, `Effect.retryOrElse`                                                                                    | the v3 predicate combinators are gone                                                                                                        |
+| Schedules            | `Schedule.spaced`, `recurs`, `exponential`, `jittered`, `during`, `upTo`, `max`, `min`, `concat`, `addDelay`, `modifyDelay`, `passthrough`, `tap`                | `Schedule.both`/`while`/`andThen` absent: pipe `recurs` after the delay schedule, use `max`/`min` and `Effect.retry`'s `while`               |
+| Timeouts             | `Effect.timeout`, `timeoutOption`, `timeoutOrElse`                                                                                                               | none                                                                                                                                         |
+| Concurrency          | `Effect.forEach(xs, f, { concurrency, discard })`; `Semaphore.make/withPermits`; `PartitionedSemaphore`; `Latch.make/whenOpen/open/close/isOpen`                 | `Effect.makeSemaphore` is not the v4 name                                                                                                    |
+| Coordination         | `Deferred.make/await/succeed/fail/interrupt`; `Queue.unbounded/bounded/offer/take/poll/takeBetween/end`; `PubSub.bounded/unbounded/subscribe`; `SubscriptionRef` | none                                                                                                                                         |
+| Streams              | `Stream.fromAsyncIterable(iter, onError)`, `Stream.callback((queue) => …)`, `tap`, `filter`, `runLast`, `runFold`, `runForEach`, `toAsyncIterable`               | none                                                                                                                                         |
+| Errors               | `Data.TaggedError(tag)<Fields>` (yieldable); `Effect.catch`, `catchTag`, `catchTags`, `catchCause`, `catchDefect`; `Cause.squash/pretty`                         | `Schema.TaggedError`/`Schema.Error` exist but §15 decision 8 keeps Zod; `Effect.catchAll` does not exist (`Effect.catch`, declared `catch_`) |
+| Tracing              | `Effect.fn(name)(gen, ...pipeables)`, `Effect.withSpan`, `Effect.annotateLogs`                                                                                   | none                                                                                                                                         |
+| Resources            | `Effect.acquireRelease`, `acquireUseRelease`, `addFinalizer`, `Effect.scoped`; `Scope.make/close/fork`                                                           | none                                                                                                                                         |
+| Testing              | `@effect/vitest` `it.effect` / `it.live` / `it.layer`; `TestClock.adjust` from `effect/testing`                                                                  | matches AGENTS.md                                                                                                                            |
+| Not adopted          | `effect/unstable/workflow`, `effect/unstable/ai`, `effect/unstable/eventlog`                                                                                     | present at the pin; rejected per PRD §13.C, the [findings][findings] §4, and §5.4                                                            |
+
+## 9. Where the corpus disagrees, and the reading taken
+
+Recommended options are taken and stated, per the owner's 2026-09-10 rule.
+
+1. **One `run` aggregate** (one-run-model §3.1 over proposal §2.1). `RunLedger.load`
+   reads one history; the tail read is the ordinary indexed read after the snapshot's
    `commit`.
-2. **The per-run service is `Run`**, not `RunContext` (proposal §2.4) or `AgentRun`
-   (injection §5 row 6). One word in every layer (one-run-model §3.10).
-3. **`flow.snapshot` stays**, as C10's single sanctioned derived row, with the
-   one-run-model R1 constraint honored: the snapshot carries only state that rows
-   already carry (a base point, not a second store). The reflection state the
-   [PR1 note][pr1] §2.6 could not fit in a snapshot becomes rows (`output.pending`,
-   `round.begin`, `round.end`), which §4.1's `OutputError` channel already assumes.
-4. **`RunContext` ALS retires with the loops** (injection §6 step 6), while
-   `workspaceRoots` waits for the filesystem ruling (step 10). The two were one item
-   only because `RunContext.ts:151-156` nests them.
-5. **Injection Q1 (filesystem):** adopt Effect's `FileSystem` + `Path`, keeping TeXRA's
-   atomic-publication, symlink and workspace-URI behavior as thin Effect functions,
-   with the [findings][findings] §2 gaps (`lstat`, `readDirectory` types, `remove`
-   ambiguity) closed inside those functions before any walker converts. Nothing in
-   §2 to §5 depends on this; it gates only the `platform()` row.
-6. **Injection Q2 (provide topology):** yes, the three points in §3 are the topology;
-   "one `provide` at the process entry" scopes to the process layer.
-7. **Injection Q3 (what sits outside `Run`):** `ModelInvoker`, `Tools`, `FollowUps`,
-   `OutputPipeline`, `ToolCall`. Each is independently substituted in an existing
-   test (fake model, fake registry, drained queue, no-op pipeline, explicit call
-   context), which is R2's test.
-8. **Injection Q4:** the dispatcher is the unit that retires R1 kind (b) (§4.3).
-9. **The lease.** The [ownership note][lease] F2 leaves the lease one job, fencing files
-   outside the database. `Runs` owns liveness (`FiberMap` + claims); the file fence
-   stays as a scoped resource acquired inside `Layer.effect(Run, …)` and released by
-   its finalizer, which is the `Effect.acquireRelease` form of what `executionLease.ts`
-   hand-rolls. Its ALS re-entrancy set becomes a `Context.Reference` (injection §5 row
-   9).
-10. **`p-queue`.** AGENTS.md line 774 forbids it; the CLAUDE.md bullet that once
-    permitted it has been corrected on main (#12203). Every remaining importer is in
-    the deletion set or converts to `Semaphore`/`PartitionedSemaphore`.
+2. **The per-run service is `Run`** (one-run-model §3.10 over `RunContext` and
+   `AgentRun`).
+3. **`flow.snapshot` stays** as C10's one sanctioned derived row, carrying only what rows
+   already carry; the reflection state PR1 §2.6 could not fit becomes rows.
+4. **`RunContext` ALS retires with the loops**; `workspaceRoots` waits for the filesystem
+   ruling (injection §6 steps 6 and 10).
+5. **Injection Q1:** adopt Effect's `FileSystem` + `Path`, with the [findings][findings]
+   §2 gaps closed inside TeXRA's thin rooted-filesystem functions first.
+6. **Injection Q2:** the three provision points in §3.1 are the topology.
+7. **Injection Q3:** `ModelInvoker`, `FollowUps`, `OutputPipeline` sit outside `Run` at
+   run lifetime; `ToolCall` at call lifetime; `ToolRegistry` at process lifetime;
+   `ModelRoutes` at session lifetime. Each is independently substituted in an existing
+   test.
+8. **Injection Q4:** the dispatcher retires R1 kind (b).
+9. **The lease keeps only its file fence** (ownership note F2), acquired inside
+   `Layer.scoped(Run, …)` and released by its finalizer; `Runs` owns liveness.
+10. **`Runs` and `Requests` are one implementation with two tags** (this revision, from
+    the session survey): a run is either executing or parked, and `interrupt` must handle
+    both states with one code path. Streamless requests (`askUserQuestion` without a
+    stream) carry `Option<RunId>`.
+11. **`SessionView` is a manifest row** (this revision): it already exists as a tag and
+    is the only consumer of the view fold; revision 1's omission contradicted its own
+    surface map.
+12. **`p-queue`** is forbidden by AGENTS.md line 774; every remaining importer is in the
+    deletion set or becomes a `Semaphore`.
 
-## 8. Delivery: three slices, one atomic cut
+## 10. Delivery: three slices, one atomic cut, four package gaps first
 
-The [delivery plan][plan] §7 packages and the [injection note][injection] §6 steps
-already order the work; this section maps this design's sections onto them and names
-what each slice deletes and which ratchet rows it moves. The one-run-model S1 (identity)
-precedes slice 3 because `RunLedger`'s aggregate arm needs `RunId`.
+The [delivery plan][plan] §7 packages and the [injection note][injection] §6 steps order
+the work; this section maps the revised design onto them. The one-run-model S1
+(identity) precedes slice 3 because `RunLedger`'s aggregate arm needs `RunId`.
 
-| Slice | Content                                                                                                                                                                                                                                                                            | Deletes (symbols that cease to exist)                                                                                                                                                                                                                                                                                                                                                                                                  | Rows                                                                                                                                                                                                            | Alone?                          |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| 1     | **Run layer and requests.** `Layer.effect(Run, …)` inside `runAgent`; flip the `runner` seam at `AgentRunLifecycle.ts:479` to `Effect`; `Requests` over today's `approval.*` rows; `Runs` as `FiberMap` over the existing registry's admission rules                               | `RunContext` ALS, `RunScope`, both `AsyncLocalStorage.bind` sites in `executeAgent.ts`, `SessionHostInteractions.pending`, `streamApprovalQueue.ts`, `executionLanes.ts`, the run `AbortController`, `forkDetach` at `AgentRunLifecycle.ts:541`                                                                                                                                                                                        | `new AbortController(` −3, `p-defer` −2, below-boundary `Effect.run*` −2 (`SessionHandle.ts`)                                                                                                                   | yes (injection steps 6, part 7) |
-| 2     | **Tool boundary.** `execute(): Effect`; `ToolCall` service; each of the 43 tools drops its `runPromise` wrapper and `bind` prelude. The single `.call()` site stays inside `ToolUseDispatchNode` and runs the tool's `Effect` with **one** `runPromise` at that site until slice 3 | `ToolFileInteractionContext` ALS, 11 `AsyncLocalStorage.bind` sites in tools, 68 `effectRuntime().run*` sites in `src/tools`, `ITool.call(): Promise`                                                                                                                                                                                                                                                                                  | `Effect.run*` boundary allowance for `src/tools/**/*Tool.ts` retires; the one new site in `ToolUseDispatchNode.ts` is a **baseline widening the ratchet refuses**, so slice 2 cannot land alone                 | **no**: lands inside slice 3    |
-| 3     | **The atomic cut.** Engine + both loops + `Tools.dispatch` + `ModelInvoker` over `packages/llm` + `FollowUps` + `OutputPipeline` + child protocol on the event table; `RunLedger` + `foldRunState` (PR1 note) land first on the same integration branch                            | `src/agent/node/**`, `src/agent/implementations/flows/**` node and flow classes (bodies move to `loop/` and `OutputPipeline`), `ModelInvocationNode.ts`, `ModelRetryGate.ts`, `IModelHandler` and `src/agent/modelHandlers/**`, `ToolUseSessionLifecycle.ts`, `FollowUpQueue.ts`'s deferred, `workflowScript/persistence.ts`, `provideAgentEngine`, `docs/architecture/2026-06-20-pocketflow-state.md`, AGENTS.md's PocketFlow section | `setServices()` → 0 (row deleted), `dep:@agent/node` → 0 (row deleted), `dep:@agent/modelHandlers` → 0, `p-retry` → 0, `p-queue` −4, `p-map` → 0, `p-timeout` → 0, `catch:effect-importer` −4, `Effect.run*` −5 | no: one merge, stacked reviews  |
+| Slice | Content                                                                                                                                                                                                                                                                                                                                                      | Deletes (symbols that cease to exist)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Rows                                                                                                                                                                                  | Alone?                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 0     | **Package gaps.** `packages/llm` gains hosted-tool definitions, an explicit upload operation, a `vscode-lm` factory, `retryAfterMs` on `ModelError`; the family moves to rc.113                                                                                                                                                                              | nothing yet; unblocks ≈950 LoC of slice 3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | none                                                                                                                                                                                  | yes                             |
+| 1     | **Run layer, `Runs`, `Requests`, `SessionView` row.** `Layer.scoped(Run, …)` inside `runAgent`; flip the `runner` seam at `AgentRunLifecycle.ts:479` to `Effect`; `Runs` as `FiberMap` over the existing admission rules; `Requests` over today's `approval.*` rows with one decision route; the ≈12 `HostRequest` arms move to `RuntimeRequest`             | `RunContext` ALS, `RunScope`, both `AsyncLocalStorage.bind` sites in `executeAgent.ts`, `HostInteractions.pending` and the seven request methods, `streamApprovalQueue.enqueue`, `executionLanes.ts`, `waitingTermination.ts`, `executionInteractionOwnership.ts`, the run `AbortController`, `forkDetach` at `AgentRunLifecycle.ts:541`, `hostRunActions.ts`                                                                                                                                                                                                                                                                                           | `new AbortController(` −3, `p-defer` −3, below-boundary `Effect.run*` −2, `async-mutex` → 0                                                                                           | yes (injection steps 6, part 7) |
+| 2     | **Tool boundary.** `execute(): Effect`; `ToolCall` three fields; `ToolRegistry` process tag; 54 tools drop prelude and `runPromise`; bash's process-group release written explicitly                                                                                                                                                                         | `ToolFileInteractionContext` ALS, 14 `bind` sites, 62 `effectRuntime()` sites in `src/tools`, 7 `Ports` interfaces, `ITool.call(): Promise`, `SharedToolInjectionRegistry`                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | the `src/tools/**/*Tool.ts` run allowance retires; the one new site in the dispatcher is a widening the ratchet refuses                                                               | **no**: lands inside slice 3    |
+| 3     | **The atomic cut.** Engine + both loops + `dispatch` + `ModelInvoker` + `ModelRoutes` + `FollowUps` rows and queue + `OutputPipeline` + one child launch op + checkpoints as child rows + `RunLedger`/`foldRunState` (PR1 note, first on the branch) + `layerReplay` for both invoker and tools + the CLI onto `SessionBridge` + SDK on the session services | `src/agent/node/**`, the node and flow classes, `ModelInvocationNode.ts`, `ModelRetryGate.ts`, `ModelCell.ts`, `helperModel.ts`, `IModelHandler` + `modelHandlers/**`, `ToolUseSessionLifecycle.ts`, `FollowUpQueue.ts`, `ToolUseFollowUpQueueManager.ts`, `workflowScript/persistence.ts`, `checkpointKey.ts`, `stableSubagentAttempt.ts`, `childRunBudget.ts`, `childRunDelivery.ts`, `detachedChildRun.ts`, `StreamLogStore.ts`, `StreamSnapshotStore.ts`, `StreamStatusService.ts`'s map, `executionRegistry.ts`, `provideAgentEngine`, the SDK handover buffer, `docs/architecture/2026-06-20-pocketflow-state.md`, AGENTS.md's PocketFlow section | `setServices()` → 0, `dep:@agent/node` → 0, `dep:@agent/modelHandlers` → 0, `p-retry` → 0, `p-map` → 0, `p-timeout` → 0, `p-queue` → ≈2, `catch:effect-importer` −4, `Effect.run*` −5 | no: one merge, stacked reviews  |
 
-Slice 2's constraint is worth stating twice because it is the one place the ratchet
-and the desire to "convert tools first" collide: converting `execute()` to `Effect`
-moves the run site from 43 tool files to the one dispatcher file, and that file is
-below the boundary, so the ratchet fails on a file newly entering the row. The
-[injection note][injection] §6 reaches the same conclusion for step 8. Slice 2 is
-therefore prepared as its own reviewable commits on the integration branch and merges
-with slice 3. Nothing else in slice 2 waits: the `ToolCall` service, the tool-body
-edits and the deletion of the eleven `bind` sites are mechanical and can be reviewed
-first.
+Slice 2 cannot land alone for the reason revision 1 gave: converting `execute()` moves
+the run site from 54 tool files to the one dispatcher file, which is below the boundary,
+and the ratchet refuses a file newly entering the row. Its mechanical parts (the
+`ToolCall` service, the per-tool edits, the `bind` deletions) are reviewed first on the
+integration branch and merge with slice 3.
 
-Gates per slice are the [delivery plan][plan] §8 table, unchanged. Slice 3 additionally
-runs the six behavior suites the plan names (`RunAgentOwnership`, `ExecutionLease`,
-`ToolUseDispatchParallel`, `RoundPersistedFlowCompileRepair`, `WorkflowScriptPersistence`,
-`ChildRunLoop`), migrated to `it.effect` over the real `RunLedger` layer, plus the
-proposal §2.3 crash-window cases behind a real process (a `TestClock` cannot establish
-those).
+Summed over the surveys, slice 3 removes on the order of 20,000 LoC (≈11,000 model,
+≈4,700 session, ≈2,800 child dispatch, ≈1,400 tools, ≈900 trace and view, ≈720
+follow-ups, ≈675 engine) and relocates ≈3,000 (compaction, media, reflection output
+bodies), against roughly 1,500 LoC of new services and loops. The numbers are the
+surveys' estimates; the PR that claims each row re-derives it.
 
-## 9. What this design refuses
+Gates per slice are the [delivery plan][plan] §8 table. Slice 3 additionally runs the
+six behavior suites the plan names, migrated to `it.effect` over the real `RunLedger`
+layer, the proposal §2.3 crash-window cases behind a real process, and one replay
+fixture per family recorded from a real run (§6, third row).
+
+## 11. What this design refuses
 
 - **A generic activity or step abstraction.** Two loops and one append do not justify
-  an interpreter. The [findings][findings] §4 record what `unstable/workflow` would
-  cost (definition identity on resume, memo-key collisions per repeated activity,
-  replayed delays, a `never` error channel over a store that can fail); the same
-  costs apply to any repo-owned equivalent.
-- **A `PubSub` behind the trace.** One gained property against seven adapter-owned
-  ones and ≥27 files ([findings][findings] §3). The trace stays a synchronous product
-  surface; Effect spans annotate it (R9).
-- **Effect Schema anywhere in the runtime.** Zod owns every payload (§15 decision 8);
-  `Data.TaggedError` fields are Zod-typed values.
+  an interpreter; the [findings][findings] §4 record what `unstable/workflow` would cost,
+  and the same costs apply to any repo-owned equivalent. Replay (§6) is a layer swap, not
+  an engine.
+- **A `PubSub` behind the trace.** One gained property against seven adapter-owned ones
+  and ≥27 files ([findings][findings] §3).
+- **Effect Schema anywhere in the runtime.** Zod owns every payload (§15 decision 8).
 - **Any adapter, shim, flag, or dual engine.** R1's second ruling and R10's struck
   clause. Slice 3 is atomic for exactly this reason.
-- **A tag per class or per `Platform` port.** R2, the delivery plan's negative, and the
-  twelve-row manifest in §3, which is the reviewed count.
+- **A tag per class or per `Platform` port.** R2 and the delivery plan's negative;
+  twenty tags is the reviewed count, and §4 says for each why it is a tag and not a
+  value.
+- **A per-call tool timeout, a `pipeline()` sandbox helper, or a call-ordinal checkpoint
+  key.** None exists today; each would be new behavior or a regression dressed as a
+  port.
 
-## 10. Verified
+## 12. Verified
 
-- `main` at `c29238e6bd` surveyed by three parallel read-only passes (runtime
-  internals; Effect adoption; the design corpus) with file:line citations reproduced
-  in §1; counts are direct references.
-- Every API in §6 was checked by grep against `node_modules/effect/dist/*.d.ts` at
-  `4.0.0-rc.112`; the four divergences (`Effect.Service`, `Schema.TaggedErrorClass`,
-  `Schedule.both/while/andThen`, `Effect.catchAll`) were confirmed absent by name.
+- `main` at `c29238e6bd` surveyed by nine read-only passes (runtime internals; Effect
+  adoption; the design corpus; and six deep surface passes: hosts, session tier, child
+  dispatch, model layer, tools and approvals, trace/view/follow-ups/SDK) with file:line
+  citations reproduced in §1 and §7; counts are direct references, LoC figures are the
+  surveys' measurements or estimates as marked.
+- Every API in §8 was checked by grep against `node_modules/effect/dist/*.d.ts` at
+  rc.112 and against the `effect@4.0.0-rc.113` tarball downloaded from npm on
+  2026-09-10; the four absent names were confirmed absent in both, and the three renames
+  were confirmed by comparing the beta.98 source in the local `effect-solutions` clone.
 - `effect-solutions list` and `show basics services-and-layers error-handling
-data-modeling testing config` were read; the Effect repository's `ai-docs/src`
-  (`01_effect`, `03_stream`, `06_schedule`, `09_testing`, `71_ai`) and
-  `cookbooks/schedule.md` at `3a1128c7` were read for the service, resource, pubsub,
-  stream and AI-tool patterns cited in §3 to §6.
-- No production code, data format, or public API changed. The fiber tree in §2, the
-  signatures in §4 and the slice table in §8 are design, not measurement; §8's row
-  arithmetic is derived from §1's ratchet counts and must be re-derived by the PR that
-  claims each row.
+data-modeling testing config` were read; the reference clone's `ai-docs/src` and
+  `cookbooks/schedule.md` were read for the service, resource, pubsub, stream and AI-tool
+  patterns cited.
+- Peer designs are cited from the [loop study][loop] and its pinned sources
+  (OpenCode `337fd144`, Pi `9767ba27`, effect-agent `bedf7f8f`), not re-derived.
+- No production code, data format, or public API changed.
 
 [prd]: ./2026-08-26-effect-4-runtime-migration.md
 [runtime]: ./2026-09-04-agent-runtime-on-effect.md
@@ -558,5 +689,4 @@ data-modeling testing config` were read; the Effect repository's `ai-docs/src`
 [onerun]: ./2026-09-10-one-run-model.md
 [pr1]: ./2026-09-08-pr1-run-ledger-foundation.md
 [findings]: ./2026-09-08-effect-4-interface-findings.md
-[aicmp]: ./2026-09-07-effect-ai-comparison.md
-[lease]: ./2026-09-10-execution-ownership-lane-and-lease.md
+[loop]: ./2026-09-06-agent-loop-architecture-study.md
