@@ -15,22 +15,20 @@ corepack pnpm install
 npm run compile:fast      # build (esbuild + Vite); watch:fast, package:fast
 npm run typecheck         # builds do NOT type check — see below
 npm test                  # Vitest — the full gate, minutes long
-npm run test:changed      # only the suites your change can reach — pre-commit signal
+npm run test:changed      # vitest --changed: suites reachable from uncommitted edits
+npm run test:pure         # the shared-registry tier (~30s), architecture ratchets included
+npm run test:watch        # the dev loop: reruns what a save reaches
 npm run lint
 npm run format
 npm run check:dead-code-ratchet
 ```
 
-**`npm run test:changed` is the commit-loop test gate.** The full suite is
-minutes of wall time, so running it before every local commit is not realistic
-and it gets skipped instead. `scripts/test-changed.mjs` asks git what changed
-and runs `vitest related` over that set, plus every suite that scans the repo
-from disk (the architecture ratchets and friends, selected by seeding
-`src/test-kernel/support/repoScan.ts` — no import edge ties them to the code
-they check). A change to the harness itself — `vitest.config.mjs`, the path
-aliases, `src/test-kernel/support/`, a `package.json` — falls back to the full
-suite rather than trusting a mapping it just invalidated. It is a signal, not a
-substitute: run `npm test` before opening a PR.
+**The full suite is not the commit-loop gate.** It is minutes of wall time, so
+in front of every local commit it gets skipped. The loop is stock Vitest:
+`test:watch` while editing, `test:changed` before a commit, `test:pure` before
+a push — 30s, and it covers the architecture ratchets, which no module graph
+ties to the code they scan. `npm test` before opening a PR. Tiers and why a
+suite lands in one: AGENTS.md "Test tiers".
 
 **Builds don't type check.** esbuild and Vite only strip TypeScript types; they
 treat it as "JavaScript with annotations to remove." Run `npm run typecheck`, or

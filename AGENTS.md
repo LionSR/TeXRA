@@ -119,9 +119,10 @@ When updating CHANGELOG.md:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.
    - Lint TypeScript sources with `npm run lint`.
-   - Run the affected Vitest suites with `npm run test:changed` (see
-     "Scoping the test run" below). Run the full suite with `npm test` before
-     opening a pull request.
+   - Run the affected Vitest suites with `npm run test:changed`, and the
+     `pure` tier with `npm run test:pure` before pushing (see "Scoping the
+     test run" below). Run the full suite with `npm test` before opening a
+     pull request.
 4. Commit only when `npm run lint` completes without errors.
 
 ### Test tiers
@@ -156,31 +157,21 @@ opt into — write the suite the durable way and it lands there.
 `npm test` runs every suite under `src/test-kernel/`. It is the gate CI enforces
 and the one to run before opening a pull request, but it takes minutes, which is
 too slow to sit in front of each local commit — and a check that slow is a check
-that gets skipped. `npm run test:changed` (`scripts/test-changed.mjs`) narrows
-the run to the suites a change can actually reach:
+that gets skipped. The loop is stock Vitest, no scripts:
 
-- Changed files come from git — working tree by default, `--staged` for the
-  pre-commit view, `--since <ref>` before pushing a branch.
-- `vitest related` keeps the suites whose module graph reaches one of them.
-- The suites that read the repository from disk rather than importing it — the
-  architecture ratchets, the agent catalog and prompt contracts — always run.
-  No import edge connects them to a changed source file, and they are the guards
-  a refactor is most likely to trip. Seeding `related` with
-  `src/test-kernel/support/repoScan.ts` selects all of them, so there is no
-  hand-maintained list to drift.
-- A change to the harness itself (`vitest.config.mjs`, `tsconfig.json`,
-  `scripts/aliases.mjs`, `src/test-kernel/support/`, any `package.json`,
-  `pnpm-lock.yaml`) invalidates the mapping rather than being covered by it, so
-  those fall back to the full suite.
-- A changed file no module graph can contain — a YAML resource, an image — is
-  named in a notice instead of being quietly dropped, because `related` will not
-  select a suite for it.
+- `npm run test:watch` while editing — Vitest keeps the process warm and
+  reruns the suites whose module graph reaches what you saved.
+- `npm run test:changed` before a commit — `vitest --changed`: git's
+  uncommitted files, then the same module-graph selection. Pass a ref to
+  widen it (`npm run test:changed -- origin/main` before pushing a branch).
+- `npm run test:pure` before a push — the whole `pure` tier in ~30s. It
+  includes the architecture ratchets, which read the repository from disk and
+  so are never selected by a module graph; this is how they get run locally.
 
-`--dry-run` prints the decision and the Vitest command without running it, for
-when you want to see how wide the run will be first. Unrecognized arguments are
-forwarded to Vitest, so `npm run test:changed -- -t <pattern>` and `--bail 1`
-work as usual. Selection is only as good as the module graph: it is a fast
-signal for the edit → commit loop, not a replacement for the full suite.
+Selection is only as good as the module graph: a changed YAML resource or
+image selects nothing, and a change to the harness itself (`vitest.config.mjs`,
+`src/test-kernel/support/`) is not covered by the mapping it invalidates. Those
+are what `npm test` is for.
 
 ### Build system: esbuild + Vite
 
