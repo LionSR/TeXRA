@@ -63,14 +63,14 @@ today the same type already.
 
 ### What was confirmed
 
-| Claim | Status |
-| ----- | ------ |
-| One minting formula, `` `${getCleanAgentName(name)}#${executionId}` `` | Confirmed — [streamTab.ts:24](../../../../src/agent/runtime/streamTab.ts), the only producer |
-| The display half is already the single source of truth elsewhere | Confirmed — `runIdentityDisplayName` is `getCleanAgentName(runIdentityName(id))`, the same function ([runIdentity.ts:54](../../../../src/shared/schemas/runIdentity.ts)) |
-| Nothing in production addresses a run by parsing the format | Confirmed — the sole `#` reader is an equality assertion between the two ids ([ToolUseFollowUpQueueManager.ts:135](../../../../src/agent/followUp/ToolUseFollowUpQueueManager.ts)) |
-| A hand-rolled reverse index exists between the two ids | Confirmed — `getAgentHandleByStream` is an O(n) scan over handles keyed by execution id ([executionRegistry.ts:435](../../../../src/agent/runtime/executionRegistry.ts)) |
-| One struct carries the composite *and* both its components | Confirmed — `RunScope` declares `streamId`, `executionId` and `agentName` together ([RunScope.ts:16](../../../../src/agent/runtime/RunScope.ts)) |
-| No ratchet or architecture test pins the current shape | Confirmed — zero hits across `config/ratchets/` and `src/test-kernel/architecture/` |
+| Claim                                                                  | Status                                                                                                                                                                             |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One minting formula, `` `${getCleanAgentName(name)}#${executionId}` `` | Confirmed — [streamTab.ts:24](../../../../src/agent/runtime/streamTab.ts), the only producer                                                                                       |
+| The display half is already the single source of truth elsewhere       | Confirmed — `runIdentityDisplayName` is `getCleanAgentName(runIdentityName(id))`, the same function ([runIdentity.ts:54](../../../../src/shared/schemas/runIdentity.ts))           |
+| Nothing in production addresses a run by parsing the format            | Confirmed — the sole `#` reader is an equality assertion between the two ids ([ToolUseFollowUpQueueManager.ts:135](../../../../src/agent/followUp/ToolUseFollowUpQueueManager.ts)) |
+| A hand-rolled reverse index exists between the two ids                 | Confirmed — `getAgentHandleByStream` is an O(n) scan over handles keyed by execution id ([executionRegistry.ts:435](../../../../src/agent/runtime/executionRegistry.ts))           |
+| One struct carries the composite _and_ both its components             | Confirmed — `RunScope` declares `streamId`, `executionId` and `agentName` together ([RunScope.ts:16](../../../../src/agent/runtime/RunScope.ts))                                   |
+| No ratchet or architecture test pins the current shape                 | Confirmed — zero hits across `config/ratchets/` and `src/test-kernel/architecture/`                                                                                                |
 
 `RunScope` is the clearest statement of the problem: it holds a value and, in
 the same struct, both of the values that value is made of.
@@ -83,7 +83,7 @@ human-orienting name — it already is, via
 [sessionFold.ts:464](../../../../src/shared/session/sessionFold.ts).
 `aggregateId(kind, logicalId)`
 ([sessionEvent.ts:131](../../../../src/shared/schemas/sessionEvent.ts)) remains
-the one owner of the stream-versus-execution *lifecycle* distinction.
+the one owner of the stream-versus-execution _lifecycle_ distinction.
 
 This last point decides the main objection. The stream and execution
 **aggregates** are separate rows with separate sequence counters and a
@@ -108,7 +108,7 @@ reverse index, which collapses to a map lookup across 5 callers.
 784 `StreamTabId` occurrences across 146 production files; 1557 production
 `streamId` occurrences; 88 production files carry both identifiers, and 56
 declaration sites list them within two lines of each other. That adjacency
-*is* the duplicate vocabulary. Persisted surfaces are three opaque-key stores
+_is_ the duplicate vocabulary. Persisted surfaces are three opaque-key stores
 (the SQLite aggregate id, the workspace-state goal key, the Supabase
 `stream_id` column); under the no-legacy-migration policy none needs a
 dual-read or a version branch, which is what would otherwise make this
@@ -145,6 +145,10 @@ become bare hex. That is a real loss. The mitigation is log annotation carrying
 the identity, which the observability-plane note already specifies.
 
 ## 4. Candidate families
+
+Superseded 2026-09-10: every family below was re-investigated and resolved as
+one design in [one run model](2026-09-10-one-run-model.md); its section 8
+records which claims here were refuted. The entries stay as the census record.
 
 Unverified. Counts are the finders' measurements; citations are theirs.
 
@@ -245,7 +249,7 @@ to need its own note.
 - **`cliState` and `Surface` are one interaction record.** Refuted twice
   independently. The sentinels are opposites and the difference is load-bearing:
   `Surface.selected: null` is a sticky navigable destination (the New-task
-  composer), while `cliState.activeStreamId: undefined` means *unset* and is
+  composer), while `cliState.activeStreamId: undefined` means _unset_ and is
   adopted by the first arriving fact. `CLI_LOCAL_STREAM_ID` is by construction
   never in `view.streams`, and `pruneSurface` is built on the explicitly
   opposite invariant that an id is never reused — so adopting `Surface` in the
@@ -253,12 +257,12 @@ to need its own note.
   dependency rule forbids. Of `Surface`'s 18 fields the TUI would use three or
   four and hold fourteen permanently empty.
 
-  One genuine finding survives, and it runs the *other* way: `ExpansionOverride`
+  One genuine finding survives, and it runs the _other_ way: `ExpansionOverride`
   is a two-value enum doing a boolean's job. `'collapsed'` is produced at
   exactly one site as a toggle target and is never read as distinct from
   absent, because `isExpanded` tests `=== 'expanded'`. The SSOT-restoring
   change is inside `Surface` — make `expanded` a `ReadonlyMap<StreamTabId,
-  boolean>` and delete `ExpansionOverrideSchema` and a persisted string enum.
+boolean>` and delete `ExpansionOverrideSchema` and a persisted string enum.
 
 ## 7. Effect-native requirements
 
@@ -272,7 +276,7 @@ than against Effect 3 recall.
 Three constraints bind every entry above:
 
 - **No transitional aliases that outlive their PR.** `export type StreamTabId =
-  ExecutionId` is admissible *within* the migration and must not survive it;
+ExecutionId` is admissible _within_ the migration and must not survive it;
   the repo already fails `check:effect-migration` on any `@adapter-until`
   marker, and the owner has ruled that there are no temporary adapters.
 - **A collapse must shrink a ratchet, never widen one.** A design that would
@@ -282,7 +286,7 @@ Three constraints bind every entry above:
   and status-enum unification are compile-time and stay plain TypeScript.
   Effect belongs where these collapses touch registries, pending-request
   lifetimes and store ownership — families **F** and **B** — where a single
-  owner means a scoped resource that releases on success, failure *and*
+  owner means a scoped resource that releases on success, failure _and_
   interruption.
 
 ## 8. A single-source-of-truth defect in the guidance itself
