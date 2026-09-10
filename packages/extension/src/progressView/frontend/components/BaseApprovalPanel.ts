@@ -7,18 +7,20 @@ import { classMap } from 'lit/directives/class-map.js';
 // Side-effect imports - register the approve-split component
 import './ApproveSplitButton';
 
+// Local imports - approval decision vocabulary
+import type {
+  ApprovalPermissionKind,
+  ApproveDecision,
+} from '@shared/session/approvalDecision';
+
 // Local imports - base class
-
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
-
-// Local imports - progress view events
-import type { ApprovalDecision, ApprovalPermissionKind } from '../events';
 
 export abstract class BaseApprovalPanel<
   K extends ApprovalPermissionKind,
 > extends BaseFeedbackPanel<K> {
   /** The panel declares its approval; the base owns dispatch and shortcuts. */
-  protected abstract readonly approvalDecision: ApprovalDecision<K>;
+  protected abstract readonly approvalDecision: ApproveDecision<K>;
 
   // -------------------------------------------------------------------------
   // Run-scoped approve-menu affordances. The ApproveSplitButton accepts them
