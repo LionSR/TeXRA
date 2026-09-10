@@ -82,8 +82,8 @@ function inquiryOperations(
   /**
    * Append a new open question to a thread. Creates the thread when no
    * thread_id is passed (or the existing thread is unknown). Updates the
-   * thread's `parentStreamId` and `parentExecutionId` to the caller;
-   * continuations always flow back to the most-recent asker.
+   * thread's `parentStreamId` to the caller; continuations always flow back
+   * to the most-recent asker.
    *
    * Behavior depends on the current status of the addressed thread:
    *   - new thread        → create with status='open'
@@ -122,7 +122,6 @@ function inquiryOperations(
       const baseManifest: InquiryThreadRecord = existing ?? {
         threadId,
         parentStreamId: params.parentStreamId,
-        parentExecutionId: params.parentExecutionId,
         status: 'open',
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -147,7 +146,6 @@ function inquiryOperations(
       const nextManifest: InquiryThreadRecord = {
         ...baseManifest,
         parentStreamId: params.parentStreamId,
-        parentExecutionId: params.parentExecutionId,
         status: 'open',
         updatedAt: timestamp,
         turns: [...baseManifest.turns, turn],

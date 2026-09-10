@@ -166,7 +166,8 @@ export async function runToolUseFlow(
   attachment?: ToolUseFlowAttachment,
 ): Promise<RunToolUseFlowResult> {
   const { logger, setting, runScope, toolPolicy } = input;
-  const { streamId, executionId, session: runSession, signal } = runScope;
+  const { executionId, session: runSession, signal } = runScope;
+  const streamId = executionId;
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
@@ -329,7 +330,7 @@ export async function runToolUseFlow(
       runSession.publish([
         {
           type: 'execution.config',
-          aggregateId: aggregateId('execution', executionId),
+          aggregateId: aggregateId('run', executionId),
           record: nextAgentConfig,
         },
       ]);
@@ -345,8 +346,7 @@ export async function runToolUseFlow(
     input.onModelChanged(model);
     logger.emit({
       type: 'run.config',
-      streamId,
-      executionId,
+      runId: executionId,
       config: nextAgentConfig,
     });
   };
@@ -513,7 +513,7 @@ export async function runToolUseFlow(
           runSession.publish([
             {
               type: 'execution.workspaceFiles',
-              aggregateId: aggregateId('execution', executionId),
+              aggregateId: aggregateId('run', executionId),
               paths: currentTouchedFiles,
             },
           ]);

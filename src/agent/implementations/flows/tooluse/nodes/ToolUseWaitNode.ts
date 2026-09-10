@@ -8,7 +8,7 @@ import {
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { USER_VAR_INSTRUCTION } from '@agent/prompt/userVars';
-import { STREAM_PHASE } from '@shared/schemas';
+import { STREAM_PHASE, type RunId } from '@shared/schemas';
 import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
 
 import type { ToolUseServices } from '../ToolUseServices';
@@ -35,7 +35,7 @@ export class ToolUseWaitNode extends BaseNode<
 
   override async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
     const { session, isSubagent, runScope, toolPolicy } = this.services;
-    const { streamId, session: ownerSession, signal } = runScope;
+    const { executionId: streamId, session: ownerSession, signal } = runScope;
     const { stopAfterCycle } = toolPolicy;
     const hasDrainedFollowUps = Boolean(this.drainedFollowUps?.length);
 
@@ -155,7 +155,7 @@ export class ToolUseWaitNode extends BaseNode<
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     const { logger, runScope } = this.services;
-    const { streamId, session } = runScope;
+    const { executionId: streamId, session } = runScope;
 
     if (execRes.kind === 'waiting') {
       return FlowTransition.WAITING;
@@ -202,7 +202,7 @@ export class ToolUseWaitNode extends BaseNode<
     return FlowTransition.CONTINUE;
   }
 
-  private async pauseActiveGoal(streamId: string): Promise<void> {
+  private async pauseActiveGoal(streamId: RunId): Promise<void> {
     const goal = GoalStore.getForStream(streamId);
     if (goal?.status !== 'active') {
       return;

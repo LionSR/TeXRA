@@ -1,7 +1,7 @@
 /**
- * Execution lifecycle operations.
+ * Run lifecycle operations.
  *
- * Business logic that orchestrates reads and writes across execution stores.
+ * Business logic that orchestrates reads and writes across run stores.
  * Separated from ExecutionKVStore to keep the store a clean storage interface
  * with no cross-store mutations or error-swallowing policies.
  */
@@ -27,10 +27,9 @@ import {
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
   type AggregateId,
-  type ExecutionId,
+  type RunId,
   type RunIdentity,
   type RunOutcome,
-  type StreamTabId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -58,17 +57,8 @@ function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
-/** Parentage is projected from the declared creation edge. */
-export const hasPersistedParent = (
-  executionId: ExecutionId,
-  session: SessionHandle,
-): Effect.Effect<boolean, Error> =>
-  getExecutionRecords(session, executionId)
-    .readMeta()
-    .pipe(Effect.map((meta) => meta?.parentExecutionId !== undefined));
-
 export const getPersistedUserFollowUpSupport = (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.Effect<UserFollowUpSupport, Error> =>
   getExecutionRecords(session, executionId)
@@ -81,16 +71,14 @@ export const getPersistedUserFollowUpSupport = (
     );
 
 export interface RegisterExecutionOptions {
-  readonly parentStreamId?: StreamTabId;
+  /** The launching run: the whole parent edge, stamped on `run.start`. */
+  readonly parentExecutionId?: RunId;
   readonly checkpointId?: string;
-  readonly background?: boolean;
   readonly category?: AgentCategory;
-  readonly streamId: StreamTabId;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
   readonly userFollowUpSupport?: UserFollowUpSupport;
-  readonly parentExecutionId?: ExecutionId;
   /**
    * Display description persisted on `ExecutionMeta.description` — the one
    * description authority (#9590 A4). Child-stream launchers pass the
@@ -102,12 +90,12 @@ export interface RegisterExecutionOptions {
 }
 
 /**
- * Register a new execution: persist config, metadata, and parent linkage.
+ * Register a new run: persist config, metadata, and parent linkage.
  * Awaits all writes before returning.
  */
 export const registerExecution = Effect.fn('registerExecution')(function* (
   session: SessionHandle,
-  executionId: ExecutionId,
+  executionId: RunId,
   record: RunRecord,
   agentName: string,
   options: RegisterExecutionOptions,
@@ -123,38 +111,31 @@ export const registerExecution = Effect.fn('registerExecution')(function* (
       const records = getExecutionRecords(session, executionId);
       const prior = yield* records.readMeta();
       if (prior !== null)
-        releaseClaims = yield* session.acquireExecutionClaims(
-          executionId,
-          options.streamId,
-        );
-      const parent =
-        options.parentExecutionId === undefined
-          ? null
-          : yield* getExecutionRecords(
-              session,
-              options.parentExecutionId,
-            ).readMeta();
-      if (options.parentExecutionId !== undefined && parent === null)
+        releaseClaims = yield* session.acquireExecutionClaims(executionId);
+      // The database refuses a parent that is closed or has no `run.start`;
+      // this read only words the refusal before the transaction opens.
+      if (
+        options.parentExecutionId !== undefined &&
+        (yield* getExecutionRecords(
+          session,
+          options.parentExecutionId,
+        ).readMeta()) === null
+      )
         return yield* Effect.fail(
-          new Error(
-            `Parent execution ${options.parentExecutionId} is unavailable.`,
-          ),
+          new Error(`Parent run ${options.parentExecutionId} is unavailable.`),
         );
       const pinned = runInSession(session, () =>
         pinExecutionWorkingDirectory(record),
       );
-      const target = aggregateId('stream', options.streamId);
+      const target = aggregateId('run', executionId);
       const category = isAgentRunRecord(pinned)
         ? pinned.agentCategory
         : (options.category ?? AgentCategory.ToolUse);
-      const background =
-        options.background ?? options.parentExecutionId !== undefined;
       const events: SessionEventDraft[] = [];
       if (prior === null) {
         events.push({
           type: 'run.start',
           aggregateId: target,
-          executionId,
           identity: options.identity,
           userFollowUpSupport:
             options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
@@ -163,29 +144,29 @@ export const registerExecution = Effect.fn('registerExecution')(function* (
             options.identity.kind === 'agent' &&
             isRemoteAgent(options.identity.agent),
           worktree: launchWorktreeInfo(pinned.workingDirectory),
-          parentStreamId:
-            parent === null ? options.parentStreamId : parent.streamId,
-          background,
-          approvalPolicy: session.approvalPolicySnapshotFor(options.streamId),
+          parent:
+            options.parentExecutionId === undefined
+              ? null
+              : { id: options.parentExecutionId },
+          approvalPolicy: session.approvalPolicySnapshotFor(executionId),
           checkpointId: options.checkpointId,
         });
       }
       events.push(
         {
           type: 'execution.launchLabel',
-          aggregateId: aggregateId('execution', executionId),
+          aggregateId: target,
           label: agentName,
         },
         {
           type: 'execution.config',
-          aggregateId: aggregateId('execution', executionId),
+          aggregateId: target,
           record: pinned,
         },
         {
           type: 'run.activate',
           aggregateId: target,
           category,
-          background,
           ...(options.identity.kind === 'agent' &&
           options.identity.tool === undefined
             ? { isRemote: isRemoteAgent(options.identity.agent) }
@@ -208,7 +189,7 @@ export const registerExecution = Effect.fn('registerExecution')(function* (
         events.push(
           {
             type: 'execution.description',
-            aggregateId: aggregateId('execution', executionId),
+            aggregateId: target,
             description: options.description,
           },
           {
@@ -250,7 +231,7 @@ export const registerExecution = Effect.fn('registerExecution')(function* (
       failures.length > 1
         ? new AggregateError(
             failures,
-            `Execution registration and lease rollback failed for ${executionId}`,
+            `Run registration and lease rollback failed for ${executionId}`,
           )
         : ensureError(cause),
     );
@@ -262,8 +243,7 @@ export const acquireResumedExecutionOwnership = Effect.fn(
   'acquireResumedExecutionOwnership',
 )(function* (
   session: SessionHandle,
-  executionId: ExecutionId,
-  streamId: StreamTabId,
+  executionId: RunId,
 ): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
   const lease = yield* Effect.tryPromise({
     try: () =>
@@ -281,7 +261,7 @@ export const acquireResumedExecutionOwnership = Effect.fn(
           catch: ensureError,
         });
   const claims = yield* Effect.exit(
-    session.acquireExecutionClaims(executionId, streamId),
+    session.acquireExecutionClaims(executionId),
   );
   if (Exit.isFailure(claims)) {
     const release = yield* Effect.exit(releaseLease);
@@ -289,7 +269,7 @@ export const acquireResumedExecutionOwnership = Effect.fn(
       Exit.isFailure(release)
         ? new AggregateError(
             [Cause.squash(claims.cause), Cause.squash(release.cause)],
-            `Execution admission and lease rollback failed for ${executionId}`,
+            `Run admission and lease rollback failed for ${executionId}`,
           )
         : ensureError(Cause.squash(claims.cause)),
     );
@@ -304,7 +284,7 @@ export const acquireResumedExecutionOwnership = Effect.fn(
       return yield* Effect.fail(
         new AggregateError(
           failures,
-          `Execution admission rollback failed for ${executionId}`,
+          `Run admission rollback failed for ${executionId}`,
         ),
       );
   });
@@ -336,7 +316,7 @@ export function retainFlowRecordUnlessCompleted(
 }
 
 export interface FinalizeExecutionInput {
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly outcome: RunOutcome;
   readonly flowRecord: 'preserve' | 'delete';
   /**
@@ -386,8 +366,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const status = yield* Effect.exit(
     session.updateRecordFacts(executionId, (rows) => {
       const meta = executionMetaFromEvents(rows, executionId);
-      if (!meta)
-        throw new Error(`Execution metadata not found for ${executionId}`);
+      if (!meta) throw new Error(`Run metadata not found for ${executionId}`);
       const persisted =
         keepExistingOutcome === true && meta.outcome !== undefined
           ? meta.outcome
@@ -397,10 +376,10 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
           meta.outcome === persisted
             ? []
             : [
-                ...session.statusClosureFacts(meta.streamId, persisted),
+                ...session.statusClosureFacts(executionId, persisted),
                 {
                   type: 'status' as const,
-                  aggregateId: aggregateId('stream', meta.streamId),
+                  aggregateId: aggregateId('run', executionId),
                   phase: persisted,
                   cause: 'lifecycle',
                 },
@@ -436,8 +415,8 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     input.report?.(
       new Error(
         outcomePersisted
-          ? `Persisted ${outcome} status for execution ${executionId}, but failed to delete its flow record: ${toErrorMessage(error)}`
-          : `Failed to persist ${outcome} terminal state for execution ${executionId}: ${toErrorMessage(error)}`,
+          ? `Persisted ${outcome} status for run ${executionId}, but failed to delete its flow record: ${toErrorMessage(error)}`
+          : `Failed to persist ${outcome} terminal state for run ${executionId}: ${toErrorMessage(error)}`,
         { cause: error },
       ),
     );
@@ -446,29 +425,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   return { ok: true, outcome: status.value };
 });
 
-/**
- * The execution→stream foreign key: the `streamId` stamped on execution
- * metadata at registration. A row without one has no persisted stream, so
- * archive readers never fall back to re-deriving a stream from names or
- * sidecar scans. This is the ONE resolution site; completed-run readers
- * and the trace assembler share it instead of each re-deriving
- * `readMeta() → meta.streamId`.
- *
- * The resolved branch carries the already-read `meta` so a caller that also
- * needs other metadata fields (the trace assembler) does not pay a second
- * `readMeta()`. Absence is a plain `null`: no execution metadata at all and
- * metadata predating stamped streams are the same answer to every caller.
- */
-export const resolveStreamForExecution = Effect.fn('resolveStreamForExecution')(
-  function* (executionId: ExecutionId, session: SessionHandle) {
-    const meta = yield* getExecutionRecords(session, executionId).readMeta();
-    return meta ? { streamId: meta.streamId, meta } : null;
-  },
-);
-
 /** Read the canonical run configuration from the owning database. */
 export const readExecutionRunRecord = (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.Effect<RunRecord | null, Error> =>
   getExecutionRecords(session, executionId).readRunRecord();
@@ -477,11 +436,12 @@ export const readExecutionRunRecord = (
 export const readExecutionChildren = Effect.fn('readExecutionChildren')(
   function* (
     session: SessionHandle,
-    executionId: ExecutionId,
+    executionId: RunId,
   ): Effect.fn.Return<ChildRecord[], Error> {
     const rows = yield* session.readExecutionChildren(executionId);
+    const own = aggregateId('run', executionId);
     const parent = rows.find(
-      (row) => row.type === 'run.start' && row.executionId === executionId,
+      (row) => row.type === 'run.start' && row.aggregateId === own,
     );
     if (parent?.type !== 'run.start') return [];
     const closed = new Set(
@@ -498,17 +458,20 @@ export const readExecutionChildren = Effect.fn('readExecutionChildren')(
     return rows.flatMap((row) => {
       if (
         row.type !== 'run.start' ||
-        row.parentStartCommit !== parent.commit ||
-        row.parentStreamId !== aggregateTarget(parent.aggregateId).id ||
+        row.parent === null ||
+        row.parent.startCommit !== parent.commit ||
+        row.parent.id !== executionId ||
         closed.has(row.aggregateId)
       )
         return [];
-      const label = labels.get(aggregateId('execution', row.executionId));
+      const target = aggregateTarget(row.aggregateId);
+      if (target.kind !== 'run') return [];
+      const label = labels.get(row.aggregateId);
       if (label === undefined)
-        throw new Error(`Child launch label missing for ${row.executionId}`);
+        throw new Error(`Child launch label missing for ${target.id}`);
       return [
         {
-          id: row.executionId,
+          id: target.id,
           agent: label,
           timestamp: new Date(row.at).toISOString(),
         },

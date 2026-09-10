@@ -11,6 +11,11 @@
  * (`AgentEvent`) shapes field for field where the fold reads them, so a
  * publisher translates by naming fields, never by re-encoding.
  *
+ * One run owns one aggregate, `('run', runId)` (one run model, section 3.1):
+ * display rows and the run's private records land on the same aggregate, and
+ * whether a row reaches a renderer is a property of its type
+ * (`isDisplaySessionEvent`), not of a second aggregate.
+ *
  * Layering: this module lives under `src/shared/schemas` so the fold and the
  * transport stay free of `@agent/*` (`dependencyDirection.vitest.ts` keeps the
  * shared-to-agent allowlist empty).
@@ -31,7 +36,7 @@ import {
   ResultMetaSchema,
 } from './executionRecords';
 import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunIdSchema, type RunId } from './identifiers';
 import {
   InquiryThreadRecordSchema,
   InquiryThreadUpdatedEventSchema,
@@ -94,20 +99,26 @@ export function ownerPid(ownerId: OwnerId): number {
   return ownerIdentity(ownerId).pid;
 }
 
-/** C2 separates independent lifecycles even when their logical ids coincide. */
-const AggregateKeySchema = z.tuple([
-  z.enum([
-    'stream',
-    'execution',
-    'workflow-checkpoint',
-    'inquiry',
-    'session',
-    'desktop-projects',
-    'global-inquiry',
-    'update-check',
-  ]),
-  z.string().min(1),
+/**
+ * C2 separates independent lifecycles even when their logical ids coincide.
+ * `run` is keyed by the run id; every other kind by its own logical id.
+ */
+const AggregateKindSchema = z.enum([
+  'run',
+  'workflow-checkpoint',
+  'inquiry',
+  'session',
+  'desktop-projects',
+  'global-inquiry',
+  'update-check',
 ]);
+type AggregateKind = z.infer<typeof AggregateKindSchema>;
+const AggregateKeySchema = z
+  .tuple([AggregateKindSchema, z.string().min(1)])
+  .refine(
+    ([kind, id]) => kind !== 'run' || RunIdSchema.safeParse(id).success,
+    'A run aggregate is keyed by a run id',
+  );
 
 /** The canonical JSON encoding of an aggregate kind and its logical id. */
 export const AggregateIdSchema = z
@@ -126,25 +137,37 @@ export const AggregateIdSchema = z
   .brand<'AggregateId'>();
 export type AggregateId = z.infer<typeof AggregateIdSchema>;
 
+/** A logical id that is not itself an already-qualified aggregate key. */
+type LogicalId = string & {
+  readonly [z.$brand]?: { readonly AggregateId?: never };
+};
+
 /** Qualify a logical id once. An already-qualified key is not an input. */
+export function aggregateId(kind: 'run', logicalId: RunId): AggregateId;
 export function aggregateId(
-  kind: z.infer<typeof AggregateKeySchema>[0],
-  logicalId: string & { readonly [z.$brand]?: never },
+  kind: Exclude<AggregateKind, 'run'>,
+  logicalId: LogicalId,
+): AggregateId;
+export function aggregateId(
+  kind: AggregateKind,
+  logicalId: string,
 ): AggregateId {
   return AggregateIdSchema.parse(JSON.stringify([kind, logicalId]));
 }
 
+/** A decoded aggregate key: the `run` arm carries its logical id as a `RunId`. */
+export type AggregateTarget =
+  | { readonly kind: 'run'; readonly id: RunId }
+  | { readonly kind: Exclude<AggregateKind, 'run'>; readonly id: string };
+
 /** Decode a validated aggregate key at a logical-id boundary. */
-export function aggregateTarget(key: AggregateId): {
-  kind: z.infer<typeof AggregateKeySchema>[0];
-  id: string;
-} {
+export function aggregateTarget(key: AggregateId): AggregateTarget {
   const [kind, id] = JSON.parse(key) as z.infer<typeof AggregateKeySchema>;
-  return { kind, id };
+  return kind === 'run' ? { kind, id: RunIdSchema.parse(id) } : { kind, id };
 }
 
-/** Per-aggregate append order; `run.start` is seq 1 of its stream. Dense
- *  from 1, assigned by the substrate's publisher and by nothing else. */
+/** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
+ *  1, assigned by the substrate's publisher and by nothing else. */
 const SeqSchema = z.int().positive();
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
@@ -167,8 +190,8 @@ export type ApprovalPolicySnapshot = z.infer<
 
 /**
  * The envelope every durable arm rides (contract C1). A run-scoped fact's
- * aggregate is its stream; an inquiry thread's aggregate is the thread id
- * (PRD 5.1: no sentinel stream id exists). `at` is the publish clock,
+ * aggregate is its run; an inquiry thread's aggregate is the thread id
+ * (PRD 5.1: no sentinel run id exists). `at` is the publish clock,
  * informational only; ordering is `seq` within an aggregate and `commit`
  * across them.
  */
@@ -187,7 +210,7 @@ const envelope = {
 function durable<T extends string, S extends z.ZodRawShape>(
   type: T,
   shape: S,
-  kind: z.infer<typeof AggregateKeySchema>[0] = 'stream',
+  kind: AggregateKind = 'run',
 ) {
   return z.object({
     aggregateId: AggregateIdSchema.refine(
@@ -201,9 +224,25 @@ function durable<T extends string, S extends z.ZodRawShape>(
 }
 
 /**
- * Per-stream launch facts. Existence fact: a stream exists iff its
- * `run.start` exists, once per incarnation, seq 1 of its aggregate (decision
- * 9). `identity` and `worktree` are nullish only on the legacy importer's
+ * The parent edge (one run model, section 3.2): the whole of it. `id` is the
+ * launching run; `startCommit` is that run's creation commit, stamped by the
+ * database inside the child's creation transaction so a logical id a
+ * workflow-script retry reuses can never redirect the child to a later
+ * incarnation of its parent. Everything else that used to spell the edge
+ * (`parentStreamId`, `parentExecutionId`, `isSubagent`, `background`) is
+ * `parent !== null`, computed from the fold or the handle.
+ */
+const RunParentSchema = z.object({
+  id: RunIdSchema,
+  startCommit: z.int().positive(),
+});
+export type RunParent = z.infer<typeof RunParentSchema>;
+
+/**
+ * Per-run launch facts. Existence fact: a run exists iff its `run.start`
+ * exists, once per incarnation, seq 1 of its aggregate (decision 9); the
+ * aggregate's logical id is the run id, so the row carries no second copy of
+ * it. `identity` and `worktree` are nullish only on the legacy importer's
  * events (contract C3); live emitters always know them. `category`,
  * `isRemote`, and `userFollowUpSupport` are explicit on every run: the
  * launcher knows them for an agent, a process, and a workflow script alike,
@@ -211,52 +250,41 @@ function durable<T extends string, S extends z.ZodRawShape>(
  * initial approval-policy snapshot rides here rather than as its own event
  * (PRD 6, item 2): under the latest-of-type rule a run never edited would
  * otherwise have no policy entry, and on the payload it is atomic with the
- * stream's existence. `checkpointId` is a workflow run's resume anchor
- * (decision 9): a relaunch finds its journal by it, never by the run's ids.
+ * run's existence. `checkpointId` is a workflow run's resume anchor
+ * (decision 9): a relaunch finds its journal by it, never by the run's id.
  */
 const RunStartEventSchema = durable('run.start', {
-  executionId: ExecutionIdSchema,
   identity: RunIdentitySchema,
   userFollowUpSupport: UserFollowUpSupportSchema,
   /** The `StreamView` discriminant: `toolUse` for an agent in tool-use mode
-   *  and for a process stream, `workflow` for a workflow agent or script. */
+   *  and for a process run, `workflow` for a workflow agent or script. */
   category: AgentCategorySchema,
   /** Agent-registry remoteness; false for a run with no registry entry. */
   isRemote: z.boolean(),
   worktree: WorktreeInfoSchema.nullish(),
-  parentStreamId: StreamTabIdSchema.nullish(),
-  /** The declared parent's creation commit, assigned by the database. */
-  parentStartCommit: z.int().positive().optional(),
-  /** Parent identity captured with its creation coordinate, surviving collection. */
-  parentExecutionId: ExecutionIdSchema.optional(),
-  /**
-   * Launched in the background whoever is watching (a delegated child); the
-   * launch fact half of the old `suppressViewSwitch`, which the frozen NDJSON
-   * `setActiveStream` line still carries (PRD 6, item 5). Focus is never a
-   * fact.
-   */
-  background: z.boolean().nullish(),
+  /** The launching run with its creation coordinate; null for a root. */
+  parent: RunParentSchema.nullable(),
   /** The run's approval policy at launch, from the session's single authority. */
   approvalPolicy: ApprovalPolicySnapshotSchema.nullish(),
   /** Workflow-script runs: the checkpoint this run journals into. */
   checkpointId: z.string().min(1).nullish(),
 });
 
-/** C9 cleanup targets, derived from owned execution edges by the database. */
+/** C9 cleanup targets: the run directories owned by this lifecycle, derived by the database. */
 const StreamRemovedEventSchema = durable('stream.removed', {
-  executionIds: z.array(ExecutionIdSchema),
+  executionIds: z.array(RunIdSchema),
 });
 
-const RunStartDraftSchema = RunStartEventSchema.omit({
-  parentStartCommit: true,
-  parentExecutionId: true,
+/** A launcher names the parent; the database stamps its creation commit. */
+const RunStartDraftSchema = RunStartEventSchema.omit({ parent: true }).extend({
+  parent: RunParentSchema.pick({ id: true }).nullable(),
 });
 const StreamRemovedDraftSchema = StreamRemovedEventSchema.omit({
   executionIds: true,
 });
 
 /**
- * The durable arms. Run-scoped arms mirror `AgentEvent`
+ * The durable arms every renderer folds. Run-scoped arms mirror `AgentEvent`
  * (`src/agent/trace/events.ts`); session-scoped arms mirror the session
  * facts with the payload flattened. `stream.removed` is the tombstone: the
  * last row of its aggregate, final (PRD 5.2, "Existence").
@@ -274,19 +302,23 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
      *  entry: the frozen wire line omits it for a process, agent-CLI, or
      *  workflow-script child (PRD 10.3), and a fold reads `run.start`. */
     isRemote: z.boolean().nullish(),
-    background: z.boolean(),
   }),
   durable('run.config', {
-    executionId: ExecutionIdSchema,
     /** The canonical configuration, validated before it becomes durable. */
     config: AgentConfigFieldsSchema,
   }),
+  /**
+   * The parent edge severed: a child promoted to the top level by a stop
+   * that detaches its children. The only fact after `run.start` that moves
+   * the edge; a run never acquires a new parent.
+   */
+  durable('run.detach', {}),
   /** The run lifecycle's last word: emitted once nothing in the owning
    *  process can still write for the run. The phase is the `status` fact's
    *  (PRD 6, item 3); this arm says only that the lifecycle has ended. */
   durable(
     'result',
-    ResultEventSchema.unwrap().omit({ type: true, streamId: true }).shape,
+    ResultEventSchema.unwrap().omit({ type: true, runId: true }).shape,
   ),
   durable('status', {
     phase: StreamPhaseSchema,
@@ -310,10 +342,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
   }),
   durable('goalPaused', {}),
-  durable('setParentStream', { parentStreamId: StreamTabIdSchema.nullable() }),
   StreamRemovedDraftSchema,
   durable('updateStreamDescription', { description: z.string() }),
-  /** Goal is per stream; the fact carries the state so the fold never reads
+  /** Goal is per run; the fact carries the state so the fold never reads
    *  `GoalStore`. */
   durable('goalStateChanged', { state: GoalStateSchema }),
   /** Aggregate is the thread id; `parentStreamId` is the payload's edge. */
@@ -346,32 +377,25 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
        * recorded presentation. */
       transcriptDebug: z.boolean().optional(),
       aggregateId: AggregateIdSchema.refine(
-        (key) => aggregateTarget(key).kind === 'stream',
-        `Expected a stream aggregate for ${schema.shape.type.value}`,
+        (key) => aggregateTarget(key).kind === 'run',
+        `Expected a run aggregate for ${schema.shape.type.value}`,
       ),
     }),
   ),
 ]);
+/**
+ * The run's private records: on the same aggregate as its display rows, read
+ * by the runtime's typed accessors and never by a renderer
+ * (`isDisplaySessionEvent` keeps them out of the transport by type).
+ */
 const ExecutionEventDraftSchema = z.discriminatedUnion('type', [
-  durable(
-    'execution.config',
-    { record: ExecutionRunRecordSchema },
-    'execution',
-  ),
-  durable('execution.launchLabel', { label: z.string() }, 'execution'),
-  durable('execution.description', { description: z.string() }, 'execution'),
-  durable('execution.report', { report: z.string().nullable() }, 'execution'),
-  durable('execution.result', { result: ResultMetaSchema }, 'execution'),
-  durable(
-    'execution.workspaceFiles',
-    { paths: ExecutionWorkspaceFilesSchema },
-    'execution',
-  ),
-  durable(
-    'execution.workflow',
-    { workflow: WorkflowExecutionSnapshotSchema },
-    'execution',
-  ),
+  durable('execution.config', { record: ExecutionRunRecordSchema }),
+  durable('execution.launchLabel', { label: z.string() }),
+  durable('execution.description', { description: z.string() }),
+  durable('execution.report', { report: z.string().nullable() }),
+  durable('execution.result', { result: ResultMetaSchema }),
+  durable('execution.workspaceFiles', { paths: ExecutionWorkspaceFilesSchema }),
+  durable('execution.workflow', { workflow: WorkflowExecutionSnapshotSchema }),
 ]);
 const DesktopProjectsDraftSchema = durable(
   'desktop.projects.changed',
@@ -396,14 +420,7 @@ export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   UpdateCheckDraftSchema,
 ]);
 const DisplaySessionEventSchema = z.discriminatedUnion('type', [
-  RunStartEventSchema.extend(envelope).refine(
-    (event) =>
-      (event.parentStreamId == null) ===
-        (event.parentStartCommit === undefined) &&
-      (event.parentStreamId == null) ===
-        (event.parentExecutionId === undefined),
-    'A declared parent requires its creation commit and execution ID; a root has neither.',
-  ),
+  RunStartEventSchema.extend(envelope),
   StreamRemovedEventSchema.extend(envelope),
   ...DisplaySessionEventDraftSchema.options
     .filter(
@@ -443,17 +460,12 @@ export type SessionEventDraft = z.infer<typeof SessionEventDraftSchema>;
 export function referencedAggregates(event: SessionEvent): AggregateId[] {
   const ids = [event.aggregateId];
   if (event.type === 'run.start') {
-    ids.push(aggregateId('execution', event.executionId));
+    if (event.parent !== null) ids.push(aggregateId('run', event.parent.id));
     if (event.checkpointId != null)
       ids.push(aggregateId('workflow-checkpoint', event.checkpointId));
   }
-  if (
-    (event.type === 'run.start' ||
-      event.type === 'setParentStream' ||
-      event.type === 'inquiryThreadUpdated') &&
-    event.parentStreamId != null
-  ) {
-    ids.push(aggregateId('stream', event.parentStreamId));
+  if (event.type === 'inquiryThreadUpdated' && event.parentStreamId !== null) {
+    ids.push(aggregateId('run', event.parentStreamId));
   }
   return ids;
 }
@@ -514,7 +526,7 @@ export const FoldEventSchema = z.object({
  */
 export const TextChunkSchema = z.object({
   _tag: z.literal('chunk'),
-  streamId: StreamTabIdSchema,
+  streamId: RunIdSchema,
   rowId: z.string(),
   from: z.int().nonnegative(),
   to: z.int().positive(),
@@ -530,9 +542,7 @@ export type TextChunk = z.infer<typeof TextChunkSchema>;
 export const LocalRuntimeStateSchema = z.object({
   self: z.array(OwnerIdSchema),
   dead: z.array(OwnerIdSchema),
-  unreadable: z.array(
-    z.object({ streamId: StreamTabIdSchema, detail: z.string() }),
-  ),
+  unreadable: z.array(z.object({ streamId: RunIdSchema, detail: z.string() })),
 });
 export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
 
@@ -587,10 +597,15 @@ const FoldInputSchema = z.discriminatedUnion('_tag', [
 ]);
 export type FoldInput = z.infer<typeof FoldInputSchema>;
 
-/** Execution metadata is private; hosts receive explicit display facts only. */
+const DISPLAY_EVENT_TYPES = new Set<string>(
+  DisplaySessionEventDraftSchema.options.map(
+    (schema) => schema.shape.type.value,
+  ),
+);
+
+/** A run's private records and the profile-state rows never enter display transport. */
 export function isDisplaySessionEvent(
   event: SessionEvent,
 ): event is DisplaySessionEvent {
-  const kind = aggregateTarget(event.aggregateId).kind;
-  return kind === 'stream' || kind === 'inquiry' || kind === 'session';
+  return DISPLAY_EVENT_TYPES.has(event.type);
 }

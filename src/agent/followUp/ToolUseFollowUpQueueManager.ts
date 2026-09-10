@@ -1,6 +1,6 @@
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { throwAggregated } from '@utils/core';
 import {
   createBoundedIdSet,
@@ -36,7 +36,7 @@ interface QueueEntry {
  * manager and cannot manufacture a consumer.
  */
 export interface FollowUpConsumerLease {
-  readonly streamId: StreamTabId;
+  readonly streamId: RunId;
   readonly kind: FollowUpConsumerKind;
 }
 
@@ -76,17 +76,17 @@ type FollowUpSubmission =
 export class ToolUseFollowUpQueue {
   static readonly DELIVERY_ID_CAP = 1000;
   static readonly TERMINALIZED_CAP = 500;
-  private readonly entries = new Map<StreamTabId, QueueEntry>();
-  private readonly terminalized = createBoundedIdSet<StreamTabId>(
+  private readonly entries = new Map<RunId, QueueEntry>();
+  private readonly terminalized = createBoundedIdSet<RunId>(
     ToolUseFollowUpQueue.TERMINALIZED_CAP,
   );
   private readonly releaseObservers = new Set<
-    (streamId: StreamTabId) => void
+    (streamId: RunId) => void
   >();
-  private readonly sentObservers = new Set<(streamId: StreamTabId) => void>();
+  private readonly sentObservers = new Set<(streamId: RunId) => void>();
   private disposed = false;
 
-  onRelease(observer: (streamId: StreamTabId) => void): () => void {
+  onRelease(observer: (streamId: RunId) => void): () => void {
     if (this.disposed) return () => {};
     this.releaseObservers.add(observer);
     return () => {
@@ -100,7 +100,7 @@ export class ToolUseFollowUpQueue {
    * occurrence, not state: it is what `executions wait` ends its wait on,
    * and it lives in this process only, never on the session's event plane.
    */
-  onSent(observer: (streamId: StreamTabId) => void): () => void {
+  onSent(observer: (streamId: RunId) => void): () => void {
     if (this.disposed) return () => {};
     this.sentObservers.add(observer);
     return () => {
@@ -108,13 +108,13 @@ export class ToolUseFollowUpQueue {
     };
   }
 
-  notifySent(streamId: StreamTabId): void {
+  notifySent(streamId: RunId): void {
     for (const observer of [...this.sentObservers]) observer(streamId);
   }
 
   /** Claim a live flow/child consumer. A competing owner is rejected. */
   claimLive(
-    streamId: StreamTabId,
+    streamId: RunId,
     kind: Exclude<FollowUpConsumerKind, 'recovery'>,
   ): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
@@ -127,16 +127,8 @@ export class ToolUseFollowUpQueue {
    * Begin a separately authorized child run. The caller must already own the
    * execution lease.
    */
-  claimChildRun(
-    streamId: StreamTabId,
-    executionId: ExecutionId,
-  ): FollowUpConsumerLease | undefined {
+  claimChildRun(streamId: RunId): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
-    if (!streamId.endsWith(`#${executionId}`)) {
-      throw new Error(
-        `Child stream ${streamId} does not belong to execution ${executionId}.`,
-      );
-    }
     this.terminalized.delete(streamId);
     const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
     return this.claim(entry, streamId, 'child');
@@ -144,7 +136,7 @@ export class ToolUseFollowUpQueue {
 
   /** Claim persisted recovery before any asynchronous resume preparation. */
   claimRecovery(
-    streamId: StreamTabId,
+    streamId: RunId,
     createIfMissing = false,
   ): FollowUpRecoveryLease | undefined {
     if (this.disposed) return undefined;
@@ -173,7 +165,7 @@ export class ToolUseFollowUpQueue {
    * queue when needed.
    */
   submit(
-    streamId: StreamTabId,
+    streamId: RunId,
     followUp: FollowUpQueueInput,
     admission: 'live_owner' | 'recoverable',
   ): FollowUpSubmission {
@@ -216,13 +208,13 @@ export class ToolUseFollowUpQueue {
   }
 
   /** Read-only lifecycle probe used by diagnostics and teardown assertions. */
-  hasLiveOwner(streamId: StreamTabId): boolean {
+  hasLiveOwner(streamId: RunId): boolean {
     const owner = this.entries.get(streamId)?.owner;
     return owner?.kind === 'flow' || owner?.kind === 'child';
   }
 
   /** Inner child/recovery flows borrow the queue their outer owner consumes. */
-  externallyOwnedQueue(streamId: StreamTabId): FollowUpQueue | undefined {
+  externallyOwnedQueue(streamId: RunId): FollowUpQueue | undefined {
     const entry = this.entries.get(streamId);
     const kind = entry?.owner?.kind;
     return kind === 'child' || kind === 'recovery' ? entry?.queue : undefined;
@@ -255,7 +247,7 @@ export class ToolUseFollowUpQueue {
    * End a stream's queue: any outstanding lease becomes stale immediately, and
    * no producer can recreate the queue until an explicit claim reopens it.
    */
-  terminalize(streamId: StreamTabId): boolean {
+  terminalize(streamId: RunId): boolean {
     if (this.disposed) return false;
     const entry = this.entries.get(streamId);
     entry?.queue.dispose();
@@ -292,7 +284,7 @@ export class ToolUseFollowUpQueue {
     throwAggregated(failures, 'Multiple follow-up queues failed to dispose');
   }
 
-  private notifyReleaseObservers(streamId: StreamTabId): void {
+  private notifyReleaseObservers(streamId: RunId): void {
     for (const observer of this.releaseObservers) {
       try {
         observer(streamId);
@@ -305,11 +297,11 @@ export class ToolUseFollowUpQueue {
   }
 
   /** Presentation-only snapshot; does not grant consumption rights. */
-  getAll(streamId: StreamTabId): string[] {
+  getAll(streamId: RunId): string[] {
     return this.entries.get(streamId)?.queue.getAll() ?? [];
   }
 
-  private createEntry(streamId: StreamTabId): QueueEntry {
+  private createEntry(streamId: RunId): QueueEntry {
     const entry: QueueEntry = {
       queue: new FollowUpQueue(),
       admittedDeliveryIds: createBoundedIdSet(
@@ -327,7 +319,7 @@ export class ToolUseFollowUpQueue {
    */
   private claim<K extends FollowUpConsumerKind>(
     entry: QueueEntry,
-    streamId: StreamTabId,
+    streamId: RunId,
     kind: K,
   ): (FollowUpConsumerLease & { readonly kind: K }) | undefined {
     if (entry.owner) return undefined;

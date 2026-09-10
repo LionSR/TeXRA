@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { byString, normalizeFilePath } from '@utils/core';
 
 import { AgentConfigFieldsSchema } from './agentConfig';
-import { ExecutionIdSchema } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 import { CompileFailureSummarySchema, OutputFileSummarySchema } from './output';
 import { RetryErrorInfoSchema } from './errors';
@@ -75,7 +74,6 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
   z.strictObject({
     producer: z.literal('subagent'),
     agentName: z.string(),
-    parentExecutionId: ExecutionIdSchema.optional(),
     wallTimeMs: z.number().nonnegative(),
     result: AgentFinalResultSchema,
     turnToken: z.string().optional(),

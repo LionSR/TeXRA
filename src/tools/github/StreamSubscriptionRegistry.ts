@@ -142,7 +142,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
               owner.publish([
                 {
                   type: 'updateQueuedFollowUps',
-                  aggregateId: qualifyAggregateId('stream', streamId),
+                  aggregateId: qualifyAggregateId('run', streamId),
                   messages: owner.followUps.getAll(streamId),
                 },
               ]);

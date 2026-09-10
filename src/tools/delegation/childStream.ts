@@ -10,7 +10,6 @@ import {
 } from '@agent/runtime/AgentRunLifecycle';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { classifyAgentError } from '@common/errors';
 import {
   aggregateId as qualifyAggregateId,
@@ -18,10 +17,9 @@ import {
   STREAM_PHASE,
 } from '@shared/schemas';
 import type {
-  ExecutionId,
+  RunId,
   RunIdentity,
   RunOutcome,
-  StreamTabId,
   UserFollowUpSupport,
 } from '@shared/schemas';
 import { createRunTrace } from '@transcript';
@@ -29,8 +27,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildStreamOptions {
-  streamPrefix: string;
-  /** What owns this stream — the launch site declares the truth once. */
+  /** What owns this run — the launch site declares the truth once. */
   run: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
   userFollowUpSupport: UserFollowUpSupport;
@@ -59,7 +56,7 @@ interface FinalizeChildStreamOptions {
 }
 
 export interface ChildStream {
-  childStreamId: StreamTabId;
+  childStreamId: RunId;
   logger: AgentTrace;
   /** The child loop is idle and waiting for the next follow-up instruction. */
   waitForInput: () => void;
@@ -87,27 +84,23 @@ export function childStreamDescription(raw: string): string {
   return truncateWithEllipsis(raw, 80);
 }
 
-/** Create a child stream tab and execution handle for a background child task. */
+/** Create a child run's presentation and handle for a background child task. */
 export const createChildStream = Effect.fn('createChildStream')(function* (
   session: SessionHandle,
-  executionId: ExecutionId,
-  parentStreamId: StreamTabId,
+  executionId: RunId,
+  parentStreamId: RunId,
   options: CreateChildStreamOptions,
 ): Effect.fn.Return<ChildStream, Error> {
-  const childStreamId = getStreamTabId(options.streamPrefix, { executionId });
+  const childStreamId = executionId;
 
   yield* Effect.tryPromise({
     try: () => session.settlePublications(),
     catch: ensureError,
   });
-  const residency = yield* session.transcripts.acquireRunResidency(
-    childStreamId,
-    executionId,
-  );
+  const residency = yield* session.transcripts.acquireRunResidency(executionId);
   const runTrace = createRunTrace(residency);
   const handle = new AgentExecutionHandle(
     {
-      streamId: childStreamId,
       executionId,
       identity: options.run,
       category: options.config.agentCategory,
@@ -142,8 +135,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
       });
       runTrace.trace.emit({
         type: 'run.config',
-        streamId: childStreamId,
-        executionId,
+        runId: executionId,
         config: options.config,
       });
       // Display-only fan-out: the durable copy is `ExecutionMeta.description`,
@@ -152,7 +144,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
       session.publish([
         {
           type: 'updateStreamDescription',
-          aggregateId: qualifyAggregateId('stream', childStreamId),
+          aggregateId: qualifyAggregateId('run', childStreamId),
           description,
         },
       ]);
@@ -199,7 +191,7 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
     // stream that already published its `run.start` exists for every fold,
     // so it ends with its terminal `result` instead of lingering as a
     // started-but-never-run ghost; the child's result stays out of the host
-    // result plane (`isSubagent`), as every child-stream result does.
+    // result plane (a child result), as every child-stream result does.
     const failures: unknown[] = [error];
     const cleanups: Effect.Effect<unknown, Error>[] = [
       Effect.sync(() => {
@@ -207,11 +199,9 @@ export const createChildStream = Effect.fn('createChildStream')(function* (
         runTrace.trace.emit({
           type: 'result',
           outcome: RUN_OUTCOME.FAILED,
-          executionId,
-          streamId: childStreamId,
+          runId: executionId,
           agentName: options.config.agent,
           category: options.config.agentCategory,
-          isSubagent: true,
           error: {
             kind: classifyAgentError(error),
             message: `Child stream setup failed: ${toErrorMessage(error)}`,
@@ -308,7 +298,6 @@ const finalizeChildStream = Effect.fn('finalizeChildStream')(function* (
     streamStatus: session.status,
     outcome,
     error,
-    isSubagent: handle.isChildExecution,
     stage: options.stage,
     flushArtifacts: () => session.flushArtifacts(),
     // No trace emit: child-stream results must stay out of `session.onResult`
@@ -318,6 +307,6 @@ const finalizeChildStream = Effect.fn('finalizeChildStream')(function* (
   disposeTrace();
 
   if (options.autoClose) {
-    session.transcripts.requestEviction(handle.childStreamId);
+    session.transcripts.requestEviction(handle.executionId);
   }
 }, Effect.uninterruptible);

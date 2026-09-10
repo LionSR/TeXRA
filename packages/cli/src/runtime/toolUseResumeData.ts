@@ -115,20 +115,10 @@ export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
   id: ExecutionId,
   config: AgentConfig,
 ): Effect.fn.Return<string | undefined> {
-  return yield* getExecutionRecords(session, id)
-    .readMeta()
-    .pipe(
-      Effect.flatMap((meta) =>
-        meta?.streamId
-          ? retrieveSessionResumeData(meta.streamId, id, config, session).pipe(
-              Effect.map((resume) =>
-                resume?.type === 'toolUse'
-                  ? resume.agentConfig.model
-                  : undefined,
-              ),
-            )
-          : Effect.succeed(undefined),
-      ),
+  return yield* retrieveSessionResumeData(id, config, session).pipe(
+    Effect.map((resume) =>
+      resume?.type === 'toolUse' ? resume.agentConfig.model : undefined,
+    ),
       Effect.catch((error) =>
         Effect.sync(() => {
           logger.debug(

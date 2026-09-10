@@ -298,7 +298,6 @@ export async function runPersistedWorkflowScriptWithProgress(
       call.agent !== undefined ||
       call.model !== undefined ||
       call.childExecutionId !== undefined ||
-      call.childStreamId !== undefined ||
       call.attempts.length > 0 ||
       call.timestamps.startedAt !== undefined;
     const includeFiles =
@@ -311,8 +310,8 @@ export async function runPersistedWorkflowScriptWithProgress(
       id: call.id,
       label: call.label,
       ...(phase !== undefined ? { phase } : {}),
-      ...(call.childStreamId !== undefined
-        ? { childStreamId: call.childStreamId }
+      ...(call.childExecutionId !== undefined
+        ? { childStreamId: call.childExecutionId }
         : {}),
       // Project only invocation facts the snapshot owns. Historical issued
       // calls may carry any subset and predate both explicit markers.
@@ -399,7 +398,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         ) {
           hydratedBaseline.set(call.id, {
             status,
-            childStreamId: call.childStreamId,
+            childStreamId: call.childExecutionId,
           });
         }
       }
@@ -475,7 +474,7 @@ export async function runPersistedWorkflowScriptWithProgress(
             if (!call.issued) continue;
           } else if (
             baseline.status === status &&
-            baseline.childStreamId === call.childStreamId
+            baseline.childStreamId === call.childExecutionId
           ) {
             continue;
           }
@@ -489,8 +488,8 @@ export async function runPersistedWorkflowScriptWithProgress(
         // yet is thereby unrepresentable.
         if (call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED) continue;
         const streamChanged =
-          call.childStreamId !== undefined &&
-          last?.childStreamId !== call.childStreamId;
+          call.childExecutionId !== undefined &&
+          last?.childStreamId !== call.childExecutionId;
         // The host resolves agent and model after the card first appears;
         // a live card re-emits so it names what actually runs.
         const factsChanged =

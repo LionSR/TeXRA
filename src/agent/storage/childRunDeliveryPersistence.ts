@@ -16,7 +16,7 @@ export function persistChildRunDelivery(
   message: string,
   resultMeta: ResultMeta | undefined,
 ): Effect.Effect<void, Error> {
-  const target = aggregateId('execution', executionId);
+  const target = aggregateId('run', executionId);
   const events: SessionEventDraft[] = [
     { type: 'execution.report', aggregateId: target, report: message },
   ];

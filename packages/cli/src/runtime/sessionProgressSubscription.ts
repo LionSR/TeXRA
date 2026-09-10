@@ -7,7 +7,7 @@ import {
   aggregateTarget,
   type ActiveChildInfo,
   type DisplaySessionEvent,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { roundStageFromStageStart } from '@shared/streams/stage';
 import { assertNever } from '@utils/core';
@@ -51,24 +51,41 @@ export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 
 /**
  * Project one session event onto the frozen NDJSON progress-event
- * vocabulary: one event to zero or one line, no cumulative state (PRD 10.3).
+ * vocabulary: one event to zero or one line, and one bit of state per run,
+ * the parent edge its `run.start` carried (PRD 10.3).
  *
  * `run.activate` projects to the public `setActiveStream` record, one to one
- * and byte for byte: every activation (a launch, a resume) emits one line,
- * `background` (a delegated child) is the record's `suppressViewSwitch:
- * true`, and `isRemote` appears only where the fact carries one (agent
- * launches; a child stream never did). `run.start` is the existence fact and
- * projects nothing: a resume mints none, and a launch emits both.
+ * and byte for byte: every activation (a launch, a resume) emits one line, a
+ * delegated child's activation carries the record's `suppressViewSwitch:
+ * true` (the 0.40 spelling of the parent edge), and `isRemote` appears only
+ * where the fact carries one (agent launches; a child never did). `run.start`
+ * is the existence fact: a child's projects the frozen `setParentStream`
+ * line its parent edge used to be published as, a root's projects nothing.
  * `context.state`, the approval facts, the terminal result, and transcript
  * rows are intentionally unprojected (the result has its own NDJSON record,
  * and the public wire carries neither a context-occupancy, an approval, nor a
  * transcript record). The goal and queued-follow-up records carry only the
- * stream they name, as the public wire always did.
+ * run they name, as the public wire always did.
  */
 function projectCliSessionEvent(
   event: DisplaySessionEvent,
+  isChild: (runId: RunId) => boolean,
 ): CliProjectedNdjsonProgressEvent | undefined {
-  const streamId = aggregateTarget(event.aggregateId).id;
+  const target = aggregateTarget(event.aggregateId);
+  if (target.kind !== 'run') {
+    if (event.type !== 'inquiryThreadUpdated') return undefined;
+    const {
+      aggregateId: _aggregateId,
+      seq: _seq,
+      commit: _commit,
+      ownerId: _ownerId,
+      at: _at,
+      type: _type,
+      ...thread
+    } = event;
+    return { event: 'inquiryThreadUpdated', payload: thread };
+  }
+  const streamId = target.id;
   switch (event.type) {
     case 'run.activate':
       return {
@@ -77,10 +94,24 @@ function projectCliSessionEvent(
           streamId,
           agentCategory: event.category,
           ...(event.isRemote != null ? { isRemote: event.isRemote } : {}),
-          ...(event.background ? { suppressViewSwitch: true } : {}),
+          ...(isChild(streamId) ? { suppressViewSwitch: true } : {}),
         },
       };
     case 'run.start':
+      return event.parent === null
+        ? undefined
+        : {
+            event: 'setParentStream',
+            payload: {
+              childStreamId: streamId,
+              parentStreamId: event.parent.id,
+            },
+          };
+    case 'run.detach':
+      return {
+        event: 'setParentStream',
+        payload: { childStreamId: streamId, parentStreamId: null },
+      };
     case 'approval.requested':
     case 'approval.resolved':
     case 'approval.policy':
@@ -115,11 +146,7 @@ function projectCliSessionEvent(
     case 'usage':
       return {
         event: 'updateStreamUsage',
-        payload: {
-          streamId,
-          storageKey: event.storageKey,
-          usage: event.usage,
-        },
+        payload: { streamId, storageKey: event.runId, usage: event.usage },
       };
     case 'run.config':
       // Publication validates the canonical AgentConfig before this frozen
@@ -128,7 +155,7 @@ function projectCliSessionEvent(
         event: 'setTaskState',
         payload: {
           streamId,
-          executionId: event.executionId,
+          executionId: streamId,
           taskState: agentConfigToTaskState(event.config),
         },
       };
@@ -178,32 +205,15 @@ function projectCliSessionEvent(
     }
     case 'goalStateChanged':
       return { event: 'goalStateChanged', payload: { streamId } };
-    case 'inquiryThreadUpdated': {
-      const {
-        aggregateId: _aggregateId,
-        seq: _seq,
-        commit: _commit,
-        ownerId: _ownerId,
-        at: _at,
-        type: _type,
-        ...thread
-      } = event;
-      return { event: 'inquiryThreadUpdated', payload: thread };
-    }
+    case 'inquiryThreadUpdated':
+      // The thread aggregate is not a run; handled above.
+      return undefined;
     case 'updateQueuedFollowUps':
       return { event: 'updateQueuedFollowUps', payload: { streamId } };
     case 'updateStreamDescription':
       return {
         event: 'updateStreamDescription',
         payload: { streamId, description: event.description },
-      };
-    case 'setParentStream':
-      return {
-        event: 'setParentStream',
-        payload: {
-          childStreamId: streamId,
-          parentStreamId: event.parentStreamId,
-        },
       };
     case 'stream.removed':
       return { event: 'removeStream', payload: { streamId } };
@@ -235,11 +245,19 @@ function projectCliSessionEvent(
  * captured at detach may be exactly that row's.
  */
 export function attachCliSessionProgressProjection(
-  session: Pick<SessionHandle, 'events' | 'now'> & {
+  session: Pick<SessionHandle, 'events' | 'now' | 'view'> & {
     readonly executions: Pick<SessionHandle['executions'], 'onChildActivity'>;
   },
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ): () => Promise<void> {
+  // The parent edge of every `run.start` this tail has passed. A run whose
+  // creation predates the tail (a resume of an earlier run) is asked of the
+  // folded view, which holds its `run.start` by then.
+  const children = new Set<RunId>();
+  const isChild = (runId: RunId): boolean =>
+    children.has(runId) ||
+    (SubscriptionRef.getUnsafe(session.view).streams.get(runId)?.parentId ??
+      null) !== null;
   function emitProjected(projected: CliProjectedNdjsonProgressEvent): void {
     writeRecord({
       kind: 'progress',
@@ -285,7 +303,11 @@ export function attachCliSessionProgressProjection(
     Stream.runForEach(session.events.all(delivered, drainedTo), (event) =>
       Effect.sync(() => {
         if (stopAt !== undefined && event.commit > stopAt) return;
-        const projected = projectCliSessionEvent(event);
+        if (event.type === 'run.start' && event.parent !== null) {
+          const target = aggregateTarget(event.aggregateId);
+          if (target.kind === 'run') children.add(target.id);
+        }
+        const projected = projectCliSessionEvent(event, isChild);
         if (projected) emitProjected(projected);
         passed(event.commit);
       }),

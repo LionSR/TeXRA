@@ -19,7 +19,7 @@
  */
 
 import { DisposableStore } from '@platform/disposable';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { AgentExecutionHandle } from './ExecutionHandle';
 import type {
   ChildExecutionActivation,
@@ -37,7 +37,7 @@ interface ExecutionInteractionScope {
    * handle is tracked, its child stream is owned too, so descendants join this
    * scope through stream lineage.
    */
-  claim(executionId: string): void;
+  claim(executionId: RunId): void;
 
   /**
    * State that no further root claims are coming. The scope releases once its
@@ -66,7 +66,7 @@ export class ExecutionInteractionOwnership {
     ExecutionInteractionScope
   >();
   private readonly streamOwners = new Map<
-    StreamTabId,
+    RunId,
     ExecutionInteractionScope
   >();
 
@@ -112,7 +112,7 @@ export class ExecutionInteractionOwnership {
   open(onRelease: () => void): ExecutionInteractionScope {
     // Live execution id → its child stream, so untracking an execution can
     // also drop the stream-owner entry its registration wrote.
-    const liveExecutions = new Map<string, StreamTabId>();
+    const liveExecutions = new Map<RunId, RunId>();
     const pendingActivations = new Set<string>();
     const disposables = new DisposableStore();
     let finished = false;
@@ -125,7 +125,7 @@ export class ExecutionInteractionOwnership {
     };
 
     const observeRegistration = (
-      executionId: string,
+      executionId: RunId,
       handle: AgentExecutionHandle | undefined,
     ): void => {
       if (!handle) {
@@ -146,7 +146,8 @@ export class ExecutionInteractionOwnership {
 
       const owned =
         this.executionOwners.get(executionId) === scope ||
-        this.streamOwners.get(handle.parentStreamId) === scope;
+        (handle.parent !== null &&
+          this.streamOwners.get(handle.parent) === scope);
       if (!owned) {
         // A replacement handle owned by another generation: drop the live
         // claim rather than holding this generation's surfaces open for it.
@@ -156,8 +157,8 @@ export class ExecutionInteractionOwnership {
       }
 
       this.executionOwners.set(executionId, scope);
-      liveExecutions.set(executionId, handle.childStreamId);
-      this.streamOwners.set(handle.childStreamId, scope);
+      liveExecutions.set(executionId, handle.executionId);
+      this.streamOwners.set(handle.executionId, scope);
     };
 
     const observeActivation = (
@@ -170,7 +171,7 @@ export class ExecutionInteractionOwnership {
         // asynchronously; the reservation keeps that gap from reading as idle.
         pendingActivations.add(activation.executionId);
         this.executionOwners.set(activation.executionId, scope);
-        this.streamOwners.set(activation.childStreamId, scope);
+        this.streamOwners.set(activation.executionId, scope);
         return;
       }
 
@@ -180,8 +181,8 @@ export class ExecutionInteractionOwnership {
         this.executionOwners.get(activation.executionId) === scope
       ) {
         this.executionOwners.delete(activation.executionId);
-        if (this.streamOwners.get(activation.childStreamId) === scope) {
-          this.streamOwners.delete(activation.childStreamId);
+        if (this.streamOwners.get(activation.executionId) === scope) {
+          this.streamOwners.delete(activation.executionId);
         }
       }
       releaseIfIdle();

@@ -53,8 +53,7 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
@@ -132,7 +131,8 @@ function engine(): AgentEngine {
  */
 export interface ChildRunLaunchOptions {
   readonly agentName: string;
-  readonly parentStreamId: StreamTabId;
+  /** The launching run: the child's parent edge. */
+  readonly parentStreamId: RunId;
   readonly session: SessionHandle;
   readonly approvalPromptsUnavailable?: boolean;
   readonly onApprovalPolicyDenial?: () => void;
@@ -145,14 +145,13 @@ export interface ChildRunLaunchOptions {
   readonly workflowPhase?: string;
   /** Caller cancellation for a durable in-band launch. */
   readonly signal?: AbortSignal;
-  /** Fires with the resolved child stream id — the caller inherits approvals onto it. */
-  readonly onStreamResolved?: (streamId: StreamTabId) => void;
+  /** Fires with the resolved child run id — the caller inherits approvals onto it. */
+  readonly onStreamResolved?: (streamId: RunId) => void;
 }
 
 interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
   readonly definition: PreparedAgentDefinition;
-  readonly executionId: ExecutionId;
-  readonly parentExecutionId?: ExecutionId;
+  readonly executionId: RunId;
   readonly startedAt: number;
   readonly workingDirectory?: string;
   /** Omit for ordinary interactive delegation; durable calls end after one cycle. */
@@ -173,7 +172,7 @@ interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
  */
 function toDeliveryResult(
   turn: AgentRuntimeFlowResult,
-  executionId: ExecutionId,
+  executionId: RunId,
 ): AgentFlowResult {
   if (!isWaitingFlowResult(turn)) return turn;
   return {
@@ -182,7 +181,6 @@ function toDeliveryResult(
     response: turn.response,
     files: turn.files,
     executionId,
-    streamId: turn.streamId,
     memoryMisses: turn.memoryMisses,
     totalCostUsd: turn.totalCostUsd,
   };
@@ -222,8 +220,8 @@ export function createNativeSubagentStrategy(
   let cachedBuilt: BuiltSubagentResult | undefined;
   let cachedDelivery: string | undefined;
 
-  const resolveDeliveryTarget = (): StreamTabId | undefined =>
-    runHandle ? runHandle.deliveryTargetStreamId : params.parentStreamId;
+  const resolveDeliveryTarget = (): RunId | undefined =>
+    runHandle ? runHandle.deliveryTarget : params.parentStreamId;
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
@@ -261,10 +259,7 @@ export function createNativeSubagentStrategy(
         params.executionId,
         params.agentName,
         result,
-        {
-          startedAt: params.startedAt,
-          parentExecutionId: params.parentExecutionId,
-        },
+        { startedAt: params.startedAt },
       );
     }
     return cachedBuilt;
@@ -293,7 +288,6 @@ export function createNativeSubagentStrategy(
         Effect.gen(function* () {
           const executeOptions = {
             session: params.session,
-            parentStreamId: params.parentStreamId,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             runtimeUnavailableTools: params.runtimeUnavailableTools,
@@ -311,12 +305,9 @@ export function createNativeSubagentStrategy(
             params.executionId,
             {
               ...executeOptions,
-              // True by construction: this strategy only ever launches child
-              // runs (`parentStreamId` is required), matching
-              // `handle.isChildExecution` once the run handle exists. Written
-              // inline as a literal `true` so overload resolution admits the
-              // WAITING result this strategy consumes as a loop turn.
-              isSubagent: true,
+              // This strategy only ever launches child runs: naming the parent
+              // is what admits the WAITING result it consumes as a loop turn.
+              parentExecutionId: params.parentStreamId,
               userFollowUpSupport: params.userFollowUpSupport,
               ...(params.executionMode === 'single-cycle'
                 ? { stopAfterCycle: true }
@@ -347,7 +338,7 @@ export function createNativeSubagentStrategy(
     runTurn: (followUps, ports, signal) =>
       runNative(ports, signal, (onRun) =>
         Effect.gen(function* () {
-          const streamId = runHandle?.childStreamId;
+          const streamId = runHandle?.executionId;
           if (!streamId) {
             return yield* Effect.fail(
               new Error(
@@ -366,7 +357,6 @@ export function createNativeSubagentStrategy(
               ),
             );
           const resume = yield* retrieveSessionResumeData(
-            streamId,
             params.executionId,
             config,
             params.session,
@@ -396,7 +386,6 @@ export function createNativeSubagentStrategy(
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             runtimeUnavailableTools: params.runtimeUnavailableTools,
-            parentStreamId: params.parentStreamId,
             // The loop's queue never admits synthetic goal continuations for
             // a subagent, but its batch type is shared with root flows. Keep
             // the existing defensive downgrade rather than silently dropping
@@ -467,10 +456,7 @@ export function createNativeSubagentStrategy(
             ? toDeliveryResult(turn, params.executionId)
             : lastResult;
           const wallTimeMs = Date.now() - params.startedAt;
-          const failureOptions = {
-            parentExecutionId: params.parentExecutionId,
-            cause: lastErr ?? error,
-          };
+          const failureOptions = { cause: lastErr ?? error };
           const built = yield* Effect.exit(
             Effect.sync(() =>
               buildSubagentFailureResultMeta(

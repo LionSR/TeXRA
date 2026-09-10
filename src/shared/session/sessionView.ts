@@ -33,12 +33,12 @@ import {
   StreamPhaseSchema,
   StreamStageSchema,
   StreamSubstateSchema,
-  StreamTabIdSchema,
+  RunIdSchema,
   TaskGroupSchema,
   TodoItemSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { STREAM_STATUS_TONE } from '@shared/streams/streamStatusDisplay';
@@ -86,7 +86,7 @@ const StreamGroupSchema = z.enum([
 export type StreamGroup = z.infer<typeof StreamGroupSchema>;
 
 const StreamViewCommonSchema = z.object({
-  id: StreamTabIdSchema,
+  id: RunIdSchema,
   /** From `run.start`; 1:1 with `id`, never changes. */
   executionId: ExecutionIdSchema,
   /** From `run.start`; every stream has one. */
@@ -140,11 +140,11 @@ const StreamViewCommonSchema = z.object({
   resumeEligible: z.boolean(),
   /** Latest `context.state`. */
   context: ContextStateDataSchema.nullable(),
-  parentId: StreamTabIdSchema.nullable(),
+  parentId: RunIdSchema.nullable(),
   /** Root first. */
-  ancestors: z.array(z.object({ id: StreamTabIdSchema, label: z.string() })),
+  ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
   /** `streamOrdering` rule. */
-  childIds: z.array(StreamTabIdSchema),
+  childIds: z.array(RunIdSchema),
   /** Descendants by status. No waiting or interrupted count: both force
    *  expansion, so a collapsed parent never hides a row that needs the user. */
   rollup: z.object({
@@ -197,7 +197,7 @@ export type StreamView = z.infer<typeof StreamViewSchema>;
 /** A pending approval: which stream is asking, and the request the UI shows.
  *  The list is a set keyed by `requestId` (5.2). */
 const ApprovalRequestSchema = z.object({
-  streamId: StreamTabIdSchema,
+  streamId: RunIdSchema,
   requestId: z.string(),
   payload: PermissionPayloadSchema,
 });
@@ -205,9 +205,9 @@ export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 
 const SessionViewSchema = z.object({
   key: SessionKeySchema,
-  streams: z.map(StreamTabIdSchema, StreamViewSchema),
+  streams: z.map(RunIdSchema, StreamViewSchema),
   /** Top-level ids, `streamOrdering` rule. */
-  order: z.array(StreamTabIdSchema),
+  order: z.array(RunIdSchema),
   /** The drained tail position, including rows no longer materialized.
    *  Listing and history rows never advance it. */
   cursor: CommitOrdinalSchema,
@@ -224,9 +224,9 @@ const SessionViewSchema = z.object({
   }),
   approvals: z.array(ApprovalRequestSchema),
   /** Latest snapshot per run. */
-  policy: z.map(StreamTabIdSchema, ApprovalPolicySnapshotSchema),
+  policy: z.map(RunIdSchema, ApprovalPolicySnapshotSchema),
   inquiries: z.array(InquiryThreadUpdatedEventSchema),
-  queuedFollowUps: z.map(StreamTabIdSchema, z.array(z.string())),
+  queuedFollowUps: z.map(RunIdSchema, z.array(z.string())),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
 
@@ -256,8 +256,8 @@ export function emptySessionView(key: string, cursor = 0): SessionView {
  *  needs to re-derive the walk to keep its own copy. */
 type StreamTopology = {
   readonly streams: ReadonlyMap<
-    StreamTabId,
-    { readonly childIds: readonly StreamTabId[] }
+    RunId,
+    { readonly childIds: readonly RunId[] }
   >;
 };
 
@@ -268,16 +268,16 @@ type StreamTopology = {
  */
 export function descendantStreams(
   view: StreamTopology,
-  rootStreamId: StreamTabId | undefined,
+  rootStreamId: RunId | undefined,
   { includeRoot }: { includeRoot: boolean },
-): readonly StreamTabId[] {
+): readonly RunId[] {
   if (rootStreamId === undefined) return [];
-  const out: StreamTabId[] = [];
+  const out: RunId[] = [];
   // An index cursor over an append-only queue keeps this linear in the
   // topology's size; `Array.shift()` would re-index the remainder on every
   // pop and make a large fan-out's walk quadratic.
   const pending = [rootStreamId];
-  const seen = new Set<StreamTabId>();
+  const seen = new Set<RunId>();
   for (let cursor = 0; cursor < pending.length; cursor++) {
     const id = pending[cursor]!;
     const stream = view.streams.get(id);

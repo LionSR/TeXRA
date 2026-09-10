@@ -1,9 +1,9 @@
 /**
- * Live agent execution handle and terminal settlement.
+ * Live run handle and terminal settlement.
  *
- * A handle owns one run's identity, its live control surfaces (interrupt,
- * tool-use flow, execution lease), and its exactly-once terminal settlement.
- * Termination policy lives with the owning registry.
+ * A handle owns one run's identity, its parent edge, its live control
+ * surfaces (interrupt, tool-use flow, run lease), and its exactly-once
+ * terminal settlement. Termination policy lives with the owning registry.
  */
 
 import { Deferred, Effect } from 'effect';
@@ -12,10 +12,9 @@ import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type {
   AgentCategory,
-  ExecutionId,
+  RunId,
   RunIdentity,
   StreamPhase,
-  StreamTabId,
 } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
 
@@ -37,8 +36,7 @@ export interface ExecutionStatusInfo {
  * display projection.
  */
 export interface ExecutionRun {
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly identity: RunIdentity;
   readonly category: AgentCategory;
 }
@@ -52,7 +50,7 @@ export interface ExecutionInterruptHandler {
    * agent turn or a resumable native-subagent loop. Shutdown drain reads this
    * to reach a leaked background process (see
    * `ExecutionRegistry.killBackgroundProcesses`) without disturbing agent
-   * executions that are intentionally left running for restart recovery.
+   * runs that are intentionally left running for restart recovery.
    */
   readonly ownsBackgroundProcess?: boolean;
 }
@@ -62,7 +60,7 @@ export interface ExecutionInterruptHandler {
  *
  * Presence is the authoritative suspension fact: only the WAITING branch of
  * `runFlowWithLifecycle` parks a handle, so no reader has to cross-check the
- * stream phase to learn whether a run is really suspended.
+ * run phase to learn whether a run is really suspended.
  */
 type RunSuspension =
   | { readonly state: 'parked'; readonly teardown: Effect.Effect<void, Error> }
@@ -73,15 +71,15 @@ type RunSuspension =
  *
  * `claimed` is the window between a caller winning {@link
  * AgentExecutionHandle.claimTerminalFinalize} and the result actually
- * settling; `settled` is reachable directly for the non-lifecycle child
- * streams that settle without claiming. Both refuse a further claim, which is
- * why this is one ordered state rather than two independent flags.
+ * settling; `settled` is reachable directly for the non-lifecycle child runs
+ * that settle without claiming. Both refuse a further claim, which is why
+ * this is one ordered state rather than two independent flags.
  */
 type TerminalState = 'open' | 'claimed' | 'settled';
 
 /**
- * The projection of the flow's {@link ToolUseFlowContext} that an execution
- * handle retains for its lifetime.
+ * The projection of the flow's {@link ToolUseFlowContext} that a run handle
+ * retains for its lifetime.
  *
  * This is derived from — not a parallel re-declaration of — {@link
  * ToolUseFlowContext}, so a shape change to either surface fails type-checking
@@ -113,9 +111,8 @@ export type LiveToolUseFlowContext = {
 >;
 
 /**
- * Handle for agent-based executions (workflow or toolUse subagents).
- * When `parentStreamId` differs from `childStreamId`, the handle represents
- * a subagent whose parent is an orchestrator.
+ * Handle for agent-based runs (workflow or toolUse subagents). A handle
+ * with a parent represents a child whose results route to that parent.
  */
 export class AgentExecutionHandle<
   Trace extends AgentTrace | undefined = AgentTrace | undefined,
@@ -126,10 +123,15 @@ export class AgentExecutionHandle<
    * replacement handle, whose `startedAt` is stamped anew. This feeds the
    * roster's `ActiveChildInfo.startedAt` and the `executions` tool's `Started:`
    * line.
-   * Durable execution creation time is `ExecutionMeta.timestamp`.
+   * Durable run creation time is `ExecutionMeta.timestamp`.
    */
   readonly startedAt = Date.now();
-  private _parentStreamId: StreamTabId;
+  /**
+   * The parent edge, the same value the run's `run.start` carries; null for
+   * a root. `detach` is its one write, so "is a child", the delivery target,
+   * and caller ownership can never disagree.
+   */
+  private _parent: RunId | null;
   private interruptHandler?: ExecutionInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
   private suspension?: RunSuspension;
@@ -144,14 +146,14 @@ export class AgentExecutionHandle<
 
   /**
    * The run's terminal outcome, settled exactly once (by the run lifecycle, or
-   * by `finalizeChildStream` for non-lifecycle child streams) BEFORE the
-   * execution is untracked. It always succeeds — it has no error channel — so
-   * a failed run reports through the `ResultEvent`'s own outcome rather than
-   * through a rejection nobody is required to observe, and a consumer that
-   * never awaits it costs nothing. Awaiting it is a fiber parked on the
-   * `Deferred`, so an interrupted consumer detaches with its fiber. SDK
-   * consumers awaiting a specific run's outcome use this; the host-wide
-   * stream is `session.onResult`.
+   * by `finalizeChildStream` for non-lifecycle child runs) BEFORE the run is
+   * untracked. It always succeeds — it has no error channel — so a failed run
+   * reports through the `ResultEvent`'s own outcome rather than through a
+   * rejection nobody is required to observe, and a consumer that never awaits
+   * it costs nothing. Awaiting it is a fiber parked on the `Deferred`, so an
+   * interrupted consumer detaches with its fiber. SDK consumers awaiting a
+   * specific run's outcome use this; the host-wide stream is
+   * `session.onResult`.
    */
   private readonly _terminal = Deferred.makeUnsafe<ResultEvent>();
   readonly result: Effect.Effect<ResultEvent> = Deferred.await(this._terminal);
@@ -164,21 +166,17 @@ export class AgentExecutionHandle<
      * so the handle and the event plane cannot describe the run differently.
      */
     readonly run: ExecutionRun,
-    parentStreamId: StreamTabId,
+    parent: RunId | null,
     /** The run's discriminated-event channel, for run-scoped subscribers:
      *  present on every launched run, absent on a process or external-CLI
-     *  stream's handle, which the type parameter records. */
+     *  run's handle, which the type parameter records. */
     readonly trace: Trace = undefined as Trace,
   ) {
-    this._parentStreamId = parentStreamId;
+    this._parent = parent;
   }
 
-  get executionId(): ExecutionId {
+  get executionId(): RunId {
     return this.run.executionId;
-  }
-
-  get childStreamId(): StreamTabId {
-    return this.run.streamId;
   }
 
   get identity(): RunIdentity {
@@ -214,46 +212,41 @@ export class AgentExecutionHandle<
     return true;
   }
 
-  get parentStreamId(): StreamTabId {
-    return this._parentStreamId;
+  /** The launching run, or null for a root and for a detached child. */
+  get parent(): RunId | null {
+    return this._parent;
   }
 
-  get isChildExecution(): boolean {
-    return this._parentStreamId !== this.childStreamId;
+  get isChild(): boolean {
+    return this._parent !== null;
   }
 
   /**
-   * The parent this run's results route to, or `undefined` once the run is its
-   * own parent (a root run, or a subagent promoted by {@link detach}). Derived
-   * from `_parentStreamId` rather than mirrored into a second field, so detach
-   * has one write and the two views can never disagree.
+   * The parent this run's results route to, or `undefined` once the run has
+   * none (a root run, or a subagent promoted by {@link detach}).
    */
-  get deliveryTargetStreamId(): StreamTabId | undefined {
-    return this.isChildExecution ? this._parentStreamId : undefined;
+  get deliveryTarget(): RunId | undefined {
+    return this._parent ?? undefined;
   }
 
-  /** Promote this subagent to a top-level execution (detach from parent). */
+  /** Promote this subagent to a top-level run (detach from parent). */
   detach(): void {
-    this._parentStreamId = this.childStreamId;
+    this._parent = null;
   }
 
   /**
    * True when this run is a live child whose results deliver to
-   * `callerStreamId` — the one caller-ownership authorization check. Reads
-   * the live parent edge, so a detached child answers false to its former
+   * `callerRunId` — the one caller-ownership authorization check. Reads the
+   * live parent edge, so a detached child answers false to its former
    * orchestrator.
    */
-  isOwnedBy(callerStreamId: StreamTabId | null | undefined): boolean {
-    return (
-      callerStreamId != null &&
-      this.isChildExecution &&
-      this._parentStreamId === callerStreamId
-    );
+  isOwnedBy(callerRunId: RunId | null | undefined): boolean {
+    return callerRunId != null && this._parent === callerRunId;
   }
 
   attachToolUseFlow(context: LiveToolUseFlowContext): void {
     if (this.category !== 'toolUse') {
-      throw new Error('Only tool-use execution handles can attach tool flows.');
+      throw new Error('Only tool-use run handles can attach tool flows.');
     }
     this.toolUseFlowContext = context;
   }
@@ -345,14 +338,14 @@ export class AgentExecutionHandle<
 export type AgentRunHandle = Pick<
   AgentExecutionHandle<AgentTrace>,
   | 'executionId'
-  | 'parentStreamId'
-  | 'childStreamId'
+  | 'parent'
+  | 'isChild'
   | 'identity'
   | 'category'
   | 'agentName'
   | 'startedAt'
   | 'trace'
   | 'result'
-  | 'deliveryTargetStreamId'
+  | 'deliveryTarget'
   | 'interrupt'
 >;

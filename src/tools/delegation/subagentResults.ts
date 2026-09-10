@@ -25,7 +25,7 @@ import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFor
 import { createLog } from '@logger/logUtils';
 import {
   runStorageFilePath,
-  type ExecutionId,
+  type RunId,
   type OutputFileSummary,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
@@ -58,7 +58,7 @@ type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
  */
 function formatOutputFile(
   o: OutputFileSummary,
-  executionId: ExecutionId,
+  executionId: RunId,
   diffInfo?: ResultDiffSummary,
 ): string {
   const readPath =
@@ -91,7 +91,7 @@ function formatOutputFile(
  */
 function formatWorkflowOutputs(
   outputs: OutputFileSummary[],
-  executionId: ExecutionId,
+  executionId: RunId,
   diffInfos?: ReadonlyMap<string, ResultDiffSummary>,
 ): string[] {
   const format = (o: OutputFileSummary): string =>
@@ -152,7 +152,7 @@ export function formatSubagentDelivery(
   agentName: string,
   result: AgentFinalResult,
   options: {
-    executionId: ExecutionId;
+    executionId: RunId;
     memoryMisses?: readonly AttachedMemoryMiss[];
     wallTimeMs?: number;
     workingDirectory?: string;
@@ -287,17 +287,8 @@ export function buildSubagentResultMeta(
   agentName: string,
   result: AgentFinalResult,
   wallTimeMs: number,
-  options: { readonly parentExecutionId?: ExecutionId } = {},
 ): SubagentResultMeta {
-  return {
-    producer: 'subagent',
-    agentName,
-    ...(options.parentExecutionId !== undefined && {
-      parentExecutionId: options.parentExecutionId,
-    }),
-    wallTimeMs,
-    result,
-  };
+  return { producer: 'subagent', agentName, wallTimeMs, result };
 }
 
 /**
@@ -312,7 +303,6 @@ export function buildSubagentFailureResultMeta(
   result: AgentFlowResult | undefined,
   wallTimeMs: number,
   options: {
-    readonly parentExecutionId?: ExecutionId;
     /**
      * The thrown error behind this failure, used when the flow result itself
      * recorded no structured error — so the typed manifest always carries a
@@ -345,9 +335,7 @@ export function buildSubagentFailureResultMeta(
           },
         }
       : built;
-  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs, {
-    parentExecutionId: options.parentExecutionId,
-  });
+  return buildSubagentResultMeta(agentName, finalResult, wallTimeMs);
 }
 
 // ============================================================================
@@ -402,7 +390,7 @@ interface DiffFileInfo {
  * Files without an original (new files) or where reading fails are omitted.
  */
 export async function computeAndWriteWorkflowDiffs(
-  executionId: ExecutionId,
+  executionId: RunId,
   outputs: OutputFileSummary[],
 ): Promise<Map<string, DiffFileInfo>> {
   const results = new Map<string, DiffFileInfo>();
@@ -488,12 +476,11 @@ export interface BuiltSubagentResult {
  * so the orchestrator can read them on demand via /executions/{id}/files/.
  */
 export async function buildSubagentResult(
-  executionId: ExecutionId,
+  executionId: RunId,
   agentName: string,
   result: AgentFlowResult,
   options: {
     readonly startedAt: number;
-    readonly parentExecutionId?: ExecutionId;
   },
 ): Promise<BuiltSubagentResult> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
@@ -529,9 +516,7 @@ export async function buildSubagentResult(
   });
   return {
     result: finalResult,
-    resultMeta: buildSubagentResultMeta(agentName, finalResult, wallTimeMs, {
-      parentExecutionId: options.parentExecutionId,
-    }),
+    resultMeta: buildSubagentResultMeta(agentName, finalResult, wallTimeMs),
     wallTimeMs,
   };
 }

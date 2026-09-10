@@ -18,8 +18,7 @@ import {
 } from '@agent/storage/executionLifecycle';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { AgentExecutionHandle } from './ExecutionHandle';
@@ -33,18 +32,18 @@ const logger = createChannelTrace('executionRegistry');
  * and the session's lease-release boundary.
  */
 export interface WaitingTerminationContext {
-  readonly publishResult: (event: ResultEvent, streamId: StreamTabId) => void;
+  readonly publishResult: (event: ResultEvent, streamId: RunId) => void;
   readonly releaseRootExecutionLease: (
-    executionId: ExecutionId,
+    executionId: RunId,
   ) => Effect.Effect<void, Error>;
   readonly finalizeExecution: (
     input: FinalizeExecutionInput,
   ) => Effect.Effect<FinalizeExecutionResult, Error>;
   readonly lanes: ExecutionLanes;
-  readonly getHandle: (executionId: string) => AgentExecutionHandle | undefined;
+  readonly getHandle: (executionId: RunId) => AgentExecutionHandle | undefined;
   readonly untrackIfCurrent: (handle: AgentExecutionHandle) => boolean;
   readonly untrackHandle: (handle: AgentExecutionHandle) => void;
-  readonly cancelStreamStatus: (streamId: StreamTabId) => void;
+  readonly cancelStreamStatus: (streamId: RunId) => void;
 }
 
 export class WaitingTermination {
@@ -95,11 +94,9 @@ export class WaitingTermination {
     const cancelledResult: ResultEvent = {
       type: 'result',
       outcome: RUN_OUTCOME.CANCELLED,
-      executionId: handle.executionId,
-      streamId: handle.childStreamId,
+      runId: handle.executionId,
       agentName: handle.agentName,
       category: handle.category,
-      isSubagent: handle.isChildExecution,
     };
     return this.context.lanes.holdLive(
       handle.executionId,
@@ -128,7 +125,7 @@ export class WaitingTermination {
                 try: () => {
                   untracked = this.context.untrackIfCurrent(handle);
                   if (untracked) {
-                    this.context.cancelStreamStatus(handle.childStreamId);
+                    this.context.cancelStreamStatus(handle.executionId);
                   }
                 },
                 catch: ensureError,
@@ -141,7 +138,7 @@ export class WaitingTermination {
             // the record now. Every other failure still owes the release.
             if (
               untracked &&
-              !handle.isChildExecution &&
+              !handle.isChild &&
               !(error instanceof ExecutionLeaseLostError)
             ) {
               const released = yield* Effect.exit(
@@ -198,10 +195,10 @@ export class WaitingTermination {
     // observes one coherent cancellation boundary, and in one fixed order:
     // publish, settle the envelope, drop the handle, cancel the stream.
     handle.trace?.emit(cancelledResult);
-    this.context.publishResult(cancelledResult, handle.childStreamId);
+    this.context.publishResult(cancelledResult, handle.executionId);
     handle.settleResult(cancelledResult);
     this.context.untrackHandle(handle);
-    this.context.cancelStreamStatus(handle.childStreamId);
+    this.context.cancelStreamStatus(handle.executionId);
 
     const finalize = Effect.gen({ self: this }, function* () {
       const finalization = yield* this.context.finalizeExecution({
@@ -223,7 +220,7 @@ export class WaitingTermination {
     });
     return yield* finalize.pipe(
       Effect.ensuring(
-        handle.isChildExecution
+        handle.isChild
           ? Effect.void
           : this.context.releaseRootExecutionLease(handle.executionId).pipe(
               Effect.catch((error) =>

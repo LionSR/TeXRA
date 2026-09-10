@@ -102,7 +102,7 @@ function cutFrame(
         break;
       }
       case 'chunk': {
-        if (!named.has(qualifyAggregateId('stream', item.streamId))) continue;
+        if (!named.has(qualifyAggregateId('run', item.streamId))) continue;
         const rowKey = `${item.streamId}/${item.rowId}`;
         const held = chunks.get(rowKey);
         chunks.set(

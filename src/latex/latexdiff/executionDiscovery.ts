@@ -1,4 +1,4 @@
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { Effect } from 'effect';
 
 /**
@@ -7,7 +7,7 @@ import type { Effect } from 'effect';
  * `outputDiscovery.ts` never reaches into `@agent/storage` itself.
  */
 interface LatexAgentRunEntry {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   readonly timestamp: string;
   readonly agent: string;
   readonly model: string;
@@ -16,7 +16,4 @@ interface LatexAgentRunEntry {
 
 export interface LatexExecutionDiscoveryPort {
   listAgentRuns(): Effect.Effect<readonly LatexAgentRunEntry[], Error>;
-  readStreamId(
-    executionId: ExecutionId,
-  ): Effect.Effect<StreamTabId | undefined, Error>;
 }

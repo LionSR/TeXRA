@@ -290,34 +290,22 @@ const sessionHandleLayer = (
           }
           return pieces.reverse().join('');
         },
-        acquireExecutionClaims: (executionId, streamId) =>
-          eventLog
-            .acquireClaims([
-              qualifyAggregateId('stream', streamId),
-              qualifyAggregateId('execution', executionId),
-            ])
-            .pipe(
-              Effect.map((ids) =>
-                eventLog.releaseClaims(ids).pipe(Effect.orDie),
-              ),
-              Effect.orDie,
-            ),
+        acquireExecutionClaims: (executionId) =>
+          eventLog.acquireClaims([qualifyAggregateId('run', executionId)]).pipe(
+            Effect.map((ids) => eventLog.releaseClaims(ids).pipe(Effect.orDie)),
+            Effect.orDie,
+          ),
         releaseExecutionClaims: (executionId) =>
-          Effect.gen(function* () {
-            const id = qualifyAggregateId('execution', executionId);
-            const rows = yield* eventLog.aggregateState([id]);
-            const parent = rows[0]?.parentId;
-            yield* eventLog.releaseClaims(
-              parent === undefined || parent === null ? [id] : [id, parent],
-            );
-          }).pipe(Effect.orDie),
+          eventLog
+            .releaseClaims([qualifyAggregateId('run', executionId)])
+            .pipe(Effect.orDie),
         executionRecords: (id) =>
           eventLog
-            .readExecutionRecords(qualifyAggregateId('execution', id))
+            .readExecutionRecords(qualifyAggregateId('run', id))
             .pipe(Effect.orDie),
         executionChildren: (id) =>
           eventLog
-            .readExecutionChildren(qualifyAggregateId('execution', id))
+            .readExecutionChildren(qualifyAggregateId('run', id))
             .pipe(Effect.orDie),
         recordListing: () => eventLog.readListing().pipe(Effect.orDie),
         publish: (events) =>
@@ -326,12 +314,7 @@ const sessionHandleLayer = (
           Effect.gen(function* () {
             const rows = yield* publish(events);
             const born = rows.flatMap((row) =>
-              row.type === 'run.start'
-                ? [
-                    row.aggregateId,
-                    qualifyAggregateId('execution', row.executionId),
-                  ]
-                : [],
+              row.type === 'run.start' ? [row.aggregateId] : [],
             );
             return yield* settlePublication(rows).pipe(
               Effect.onError(() =>
@@ -669,7 +652,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     const termination = yield* Effect.forkDetach(
       Effect.all(
         executions.getActiveIds().flatMap((executionId) => {
-          if (executions.getHandle(executionId)?.isChildExecution) return [];
+          if (executions.getHandle(executionId)?.isChild) return [];
           return [
             executions.kill(executionId, { detachActiveChildren: false })
               .settlement,

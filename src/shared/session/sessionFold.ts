@@ -81,7 +81,7 @@ import {
   type RoundIndexed,
   type DisplaySessionEvent,
   type StreamLogEntry,
-  type StreamTabId,
+  type RunId,
   type TaskGroup,
   type TextChunk,
   type TranscriptSubscription,
@@ -146,7 +146,7 @@ type TranscriptEntryEvent = Extract<
 >;
 
 /** Workflow-script stream ids whose run model a batch derives at its end. */
-type DeferredRunModels = Set<StreamTabId> | null;
+type DeferredRunModels = Set<RunId> | null;
 
 /** Canonical dashboard rows a workflow-script run model reads. */
 const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
@@ -175,7 +175,7 @@ export function fold(
   // One call publishes one level: nothing this call did not copy is written.
   owned = new WeakSet();
   if (!Array.isArray(input)) return foldWith(view, input as FoldInput, null);
-  const deferred = new Set<StreamTabId>();
+  const deferred = new Set<RunId>();
   let next = view;
   for (const each of input as readonly FoldInput[]) {
     next = foldWith(next, each, deferred);
@@ -273,10 +273,10 @@ interface SessionIndexes {
   readonly listed: Set<AggregateId>;
   /** Streams whose lifecycle `result` has folded: nothing in the owning
    *  process can still write for them. */
-  readonly ended: Set<StreamTabId>;
+  readonly ended: Set<RunId>;
   /** Streams by their current claimant, so a local snapshot
    *  recomputes exactly the streams a changed owner holds. */
-  readonly byOwner: Map<string, Set<StreamTabId>>;
+  readonly byOwner: Map<string, Set<RunId>>;
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
@@ -369,7 +369,7 @@ function writableTranscriptArray<K extends TranscriptArrayKey>(
   return copy;
 }
 
-function inflightKey(streamId: StreamTabId, rowId: string): string {
+function inflightKey(streamId: RunId, rowId: string): string {
   return `${streamId}/${rowId}`;
 }
 
@@ -561,7 +561,7 @@ function dropStream(view: SessionView, stream: StreamView): void {
 
 function reindexOwner(
   view: SessionView,
-  streamId: StreamTabId,
+  streamId: RunId,
   from: string | null,
   to: string | null,
 ): void {
@@ -614,9 +614,9 @@ function orderingKey(stream: StreamView): {
 /** `ids` with `id` placed by the `streamOrdering` rule. */
 function insertOrdered(
   view: SessionView,
-  ids: readonly StreamTabId[],
-  id: StreamTabId,
-): StreamTabId[] {
+  ids: readonly RunId[],
+  id: RunId,
+): RunId[] {
   const next = ids.filter((existing) => existing !== id);
   const stream = view.streams.get(id);
   if (!stream) return next;
@@ -634,9 +634,9 @@ function insertOrdered(
 }
 
 function withoutId(
-  ids: readonly StreamTabId[],
-  id: StreamTabId,
-): StreamTabId[] {
+  ids: readonly RunId[],
+  id: RunId,
+): RunId[] {
   return ids.filter((existing) => existing !== id);
 }
 
@@ -661,7 +661,7 @@ function ancestorsOf(
 function isDescendantOf(
   view: SessionView,
   stream: StreamView,
-  ancestorId: StreamTabId,
+  ancestorId: RunId,
 ): boolean {
   let cursor: StreamView | undefined = stream;
   while (cursor) {
@@ -674,7 +674,7 @@ function isDescendantOf(
 
 /** Recompute `ancestors` for a stream and its descendants (a moved subtree,
  *  or a relabelled parent). O(subtree), once per such change. */
-function refreshAncestors(view: SessionView, streamId: StreamTabId): void {
+function refreshAncestors(view: SessionView, streamId: RunId): void {
   const stream = view.streams.get(streamId);
   if (!stream) return;
   const ancestors = ancestorsOf(view, stream);
@@ -865,7 +865,7 @@ function runModelInputs(transcript: TranscriptView): {
 /** `transcript.run` for a workflow-script run, derived now. */
 function withRunModel(view: SessionView, stream: StreamView): StreamView {
   if (!isWorkflowScriptRun(stream)) return stream;
-  const childProgress = new Map<StreamTabId, ChildRunProgress>();
+  const childProgress = new Map<RunId, ChildRunProgress>();
   for (const childId of stream.childIds) {
     const child = view.streams.get(childId);
     if (child) childProgress.set(childId, childProgressOf(child));
@@ -905,11 +905,11 @@ function runModelAt(
  */
 function walkUp(
   view: SessionView,
-  startId: StreamTabId | null,
-  boardId: StreamTabId | null,
+  startId: RunId | null,
+  boardId: RunId | null,
   deferred: DeferredRunModels,
 ): void {
-  const seen = new Set<StreamTabId>();
+  const seen = new Set<RunId>();
   let id = startId;
   while (id !== null && !seen.has(id)) {
     seen.add(id);
@@ -1500,7 +1500,7 @@ function applyOwnArm(
  *  aggregates see them. */
 function applySessionSlices(
   view: SessionView,
-  streamId: StreamTabId | null,
+  streamId: RunId | null,
   event: DisplaySessionEvent,
 ): void {
   switch (event.type) {
@@ -1569,7 +1569,7 @@ function applySessionSlices(
 function relink(
   view: SessionView,
   stream: StreamView,
-  previousParentId: StreamTabId | null,
+  previousParentId: RunId | null,
 ): void {
   const previousParent =
     previousParentId === null ? undefined : view.streams.get(previousParentId);
@@ -1606,7 +1606,7 @@ function relink(
 
 /** The stream a durable event names: its aggregate, except for the thread
  *  aggregate of an inquiry (5.1). */
-function streamOf(event: DisplaySessionEvent): StreamTabId | null {
+function streamOf(event: DisplaySessionEvent): RunId | null {
   return event.type === 'inquiryThreadUpdated'
     ? null
     : aggregateTarget(event.aggregateId).id;
@@ -1777,7 +1777,7 @@ function foldTranscriptRow(
  */
 function foldStreamRemoved(
   view: SessionView,
-  streamId: StreamTabId,
+  streamId: RunId,
   deferred: DeferredRunModels,
 ): boolean {
   const stream = view.streams.get(streamId);
@@ -1851,7 +1851,7 @@ function foldLocal(
       changedOwners.add(owner);
     }
   }
-  const touched = new Set<StreamTabId>();
+  const touched = new Set<RunId>();
   for (const owner of changedOwners) {
     for (const streamId of indexes.byOwner.get(owner) ?? []) {
       touched.add(streamId);

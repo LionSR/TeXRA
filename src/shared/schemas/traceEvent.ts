@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { ActiveSkillsSnapshotSchema } from './activeSkills';
 import { ContextStateDataSchema } from './contextManagement';
-import { ExecutionIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { LogLevelSchema } from './log';
 import { RunOutcomeSchema } from './stream';
 import { AgentCategorySchema } from './agent';
@@ -44,11 +44,9 @@ const ResultErrorSchema = z
 /** One canonical terminal-result payload for trace publication and storage. */
 export const ResultEventSchema = trace('result', {
   outcome: RunOutcomeSchema,
-  executionId: z.string(),
-  streamId: z.string(),
+  runId: RunIdSchema,
   agentName: z.string(),
   category: AgentCategorySchema,
-  isSubagent: z.boolean(),
   error: ResultErrorSchema.optional(),
   usage: RunUsageTotalsSchema.optional(),
 }).readonly();
@@ -95,7 +93,9 @@ export const TranscriptEventSchemas = {
     skills: ActiveSkillsSnapshotSchema.shape.skills.readonly(),
   }),
   usage: trace('usage', {
-    storageKey: ExecutionIdSchema,
+    /** The run whose usage this is: the row's own run, or a child whose
+     *  spend a parent's usage map keys by that child's id. */
+    runId: RunIdSchema,
     usage: ExtendedTokenUsageStatsSchema,
     recordTranscript: z.boolean().optional(),
   }),

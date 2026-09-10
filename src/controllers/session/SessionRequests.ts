@@ -34,7 +34,7 @@ import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ExecutionBusy } from '@agent/runtime/executionLanes';
 import { aggregateId as qualifyAggregateId } from '@shared/schemas';
-import type { LocalRuntimeState, StreamTabId } from '@shared/schemas';
+import type { LocalRuntimeState, RunId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   DatabaseClaimRefused,
@@ -75,7 +75,7 @@ export function sessionRequests(
     );
   });
   const removeStream = Effect.fn('SessionRequests.removeStream')(function* (
-    streamId: StreamTabId,
+    streamId: RunId,
     mode: DeletionMode,
     expectedStartCommit: number,
   ) {
@@ -108,7 +108,7 @@ function admit(
   const streamId =
     req.kind === 'policy.set' ? req.change.streamId : req.streamId;
   return Effect.flatMap(
-    log.aggregateState([qualifyAggregateId('stream', streamId)]).pipe(
+    log.aggregateState([qualifyAggregateId('run', streamId)]).pipe(
       Effect.orDie,
       Effect.map((rows) => rows[0]),
     ),
@@ -136,7 +136,7 @@ function admit(
 }
 
 /** A decision for a request no longer pending: settled already, or never made. */
-function settled(streamId: StreamTabId, what: string): Unavailable {
+function settled(streamId: RunId, what: string): Unavailable {
   return new Unavailable({
     streamId,
     reason: `No pending ${what} request under that id.`,
@@ -180,11 +180,11 @@ function proposalDecision(
 function deleteAdmittedStream(
   session: SessionHandle,
   log: SessionRequestLog,
-  streamId: StreamTabId,
+  streamId: RunId,
   admitted: AggregateState,
   mode: DeletionMode,
 ): Effect.Effect<Outcome, RequestError> {
-  const aggregateId = qualifyAggregateId('stream', streamId);
+  const aggregateId = qualifyAggregateId('run', streamId);
   return Effect.gen(function* () {
     if (admitted.startCommit === null) {
       return yield* Effect.fail(
@@ -207,7 +207,7 @@ function deleteAdmittedStream(
     }
     yield* session.executions
       .withInactiveExecutionStep(
-        start.executionId,
+        streamId,
         log.removeStream(aggregateId, mode, start.commit),
       )
       .pipe(

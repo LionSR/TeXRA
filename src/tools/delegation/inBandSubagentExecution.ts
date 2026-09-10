@@ -38,8 +38,7 @@ import {
   RUN_OUTCOME,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
@@ -84,8 +83,8 @@ interface InBandSubagentExecutionBaseOptions extends ChildRunLaunchOptions {
 interface StableInBandSubagentExecutionOptions {
   readonly session: SessionHandle;
   /** Cryptographic identity of the prompt/options call, stable across restart. */
-  readonly executionId: ExecutionId;
-  readonly parentExecutionId: ExecutionId;
+  readonly executionId: RunId;
+  readonly parentExecutionId: RunId;
   readonly signal?: AbortSignal;
   /** Resolve mutable launch prerequisites only when no result can be recovered. */
   readonly prepare: () => Effect.Effect<
@@ -100,19 +99,14 @@ interface StableInBandSubagentExecutionOptions {
    * in-flight child (skip/retry) must key on it, not the pre-derived logical
    * id. Recovered attempts never run live, so this does not fire for them.
    */
-  readonly onActiveExecutionId?: (executionId: ExecutionId) => void;
+  readonly onActiveExecutionId?: (executionId: RunId) => void;
 }
 
-/**
- * Options for the XML-delivery API. A one-shot run context need not have a
- * persisted parent execution, so parentage is optional here.
- */
-interface InBandSubagentDeliveryOptions extends InBandSubagentExecutionBaseOptions {
-  readonly parentExecutionId?: ExecutionId;
-}
+/** Options for the XML-delivery API. */
+type InBandSubagentDeliveryOptions = InBandSubagentExecutionBaseOptions;
 
 interface InBandSubagentExecutionResult {
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly result: AgentFinalResult;
 }
 
@@ -129,7 +123,7 @@ type SettledInBandTurn = Parameters<
 // Parent execution ownership is process-local. Serialize duplicate dispatches
 // within that owner while durable manifests handle later restart recovery.
 const stableExecutions = new Map<
-  ExecutionId,
+  RunId,
   {
     readonly semaphore: Semaphore.Semaphore;
     users: number;
@@ -171,7 +165,7 @@ const executeInBand = Effect.fn('executeInBand')(
     options: InBandSubagentDeliveryOptions,
     definition: PreparedAgentDefinition,
     mode: PersistenceMode,
-    executionId: ExecutionId,
+    executionId: RunId,
     stableAttempt?: StableSubagentAttempt,
   ): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
     const { config } = definition;
@@ -181,12 +175,12 @@ const executeInBand = Effect.fn('executeInBand')(
       getExecutionStore(executionId),
     );
 
-    const { childStreamId } = yield* registerChildExecution(options.session, {
+    yield* registerChildExecution(options.session, {
       executionId,
       config,
       agentName: options.agentName,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      parentExecutionId: options.parentExecutionId,
+      parentExecutionId: options.parentStreamId,
     }).pipe(
       Effect.mapError((cause) =>
         mode === 'required-result'
@@ -204,7 +198,6 @@ const executeInBand = Effect.fn('executeInBand')(
         session: options.session,
         executionId,
         parentStreamId: options.parentStreamId,
-        childStreamId,
         agentName: options.agentName,
         recordCost: options.onCost,
         // The parent is blocked awaiting this child, so it rides the parent's
@@ -441,11 +434,7 @@ export const executeStableSubagentInBand = Effect.fn(
             // Publish the physical attempt id before resolving mutable launch state.
             options.onActiveExecutionId?.(executionId);
             const prepared = yield* options.prepare();
-            const launch = {
-              ...prepared,
-              parentExecutionId: options.parentExecutionId,
-              signal: options.signal,
-            };
+            const launch = { ...prepared, signal: options.signal };
             const definition = yield* prepareInBandDefinition(launch);
             // Validate the current definition, not metadata left by an earlier
             // catalog load. Recovery returned above without loading it again.

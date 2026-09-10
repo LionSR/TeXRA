@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
 import type { SessionHostInteractions } from './HostInteractions';
@@ -26,10 +26,7 @@ export interface LaunchRunContext extends RunContextCommon {
 }
 
 type BareRunIdentity = Partial<
-  Pick<
-    RunScope,
-    'streamId' | 'executionId' | 'agentName' | 'workingDirectory' | 'session'
-  >
+  Pick<RunScope, 'executionId' | 'workingDirectory' | 'session'>
 >;
 
 interface BareRunContext extends RunContextCommon, BareRunIdentity {
@@ -127,9 +124,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
   return Object.freeze({
     kind: 'bare',
     ...commonRunContextFields(options),
-    streamId: options.streamId,
     executionId: options.executionId,
-    agentName: options.agentName,
     workingDirectory: options.workingDirectory,
     session: options.session,
     get model() {
@@ -194,25 +189,11 @@ export function getRunContextInteractions(
   return getRunContextSession(context)?.interactions;
 }
 
-/** Return the stream id for a context, reading launch contexts through RunScope. */
-export function getRunContextStreamId(
-  context: RunContext | undefined = tryUseRunContext(),
-): StreamTabId | undefined {
-  return getRunContextField('streamId', context);
-}
-
-/** Return the execution id for a context, reading launch contexts through RunScope. */
+/** Return the run id for a context, reading launch contexts through RunScope. */
 export function getRunContextExecutionId(
   context: RunContext | undefined = tryUseRunContext(),
-): ExecutionId | undefined {
+): RunId | undefined {
   return getRunContextField('executionId', context);
-}
-
-/** Return the agent name for a context, reading launch contexts through RunScope. */
-export function getRunContextAgentName(
-  context: RunContext | undefined = tryUseRunContext(),
-): string | undefined {
-  return getRunContextField('agentName', context);
 }
 
 /** Return the working directory for a context, reading launch contexts through RunScope. */

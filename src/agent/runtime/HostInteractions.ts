@@ -844,7 +844,7 @@ export class SessionHostInteractions implements HostInteractions {
     this.session.publish([
       {
         type: 'approval.requested',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        aggregateId: qualifyAggregateId('run', streamId),
         requestId,
         payload: redactedForFact(payload),
       },
@@ -979,7 +979,7 @@ export class SessionHostInteractions implements HostInteractions {
       this.session.publish([
         {
           type: 'approval.resolved',
-          aggregateId: qualifyAggregateId('stream', pending.fact.streamId),
+          aggregateId: qualifyAggregateId('run', pending.fact.streamId),
           requestId: pending.fact.requestId,
         },
       ]);

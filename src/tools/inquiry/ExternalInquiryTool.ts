@@ -21,7 +21,6 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 
 import {
   getRunContextExecutionId,
-  getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import {
@@ -36,10 +35,9 @@ import {
   aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,
-  type ExecutionId,
+  type RunId,
   type ExternalInquiryPermission,
   type InquiryThreadSummary,
-  type StreamTabId,
   type ToolResult,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
@@ -238,20 +236,14 @@ export class ExternalInquiryTool extends defineTool({
   protected execute(input: InquiryInput): Promise<ToolResult> {
     // Capture the run owner before the shared Effect scheduler can yield.
     const context = tryUseRunContext();
-    const streamId = getRunContextStreamId(context);
-    const executionId = getRunContextExecutionId(context);
+    const streamId = getRunContextExecutionId(context);
     const signal = getCurrentToolCallContext()?.signal;
     let operation: Effect.Effect<ToolResult, Error, InquiryRecords>;
 
     switch (input.command) {
       case 'ask':
         requireInteractions('inquiry', context);
-        operation = this.executeAsk(
-          input,
-          streamId,
-          executionId,
-          currentSession(),
-        );
+        operation = this.executeAsk(input, streamId, currentSession());
         break;
       case 'read':
         operation = this.executeRead(input);
@@ -265,8 +257,7 @@ export class ExternalInquiryTool extends defineTool({
 
   private executeAsk(
     input: Extract<InquiryInput, { command: 'ask' }>,
-    streamId: StreamTabId | undefined,
-    executionId: ExecutionId | undefined,
+    streamId: RunId | undefined,
     session: SessionHandle,
   ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {
@@ -289,7 +280,6 @@ export class ExternalInquiryTool extends defineTool({
       const manifest = yield* records.recordOpenQuestion({
         threadId: input.thread_id ?? undefined,
         parentStreamId: streamId,
-        parentExecutionId: executionId ?? null,
         question: input.question,
         context: questionContext,
         suggestSearch,
@@ -366,7 +356,7 @@ export class ExternalInquiryTool extends defineTool({
 
   private executeList(
     input: Extract<InquiryInput, { command: 'list' }>,
-    streamId: StreamTabId | undefined,
+    streamId: RunId | undefined,
   ): Effect.Effect<ToolResult, Error, InquiryRecords> {
     return Effect.gen(function* () {
       const records = yield* InquiryRecords;

@@ -15,7 +15,10 @@ import {
   installWebviewRuntime,
   WebviewSessions,
 } from '@controllers/session/webviewSessionLayer';
-import { aggregateId as qualifyAggregateId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type RunId,
+} from '@shared/schemas';
 import { hostBridge } from '@shared/hostBridge';
 import { toSignal, type StreamSignal } from '@shared/signals';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -224,21 +227,15 @@ export function installWebviewTransport(): WebviewTransport {
   };
 }
 
-/** The aggregates a surface names for a selected stream (contract C7): the
- *  stream's own and, through `run.start`, its execution aggregate, each from
- *  the seq the view retained for it. */
+/** The aggregate a surface names for a selected run (contract C7): the
+ *  run's own, from the seq the view retained for it. */
 export function transcriptAggregates(
   view: SessionView,
-  streamId: string | null,
+  streamId: RunId | null,
 ): Subscribe['aggregates'] {
   if (streamId === null) return [];
   const stream = view.streams.get(streamId);
   if (!stream) return [];
-  return [
-    qualifyAggregateId('stream', streamId),
-    qualifyAggregateId('execution', stream.executionId),
-  ].map((id) => ({
-    id,
-    fromSeq: view.folded.get(id) ?? 0,
-  }));
+  const id = qualifyAggregateId('run', stream.id);
+  return [{ id, fromSeq: view.folded.get(id) ?? 0 }];
 }

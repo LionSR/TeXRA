@@ -437,7 +437,7 @@ function start(
             return session.subscriptions.set(
               port,
               ids.map((id) => ({
-                id: qualifyAggregateId('stream', id),
+                id: qualifyAggregateId('run', id),
                 fromSeq: 0,
               })),
             );

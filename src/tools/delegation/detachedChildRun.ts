@@ -10,7 +10,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
  * their own execution-id derivation, approval wiring, and result shaping; this
  * module owns the guard-and-trace skeleton so its invariant (a throw inside
  * the guard releases the lease; a late loop failure is surfaced) lives in one
- * place, plus native-agent registration that mints the child's stream id.
+ * place, plus native-agent registration.
  */
 
 // Third-party imports
@@ -24,11 +24,9 @@ import {
   type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -37,40 +35,29 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { ChildStream } from './childStream';
 
 /**
- * Register a native agent child and take its owned-execution lease, minting
- * the one stream id the child is addressed by.
- *
- * That id must match the one `buildAgentLaunchContext` derives for this
- * executionId (AgentLaunchContext.ts's `getStreamTabId` call), or the loop
- * acquires the wrong follow-up queue/interrupt slot. That id derives
- * from the canonical config's `agent`, never from `agentName`, which callers
- * resolve differently (an approved override's display name vs. its registry
- * name) and which reaches only the durable child row. Minting it here is what
- * keeps the two in step: while each launch site derived its own, the
- * invariant could only be stated as a comment asking the copies to agree.
+ * Register a native agent child and take its owned-run lease. The identity
+ * derives from the canonical config's `agent`, never from `agentName`, which
+ * callers resolve differently (an approved override's display name vs. its
+ * registry name) and which reaches only the durable launch label.
  */
 export const registerChildExecution = Effect.fn('registerChildExecution')(
   function* (
     session: SessionHandle,
     input: {
-      readonly executionId: ExecutionId;
+      readonly executionId: RunId;
       /** Canonical config, already parsed by the launch site. */
       readonly config: AgentConfig;
       readonly agentName: string;
       readonly userFollowUpSupport: UserFollowUpSupport;
-      readonly parentExecutionId?: ExecutionId;
+      readonly parentExecutionId?: RunId;
     },
-  ): Effect.fn.Return<{ readonly childStreamId: StreamTabId }, Error> {
+  ): Effect.fn.Return<void, Error> {
     const { executionId, config } = input;
-    const childStreamId = getStreamTabId(config.agent, { executionId });
     yield* registerExecution(session, executionId, config, input.agentName, {
-      streamId: childStreamId,
       identity: { kind: 'agent', agent: config.agent },
       userFollowUpSupport: input.userFollowUpSupport,
       parentExecutionId: input.parentExecutionId,
-      background: true,
     });
-    return { childStreamId };
   },
 );
 
@@ -130,7 +117,7 @@ export function startDetachedChildRunLoop<TTurn>(
   input: DetachedChildRunInput<TTurn>,
 ): Effect.Effect<
   {
-    childStreamId: StreamTabId;
+    childStreamId: RunId;
     completion: Fiber.Fiber<void, Error>;
   },
   Error
@@ -201,10 +188,7 @@ export function startDetachedChildRunLoop<TTurn>(
           ),
         );
       }
-      return {
-        childStreamId: childStream?.childStreamId ?? input.childStreamId,
-        completion,
-      };
+      return { childStreamId: input.executionId, completion };
     }),
   ).pipe(Effect.uninterruptible);
 }

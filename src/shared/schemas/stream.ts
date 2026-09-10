@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { RunIdentitySchema } from './runIdentity';
 import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
 
@@ -47,7 +47,8 @@ export type UserFollowUpSupport = z.infer<typeof UserFollowUpSupportSchema>;
 const ExecutionMetaCoreSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
   timestamp: z.string(),
-  parentExecutionId: ExecutionIdSchema.optional(),
+  /** The launching run, from `run.start.parent`; absent for a root or a detached child. */
+  parentExecutionId: RunIdSchema.optional(),
   /** Canonical terminal outcome — the ONE persisted terminal fact. */
   outcome: RunOutcomeSchema.optional(),
   /** What kind of run this execution is. Registration declares it at birth. */
@@ -56,12 +57,6 @@ const ExecutionMetaCoreSchema = z.object({
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
-  /**
-   * The transcript stream this execution's data lives under — the ONE
-   * execution→stream mapping, written at registration. A row without one has
-   * no persisted stream; nothing re-derives it from names or scans.
-   */
-  streamId: StreamTabIdSchema,
 });
 
 /** Execution metadata stored alongside config at launch time. */

@@ -16,7 +16,6 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { effectRuntime } from '@platform/processRuntime';
 import { aggregateId } from '@shared/schemas';
@@ -111,7 +110,6 @@ const WorkflowScriptToolInputSchema = z
 
 type WorkflowScriptToolInput = z.infer<typeof WorkflowScriptToolInputSchema>;
 
-const STREAM_PREFIX = 'workflow-script';
 const WORKFLOW_SCRIPT_DIRECTORY = '.texra/workflow-scripts';
 
 function workflowScriptDraftStem(id: string): string {
@@ -357,9 +355,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
         // anchor and resume still replays completed calls (#8712). The journal
         // itself stays on the orchestrator store, where the checkpoint lives.
         const runExecutionId = deriveExecutionId({ checkpointId });
-        const runStreamId = getStreamTabId(STREAM_PREFIX, {
-          executionId: runExecutionId,
-        });
 
         // Captured now, while the launching tool call's ALS frame is live, so the
         // detached run can still roll its cost into the parent after this call
@@ -427,7 +422,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
           try: () =>
             requestDelegationProposal(
               proposal,
-              runScope.streamId,
+              runScope.executionId,
               runScope.session,
               parent,
             ),
@@ -473,7 +468,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                   },
                   meta.name,
                   {
-                    streamId: runStreamId,
                     category: runConfig.agentCategory,
                     checkpointId,
                     identity: {
@@ -520,8 +514,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
               return yield* startDetachedChildRunLoop({
                 session: runScope.session,
                 executionId: runExecutionId,
-                parentStreamId: runScope.streamId,
-                childStreamId: runStreamId,
+                parentStreamId: runScope.executionId,
                 agentName: meta.name,
                 recordCost,
                 createChildStream: () =>
@@ -538,9 +531,8 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                     return yield* createChildStream(
                       runScope.session,
                       runExecutionId,
-                      runScope.streamId,
+                      runScope.executionId,
                       {
-                        streamPrefix: STREAM_PREFIX,
                         run: {
                           kind: 'multiAgentWorkflow',
                           workflowName: meta.name,
@@ -559,7 +551,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                     // inherits only the parent's ordinary per-kind bypass state.
                     configureDelegatedChildApprovals(
                       childStream.childStreamId,
-                      runScope.streamId,
+                      runScope.executionId,
                       proposalDecision.autoApproved
                         ? 'auto-approved'
                         : 'inherit',
@@ -592,10 +584,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                           runScope.session.publish([
                             {
                               type: 'execution.workflow',
-                              aggregateId: aggregateId(
-                                'execution',
-                                runExecutionId,
-                              ),
+                              aggregateId: aggregateId('run', runExecutionId),
                               workflow: snapshot,
                             },
                           ]);
@@ -611,7 +600,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                             checkpointId,
                             {
                               executionId: runExecutionId,
-                              streamId: childStream.childStreamId,
                             },
                             hooks,
                           );

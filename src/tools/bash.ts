@@ -15,14 +15,7 @@ import {
   type ToolCallContext,
 } from '@agent/followUp/ToolFileInteractionContext';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
-import {
-  getRunContextExecutionId,
-  getRunContextWorkingDirectory,
-} from '@agent/runtime/RunContext';
-import {
-  BASH_CHILD_STREAM_PREFIX,
-  getStreamTabId,
-} from '@agent/runtime/streamTab';
+import { getRunContextWorkingDirectory } from '@agent/runtime/RunContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,
@@ -39,8 +32,7 @@ import {
   AgentCategory,
   ToolError,
   type ExecResult,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type ToolResult,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
@@ -249,7 +241,7 @@ type BashInput = z.infer<typeof BashInputSchema>;
  * finalization — is the loop's, exactly as it is for every other child type.
  */
 function createBackgroundBashStrategy(params: {
-  executionId: ExecutionId;
+  executionId: RunId;
   command: string;
   timeoutMs: number;
   cwd: string | undefined;
@@ -429,7 +421,6 @@ export class BashTool extends defineTool({
           input.command,
           timeoutMs,
           streamId,
-          getRunContextExecutionId(runContext),
           cwd,
         ),
       );
@@ -511,17 +502,13 @@ export class BashTool extends defineTool({
       session: SessionHandle,
       command: string,
       timeoutMs: number,
-      parentStreamId: StreamTabId,
-      parentExecutionId: ExecutionId | undefined,
+      parentStreamId: RunId,
       cwd?: string,
     ) {
       return yield* Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const executionId = generateExecutionId();
           const preview = previewLabel(command);
-          const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
-            executionId,
-          });
 
           const syntheticConfig = AgentConfigSchema.parse({
             agent: 'bash',
@@ -538,12 +525,9 @@ export class BashTool extends defineTool({
             { name: 'bash', instruction: command },
             'bash',
             {
-              streamId: childStreamId,
               identity: { kind: 'process', tool: 'bash' },
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-              parentExecutionId,
-              parentStreamId,
-              background: true,
+              parentExecutionId: parentStreamId,
               category: AgentCategory.ToolUse,
               description: childStreamDescription(command),
             },
@@ -553,7 +537,6 @@ export class BashTool extends defineTool({
             session,
             executionId,
             parentStreamId,
-            childStreamId,
             agentName: 'bash',
             // A background shell is an external process on no model budget, like
             // the agent-CLI children (see the child-run concurrency budget note).
@@ -562,7 +545,6 @@ export class BashTool extends defineTool({
               restore(Effect.void).pipe(
                 Effect.andThen(
                   createChildStream(session, executionId, parentStreamId, {
-                    streamPrefix: BASH_CHILD_STREAM_PREFIX,
                     run: { kind: 'process', tool: 'bash' },
                     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                     description: command,
@@ -597,7 +579,6 @@ export class BashTool extends defineTool({
             [
               `Command launched in background.`,
               `Execution ID: ${executionId}`,
-              `Stream tab: ${childStreamId}`,
               'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
               `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
               `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,

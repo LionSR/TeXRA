@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { StreamTabIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import {
   WORKFLOW_CALL_KIND,
   WorkflowCallFilesSchema,
@@ -82,10 +82,10 @@ const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
    */
   attemptId: z.string().min(1).optional(),
   /**
-   * Live child stream that executes this call. Absent for planned, cached, and
+   * The live child run executing this call. Absent for planned, cached, and
    * not-yet-launched calls.
    */
-  childStreamId: StreamTabIdSchema.optional(),
+  childStreamId: RunIdSchema.optional(),
 });
 
 /**

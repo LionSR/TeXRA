@@ -76,7 +76,7 @@ export const submitProgressFollowUp = Effect.fn('submitProgressFollowUp')(
       session.publish([
         {
           type: 'updateQueuedFollowUps',
-          aggregateId: qualifyAggregateId('stream', streamId),
+          aggregateId: qualifyAggregateId('run', streamId),
           messages: session.followUps.getAll(streamId),
         },
       ]);

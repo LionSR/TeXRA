@@ -36,14 +36,8 @@ export {
   AgentCategorySchema,
   AgentNameSchema,
   AgentSourceSchema,
-  ExecutionIdSchema,
+  RunIdSchema,
   RUN_OUTCOME,
   RunOutcomeSchema,
-  StreamTabIdSchema,
 } from '@shared/schemas';
-export type {
-  AgentSource,
-  ExecutionId,
-  RunOutcome,
-  StreamTabId,
-} from '@shared/schemas';
+export type { AgentSource, RunId, RunOutcome } from '@shared/schemas';

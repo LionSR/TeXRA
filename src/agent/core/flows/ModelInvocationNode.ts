@@ -278,8 +278,7 @@ export class ModelInvocationNode<
         operationId: lifecycle.operationId,
         operation: this._config.operationName,
         executionId: runScope.executionId,
-        streamId: runScope.streamId,
-        agentName: runScope.agentName,
+        agentName: this.services.config.agent,
         model: this.services.config.model,
         credentialRoute: modelCell.route,
         attemptOrdinal: lifecycle.attemptOrdinal,
@@ -508,7 +507,7 @@ export class ModelInvocationNode<
   ): Promise<ManualRetryPromptResult> {
     const {
       logger,
-      runScope: { session, streamId },
+      runScope: { session, executionId: streamId },
     } = this.services;
     const streamStatus = session.status;
     const operationName = this._config.operationName;

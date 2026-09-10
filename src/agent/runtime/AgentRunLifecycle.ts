@@ -24,12 +24,7 @@ import {
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { platform } from '@platform/platform';
-import type {
-  ExecutionId,
-  RetryErrorInfo,
-  RunOutcome,
-  StreamTabId,
-} from '@shared/schemas';
+import type { RetryErrorInfo, RunId, RunOutcome } from '@shared/schemas';
 import {
   agentName as baseAgentName,
   RUN_OUTCOME,
@@ -61,8 +56,8 @@ import type { StreamStatusMachine } from './StreamStatusService';
 const logger = createChannelTrace('agentRunLifecycle');
 
 export interface RunFlowLifecycleOptions {
-  isSubagent?: boolean;
-  parentStreamId?: StreamTabId;
+  /** The launching run: the parent edge on the handle; a child may park at WAITING. */
+  parentExecutionId?: RunId;
   /**
    * Workflow-script phase owning this run, stamped on the handle before it is
    * tracked so the parent's very first child roster already groups the row.
@@ -85,7 +80,7 @@ export interface RunFlowLifecycleOptions {
    * Kept injected so this module does not statically reach tool-domain
    * services such as the Lean language adapter.
    */
-  onRunEnd?: (executionId: ExecutionId) => void | Promise<void>;
+  onRunEnd?: (executionId: RunId) => void | Promise<void>;
 }
 
 type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
@@ -134,7 +129,6 @@ interface FinalizeRunTerminalParams {
   readonly error?: ResultEvent['error'];
   /** Run usage totals riding the terminal `result` event, when known. */
   readonly usage?: ResultEvent['usage'];
-  readonly isSubagent: boolean;
   /** Transcript stage closed with the outcome's legacy group status (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
   /**
@@ -192,7 +186,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   // arrived after it. Resolving once here is what lets every projection below
   // (persisted history, stage end, result event, terminal phase) read one
   // value, so no caller has to cross-check the phase for itself.
-  const observedPhase = params.streamStatus.get(handle.childStreamId);
+  const observedPhase = params.streamStatus.get(handle.executionId);
   const outcome = isTerminalOutcomePhase(observedPhase)
     ? observedPhase
     : params.outcome;
@@ -255,11 +249,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   const event: ResultEvent = {
     type: 'result',
     outcome,
-    executionId: handle.executionId,
-    streamId: handle.childStreamId,
+    runId: handle.executionId,
     agentName: handle.agentName,
     category: handle.category,
-    isSubagent: params.isSubagent,
     ...(error ? { error } : {}),
     ...(params.usage ? { usage: params.usage } : {}),
   };
@@ -292,15 +284,15 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       // and must stay loud.
       if (
         !params.streamStatus.transitionToTerminal(
-          handle.childStreamId,
+          handle.executionId,
           outcome,
           STREAM_TRANSITION_CAUSE.LIFECYCLE,
         )
       ) {
-        logger.warn('Failed to set terminal stream status', {
+        logger.warn('Failed to set terminal run status', {
           data: {
             agentIdentifier: handle.agentName,
-            streamId: handle.childStreamId,
+            runId: handle.executionId,
             status: outcome,
           },
         });
@@ -360,7 +352,7 @@ function toFlowFailureError(error: RetryErrorInfo): Error {
 }
 
 function transitionRunStart(ctx: AgentLaunchContext): void {
-  const { streamId, session } = ctx.runScope;
+  const { executionId: streamId, session } = ctx.runScope;
   const streamStatus = session.status;
   const transitioned =
     streamStatus.transition(
@@ -419,7 +411,7 @@ function withResolvedOutcome(
  * phase carries nothing to inherit.
  */
 function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
-  const { streamId, session } = ctx.runScope;
+  const { executionId: streamId, session } = ctx.runScope;
   const streamStatus = session.status;
   const phase = streamStatus.get(streamId);
   if (phase === STREAM_PHASE.CANCELLED || !isTerminalOutcomePhase(phase)) {
@@ -448,7 +440,7 @@ function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
 /** Close a suspended run's stage through its session after its trace detached. */
 const closeSuspendedTranscriptGroup = Effect.fn(function* (
   session: SessionHandle,
-  streamId: StreamTabId,
+  streamId: RunId,
   parentStageId: string | undefined,
 ): Effect.fn.Return<void, Error> {
   if (!parentStageId) return;
@@ -481,17 +473,17 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     ) => Promise<AgentRuntimeFlowResult>,
     options?: RunFlowLifecycleOptions,
   ): Effect.fn.Return<AgentRuntimeFlowResult, Error> {
-    const { streamId, executionId, session } = ctx.runScope;
+    const { executionId, session } = ctx.runScope;
+    const streamId = executionId;
     const agentIdentifier = ctx.config.agent;
-    const parentStreamId = options?.parentStreamId ?? streamId;
+    const isSubagent = options?.parentExecutionId !== undefined;
     const handle = new AgentExecutionHandle(
       {
-        streamId,
         executionId,
         identity: { kind: 'agent', agent: agentIdentifier },
         category: ctx.setting.agentCategory,
       },
-      parentStreamId,
+      options?.parentExecutionId ?? null,
       ctx.logger,
     );
     // Roster display fields must be on the handle BEFORE it is tracked:
@@ -554,7 +546,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         executions: session.executions,
         streamStatus: session.status,
         usage: ctx.usageMonitor.lastTotals(),
-        isSubagent: options?.isSubagent ?? false,
         stage: ctx.parentStage,
         trace: ctx.logger,
         flushArtifacts: () => session.flushArtifacts(),
@@ -594,7 +585,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // Root-agent failures are surfaced in the stream log. Subagent failures
       // are delivered to the orchestrator below, so avoid adding a second
       // wrapper error that makes a child failure look like the parent failed.
-      if (kind !== 'abort' && !options?.isSubagent) {
+      if (kind !== 'abort' && !isSubagent) {
         logSdkError(ctx.logger, errorMsg, err, {
           operation: `execute ${agentIdentifier}`,
         });
@@ -621,13 +612,12 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
               message,
               ...providerErrorInfo,
             };
-      const subagentResult = options?.isSubagent
+      const subagentResult = isSubagent
         ? (carried ??
           buildTerminalFlowResult(
             handle.category,
             outcome,
             executionId,
-            streamId,
             ctx.attachedMemoryMisses,
           ))
         : undefined;
@@ -662,7 +652,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           handle.category,
           resolvedOutcome,
           executionId,
-          streamId,
           ctx.attachedMemoryMisses,
         );
       }
@@ -699,8 +688,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // the transition-owned run-start side effects fire.
       ctx.logger.emit({
         type: 'run.config',
-        streamId,
-        executionId,
+        runId: executionId,
         config: ctx.config,
       });
       // The lifecycle owns every stream-status transition: the start claim here,

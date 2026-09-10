@@ -10,7 +10,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import {
@@ -24,7 +24,6 @@ import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { AgentExecutionHandle } from './ExecutionHandle';
 import { runInSession } from './RunContext';
-import { getStreamTabId } from './streamTab';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
 
@@ -58,7 +57,7 @@ export interface RunAgentOptions extends Pick<
    */
   beforeLeaseRelease?: () => Promise<boolean | void>;
   /** Fires once this run owns its execution lease. */
-  onExecutionLeaseAcquired?: (executionId: ExecutionId) => void;
+  onExecutionLeaseAcquired?: (executionId: RunId) => void;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured
@@ -72,12 +71,12 @@ export type RunAgentRequest =
   | {
       readonly kind: 'fresh';
       readonly config: AgentConfig;
-      readonly executionId?: ExecutionId;
+      readonly executionId?: RunId;
     }
   | {
       readonly kind: 'resume';
       readonly config: AgentConfig;
-      readonly executionId: ExecutionId;
+      readonly executionId: RunId;
     };
 
 /**
@@ -110,7 +109,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
     : yield* getExecutionRecords(runSession, executionId).readMeta();
   if (!shouldRegister && !prior)
     return yield* Effect.fail(
-      new Error(`Execution metadata not found for ${executionId}`),
+      new Error(`Run metadata not found for ${executionId}`),
     );
   const launchAbortController = new AbortController();
   const detachLaunchAbortLink = linkAbortSignals(
@@ -118,18 +117,15 @@ export const runAgent = Effect.fn('runAgent')(function* (
     launchAbortController,
   );
   const launchSignal = launchAbortController.signal;
-  const launchStreamId =
-    prior?.streamId ?? getStreamTabId(request.config.agent, { executionId });
   const launchHandle = runSession.executions.getHandle(executionId)
     ? undefined
     : new AgentExecutionHandle(
         {
-          streamId: launchStreamId,
           executionId,
           identity: { kind: 'agent', agent: request.config.agent },
           category: request.config.agentCategory,
         },
-        launchStreamId,
+        null,
       );
   const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
     interrupt: () => launchAbortController.abort(),
@@ -170,17 +166,12 @@ export const runAgent = Effect.fn('runAgent')(function* (
             config,
             config.agent,
             {
-              streamId: launchStreamId,
               identity: { kind: 'agent', agent: config.agent },
               userFollowUpSupport,
             },
           );
         } else {
-          yield* acquireResumedExecutionOwnership(
-            runSession,
-            executionId,
-            launchStreamId,
-          );
+          yield* acquireResumedExecutionOwnership(runSession, executionId);
         }
 
         let lifecycleStarted = false;
@@ -192,7 +183,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
               ...executeAgentOptions,
               launchSignal,
               session: runSession,
-              streamTabIdOverride: prior?.streamId,
+              resumed: prior !== null,
               userFollowUpSupport,
               onRun: async (handle) => {
                 lifecycleStarted = true;
@@ -245,7 +236,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
             ensureError(
               aggregateError(
                 failures,
-                `Execution ${executionId} failed or its final artifacts could not be persisted`,
+                `Run ${executionId} failed or its final artifacts could not be persisted`,
               ),
             ),
           );

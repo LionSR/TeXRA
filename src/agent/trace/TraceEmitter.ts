@@ -13,11 +13,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { createLog } from '@logger/logUtils';
-import {
-  RUN_OUTCOME,
-  type RunOutcome,
-  type UpdateStreamUsagePayload,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 import { createListenerSet } from '@utils/core/listenerSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -27,6 +23,7 @@ import type {
   ContextStateData,
   StreamKind,
   ToolStatus,
+  UsageReport,
 } from './events';
 import type {
   AgentTrace,
@@ -142,10 +139,7 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Structured emitters ───────────────────────────────────────────
 
-  usage(
-    payload: UpdateStreamUsagePayload,
-    options: UsageEmitOptions = {},
-  ): void {
+  usage(payload: UsageReport, options: UsageEmitOptions = {}): void {
     this.emit({
       type: 'usage',
       payload,

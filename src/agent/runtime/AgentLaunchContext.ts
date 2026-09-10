@@ -46,8 +46,7 @@ import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   aggregateId as qualifyAggregateId,
   type AgentSource,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import {
@@ -64,7 +63,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createRunContext, runInSession, withRunContext } from './RunContext';
 import { createRunScope } from './RunScope';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
-import { getStreamTabId } from './streamTab';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -93,22 +91,25 @@ export interface AgentLaunchContext extends AgentCore {
 
 interface AgentLaunchInput {
   definition: PreparedAgentDefinition;
-  executionId: ExecutionId;
-  streamTabIdOverride?: StreamTabId;
+  executionId: RunId;
   /**
-   * Fires once the stream's `run.start` is published, before the run itself
-   * begins: the stream exists for every fold by then, so a host may select
+   * The run's `run.start` was committed by an earlier activation: this
+   * launch resumes it, so it appends its own `run.activate` and does not
+   * log the initial instruction again.
+   */
+  resumed?: boolean;
+  /**
+   * Fires once the run's `run.start` is published, before the run itself
+   * begins: the run exists for every fold by then, so a host may select
    * it (its own surface state, never a fact) and approval ancestry may be
    * registered against it. It carries the run's trace, which has emitted
    * nothing yet: a consumer of every trace event (the agent package)
    * attaches here, ahead of the instruction log, the root stage, and the
    * launch warnings.
    */
-  onStreamResolved?: (streamId: StreamTabId, trace: AgentTrace) => void;
-  /** Delegated child of another run; carried on the failure `result`. */
-  isSubagent?: boolean;
-  /** Stream this run was launched from, stamped on `run.start`. */
-  parentStreamId?: StreamTabId;
+  onStreamResolved?: (streamId: RunId, trace: AgentTrace) => void;
+  /** The launching run, when this run is a delegated child of another. */
+  parentExecutionId?: RunId;
   /** A workflow-script run's resume anchor, stamped on `run.start`
    *  (decision 9): the checkpoint it journals into. */
   checkpointId?: string;
@@ -145,8 +146,8 @@ export function withExecutionRunContext<T>(
   // `stopAfterCycle`) are projected straight from `ctx.toolPolicy` so callers
   // can't drift a hand-maintained copy of the same values; only
   // `onApprovalPolicyDenial` (a callback that is not part of ToolPolicy) is
-  // still supplied explicitly. Run identity (`streamId`/`executionId`/
-  // `agentName`/`workingDirectory`) travels via `ctx.runScope` unchanged, and
+  // still supplied explicitly. Run identity (`executionId`/`workingDirectory`)
+  // travels via `ctx.runScope` unchanged, and
   // the model via the run's `ModelCell`, so tools observe a mid-session model
   // switch without depending on the `AgentConfig.model` mirror.
   return withRunContext(
@@ -232,7 +233,7 @@ async function validateModelExists(
 
 const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
   'inferLaunchModelHandlerCompatibilityKey',
-)(function* (executionId: ExecutionId, session: SessionHandle) {
+)(function* (executionId: RunId, session: SessionHandle) {
   const flowRecord = yield* Effect.tryPromise({
     try: async () =>
       runInSession(session, () =>
@@ -378,8 +379,7 @@ export type PreparedAgentDefinition = Effect.Success<
 const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   function* (
     input: AgentLaunchInput & { session: SessionHandle },
-    executionId: ExecutionId,
-    streamId: StreamTabId,
+    executionId: RunId,
     resources: Array<() => void | Promise<void>>,
   ): Effect.fn.Return<AgentLaunchContext, Error> {
     yield* failIfAborted(input.signal);
@@ -423,10 +423,8 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     yield* failIfAborted(input.signal);
     const modelCell = new ModelCell(modelHandler, config.model);
 
-    const residency = yield* session.transcripts.acquireRunResidency(
-      streamId,
-      executionId,
-    );
+    const residency =
+      yield* session.transcripts.acquireRunResidency(executionId);
     const rawRunTrace = createRunTrace(residency);
     // The composed trace enters the store BEFORE session attachment, so a
     // failed attachment still disposes the raw trace through the store.
@@ -443,7 +441,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     };
     resources.push(() => runTrace.dispose());
     yield* failIfAborted(input.signal);
-    attachment.detach = session.attachRunTrace(rawRunTrace.trace, streamId);
+    attachment.detach = session.attachRunTrace(rawRunTrace.trace, executionId);
 
     const agentLogger = runTrace.trace;
     modelHandler.setAgentCategory(setting.agentCategory);
@@ -453,15 +451,13 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const isRemote = isRemoteAgent(config.agent);
     // Registration committed creation, configuration and initial activation.
     // A resumed turn appends only its new activation.
-    const background = input.isSubagent ?? false;
-    if (input.streamTabIdOverride) {
+    if (input.resumed) {
       yield* session.commit([
         {
           type: 'run.activate',
-          aggregateId: qualifyAggregateId('stream', streamId),
+          aggregateId: qualifyAggregateId('run', executionId),
           category: setting.agentCategory,
           isRemote,
-          background,
         },
       ]);
     }
@@ -470,15 +466,13 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       try: () => session.settlePublications(),
       catch: ensureError,
     });
-    input.onStreamResolved?.(streamId, runTrace.trace);
+    input.onStreamResolved?.(executionId, runTrace.trace);
 
     // Log the initial instruction as a user message so both workflow and
     // tool-use tabs display it inline with the stream log (no separate panel).
     const displayInstruction = getDisplayedInstruction(config);
     const initialInstruction =
-      displayInstruction && !input.streamTabIdOverride
-        ? displayInstruction
-        : undefined;
+      displayInstruction && !input.resumed ? displayInstruction : undefined;
     const supportsMediaInMessage =
       setting.agentCategory === AgentCategory.ToolUse
         ? modelHandler.capabilities.supportsVision ||
@@ -520,9 +514,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     resources.push(detachRunAbortLink);
     const runSignal = runAbortController.signal;
     const runScope = createRunScope({
-      streamId,
       executionId,
-      agentName: config.agent,
       workingDirectory,
       delegationAgentScope: config.delegationAgentScope,
       session,
@@ -563,7 +555,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         logger: agentLogger,
         executionId,
         runStageId: parentStage.id,
-        streamId,
       },
       {
         agentName: config.agent,
@@ -602,35 +593,25 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const { session: launchSession, executionId } = input;
     const { config } = input.definition;
     const streamStatus = launchSession.status;
-    const streamId =
-      input.streamTabIdOverride ??
-      getStreamTabId(config.agent, { executionId });
 
     // The runtime takes these resources only after assembly succeeds. Failure
     // unwinds them in reverse order while preserving the original cause.
     const resources: Array<() => void | Promise<void>> = [];
-    return yield* assembleAgentLaunchContext(
-      input,
-      executionId,
-      streamId,
-      resources,
-    ).pipe(
+    return yield* assembleAgentLaunchContext(input, executionId, resources).pipe(
       Effect.onError((cause) =>
         Effect.gen(function* () {
           const err = Cause.squash(cause);
           const message = `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`;
-          launchSession.publishRunEvent(streamId, {
+          launchSession.publishRunEvent(executionId, {
             type: 'result',
             outcome: RUN_OUTCOME.FAILED,
-            executionId,
-            streamId,
+            runId: executionId,
             agentName: config.agent,
             category: config.agentCategory,
-            isSubagent: input.isSubagent ?? false,
             error: { kind: classifyAgentError(err), message },
           });
           streamStatus.transitionToTerminal(
-            streamId,
+            executionId,
             STREAM_PHASE.FAILED,
             STREAM_TRANSITION_CAUSE.LIFECYCLE,
           );

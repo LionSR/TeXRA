@@ -17,8 +17,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { createLog } from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -101,8 +100,7 @@ export function getDisplayedInstruction(
  * an `updateStreamDescription` event so the progress view can display it.
  */
 export async function generateSessionDescription(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
+  executionId: RunId,
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
@@ -138,12 +136,12 @@ export async function generateSessionDescription(
     session.publish([
       {
         type: 'execution.description',
-        aggregateId: qualifyAggregateId('execution', executionId),
+        aggregateId: qualifyAggregateId('run', executionId),
         description,
       },
       {
         type: 'updateStreamDescription',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        aggregateId: qualifyAggregateId('run', executionId),
         description,
       },
     ]);

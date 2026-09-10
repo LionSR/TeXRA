@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 
 import type { AgentCategory } from './agent';
-import type { ExecutionId, StreamTabId } from './identifiers';
+import type { RunId } from './identifiers';
 import type { FileLocation } from './output';
 import type { RoundKeyedOutputSidecarValueSchemas } from './streamState';
 import type { ExtendedTokenUsageStats } from './usage';
@@ -13,29 +13,29 @@ import type { ExtendedTokenUsageStats } from './usage';
  */
 
 export interface AddOutputFilesPayload {
-  streamId: StreamTabId;
+  streamId: RunId;
   filesByRound: z.infer<typeof RoundKeyedOutputSidecarValueSchemas.outputFiles>;
 }
 
 export interface UpdateMissingOutputsPayload {
-  streamId: StreamTabId;
+  streamId: RunId;
   filesByRound: z.infer<
     typeof RoundKeyedOutputSidecarValueSchemas.missingOutputs
   >;
 }
 
 export interface UpdateCompileFailuresPayload {
-  streamId: StreamTabId;
+  streamId: RunId;
   filesByRound: z.infer<
     typeof RoundKeyedOutputSidecarValueSchemas.compileFailures
   >;
 }
 
-/** Usage is execution-scoped; a resume accumulates onto the same key. The
- *  field name is frozen by the public NDJSON vocabulary. */
+/** The frozen NDJSON `updateStreamUsage` line: `storageKey` is the run the
+ *  usage belongs to, under the field name the 0.40 wire promised. */
 export interface UpdateStreamUsagePayload {
-  streamId: StreamTabId;
-  storageKey: ExecutionId;
+  streamId: RunId;
+  storageKey: RunId;
   usage: ExtendedTokenUsageStats;
 }
 
@@ -44,7 +44,7 @@ export interface UpdateStreamUsagePayload {
  * leg. Hosts surface this so a paused goal is distinguishable from a hang.
  */
 export interface GoalPausedPayload {
-  streamId: StreamTabId;
+  streamId: RunId;
 }
 
 /**

@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 import { StreamPhaseSchema } from './stream';
 import {
   ActiveChildInfoSchema,
@@ -33,7 +33,7 @@ export const StreamSnapshotSchema = z.object({
   schemaVersion: z
     .literal(STREAM_SNAPSHOT_SCHEMA_VERSION)
     .prefault(STREAM_SNAPSHOT_SCHEMA_VERSION),
-  streamId: StreamTabIdSchema,
+  streamId: RunIdSchema,
 
   // -- Durable display state (persisted in field-scoped files) --------------
   todos: WorkPlanSnapshotShape.todos.prefault([]),
@@ -51,9 +51,8 @@ export const StreamSnapshotSchema = z.object({
     RoundKeyedOutputSidecarValueSchemas.compileFailures.prefault({}),
   runUsage: RunUsageMapSchema.prefault({}),
 
-  // -- Pointers (resume / lookup) -------------------------------------------
-  executionId: ExecutionIdSchema.optional(),
-  parentStreamId: StreamTabIdSchema.optional(),
+  // -- The parent edge, from `run.start.parent` until a `run.detach` -------
+  parentStreamId: RunIdSchema.optional(),
 
   // -- Log-derived (recomputed from the StreamLog on load) ------------------
   status: StreamPhaseSchema.optional(),

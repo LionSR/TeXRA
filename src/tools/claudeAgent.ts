@@ -53,8 +53,7 @@ import {
 import type {
   ClaudeAgentEffort,
   ClaudeAgentPermissionMode,
-  ExecutionId,
-  StreamTabId,
+  RunId,
   ToolResult,
   ToolUseLog,
 } from '@shared/schemas';
@@ -408,8 +407,8 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 function startClaudeAgentLoop(params: {
   session: SessionHandle;
   childStream: ChildStream;
-  parentStreamId: StreamTabId;
-  executionId: ExecutionId;
+  parentStreamId: RunId;
+  executionId: RunId;
   initialPrompt: string;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
@@ -588,7 +587,6 @@ export class ClaudeAgentTool extends defineTool({
           model,
           effort,
           context.parentStreamId,
-          context.parentExecutionId,
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
           session,
@@ -604,8 +602,7 @@ const launchClaudeAgentSession = Effect.fn(
   permissionMode: ClaudeAgentPermissionMode,
   model: string,
   effort: ClaudeAgentEffort,
-  parentStreamId: StreamTabId,
-  parentExecutionId: ExecutionId | undefined,
+  parentStreamId: RunId,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
@@ -635,9 +632,7 @@ const launchClaudeAgentSession = Effect.fn(
   return yield* launchAgentCliSession({
     session,
     parentStreamId,
-    parentExecutionId,
     agentName: CLAUDE_AGENT_NAME,
-    streamPrefix: 'claude@agent-sdk',
     description: input.prompt,
     config: agentConfig,
     registerFailedMessage: 'Failed to register Claude Code CLI execution.',

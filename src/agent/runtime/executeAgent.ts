@@ -17,18 +17,17 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import {
   acquireResumedExecutionOwnership,
   getPersistedUserFollowUpSupport,
-  hasPersistedParent,
 } from '@agent/storage/executionLifecycle';
+import { getExecutionRecords } from '@agent/storage/ExecutionKVStore';
 import { assertOwnedExecutionLease } from '@agent/storage/executionLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
+  type RunId,
   type RequestEnsureProgressViewPayload,
   type RunOutcome,
-  type StreamTabId,
   type SubagentProgressUpdate,
   type UserFollowUpSupport,
 } from '@shared/schemas';
@@ -74,9 +73,9 @@ import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKe
 
 const logger = createLog('executeAgent');
 
-/** A claimed execution no longer has the persisted tool-use state to resume. */
+/** A claimed run no longer has the persisted tool-use state to resume. */
 export class ResumeSessionUnavailableError extends Error {
-  constructor(readonly executionId: ExecutionId) {
+  constructor(readonly executionId: RunId) {
     super('This session can no longer be resumed. Start a new run instead.');
     this.name = 'ResumeSessionUnavailableError';
   }
@@ -129,23 +128,19 @@ async function launchToolUseRun(
   shared: SubagentRunOptions & {
     readonly setting: AgentToolUseSetting;
     readonly onFollowUpConsumed?: () => void;
-    /**
-     * Fresh launches take this from the caller; resume derives it from
-     * persisted lineage, because the rebuilt system prompt would otherwise drop
-     * subagent-specific instructions (e.g. the shared /memories protocol) that
-     * the fresh run had included.
-     */
-    readonly isSubagent?: boolean;
   },
   variant: ToolUseLaunchVariant,
 ): Promise<AgentRuntimeFlowResult> {
-  const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
+  const { executionId: runExecutionId } = ctx.runScope;
   const result = await runToolUseFlow(
     {
       ...ctx,
       onRoundFinalized: createUsageRecordingCallback(ctx),
       setting: shared.setting,
-      isSubagent: shared.isSubagent,
+      // A child (a run with a parent) takes the subagent prompt and may park
+      // at WAITING for its loop; the fresh launch and the resume both read
+      // the same edge.
+      isSubagent: shared.parentExecutionId !== undefined,
       tools: shared.tools,
       onProgress: (update) => {
         if (update.kind === 'overview') {
@@ -156,12 +151,12 @@ async function launchToolUseRun(
         shared.onProgress?.(update);
       },
       onFollowUpConsumed: () => {
-        const { session, streamId } = ctx.runScope;
+        const { session, executionId } = ctx.runScope;
         session.publish([
           {
             type: 'updateQueuedFollowUps',
-            aggregateId: qualifyAggregateId('stream', streamId),
-            messages: session.followUps.getAll(streamId),
+            aggregateId: qualifyAggregateId('run', executionId),
+            messages: session.followUps.getAll(executionId),
           },
         ]);
         shared.onFollowUpConsumed?.();
@@ -201,7 +196,6 @@ async function launchToolUseRun(
     response: result.response,
     files: result.files,
     executionId: runExecutionId,
-    streamId: runStreamId,
     ...(result.structured !== undefined
       ? { structured: result.structured }
       : {}),
@@ -214,17 +208,16 @@ async function launchToolUseRun(
 }
 
 /**
- * The lifecycle options every entry point that drives one run passes.
- * `isSubagent` stays a separate argument because resume derives it from
- * persisted lineage rather than from the caller's options.
+ * The lifecycle options every entry point that drives one run passes. The
+ * parent edge is an argument because resume reads it from the persisted
+ * `run.start` rather than from the caller's options.
  */
 function buildLifecycleOptions(
   options: SubagentRunOptions,
-  isSubagent: boolean | undefined,
+  parentExecutionId: RunId | undefined,
 ): RunFlowLifecycleOptions {
   return {
-    isSubagent,
-    parentStreamId: options.parentStreamId,
+    parentExecutionId,
     workflowPhase: options.workflowPhase,
     onError: options.onRunError,
     onRun: options.onRun,
@@ -242,7 +235,7 @@ async function runReflectionAgent(
   ctx: AgentLaunchContext,
   setting: AgentWorkflowSetting,
 ): Promise<WorkflowFlowResult> {
-  const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
+  const { executionId: runExecutionId } = ctx.runScope;
   const result = await runReflectionFlow({
     ...ctx,
     onRoundFinalized: createUsageRecordingCallback(ctx),
@@ -254,7 +247,6 @@ async function runReflectionAgent(
     outputs: roundOutputsToOutputSummaries(result.roundOutputs),
     compileFailures: roundOutputsToCompileFailureSummaries(result.roundOutputs),
     executionId: runExecutionId,
-    streamId: runStreamId,
     ...(result.error ? { error: result.error } : {}),
     ...buildOptionalFlowResultFields(
       ctx.attachedMemoryMisses,
@@ -298,8 +290,13 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
 export interface SubagentRunOptions {
   /** Run-scoped tools added to tool-use agents without mutating the default registry. */
   readonly tools?: readonly ITool[];
-  /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
-  parentStreamId?: StreamTabId;
+  /**
+   * The launching run, for a delegated child: the parent edge on the handle,
+   * the subagent prompt, and the licence to park at WAITING for the child
+   * loop. A fresh launch takes it from the caller; a resume ignores it and
+   * reads the persisted `run.start`.
+   */
+  parentExecutionId?: RunId;
   /** Fires on meaningful progress: todo changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
@@ -346,22 +343,17 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   ) => Promise<RunOutcome | void>;
   /** Cancel launch preparation before the per-run handle is available. */
   launchSignal?: AbortSignal;
-  /** Registration-stamped stream identity for a resumed workflow launch. */
-  streamTabIdOverride?: StreamTabId;
+  /** The run's `run.start` was committed by an earlier activation (a resume). */
+  resumed?: boolean;
   /** The caller owns presentation for failures before the run lifecycle. */
   suppressErrorNotification?: boolean;
   /**
-   * Selects subagent prompt and presentation defaults and allows tool-use
-   * cycles to suspend at WAITING for the child-run loop.
+   * Fires with the run id once its `run.start` is published, before the run
+   * begins: the run exists for every fold, so a host may select it as its
+   * own surface state. The run's trace comes with it, before its first
+   * event, for a consumer that must hear every trace event.
    */
-  isSubagent?: boolean;
-  /**
-   * Fires with the real streamId once its `run.start` is published, before
-   * the run begins: the stream exists for every fold, so a host may select
-   * it as its own surface state. The run's trace comes with it, before its
-   * first event, for a consumer that must hear every trace event.
-   */
-  onStreamResolved?: (streamId: StreamTabId, trace: AgentTrace) => void;
+  onStreamResolved?: (streamId: RunId, trace: AgentTrace) => void;
   /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: () => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
@@ -372,22 +364,26 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   copilotRouteOverride?: CopilotRouteOverride;
 }
 
-// A WAITING result is reachable only for a subagent: `{ kind: 'waiting' }` is
-// minted solely behind `ToolUseWaitNode`'s `isSubagent` check, so `isSubagent`
-// already carries the fact a separate `allowWaitingResult` flag used to.
-// Resume paths need no flag at all — whether a resumed run is a subagent comes
-// from persisted lineage, so `resumeToolUseFromResumeData` always admits
-// WAITING and callers narrow with `isWaitingFlowResult`.
+// A WAITING result is reachable only for a child: `{ kind: 'waiting' }` is
+// minted solely behind `ToolUseWaitNode`'s `isSubagent` check, which is the
+// parent edge, so a caller that names a parent admits WAITING and one that
+// names none never sees it. Resume paths need no flag at all — whether a
+// resumed run is a child comes from the persisted `run.start`, so
+// `resumeToolUseFromResumeData` always admits WAITING and callers narrow with
+// `isWaitingFlowResult`.
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: ExecutionId,
-  options: ExecuteAgentOptions & { isSubagent: true; session: SessionHandle },
+  executionId: RunId,
+  options: ExecuteAgentOptions & {
+    parentExecutionId: RunId;
+    session: SessionHandle;
+  },
 ): Effect.Effect<AgentFlowResult | WaitingToolUseFlowResult, Error>;
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: ExecutionId,
+  executionId: RunId,
   options: ExecuteAgentOptions & {
-    isSubagent?: false | undefined;
+    parentExecutionId?: undefined;
     session: SessionHandle;
   },
 ): Effect.Effect<AgentFlowResult, Error>;
@@ -400,7 +396,7 @@ export function executeAgent(
  */
 export function executeAgent(
   definition: PreparedAgentDefinition,
-  executionId: ExecutionId,
+  executionId: RunId,
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentRuntimeFlowResult, Error> {
   return Effect.gen(function* () {
@@ -411,16 +407,16 @@ export function executeAgent(
         ),
       catch: ensureError,
     });
+    const isSubagent = options.parentExecutionId !== undefined;
     const ctx = yield* buildAgentLaunchContext({
       definition,
       executionId,
-      streamTabIdOverride: options.streamTabIdOverride,
+      resumed: options.resumed,
       onStreamResolved: options.onStreamResolved,
-      isSubagent: options.isSubagent,
-      parentStreamId: options.parentStreamId,
+      parentExecutionId: options.parentExecutionId,
       userFollowUpSupport: options.userFollowUpSupport,
       suppressErrorNotification:
-        options.suppressErrorNotification ?? options.isSubagent,
+        options.suppressErrorNotification ?? isSubagent,
       session: options.session,
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
@@ -441,20 +437,15 @@ export function executeAgent(
           );
           return Effect.gen(function* () {
             const { setting, config } = ctx;
-            const {
-              streamId: runStreamId,
-              executionId: runExecutionId,
-              session: runSession,
-            } = ctx.runScope;
-            const { isSubagent } = options;
+            const { executionId: runExecutionId, session: runSession } =
+              ctx.runScope;
 
             // Start description generation concurrently with the run, but join it
-            // before the owner can release its execution lease. This prevents the
-            // metadata write from recreating an execution deleted by another host.
+            // before the owner can release its run lease. This prevents the
+            // metadata write from recreating a run deleted by another host.
             const sessionDescription = runInScope(() =>
               generateSessionDescription(
                 runExecutionId,
-                runStreamId,
                 config,
                 ctx.resolvedAgentDescription,
                 runSession,
@@ -469,14 +460,14 @@ export function executeAgent(
                     // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
                     await ensureRunDir(executionId);
                     logger.info(
-                      `Starting task execution (streamId: ${runStreamId})`,
+                      `Starting task execution (runId: ${runExecutionId})`,
                     );
                     logger.info(
                       `Input file: ${config.inputFiles[0] ?? '(none)'}`,
                     );
                     logger.debug('Task execution details', {
                       data: {
-                        streamId: runStreamId,
+                        runId: runExecutionId,
                         agent: config.agent,
                         model: config.model,
                       },
@@ -505,7 +496,7 @@ export function executeAgent(
                         ctx,
                         handle,
                         lifecycle,
-                        { ...options, setting, isSubagent },
+                        { ...options, setting },
                         { kind: 'fresh', onIdle: options.onIdle },
                       );
                     }
@@ -517,9 +508,9 @@ export function executeAgent(
                       ? result
                       : { ...result, outcome: outputOutcome };
                   }),
-                buildLifecycleOptions(options, isSubagent),
+                buildLifecycleOptions(options, options.parentExecutionId),
               );
-              if (isWaitingFlowResult(result) && !options.isSubagent) {
+              if (isWaitingFlowResult(result) && !isSubagent) {
                 throw new Error(
                   'executeAgent received a non-terminal WAITING result for a non-subagent run.',
                 );
@@ -560,8 +551,9 @@ export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
 
 /**
  * Resume a persisted tool-use session at its WAITING cursor. Whether the run
- * is a subagent — and can therefore legitimately resolve WAITING again — comes
- * from persisted lineage (`hasPersistedParent`), never from the caller.
+ * is a child — and can therefore legitimately resolve WAITING again — is its
+ * persisted parent edge (`run.start.parent`, minus a `run.detach`), never
+ * the caller's word.
  */
 const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
   function* (
@@ -571,10 +563,11 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const runSession = options.session;
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
-        const [isSubagent, userFollowUpSupport] = yield* Effect.all([
-          hasPersistedParent(resume.executionId, runSession),
+        const [meta, userFollowUpSupport] = yield* Effect.all([
+          getExecutionRecords(runSession, resume.executionId).readMeta(),
           getPersistedUserFollowUpSupport(resume.executionId, runSession),
         ]);
+        const parentExecutionId = meta?.parentExecutionId;
         const definition = yield* prepareAgentDefinition({
           config: resume.agentConfig,
           enforceCategory: true,
@@ -584,11 +577,10 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
         const ctx = yield* buildAgentLaunchContext({
           definition,
           executionId: resume.executionId,
-          streamTabIdOverride: resume.streamId,
+          resumed: true,
           modelHandlerCompatibilityKey:
             resume.shared.modelHandlerCompatibilityKey,
-          isSubagent,
-          parentStreamId: options.parentStreamId,
+          parentExecutionId,
           userFollowUpSupport,
           suppressErrorNotification: true,
           session: runSession,
@@ -597,7 +589,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
             runtimeUnavailableTools: options.runtimeUnavailableTools,
           },
         });
-        return { ctx, isSubagent };
+        return { ctx, parentExecutionId };
       }),
     );
     if (Exit.isFailure(setup)) {
@@ -607,7 +599,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
         ),
       );
     }
-    const { ctx, isSubagent } = setup.value;
+    const { ctx, parentExecutionId } = setup.value;
     const { setting } = ctx;
     const result = yield* Effect.exit(
       Effect.suspend(() =>
@@ -634,7 +626,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                     ctx,
                     handle,
                     lifecycle,
-                    { ...options, setting, isSubagent },
+                    { ...options, setting, parentExecutionId },
                     {
                       kind: 'resume',
                       resume,
@@ -646,7 +638,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
                     },
                   );
                 }),
-              buildLifecycleOptions(options, isSubagent),
+              buildLifecycleOptions(options, parentExecutionId),
             );
           },
         ),
@@ -660,7 +652,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
         return yield* Effect.fail(
           new AggregateError(
             [Cause.squash(result.cause), Cause.squash(released.cause)],
-            `Execution ${resume.executionId} failed and its final artifacts could not be persisted`,
+            `Run ${resume.executionId} failed and its final artifacts could not be persisted`,
           ),
         );
       }
@@ -676,10 +668,10 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
 );
 
 /**
- * One resumed turn of a persisted tool-use session: claim its execution lease,
+ * One resumed turn of a persisted tool-use session: claim its run lease,
  * reload the persisted snapshot under that lease, and run. Whether the run is
- * a subagent — and can therefore legitimately resolve WAITING again — comes
- * from persisted lineage (`hasPersistedParent`), never from the caller.
+ * a child — and can therefore legitimately resolve WAITING again — is its
+ * persisted parent edge, never the caller's word.
  *
  * This is the inner, unserialized turn: a native child loop runs it for every
  * turn inside the child's own generation, which already holds the child's
@@ -693,15 +685,12 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
   const rollback = yield* acquireResumedExecutionOwnership(
     session,
     resume.executionId,
-    resume.streamId,
   );
   const retrieval = yield* Effect.exit(
     retrieveSessionResumeData(
-      resume.streamId,
       resume.executionId,
       resume.agentConfig,
       session,
-      { parentStreamId: resume.parentStreamId },
     ).pipe(
       Effect.flatMap((retrieved) =>
         retrieved?.type === 'toolUse'

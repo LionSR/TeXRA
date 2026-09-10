@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunIdSchema } from './identifiers';
 
 export const WORKFLOW_EXECUTION_LIFECYCLE = {
   WAITING: 'waiting',
@@ -63,8 +63,7 @@ const WorkflowExecutionStageSchema = z.strictObject({
 });
 const WorkflowExecutionAttemptSchema = z.strictObject({
   number: z.int().positive(),
-  id: ExecutionIdSchema.optional(),
-  childStreamId: StreamTabIdSchema.optional(),
+  id: RunIdSchema.optional(),
   model: z.string().optional(),
   costUsd: z.number().nonnegative().optional(),
   startedAt: z.iso.datetime(),
@@ -98,7 +97,6 @@ const WorkflowExecutionCallBaseSchema = z.strictObject({
   agent: z.never().optional(),
   model: z.never().optional(),
   childExecutionId: z.never().optional(),
-  childStreamId: z.never().optional(),
   settledBySweep: z.never().optional(),
   error: z.never().optional(),
 });
@@ -111,8 +109,7 @@ const WorkflowExecutionIssuedCallSchema =
     agent: z.string().optional(),
     /** Declared by the script at issue time, then the host-resolved model. */
     model: z.string().optional(),
-    childExecutionId: ExecutionIdSchema.optional(),
-    childStreamId: StreamTabIdSchema.optional(),
+    childExecutionId: RunIdSchema.optional(),
   });
 
 type MaybeIssuedCall = Pick<

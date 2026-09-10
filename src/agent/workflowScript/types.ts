@@ -2,8 +2,7 @@ import { z } from 'zod';
 
 import {
   WorkflowCallIdentitySchema,
-  type ExecutionId,
-  type StreamTabId,
+  type RunId,
   type WorkflowCallIdentity,
   type WorkflowControlAction,
   type WorkflowExecutionSnapshot,
@@ -277,14 +276,9 @@ export interface WorkflowAttemptFacts {
   readonly model?: string;
   /** The resolved agent the host selected. */
   readonly agent?: string;
-  /** The physical child execution selected for this attempt. */
-  readonly childExecutionId?: ExecutionId;
-  /**
-   * The live child stream, once the host has resolved its agent, model, and
-   * execution identity. Progress renderers use it as the task card's
-   * navigation target.
-   */
-  readonly childStreamId?: StreamTabId;
+  /** The physical child run selected for this attempt: the task card's
+   *  navigation target once the host has resolved it. */
+  readonly childExecutionId?: RunId;
   /** Cost available on the child result. */
   readonly costUsd?: number;
   /**
@@ -353,7 +347,7 @@ export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
  * journal, checkpoint, or per-call resume identity.
  */
 export type WorkflowScriptControl = (
-  childExecutionId: ExecutionId,
+  childExecutionId: RunId,
   action: WorkflowControlAction,
 ) => boolean;
 

@@ -12,7 +12,7 @@ import {
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   streamHeldMessage,
   streamUnreadableMessage,
@@ -107,7 +107,7 @@ export function presentFollowUpResult(
 const logger = createLog('ToolUseFollowUp');
 
 export function notifyFollowUpSent(
-  streamId: StreamTabId,
+  streamId: RunId,
   session?: SessionHandle,
 ): void {
   (session ?? currentSession()).followUps.notifySent(streamId);
@@ -115,7 +115,7 @@ export function notifyFollowUpSent(
 
 /** Queue transient progress using the current stream and live queue owners. */
 export function enqueueLiveFollowUp(
-  streamId: StreamTabId,
+  streamId: RunId,
   followUp: FollowUpQueueInput,
   session: SessionHandle,
 ): void {
@@ -137,7 +137,7 @@ type Admission =
  * after this returns, so it cannot block later input from joining its queue.
  */
 function admitFollowUp(
-  streamId: StreamTabId,
+  streamId: RunId,
   item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
   ownerSession: SessionHandle,
@@ -196,14 +196,6 @@ function admitFollowUp(
   return { resume };
 }
 
-/** Read the authored execution identity from the stream's committed prefix. */
-export const lookupStreamExecutionId = Effect.fn('lookupStreamExecutionId')(
-  function* (streamId: StreamTabId, session: SessionHandle) {
-    yield* session.snapshots.preload([streamId]);
-    return session.snapshots.getRunMetadata(streamId).executionId;
-  },
-);
-
 /**
  * The one mapping from a run classification to what the user's stream shows
  * and what the refusal is called. Both refusal paths use it — a follow-up
@@ -231,7 +223,7 @@ export const lookupStreamExecutionId = Effect.fn('lookupStreamExecutionId')(
  * Nothing is written to disk.
  */
 export function recordRunRefusal(
-  streamId: StreamTabId,
+  streamId: RunId,
   session: SessionHandle,
   classification: RunClassification,
 ): FollowUpFailureReason {
@@ -269,27 +261,15 @@ export function recordRunRefusal(
  * the user acted on is inspected.
  */
 const classifyRefusal = Effect.fn('classifyRefusal')(function* (
-  streamId: StreamTabId,
+  streamId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<FollowUpFailureReason, Error> {
-  const executionId = yield* lookupStreamExecutionId(streamId, session).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        logger.warn(
-          `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,
-          { data: { streamId, error } },
-        );
-        return undefined;
-      }),
-    ),
-  );
-  if (!executionId) return 'not_resumable';
-  const classification = yield* classifyRun(executionId, session);
+  const classification = yield* classifyRun(streamId, session);
   return recordRunRefusal(streamId, session, classification);
 });
 
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
-  streamId: StreamTabId,
+  streamId: RunId,
   followUp: FollowUpQueueInput | string,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {

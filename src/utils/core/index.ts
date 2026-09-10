@@ -18,7 +18,7 @@
 import { customAlphabet, nanoid } from 'nanoid';
 import { basename as pathBasename, extname as pathExtname } from 'pathe';
 
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 export {
   isNonEmptyString,
@@ -530,9 +530,11 @@ export function tryParseUrl(input: string): URL | undefined {
  */
 export const hexId12 = customAlphabet('0123456789abcdef', 12);
 
-/** Generate a compact 12-char hex execution ID (48 bits of entropy). */
-export function generateExecutionId(): ExecutionId {
-  return hexId12() as ExecutionId;
+/** Mint a run id: 12 lowercase hex chars (48 bits of entropy). One of the
+ *  two minting sites (`deriveExecutionId` is the other), so the brand is
+ *  applied here and nowhere downstream. */
+export function generateExecutionId(): RunId {
+  return hexId12() as RunId;
 }
 
 /**

@@ -24,7 +24,7 @@ import {
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import { createLog } from '@logger/logUtils';
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
@@ -35,24 +35,18 @@ export interface ToolUseResumeData {
   readonly type: 'toolUse';
   readonly shared: PreparedShared;
   readonly agentConfig: AgentConfig;
-  readonly executionId: ExecutionId;
-  readonly streamId: StreamTabId;
-  readonly parentStreamId?: StreamTabId;
+  readonly executionId: RunId;
 }
 
 /** Workflow session resume data: flow reads full state via executionId. */
 interface WorkflowResumeData {
   readonly type: 'workflow';
   readonly agentConfig: AgentConfig;
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
 }
 
 type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
-
-interface SessionResumeRetrievalOptions {
-  readonly parentStreamId?: StreamTabId | undefined;
-}
 
 /** Agent-type label used in resume-retrieval warnings and error messages. */
 type ResumeAgentLabel = 'tool-use' | 'workflow';
@@ -64,7 +58,7 @@ type ResumeAgentLabel = 'tool-use' | 'workflow';
  */
 const probeResumableFlowRecord = Effect.fn('probeResumableFlowRecord')(
   function* (
-    executionId: ExecutionId,
+    executionId: RunId,
     agentType: ResumeAgentLabel,
     session: SessionHandle,
   ): Effect.fn.Return<FlowRecord | null, Error> {
@@ -100,11 +94,11 @@ const probeResumableFlowRecord = Effect.fn('probeResumableFlowRecord')(
  */
 function resumeRetrievalError(
   agentType: ResumeAgentLabel,
-  streamId: StreamTabId,
+  executionId: RunId,
   error: unknown,
 ): Error {
   return new Error(
-    `Failed to retrieve ${agentType} resume data for stream: ${streamId}`,
+    `Failed to retrieve ${agentType} resume data for run: ${executionId}`,
     { cause: error },
   );
 }
@@ -116,9 +110,8 @@ function resumeRetrievalError(
  * - Tool-use: Canonical shared state with launch metadata
  * - Workflow: agentConfig, executionId, and transcript-format key
  *
- * @param streamId - Stream tab ID used for logging and resume identity
- * @param executionId - The execution ID for the stream
- * @param agentConfig - The run config for the execution
+ * @param executionId - The run id
+ * @param agentConfig - The run config for the run
  * @returns The resume data, or `null` when there is no resumable session
  *   (missing/invalid flow record). Throws when retrieval fails unexpectedly
  *   (e.g. a transient KV/IO error) so the caller can distinguish "nothing to
@@ -126,32 +119,23 @@ function resumeRetrievalError(
  */
 export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
   function* (
-    streamId: StreamTabId,
-    executionId: ExecutionId,
+    executionId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
-    options: SessionResumeRetrievalOptions = {},
   ): Effect.fn.Return<SessionResumeData | null, Error> {
     if (agentConfig.agentCategory === AgentCategory.ToolUse) {
-      return yield* retrieveToolUseResumeData(
-        streamId,
-        executionId,
-        agentConfig,
-        session,
-        options,
-      );
+      return yield* retrieveToolUseResumeData(executionId, agentConfig, session);
     }
 
     if (agentConfig.agentCategory === AgentCategory.Workflow) {
       return yield* retrieveWorkflowResumeData(
-        streamId,
         executionId,
         agentConfig,
         session,
       );
     }
 
-    logger.warn(`Unknown agent config type for stream: ${streamId}`);
+    logger.warn(`Unknown agent config type for run: ${executionId}`);
     return null;
   },
 );
@@ -161,11 +145,9 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
  */
 const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
   function* (
-    streamId: StreamTabId,
-    executionId: ExecutionId,
+    executionId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
-    options: SessionResumeRetrievalOptions,
   ): Effect.fn.Return<ToolUseResumeData | null, Error> {
     const flowRecord = yield* probeResumableFlowRecord(
       executionId,
@@ -173,7 +155,7 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
       session,
     ).pipe(
       Effect.mapError((error) =>
-        resumeRetrievalError('tool-use', streamId, error),
+        resumeRetrievalError('tool-use', executionId, error),
       ),
     );
     return yield* Effect.try({
@@ -214,19 +196,15 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
           }),
         };
 
-        logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
+        logger.debug(`Retrieved tool-use resume data for run: ${executionId}`);
         return {
           type: 'toolUse',
           shared,
           executionId,
-          streamId,
-          ...(options.parentStreamId !== undefined && {
-            parentStreamId: options.parentStreamId,
-          }),
           agentConfig: currentConfig,
         };
       },
-      catch: (error) => resumeRetrievalError('tool-use', streamId, error),
+      catch: (error) => resumeRetrievalError('tool-use', executionId, error),
     });
   },
 );
@@ -238,8 +216,7 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
  */
 const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
   function* (
-    streamId: StreamTabId,
-    executionId: ExecutionId,
+    executionId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
   ): Effect.fn.Return<WorkflowResumeData | null, Error> {
@@ -249,7 +226,7 @@ const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
       session,
     ).pipe(
       Effect.mapError((error) =>
-        resumeRetrievalError('workflow', streamId, error),
+        resumeRetrievalError('workflow', executionId, error),
       ),
     );
     return yield* Effect.try({
@@ -266,9 +243,9 @@ const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
           return null;
         }
 
-        logger.debug('Retrieved workflow resume data for stream', {
+        logger.debug('Retrieved workflow resume data for run', {
           data: {
-            streamId,
+            executionId,
             currentRound: parseResult.data.currentRound,
             totalRounds: parseResult.data.totalRounds,
           },
@@ -282,7 +259,7 @@ const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
           modelHandlerCompatibilityKey,
         };
       },
-      catch: (error) => resumeRetrievalError('workflow', streamId, error),
+      catch: (error) => resumeRetrievalError('workflow', executionId, error),
     });
   },
 );

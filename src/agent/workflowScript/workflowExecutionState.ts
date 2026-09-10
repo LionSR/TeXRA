@@ -312,7 +312,6 @@ export class WorkflowExecutionState {
     this.updateCall(id, {
       status: WORKFLOW_CALL_STATUS.QUEUED,
       childExecutionId: undefined,
-      childStreamId: undefined,
       model: declared.model,
       settledBySweep: undefined,
       error: undefined,
@@ -349,10 +348,6 @@ export class WorkflowExecutionState {
     if (facts.childExecutionId !== undefined) {
       call.childExecutionId = facts.childExecutionId;
       if (attempt) attempt.id = facts.childExecutionId;
-    }
-    if (facts.childStreamId !== undefined) {
-      call.childStreamId = facts.childStreamId;
-      if (attempt) attempt.childStreamId = facts.childStreamId;
     }
     if (facts.model !== undefined) {
       call.model = facts.model;

@@ -675,7 +675,8 @@ function seedStream(
       Extract<SessionEventDraft, { type: 'run.start' }>['identity']
     >;
     readonly parentStreamId?: StreamTabId;
-    readonly executionId?: string;
+    /** The agent name for a default (agent) identity; a run id names nothing. */
+    readonly agent?: string;
     readonly userFollowUpSupport?: Extract<
       SessionEventDraft,
       { type: 'run.start' }
@@ -684,30 +685,27 @@ function seedStream(
 ): void {
   if (harnessStreams.has(streamId)) return;
   harnessStreams.add(streamId);
-  const executionId = (options.executionId ??
-    generateExecutionId()) as ExecutionId;
   const identity = options.identity ?? {
     kind: 'agent' as const,
-    agent: streamId.split('#')[0] ?? streamId,
+    agent: options.agent ?? 'harness-agent',
   };
   publish({
     type: 'run.start',
-    aggregateId: qualifyAggregateId('stream', streamId),
-    executionId,
+    aggregateId: qualifyAggregateId('run', streamId),
     identity,
     category: options.category ?? AgentCategory.ToolUse,
     isRemote: false,
     userFollowUpSupport:
       options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    ...(options.parentStreamId === undefined
-      ? {}
-      : { parentStreamId: options.parentStreamId }),
+    parent:
+      options.parentStreamId === undefined
+        ? null
+        : { id: options.parentStreamId },
   });
   if (identity.kind === 'agent') {
     publish({
       type: 'run.config',
-      aggregateId: qualifyAggregateId('stream', streamId),
-      executionId,
+      aggregateId: qualifyAggregateId('run', streamId),
       config: AgentConfigFieldsSchema.parse({
         agent: identity.agent,
         agentCategory: options.category ?? AgentCategory.ToolUse,
@@ -726,7 +724,7 @@ function seedPhase(
   seedStream(streamId);
   publish({
     type: 'status',
-    aggregateId: qualifyAggregateId('stream', streamId),
+    aggregateId: qualifyAggregateId('run', streamId),
     phase,
     cause: 'harness',
     ...(runStartedAt !== undefined ? { runStartedAt } : {}),
@@ -736,7 +734,7 @@ function seedPhase(
 function seedDescription(streamId: StreamTabId, description: string): void {
   publish({
     type: 'updateStreamDescription',
-    aggregateId: qualifyAggregateId('stream', streamId),
+    aggregateId: qualifyAggregateId('run', streamId),
     description,
   });
 }
@@ -744,7 +742,7 @@ function seedDescription(streamId: StreamTabId, description: string): void {
 function removeStream(streamId: StreamTabId): void {
   publish({
     type: 'stream.removed',
-    aggregateId: qualifyAggregateId('stream', streamId),
+    aggregateId: qualifyAggregateId('run', streamId),
   });
   harnessStreams.delete(streamId);
 }
@@ -763,7 +761,7 @@ function seedRows(
   publish(
     ...entries.map((entry) => ({
       type: 'transcript.entry' as const,
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('run', streamId),
       entry: log.appendSettled(entry),
     })),
   );
@@ -1287,7 +1285,7 @@ seedRows(STREAM_ID, harnessInitialEntries());
 if (QUEUED_FOLLOW_UPS.length > 0) {
   publish({
     type: 'updateQueuedFollowUps',
-    aggregateId: qualifyAggregateId('stream', STREAM_ID),
+    aggregateId: qualifyAggregateId('run', STREAM_ID),
     messages: QUEUED_FOLLOW_UPS,
   });
 }
@@ -1472,7 +1470,7 @@ if (SHOW_CHILDREN) {
     if (child.agentName === 'reviewer') {
       publish({
         type: 'usage',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        aggregateId: qualifyAggregateId('run', streamId),
         storageKey: child.executionId as ExecutionId,
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
@@ -1535,12 +1533,12 @@ if (SHOW_TODOS) {
   publish(
     {
       type: 'updateTodos',
-      aggregateId: qualifyAggregateId('stream', STREAM_ID),
+      aggregateId: qualifyAggregateId('run', STREAM_ID),
       todos: [...workPlan.todos],
     },
     {
       type: 'updatePlan',
-      aggregateId: qualifyAggregateId('stream', STREAM_ID),
+      aggregateId: qualifyAggregateId('run', STREAM_ID),
       plan: workPlan.plan,
     },
   );
@@ -2008,30 +2006,29 @@ function renderHarnessApp(): React.JSX.Element {
 if (process.env.HARNESS_SESSION_TREE === '1') {
   const { log, events } = buildScenario();
   const recordedCount = log.events.length;
-  const waiting = 'waiting#eeeeeeeeeeee' as StreamTabId;
-  const interrupted = 'interrupted#ffffffffffff' as StreamTabId;
-  const nested = 'nested#111111111111' as StreamTabId;
+  const waiting = 'eeeeeeeeeeee' as StreamTabId;
+  const interrupted = 'ffffffffffff' as StreamTabId;
+  const nested = '111111111111' as StreamTabId;
   log.emit(PROCESS, 10_000_000, {
     type: 'status',
     phase: STREAM_PHASE.RUNNING,
     cause: 'harness',
   });
-  for (const [id, owner, parentStreamId] of [
-    [waiting, OWNER, undefined],
-    [interrupted, OTHER_OWNER, undefined],
-    [nested, OTHER_OWNER, waiting],
+  for (const [id, agent, owner, parent] of [
+    [waiting, 'waiting', OWNER, null],
+    [interrupted, 'interrupted', OTHER_OWNER, null],
+    [nested, 'nested', OTHER_OWNER, { id: waiting, startCommit: 1 }],
   ] as const) {
     log.emit(
       id,
       10_000_000,
       {
         type: 'run.start',
-        executionId: id.split('#')[1]!,
-        identity: { kind: 'agent', agent: id.split('#')[0]! },
+        identity: { kind: 'agent', agent },
         category: AgentCategory.ToolUse,
         isRemote: false,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        ...(parentStreamId ? { parentStreamId } : {}),
+        parent,
       },
       owner,
     );

@@ -31,7 +31,7 @@ import {
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -85,8 +85,15 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
       `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
     );
     const msg = formatSubagentError(executionId, handle.agentName, err);
+    const targetStreamId = handle.deliveryTarget;
+    if (targetStreamId === undefined) {
+      log.warn(
+        `The wake-failure error for '${executionId}' has no parent to deliver to (detached).`,
+      );
+      return;
+    }
     const delivery = yield* deliverChildRunFollowUp({
-      targetStreamId: handle.parentStreamId,
+      targetStreamId,
       followUp: { text: msg, origin: 'subagent_result' },
       session,
     });
@@ -310,7 +317,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       executionId: string,
       instruction: string,
       session: SessionHandle,
-      callerStreamId: StreamTabId | undefined,
+      callerStreamId: RunId | undefined,
     ): Effect.fn.Return<ToolResult, Error> {
       const handle = session.executions.getHandle(executionId);
       if (!handle) {
@@ -329,11 +336,11 @@ Git worktree support: resolved from the active workspace at runtime.`,
         );
       }
 
-      // Results route to handle.parentStreamId. A detached subagent (parent ===
-      // child) delivers nowhere, and a subagent of another orchestrator reports
-      // to that orchestrator, not the caller. Fail fast instead of silently
-      // queueing instructions whose results would never come back here.
-      if (!handle.isChildExecution) {
+      // Results route to the handle's parent. A detached subagent delivers
+      // nowhere, and a subagent of another orchestrator reports to that
+      // orchestrator, not the caller. Fail fast instead of silently queueing
+      // instructions whose results would never come back here.
+      if (!handle.isChild) {
         return yield* Effect.fail(
           new Error(
             `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,
@@ -350,11 +357,9 @@ Git worktree support: resolved from the active workspace at runtime.`,
 
       const framedInstruction = formatFollowUpInstruction(instruction);
       const result = yield* submitFollowUp(
-        handle.childStreamId,
+        handle.executionId,
         framedInstruction,
-        {
-          session,
-        },
+        { session },
       );
       if (result.status === 'failed') {
         return yield* Effect.fail(

@@ -1,8 +1,4 @@
-import type {
-  AgentDelegationScope,
-  ExecutionId,
-  StreamTabId,
-} from '@shared/schemas';
+import type { AgentDelegationScope, RunId } from '@shared/schemas';
 
 import type { SessionHandle } from './SessionHandle';
 
@@ -10,14 +6,13 @@ import type { SessionHandle } from './SessionHandle';
  * Canonical identity and ownership scope for a launched agent run.
  *
  * `AgentLaunchContext` and the ambient `RunContext` both carry this object
- * (not flat `streamId`/`executionId`/`agentName` fields) whenever they need
- * run identity or the session that owns runtime state.
+ * whenever they need the run's id or the session that owns runtime state.
+ * The run's name is not here: it is `runIdentityName(handle.identity)`, read
+ * off the run's handle, so the model node and the delegation tools cannot
+ * read two different fields for it.
  */
 export interface RunScope {
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
-  /** Agent name (e.g. "orchestrator", "search-agent"). */
-  readonly agentName: string;
+  readonly executionId: RunId;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
   readonly session: SessionHandle;

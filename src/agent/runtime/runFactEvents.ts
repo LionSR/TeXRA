@@ -2,6 +2,7 @@ import type { AgentEvent, AgentTrace } from '@agent/trace';
 import type {
   AddOutputFilesPayload,
   GoalPausedPayload,
+  RunId,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
@@ -48,7 +49,7 @@ export function emitRunFact<K extends RunFactEventName>(
 export function reportMissingOutputs(
   trace: AgentTrace,
   info: {
-    streamId: string;
+    streamId: RunId;
     round: number;
     missing: string[];
     xmlFile: string | null;

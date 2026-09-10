@@ -43,7 +43,7 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
   AggregateIdSchema,
-  ExecutionIdSchema,
+  RunIdSchema,
   OwnerIdSchema,
   SessionEventDraftSchema,
   SessionEventSchema,
@@ -53,7 +53,7 @@ import {
   listingTypeOf,
   referencedAggregates,
   type AggregateId,
-  type ExecutionId,
+  type RunParent,
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -85,17 +85,20 @@ const SESSION_DATABASE_FILE = 'texra.db';
  * unquoted, and every query below aliases the snake-case columns onto it.
  *
  * `event_sequence` is declared first because `event` references it, and the
- * parent edge is self-referential, so both cascades exist the moment the
- * schema does. `STRICT` makes a wrong-typed value an error at insert instead
- * of a surprise at read: on persisted data, a silent coercion is the same
- * defect as a `.catch()` default.
+ * dependency edge (an inquiry thread under the run that asked it) is
+ * self-referential, so both cascades exist the moment the schema does. One
+ * run owns one row here: one sequence counter and one ownership claim (one
+ * run model, section 3.1). `STRICT` makes a wrong-typed value an error at
+ * insert instead of a surprise at read: on persisted data, a silent coercion
+ * is the same defect as a `.catch()` default.
  *
  * The three `event` indexes are the ones the C7 reads need: latest-of-type
  * per aggregate (the listing tier), one aggregate from a commit (the bounded
  * cross-aggregate resume read), and one type across aggregates in commit
- * order (the listing tier across streams). `UNIQUE (aggregate_id, seq)` is
+ * order (the listing tier across runs). `UNIQUE (aggregate_id, seq)` is
  * both the density guarantee and the index a single aggregate's history reads
- * from its seq.
+ * from its seq. `event_parent_start` finds a run's children by the parent
+ * creation commit their `run.start` was stamped with.
  */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS input_history (
@@ -130,7 +133,7 @@ CREATE TABLE IF NOT EXISTS event (
 CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);
 CREATE INDEX IF NOT EXISTS event_agg_commit   ON event(aggregate_id, "commit");
 CREATE INDEX IF NOT EXISTS event_type_commit  ON event(type, "commit");
-CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.parentStartCommit')) WHERE type = 'run.start.1';
+CREATE INDEX IF NOT EXISTS event_parent_start ON event(json_extract(data, '$.parent.startCommit')) WHERE type = 'run.start.1';
 `;
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
@@ -168,7 +171,7 @@ ORDER BY "commit"
 const READ_STATE = `
 SELECT s.aggregate_id AS aggregateId, s.owner_id AS ownerId,
   s.closed, s.parent_id AS parentId,
-  CASE WHEN json_extract(s.aggregate_id, '$[0]') = 'stream'
+  CASE WHEN json_extract(s.aggregate_id, '$[0]') = 'run'
     THEN (SELECT e."commit" FROM event e
           WHERE e.aggregate_id = s.aggregate_id AND e.seq = 1)
     ELSE NULL END AS startCommit
@@ -203,8 +206,7 @@ RETURNING seq
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
 INSERT INTO event (aggregate_id, seq, type, owner_id, at, data)
-VALUES (?, ?, ?, ?, ?,
-  CASE WHEN ? IS NULL THEN ? ELSE json_set(?, '$.parentStartCommit', ?) END)
+VALUES (?, ?, ?, ?, ?, ?)
 RETURNING "commit" AS "commit"
 `;
 export const databaseLayer = (
@@ -277,12 +279,12 @@ export const databaseLayer = (
           AND closed = 0 AND owner_id IS NOT ?
         LIMIT 1
       `;
-      const deletionExecutions = `${dependents}
-        SELECT json_extract(aggregate_id, '$[1]') AS executionId
+      const deletionRuns = `${dependents}
+        SELECT json_extract(aggregate_id, '$[1]') AS runId
         FROM event_sequence
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
-          AND json_extract(aggregate_id, '$[0]') = 'execution'
-        ORDER BY executionId
+          AND json_extract(aggregate_id, '$[0]') = 'run'
+        ORDER BY runId
       `;
       const closeDependents = `${dependents}
         UPDATE event_sequence SET closed = 1
@@ -291,34 +293,31 @@ export const databaseLayer = (
       const all = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
-      const executionRecords = `
-        WITH own_stream AS (
-          SELECT stream.aggregate_id AS id FROM event_sequence execution
-          JOIN event_sequence stream ON stream.aggregate_id = execution.parent_id
-          WHERE execution.aggregate_id = ? AND execution.closed = 0 AND stream.closed = 0
-        ),
-        latest AS (
+      // The latest listing row of each type on one open run: its creation,
+      // status and tombstone beside its private records, never a transcript
+      // row. A closed (tombstoned) run reads as absent.
+      const runRecords = `
+        WITH latest AS (
           SELECT aggregate_id, type, MAX(seq) AS seq FROM event
-          WHERE EXISTS (SELECT 1 FROM own_stream) AND (
-            aggregate_id = ?
-            OR (aggregate_id = (SELECT id FROM own_stream) AND type IN ('run.start.1', 'status.1', 'stream.removed.1'))
-          )
+          WHERE aggregate_id = ?
+            AND EXISTS (SELECT 1 FROM event_sequence s
+                        WHERE s.aggregate_id = event.aggregate_id AND s.closed = 0)
+            AND type IN (SELECT value FROM json_each(?))
           GROUP BY aggregate_id, type
         )
         SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq)
         ORDER BY "commit"
       `;
-      const executionChildren = `
-        WITH own_stream AS (SELECT parent_id AS id FROM event_sequence WHERE aggregate_id = ?),
-        parent AS (SELECT "commit" AS start FROM event WHERE aggregate_id = (SELECT id FROM own_stream) AND type = 'run.start.1'),
-        children AS (SELECT aggregate_id AS id, data FROM event INDEXED BY event_parent_start
-          WHERE type = 'run.start.1' AND json_extract(data, '$.parentStartCommit') = (SELECT start FROM parent)),
+      const runChildren = `
+        WITH parent AS (SELECT "commit" AS start FROM event WHERE aggregate_id = ? AND type = 'run.start.1'),
+        children AS (SELECT aggregate_id AS id FROM event INDEXED BY event_parent_start
+          WHERE type = 'run.start.1' AND json_extract(data, '$.parent.startCommit') = (SELECT start FROM parent)),
         relevant AS (
           SELECT id, 'run.start.1' AS type FROM children
           UNION ALL SELECT id, 'stream.removed.1' FROM children
-          UNION ALL SELECT json_array('execution',json_extract(data,'$.executionId')), 'execution.launchLabel.1' FROM children
-          UNION ALL SELECT id, 'run.start.1' FROM own_stream
-          UNION ALL SELECT id, 'stream.removed.1' FROM own_stream
+          UNION ALL SELECT id, 'execution.launchLabel.1' FROM children
+          UNION ALL SELECT ?, 'run.start.1'
+          UNION ALL SELECT ?, 'stream.removed.1'
         ),
         latest AS (SELECT e.aggregate_id,e.type,MAX(e.seq) AS seq FROM relevant r JOIN event e ON e.aggregate_id=r.id AND e.type=r.type GROUP BY e.aggregate_id,e.type)
         SELECT ${EVENT_COLUMNS} FROM latest JOIN event e USING (aggregate_id,type,seq) ORDER BY "commit"
@@ -442,8 +441,6 @@ export const databaseLayer = (
           'SELECT at, value FROM input_history ORDER BY id',
         )).map((row) => InputHistoryRecordSchema.parse(row));
       });
-      const createExecution = `INSERT INTO event_sequence
-        (aggregate_id, seq, owner_id, parent_id) VALUES (?, 0, ?, ?)`;
       const claim = `UPDATE event_sequence SET owner_id = ?
         WHERE aggregate_id = ? AND owner_id IS ? AND closed = 0 RETURNING aggregate_id`;
       const release = `UPDATE event_sequence SET owner_id = NULL
@@ -595,7 +592,7 @@ export const databaseLayer = (
               }
               if ((!previous || reopened) && draft.parentStreamId !== null) {
                 const parent = (yield* readState([
-                  qualifyAggregateId('stream', draft.parentStreamId),
+                  qualifyAggregateId('run', draft.parentStreamId),
                 ]))[0];
                 if (
                   !parent ||
@@ -618,57 +615,44 @@ export const databaseLayer = (
               );
             }
             const target = aggregateTarget(draft.aggregateId);
+            // The seq-1 rule (decision 9): a run aggregate begins with exactly
+            // one `run.start`, and nothing else ever lands at seq 1.
             if (
-              target.kind === 'stream' &&
+              target.kind === 'run' &&
               (seq === 1) !== (draft.type === 'run.start')
             ) {
               throw new Error(
-                `A stream must begin with exactly one run.start: ${draft.aggregateId}`,
+                `A run must begin with exactly one run.start: ${draft.aggregateId}`,
               );
             }
             if (
               (draft.type === 'run.start' || draft.type === 'stream.removed') &&
-              target.kind !== 'stream'
+              target.kind !== 'run'
             ) {
               throw new Error(
-                `Stream lifecycle event has a non-stream target: ${draft.aggregateId}`,
+                `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
               );
             }
-            if (draft.type === 'run.start') {
-              // The execution belongs to this stream from creation onward.
-              // Its first own event will advance seq from zero to one.
-              // An existing execution cannot be assigned to a second run.
-              yield* sql.unsafe<Record<string, unknown>>(createExecution, [
-                qualifyAggregateId('execution', draft.executionId),
-                identity.ownerId,
-                draft.aggregateId,
-              ]);
-            }
-            // Capture the declared parent in this same transaction. A
-            // reused logical id must not redirect the child to a new run.
-            let parentStartCommit: number | undefined;
-            let parentExecutionId: ExecutionId | undefined;
-            if (draft.type === 'run.start' && draft.parentStreamId != null) {
-              const parent = (yield* readState([
-                qualifyAggregateId('stream', draft.parentStreamId),
+            // Stamp the declared parent's creation commit in this same
+            // transaction. A reused logical id must not redirect the child to
+            // a later incarnation of its parent.
+            let parent: RunParent | null = null;
+            if (draft.type === 'run.start' && draft.parent !== null) {
+              const parentState = (yield* readState([
+                qualifyAggregateId('run', draft.parent.id),
               ]))[0];
-              if (!parent || parent.closed || parent.startCommit === null) {
+              if (
+                !parentState ||
+                parentState.closed ||
+                parentState.startCommit === null
+              ) {
                 throw new Error(
-                  `Child creation requires an open parent: ${draft.parentStreamId}`,
+                  `Child creation requires an open parent: ${draft.parent.id}`,
                 );
               }
-              parentStartCommit = parent.startCommit;
-              const parentRow = (yield* sql.unsafe<Record<string, unknown>>(
-                `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? AND e.seq = ?`,
-                [qualifyAggregateId('stream', draft.parentStreamId), 1],
-              ))[0];
-              if (!parentRow) throw new Error('Parent creation row is missing');
-              const parentCreation = decodeEvent(parentRow);
-              if (parentCreation.type !== 'run.start')
-                throw new Error('Parent creation row is missing');
-              parentExecutionId = parentCreation.executionId;
+              parent = { id: draft.parent.id, startCommit: parentState.startCommit };
             }
-            // A tombstone names only execution directories owned by this
+            // A tombstone names only run directories owned by this
             // lifecycle. Derive the targets under the same write permit
             // and transaction as closure; no caller chooses cleanup paths.
             const committedDraft =
@@ -676,20 +660,15 @@ export const databaseLayer = (
                 ? {
                     ...draft,
                     executionIds: (yield* sql.unsafe<Record<string, unknown>>(
-                      deletionExecutions,
+                      deletionRuns,
                       [draft.aggregateId],
-                    )).map((row) => ExecutionIdSchema.parse(row.executionId)),
+                    )).map((row) => RunIdSchema.parse(row.runId)),
                   }
-                : {
-                    ...draft,
-                    ...(parentExecutionId === undefined
-                      ? {}
-                      : { parentExecutionId }),
-                  };
+                : draft.type === 'run.start'
+                  ? { ...draft, parent }
+                  : draft;
             const committedPayload =
-              draft.type === 'stream.removed' || parentExecutionId !== undefined
-                ? payloadOf(committedDraft)
-                : payload;
+              committedDraft === draft ? payload : payloadOf(committedDraft);
             const commit = (yield* sql.unsafe<Record<string, unknown>>(
               INSERT_EVENT,
               [
@@ -698,10 +677,7 @@ export const databaseLayer = (
                 `${draft.type}.1`,
                 identity.ownerId,
                 at,
-                parentStartCommit ?? null,
                 committedPayload,
-                committedPayload,
-                parentStartCommit ?? null,
               ],
             ))[0]?.commit;
             if (typeof commit !== 'number') {
@@ -723,7 +699,7 @@ export const databaseLayer = (
               yield* sql.unsafe<Record<string, unknown>>(reparentInquiry, [
                 draft.parentStreamId === null
                   ? null
-                  : qualifyAggregateId('stream', draft.parentStreamId),
+                  : qualifyAggregateId('run', draft.parentStreamId),
                 draft.aggregateId,
                 identity.ownerId,
               ]);
@@ -751,9 +727,6 @@ export const databaseLayer = (
             }
             return {
               ...committedDraft,
-              ...(parentStartCommit === undefined
-                ? {}
-                : { parentStartCommit, parentExecutionId }),
               seq,
               commit,
               ownerId: identity.ownerId,
@@ -816,19 +789,20 @@ export const databaseLayer = (
         readExecutionRecords: (id) =>
           query(
             Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(
-                executionRecords,
-                [id, id],
-              )).map(decodeEvent);
+              return (yield* sql.unsafe<Record<string, unknown>>(runRecords, [
+                id,
+                JSON.stringify(LISTING_TYPES),
+              ])).map(decodeEvent);
             }),
           ),
         readExecutionChildren: (id) =>
           query(
             Effect.gen(function* () {
-              return (yield* sql.unsafe<Record<string, unknown>>(
-                executionChildren,
-                [id],
-              )).map(decodeEvent);
+              return (yield* sql.unsafe<Record<string, unknown>>(runChildren, [
+                id,
+                id,
+                id,
+              ])).map(decodeEvent);
             }),
           ),
         readUpdateCheck: (host) => query(readUpdateCheck(host)),
@@ -1203,7 +1177,10 @@ function prepareEventDraft(input: SessionEventDraft) {
  * their own C1 columns. Child creation adds the database-owned parent commit
  * to this payload inside the creation transaction.
  */
-function payloadOf(draft: SessionEventDraft): string {
+function payloadOf(draft: {
+  readonly type: string;
+  readonly aggregateId: AggregateId;
+}): string {
   const { type, aggregateId, ...payload } = draft;
   return JSON.stringify(payload);
 }

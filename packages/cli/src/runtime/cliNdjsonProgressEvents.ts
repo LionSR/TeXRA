@@ -3,19 +3,27 @@ import type {
   AddOutputFilesPayload,
   AgentCategory,
   ConversationProgress,
-  ExecutionId,
   GoalPausedPayload,
   InquiryThreadUpdatedEvent,
   RoundStage,
+  RunId,
   StreamPhase,
   StreamSubstate,
-  StreamTabId,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
+
+/**
+ * The 0.40 wire's stream and execution ids are one run id: this module keeps
+ * the frozen key names (`streamId`, `executionId`, `childStreamId`,
+ * `parentStreamId`, `storageKey`) over that one value until S5 versions the
+ * projection.
+ */
+type StreamTabId = RunId;
+type ExecutionId = RunId;
 
 // Derived rather than deep-imported from '@agent/core/state/TaskState', so the
 // cli host does not pin @agent's internal module layout for one payload type.
@@ -46,7 +54,7 @@ export interface CliNdjsonActiveChildRow {
 
 /**
  * Frozen public `setActiveStream` record: the pre-fold stream attachment
- * shape, now projected from the stream's `run.start`. The internal fact that
+ * shape, now projected from the run's `run.activate`. The internal fact that
  * carried it is gone (existence is `run.start`; focus is never a fact), and
  * the NDJSON boundary alone keeps the record name and fields.
  */
@@ -54,7 +62,8 @@ interface CliNdjsonSetActiveStreamPayload {
   readonly streamId: StreamTabId;
   readonly agentCategory?: AgentCategory;
   readonly isRemote?: boolean;
-  /** Present, and true, only on a background (delegated child) launch. */
+  /** Present, and true, only on a delegated child's activation: the parent
+   *  edge of its `run.start`, spelled the way the 0.40 wire promised. */
   readonly suppressViewSwitch?: true;
 }
 
@@ -90,8 +99,11 @@ export interface CliNdjsonProgressEventPayloads {
     taskState: TaskState;
   };
   updateStreamUsage: UpdateStreamUsagePayload;
-  /** Inquiry thread state changed (open, answered, dropped, or resume outcome). */
-  inquiryThreadUpdated: InquiryThreadUpdatedEvent;
+  /** Inquiry thread state changed (open, answered, dropped, or resume outcome).
+   *  The internal edge is the asking run under the 0.40 key. */
+  inquiryThreadUpdated: Omit<InquiryThreadUpdatedEvent, 'parentStreamId'> & {
+    readonly parentStreamId: StreamTabId | null;
+  };
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   updateConversationProgress: {

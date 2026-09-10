@@ -4,20 +4,18 @@ import {
   AttachedMemoryMissSchema,
   type AttachedMemoryMiss,
 } from '@agent/types/AttachedMemory';
-import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
+import type { RunId, RunOutcome } from '@shared/schemas';
 import {
   CompileFailureSummarySchema,
-  ExecutionIdSchema,
+  RunIdSchema,
   OutputFileSummarySchema,
   RetryErrorInfoSchema,
   RunOutcomeSchema,
   STREAM_PHASE,
-  StreamTabIdSchema,
 } from '@shared/schemas';
 
 const AgentFlowMetaSchema = z.object({
-  executionId: ExecutionIdSchema,
-  streamId: StreamTabIdSchema,
+  executionId: RunIdSchema,
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
   /**
    * Total model cost (USD) of the run, including its own subagents.
@@ -109,13 +107,11 @@ export function buildOptionalFlowResultFields(
 export function buildTerminalFlowResult(
   category: AgentFlowCategory,
   outcome: RunOutcome,
-  executionId: ExecutionId,
-  streamId: StreamTabId,
+  executionId: RunId,
   memoryMisses?: AttachedMemoryMiss[],
 ): AgentFlowResult {
   const meta = {
     executionId,
-    streamId,
     ...buildOptionalFlowResultFields(memoryMisses, undefined),
   };
   if (category === 'toolUse') {

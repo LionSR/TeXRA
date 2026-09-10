@@ -73,10 +73,9 @@ import {
   STREAM_PHASE,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
-  type ExecutionId,
+  type RunId,
   type SessionEvent,
   type SessionEventDraft,
-  type StreamTabId,
   type StreamPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
@@ -346,7 +345,7 @@ export class SessionHandle {
    * `run.start` as the initial snapshot; every later change is published
    * through {@link publishApprovalPolicy}. Never a toggle delta.
    */
-  approvalPolicySnapshotFor(streamId: StreamTabId): ApprovalPolicySnapshot {
+  approvalPolicySnapshotFor(streamId: RunId): ApprovalPolicySnapshot {
     return {
       policy: this.texraApprovalPolicy,
       bypasses: this.approvals.bypassesFor(streamId),
@@ -357,11 +356,11 @@ export class SessionHandle {
    * The one emitter of `approval.policy` (PRD one-fold-three-renderers,
    * section 6, item 2), for a change after the run's `run.start`.
    */
-  private publishApprovalPolicy(streamId: StreamTabId): void {
+  private publishApprovalPolicy(streamId: RunId): void {
     this.publish([
       {
         type: 'approval.policy',
-        aggregateId: qualifyAggregateId('stream', streamId),
+        aggregateId: qualifyAggregateId('run', streamId),
         snapshot: this.approvalPolicySnapshotFor(streamId),
       },
     ]);
@@ -378,7 +377,7 @@ export class SessionHandle {
    * This is the one exit choreography every run driver calls.
    */
   releaseExecutionLease(
-    executionId: ExecutionId,
+    executionId: RunId,
     afterArtifactsDrained: Effect.Effect<void, Error> = Effect.void,
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
@@ -429,12 +428,11 @@ export class SessionHandle {
     });
   }
 
-  /** Admit both existing execution claims before resume reads or mutations. */
+  /** Admit the run's existing claim before resume reads or mutations. */
   acquireExecutionClaims(
-    executionId: ExecutionId,
-    streamId: StreamTabId,
+    executionId: RunId,
   ): Effect.Effect<Effect.Effect<void, Error>, Error> {
-    return this.graph.acquireExecutionClaims(executionId, streamId).pipe(
+    return this.graph.acquireExecutionClaims(executionId).pipe(
       Effect.map((release) =>
         release.pipe(
           Effect.catchCause((cause) =>
@@ -483,7 +481,7 @@ export class SessionHandle {
    * transcript order. Returns a detach disposer the run bundles into its
    * trace teardown.
    */
-  attachRunTrace(trace: AgentTrace, streamId: StreamTabId): () => void {
+  attachRunTrace(trace: AgentTrace, streamId: RunId): () => void {
     return trace.subscribe((event) => this.publishRunEvent(streamId, event));
   }
 
@@ -498,7 +496,7 @@ export class SessionHandle {
    * run's own (already-torn-down) trace, but has no other way to reach this
    * session's `onResult` subscribers.
    */
-  publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
+  publishRunEvent(streamId: RunId, event: AgentEvent): void {
     if (this.disposed) return;
     if (event.type === 'stream.chunk') {
       this.schedulePublication(
@@ -546,17 +544,14 @@ export class SessionHandle {
   }
 
   /** Final text facts committed immediately before a status closes its entries. */
-  statusClosureFacts(
-    streamId: StreamTabId,
-    phase: StreamPhase,
-  ): SessionEventDraft[] {
+  statusClosureFacts(streamId: RunId, phase: StreamPhase): SessionEventDraft[] {
     const closure: SessionEventDraft[] = [];
     if (phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase)) {
       for (const entry of this.transcripts.get(streamId)?.getRange(0) ?? []) {
         if (!isRunningStreamingTextEntry(entry)) continue;
         closure.push({
           type: 'stream.end',
-          aggregateId: qualifyAggregateId('stream', streamId),
+          aggregateId: qualifyAggregateId('run', streamId),
           id: entry.id,
           finalText: this.graph.readText(streamId, entry.id) ?? entry.text,
         });
@@ -594,7 +589,7 @@ export class SessionHandle {
 
   /** Read and append under the same local publisher permit. C5 excludes foreign writers. */
   updateRecordFacts<A>(
-    executionId: ExecutionId,
+    executionId: RunId,
     update: (rows: readonly SessionEvent[]) => {
       readonly events: readonly SessionEventDraft[];
       readonly value: A;
@@ -612,13 +607,13 @@ export class SessionHandle {
 
   /** Internal typed metadata accessors read the database, never the display fold. */
   readExecutionRecords(
-    executionId: ExecutionId,
+    executionId: RunId,
   ): Effect.Effect<readonly SessionEvent[]> {
     return this.graph.executionRecords(executionId);
   }
 
   readExecutionChildren(
-    executionId: ExecutionId,
+    executionId: RunId,
   ): Effect.Effect<readonly SessionEvent[]> {
     return this.graph.executionChildren(executionId);
   }
@@ -666,13 +661,12 @@ export class SessionHandle {
           const { self } = SubscriptionRef.getUnsafe(this.graph.local);
           if (event.ownerId == null || !self.includes(event.ownerId)) return;
 
+          const target = aggregateTarget(event.aggregateId);
+          if (target.kind !== 'run') return;
           if (event.type === 'result') {
             for (const listener of [...this.resultListeners]) {
               try {
-                listener({
-                  ...event,
-                  streamId: aggregateTarget(event.aggregateId).id,
-                });
+                listener({ ...event, runId: target.id });
               } catch (error) {
                 logger.warn('Session result listener threw', { data: error });
               }
@@ -680,11 +674,7 @@ export class SessionHandle {
           }
 
           if (event.type !== 'status') return;
-          const status: StatusEvent = {
-            ...event,
-            streamId: aggregateTarget(event.aggregateId).id as StreamTabId,
-          };
-          this.executions.handleStatus(status.streamId);
+          this.executions.handleStatus(target.id);
         }),
       ),
     );
@@ -711,7 +701,7 @@ export class SessionHandle {
    */
   setTranscriptSubscriptions(
     port: string,
-    set: readonly (Omit<TranscriptSubscription, 'id'> & { id: StreamTabId })[],
+    set: readonly (Omit<TranscriptSubscription, 'id'> & { id: RunId })[],
   ): Effect.Effect<void> {
     return Effect.suspend(() =>
       this.disposed
@@ -719,7 +709,7 @@ export class SessionHandle {
         : this.subscriptions.set(
             port,
             set.map(({ id, fromSeq }) => ({
-              id: qualifyAggregateId('stream', id),
+              id: qualifyAggregateId('run', id),
               fromSeq,
             })),
           ),
@@ -728,7 +718,7 @@ export class SessionHandle {
 
   /** The status machine's hold on a stream this process cannot read, or its
    *  release: local truth the fold reads as `readOnly` (PRD 5.1). */
-  private setUnreadable(streamId: StreamTabId, detail: string | null): void {
+  private setUnreadable(streamId: RunId, detail: string | null): void {
     if (this.disposed) return;
     effectRuntime().runFork(
       SubscriptionRef.update(this.graph.local, (local) => {
@@ -800,7 +790,7 @@ export function forEachLiveSession(
 export const settleLiveSessionExecutions = Effect.fn(
   'settleLiveSessionExecutions',
 )(function* (signal: AbortSignal) {
-  const pending: { session: SessionHandle; executionId: ExecutionId }[] = [];
+  const pending: { session: SessionHandle; executionId: RunId }[] = [];
   forEachLiveSession((session) => {
     for (const executionId of session.executions.getActiveIds()) {
       pending.push({ session, executionId });
@@ -815,7 +805,7 @@ export const settleLiveSessionExecutions = Effect.fn(
     }
     const settlement = Effect.gen(function* () {
       if (!runInSession(session, () => ownsExecutionLease(executionId))) return;
-      const streamId = session.executions.getHandle(executionId)?.childStreamId;
+      const tracked = session.executions.getHandle(executionId) !== undefined;
       // Read the committed transcript once after queued publications settle.
       // Host exit needs no presentation residency or mutable writer handle.
       const transcript = yield* Effect.exit(
@@ -824,9 +814,9 @@ export const settleLiveSessionExecutions = Effect.fn(
             try: () => session.settlePublications(),
             catch: ensureError,
           });
-          return streamId === undefined
-            ? []
-            : yield* session.transcripts.readEntries(streamId);
+          return tracked
+            ? yield* session.transcripts.readEntries(executionId)
+            : [];
         }),
       );
       yield* session.releaseExecutionLease(
@@ -850,7 +840,7 @@ export const settleLiveSessionExecutions = Effect.fn(
             );
             return;
           }
-          if (streamId === undefined) {
+          if (!tracked) {
             logger.warn(
               `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
             );
@@ -864,20 +854,20 @@ export const settleLiveSessionExecutions = Effect.fn(
           // closure as the resident transcript.
           for (const entry of transcript.value) {
             if (isRunningGroupEntry(entry)) {
-              session.publishRunEvent(streamId, {
+              session.publishRunEvent(executionId, {
                 type: 'stage.end',
                 id: entry.id,
                 status: finalization.outcome,
               });
             } else if (isRunningStreamingTextEntry(entry)) {
-              session.publishRunEvent(streamId, {
+              session.publishRunEvent(executionId, {
                 type: 'stream.end',
                 id: entry.id,
               });
             } else {
               const call = nonterminalWorkflowCall(entry);
               if (call)
-                session.publishRunEvent(streamId, {
+                session.publishRunEvent(executionId, {
                   type: 'workflow.call',
                   logId: entry.id,
                   stageId: entry.groupId,

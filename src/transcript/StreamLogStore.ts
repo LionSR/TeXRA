@@ -6,16 +6,18 @@ import {
   aggregateTarget,
   isTranscriptEvent,
   type SessionEvent,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
-import { StreamLog } from '@shared/session/traceEntries';
+import { StreamLog, type StreamLogDelta } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
+import { createListenerSet } from '@utils/core/listenerSet';
 
 type TranscriptDatabase = Pick<
   Context.Service.Shape<typeof Database>,
   'readAggregate' | 'readListing'
 >;
+type StreamLogListener = (streamId: RunId, delta: StreamLogDelta) => void;
 export type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
@@ -26,7 +28,7 @@ interface StreamRunOwnership {
 }
 type TranscriptResidencyLeaseReason = 'run' | 'focus';
 export interface TranscriptResidencyLease {
-  readonly streamId: StreamTabId;
+  readonly streamId: RunId;
   close(): void;
 }
 interface StreamState {
@@ -66,9 +68,10 @@ function foldEntries(events: readonly SessionEvent[]): StreamState | undefined {
 }
 
 export class StreamLogStore {
-  private readonly streams = new Map<StreamTabId, StreamState>();
-  private readonly known = new Set<StreamTabId>();
-  private readonly releaseRequests = new Set<StreamTabId>();
+  private readonly streams = new Map<RunId, StreamState>();
+  private readonly known = new Set<RunId>();
+  private readonly releaseRequests = new Set<RunId>();
+  private readonly listeners = createListenerSet<StreamLogListener>();
   private readonly gate = Semaphore.makeUnsafe(1);
 
   private constructor(
@@ -86,7 +89,7 @@ export class StreamLogStore {
       const store = new StreamLogStore(mode, database);
       for (const event of listing ?? (yield* database.readListing())) {
         const target = aggregateTarget(event.aggregateId);
-        if (target.kind !== 'stream') continue;
+        if (target.kind !== 'run') continue;
         const id = target.id;
         if (event.type === 'run.start') store.known.add(id);
         else if (event.type === 'stream.removed') store.known.delete(id);
@@ -103,29 +106,32 @@ export class StreamLogStore {
     return new StreamLogStore({ kind: 'ephemeral', reason: normalized });
   }
 
-  get(streamId: StreamTabId): StreamLog | undefined {
+  onChange(listener: StreamLogListener): () => void {
+    return this.listeners.add(listener);
+  }
+  get(streamId: RunId): StreamLog | undefined {
     return this.streams.get(streamId)?.log;
   }
-  has(streamId: StreamTabId): boolean {
+  has(streamId: RunId): boolean {
     return this.known.has(streamId);
   }
 
   /** Read a complete event prefix without changing residency. */
-  readEntries(streamId: StreamTabId) {
+  readEntries(streamId: RunId) {
     return this.database === undefined
       ? Effect.sync(() => this.get(streamId)?.toJSON() ?? [])
       : this.database
-          .readAggregate(aggregateId('stream', streamId), 0)
+          .readAggregate(aggregateId('run', streamId), 0)
           .pipe(
             Effect.map((events) => foldEntries(events)?.log?.toJSON() ?? []),
           );
   }
 
-  hasAuthoritativeStream(streamId: StreamTabId) {
+  hasAuthoritativeStream(streamId: RunId) {
     return this.database === undefined
       ? Effect.sync(() => this.has(streamId))
       : this.database
-          .readAggregate(aggregateId('stream', streamId), 0)
+          .readAggregate(aggregateId('run', streamId), 0)
           .pipe(
             Effect.map(
               (events) =>
@@ -134,13 +140,13 @@ export class StreamLogStore {
           );
   }
 
-  ensureStream(streamId: StreamTabId): void {
+  ensureStream(streamId: RunId): void {
     if (this.known.has(streamId)) return;
     this.known.add(streamId);
     this.ensureStreamState(streamId).log = new StreamLog();
   }
 
-  requestEviction(streamId: StreamTabId): void {
+  requestEviction(streamId: RunId): void {
     if (this.mode.kind === 'ephemeral') return;
     this.releaseRequests.add(streamId);
     const state = this.streams.get(streamId);
@@ -148,10 +154,11 @@ export class StreamLogStore {
     this.tryRelease(streamId);
   }
 
-  acquireRunResidency(streamId: StreamTabId, ownerKey: string) {
+  /** Retain a run's transcript for the run itself: the run is its own owner key. */
+  acquireRunResidency(streamId: RunId) {
     return this.gate.withPermit(
       Effect.gen({ self: this }, function* () {
-        const residency = this.retainRun(streamId, ownerKey);
+        const residency = this.retainRun(streamId, streamId);
         yield* this.loadEntries(streamId).pipe(
           Effect.onError(() => Effect.sync(() => residency.close())),
         );
@@ -161,12 +168,12 @@ export class StreamLogStore {
   }
 
   ensureLoaded(
-    streamId: StreamTabId,
+    streamId: RunId,
     options: { retainForPresentation: true },
   ): Effect.Effect<TranscriptResidencyLease, Error>;
-  ensureLoaded(streamId: StreamTabId): Effect.Effect<void, Error>;
+  ensureLoaded(streamId: RunId): Effect.Effect<void, Error>;
   ensureLoaded(
-    streamId: StreamTabId,
+    streamId: RunId,
     options?: { retainForPresentation: true },
   ): Effect.Effect<void | TranscriptResidencyLease, Error> {
     return Effect.gen({ self: this }, function* () {
@@ -196,12 +203,12 @@ export class StreamLogStore {
     });
   }
 
-  private loadEntries(streamId: StreamTabId) {
+  private loadEntries(streamId: RunId) {
     return Effect.gen({ self: this }, function* () {
       if (this.get(streamId) !== undefined || this.database === undefined)
         return;
       const entries = foldEntries(
-        yield* this.database.readAggregate(aggregateId('stream', streamId), 0),
+        yield* this.database.readAggregate(aggregateId('run', streamId), 0),
       );
       if (entries === undefined) {
         this.known.delete(streamId);
@@ -209,6 +216,7 @@ export class StreamLogStore {
       }
       this.known.add(streamId);
       Object.assign(this.ensureStreamState(streamId), entries);
+      this.notify(streamId, true);
     });
   }
 
@@ -217,7 +225,7 @@ export class StreamLogStore {
     return this.gate.withPermit(
       Effect.sync(() => {
         const target = aggregateTarget(event.aggregateId);
-        if (target.kind !== 'stream') return;
+        if (target.kind !== 'run') return;
         const streamId = target.id;
         if (event.type === 'run.start') this.known.add(streamId);
         if (event.type === 'stream.removed') {
@@ -239,15 +247,13 @@ export class StreamLogStore {
         state.fold ??= createTranscriptFold(state.log);
         applyEvent(state.log, state.fold, event);
         state.seq = event.seq;
-        // Nothing here reads the log's change buffers; drain them so they do
-        // not grow with the resident log.
-        state.log.drainEmission();
+        this.notify(streamId);
       }),
     );
   }
 
   /** Forget only the resident projection after committed deletion. */
-  delete(streamId: StreamTabId) {
+  delete(streamId: RunId) {
     return this.gate.withPermit(
       Effect.sync(() => {
         this.streams.delete(streamId);
@@ -268,7 +274,7 @@ export class StreamLogStore {
   }
 
   private retainRun(
-    streamId: StreamTabId,
+    streamId: RunId,
     ownerKey: string,
   ): TranscriptResidencyLease {
     if (!ownerKey.trim()) {
@@ -307,7 +313,7 @@ export class StreamLogStore {
     };
   }
 
-  private pruneStreamState(streamId: StreamTabId): void {
+  private pruneStreamState(streamId: RunId): void {
     const state = this.streams.get(streamId);
     if (
       state &&
@@ -319,7 +325,7 @@ export class StreamLogStore {
     }
   }
   private acquireLease(
-    streamId: StreamTabId,
+    streamId: RunId,
     reason: TranscriptResidencyLeaseReason,
   ): void {
     const state = this.ensureStreamState(streamId);
@@ -327,7 +333,7 @@ export class StreamLogStore {
     state.pins.add(reason);
   }
   private releaseLease(
-    streamId: StreamTabId,
+    streamId: RunId,
     reason: TranscriptResidencyLeaseReason,
   ): void {
     const state = this.streams.get(streamId);
@@ -343,7 +349,7 @@ export class StreamLogStore {
     state.pins?.delete(pin);
     if (state.pins?.size === 0) state.pins = undefined;
   }
-  private tryRelease(streamId: StreamTabId): void {
+  private tryRelease(streamId: RunId): void {
     const state = this.streams.get(streamId);
     if (
       this.mode.kind === 'ephemeral' ||
@@ -357,12 +363,19 @@ export class StreamLogStore {
     state.seq = undefined;
     this.pruneStreamState(streamId);
   }
-  private ensureStreamState(streamId: StreamTabId): StreamState {
+  private ensureStreamState(streamId: RunId): StreamState {
     let state = this.streams.get(streamId);
     if (!state) {
       state = {};
       this.streams.set(streamId, state);
     }
     return state;
+  }
+
+  private notify(streamId: RunId, reset = false): void {
+    const log = this.get(streamId);
+    if (log === undefined) return;
+    const delta = { ...log.drainEmission(), reset };
+    for (const listener of this.listeners) listener(streamId, delta);
   }
 }

@@ -4,17 +4,17 @@ import { createLog } from '@logger/logUtils';
 import {
   aggregateTarget,
   type SessionEvent,
-  type StreamTabId,
+  type RunId,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 const log = createLog('LeftoverStreamSweep');
 
 /** Streams this process is running right now, by handle or by in-flight phase. */
-function runningStreams(session: SessionHandle): Set<StreamTabId> {
-  const running = new Set<StreamTabId>();
+function runningStreams(session: SessionHandle): Set<RunId> {
+  const running = new Set<RunId>();
   for (const handle of session.executions.getAgentHandles()) {
-    running.add(handle.childStreamId);
+    running.add(handle.executionId);
   }
   for (const [stream, state] of session.status.getAllStreamStates()) {
     if (isInFlightPhase(state.phase)) running.add(stream);
@@ -38,7 +38,9 @@ export const sweepLeftoverStreams = Effect.fn('sweepLeftoverStreams')(
         removed.has(row.aggregateId)
       )
         continue;
-      const stream = aggregateTarget(row.aggregateId).id;
+      const target = aggregateTarget(row.aggregateId);
+      if (target.kind !== 'run') continue;
+      const stream = target.id;
       if (running.has(stream)) continue;
       yield* session.requests
         .removeStream(stream, 'automatic', row.commit)

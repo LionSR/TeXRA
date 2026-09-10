@@ -14,9 +14,9 @@ import {
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import { createLog } from '@logger/logUtils';
 import {
-  ExecutionIdSchema,
+  RunIdSchema,
   RUN_OUTCOME,
-  type ExecutionId,
+  type RunId,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
@@ -32,8 +32,8 @@ const STABLE_SUBAGENT_SEQUENCE_KEY_PREFIX = 'stable-subagent-sequence-';
 
 const StableSubagentAttemptSchema = z.strictObject({
   schemaVersion: z.literal(STABLE_SUBAGENT_STATE_SCHEMA_VERSION),
-  logicalExecutionId: ExecutionIdSchema,
-  parentExecutionId: ExecutionIdSchema,
+  logicalExecutionId: RunIdSchema,
+  parentExecutionId: RunIdSchema,
   phase: z.enum(['reserved', 'launched', 'committed', 'retryable']),
 });
 
@@ -41,14 +41,14 @@ export type StableSubagentAttempt = z.infer<typeof StableSubagentAttemptSchema>;
 
 const StableSubagentSequenceSchema = z.strictObject({
   schemaVersion: z.literal(STABLE_SUBAGENT_STATE_SCHEMA_VERSION),
-  logicalExecutionId: ExecutionIdSchema,
-  parentExecutionId: ExecutionIdSchema,
+  logicalExecutionId: RunIdSchema,
+  parentExecutionId: RunIdSchema,
   nextAttempt: z.int().nonnegative(),
 });
 
 type StableSubagentSequence = z.infer<typeof StableSubagentSequenceSchema>;
 
-function stableSubagentSequenceKvKey(logicalExecutionId: ExecutionId): string {
+function stableSubagentSequenceKvKey(logicalExecutionId: RunId): string {
   return `${STABLE_SUBAGENT_SEQUENCE_KEY_PREFIX}${logicalExecutionId}`;
 }
 
@@ -62,7 +62,7 @@ export function isStableSubagentStateKvKey(key: string): boolean {
 /** Read the parent-owned attempt sequence for one stable logical call. */
 async function readStableSubagentSequence(
   store: ExecutionKVStore,
-  logicalExecutionId: ExecutionId,
+  logicalExecutionId: RunId,
 ): Promise<StableSubagentSequence | null> {
   const raw = await store.read(stableSubagentSequenceKvKey(logicalExecutionId));
   return raw === undefined ? null : StableSubagentSequenceSchema.parse(raw);
@@ -71,8 +71,8 @@ async function readStableSubagentSequence(
 /** Atomically publish the number of child attempts reserved for this call. */
 async function writeStableSubagentSequence(
   store: ExecutionKVStore,
-  logicalExecutionId: ExecutionId,
-  parentExecutionId: ExecutionId,
+  logicalExecutionId: RunId,
+  parentExecutionId: RunId,
   nextAttempt: number,
 ): Promise<void> {
   const sequence = StableSubagentSequenceSchema.parse({
@@ -112,13 +112,13 @@ export async function writeStableSubagentAttempt(
  * live execution and its serialization remain with the native caller.
  */
 interface StableSubagentCallIdentity {
-  readonly executionId: ExecutionId;
-  readonly parentExecutionId: ExecutionId;
+  readonly executionId: RunId;
+  readonly parentExecutionId: RunId;
   readonly signal?: AbortSignal;
 }
 
 interface StableSubagentResult {
-  readonly executionId: ExecutionId;
+  readonly executionId: RunId;
   readonly result: AgentFinalResult;
 }
 
@@ -156,9 +156,9 @@ export class SubagentCommitError extends SubagentDurabilityError {
 const MAX_STABLE_ATTEMPTS = 1_024;
 
 function stableAttemptExecutionId(
-  logicalExecutionId: ExecutionId,
+  logicalExecutionId: RunId,
   attempt: number,
-): ExecutionId {
+): RunId {
   if (attempt === 0) return logicalExecutionId;
   return deriveExecutionId({ attempt, logicalExecutionId });
 }
@@ -175,7 +175,7 @@ function stableStorageOperation<A>(
 
 const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
   options: StableSubagentCallIdentity,
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<StableAttemptInspection, Error> {
   const store = runInSession(session, () => getExecutionStore(executionId));
@@ -280,13 +280,6 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
       ),
     );
   }
-  if (resultMeta.parentExecutionId !== options.parentExecutionId) {
-    return yield* Effect.fail(
-      new SubagentReconciliationError(
-        `Persisted subagent ${executionId} has different parent lineage; refusing to reuse or repeat it.`,
-      ),
-    );
-  }
   if (attempt.phase === 'retryable') return { kind: 'advance' };
   if (resultMeta.result.outcome !== 'completed') return { kind: 'advance' };
   if (attempt.phase !== 'committed') {
@@ -315,7 +308,7 @@ const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
 export const throwRetryableDurabilityError = Effect.fn(
   'throwRetryableDurabilityError',
 )(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   stableAttempt: StableSubagentAttempt | undefined,
   error: SubagentDurabilityError,
   session: SessionHandle,
@@ -373,7 +366,7 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
     | { readonly kind: 'recovered'; readonly result: StableSubagentResult }
     | {
         readonly kind: 'reserved';
-        readonly executionId: ExecutionId;
+        readonly executionId: RunId;
         readonly attempt: StableSubagentAttempt;
       },
     Error
@@ -435,7 +428,7 @@ export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
         );
     }
     if (unresolved) return yield* Effect.fail(unresolved);
-    let executionId: ExecutionId;
+    let executionId: RunId;
     let candidateInspection: StableAttemptInspection;
     while (true) {
       if (nextAttempt >= MAX_STABLE_ATTEMPTS)
@@ -513,7 +506,7 @@ export const commitStableSubagentAttempt = Effect.fn(
   'commitStableSubagentAttempt',
 )(function* (
   store: ExecutionKVStore,
-  executionId: ExecutionId,
+  executionId: RunId,
   stableAttempt: StableSubagentAttempt,
   session: SessionHandle,
 ): Effect.fn.Return<void, Error> {

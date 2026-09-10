@@ -17,7 +17,6 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import {
-  getRunContextExecutionId,
   getRunContextSession,
   runInSession,
   type RunContext,
@@ -28,7 +27,7 @@ import {
   AgentCategory,
   TODO_STATUS,
   USER_FOLLOW_UP_SUPPORT,
-  type StreamTabId,
+  type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
@@ -100,7 +99,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
   callContext: ToolCallContext | undefined,
   configPayload: AgentConfigPayload,
   agentName: string,
-  parentStreamId: StreamTabId,
+  parentStreamId: RunId,
   options?: { approvalMeta?: ApprovalMeta },
 ) {
   const parentSession = parentContext
@@ -118,7 +117,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       },
     );
   }
-  const parentExecutionId = getRunContextExecutionId(parentContext);
   // Captured now (while the launching tool call's ALS frame is live) so the
   // child-run loop can still roll the child's cost into the parent run after
   // this tool call has returned. Subagents count toward parent usage totals
@@ -138,7 +136,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
   };
   const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
 
-  const inheritChildStreamApprovals = (resolvedStreamId: StreamTabId): void => {
+  const inheritChildStreamApprovals = (resolvedStreamId: RunId): void => {
     // Live inherited bypass values: each approval follows the parent's
     // corresponding bypass, so a partial grant propagates only that grant.
     // Complete delegated-task approval also reaches nested orchestrators.
@@ -166,7 +164,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       executeSubagentForDeliveryInBand({
         configPayload: childConfigPayload,
         agentName,
-        parentExecutionId,
         parentStreamId,
         session: parentSession,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
@@ -209,18 +206,17 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const { childStreamId } = yield* registerChildExecution(parentSession, {
+      yield* registerChildExecution(parentSession, {
         executionId,
         config,
         agentName,
         userFollowUpSupport,
-        parentExecutionId,
+        parentExecutionId: parentStreamId,
       });
 
       const strategyParams = {
         definition,
         executionId,
-        parentExecutionId,
         agentName,
         parentStreamId,
         session: parentSession,
@@ -237,7 +233,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         session: parentSession,
         executionId,
         parentStreamId,
-        childStreamId,
         agentName,
         recordCost,
         buildLaunch: () =>

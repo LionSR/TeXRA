@@ -1,13 +1,11 @@
-/** Assemble a static trace from execution metadata, transcript entries and the root's folded stream state. */
+/** Assemble a static trace from run metadata, transcript entries and the root's folded run state. */
 import { Effect } from 'effect';
-import {
-  readExecutionRunRecord,
-  resolveStreamForExecution,
-} from '@agent/storage/executionLifecycle';
+import { readExecutionRunRecord } from '@agent/storage/executionLifecycle';
+import { getExecutionRecords } from '@agent/storage/ExecutionKVStore';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { redactDisplayValue } from '@logger/redaction';
 
-import type { ExecutionId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import type { TraceDocument } from './traceDocumentSchema';
 
@@ -16,30 +14,28 @@ export type AssembleTraceResult =
   | { readonly status: 'config_missing' | 'streamLogs_missing' };
 
 /**
- * `streamLogs_missing` means no replayable execution-root timeline is
- * available: the run predates transcript persistence, or its metadata
- * carries no stamped stream id.
+ * `streamLogs_missing` means no replayable run timeline is available: the
+ * run has no metadata or no authoritative transcript.
  */
 export const assembleTrace = Effect.fn('assembleTrace')(function* (
-  executionId: ExecutionId,
+  executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<AssembleTraceResult, Error> {
-  const [resolution, config] = yield* Effect.all(
+  const [meta, config] = yield* Effect.all(
     [
-      resolveStreamForExecution(executionId, session),
+      getExecutionRecords(session, executionId).readMeta(),
       readExecutionRunRecord(executionId, session),
     ],
     { concurrency: 2 },
   );
   if (!config) return { status: 'config_missing' };
-  if (!resolution) return { status: 'streamLogs_missing' };
-  const { streamId, meta } = resolution;
-  if (!(yield* session.transcripts.hasAuthoritativeStream(streamId)))
+  if (!meta) return { status: 'streamLogs_missing' };
+  if (!(yield* session.transcripts.hasAuthoritativeStream(executionId)))
     return { status: 'streamLogs_missing' };
   const [entries, snapshot] = yield* Effect.all(
     [
-      session.transcripts.readEntries(streamId),
-      session.snapshots.read(streamId),
+      session.transcripts.readEntries(executionId),
+      session.snapshots.read(executionId),
     ],
     { concurrency: 2 },
   );
@@ -47,7 +43,6 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
     status: 'ok',
     trace: redactDisplayValue({
       executionId,
-      streamId,
       config,
       meta,
       entries,

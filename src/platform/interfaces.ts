@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
-import type { StreamTabId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { Effect } from 'effect';
 
 // ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ export interface AgentDirectoriesPort {
  * importing the host-level command pipeline.
  */
 export interface RecoveryContinuation {
-  readonly streamId: StreamTabId;
+  readonly streamId: RunId;
   readonly kind: 'recovery';
 }
 
@@ -293,7 +293,7 @@ export interface AgentResumePort {
    * the message queued for the next manual resume.
    */
   tryResumeStream(
-    streamId: StreamTabId,
+    streamId: RunId,
     recovery?: RecoveryContinuation,
   ): Promise<boolean>;
 }

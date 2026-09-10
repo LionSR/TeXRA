@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import type {
-  ExecutionId,
+  RunId,
   OutputFileInfo,
   ReadonlyRoundIndexed,
 } from '@shared/schemas';
@@ -35,7 +35,7 @@ export const discoverLatestExecutionOutputs = Effect.fn(
   filesystem: RunOutputFilesystem,
 ): Effect.fn.Return<
   {
-    executionId: ExecutionId;
+    executionId: RunId;
     rounds: ReadonlyRoundIndexed<OutputFileInfo>;
   } | null,
   Error
@@ -61,15 +61,11 @@ export const discoverLatestExecutionOutputs = Effect.fn(
   );
 
   for (const candidate of candidates) {
-    // The stream stamped on execution metadata addresses its snapshot
-    // directly; identity is never rebuilt from agent/model configuration.
-    // Records without one go straight to the run-directory scan below.
-    const streamId = yield* discovery.readStreamId(candidate.id);
-    if (streamId !== undefined) {
-      const { outputFilesByRound: rounds } = yield* snapshots.read(streamId);
-      if (Object.keys(rounds).length > 0) {
-        return { executionId: candidate.id, rounds };
-      }
+    // The run id addresses its snapshot directly; identity is never rebuilt
+    // from agent/model configuration.
+    const { outputFilesByRound: rounds } = yield* snapshots.read(candidate.id);
+    if (Object.keys(rounds).length > 0) {
+      return { executionId: candidate.id, rounds };
     }
     // Generated files remain discoverable when no output facts were recorded.
     // Use all configured input files as diff bases, as the pinned-run path does.

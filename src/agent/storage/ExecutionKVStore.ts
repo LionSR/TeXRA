@@ -24,11 +24,10 @@ import {
   ExecutionMetaSchema,
   RUN_OUTCOME,
   aggregateId,
-  aggregateTarget,
   EXECUTION_META_SCHEMA_VERSION,
   type SessionEvent,
   type SessionEventDraft,
-  type ExecutionId,
+  type RunId,
   type ExecutionMeta,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -55,7 +54,7 @@ const log = createLog('ExecutionKVStore');
 
 /** A child launch projected from its canonical creation fact. */
 export interface ChildRecord {
-  readonly id: ExecutionId;
+  readonly id: RunId;
   readonly agent: string;
   readonly timestamp: string;
 }
@@ -106,7 +105,7 @@ export interface ExecutionKVStore {
   exists(key: string): Promise<boolean>;
   listKeys(prefix?: string): Promise<string[]>;
   clear(): Promise<void>;
-  getExecutionId(): ExecutionId;
+  getExecutionId(): RunId;
 
   readTurnState(): Promise<ChildTurnState | null>;
   writeTurnState(state: ChildTurnState): Promise<void>;
@@ -122,7 +121,7 @@ export interface ExecutionKVStore {
  * Stores data in executions/{executionId}/{key}.json
  */
 class StorageFSKVStore extends KVStore implements ExecutionKVStore {
-  constructor(private readonly executionId: ExecutionId) {
+  constructor(private readonly executionId: RunId) {
     // Compact JSON: flow records rewrite full shared state on every node
     // transition, so pretty-printing this machine-owned store is pure churn.
     super(resolveRunStoragePath(executionId), { compactJson: true });
@@ -146,7 +145,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     );
   }
 
-  getExecutionId(): ExecutionId {
+  getExecutionId(): RunId {
     return this.executionId;
   }
 
@@ -176,26 +175,20 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 }
 
-/** Fold the named metadata records for one execution from one database prefix. */
+/** Fold the named metadata records for one run from one database prefix. */
 export function executionMetaFromEvents(
   rows: readonly SessionEvent[],
-  executionId: ExecutionId,
+  executionId: RunId,
 ): ExecutionMeta | null {
-  const id = aggregateId('execution', executionId);
+  const id = aggregateId('run', executionId);
   const start = rows.find(
     (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
-      row.type === 'run.start' && row.executionId === executionId,
+      row.type === 'run.start' && row.aggregateId === id,
   );
-  if (
-    !start ||
-    rows.some(
-      (row) =>
-        row.aggregateId === start.aggregateId && row.type === 'stream.removed',
-    )
-  )
+  if (!start || rows.some((row) => row.aggregateId === id && row.type === 'stream.removed'))
     return null;
   const status = rows.findLast(
-    (row) => row.aggregateId === start.aggregateId && row.type === 'status',
+    (row) => row.aggregateId === id && row.type === 'status',
   );
   const description = rows.findLast(
     (row) => row.aggregateId === id && row.type === 'execution.description',
@@ -203,13 +196,17 @@ export function executionMetaFromEvents(
   const workflow = rows.findLast(
     (row) => row.aggregateId === id && row.type === 'execution.workflow',
   );
+  // The parent edge: `run.start.parent`, severed by a later `run.detach`.
+  const detached = rows.some(
+    (row) => row.aggregateId === id && row.type === 'run.detach',
+  );
   return ExecutionMetaSchema.parse({
     schemaVersion: EXECUTION_META_SCHEMA_VERSION,
     timestamp: new Date(start.at).toISOString(),
-    streamId: aggregateTarget(start.aggregateId).id,
     identity: start.identity ?? undefined,
     userFollowUpSupport: start.userFollowUpSupport,
-    parentExecutionId: start.parentExecutionId,
+    parentExecutionId:
+      detached || start.parent === null ? undefined : start.parent.id,
     outcome:
       status?.type === 'status' &&
       (status.phase === RUN_OUTCOME.COMPLETED ||
@@ -229,10 +226,10 @@ export function executionMetaFromEvents(
 /** Read the current configuration from the same committed prefix as metadata. */
 export function executionRunRecordFromEvents(
   rows: readonly SessionEvent[],
-  executionId: ExecutionId,
+  executionId: RunId,
 ): RunRecord | null {
   if (!executionMetaFromEvents(rows, executionId)) return null;
-  const id = aggregateId('execution', executionId);
+  const id = aggregateId('run', executionId);
   const event = rows.findLast(
     (row) => row.aggregateId === id && row.type === 'execution.config',
   );
@@ -241,12 +238,12 @@ export function executionRunRecordFromEvents(
     : null;
 }
 
-/** Native access to named execution metadata, with no file-backed read arm. */
+/** Native access to named run metadata, with no file-backed read arm. */
 export function getExecutionRecords(
   session: SessionHandle,
-  executionId: ExecutionId,
+  executionId: RunId,
 ) {
-  const id = aggregateId('execution', executionId);
+  const id = aggregateId('run', executionId);
   const read = <A>(
     select: (rows: readonly SessionEvent[]) => A,
   ): Effect.Effect<A, Error> =>
@@ -353,9 +350,9 @@ export function getExecutionRecords(
 // so eviction is lossless — re-creation just makes a new thin wrapper. The
 // cache exists for instance identity (callers spy on the returned store),
 // not to avoid work.
-const storeCache = new LRUCache<ExecutionId, StorageFSKVStore>({ max: 50 });
+const storeCache = new LRUCache<RunId, StorageFSKVStore>({ max: 50 });
 
-export function getExecutionStore(executionId: ExecutionId): ExecutionKVStore {
+export function getExecutionStore(executionId: RunId): ExecutionKVStore {
   const cached = storeCache.get(executionId);
   if (cached) return cached;
   const created = new StorageFSKVStore(executionId);

@@ -42,8 +42,7 @@ import {
 } from '@agent/followUp/ToolFileInteractionContext';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
-  ExecutionId,
-  StreamTabId,
+  RunId,
   TodoItem,
   ToolResult,
   ToolUseLog,
@@ -148,7 +147,7 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 // ============================================================================
 
 export function publishCodexTodos(
-  childStreamId: StreamTabId,
+  childStreamId: RunId,
   todos: TodoItem[],
   logger: AgentTrace,
 ): void {
@@ -227,7 +226,7 @@ function updateCodexLiveToolLog(
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolUseStatus;
-  childStreamId: StreamTabId;
+  childStreamId: RunId;
   logger: AgentTrace;
   refs: Map<string, ToolUseCardRef>;
 }): boolean {
@@ -252,7 +251,7 @@ function publishCodexItemProgress(params: {
 export async function runStreamedTurn(
   thread: Thread,
   prompt: string,
-  childStreamId: StreamTabId,
+  childStreamId: RunId,
   logger: AgentTrace,
   signal?: AbortSignal,
 ): Promise<RunResult> {
@@ -357,8 +356,8 @@ function startCodexLoop(params: {
   session: SessionHandle;
   thread: Thread;
   childStream: ChildStream;
-  parentStreamId: StreamTabId;
-  executionId: ExecutionId;
+  parentStreamId: RunId;
+  executionId: RunId;
   initialPrompt: string;
   /**
    * The disk-based fallback thread id claimed synchronously in execute(). The
@@ -528,7 +527,6 @@ export class CodexTool extends defineTool({
           input,
           sandboxMode,
           context.parentStreamId,
-          context.parentExecutionId,
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
           session,
@@ -540,8 +538,7 @@ export class CodexTool extends defineTool({
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
-  parentStreamId: StreamTabId,
-  parentExecutionId: ExecutionId | undefined,
+  parentStreamId: RunId,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
@@ -560,9 +557,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   return yield* launchAgentCliSession({
     session,
     parentStreamId,
-    parentExecutionId,
     agentName: 'codex',
-    streamPrefix: 'codex@codex-sdk',
     description: input.prompt,
     config,
     registerFailedMessage: 'Failed to register Codex execution.',

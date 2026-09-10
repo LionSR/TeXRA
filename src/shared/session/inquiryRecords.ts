@@ -1,8 +1,7 @@
 /** Canonical global inquiry operations, independent of project display lifetimes. */
 import { Context, type Effect } from 'effect';
 import type {
-  ExecutionId,
-  StreamTabId,
+  RunId,
   InquiryThreadId,
   InquiryThreadRecord,
   InquiryThreadStatus,
@@ -14,8 +13,8 @@ export class InquiryRecords extends Context.Service<
   {
     readonly recordOpenQuestion: (params: {
       threadId?: InquiryThreadId;
-      parentStreamId: StreamTabId;
-      parentExecutionId: ExecutionId | null;
+      /** The asking run; continuations flow back to it. */
+      parentStreamId: RunId;
       question: string;
       context?: string;
       suggestSearch?: boolean;
@@ -40,7 +39,7 @@ export class InquiryRecords extends Context.Service<
     readonly listThreadsByStatus: (params: {
       status: InquiryThreadStatus | 'any';
       scope: 'stream' | 'all';
-      streamId?: StreamTabId;
+      streamId?: RunId;
       limit?: number;
     }) => Effect.Effect<InquiryThreadSummary[], Error>;
   }

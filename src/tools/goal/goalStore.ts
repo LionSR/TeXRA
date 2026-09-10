@@ -68,7 +68,7 @@ function emitGoalStateChanged(
   target.publish([
     {
       type: 'goalStateChanged',
-      aggregateId: qualifyAggregateId('stream', streamId),
+      aggregateId: qualifyAggregateId('run', streamId),
       state: goalStateOf(current),
     },
   ]);

@@ -13,18 +13,15 @@ import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDisc
 import { createLog } from '@logger/logUtils';
 import {
   aggregateTarget,
-  type AggregateId,
   type SessionEvent,
-  type ExecutionId,
+  type RunId,
   type RunIdentity,
   type RunOutcome,
-  type StreamTabId,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  getExecutionRecords,
   executionMetaFromEvents,
   executionRunRecordFromEvents,
 } from './ExecutionKVStore';
@@ -37,9 +34,9 @@ const EXECUTION_STORAGE_CONCURRENCY = 32;
 // ============================================================================
 
 interface ExecutionListingBase {
-  id: ExecutionId;
+  id: RunId;
   timestamp: string;
-  parentExecutionId?: ExecutionId;
+  parentExecutionId?: RunId;
   /** Canonical terminal outcome; absent for a run still in flight. */
   outcome?: RunOutcome;
   /** AI-generated summary of what the session aimed to accomplish. */
@@ -52,12 +49,6 @@ interface ExecutionListingBase {
    * for and refuses loudly.
    */
   checkpointPresent: boolean;
-  /**
-   * The stream stamped on metadata at registration — the reproduction
-   * contract. Absent on rows written before stamping, which have no
-   * persisted stream to continue.
-   */
-  streamId?: StreamTabId;
 }
 
 /** A native or tool-backed agent run: its record is always an AgentConfig. */
@@ -110,24 +101,17 @@ export function isUserVisibleExecution(
   return isAgentRunEntry(entry) && entry.parentExecutionId === undefined;
 }
 
-/** Group one committed listing prefix without scanning other runs during each fold. */
+/** Group one committed listing prefix by run without scanning other runs during each fold. */
 function groupExecutionRows(
   rows: readonly SessionEvent[],
-): Map<ExecutionId, SessionEvent[]> {
-  const executions = new Map<ExecutionId, SessionEvent[]>();
-  const streamExecutions = new Map<AggregateId, ExecutionId>();
+): Map<RunId, SessionEvent[]> {
+  const executions = new Map<RunId, SessionEvent[]>();
   for (const row of rows) {
-    // Creation precedes its stream and execution rows in the committed prefix.
-    if (row.type === 'run.start') {
-      streamExecutions.set(row.aggregateId, row.executionId);
-      executions.set(row.executionId, []);
-    }
     const target = aggregateTarget(row.aggregateId);
-    const id =
-      target.kind === 'execution'
-        ? target.id
-        : streamExecutions.get(row.aggregateId);
-    if (id !== undefined) executions.get(id)?.push(row);
+    if (target.kind !== 'run') continue;
+    // Creation precedes every other row of its run in the committed prefix.
+    if (row.type === 'run.start') executions.set(target.id, []);
+    executions.get(target.id)?.push(row);
   }
   return executions;
 }
@@ -162,7 +146,6 @@ export const listExecutions = Effect.fn('listExecutions')(function* (
           outcome: meta.outcome,
           description: meta.description,
           checkpointPresent,
-          streamId: meta.streamId,
         };
         const agentRecord = record && isAgentRunRecord(record) ? record : null;
         const identity = meta.identity;
@@ -213,9 +196,5 @@ export function createLatexExecutionDiscovery(
           })),
         ),
       ),
-    readStreamId: (executionId) =>
-      getExecutionRecords(session, executionId)
-        .readMeta()
-        .pipe(Effect.map((meta) => meta?.streamId)),
   };
 }
