@@ -1,7 +1,8 @@
 # Kernel suite wall time: the module registry, not the tests
 
-Status: proposed — measured 2026-09-10; the flip is blocked on fixing
-cross-file state leaks, listed below.
+Status: proposed — measured 2026-09-10; the flip is blocked on moving the
+state that leaks between suites behind Effect layers, which is the 1.0
+direction anyway. The leaking suites are listed below.
 
 ## Finding
 
@@ -79,6 +80,27 @@ session has not been initialized`, unhandled `ExecutionLeaseLostError`
    errors), `session.onResult is not a function`. 82 suites pull in
    `sessionTestUtils`, 23 reference the execution lease.
 
+### Effect form alone does not fix it
+
+70 of the 741 suites already use `@effect/vitest` (352 `it.effect` /
+`it.live` / `it.scoped` sites), and 24 of them are among the 209 leakers —
+the same rate as the rest (34% vs 28%). Their failures are the same shape:
+`Cannot read properties of undefined (reading 'selfIdentity' | 'onRelease' |
+'emit' | 'getToolUseFollowUpTarget')` and `vi.fn()` call counts — a handle a
+neighbouring file replaced. Nothing that a test's own layer provided leaked;
+everything the test reached _outside_ its layer did.
+
+That is the actual boundary. The session graph is already Effect-native: a
+`LayerMap` keyed by storage root under one `ManagedRuntime`
+(`src/controllers/session/sessionLayer.ts`), and `setupPlatform.ts` builds a
+`ManagedRuntime` per install. What is not Layer-provided is exactly what
+leaks: `platform()` is a module global behind `initPlatform()` read at 74
+production sites with no service behind it; `ownedLeases` in
+`src/agent/storage/executionLease.ts:130` is a module-scope `Map`; and the
+process runtime is installed once per process
+(`installProcessRuntime`), so a suite that disposes or re-installs it
+changes what the next suite's `it.effect` runs against.
+
 ## Proposal
 
 Fix the leaks at their sources, then flip `isolate: false` as the default with
@@ -86,19 +108,34 @@ a shrink-only pinned list for what remains. Not the other way round: the
 pinned list only converges once the shared set is deterministic, and it is
 only deterministic once classes 2 and 3 are gone.
 
-- Class 3 is one fix per singleton: `setupFakePlatform.ts` already reinstalls
-  the fake host per file; the session runtime, execution-lease registry and
-  default-session state need the same per-file reset in that hook, and suites
-  that tear them down must restore them.
-- Class 2 is a discipline change: replace partial `vi.mock` factories on
-  `@platform/*` with `setupPlatform(...)` overrides (which restore after each
-  test), and keep any remaining `vi.mock` complete (`importOriginal` spread)
-  so a leaked mock is still a working module.
+The remedy is the Effect-native one, not a per-file reset hook: a hook that
+scrubs module globals before each suite is a transitional adapter whose purpose
+disappears once the globals are services, which AGENTS.md rules out building.
+A test that gets its dependencies from a layer scoped to the test cannot leak
+them by construction, so the fix and the 1.0 migration are the same work,
+done in this order:
+
+- Class 3: put the state behind layers and give suites their own. The
+  execution-lease registry becomes a service scoped under the session layer
+  (it is per-root state already). Suites that today install or dispose the
+  process runtime instead build a test runtime with `it.layer(...)` — the
+  `ManagedRuntime` that `setupPlatform.ts` already constructs is the seed —
+  so the process-global one is never touched from a test.
+- Class 2: the platform. `platform()` behind a service is the 74-site
+  migration; until it lands, the discipline is `setupPlatform(...)` overrides
+  (which restore after each test) instead of `vi.mock('@platform/*')`, and
+  any `vi.mock` that remains is complete (`importOriginal` spread) so a leaked
+  mock is still a working module. Once the platform is a layer, the
+  `vi.mock`s become `it.layer(TestPlatform)` and the discipline is unneeded.
 - Class 1 stays isolated. Pin the DOM suites (`progressView`, `settings`,
   `frontend`, `desktop`, `webview` — ~50 files) into an `isolate: true`
-  project; they are the ones that genuinely need a fresh registry.
+  project; a Lit element class is bound to a window, and no layer changes
+  that.
 
-Once 2 and 3 are fixed, re-run `--no-isolate` on the non-DOM tree. The target
+Converting a suite to `it.effect` without moving what it reaches into a layer
+changes nothing — the 24 leaking Effect suites are the measurement of that.
+
+Once 2 and 3 are done, re-run `--no-isolate` on the non-DOM tree. The target
 is the measured floor: the shared project ran 567 suites in 81s here, against
 a full run that does not finish in 45 minutes.
 
