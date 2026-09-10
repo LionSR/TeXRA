@@ -92,6 +92,21 @@ function serializeOnWorkspace(
   });
 }
 
+/** The raw `lake` spawn, split out so its exact execa result type stays
+ *  inferred rather than widened by the generic `Result`. */
+function spawnLake(options: LakeCommandOptions) {
+  return execa(options.lakeCommand, [...options.args], {
+    cwd: options.workspaceRoot,
+    timeout: options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS,
+    reject: false,
+    maxBuffer: LAKE_PROCESS_MAX_BUFFER_CHARS,
+    windowsHide: true,
+    stdin: 'ignore',
+  });
+}
+
+type LakeExecaResult = Awaited<ReturnType<typeof spawnLake>>;
+
 function executeLake(
   options: LakeCommandOptions,
 ): Effect.Effect<LakeCommandResult> {
@@ -100,18 +115,37 @@ function executeLake(
   // head/tail streaming policy for this serialized, lower-risk path.
   //
   // `reject: false` means execa settles on a failed command rather than
-  // rejecting, so `Effect.promise` keeps the failure channel empty here — as
-  // the Promise contract this replaces did.
-  return Effect.promise(() =>
-    execa(options.lakeCommand, [...options.args], {
-      cwd: options.workspaceRoot,
-      timeout: options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS,
-      reject: false,
-      maxBuffer: LAKE_PROCESS_MAX_BUFFER_CHARS,
-      windowsHide: true,
-      stdin: 'ignore',
-    }),
-  ).pipe(
+  // rejecting, so the failure channel stays empty here — as the Promise
+  // contract this replaces did; a genuine spawn error is still a defect.
+  //
+  // The child is owned across interruption rather than abandoned. An
+  // interrupt (a sibling root's `lease` failing under the unbounded
+  // `Effect.forEach` in `leanServerPool.runLake`, or runtime disposal) must
+  // not release this workspace's permit while `lake` is still writing
+  // `.lake/build`: the next `build`/`clean` would then run concurrently with
+  // an orphan, which is exactly what this module's lock exists to prevent.
+  // The returned canceller terminates the child and awaits its exit, and the
+  // interrupt only propagates once that finishes — so `withPermit` and the
+  // `users` bookkeeping in `serializeOnWorkspace` release after the process
+  // is gone. A bare abort signal is not enough: Effect aborts the controller
+  // but does not wait for the abortee.
+  return Effect.callback<LakeExecaResult>((resume) => {
+    const child = spawnLake(options);
+    child.then(
+      (result) => resume(Effect.succeed(result)),
+      (error: unknown) => resume(Effect.die(error)),
+    );
+    // `Effect.exit` absorbs however the child settles — including a spawn
+    // rejection — without a raw catch clause, which this file may not carry.
+    return Effect.asVoid(
+      Effect.exit(
+        Effect.promise(() => {
+          child.kill();
+          return child;
+        }),
+      ),
+    );
+  }).pipe(
     Effect.map((result) => {
       const { stdout, stderr } = result;
       const shouldUseShortMessage =
