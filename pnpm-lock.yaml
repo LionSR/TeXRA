@@ -157,8 +157,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.35.0
-        version: 1.35.0(zod@4.4.3)
+        specifier: ^1.36.0
+        version: 1.36.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -509,8 +509,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       llm-zoo:
-        specifier: ^1.35.0
-        version: 1.35.0(zod@4.4.3)
+        specifier: ^1.36.0
+        version: 1.36.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -869,8 +869,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.35.0
-        version: 1.35.0(zod@4.4.3)
+        specifier: ^1.36.0
+        version: 1.36.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -1090,8 +1090,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.35.0
-        version: 1.35.0(zod@4.4.3)
+        specifier: ^1.36.0
+        version: 1.36.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -1534,6 +1534,7 @@ packages:
     resolution: {integrity: sha512-jGRtbJsn5z7DqsMEPSbXq2Q9mYEvMy1v9DTeziTtDEnDzlxhxfrXkSeupZbYqAP5pukIM1JBa10zfAn6KnHG2Q==}
     peerDependencies:
       effect: ^4.0.0-rc.112
+
   '@effect/vitest@4.0.0-rc.112':
     resolution: {integrity: sha512-mEKh/FI64mt8JK1/v9mpOrJYdnp+UFZdRUBMEdZMiKz7klg6NPqVgg/oeAGH6wOOQc2iAPcfc2H9BbAv1KyzMQ==}
     peerDependencies:
@@ -5156,8 +5157,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.35.0:
-    resolution: {integrity: sha512-zHcMXttMOJFg+vuKEL/9ORLLAuo//v8oV16k5w0JvABYPb2L1v/c9FM2eV8sxBH7Q+Hg0NWM7BMjC9nWUWT+dQ==}
+  llm-zoo@1.36.0:
+    resolution: {integrity: sha512-56AqbLLrZYZu2CqoTiZqjaMR6HrpE7j6OZOQpve14EIIdesBT/1PBn8vbN/DAjM/UPAo/5JYA7nMncoM7F9SxQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -11102,7 +11103,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.35.0(zod@4.4.3):
+  llm-zoo@1.36.0(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 

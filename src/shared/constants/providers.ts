@@ -240,11 +240,11 @@ export const PROVIDER_ENDPOINT_STATE_ENTRIES: readonly ProviderEndpointStateEntr
 
 /**
  * Default model used for auxiliary/helper tasks (polishing, agent creation,
- * merge, session descriptions). DeepSeek V4 Flash is the cheapest capable
- * option (~$0.14/$0.28 per MTok) and keeps these one-shot, non-streaming
+ * merge, session descriptions). DeepSeek V4.1 Flash is the cheapest capable
+ * option (~$0.15/$0.60 per MTok) and keeps these one-shot, non-streaming
  * helper calls fast.
  */
-export const DEFAULT_HELPER_MODEL = 'deepseek';
+export const DEFAULT_HELPER_MODEL = 'deepseek41';
 
 /**
  * Default model used when a new agent run / proposal omits one. Single source of
