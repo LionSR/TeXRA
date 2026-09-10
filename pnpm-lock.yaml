@@ -148,8 +148,8 @@ importers:
         specifier: ^3.1.1
         version: 3.1.1
       katex:
-        specifier: ^0.18.6
-        version: 0.18.6
+        specifier: ^0.18.7
+        version: 0.18.7
       ky:
         specifier: ^2.1.0
         version: 2.1.0
@@ -863,8 +863,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       katex:
-        specifier: ^0.18.6
-        version: 0.18.6
+        specifier: ^0.18.7
+        version: 0.18.7
       lit:
         specifier: ^3.3.3
         version: 3.3.3
@@ -1084,8 +1084,8 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0
       katex:
-        specifier: ^0.18.6
-        version: 0.18.6
+        specifier: ^0.18.7
+        version: 0.18.7
       lit:
         specifier: ^3.3.3
         version: 3.3.3
@@ -5029,8 +5029,8 @@ packages:
   jws@4.0.1:
     resolution: {integrity: sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==}
 
-  katex@0.18.6:
-    resolution: {integrity: sha512-5B7yiIsr7gq9hlIH6uG7hTNglHSz7I+Csa9I66dK4Ljz/YEGQMoBcC1IwtFFp34I7byBcEPtCyYFNnzuxZnGlw==}
+  katex@0.18.7:
+    resolution: {integrity: sha512-h+UCwkZ+4Jz8WQ7MLGfj7UVFrRCizGb912fwF4luGdYsC5paYG1vx+jy+KRcC/XkpjGva/P7nAWuxNnPzRvzHw==}
     hasBin: true
 
   keytar@7.9.0:
@@ -10975,7 +10975,7 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  katex@0.18.6:
+  katex@0.18.7:
     dependencies:
       commander: 15.0.0
 
