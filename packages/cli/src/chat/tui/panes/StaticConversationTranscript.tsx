@@ -827,14 +827,21 @@ export function buildStaticTranscriptItems(
         !markedThisPass.has(entry.id)
       ) {
         markedThisPass.add(entry.id);
-        const warningRow = duplicateRowIdWarningRow(entry);
-        items.push({ id: warningRow.id, kind: 'entry', entry: warningRow });
         pendingDuplicates.push(entry);
       }
       continue;
     }
     seen.add(entry.id);
     items.push({ id: entry.id, kind: 'entry', entry });
+  }
+  // Appended at the true tail rather than beside the historical duplicate:
+  // retention trims from the front, so a marker here is the last thing a long
+  // session's ring budget would ever drop, and a diagnostic surfacing "now"
+  // for an old collision is at least as legible as one backdated into
+  // scrollback that may already be gone.
+  for (const entry of pendingDuplicates) {
+    const warningRow = duplicateRowIdWarningRow(entry);
+    items.push({ id: warningRow.id, kind: 'entry', entry: warningRow });
   }
 
   const retained = retainedStaticTranscriptTail(items, {
@@ -1126,8 +1133,6 @@ export function advanceStaticTranscriptState(
           !markedThisPass.has(entry.id)
         ) {
           markedThisPass.add(entry.id);
-          const warningRow = duplicateRowIdWarningRow(entry);
-          appendItem({ id: warningRow.id, kind: 'entry', entry: warningRow });
           pendingDuplicates.push(entry);
         }
         continue;
@@ -1140,6 +1145,12 @@ export function advanceStaticTranscriptState(
       appendItem(item);
       seenIds.add(entry.id);
     }
+  }
+  // Appended after every real row from this tick, at the true tail — see the
+  // matching comment in buildStaticTranscriptItems.
+  for (const entry of pendingDuplicates) {
+    const warningRow = duplicateRowIdWarningRow(entry);
+    appendItem({ id: warningRow.id, kind: 'entry', entry: warningRow });
   }
 
   const trimmed = trimStaticTranscriptItems(nextItems, {
