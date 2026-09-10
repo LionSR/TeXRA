@@ -13,6 +13,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import type { ChatExportInput } from '@agent/export/schemas';
+import type { RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   ChatExportController,
@@ -95,52 +96,48 @@ function exportedFileMessage(storagePath: string): string {
  * `showError` rather than thrown so a missing transcript is not an
  * unexpected failure.
  */
-export const exportRunTranscript = Effect.fn('exportRunTranscript')(
-  function* (
-    runId: string,
-    ports: TranscriptExportPorts,
-  ): Effect.fn.Return<void, Error> {
-    const format = yield* Effect.tryPromise({
-      try: async () => ports.pickFormat(),
+export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
+  runId: RunId,
+  ports: TranscriptExportPorts,
+): Effect.fn.Return<void, Error> {
+  const format = yield* Effect.tryPromise({
+    try: async () => ports.pickFormat(),
+    catch: ensureError,
+  });
+  if (!format) return;
+  const controller = yield* Effect.tryPromise({
+    try: async () => ports.getController(),
+    catch: ensureError,
+  });
+  if (format === 'html') {
+    yield* exportHtml(controller, runId, ports);
+    return;
+  }
+  const result = yield* controller.buildExportInput(runId);
+  if (result.status !== 'ok') {
+    yield* Effect.tryPromise({
+      try: async () => ports.showError(exportInputErrorMessage(result.status)),
       catch: ensureError,
     });
-    if (!format) return;
-    const controller = yield* Effect.tryPromise({
-      try: async () => ports.getController(),
-      catch: ensureError,
-    });
-    if (format === 'html') {
-      yield* exportHtml(controller, runId, ports);
-      return;
-    }
-    const result = yield* controller.buildExportInput(runId);
-    if (result.status !== 'ok') {
-      yield* Effect.tryPromise({
-        try: async () =>
-          ports.showError(exportInputErrorMessage(result.status)),
-        catch: ensureError,
-      });
-      return;
-    }
-    if (format === 'md') {
-      yield* Effect.tryPromise({
-        try: async () =>
-          exportMarkdown(controller, runId, result.exportInput, ports),
-        catch: ensureError,
-      });
-      return;
-    }
+    return;
+  }
+  if (format === 'md') {
     yield* Effect.tryPromise({
       try: async () =>
-        exportLatex(controller, runId, result.exportInput, ports),
+        exportMarkdown(controller, runId, result.exportInput, ports),
       catch: ensureError,
     });
-  },
-);
+    return;
+  }
+  yield* Effect.tryPromise({
+    try: async () => exportLatex(controller, runId, result.exportInput, ports),
+    catch: ensureError,
+  });
+});
 
 async function exportMarkdown(
   controller: ChatExportController,
-  runId: string,
+  runId: RunId,
   input: ChatExportInput,
   ports: TranscriptExportPorts,
 ): Promise<void> {
@@ -151,7 +148,7 @@ async function exportMarkdown(
 
 async function exportLatex(
   controller: ChatExportController,
-  runId: string,
+  runId: RunId,
   input: ChatExportInput,
   ports: TranscriptExportPorts,
 ): Promise<void> {
@@ -178,7 +175,7 @@ async function exportLatex(
 
 const exportHtml = Effect.fn('exportHtml')(function* (
   controller: ChatExportController,
-  runId: string,
+  runId: RunId,
   ports: TranscriptExportPorts,
 ): Effect.fn.Return<void, Error> {
   const outcome = yield* controller.exportAsHtml(

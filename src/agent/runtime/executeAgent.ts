@@ -402,9 +402,7 @@ export function executeAgent(
   return Effect.gen(function* () {
     yield* Effect.tryPromise({
       try: async () =>
-        runInSession(options.session, () =>
-          assertOwnedRunLease(runId),
-        ),
+        runInSession(options.session, () => assertOwnedRunLease(runId)),
       catch: ensureError,
     });
     const isSubagent = options.parentRunId !== undefined;
@@ -412,7 +410,7 @@ export function executeAgent(
       definition,
       runId,
       resumed: options.resumed,
-      onStreamResolved: options.onStreamResolved,
+      onRunResolved: options.onStreamResolved,
       parentRunId: options.parentRunId,
       userFollowUpSupport: options.userFollowUpSupport,
       suppressErrorNotification:
@@ -437,8 +435,7 @@ export function executeAgent(
           );
           return Effect.gen(function* () {
             const { setting, config } = ctx;
-            const { runId, session: runSession } =
-              ctx.runScope;
+            const { runId, session: runSession } = ctx.runScope;
 
             // Start description generation concurrently with the run, but join it
             // before the owner can release its run lease. This prevents the
@@ -459,9 +456,7 @@ export function executeAgent(
                   runInScope(async () => {
                     // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
                     await ensureRunDir(runId);
-                    logger.info(
-                      `Starting task run (runId: ${runId})`,
-                    );
+                    logger.info(`Starting task run (runId: ${runId})`);
                     logger.info(
                       `Input file: ${config.inputFiles[0] ?? '(none)'}`,
                     );
@@ -594,9 +589,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     );
     if (Exit.isFailure(setup)) {
       return yield* Effect.failCause(setup.cause).pipe(
-        Effect.onExit(() =>
-          runSession.releaseRunLease(resume.runId),
-        ),
+        Effect.onExit(() => runSession.releaseRunLease(resume.runId)),
       );
     }
     const { ctx, parentRunId } = setup.value;
@@ -682,16 +675,9 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ) {
   const session = options.session;
-  const rollback = yield* acquireResumedRunOwnership(
-    session,
-    resume.runId,
-  );
+  const rollback = yield* acquireResumedRunOwnership(session, resume.runId);
   const retrieval = yield* Effect.exit(
-    retrieveSessionResumeData(
-      resume.runId,
-      resume.agentConfig,
-      session,
-    ).pipe(
+    retrieveSessionResumeData(resume.runId, resume.agentConfig, session).pipe(
       Effect.flatMap((retrieved) =>
         retrieved?.type === 'toolUse'
           ? Effect.succeed(retrieved)

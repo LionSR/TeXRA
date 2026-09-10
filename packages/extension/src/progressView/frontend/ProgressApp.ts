@@ -112,7 +112,7 @@ export class ProgressApp extends LitElement {
 
   private stopRun(stream: RunView): void {
     this.dispatchEvent(
-      SessionUiEvents.runtime({ kind: 'stream.stop', runId: stream.id }),
+      SessionUiEvents.runtime({ kind: 'run.stop', runId: stream.id }),
     );
   }
 
@@ -158,8 +158,7 @@ export class ProgressApp extends LitElement {
     const { view, surface, host } = this;
     if (!view || !surface || !host) return nothing;
     const selected = resolveSelected(view, surface);
-    const stream =
-      selected === null ? null : (view.runs.get(selected) ?? null);
+    const stream = selected === null ? null : (view.runs.get(selected) ?? null);
     const docked = this.placement === 'editor';
 
     return html`

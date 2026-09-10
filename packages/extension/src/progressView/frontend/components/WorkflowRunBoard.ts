@@ -6,7 +6,7 @@
  * Reads `stream.transcript.run` (the fold's `workflowRunModel`), the child
  * runs the model joins by row, the stream's `readOnly` and
  * `durableOutcome` (a settled run keeps its rows but nothing acts), and the
- * surface's phase, groups, and focus. Dispatches `workflow.control` and `stream.stop` runtime
+ * surface's phase, groups, and focus. Dispatches `workflow.control` and `run.stop` runtime
  * requests and `phase`, `group`, `select`, and `focusRow` surface actions;
  * it holds no state of its own. The host passes its clock as `nowMs` (G4).
  */
@@ -332,7 +332,7 @@ export class WorkflowRunBoard extends LitElement {
   private killRun(): void {
     this.dispatchEvent(
       SessionUiEvents.runtime({
-        kind: 'stream.stop',
+        kind: 'run.stop',
         runId: this.stream.id,
       }),
     );

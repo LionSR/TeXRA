@@ -414,12 +414,12 @@ export class RunHeader extends LitElement {
     switch (button.id) {
       case ELEMENT_IDS.STOP_STREAM_BTN:
         this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'stream.stop', runId }),
+          SessionUiEvents.runtime({ kind: 'run.stop', runId }),
         );
         return;
       case ELEMENT_IDS.COMPACT_RESPONSE_BTN:
         this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'stream.compact', runId }),
+          SessionUiEvents.runtime({ kind: 'run.compact', runId }),
         );
         return;
       case ELEMENT_IDS.RESUME_BTN:

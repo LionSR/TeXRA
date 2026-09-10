@@ -80,7 +80,7 @@ export function sessionRequests(
     expectedStartCommit: number,
   ) {
     const admitted = yield* admit(log, local, {
-      kind: 'stream.delete',
+      kind: 'run.delete',
       runId,
     });
     if (admitted.startCommit !== expectedStartCommit) {
@@ -104,9 +104,8 @@ function admit(
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   req: RuntimeRequest,
 ): Effect.Effect<AggregateState, RequestError> {
-  // The stream a request acts on.
-  const runId =
-    req.kind === 'policy.set' ? req.change.runId : req.runId;
+  // The run a request acts on.
+  const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   return Effect.flatMap(
     log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
       Effect.orDie,
@@ -123,7 +122,7 @@ function admit(
       }
       const liveness = SubscriptionRef.getUnsafe(local);
       if (
-        req.kind !== 'stream.delete' &&
+        req.kind !== 'run.delete' &&
         state.ownerId !== null &&
         !liveness.self.includes(state.ownerId) &&
         !liveness.dead.includes(state.ownerId)
@@ -241,21 +240,15 @@ function handle(
   admitted: AggregateState,
 ): Effect.Effect<Outcome, RequestError, InquiryRecords> {
   switch (req.kind) {
-    case 'stream.stop':
+    case 'run.stop':
       return Effect.suspend(() =>
         session.runs.stopAgentRun(req.runId, {
           detachActiveChildren: req.detachActiveChildren ?? undefined,
         }),
       ).pipe(Effect.as(done), Effect.uninterruptible);
-    case 'stream.delete':
-      return deleteAdmittedRun(
-        session,
-        log,
-        req.runId,
-        admitted,
-        'single',
-      );
-    case 'stream.compact':
+    case 'run.delete':
+      return deleteAdmittedRun(session, log, req.runId, admitted, 'single');
+    case 'run.compact':
       return Effect.suspend((): Effect.Effect<Outcome, RequestError> => {
         const result = session.runs.requestManualCompaction(req.runId);
         switch (result.kind) {

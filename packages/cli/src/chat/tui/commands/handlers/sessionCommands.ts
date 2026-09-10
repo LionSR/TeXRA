@@ -159,7 +159,7 @@ export function requestCliSessionCompaction(): void {
   }
   const session = defaultSession();
   void effectRuntime().runPromise(
-    session.requests.request({ kind: 'stream.compact', runId }).pipe(
+    session.requests.request({ kind: 'run.compact', runId }).pipe(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () => {

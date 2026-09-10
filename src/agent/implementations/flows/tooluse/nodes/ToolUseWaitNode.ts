@@ -34,7 +34,10 @@ export class ToolUseWaitNode extends BaseNode<
   }
 
   override async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const { session, isSubagent, runScope, toolPolicy } = this.services;
+    const { session, parentRunId, runScope, toolPolicy } = this.services;
+    // A run with a parent is a child: it takes the WAITING-suspend
+    // delivery path instead of blocking in-flow for a follow-up.
+    const isChild = parentRunId !== undefined;
     const { runId, session: ownerSession, signal } = runScope;
     const { stopAfterCycle } = toolPolicy;
     const hasDrainedFollowUps = Boolean(this.drainedFollowUps?.length);
@@ -53,7 +56,7 @@ export class ToolUseWaitNode extends BaseNode<
     // Stopping here would drop that user input on the floor — and skip the
     // `post` clear of `lastError`/`userCancelledRetry` that consuming it
     // performs, which is what makes the error recovered rather than terminal.
-    if (prepRes.afterError && isSubagent && !hasDrainedFollowUps) {
+    if (prepRes.afterError && isChild && !hasDrainedFollowUps) {
       return { kind: 'stop' };
     }
 
@@ -66,7 +69,7 @@ export class ToolUseWaitNode extends BaseNode<
     // mid-objective reads as a hang.
     if (prepRes.afterError && !hasDrainedFollowUps) {
       await this.pauseActiveGoal(runId);
-    } else if (!isSubagent) {
+    } else if (!isChild) {
       // Root-only notification: fires every cycle (not just a genuine
       // block) so a host can project each round's response as it happens —
       // e.g. the CLI syncing its terminal transcript live. Distinct from
@@ -97,7 +100,7 @@ export class ToolUseWaitNode extends BaseNode<
     // here. The child-run loop formats and delivers this cycle's turn facts
     // after suspension, then owns the next queue wait. This keeps every
     // ordinary suspension symmetric and leaves one delivery site.
-    if (isSubagent) {
+    if (isChild) {
       ownerSession.status.transitionToWaiting(runId, 'wait');
       await ownerSession.settlePublications();
       return { kind: 'waiting' };

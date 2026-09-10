@@ -443,7 +443,7 @@ export function createChatSessionController(
     // `stopRun` below is the other gesture and answers deliberately
     // differently.
     void request({
-      kind: 'stream.stop',
+      kind: 'run.stop',
       runId,
       detachActiveChildren: detachSubagentsOnStop(),
     });
@@ -1021,7 +1021,7 @@ export function createChatSessionController(
       requestStop();
       session.interruptedRunId = runId;
     }
-    void request({ kind: 'stream.stop', runId, detachActiveChildren: true });
+    void request({ kind: 'run.stop', runId, detachActiveChildren: true });
   };
 
   const startSession = async (
