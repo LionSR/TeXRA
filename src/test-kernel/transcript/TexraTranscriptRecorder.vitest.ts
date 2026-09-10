@@ -348,11 +348,6 @@ describe('attachTestTranscriptFold workflow task state', () => {
     // streams/tools. Late provider cleanup cannot mutate a row already made
     // printable in append-only Static scrollback.
     trace.emit({
-      type: 'stream.chunk',
-      id: response.id,
-      text: ' late text',
-    });
-    trace.emit({
       type: 'stream.end',
       id: response.id,
       finalText: 'Late replacement',
@@ -364,7 +359,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
     });
     expect(row(response.id)).toMatchObject({
       settlementSeqNo: 2,
-      text: 'Partial answer',
+      text: '',
       data: { status: 'completed' },
     });
     expect(row('tool:pending')).toMatchObject({
@@ -405,7 +400,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       {
         id: response.id,
         settlementSeqNo: 2,
-        text: 'Partial answer',
+        text: '',
       },
       {
         settlementSeqNo: 5,
@@ -437,7 +432,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       {
         id: waitingResponse.id,
         settlementSeqNo: 1,
-        text: 'Waiting response',
+        text: '',
         data: { status: 'completed' },
       },
       {
@@ -472,7 +467,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       {
         id: waitingResponse.id,
         settlementSeqNo: 1,
-        text: 'Waiting response',
+        text: '',
         data: { status: 'completed' },
       },
       {

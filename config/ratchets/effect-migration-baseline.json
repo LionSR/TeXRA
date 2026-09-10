@@ -102,7 +102,6 @@
       "packages/cli/src/chat/chatSessionController.ts": 1,
       "src/agent/followUp/FollowUpQueue.ts": 1,
       "src/agent/runtime/ModelRetryGate.ts": 1,
-      "src/agent/runtime/SessionHandle.ts": 1,
       "src/agent/storage/executionLease.ts": 1
     },
     "import:async-mutex": {
@@ -126,7 +125,7 @@
       "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
-      "src/agent/runtime/SessionHandle.ts": 3,
+      "src/agent/runtime/SessionHandle.ts": 2,
       "src/agent/runtime/bundledPrompts.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2

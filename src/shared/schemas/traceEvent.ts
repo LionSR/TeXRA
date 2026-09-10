@@ -54,7 +54,7 @@ export const ResultEventSchema = trace('result', {
 }).readonly();
 export type ResultEvent = z.infer<typeof ResultEventSchema>;
 
-/** Named arms let the durable vocabulary omit the transient chunk explicitly. */
+/** Durable transcript vocabulary; session events extend each arm. */
 export const TranscriptEventSchemas = {
   log: trace('log', {
     level: LogLevelSchema,
@@ -116,16 +116,9 @@ export const TranscriptEventSchemas = {
   }),
 };
 
-/** Deltas are fold inputs only; they never enter the durable event vocabulary. */
-const TranscriptChunkSchema = trace('stream.chunk', {
-  id: z.string(),
-  text: z.string(),
-});
-const TranscriptEventSchema = z.discriminatedUnion('type', [
-  TranscriptChunkSchema,
-  ...Object.values(TranscriptEventSchemas),
-]);
-export type TranscriptEvent = z.infer<typeof TranscriptEventSchema>;
+export type TranscriptEvent = z.infer<
+  (typeof TranscriptEventSchemas)[keyof typeof TranscriptEventSchemas]
+>;
 
 const TRANSCRIPT_EVENT_TYPES = new Set<string>(
   Object.values(TranscriptEventSchemas).map(
@@ -137,7 +130,5 @@ const TRANSCRIPT_EVENT_TYPES = new Set<string>(
 export function isTranscriptEvent<T extends { type: string }>(
   event: T,
 ): event is Extract<T, { type: TranscriptEvent['type'] }> {
-  return (
-    event.type === 'stream.chunk' || TRANSCRIPT_EVENT_TYPES.has(event.type)
-  );
+  return TRANSCRIPT_EVENT_TYPES.has(event.type);
 }

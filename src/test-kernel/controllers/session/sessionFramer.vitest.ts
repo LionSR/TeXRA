@@ -33,6 +33,8 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   FoldEventSchema,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type ExecutionId,
   type SessionEventDraft,
@@ -85,6 +87,25 @@ const running: SessionEventDraft = {
   cause: 'resume',
 };
 
+/** A running model reply with no text of its own: the row the live text for
+ *  `rowId` paints into once its entry folds. */
+function streamingRow(streamId: StreamTabId, rowId: string): SessionEventDraft {
+  return {
+    type: 'transcript.entry',
+    aggregateId: qualifyAggregateId('stream', streamId),
+    entry: {
+      seqNo: 1,
+      id: rowId,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: 'info',
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      timestamp: 0,
+      text: '',
+      data: { status: 'running' },
+    },
+  };
+}
+
 /** The runtime graph, as `sessionLayer` composes it without the host bits. */
 const runtimeGraph = (history: readonly SessionEventDraft[]) => {
   const roots = createFakeWorkspaceRoots({ storagePath: KEY });
@@ -132,6 +153,15 @@ const settle = (
 ) =>
   SubscriptionRef.changes(view).pipe(Stream.takeUntil(ready), Stream.runDrain);
 
+/** The text a row paints: its durable text joined with the live text the
+ *  fold holds for it, once the row's entry has folded. */
+function rowText(view: SessionView, streamId: StreamTabId, rowId: string) {
+  const row = view.streams
+    .get(streamId)
+    ?.transcript.rows.find((each) => each.id === rowId);
+  return row?.kind === 'assistant' ? row.text.full : undefined;
+}
+
 /** What a renderer draws of a view: the same for both hosts of one log. */
 function drawn(view: SessionView) {
   const stream = view.streams.get(STREAM);
@@ -140,7 +170,11 @@ function drawn(view: SessionView) {
     status: stream?.status ?? null,
     group: stream?.group ?? null,
     approvals: view.approvals.map((a) => a.requestId),
-    inflight: [...view.inflight.entries()],
+    rows:
+      stream?.transcript.rows.map((row) => [
+        row.id,
+        rowText(view, STREAM, row.id),
+      ]) ?? [],
   };
 }
 
@@ -316,23 +350,13 @@ describe('session framer', () => {
         const webview = yield* WebviewSessions.open(KEY);
         const { frames, view } = webview;
         const shell = webview.subscriptions;
-        // The shell names the second stream ahead of its run.start: live
-        // text is framed only for the aggregates a Subscribe names.
-        const child = 'stream:second';
-        const named: Subscribe = {
-          ...subscribe,
-          aggregates: [
-            ...subscribe.aggregates,
-            { id: qualifyAggregateId('stream', child), fromSeq: 0 },
-          ],
-        };
         // The shell: begin the generation and set its transcript set, then
         // post the Subscribe; the decoder feeds every frame that answers it.
-        yield* frames.begin(named.generation);
-        yield* shell.set('shell', named.aggregates);
-        const decoder = yield* Effect.forkScoped(
+        yield* frames.begin(subscribe.generation);
+        yield* shell.set('shell', subscribe.aggregates);
+        const parentDecoder = yield* Effect.forkScoped(
           Stream.runForEach(
-            frameSubscription(source, PORT, host, named),
+            frameSubscription(source, PORT, host, subscribe),
             (frame) => frames.feed(frame),
           ),
         );
@@ -365,13 +389,10 @@ describe('session framer', () => {
           existence: null,
         });
         const ticker = yield* Effect.forkScoped(ticking);
-        yield* settle(
-          view.ref,
-          (v) => v.inflight.get(`${STREAM}/row-1`) === 'Hello',
-        );
+        yield* settle(view.ref, (v) => rowText(v, STREAM, 'row-1') === 'Hello');
         yield* settle(
           runtimeView.ref,
-          (v) => v.inflight.get(`${STREAM}/row-1`) === 'Hello',
+          (v) => rowText(v, STREAM, 'row-1') === 'Hello',
         );
         expect(drawn(yield* SubscriptionRef.get(view.ref))).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
@@ -386,7 +407,7 @@ describe('session framer', () => {
           view.ref,
           (v) =>
             v.streams.get(STREAM)?.status === STREAM_PHASE.RUNNING &&
-            v.inflight.get(`${STREAM}/row-1`) === 'Hello again',
+            rowText(v, STREAM, 'row-1') === 'Hello again',
         );
         yield* settle(
           runtimeView.ref,
@@ -396,9 +417,13 @@ describe('session framer', () => {
         expect(drawn(folded)).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
-        expect(folded.cursor).toBe(3);
+        expect(folded.cursor).toBe(4);
 
-        // A new stream and its first prefix can become ready in one turn.
+        // A new stream: its run.start is a listing fact, framed to a shell
+        // that has not named it. The shell names a stream only once its view
+        // holds it (`transcriptAggregates`), and live text is framed only for
+        // the aggregates a Subscribe names, so it resubscribes naming it.
+        const child = 'stream:second' as StreamTabId;
         yield* events.publish([
           {
             ...runStart,
@@ -406,14 +431,34 @@ describe('session framer', () => {
             executionId: 'dec0de',
           },
         ]);
+        yield* settle(view.ref, (v) => v.streams.has(child));
+        yield* settle(runtimeView.ref, (v) => v.streams.has(child));
+        yield* Fiber.interrupt(parentDecoder);
+        const named: Subscribe = {
+          ...subscribe,
+          generation: 2,
+          cursor: (yield* SubscriptionRef.get(view.ref)).cursor,
+          aggregates: [
+            ...subscribe.aggregates,
+            { id: qualifyAggregateId('stream', child), fromSeq: 0 },
+          ],
+        };
+        yield* frames.begin(named.generation);
+        yield* shell.set('shell', named.aggregates);
+        const decoder = yield* Effect.forkScoped(
+          Stream.runForEach(
+            frameSubscription(source, PORT, host, named),
+            (frame) => frames.feed(frame),
+          ),
+        );
+        // The named stream's streaming row and the row's first prefix can
+        // become ready in one turn.
+        yield* events.publish([streamingRow(child, 'row-2')]);
         yield* SubscriptionRef.update(
           chunks.ref,
           (held) => new Map([...held, [`${child}/row-2`, textTail('First')]]),
         );
-        yield* settle(
-          view.ref,
-          (v) => v.inflight.get(`${child}/row-2`) === 'First',
-        );
+        yield* settle(view.ref, (v) => rowText(v, child, 'row-2') === 'First');
         yield* SubscriptionRef.update(
           chunks.ref,
           (held) =>
@@ -427,11 +472,11 @@ describe('session framer', () => {
         );
         yield* settle(
           view.ref,
-          (v) => v.inflight.get(`${child}/row-2`) === 'First suffix',
+          (v) => rowText(v, child, 'row-2') === 'First suffix',
         );
         yield* settle(
           runtimeView.ref,
-          (v) => v.inflight.get(`${child}/row-2`) === 'First suffix',
+          (v) => rowText(v, child, 'row-2') === 'First suffix',
         );
 
         // Neither a partial replay nor its superseded generation may mutate
@@ -481,14 +526,14 @@ describe('session framer', () => {
         yield* settle(view.ref, (v) => v.streams.get(STREAM)?.ownerId === null);
         const afterLive = yield* SubscriptionRef.get(view.ref);
         expect(afterLive.cursor).toBe(beforeLive.cursor);
-        expect(afterLive.inflight.get(`${STREAM}/row-1`)).toBe('Hello again!');
+        expect(rowText(afterLive, STREAM, 'row-1')).toBe('Hello again!');
         const beforeReplay = yield* SubscriptionRef.get(view.ref);
-        yield* frames.begin(2);
+        yield* frames.begin(3);
         yield* shell.set('shell', named.aggregates);
         yield* frames.feed({
           kind: 'events',
           session: KEY,
-          generation: 2,
+          generation: 3,
           cursor: 4,
           events: [
             {
@@ -514,13 +559,13 @@ describe('session framer', () => {
         expect(beforeReplay.streams.get(STREAM)?.status).toBe(
           STREAM_PHASE.RUNNING,
         );
-        yield* frames.begin(3);
+        yield* frames.begin(4);
         yield* shell.set('shell', named.aggregates);
         const resumed = yield* Effect.forkScoped(
           Stream.runForEach(
             frameSubscription(source, PORT, host, {
               ...named,
-              generation: 3,
+              generation: 4,
               cursor: beforeReplay.cursor,
             }),
             (frame) => frames.feed(frame),
@@ -535,7 +580,7 @@ describe('session framer', () => {
       }).pipe(
         Effect.provide(
           Layer.merge(
-            runtimeGraph([runStart, waiting]),
+            runtimeGraph([runStart, waiting, streamingRow(STREAM, 'row-1')]),
             WebviewSessions.layerNoDeps,
           ),
         ),

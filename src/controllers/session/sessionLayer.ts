@@ -714,8 +714,8 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // is armed on the settlement, whatever the flush's exit, and a flush
     // that fails still fails this close.
     //
-    // `flushArtifacts` does reject when a trace or shared artifact writer
-    // fails, and `Effect.promise` is deliberate rather than an oversight:
+    // `flushArtifacts` does reject when a session publication failed, and
+    // `Effect.promise` is deliberate rather than an oversight:
     // `close` answers a `SessionCloseReport` and names no error, so the
     // defect is the channel a failed flush travels on, and `ProcessHold.release`
     // (packages/agent/src/effect/runtime.ts) documents the embedder seeing

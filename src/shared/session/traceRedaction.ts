@@ -1,9 +1,6 @@
 /** Existing transcript redaction rules, shared by publication and display. */
 import { redactDisplayValue, redactSecrets } from '@logger/redaction';
-import {
-  SessionEventDraftSchema,
-  type SessionEventDraft,
-} from '@shared/schemas';
+import type { SessionEventDraft } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
 /** Apply the existing transcript rules before source facts enter the event table. */
@@ -14,10 +11,7 @@ export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
     case 'run.config':
       return { ...event, config: redactDisplayValue(event.config) };
     case 'result':
-      return SessionEventDraftSchema.parse({
-        ...event,
-        error: redactLogData(event.error),
-      });
+      return { ...event, error: redactLogData(event.error) };
     case 'log':
       return {
         ...event,
@@ -81,8 +75,11 @@ export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
  * whose `message` and `stack` are non-enumerable own properties that a spread
  * would silently drop; such an object serializes to `{}` on the wire and on
  * disk anyway, so it is left untouched.
+ *
+ * The result keeps the input's type: redaction replaces existing string fields
+ * with strings and adds no keys.
  */
-export function redactLogData(data: unknown): unknown {
+export function redactLogData<T>(data: T): T {
   if (
     !isObject(data) ||
     Object.getPrototypeOf(data) !== Object.prototype ||
@@ -94,7 +91,7 @@ export function redactLogData(data: unknown): unknown {
   // rawErrorBody carry provider error bodies (which can echo request URLs or
   // Authorization headers), statusText is the provider's HTTP status line,
   // partialText carries truncated model output.
-  const redacted: Record<string, unknown> = { ...data };
+  const redacted: Record<string, string> = {};
   for (const key of [
     'message',
     'rawMessage',
@@ -102,9 +99,10 @@ export function redactLogData(data: unknown): unknown {
     'statusText',
     'partialText',
   ]) {
-    if (typeof redacted[key] === 'string') {
-      redacted[key] = redactSecrets(redacted[key] as string);
+    const value = data[key];
+    if (typeof value === 'string') {
+      redacted[key] = redactSecrets(value);
     }
   }
-  return redacted;
+  return { ...data, ...redacted };
 }

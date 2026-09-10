@@ -70,7 +70,7 @@ describe('AgentTrace stream output', () => {
       const entries = streamEntries(store);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
-      expect(entries[0]?.text).toBe('reasoning delta');
+      expect(entries[0]?.text).toBe('');
 
       expect(thinking.finalize()).toBe('reasoning delta');
       expect(events.at(-1)).toMatchObject({

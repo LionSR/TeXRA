@@ -119,9 +119,9 @@ interface ExecutionRegistryInit {
   readonly approvals: SessionApprovals;
   readonly publishResult: (event: ResultEvent, streamId: StreamTabId) => void;
   /**
-   * The session's one exit choreography (`SessionHandle.releaseExecutionLease`)
-   * — required so no construction path can silently release a lease without
-   * draining the session's durable writers first.
+   * The session's one exit choreography (`SessionHandle.releaseExecutionLease`),
+   * required so no construction path can silently release a lease without
+   * settling the session's queued publications first.
    */
   readonly releaseRootExecutionLease: WaitingTerminationContext['releaseRootExecutionLease'];
   readonly finalizeExecution: WaitingTerminationContext['finalizeExecution'];

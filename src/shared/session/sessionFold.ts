@@ -16,10 +16,10 @@
  *
  * Three rules govern the event arm before any fact applies (5.2). A listing
  * fact is ordered by commit within its `(aggregate, listing type)` entry in
- * `view.latest` and ignored when it is not above it, whichever read
- * delivered it. A transcript row folds only for an aggregate in the
- * subscription set (its `view.folded` entry), and only when its seq is above
- * that entry, which it then advances. `view.cursor` moves on tail rows
+ * the session's `latest` index and ignored when it is not above it,
+ * whichever read delivered it. A transcript row folds only for an aggregate
+ * in the subscription set (its `view.folded` entry), and only when its seq
+ * is above that entry, which it then advances. `view.cursor` moves on tail rows
  * alone. Existence: a stream exists iff its `run.start` has folded and its
  * `stream.removed` has not; the two share one `latest` entry, so the
  * tombstone is final under every read, ids are never reused (decision 9),
@@ -35,26 +35,27 @@
  *
  * The publication contract (decision D5): every view `fold` returns is
  * immutable, and untouched branches are shared by reference between levels.
- * `view.streams`, `view.policy`, `view.folded`, `view.latest`,
- * `view.inflight`, `view.queuedFollowUps`, and a transcript's `rows` and
- * `taskGroups` are copied at most once per `fold` call, by the write that
- * touches them (`writableMap`, `writableTranscriptArray`), and never
- * written after the call returns. The copy belongs to the write, not to the
- * input: an entry that projects no row, one that lands no task group, and a
- * delete of a key its map never held all leave those branches the objects
- * the previous level published. Every `StreamView` value, every
- * `TranscriptView` value, and the `SessionView` envelope are replaced on
- * change and never mutated. A host that compares any of these by identity
- * sees exactly what changed, and an older view is stable to read for as
- * long as it is held. It is not a fold
+ * `view.streams`, `view.policy`, `view.folded`, `view.queuedFollowUps`, and
+ * a transcript's `rows` and `taskGroups` are copied at most once per `fold`
+ * call, by the write that touches them (`writableMap`,
+ * `writableTranscriptArray`), and never written after the call returns.
+ * The copy belongs to the write, not to the input: an entry that projects no
+ * row, one that lands no task group, and a delete of a key its map never
+ * held all leave those branches the objects the previous level published.
+ * Every `StreamView` value, every `TranscriptView` value, and the
+ * `SessionView` envelope are replaced on change and never mutated. A host
+ * that compares any of these by identity sees exactly what changed, and an
+ * older view is stable to read for as long as it is held. It is not a fold
  * input: the fold's own indexes live in module-private maps keyed by the
  * value they index, per transcript (row and group positions, the measured
- * live text, the newest thinking row) and per view (streams by owner, the
- * streams whose lifecycle ended, the aggregates the listing named), and
- * those are single-owner, advancing with the latest level only. The
- * invariant the copy rests on: an arm that writes a container reports
- * `changed`, so `foldWith` publishes the envelope holding the copy; a write
- * followed by "no change" would be dropped, not shared.
+ * live text, the newest thinking row) and per view (the current claims, the
+ * newest commit per listing entry, the live text per row, the local
+ * snapshot, streams by owner, the streams whose lifecycle ended, the
+ * aggregates the listing named), and those are single-owner, advancing with
+ * the latest level only. The invariant the copy rests on: an arm that writes
+ * a container reports `changed`, so `foldWith` publishes the envelope
+ * holding the copy; a write followed by "no change" would be dropped, not
+ * shared.
  */
 
 import {
@@ -237,12 +238,9 @@ function reconcileExistence(
   existence: ExistenceReconciliation,
   deferred: DeferredRunModels,
 ): void {
+  const { claims } = sessionIndexesOf(view);
   for (const { aggregateId, ownerId } of existence.claims) {
-    if (
-      !view.claims.has(aggregateId) ||
-      view.claims.get(aggregateId) !== ownerId
-    )
-      writableMap(view, 'claims').set(aggregateId, ownerId);
+    claims.set(aggregateId, ownerId);
     const target = aggregateTarget(aggregateId);
     if (target.kind !== 'stream') continue;
     const stream = view.streams.get(target.id);
@@ -251,7 +249,7 @@ function reconcileExistence(
     walkUp(view, stream.id, stream.id, deferred);
   }
   for (const id of existence.removedAggregateIds) {
-    if (view.claims.has(id)) writableMap(view, 'claims').delete(id);
+    claims.delete(id);
     if (view.folded.has(id)) writableMap(view, 'folded').delete(id);
     const target = aggregateTarget(id);
     if (target.kind === 'stream') foldStreamRemoved(view, target.id, deferred);
@@ -279,6 +277,22 @@ interface SessionIndexes {
   /** Streams by their current claimant, so a local snapshot
    *  recomputes exactly the streams a changed owner holds. */
   readonly byOwner: Map<string, Set<StreamTabId>>;
+  /** Current sequence-row claims for the checked resident scope. */
+  readonly claims: Map<AggregateId, string | null>;
+  /** One entry per `${aggregate}/${listing type}`: the commit of the latest
+   *  listing fact folded for it, so a replayed older one is ignored. The
+   *  lifecycle entry outlives its stream: it is what keeps a tombstone
+   *  final when a read replays the `run.start` beneath it. */
+  readonly latest: Map<string, number>;
+  /** Live text per `${stream}/${row}`, beside the rows rather than inside
+   *  them: a chunk can reach the fold before its row (5.2). A row paints
+   *  its durable text joined with this entry; the entry goes when the row
+   *  finalizes, the stream ends, the stream is removed, or its transcript
+   *  tier is evicted. */
+  readonly inflight: Map<string, string>;
+  /** This process's local truth, the snapshot the next one diffs against:
+   *  a fold input, never durable. */
+  local: LocalRuntimeState;
 }
 
 /** Keyed by the stream index; a copied index inherits its predecessor's
@@ -288,7 +302,15 @@ const SESSION_INDEXES = new WeakMap<SessionView['streams'], SessionIndexes>();
 function sessionIndexesOf(view: SessionView): SessionIndexes {
   let indexes = SESSION_INDEXES.get(view.streams);
   if (!indexes) {
-    indexes = { listed: new Set(), ended: new Set(), byOwner: new Map() };
+    indexes = {
+      listed: new Set(),
+      ended: new Set(),
+      byOwner: new Map(),
+      claims: new Map(),
+      latest: new Map(),
+      inflight: new Map(),
+      local: { self: [], dead: [], unreadable: [] },
+    };
     SESSION_INDEXES.set(view.streams, indexes);
   }
   return indexes;
@@ -306,14 +328,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
  */
 let owned = new WeakSet<object>();
 
-type ViewMapKey =
-  | 'streams'
-  | 'policy'
-  | 'folded'
-  | 'claims'
-  | 'latest'
-  | 'inflight'
-  | 'queuedFollowUps';
+type ViewMapKey = 'streams' | 'policy' | 'folded' | 'queuedFollowUps';
 
 /** The view's map under `key`, copied once per call before its first write. */
 function writableMap<K extends ViewMapKey>(
@@ -362,8 +377,9 @@ function inflightKey(streamId: StreamTabId, rowId: string): string {
  *  was removed, or lost its transcript tier (5.2, "In-flight text"). */
 function clearInflight(view: SessionView, stream: StreamView): void {
   const prefix = `${stream.id}/`;
-  for (const key of [...view.inflight.keys()]) {
-    if (key.startsWith(prefix)) writableMap(view, 'inflight').delete(key);
+  const { inflight } = sessionIndexesOf(view);
+  for (const key of inflight.keys()) {
+    if (key.startsWith(prefix)) inflight.delete(key);
   }
   indexesOf(stream.transcript).streaming.clear();
 }
@@ -372,8 +388,8 @@ function clearInflight(view: SessionView, stream: StreamView): void {
 // Transcript indexes (fold-owned, never on the view)
 // ---------------------------------------------------------------------------
 
-/** One streaming row's measured live text: the projection of its
- *  `view.inflight` entry, extended per chunk rather than re-measured. */
+/** One streaming row's measured live text: the projection of its session
+ *  `inflight` entry, extended per chunk rather than re-measured. */
 interface StreamingCursor {
   /** The last durable entry for the row: a first chunk projects it when the
    *  entry's own text was blank and gave no row. */
@@ -460,7 +476,7 @@ function createStream(view: SessionView, event: RunStartEvent): StreamView {
     executionId: event.executionId,
     identity,
     isRemote: event.isRemote,
-    ownerId: view.claims.get(event.aggregateId) ?? null,
+    ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,
     label: runIdentityDisplayName(identity),
     description: null,
     model: null,
@@ -689,7 +705,7 @@ function refreshAncestors(view: SessionView, streamId: StreamTabId): void {
  * so a resume can re-ask.
  */
 function withAggregates(view: SessionView, stream: StreamView): StreamView {
-  const { local } = view;
+  const { local } = sessionIndexesOf(view);
   const owner = stream.ownerId;
   const own = owner !== null && local.self.includes(owner);
   const heldBy =
@@ -1008,7 +1024,7 @@ function projectRow(
 /**
  * Fold one transcript row into the slice: the row, task-group, compaction,
  * and run-marker reducers, each called unchanged. A streaming row joins its
- * durable fields with its `view.inflight` entry, which may have arrived
+ * durable fields with its session `inflight` entry, which may have arrived
  * first (5.2, "In-flight text"); a finalizing row drops that entry, so a
  * late chunk cannot reopen settled text.
  */
@@ -1038,15 +1054,17 @@ function applyEntry(
     applyCompactionActivityEntries(indexes.compactionState, [entry]),
   );
   const key = inflightKey(stream.id, entry.id);
-  // One holder of a row's live text, `view.inflight`, whichever arrives
-  // first: chunks extend it, and an entry that folds before any chunk seeds
-  // it with the text it carried, so the chunk re-delivering that text from
-  // offset zero (the bridge seeds one for every running row it publishes)
-  // ends within the length held and is dropped (5.2, "In-flight text").
-  if (isStreamingEntry(entry) && entry.text && !view.inflight.has(key)) {
-    writableMap(view, 'inflight').set(key, entry.text);
+  const { inflight } = sessionIndexesOf(view);
+  // One holder of a row's live text, the session `inflight` index, whichever
+  // arrives first: chunks extend it, and an entry that folds before any chunk
+  // seeds it with the text it carried, so the chunk re-delivering that text
+  // from offset zero (the bridge seeds one for every running row it
+  // publishes) ends within the length held and is dropped (5.2, "In-flight
+  // text").
+  if (isStreamingEntry(entry) && entry.text && !inflight.has(key)) {
+    inflight.set(key, entry.text);
   }
-  const live = isStreamingEntry(entry) ? view.inflight.get(key) : undefined;
+  const live = isStreamingEntry(entry) ? inflight.get(key) : undefined;
   projectRow(
     next,
     live === undefined ? entry : { ...entry, text: live },
@@ -1069,7 +1087,7 @@ function applyEntry(
     });
   } else {
     indexes.streaming.delete(entry.id);
-    if (view.inflight.has(key)) writableMap(view, 'inflight').delete(key);
+    inflight.delete(key);
   }
   return next;
 }
@@ -1275,7 +1293,8 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   const cursor = indexes.streaming.get(chunk.rowId);
   if (!cursor && rowById(stream.transcript, chunk.rowId)) return false;
   const key = inflightKey(chunk.streamId, chunk.rowId);
-  const held = view.inflight.get(key) ?? '';
+  const { inflight } = sessionIndexesOf(view);
+  const held = inflight.get(key) ?? '';
   if (chunk.to <= held.length) return false;
   if (chunk.from > held.length) {
     throw new Error(
@@ -1283,7 +1302,7 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
     );
   }
   const text = held.slice(0, chunk.from) + chunk.text;
-  writableMap(view, 'inflight').set(key, text);
+  inflight.set(key, text);
   // The row projects when its entry folds, joined with this entry.
   if (!cursor) return true;
   cursor.text =
@@ -1611,12 +1630,13 @@ function foldDurable(
   // Listing facts are ordered by commit per (aggregate, listing type),
   // whichever read delivered them (5.2, "Duplicates").
   const listingKey = `${event.aggregateId}/${listingTypeOf(event)}`;
-  const latest = view.latest.get(listingKey);
-  if (latest !== undefined && event.commit <= latest) return traceChanged;
+  const { latest } = sessionIndexesOf(view);
+  const newest = latest.get(listingKey);
+  if (newest !== undefined && event.commit <= newest) return traceChanged;
 
   const streamId = streamOf(event);
   if (streamId === null) {
-    writableMap(view, 'latest').set(listingKey, event.commit);
+    latest.set(listingKey, event.commit);
     applySessionSlices(view, null, event);
     return true;
   }
@@ -1625,7 +1645,7 @@ function foldDurable(
   // the view has no `run.start` for changes nothing and leaves no entry (its
   // publisher logs it).
   if (!known && event.type !== 'run.start') return false;
-  writableMap(view, 'latest').set(listingKey, event.commit);
+  latest.set(listingKey, event.commit);
   if (event.type === 'stream.removed') {
     return foldStreamRemoved(view, streamId, deferred);
   }
@@ -1811,8 +1831,9 @@ function foldLocal(
   local: LocalRuntimeState,
   deferred: DeferredRunModels,
 ): void {
-  const previous = view.local;
-  view.local = local;
+  const indexes = sessionIndexesOf(view);
+  const previous = indexes.local;
+  indexes.local = local;
   const heldBefore = new Set([...previous.self, ...previous.dead]);
   const heldAfter = new Set([...local.self, ...local.dead]);
   const changedOwners = new Set<string>();
@@ -1831,9 +1852,10 @@ function foldLocal(
     }
   }
   const touched = new Set<StreamTabId>();
-  const { byOwner } = sessionIndexesOf(view);
   for (const owner of changedOwners) {
-    for (const streamId of byOwner.get(owner) ?? []) touched.add(streamId);
+    for (const streamId of indexes.byOwner.get(owner) ?? []) {
+      touched.add(streamId);
+    }
   }
   const unreadableBefore = new Map(
     previous.unreadable.map((u) => [u.streamId, u.detail]),
