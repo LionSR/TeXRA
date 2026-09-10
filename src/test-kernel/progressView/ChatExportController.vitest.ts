@@ -177,7 +177,7 @@ describe('ChatExportController.buildExportInput', () => {
 
   it('reports config_missing when nothing is stored', async () => {
     await expect(
-      Effect.runPromise(controller.buildExportInput('eec404')),
+      Effect.runPromise(controller.buildExportInput('eec404' as RunId)),
     ).resolves.toEqual({
       status: 'config_missing',
     });

@@ -232,9 +232,9 @@ describe('ModelHandlerCodex subscription fallback', () => {
     const handler = new CodexRouteProbe(largeWindowConfig);
     handler.setAgentCategory(AgentCategory.ToolUse);
     const stream = pDefer<never>();
-    const runRequestSpy = vi.fn(() => stream.promise);
+    const streamRequestSpy = vi.fn(() => stream.promise);
     const client = handler.tagClient(
-      { responses: { stream: runRequestSpy } } as unknown as OpenAI,
+      { responses: { stream: streamRequestSpy } } as unknown as OpenAI,
       'chatgpt-subscription',
     );
 
@@ -243,7 +243,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
       messages: [],
       temperature: 0,
     });
-    await vi.waitFor(() => expect(runRequestSpy).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(streamRequestSpy).toHaveBeenCalledOnce());
 
     await setPreferCodexSubscription(false);
     expect(handler.getEffectiveContextWindow()).toBe(
