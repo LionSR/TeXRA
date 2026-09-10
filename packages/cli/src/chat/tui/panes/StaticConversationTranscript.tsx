@@ -725,9 +725,7 @@ const DUPLICATE_ROW_ID_REPORT_CAP = 1000;
  *  logged once instead of once per rebuild. `upsertRow` (sessionFold) and the
  *  local-notice counter (`transcript.ts`) both guarantee unique ids; a
  *  collision here means one of those invariants broke upstream. */
-const duplicateRowIdsReported = createBoundedIdSet(
-  DUPLICATE_ROW_ID_REPORT_CAP,
-);
+const duplicateRowIdsReported = createBoundedIdSet(DUPLICATE_ROW_ID_REPORT_CAP);
 
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
