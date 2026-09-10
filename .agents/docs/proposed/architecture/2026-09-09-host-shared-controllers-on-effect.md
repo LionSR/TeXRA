@@ -456,8 +456,8 @@ stale headroom fails the check as surely as growth does.
 | # | Step | Ratchet | Risk |
 | --- | --- | --- | --- |
 | 1 | One decision vocabulary and arms mapper in `src/shared/session/approvalDecision.ts`; both surfaces call it | none | medium surface area, compiler-checked |
-| 2 | `sessionActivity`, `STREAM_GROUP_LABELS`, `describeRequestRefusal` get their shared homes; delete `Surface.scroll` | none; knip consumers in the same PR | low |
-| 3 | Delete the desktop `toolEditAction` pass-through and its host arm | none | low |
+| 2 | `sessionActivity`, `STREAM_GROUP_LABELS`, `describeRequestRefusal` get their shared homes; delete `Surface.scroll` | none; knip consumers in the same PR | low — **partly landed**, see below |
+| 3 | Delete the desktop `toolEditAction` pass-through and its host arm | none | low — **landed** |
 | 4 | `CredentialStore`; move and convert `ProviderKeyController`; delete `packages/cli/src/runtime/providerApiKey.ts` | `platform()` shrinks by 4 | medium-low |
 | 5 | `githubToken` controller; delete the CLI file and the extension's single-caller alias | `platform()` shrinks by 6 | low |
 | 6 | `SubscriptionUsage` as one scoped service | `platform()` shrinks by 2; retires `coalesceAsync` and `AbortSignal.timeout` | medium |
@@ -482,6 +482,44 @@ both touch `subscribeApprovals.ts:686`, where the comment at `:683-685` records
 an ordering rule — "The presentation check is deliberately cached. Drop that
 cache only after the uncached commit check" — that neither step's carry-across
 list named; one step must own that region and the other must depend on it.
+
+**Step 2 landed only in part.** `STREAM_GROUP_LABELS`/`_ORDER` and the
+`Surface.scroll` deletion shipped as described; the group union is now an
+exported `StreamGroup` type so the table is keyed by the schema rather than
+by indexing into `StreamView`. The other two collapses were withdrawn on
+inspection. `sessionActivity` is not one computation in two hosts: the
+desktop's reads `view.rollup` alone, while the CLI's
+`currentTerminalTitleState` also reads `attentionRequests(view)`, the
+root-run slot (`rootRunPending`, `rootRunStreamId`) and
+`chatTuiCanStopActiveRun` — the root-run behaviour this study lists as
+genuinely CLI product. Sharing the desktop's three lines alone would leave a
+single-caller export. `describeRequestRefusal` is worse than a merge: the two
+switches cover different arms (the extension has `Invalid` and no
+`Cancelled`, the CLI the reverse) and word `NotOwner` for different hosts —
+"This run is controlled by another TeXRA window" against "Another process
+owns this conversation" — so one table would change user-visible copy in both
+hosts. Both need an owner decision, not a refactor.
+
+**Step 5 depends on step 4, and its `platform()` shrink is not independently
+realizable** (established while implementing steps 2 and 3). The row is
+per-file and closed in both directions: a count that grows fails, and
+`--update` refuses to admit a file the committed baseline does not already
+name — "a file that is new to a row is new debt … stays red until it is
+gone" (`check-effect-migration-ratchet.mjs:1318-1320`). Both halves of step 5
+move a `platform().secrets` read to a caller, and both callers are blocked.
+On the CLI, deleting `packages/cli/src/runtime/githubToken.ts` (3 calls)
+pushes the read into `CliConfigForm.tsx`, which has no row entry, so the
+check goes permanently red. On the extension, deleting
+`SecretManager.gitHubTokenExists` (1 call) pushes its read into
+`githubSubscriptionHandlers.ts`, which sits at exactly its ceiling of 2 and
+would go to 3. Adopting the shared verbs while leaving both reads where they
+are keeps every count unchanged but deletes nothing, and leaves two new
+exports with one caller each — which the repository's single-caller rule
+bans. So step 5 is not the low-risk `platform()`-shrinking step the table
+describes; it is the second half of step 4, and lands only once
+`CredentialStore` gives both call sites the secrets without re-entering the
+platform. The same test applies to every later step that relocates a
+`platform()` read rather than removing it.
 
 **Two ratchet corrections folded in.** Step 12's original claim that
 `platform()` in `subscribeApprovals.ts` drops 2→1 is wrong: the controller has
