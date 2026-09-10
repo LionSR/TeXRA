@@ -28,26 +28,10 @@ import { extractTextFromTag } from '@utils/text/xmlExtraction';
 
 const log = createLog('AgentCreator');
 
-// ── Types ───────────────────────────────────────────────────
-
-// Derived from the prompts block the template parser validates — the schema
-// is the SSOT for this shape.
-type AgentPromptPair = z.infer<typeof ParsedCreatorYamlSchema>['prompts'];
-
-export interface CreatorConfig {
-  workflow: AgentPromptPair;
-  toolUse: AgentPromptPair;
-  retryPrompts: Record<AgentCategory, string>;
-  templates: {
-    workflowSingle: string;
-    toolUse: string;
-  };
-}
-
 // ── Template parsing ────────────────────────────────────────
 //
 // Parses the bundled agent-creator YAML templates and assembles the
-// `CreatorConfig` above. Hosts own only resolving where the template files
+// `CreatorConfig` below. Hosts own only resolving where the template files
 // live and reading their bytes (see `buildCreatorConfig`); this module owns
 // validating and shaping that content.
 
@@ -67,6 +51,22 @@ const ParsedCreatorYamlSchema = z.object({
     userRequest: PromptStringSchema,
   }),
 });
+
+// ── Types ───────────────────────────────────────────────────
+
+// Derived from the prompts block the template parser validates — the schema
+// is the SSOT for this shape.
+type AgentPromptPair = z.infer<typeof ParsedCreatorYamlSchema>['prompts'];
+
+export interface CreatorConfig {
+  workflow: AgentPromptPair;
+  toolUse: AgentPromptPair;
+  retryPrompts: Record<AgentCategory, string>;
+  templates: {
+    workflowSingle: string;
+    toolUse: string;
+  };
+}
 
 function parseCreatorTemplate(
   fileName: string,

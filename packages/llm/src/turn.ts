@@ -806,6 +806,7 @@ const EditorControlsSchema = z.strictObject({
   toolChoice: z.literal('auto'),
 });
 
+/** Refinement guard: a route without temperature support must default to null. */
 function validateTemperatureDefault(
   configuration: {
     readonly supportsTemperature: boolean;
@@ -825,6 +826,7 @@ function validateTemperatureDefault(
   }
 }
 
+/** Refinement guard: the default effort must be one the selected route supports. */
 function validateEffortDefault<E extends string>(
   configuration: {
     readonly supportedEfforts: readonly E[];

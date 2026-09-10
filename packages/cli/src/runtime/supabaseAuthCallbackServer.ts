@@ -1,3 +1,4 @@
+// Node imports
 import { randomBytes } from 'node:crypto';
 import {
   createServer,
@@ -5,9 +6,11 @@ import {
   type ServerResponse,
 } from 'node:http';
 
+// Third-party imports
 import { z } from 'zod';
-
 import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
+
+// Local imports
 import { unwrapAuthPortCause } from '@auth/authProgram';
 import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
 import {
