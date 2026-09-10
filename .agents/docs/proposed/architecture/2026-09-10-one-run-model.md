@@ -72,7 +72,7 @@ not touched.
 
 | Fact about a run   | Declared today (spellings)                                                                                                                          | Declared in 1.0                                                                                               |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Identity           | `ExecutionId`, `StreamTabId`, `runId`, `storageKey`, `RunScope.agentName`, four stream prefixes                                                     | `ExecutionId` (branded); `RunIdentity` for what kind of thing it is                                           |
+| Identity           | `ExecutionId`, `StreamTabId`, `runId`, `storageKey`, `RunScope.agentName`, four stream prefixes                                                     | `RunId` (branded, today's `ExecutionId`); `RunIdentity` for what kind of thing it is                          |
 | Parent edge        | `parentStreamId`, `parentExecutionId`, `isSubagent`, `isChildExecution`, `background`, five persisted carriers, two "is child of" implementations   | `parent: { id, startCommit } \| null` on `run.start`; everything else is `parent !== null`                    |
 | Phase and outcome  | `StreamPhase`, `StreamLifecycleStatus`, `ExecutionStatus`, `HistoryRunStatus`, `ExecutionMeta.outcome`, the `status` fact, the `result` fact        | `RunPhase` folded from `run.start`, `run.activate`, `flow.step`, `run.end`; `RunOutcome` its terminal subset  |
 | Tool-call outcome  | `ToolResult.status`, `ToolStatus`, `TOOL_USE_STATUS`, `ToolUseLog.isError`, `normalizeToolUseData`                                                  | `ToolCallStatus` on `tool.result`; the card's status is the fold of it                                        |
@@ -347,6 +347,38 @@ the same versioning rule as the CLI. `ReasoningEffort` is llm-zoo's, and
 availability is one discriminated field. This family is real but touches
 nothing above and can land in any order.
 
+### 3.10 Names: one word, and it is "run"
+
+Collapsing the concepts and leaving the words is half a collapse. Today the
+same thing is called an execution in the runtime and storage layers
+(`ExecutionId`, `AgentExecutionHandle`, `executionRegistry`, `executionLanes`,
+`executionLifecycle`, `ExecutionMeta`, the `execution.*` rows), a stream in
+the session and view layers (`StreamView`, `SessionView.streams`,
+`StreamPhase`, `streamStatus`, `stream.removed`, `StreamSelection`, every
+`streamId` field), and a run at the seams between them (`runAgent`,
+`RunIdentity`, `RunOutcome`, `run.start`). The proposal notes disagree with
+each other the same way: the runtime note's per-run service is `RunContext`,
+the injection note's is `AgentRun`, the code's is `RunScope`. A reader has to
+know which layer wrote a file to know whether "execution" and "stream" mean
+the same object, and after this note they always do.
+
+The rule is one word. **A run is a run** in every layer, every row, every
+service, every file name. `ExecutionId` becomes `RunId`, the aggregate kind
+is `run`, the rows are `run.*`, the view is `RunView` in `SessionView.runs`,
+the phase is `RunPhase`, the handle is `RunHandle`, the registry and lanes
+are the run registry and run lanes, and the one per-run service the runtime
+lane provides is `Run`. "Execution" survives nowhere; "stream" survives only
+for what streams, a provider's token stream. The rename is compiler-driven
+once the id is branded, and it lands inside S1, because doing the id and the
+words in two passes touches the same 150 files twice. Cost, measured on
+`main`: 35 production files named after one of the retired words, and about
+2,900 spellings of `streamId` and `executionId` across the hosts and core.
+That number is the reason to do it once and not gradually.
+
+The same rule binds the proposal tree. The injection note's `AgentRun` and
+the runtime note's `RunContext` are the `Run` service; the PR1 note's
+`RunAggregates` is the run id; nothing new is named with either retired word.
+
 ## 4. What this deletes
 
 | Deleted                                                                                                                                                                                                               | Lines (measured)       |
@@ -403,7 +435,8 @@ first removes a documented deviation from PR1 before it is written.
    Section 4 to point here.
 2. **S1, identity and aggregate.** Brand the run id; delete `StreamTabId`
    and its minting; one `run` aggregate; `parent` on `run.start`, `background`
-   gone; `RunScope` shrinks. One PR, compiler-driven, about 150 files. The
+   gone; `RunScope` shrinks; the one-word rename of section 3.10 in the same
+   PR. One PR, compiler-driven, about 150 files. The
    persisted-state keys change in the fresh namespace only.
 3. **S2, vocabulary.** `sessionEvent.ts` as the only declaration; the trace
    `.pick()`; `run.end`, `run.description`; one `ToolCallStatus`; delete the
