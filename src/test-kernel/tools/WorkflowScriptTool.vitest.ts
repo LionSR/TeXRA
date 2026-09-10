@@ -183,7 +183,7 @@ function registrationRecordFor(name: string, model = 'parent-model') {
 /** The registration options a launch of `name` must record. */
 function registrationOptionsFor(name: string) {
   return expect.objectContaining({
-    streamId: `workflow-script#${runExecutionIdFor(name)}`,
+    streamId: runExecutionIdFor(name),
     identity: { kind: 'multiAgentWorkflow', workflowName: name },
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     parentExecutionId: executionId,
@@ -288,7 +288,7 @@ beforeEach(async () => {
         const logger = new TraceEmitter();
         vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
         return {
-          childStreamId: `workflow-script#${runId}` as StreamTabId,
+          childStreamId: runId,
           logger,
           waitForInput: vi.fn(),
           beginTurn: vi.fn(),
@@ -337,7 +337,7 @@ describe('WorkflowScriptTool', () => {
     await callTool();
 
     expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      `workflow-script#${runExecutionIdFor('tool-test')}`,
+      runExecutionIdFor('tool-test'),
       streamId,
       'auto-approved',
       currentSession(),
@@ -348,7 +348,7 @@ describe('WorkflowScriptTool', () => {
     await callTool();
 
     expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      `workflow-script#${runExecutionIdFor('tool-test')}`,
+      runExecutionIdFor('tool-test'),
       streamId,
       'inherit',
       currentSession(),
@@ -529,13 +529,12 @@ return null`;
       runExecutionId,
       streamId,
       expect.objectContaining({
-        streamPrefix: 'workflow-script',
         run: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
       }),
     );
     // The run's own stream inherits the orchestrator's approval ancestry.
     expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
-      `workflow-script#${runExecutionId}`,
+      runExecutionId,
       streamId,
       'inherit',
       currentSession(),
@@ -543,7 +542,7 @@ return null`;
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
     const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
     expect(loopParams).toMatchObject({
-      childStreamId: `workflow-script#${runExecutionId}`,
+      childStreamId: runExecutionId,
       parentStreamId: streamId,
       executionId: runExecutionId,
       agentName: 'tool-test',

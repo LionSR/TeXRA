@@ -13,7 +13,7 @@ import { Effect } from 'effect';
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
 
-import { lookupRunId, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
@@ -163,7 +163,7 @@ const deliverContinuation = Effect.fn('deliverContinuation')(
  * Shared body of the answered / dropped injectors: resolve the manifest,
  * archive when there is nothing to continue (missing thread, a turn-less
  * manifest, an `answered` event whose last turn is no longer answered, no
- * parent stream, or a parent stream since re-run under another execution),
+ * parent stream),
  * then build and deliver the continuation.
  */
 const injectContinuation = Effect.fn('injectContinuation')(function* (
@@ -190,18 +190,6 @@ const injectContinuation = Effect.fn('injectContinuation')(function* (
   if (manifest.parentStreamId == null) {
     return yield* archiveAsParentFinished(threadId, session);
   }
-  // The answer is addressed to the execution that asked. A manifest written
-  // before the field existed names none and is delivered by stream alone.
-  if (manifest.parentExecutionId != null) {
-    const current = yield* lookupRunId(manifest.parentStreamId, session);
-    if (current !== manifest.parentExecutionId) {
-      logger.warn(
-        `Inquiry continuation for ${threadId}: parent stream ${manifest.parentStreamId} now runs execution ${current ?? 'none'}, not ${manifest.parentExecutionId}; archiving.`,
-      );
-      return yield* archiveAsParentFinished(threadId, session);
-    }
-  }
-
   const parentStreamId = manifest.parentStreamId;
   const stillOpen = yield* records.listThreadsByStatus({
     status: 'open',

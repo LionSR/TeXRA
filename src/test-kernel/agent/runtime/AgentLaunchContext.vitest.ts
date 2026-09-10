@@ -443,7 +443,7 @@ describe('AgentLaunchContext', () => {
     try {
       await Effect.runPromise(
         registerRun(session, EXECUTION_ID, config, 'chat', {
-          streamId: `chat#${EXECUTION_ID}`,
+          streamId: EXECUTION_ID,
           identity: { kind: 'agent', agent: 'chat' },
         }),
       );
@@ -495,7 +495,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({
       responseTextProcessing,
     });
-    publishTestRunStart(session, 'late-assembly-stream', EXECUTION_ID);
+    publishTestRunStart(session, EXECUTION_ID, EXECUTION_ID);
     const terminalEvents = recordSessionEvents(session);
     const stage = noopTrace.openStage('Run');
     const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
@@ -538,7 +538,7 @@ describe('AgentLaunchContext', () => {
           }),
           executionId: EXECUTION_ID,
           session,
-          streamTabIdOverride: 'late-assembly-stream',
+          resumed: true,
           suppressErrorNotification: true,
           modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
         }),
@@ -552,9 +552,7 @@ describe('AgentLaunchContext', () => {
       );
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
       expect(handler.dispose).toHaveBeenCalledOnce();
-      expect(session.status.get('late-assembly-stream')).toBe(
-        STREAM_PHASE.FAILED,
-      );
+      expect(session.status.get(EXECUTION_ID)).toBe(STREAM_PHASE.FAILED);
       expect(detachTrace).toHaveBeenCalledOnce();
       await expect(detachTrace.mock.results[0]?.value).resolves.toContainEqual(
         expect.objectContaining({ type: 'status', phase: STREAM_PHASE.FAILED }),

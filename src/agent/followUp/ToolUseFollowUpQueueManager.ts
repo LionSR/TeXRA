@@ -127,16 +127,8 @@ export class ToolUseFollowUpQueue {
    * Begin a separately authorized child run. The caller must already own the
    * execution lease.
    */
-  claimChildRun(
-    streamId: StreamTabId,
-    executionId: RunId,
-  ): FollowUpConsumerLease | undefined {
+  claimChildRun(streamId: StreamTabId): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
-    if (!streamId.endsWith(`#${executionId}`)) {
-      throw new Error(
-        `Child stream ${streamId} does not belong to execution ${executionId}.`,
-      );
-    }
     this.terminalized.delete(streamId);
     const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
     return this.claim(entry, streamId, 'child');

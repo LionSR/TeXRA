@@ -50,7 +50,6 @@ import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   readCliHistoryDetails,
@@ -263,7 +262,7 @@ describe('completedRunArchive facade', () => {
       transcriptMode: { kind: 'persistent' },
     });
     const executionId = 'abc654abc654' as RunId;
-    const streamId = 'stream:secret-export' as StreamTabId;
+    const streamId: StreamTabId = executionId;
     const secret = 'sk-private-export-key-1234567890';
     const content = `  retained text ${secret}  `;
     await stampStreamId(executionId, streamId);
@@ -353,7 +352,7 @@ describe('completedRunArchive facade', () => {
 
   it('keeps concurrent exports of the same execution isolated by session roots', async () => {
     const executionId = 'abc456abc456' as RunId;
-    const streamId = 'stream:shared-execution-id' as StreamTabId;
+    const streamId: StreamTabId = executionId;
     const papers = ['first-paper', 'second-paper'].map((label) => ({
       label,
       session: createTestSession(),
@@ -423,7 +422,7 @@ describe('completedRunArchive facade', () => {
 
   it('serves conversation and export from transcripts and tasks from committed events', async () => {
     const executionId = 'abc123abc123' as RunId;
-    const streamId = 'orchestrator@deepseekproT#abc123abc123' as StreamTabId;
+    const streamId: StreamTabId = executionId;
     await writeArchiveFixture(executionId, streamId);
 
     await Effect.runPromise(
@@ -529,13 +528,8 @@ describe('completedRunArchive facade', () => {
     () =>
       Effect.gen(function* () {
         const executionId = '0aa1110aa111' as RunId;
-        const streamId = 'orchestrator@legacyModel#0aa1110aa111' as StreamTabId;
+        const streamId: StreamTabId = executionId;
         const config = runConfig('orchestrator');
-        // The stamped id is the reproduction contract: minting from today's
-        // config would produce a different (wrong) id.
-        expect(getStreamTabId(config.agent, { executionId })).not.toBe(
-          streamId,
-        );
 
         yield* Effect.promise(() => stampStreamId(executionId, streamId));
         taskSession.dispose();
@@ -757,7 +751,7 @@ describe('completedRunArchive facade', () => {
 
   it('reads an empty task list from a committed empty work plan', async () => {
     const executionId = '0aa2220aa222' as RunId;
-    const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
+    const streamId: StreamTabId = executionId;
     await seedTasks(executionId, streamId, []);
     await stampStreamId(executionId, streamId);
 
@@ -780,10 +774,10 @@ describe('completedRunArchive facade', () => {
 
   it('reads a registered execution without sidecar or suffix scans, even when its transcript is empty (#9590 A1)', async () => {
     const executionId = 'abc907abc907' as RunId;
-    const streamId = 'orchestrator@deepseekproT#abc907abc907' as StreamTabId;
+    const streamId: StreamTabId = executionId;
     await stampStreamId(executionId, streamId);
-    // A decoy stream that a suffix scan would match; registration must make
-    // it unreachable — the stamped (empty) stream is authoritative.
+    // A decoy stream that a suffix scan would match; the run's own (empty)
+    // stream is authoritative.
     await persistRows(
       'dec000001' as RunId,
       new Map([
@@ -802,7 +796,7 @@ describe('completedRunArchive facade', () => {
       source: 'none',
       streamId,
     });
-    // The stamped stream id alone is association evidence.
+    // The run's registered stream alone is association evidence.
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(true);
 
     expect(
@@ -814,7 +808,7 @@ describe('completedRunArchive facade', () => {
 
   it('reads a sidecar conversation', async () => {
     const executionId = 'ddd444ddd444' as RunId;
-    const streamId = 'orchestrator@deepseekproT#ddd444ddd444' as StreamTabId;
+    const streamId: StreamTabId = executionId;
     await writeArchiveFixture(executionId, streamId);
     await stampStreamId(executionId, streamId);
     const result = await readCompletedRunConversation(executionId);
@@ -826,7 +820,7 @@ describe('completedRunArchive facade', () => {
 
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {
     const executionId = '0ee5550ee555' as RunId;
-    const streamId = 'orchestrator@deepseekproT#0ee5550ee555' as StreamTabId;
+    const streamId: StreamTabId = executionId;
 
     await stampStreamId(executionId, streamId);
 
@@ -883,9 +877,9 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
-  it('preserves a diagnostic-only stamped stream as execution evidence without a conversation', async () => {
+  it('preserves a diagnostic-only run stream as execution evidence without a conversation', async () => {
     const executionId = '0999cb0999cb' as RunId;
-    const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
+    const root: StreamTabId = executionId;
 
     await stampStreamId(executionId, root);
 
@@ -909,9 +903,9 @@ describe('completedRunArchive facade', () => {
     expect(endpoint.output).toContain(`Stream: ${root}`);
   });
 
-  it('never substitutes another stream for an empty stamped stream', async () => {
+  it('never substitutes another stream for an empty run stream', async () => {
     const executionId = '0999cc0999cc' as RunId;
-    const root = 'orchestrator@model#0999cc0999cc' as StreamTabId;
+    const root: StreamTabId = executionId;
     const child = 'child@tool#0999cc0999cc' as StreamTabId;
 
     await stampStreamId(executionId, root);
@@ -928,31 +922,6 @@ describe('completedRunArchive facade', () => {
       conversation: null,
       source: 'none',
       streamId: root,
-    });
-  });
-
-  it('reads a historical execution whose stamped stream uses the tool-format child id', async () => {
-    const executionId = '0999cd0999cd' as RunId;
-    const streamId = 'child@tool#0999cd0999cd' as StreamTabId;
-    const parentStreamId = 'orchestrator@model#parent' as StreamTabId;
-
-    await stampStreamId(executionId, streamId);
-
-    await appendRows(streamId, [
-      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Delegated question' }),
-      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Delegated answer' }),
-    ]);
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'streamLog',
-      streamId,
-      conversation: [
-        { role: 'user', content: 'Delegated question' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Delegated answer' }],
-        },
-      ],
     });
   });
 });

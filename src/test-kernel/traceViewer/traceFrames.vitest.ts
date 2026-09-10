@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -178,7 +177,7 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
   it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
     const executionId = 'abc124' as RunId;
     const config = parseConfig(AgentCategory.Workflow);
-    const streamId = getStreamTabId(config.agent, { executionId });
+    const streamId = executionId;
     const session = createTestSession();
     publishTestRunStart(session, streamId, executionId);
     await session.settlePublications();

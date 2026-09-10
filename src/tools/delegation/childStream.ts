@@ -10,7 +10,6 @@ import {
 } from '@agent/runtime/AgentRunLifecycle';
 import { RunHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { classifyAgentError } from '@common/errors';
 import {
   aggregateId as qualifyAggregateId,
@@ -29,7 +28,6 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildStreamOptions {
-  streamPrefix: string;
   /** What owns this stream — the launch site declares the truth once. */
   run: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
@@ -94,20 +92,18 @@ export const createChildRun = Effect.fn('createChildStream')(function* (
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
 ): Effect.fn.Return<ChildRun, Error> {
-  const childStreamId = getStreamTabId(options.streamPrefix, { executionId });
-
   yield* Effect.tryPromise({
     try: () => session.settlePublications(),
     catch: ensureError,
   });
   const residency = yield* session.transcripts.acquireRunResidency(
-    childStreamId,
+    executionId,
     executionId,
   );
   const runTrace = createRunTrace(residency);
   const handle = new RunHandle(
     {
-      streamId: childStreamId,
+      streamId: executionId,
       executionId,
       identity: options.run,
       category: options.config.agentCategory,
@@ -120,10 +116,7 @@ export const createChildRun = Effect.fn('createChildStream')(function* (
   const setup = yield* Effect.exit(
     Effect.gen(function* () {
       // Attach the run's canonical event publication before activation.
-      detachSessionTrace = session.attachRunTrace(
-        runTrace.trace,
-        childStreamId,
-      );
+      detachSessionTrace = session.attachRunTrace(runTrace.trace, executionId);
       const disposeTrace = () => {
         detachSessionTrace?.();
         runTrace.dispose();
@@ -142,7 +135,7 @@ export const createChildRun = Effect.fn('createChildStream')(function* (
       });
       runTrace.trace.emit({
         type: 'run.config',
-        streamId: childStreamId,
+        streamId: executionId,
         executionId,
         config: options.config,
       });
@@ -152,13 +145,13 @@ export const createChildRun = Effect.fn('createChildStream')(function* (
       session.publish([
         {
           type: 'updateStreamDescription',
-          aggregateId: qualifyAggregateId('stream', childStreamId),
+          aggregateId: qualifyAggregateId('stream', executionId),
           description,
         },
       ]);
 
       return {
-        childStreamId,
+        childStreamId: executionId,
         logger: runTrace.trace,
         // Reports, not writes: the status machine's transition table decides
         // which of these lands, so a stale handle or a stream a stop already
@@ -208,7 +201,7 @@ export const createChildRun = Effect.fn('createChildStream')(function* (
           type: 'result',
           outcome: RUN_OUTCOME.FAILED,
           executionId,
-          streamId: childStreamId,
+          streamId: executionId,
           agentName: options.config.agent,
           category: options.config.agentCategory,
           isSubagent: true,

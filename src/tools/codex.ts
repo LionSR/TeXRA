@@ -566,7 +566,6 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
     parentStreamId,
     parentExecutionId,
     agentName: 'codex',
-    streamPrefix: 'codex@codex-sdk',
     description: input.prompt,
     config,
     registerFailedMessage: 'Failed to register Codex execution.',

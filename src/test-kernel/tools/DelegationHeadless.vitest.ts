@@ -635,7 +635,7 @@ describe('headless delegation', () => {
       'review',
       expect.objectContaining({
         parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        streamId: expect.stringContaining(`#${result.executionId}`),
+        streamId: result.executionId,
       }),
     );
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
@@ -1046,7 +1046,7 @@ describe('headless delegation', () => {
       'review',
       expect.objectContaining({
         parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        streamId: expect.stringContaining(`#${completed.executionId}`),
+        streamId: completed.executionId,
       }),
     );
   });

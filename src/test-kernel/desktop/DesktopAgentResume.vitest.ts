@@ -44,8 +44,8 @@ const resumeToolUseFromResumeData = vi.spyOn(
 );
 
 let testSession: SessionHandle;
-const stream = 'headless-resume' as StreamTabId;
 const executionId = 'abc123' as RunId;
+const stream: StreamTabId = executionId;
 const config = ToolUseAgentConfigSchema.parse({
   agent: 'proofreader',
   model: 'deepseekproT',

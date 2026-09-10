@@ -1,6 +1,6 @@
-/** Completed-run display reads, keyed by the registered execution-to-stream link. */
+/** Completed-run display reads, keyed by the run id the run's stream carries. */
 import { Effect } from 'effect';
-import { resolveStreamTabIdForRun } from '@agent/storage/executionLifecycle';
+import { getRunRecords } from '@agent/storage/ExecutionKVStore';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
@@ -24,9 +24,9 @@ export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
     executionId: RunId,
     session: SessionHandle,
   ): Effect.fn.Return<readonly TodoItem[], Error> {
-    const resolution = yield* resolveStreamTabIdForRun(executionId, session);
-    if (!resolution) return [];
-    const snapshot = yield* session.snapshots.read(resolution.streamId);
+    const meta = yield* getRunRecords(session, executionId).readMeta();
+    if (!meta) return [];
+    const snapshot = yield* session.snapshots.read(executionId);
     return snapshot.todos;
   },
 );
@@ -289,13 +289,12 @@ export const readCompletedRunConversation = Effect.fn(
   executionId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
-  const resolution = yield* resolveStreamTabIdForRun(executionId, session);
-  if (!resolution) return { conversation: null, source: 'none' };
-  const { streamId } = resolution;
+  const meta = yield* getRunRecords(session, executionId).readMeta();
+  if (!meta) return { conversation: null, source: 'none' };
   const conversation = streamLogEntriesToConversation(
-    yield* session.transcripts.readEntries(streamId),
+    yield* session.transcripts.readEntries(executionId),
   );
   return conversation.length > 0
-    ? { conversation, source: 'streamLog', streamId }
-    : { conversation: null, source: 'none', streamId };
+    ? { conversation, source: 'streamLog', streamId: executionId }
+    : { conversation: null, source: 'none', streamId: executionId };
 });

@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -85,7 +84,7 @@ async function persistTranscriptEntry(
   executionId: RunId,
   agent: string,
 ): Promise<StreamTabId> {
-  const streamId = getStreamTabId(agent, { executionId });
+  const streamId = executionId;
   await Effect.runPromise(
     session.commit([
       {
@@ -127,11 +126,7 @@ describe('ChatExportController.exportAsHtml', () => {
     const templatePath = await writeTemplate();
     const executionId = 'eec001' as RunId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-    publishTestRunStart(
-      session,
-      getStreamTabId(executionConfig.agent, { executionId }),
-      executionId,
-    );
+    publishTestRunStart(session, executionId, executionId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, executionId).writeRunRecord(executionConfig),
@@ -159,11 +154,7 @@ describe('ChatExportController.exportAsHtml', () => {
 
   it('throws when the standalone template bundle is missing', async () => {
     const executionId = 'eec002' as RunId;
-    publishTestRunStart(
-      session,
-      getStreamTabId(config().agent, { executionId }),
-      executionId,
-    );
+    publishTestRunStart(session, executionId, executionId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, executionId).writeRunRecord(config()),
@@ -200,11 +191,7 @@ describe('ChatExportController.buildExportInput', () => {
 
   it('returns ok when config and transcript are stored', async () => {
     const executionId = 'eec001' as RunId;
-    publishTestRunStart(
-      session,
-      getStreamTabId(config().agent, { executionId }),
-      executionId,
-    );
+    publishTestRunStart(session, executionId, executionId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, executionId).writeRunRecord(config()),
@@ -220,11 +207,7 @@ describe('ChatExportController.buildExportInput', () => {
 
   it('reports conversation_missing when a config is stored but no transcript exists', async () => {
     const executionId = 'eec003' as RunId;
-    publishTestRunStart(
-      session,
-      getStreamTabId(config().agent, { executionId }),
-      executionId,
-    );
+    publishTestRunStart(session, executionId, executionId);
     await session.settlePublications();
     await Effect.runPromise(
       getRunRecords(session, executionId).writeRunRecord(config()),

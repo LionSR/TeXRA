@@ -453,7 +453,7 @@ describe('ExecutionsTool', () => {
       await withTempStorage(async () => {
         const executionId = 'abc123' as RunId;
         const session = createTestSession();
-        const streamId = `codex#${executionId}` as StreamTabId;
+        const streamId: StreamTabId = executionId;
         publishTestRunStart(session, streamId, executionId);
         session.publish([
           {

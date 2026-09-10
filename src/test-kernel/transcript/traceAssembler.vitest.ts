@@ -8,7 +8,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId,
@@ -70,8 +69,7 @@ async function writeExecution(
   meta: { outcome?: RunOutcome; streamId?: StreamTabId } = {},
   executionConfig: AgentConfig = config(),
 ): Promise<void> {
-  const streamId =
-    meta.streamId ?? getStreamTabId(executionConfig.agent, { executionId });
+  const streamId = meta.streamId ?? executionId;
   publishTestRunStart(session, streamId, executionId);
   await session.settlePublications();
   await Effect.runPromise(
@@ -115,17 +113,14 @@ describe('assembleTrace', () => {
   it('resolves a registered execution from its metadata without any sidecar scan (#9590 A1)', async () => {
     const executionId = 'abc900abc900' as RunId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-    // Registered under a stream the config would NOT derive: proves the read
-    // comes from execution metadata, not from agent/model reconstruction.
-    const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
     await Effect.runPromise(
       registerRun(session, executionId, executionConfig, 'review', {
-        streamId: registeredId,
+        streamId: executionId,
         identity: { kind: 'agent', agent: 'review' },
       }),
     );
     await releaseOwnedRunLease(executionId);
-    await appendLogEntry(registeredId, 'registered row');
+    await appendLogEntry(executionId, 'registered row');
 
     const scan = vi.spyOn(RunSnapshotStore.prototype, 'listPersistedStreams');
 
@@ -133,14 +128,14 @@ describe('assembleTrace', () => {
       await Effect.runPromise(assembleTrace(executionId, session)),
     );
 
-    expect(trace.streamId).toBe(registeredId);
+    expect(trace.streamId).toBe(executionId);
     expect(scan).not.toHaveBeenCalled();
   });
 
-  it('assembles a full trace document from the streamId stamped on execution metadata', async () => {
+  it("assembles a full trace document from the run's stream", async () => {
     const executionId = 'aa11bb22cc33' as RunId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-    const streamId = getStreamTabId('review', { executionId });
+    const streamId = executionId;
 
     await writeExecution(
       executionId,
@@ -191,41 +186,11 @@ describe('assembleTrace', () => {
 
   it('exports a registered stream with an empty transcript', async () => {
     const executionId = 'eec000001' as RunId;
-    const streamId = getStreamTabId('orchestrator', { executionId });
+    const streamId = executionId;
     await writeExecution(executionId, { streamId });
 
     const result = await Effect.runPromise(assembleTrace(executionId, session));
 
     expect(unwrapOkTrace(result).entries).toEqual([]);
-  });
-
-  it('resolves a tool-format child stream through its stamped metadata, not name derivation', async () => {
-    // Background child streams (bash/codex/claude subagents, see
-    // @tools/delegation/childStream.createChildStream) share getStreamTabId's
-    // format but carry a tool-specific prefix, disjoint from any agent name —
-    // the stamped meta.streamId is the only mapping that reaches them.
-    const executionId = 'eec000002' as RunId;
-    const executionConfig = config({
-      agent: 'orchestrator',
-      model: 'deepseekT',
-    });
-    const actualChildStreamId = `bash@tool#${executionId}` as StreamTabId;
-    expect(actualChildStreamId).not.toBe(
-      getStreamTabId('orchestrator', { executionId }),
-    );
-    await writeExecution(
-      executionId,
-      { outcome: 'completed', streamId: actualChildStreamId },
-      executionConfig,
-    );
-
-    await appendLogEntry(actualChildStreamId, 'child stream output');
-
-    const trace = unwrapOkTrace(
-      await Effect.runPromise(assembleTrace(executionId, session)),
-    );
-
-    expect(trace.streamId).toBe(actualChildStreamId);
-    expect(trace.entries).toHaveLength(1);
   });
 });

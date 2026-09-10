@@ -302,13 +302,10 @@ export interface ChildRunLoopParams<TTurn> {
    */
   readonly childStream?: ChildStreamPort;
   /**
-   * The child's stream id, known deterministically upfront by every caller
-   * (one `getStreamTabId` formula either way; agent-CLI passes the launching
-   * tool's stream prefix, native passes the clean agent name, which is what
-   * `buildAgentLaunchContext` derives internally); never
-   * discovered mid-flight, so the loop can acquire the follow-up queue and
-   * attach its interrupt handler before the first turn ever runs when a handle
-   * already exists.
+   * The child's stream id, which is its run id: known upfront by every caller,
+   * never discovered mid-flight, so the loop can acquire the follow-up queue
+   * and attach its interrupt handler before the first turn ever runs when a
+   * handle already exists.
    */
   readonly childStreamId: StreamTabId;
   readonly parentStreamId: StreamTabId;
@@ -865,8 +862,7 @@ export function startChildRunLoop<TTurn>(
     let attachedHandle: RunHandle | undefined;
     let detachLoopInterrupt: (() => void) | undefined;
     const attachLoopInterrupt = (): void => {
-      const handle =
-        runSession.executions.getAgentHandleByStream(childStreamId);
+      const handle = runSession.executions.getHandle(executionId);
       if (!handle || handle === attachedHandle) return;
       detachLoopInterrupt?.();
       attachedHandle = handle;
@@ -908,10 +904,7 @@ export function startChildRunLoop<TTurn>(
         // Revalidate at the state transition itself: setup hooks above may run
         // arbitrary synchronous code after the early fail-fast lease check.
         runInSession(runSession, () => assertOwnedRunLease(executionId));
-        queueLease = runSession.followUps.claimChildRun(
-          childStreamId,
-          executionId,
-        );
+        queueLease = runSession.followUps.claimChildRun(childStreamId);
         if (!queueLease) {
           throw new Error(
             `Follow-up continuation already has an owner for child ${childStreamId}.`,
@@ -1200,8 +1193,7 @@ export function startChildRunLoop<TTurn>(
             });
           } else {
             // A native turn normally finalizes itself. A stopped between-turn handle remains ours.
-            const handle =
-              runSession.executions.getAgentHandleByStream(childStreamId);
+            const handle = runSession.executions.getHandle(executionId);
             if (handle) {
               yield* finalizeRunTerminal({
                 session: runSession,

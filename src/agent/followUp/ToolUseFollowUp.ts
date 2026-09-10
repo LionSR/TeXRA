@@ -196,15 +196,6 @@ function admitFollowUp(
   return { resume };
 }
 
-/** Read the authored execution identity from the stream's committed prefix. */
-export const lookupRunId = Effect.fn('lookupRunId')(function* (
-  streamId: StreamTabId,
-  session: SessionHandle,
-) {
-  yield* session.snapshots.preload([streamId]);
-  return session.snapshots.getRunMetadata(streamId).executionId;
-});
-
 /**
  * The one mapping from a run classification to what the user's stream shows
  * and what the refusal is called. Both refusal paths use it — a follow-up
@@ -272,19 +263,24 @@ export function recordRunRefusal(
 const classifyRefusal = Effect.fn('classifyRefusal')(function* (
   streamId: StreamTabId,
   session: SessionHandle,
-): Effect.fn.Return<FollowUpFailureReason, Error> {
-  const executionId = yield* lookupRunId(streamId, session).pipe(
+): Effect.fn.Return<FollowUpFailureReason> {
+  // A stream with no committed run is not a run to classify: the run's own
+  // lease and checkpoint reads cannot tell it from a finished one. Classify
+  // the run id the fold committed rather than the stream id, so a stream
+  // persisted before the two became one id is classified under its own run.
+  const executionId = yield* session.snapshots.preload([streamId]).pipe(
+    Effect.map(() => session.snapshots.getRunMetadata(streamId).executionId),
     Effect.catch((error) =>
       Effect.sync(() => {
         logger.warn(
-          `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,
+          `Cannot classify the refusal for ${streamId}: its committed run is unreadable.`,
           { data: { streamId, error } },
         );
         return undefined;
       }),
     ),
   );
-  if (!executionId) return 'not_resumable';
+  if (executionId === undefined) return 'not_resumable';
   const classification = yield* classifyRun(executionId, session);
   return recordRunRefusal(streamId, session, classification);
 });

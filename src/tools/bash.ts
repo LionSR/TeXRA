@@ -19,10 +19,6 @@ import {
   getRunContextRunId,
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
-import {
-  BASH_CHILD_STREAM_PREFIX,
-  getStreamTabId,
-} from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,
@@ -513,9 +509,6 @@ export class BashTool extends defineTool({
         Effect.gen(function* () {
           const executionId = generateRunId();
           const preview = previewLabel(command);
-          const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
-            executionId,
-          });
 
           const syntheticConfig = AgentConfigSchema.parse({
             agent: 'bash',
@@ -532,7 +525,7 @@ export class BashTool extends defineTool({
             { name: 'bash', instruction: command },
             'bash',
             {
-              streamId: childStreamId,
+              streamId: executionId,
               identity: { kind: 'process', tool: 'bash' },
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
               parentExecutionId,
@@ -547,7 +540,7 @@ export class BashTool extends defineTool({
             session,
             executionId,
             parentStreamId,
-            childStreamId,
+            childStreamId: executionId,
             agentName: 'bash',
             // A background shell is an external process on no model budget, like
             // the agent-CLI children (see the child-run concurrency budget note).
@@ -556,7 +549,6 @@ export class BashTool extends defineTool({
               restore(Effect.void).pipe(
                 Effect.andThen(
                   createChildRun(session, executionId, parentStreamId, {
-                    streamPrefix: BASH_CHILD_STREAM_PREFIX,
                     run: { kind: 'process', tool: 'bash' },
                     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                     description: command,
@@ -591,7 +583,6 @@ export class BashTool extends defineTool({
             [
               `Command launched in background.`,
               `Execution ID: ${executionId}`,
-              `Stream tab: ${childStreamId}`,
               'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
               `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
               `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,

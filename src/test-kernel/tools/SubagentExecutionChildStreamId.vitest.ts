@@ -10,7 +10,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { StreamTabId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
@@ -144,7 +143,7 @@ describe('executeSubagent childStreamId derivation', () => {
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
-  it('derives childStreamId from configPayload.agent, not the (possibly different) agentName parameter', async () => {
+  it('addresses the child stream by its run id, whatever agentName the caller resolved', async () => {
     const configPayload = {
       agent: 'proof-checker', // the config's own registry name
       model: 'gpt5',
@@ -184,17 +183,7 @@ describe('executeSubagent childStreamId derivation', () => {
         streamId: loopParams.childStreamId,
       }),
     );
-    const expectedChildStreamId = getStreamTabId(configPayload.agent, {
-      executionId: loopParams.executionId as never,
-    });
-    expect(loopParams.childStreamId).toBe(expectedChildStreamId);
-    // Confirms the bug the review flagged would have actually mismatched:
-    // the OLD (agentName-keyed) formula produces a different id.
-    expect(loopParams.childStreamId).not.toBe(
-      getStreamTabId(agentName, {
-        executionId: loopParams.executionId as never,
-      }),
-    );
+    expect(loopParams.childStreamId).toBe(loopParams.executionId);
   });
 
   it('logs a detached run-loop rejection through the childRunLoop channel log', async () => {

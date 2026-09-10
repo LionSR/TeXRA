@@ -75,8 +75,8 @@ import { readCompletedRunConversation } from '@transcript';
 
 const PARENT_EXECUTION_ID = 'a9531a9531a9' as RunId;
 const OUTER_EXECUTION_ID = '0a95310a9531' as RunId;
-const OUTER_STREAM_ID = 'outer_9531@gpt54#0a95310a9531' as StreamTabId;
-const PARENT_STREAM_ID = 'parent_9531#a9531a9531a9' as StreamTabId;
+const OUTER_STREAM_ID: StreamTabId = OUTER_EXECUTION_ID;
+const PARENT_STREAM_ID: StreamTabId = PARENT_EXECUTION_ID;
 const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
 const PARENT_MODEL = 'gpt54';
@@ -156,9 +156,8 @@ async function resumePersistedStream(
   recovery?: RecoveryContinuation,
 ): Promise<boolean> {
   resumedStreams.push(streamId);
-  const executionId = streamId.slice(streamId.lastIndexOf('#') + 1) as RunId;
   const resumed = await effectRuntime().runPromise(
-    resumeRun(executionId, {
+    resumeRun(streamId, {
       session,
       recovery,
       executeWorkflow: async () => {

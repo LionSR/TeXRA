@@ -64,7 +64,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createRunContext, runInSession, withRunContext } from './RunContext';
 import { createRunScope } from './RunScope';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
-import { getStreamTabId } from './streamTab';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -94,7 +93,12 @@ export interface AgentLaunchContext extends AgentCore {
 interface AgentLaunchInput {
   definition: PreparedAgentDefinition;
   executionId: RunId;
-  streamTabIdOverride?: StreamTabId;
+  /**
+   * A later turn of a run whose registration already committed its creation
+   * and first activation: the launch commits only the new activation and does
+   * not log the initial instruction again.
+   */
+  resumed?: boolean;
   /**
    * Fires once the stream's `run.start` is published, before the run itself
    * begins: the stream exists for every fold by then, so a host may select
@@ -454,7 +458,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // Registration committed creation, configuration and initial activation.
     // A resumed turn appends only its new activation.
     const background = input.isSubagent ?? false;
-    if (input.streamTabIdOverride) {
+    if (input.resumed) {
       yield* session.commit([
         {
           type: 'run.activate',
@@ -476,9 +480,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // tool-use tabs display it inline with the stream log (no separate panel).
     const displayInstruction = getDisplayedInstruction(config);
     const initialInstruction =
-      displayInstruction && !input.streamTabIdOverride
-        ? displayInstruction
-        : undefined;
+      displayInstruction && !input.resumed ? displayInstruction : undefined;
     const supportsMediaInMessage =
       setting.agentCategory === AgentCategory.ToolUse
         ? modelHandler.capabilities.supportsVision ||
@@ -602,9 +604,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const { session: launchSession, executionId } = input;
     const { config } = input.definition;
     const streamStatus = launchSession.status;
-    const streamId =
-      input.streamTabIdOverride ??
-      getStreamTabId(config.agent, { executionId });
 
     // The runtime takes these resources only after assembly succeeds. Failure
     // unwinds them in reverse order while preserving the original cause.
@@ -612,25 +611,25 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     return yield* assembleAgentLaunchContext(
       input,
       executionId,
-      streamId,
+      executionId,
       resources,
     ).pipe(
       Effect.onError((cause) =>
         Effect.gen(function* () {
           const err = Cause.squash(cause);
           const message = `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`;
-          launchSession.publishRunEvent(streamId, {
+          launchSession.publishRunEvent(executionId, {
             type: 'result',
             outcome: RUN_OUTCOME.FAILED,
             executionId,
-            streamId,
+            streamId: executionId,
             agentName: config.agent,
             category: config.agentCategory,
             isSubagent: input.isSubagent ?? false,
             error: { kind: classifyAgentError(err), message },
           });
           streamStatus.transitionToTerminal(
-            streamId,
+            executionId,
             STREAM_PHASE.FAILED,
             STREAM_TRANSITION_CAUSE.LIFECYCLE,
           );

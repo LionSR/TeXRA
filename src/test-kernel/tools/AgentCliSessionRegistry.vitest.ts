@@ -319,7 +319,7 @@ describe('AgentCliSessionRegistry', () => {
     const executionId = 'execution-in-flight' as RunId;
     const interrupt = vi.fn();
     const registry = new AgentCliSessionRegistry('test_session_id', {
-      getAgentHandleByStream: () => ({ interrupt }),
+      getHandle: () => ({ interrupt }),
     } as unknown as RunRegistry);
     const releaseClaim = registry.claim('reserved-session');
 

@@ -640,7 +640,6 @@ const launchClaudeAgentSession = Effect.fn(
     parentStreamId,
     parentExecutionId,
     agentName: CLAUDE_AGENT_NAME,
-    streamPrefix: 'claude@agent-sdk',
     description: input.prompt,
     config: agentConfig,
     registerFailedMessage: 'Failed to register Claude Code CLI execution.',

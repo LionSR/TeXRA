@@ -15,7 +15,6 @@ import type {
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
 import {
-  lookupRunId,
   recordRunRefusal,
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
@@ -136,7 +135,7 @@ export interface ResumeRunOptions extends Pick<
 
 /**
  * Resume a stream through the single host entry path. Recovery is claimed
- * when the program starts, before the stream-to-execution index performs I/O.
+ * when the program starts, before the run's records are read.
  */
 export const resumeStream = Effect.fn('resumeStream')(function* (
   streamId: StreamTabId,
@@ -155,19 +154,8 @@ export const resumeStream = Effect.fn('resumeStream')(function* (
     if (recovery) session.followUps.release(recovery, 'recoverable');
     return REFUSED;
   }
-  const executionId = yield* lookupRunId(streamId, session).pipe(
-    Effect.onError(() =>
-      Effect.sync(() =>
-        releaseUnstartedRecovery(session, recovery, options.recovery == null),
-      ),
-    ),
-  );
-  if (!executionId) {
-    releaseUnstartedRecovery(session, recovery, options.recovery == null);
-    return REFUSED;
-  }
   return yield* resumeRunWithRecoveryProvenance(
-    executionId,
+    streamId,
     { ...options, session, recovery },
     options.recovery == null,
   );

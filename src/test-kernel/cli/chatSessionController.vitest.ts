@@ -766,7 +766,7 @@ describe('createChatSessionController', () => {
   });
 
   it('keeps detached-child approvals answerable after the stopped root finalizes', async () => {
-    const rootStream = 'root-stream' as StreamTabId;
+    let rootStream!: StreamTabId;
     const childStream = 'child-stream' as StreamTabId;
     const { executions, interactions } = installOwnerSession();
     const adapterDecision = pDefer<{ action: 'approve' | 'reject' }>();
@@ -793,13 +793,14 @@ describe('createChatSessionController', () => {
         executionId: RunId,
         options: ExecuteAgentMockOptions,
       ) => {
+        rootStream = executionId;
         const rootHandle = testExecutionHandle({
           executionId,
           parentStreamId: rootStream,
           agent: 'root',
         });
         const childHandle = testExecutionHandle({
-          executionId: 'child-exec',
+          executionId: childStream,
           parentStreamId: rootStream,
           childStreamId: childStream,
           agent: 'child',
@@ -838,9 +839,7 @@ describe('createChatSessionController', () => {
     await session.runPromise;
 
     expect(session.runCompleted).toBe(true);
-    expect(
-      executions.getAgentHandleByStream(childStream)?.isChildExecution,
-    ).toBe(false);
+    expect(executions.getHandle(childStream)?.isChildExecution).toBe(false);
     expect(disposeAdapter).not.toHaveBeenCalled();
     expect(detachResultToast).toHaveBeenCalledOnce();
     expect(mocks.presentationHostClose).not.toHaveBeenCalled();
@@ -855,7 +854,7 @@ describe('createChatSessionController', () => {
     adapterDecision.resolve({ action: 'approve' });
     await expect(approval).resolves.toEqual({ action: 'approve' });
 
-    executions.untrack('child-exec');
+    executions.untrack(childStream);
     await vi.waitFor(() => {
       expect(disposeAdapter).toHaveBeenCalledOnce();
       expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
