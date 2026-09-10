@@ -89,7 +89,7 @@ export class RunStatusMachine {
    * This run's combined phase + substate + run-window start. The entry is
    * written before the matching `status` fact is published, so a consumer
    * reacting to that fact reads the phase the fact announced without mirroring
-   * it, and `getAllStreamStates()` stays for the whole-map cases.
+   * it, and `getAllRunStates()` stays for the whole-map cases.
    */
   getRunState(runId: RunId): RunPhaseState | undefined {
     return this.runs.get(runId)?.state;
@@ -268,7 +268,7 @@ export class RunStatusMachine {
   }
 
   /** Combined per-run phase + substate for every known run. */
-  getAllStreamStates(): Map<RunId, RunPhaseState> {
+  getAllRunStates(): Map<RunId, RunPhaseState> {
     const values = new Map<RunId, RunPhaseState>();
     for (const [runId, entry] of this.runs) {
       if (entry.state) values.set(runId, entry.state);

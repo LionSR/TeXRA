@@ -1,5 +1,5 @@
-// Regression coverage for #7306: a per-stream cancel must settle every
-// approval kind on that stream, not only its retry routes.
+// Regression coverage for #7306: a per-run cancel must settle every
+// approval kind on that run, not only its retry routes.
 
 import '@test/support/defaultSessionTestSetup';
 import {
@@ -16,7 +16,7 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: vi.fn(),
 }));
 
-// Approval prompt preparation reads per-stream bypass state off the process
+// Approval prompt preparation reads per-run bypass state off the process
 // session; stub the session so these queue-focused tests need no
 // initializeDefaultSession/platform setup.
 
@@ -49,8 +49,8 @@ function host(): CliRuntimeHost {
  *  request goes through the session, which publishes the fact the modal
  *  reads and settles the pending set. */
 
-const runA = 'stream-a' as RunId;
-const runB = 'stream-b' as RunId;
+const runA = 'a0a0a0' as RunId;
+const runB = 'b0b0b0' as RunId;
 
 /**
  * The session's port for a test: a request names a run the fold must
@@ -145,7 +145,7 @@ describe('createTuiHostInteractions', () => {
     });
   });
 
-  it('cancels a queued plan approval for the target stream, leaving other runs untouched', async () => {
+  it('cancels a queued plan approval for the target run, leaving other runs untouched', async () => {
     const interactions = tuiInteractions();
     const planResult = interactions.requestPlanApproval({
       requestId: 'approval-a',
@@ -153,7 +153,7 @@ describe('createTuiHostInteractions', () => {
       plan,
       goalEnabled: false,
     });
-    const otherStreamResult = interactions.requestPlanApproval({
+    const otherRunResult = interactions.requestPlanApproval({
       requestId: 'approval-b',
       runId: runB,
       plan,
@@ -172,11 +172,11 @@ describe('createTuiHostInteractions', () => {
       cause: 'Session interrupted.',
     });
 
-    // stream-b's request was never touched and now becomes the foreground
+    // runB's request was never touched and now becomes the foreground
     // modal instead of being left permanently pending.
     await waitForApproval('planApproval', { runId: runB });
     currentApproval.get()?.decide({ accepted: true });
-    await expect(otherStreamResult).resolves.toEqual({ action: 'approve' });
+    await expect(otherRunResult).resolves.toEqual({ action: 'approve' });
   });
 
   it('settles plan decisions through the shared mapper: goal action kept, silent rejection omits feedback', async () => {
@@ -212,7 +212,7 @@ describe('createTuiHostInteractions', () => {
     await expect(rejected).resolves.toEqual({ action: 'reject' });
   });
 
-  it('cancels a queued agent proposal for the target stream', async () => {
+  it('cancels a queued agent proposal for the target run', async () => {
     const interactions = tuiInteractions();
     const proposalResult = interactions.requestAgentProposal({
       requestId: 'proposal-a',
@@ -234,7 +234,7 @@ describe('createTuiHostInteractions', () => {
     await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
   });
 
-  it('cancels a queued bash approval for the target stream (not just retry)', async () => {
+  it('cancels a queued bash approval for the target run (not just retry)', async () => {
     const interactions = tuiInteractions();
     const bashResult = interactions.requestBashApproval(
       bashApprovalRequest({
@@ -316,7 +316,7 @@ describe('createTuiHostInteractions', () => {
     await expect(second).resolves.toEqual({ action: 'cancel' });
   });
 
-  it('a retry-kind cancel leaves a queued plan approval on the same stream pending', async () => {
+  it('a retry-kind cancel leaves a queued plan approval on the same run pending', async () => {
     const interactions = tuiInteractions();
     const planResult = interactions.requestPlanApproval({
       requestId: 'approval-kind',

@@ -42,6 +42,7 @@ import {
   clearRunStatusForTest,
   seedRunStatusForTest,
 } from '@test/support/runStatusTestUtils';
+import { generateRunId } from '@utils/core';
 
 import {
   eventsOfType,
@@ -594,7 +595,7 @@ describe('runFlowWithLifecycle', () => {
 
   it('carries workflowPhase on the first child roster emission', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
-    const parentRunId = 'parent-lifecycle-workflow-phase' as RunId;
+    const parentRunId = generateRunId();
     const rosters = recordChildRosters(ctx.runScope.session.runs);
     // `track()` emits the roster synchronously, so onRun — which fires after
     // tracking — is structurally too late to stamp a display field.
@@ -618,7 +619,6 @@ describe('runFlowWithLifecycle', () => {
       const [firstRoster] = rosters.rosters;
       expect(firstRoster?.items).toEqual([
         expect.objectContaining({
-          runId,
           childRunId: runId,
           workflowPhase: 'Reduce',
         }),

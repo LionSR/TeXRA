@@ -248,12 +248,12 @@ describe('CLI history runtime', () => {
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
-    mocks.listRuns.mockReturnValue(Effect.succeed([runListEntry('a1')]));
+    mocks.listRuns.mockReturnValue(Effect.succeed([runListEntry('a1a1a1')]));
 
     const entries = await listCliHistoryEntries();
 
     expect(formatCliHistoryText(entries)).toBe(
-      'a1\t2026-05-18T08:00:00.000Z\tcorrect\tcompleted\tintro.tex',
+      'a1a1a1\t2026-05-18T08:00:00.000Z\tcorrect\tcompleted\tintro.tex',
     );
     expect(
       cliHistoryNdjsonRecords(entries, '2026-05-18T09:00:00.000Z'),
@@ -314,11 +314,11 @@ describe('CLI history runtime', () => {
       outcome: 'cancelled',
     });
 
-    const details = await readCliHistoryDetails('c1' as RunId);
+    const details = await readCliHistoryDetails('c1c1c1' as RunId);
     expect(details?.status).toBe('cancelled');
     expect(cliHistoryDetailNdjsonRecord(details!)).toMatchObject({
       kind: 'history-detail',
-      detail: { id: 'c1', status: 'interrupted' },
+      detail: { id: 'c1c1c1', status: 'interrupted' },
     });
   });
 
@@ -353,7 +353,7 @@ describe('CLI history runtime', () => {
     mocks.listRuns.mockReturnValue(
       Effect.succeed([
         runListEntry('root'),
-        runListEntry('delegated-child', {
+        runListEntry('de1e6a', {
           timestamp: '2026-05-18T08:01:00.000Z',
           parentRunId: 'root' as RunId,
         }),
@@ -372,7 +372,7 @@ describe('CLI history runtime', () => {
     });
     mocks.listRuns.mockReturnValue(
       Effect.succeed([
-        runListEntry('team1', {
+        runListEntry('bea111', {
           identity: { kind: 'agent', agent: 'engineer' },
           timestamp: '2026-05-18T10:00:00.000Z',
           record: teamConfig,
@@ -387,7 +387,7 @@ describe('CLI history runtime', () => {
     expect(entries[0]?.agent).toBe('engineer');
     expect(entries[0]?.teamPresetId).toBe('software-engineer');
     expect(formatCliHistoryText(entries)).toBe(
-      'team1\t2026-05-18T10:00:00.000Z\tteam:software-engineer\tresumable\t-',
+      'bea111\t2026-05-18T10:00:00.000Z\tteam:software-engineer\tresumable\t-',
     );
   });
 
@@ -448,9 +448,7 @@ describe('CLI history runtime', () => {
   it('returns null for ids without persisted metadata, config, or flow state', async () => {
     mockNothingPersisted();
 
-    await expect(
-      readCliHistoryDetails('dead' as RunId),
-    ).resolves.toBeNull();
+    await expect(readCliHistoryDetails('deadbe' as RunId)).resolves.toBeNull();
   });
 
   it('finds a stamped diagnostic-only root in CLI history details', async () => {
@@ -489,12 +487,12 @@ describe('CLI history runtime', () => {
       },
     ]);
 
-    const details = await readCliHistoryDetails('dead' as RunId, {
+    const details = await readCliHistoryDetails('deadbe' as RunId, {
       includeFullConversation: true,
     });
 
     expect(details).toMatchObject({
-      id: 'dead',
+      id: 'deadbe',
       status: 'unknown',
       conversationPreview: null,
       conversation: {
@@ -525,7 +523,7 @@ describe('CLI history runtime', () => {
     mocks.readConfig.mockResolvedValue(toolUseConfig);
     mocks.readCliResumedModel.mockResolvedValue('gpt55');
 
-    const details = await readCliHistoryDetails('a1' as RunId);
+    const details = await readCliHistoryDetails('a1a1a1' as RunId);
     const text = formatCliHistoryDetailsText(details!);
 
     expect(details?.currentModel).toBe('gpt55');
@@ -544,7 +542,7 @@ describe('CLI history runtime', () => {
       }),
     );
 
-    const details = await readCliHistoryDetails('team1' as RunId);
+    const details = await readCliHistoryDetails('bea111' as RunId);
     const text = formatCliHistoryDetailsText(details!);
 
     expect(text).toContain('Agent: engineer');
@@ -560,7 +558,7 @@ describe('CLI history runtime', () => {
       }),
     );
 
-    const details = await readCliHistoryDetails('a1' as RunId);
+    const details = await readCliHistoryDetails('a1a1a1' as RunId);
     const text = formatCliHistoryDetailsText(details!);
 
     expect(text).toContain('CLI output: /tmp/texra-output/polished.tex');
@@ -597,7 +595,7 @@ describe('CLI history runtime', () => {
       },
     });
 
-    const details = await readCliHistoryDetails('a1' as RunId);
+    const details = await readCliHistoryDetails('a1a1a1' as RunId);
     const text = formatCliHistoryDetailsText(details!);
 
     expect(details?.result).toEqual({
@@ -631,7 +629,7 @@ describe('CLI history runtime', () => {
       },
     ]);
 
-    const details = await readCliHistoryDetails('a1' as RunId);
+    const details = await readCliHistoryDetails('a1a1a1' as RunId);
     const text = formatCliHistoryDetailsText(details!);
 
     expect(details?.conversationPreview).toEqual({
@@ -673,7 +671,7 @@ describe('CLI history runtime', () => {
       },
     ]);
 
-    const details = await readCliHistoryDetails('a1' as RunId, {
+    const details = await readCliHistoryDetails('a1a1a1' as RunId, {
       includeFullConversation: true,
     });
     const text = formatCliHistoryDetailsText(details!);
@@ -720,7 +718,7 @@ describe('CLI history runtime', () => {
       },
     ]);
 
-    const details = await readCliHistoryDetails('a1' as RunId, {
+    const details = await readCliHistoryDetails('a1a1a1' as RunId, {
       includeFullConversation: true,
     });
     const text = formatCliHistoryDetailsText(details!);
@@ -772,7 +770,7 @@ describe('CLI history runtime', () => {
       { role: 'assistant', content: 'Final proof analysis.' },
     ]);
 
-    const details = await readCliHistoryDetails('a1' as RunId, {
+    const details = await readCliHistoryDetails('a1a1a1' as RunId, {
       includeFullConversation: true,
     });
     const text = formatCliHistoryDetailsText(details!);
@@ -868,7 +866,7 @@ describe('CLI history runtime', () => {
       },
     ]);
 
-    const details = await readCliHistoryDetails('a1' as RunId, {
+    const details = await readCliHistoryDetails('a1a1a1' as RunId, {
       includeFullConversation: true,
     });
     const text = formatCliHistoryDetailsText(details!);
@@ -924,11 +922,9 @@ describe('CLI history runtime', () => {
       terminalStatus: 'completed',
     });
 
-    const details = await readCliHistoryDetails(
-      'delegated-child' as RunId,
-    );
+    const details = await readCliHistoryDetails('de1e6a' as RunId);
 
-    expect(details?.id).toBe('delegated-child');
+    expect(details?.id).toBe('de1e6a');
     expect(formatCliHistoryDetailsText(details!)).toContain('Parent: root');
   });
 
@@ -938,7 +934,7 @@ describe('CLI history runtime', () => {
       { role: 'assistant', content: 'Final proof analysis.' },
     ]);
 
-    const details = await readCliHistoryDetails('a1' as RunId);
+    const details = await readCliHistoryDetails('a1a1a1' as RunId);
     const text = formatCliHistoryDetailsText(details!);
 
     expect(text).toContain('Report:\nStructured report.');
@@ -954,7 +950,7 @@ describe('CLI history runtime', () => {
       args: JSON.stringify({ path: 'legacy.md' }),
     });
 
-    const details = await readCliHistoryDetails('a1' as RunId);
+    const details = await readCliHistoryDetails('a1a1a1' as RunId);
 
     expect(details?.files).toEqual([
       { path: 'workspace/durable.md', size: 9, isDirectory: false },
@@ -968,7 +964,7 @@ describe('CLI history runtime', () => {
     await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
     mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
 
-    const details = await readCliHistoryDetails('a1' as RunId);
+    const details = await readCliHistoryDetails('a1a1a1' as RunId);
 
     expect(details?.files).toEqual([
       { path: 'workspace/workspace/review.md', size: 6, isDirectory: false },
@@ -988,7 +984,7 @@ describe('CLI history runtime', () => {
       'missing.md',
     ]);
 
-    const details = await readCliHistoryDetails('a1' as RunId);
+    const details = await readCliHistoryDetails('a1a1a1' as RunId);
 
     expect(details?.files).toEqual([]);
   });
@@ -1048,7 +1044,7 @@ describe('CLI history runtime', () => {
         description: 'Polish pass',
       });
 
-      const result = await readCliHistoryExportInput('a1' as RunId);
+      const result = await readCliHistoryExportInput('a1a1a1' as RunId);
 
       expect(result).toEqual({
         status: 'ok',
@@ -1076,7 +1072,7 @@ describe('CLI history runtime', () => {
       mockNothingPersisted();
 
       await expect(
-        readCliHistoryExportInput('missing' as RunId),
+        readCliHistoryExportInput('facade' as RunId),
       ).resolves.toEqual({ status: 'not_found' });
     });
 
@@ -1086,7 +1082,7 @@ describe('CLI history runtime', () => {
       // the id not resolving to anything at all. This is the beforeEach
       // baseline: stored config, no conversation, no meta.
       await expect(
-        readCliHistoryExportInput('a1' as RunId),
+        readCliHistoryExportInput('a1a1a1' as RunId),
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
@@ -1097,7 +1093,7 @@ describe('CLI history runtime', () => {
       ]);
 
       await expect(
-        readCliHistoryExportInput('a1' as RunId),
+        readCliHistoryExportInput('a1a1a1' as RunId),
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
@@ -1111,10 +1107,10 @@ describe('CLI history runtime', () => {
       mocks.readConversation.mockResolvedValue([]);
 
       await expect(
-        readCliHistoryExportInput('missing' as RunId),
+        readCliHistoryExportInput('facade' as RunId),
       ).resolves.toEqual({ status: 'not_found' });
       await expect(
-        readCliHistoryDetails('missing' as RunId),
+        readCliHistoryDetails('facade' as RunId),
       ).resolves.toBeNull();
     });
 
@@ -1122,7 +1118,7 @@ describe('CLI history runtime', () => {
       mocks.readConversation.mockResolvedValue([]);
 
       await expect(
-        readCliHistoryExportInput('a1' as RunId),
+        readCliHistoryExportInput('a1a1a1' as RunId),
       ).resolves.toEqual({ status: 'incomplete' });
     });
 
@@ -1247,7 +1243,7 @@ describe('CLI history runtime', () => {
         } as unknown as TraceDocument;
       }
 
-      const trace = makeTrace('a1');
+      const trace = makeTrace('a1a1a1');
 
       function makeContext(resourcesPath: string): CliContext {
         return createTestCliContext({
@@ -1291,7 +1287,7 @@ describe('CLI history runtime', () => {
 
         const exitCode = await runHistoryExport(
           makeContext('/resources'),
-          'a1' as RunId,
+          'a1a1a1' as RunId,
           'html',
           {},
         );
@@ -1313,7 +1309,7 @@ describe('CLI history runtime', () => {
 
         const exitCode = await runHistoryExport(
           makeContext(resourcesPath),
-          'a1' as RunId,
+          'a1a1a1' as RunId,
           'html',
           { assetsDir: destDir },
         );
@@ -1333,7 +1329,7 @@ describe('CLI history runtime', () => {
 
         const exitCode = await runHistoryExport(
           makeContext(resourcesPath),
-          'a1' as RunId,
+          'a1a1a1' as RunId,
           'html',
           { assetsDir: destDir },
         );
@@ -1345,9 +1341,9 @@ describe('CLI history runtime', () => {
         expect(stderr).not.toContain('<redirected-path>');
         expect(stderr).not.toContain('<relative-path-to-the-redirected-file>');
         expect(stderr).toContain(
-          `Wrote trace JSON for a1 to stdout. Save the output to ` +
-            `${path.join(destDir, 'a1.json')}, then open ` +
-            `${destDir}/index.html?trace=a1.json.`,
+          `Wrote trace JSON for a1a1a1 to stdout. Save the output to ` +
+            `${path.join(destDir, 'a1a1a1.json')}, then open ` +
+            `${destDir}/index.html?trace=a1a1a1.json.`,
         );
       });
 

@@ -11,16 +11,15 @@ import type {
   HostBashApprovalRequest,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { BashPermissionSchema, type RunId } from '@shared/schemas';
+import { BashPermissionSchema } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { requestBashApproval } from '@tools/approval/bashApproval';
-
-const sid = (s: string): RunId => s as RunId;
+import { generateRunId } from '@utils/core';
 
 describe('requestBashApproval queueing', () => {
   it('hands the host a schema-valid permission with a prefixed request id and a trimmed cwd', async () => {
     const session = createTestSession();
-    const runId = sid('s:bash-prompt');
+    const runId = generateRunId();
     const prompted: HostBashApprovalRequest[] = [];
     session.interactions.use({
       requestBashApproval: async (request) => {
@@ -53,9 +52,9 @@ describe('requestBashApproval queueing', () => {
     }
   });
 
-  it('lets never override a stream bypass at the shared boundary', async () => {
+  it('lets never override a run bypass at the shared boundary', async () => {
     const session = createTestSession();
-    const runId = sid('s:bash-policy-denial');
+    const runId = generateRunId();
     let policyDenials = 0;
     let prompts = 0;
     session.setApprovalPolicy('never');
@@ -91,9 +90,9 @@ describe('requestBashApproval queueing', () => {
     }
   });
 
-  it('auto-approves a queued request once the stream is bypassed while it waits', async () => {
+  it('auto-approves a queued request once the run is bypassed while it waits', async () => {
     const session = createTestSession();
-    const runId = sid('s:bash-queued-bypass');
+    const runId = generateRunId();
     const firstPrompted = pDefer<void>();
     const firstAnswer = pDefer<BashSettlement>();
     let prompts = 0;

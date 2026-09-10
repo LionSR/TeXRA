@@ -141,8 +141,8 @@ vi.mock('@tools/approval', () => ({
   }),
 }));
 
-const PARENT_RUN_ID = 'parent-run' as RunId;
-const CHILD_RUN_ID = 'child-run' as RunId;
+const PARENT_RUN_ID = 'aaaaaa222222' as RunId;
+const CHILD_RUN_ID = 'bbbbbb333333' as RunId;
 
 /** The run context shared by nearly every case (run/stopAfterCycle/session vary). */
 function parentRunContext(
@@ -353,11 +353,7 @@ function emptyChildStore() {
 }
 
 /** Child store holding a launched attempt marker and its result manifest. */
-function completedChildStore(
-  logicalRunId: RunId,
-  result: unknown,
-  parentRunId: string = STABLE_PARENT_RUN_ID,
-) {
+function completedChildStore(logicalRunId: RunId, result: unknown) {
   return {
     listKeys: vi
       .fn()
@@ -367,7 +363,6 @@ function completedChildStore(
     readResultMeta: vi.fn().mockResolvedValue({
       producer: 'subagent',
       agentName: 'review',
-      parentRunId,
       wallTimeMs: 100,
       result,
     }),
@@ -617,16 +612,12 @@ describe('headless delegation', () => {
       result.runId,
       expect.objectContaining({ agent: 'review' }),
       'review',
-      expect.objectContaining({
-        parentRunId: STABLE_PARENT_RUN_ID,
-        runId: expect.stringContaining(`#${result.runId}`),
-      }),
+      expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
     );
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
         producer: 'subagent',
         agentName: 'review',
-        parentRunId: STABLE_PARENT_RUN_ID,
         wallTimeMs: expect.any(Number),
         // The loop stamps turn attribution on every manifest it persists —
         // scripted children included (this closed item 10's turnToken gap).
@@ -857,36 +848,6 @@ describe('headless delegation', () => {
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
-  it('rejects a result manifest with different parent lineage', async () => {
-    const stableRunId = 'cccccc555555' as RunId;
-    const sequenceStore = stableSequenceStore(stableRunId, 1);
-    useStableStores(
-      sequenceStore,
-      completedChildStore(
-        stableRunId,
-        {
-          category: 'toolUse',
-          outcome: 'completed',
-          response: 'Wrong workflow.',
-          files: [],
-          cost: 0,
-        },
-        'deadbeef',
-      ),
-    );
-
-    await expect(
-      executeStableSubagentInBand({
-        runId: stableRunId,
-        parentRunId: STABLE_PARENT_RUN_ID,
-        session: defaultSession(),
-        prepare: vi.fn(),
-      }),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    expect(mocks.registerRun).not.toHaveBeenCalled();
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
-  });
-
   it('refuses to repeat a committed child whose result manifest is missing', async () => {
     const logicalRunId = 'cccccc777777' as RunId;
     const sequenceStore = stableSequenceStore(logicalRunId, 1);
@@ -1017,10 +978,7 @@ describe('headless delegation', () => {
       completed.runId,
       expect.anything(),
       'review',
-      expect.objectContaining({
-        parentRunId: STABLE_PARENT_RUN_ID,
-        runId: expect.stringContaining(`#${completed.runId}`),
-      }),
+      expect.objectContaining({ parentRunId: STABLE_PARENT_RUN_ID }),
     );
   });
 

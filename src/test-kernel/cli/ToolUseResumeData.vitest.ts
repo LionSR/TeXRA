@@ -41,6 +41,14 @@ function listingFacts(
   };
 }
 
+let runCounter = 0;
+
+/** Run ids are hex-branded; the case name lives in the test title. */
+function mintRunId(): RunId {
+  runCounter += 1;
+  return `beef${runCounter.toString(16).padStart(2, '0')}` as RunId;
+}
+
 const TERMINAL_REJECTION = {
   currentRound: 1,
   totalRounds: 2,
@@ -67,8 +75,8 @@ afterEach(async () => {
 describe('CLI listing resumability', () => {
   it.each([['no checkpoint file', { checkpointPresent: false }]])(
     'does not advertise a row with %s, without reading its state',
-    async (description, overrides) => {
-      const runId = `gate-${description.replaceAll(' ', '-')}` as RunId;
+    async (_description, overrides) => {
+      const runId = mintRunId();
       // A continuable record is on disk, so reading it would answer `true`.
       // Only the free fact can produce the `false` asserted below.
       await writeFlowRecord(runId, { currentRound: 0, totalRounds: 4 });
@@ -87,8 +95,8 @@ describe('CLI listing resumability', () => {
     ['a workflow row that did not fail', { outcome: RUN_OUTCOME.CANCELLED }],
   ])(
     'advertises %s without parsing its checkpoint',
-    async (description, overrides) => {
-      const runId = `free-${description.replaceAll(' ', '-')}` as RunId;
+    async (_description, overrides) => {
+      const runId = mintRunId();
       // A terminal rejection is on disk, so a parse would answer `false`.
       // Only the short-circuit can produce the `true` asserted below.
       await writeFlowRecord(runId, TERMINAL_REJECTION);
@@ -111,9 +119,8 @@ describe('CLI listing resumability', () => {
     ],
   ])(
     'does not advertise a failed workflow with terminal %s as resumable',
-    async (description, shared) => {
-      const runId =
-        `workflow-terminal-${description.replaceAll(' ', '-')}` as RunId;
+    async (_description, shared) => {
+      const runId = mintRunId();
       await writeFlowRecord(runId, shared);
 
       await expect(isCliRunResumable(listingFacts(runId))).resolves.toBe(false);

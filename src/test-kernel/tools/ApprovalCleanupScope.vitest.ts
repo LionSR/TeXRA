@@ -10,20 +10,16 @@ import type { RunId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { proposalApprovals, releaseRunResources } from '@tools/approval';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import { generateRunId } from '@utils/core';
 import {
   bashApprovalRequest,
   toolEditApprovalRequest,
 } from '../agent/progressTestUtils';
 
-const sid = (s: string): RunId => s as RunId;
-
 /** A never-answered approval prompt, holding a session's prompt slot open. */
 const pendingApproval = (): Promise<never> => new Promise(() => {});
 
-function toolEditRequest(
-  path: string,
-  runId?: RunId,
-): ToolEditApprovalRequest {
+function toolEditRequest(path: string, runId?: RunId): ToolEditApprovalRequest {
   return toolEditApprovalRequest({
     path,
     originalContent: 'old',
@@ -34,9 +30,9 @@ function toolEditRequest(
 }
 
 describe('approval cleanup scope', () => {
-  it("per-stream cleanup leaves another stream's approval state intact", () => {
-    const a = sid('s:appr-scope-a');
-    const b = sid('s:appr-scope-b');
+  it("per-run cleanup leaves another run's approval state intact", () => {
+    const a = generateRunId();
+    const b = generateRunId();
     currentSession().approvals.bash.bypass.setBypass(a, true, {
       silent: true,
     });
@@ -45,8 +41,8 @@ describe('approval cleanup scope', () => {
     });
 
     try {
-      // A desktop window deleting its own stream `a` scopes the sweep to `a`
-      // (this is what `deleteAllRuns` loops), so a sibling stream `b`
+      // A desktop window deleting its own run `a` scopes the sweep to `a`
+      // (this is what `deleteAllRuns` loops), so a sibling run `b`
       // keeps its bypass state.
       releaseRunResources(a);
       expect(currentSession().approvals.bash.bypass.isBypassed(a)).toBe(false);
@@ -56,9 +52,9 @@ describe('approval cleanup scope', () => {
     }
   });
 
-  it('settles a stream tool-edit approval with the cancellation cause', async () => {
+  it('settles a run tool-edit approval with the cancellation cause', async () => {
     const session = createTestSession();
-    const runId = sid('s:cause-swallow');
+    const runId = generateRunId();
     const cancel = vi.fn();
     session.interactions.use({
       requestToolEditApproval: pendingApproval,
@@ -168,20 +164,16 @@ describe('session-owned approval state (#8144)', () => {
   it('keeps complete delegated-task approval grants within their owning session', () => {
     const sessionA = createTestSession();
     const sessionB = createTestSession();
-    const runId = sid('s:delegated-approval-same-id');
+    const runId = generateRunId();
 
     try {
       sessionA.approvals.setDelegatedWorkBypasses(runId, true);
 
       expect(proposalApprovals(sessionA).isBypassed(runId)).toBe(true);
-      expect(sessionA.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
-        true,
-      );
+      expect(sessionA.approvals.toolEdit.bypass.isBypassed(runId)).toBe(true);
       expect(sessionA.approvals.bash.bypass.isBypassed(runId)).toBe(true);
       expect(proposalApprovals(sessionB).isBypassed(runId)).toBe(false);
-      expect(sessionB.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
-        false,
-      );
+      expect(sessionB.approvals.toolEdit.bypass.isBypassed(runId)).toBe(false);
       expect(sessionB.approvals.bash.bypass.isBypassed(runId)).toBe(false);
 
       releaseRunResources(runId, sessionA);
@@ -193,10 +185,10 @@ describe('session-owned approval state (#8144)', () => {
     }
   });
 
-  it('keeps bypass state for equal stream ids isolated between sessions', () => {
+  it('keeps bypass state for equal run ids isolated between sessions', () => {
     const sessionA = createTestSession();
     const sessionB = createTestSession();
-    const runId = sid('s:appr-same-id');
+    const runId = generateRunId();
 
     try {
       sessionA.approvals.bash.bypass.setBypass(runId, true, {
@@ -240,7 +232,7 @@ describe('session-owned approval state (#8144)', () => {
 
   it('session disposal rejects its remaining pending approvals and clears bypass state', async () => {
     const session = createTestSession();
-    const runId = sid('s:appr-dispose');
+    const runId = generateRunId();
     session.interactions.use({
       requestToolEditApproval: pendingApproval,
       cancel: vi.fn(),

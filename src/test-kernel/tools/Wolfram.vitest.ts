@@ -44,7 +44,7 @@ describe('WolframTool approval', () => {
   });
 
   it('requests bash-style approval before executing wolframscript', async () => {
-    const runId = 'stream:wolfram-approval' as RunId;
+    const runId = 'a99f00000001' as RunId;
     const execute = vi.spyOn(toolUtils, 'runToolWithCheck').mockResolvedValue({
       success: true,
       stdout: '2',
@@ -94,7 +94,7 @@ describe('WolframTool approval', () => {
     const execute = vi.spyOn(toolUtils, 'runToolWithCheck');
 
     const { explicit, result, show } = await dispatchWolfram(
-      'stream:wolfram-rejected' as RunId,
+      'a99f00000002' as RunId,
       'Factor[n^7 - n]',
     );
     expect(

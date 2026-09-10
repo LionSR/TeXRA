@@ -37,11 +37,11 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { seedRunStatusForTest } from '@test/support/runStatusTestUtils';
+import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { eventsOfType, recordChildRosters } from '../progressTestUtils';
-import { generateRunId } from '@utils/core';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
@@ -1175,7 +1175,7 @@ describe('runRegistry', () => {
 
       expect(registry.getActiveChildren(parentRunId)).toEqual([
         expect.objectContaining({
-          runId,
+          childRunId: runId,
           status: RUN_PHASE.WAITING,
         }),
       ]);
@@ -1228,7 +1228,7 @@ describe('runRegistry', () => {
       expect(runStatus.get(runId)).toBe(RUN_PHASE.RUNNING);
       expect(registry.getActiveChildren(parentRunId)).toEqual([
         expect.objectContaining({
-          runId,
+          childRunId: runId,
           status: RUN_PHASE.RUNNING,
         }),
       ]);
@@ -1256,7 +1256,7 @@ describe('runRegistry', () => {
       });
       expect(registry.getActiveChildren(parentRunId)).toEqual([
         expect.objectContaining({
-          runId,
+          childRunId: runId,
           status: RUN_PHASE.CANCELLED,
         }),
       ]);
@@ -1328,7 +1328,7 @@ describe('runRegistry', () => {
         parentRunId,
         items: [
           {
-            runId,
+            childRunId: runId,
             agentName: 'test-subagent',
           },
         ],

@@ -113,7 +113,7 @@ export const SETTINGS_VIEW_CMD = {
   GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
   SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
   GET_GOAL_LIST: 'getGoalList',
-  REVEAL_GOAL_STREAM: 'revealGoalRun',
+  REVEAL_GOAL_RUN: 'revealGoalRun',
 } as const;
 
 // Settings view specific commands (combines Memory and Profile views)

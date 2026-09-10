@@ -143,7 +143,7 @@ const CodexInputSchema = z.strictObject({
 export type CodexInput = z.infer<typeof CodexInputSchema>;
 
 // ============================================================================
-// Stream tab helpers
+// Run fact helpers
 // ============================================================================
 
 export function publishCodexTodos(

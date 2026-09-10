@@ -62,6 +62,7 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { BashTool } from '@tools/bash';
 import * as bashDelivery from '@tools/delegation/bashDelivery';
+import { generateRunId } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import * as execUtils from '@utils/system/execUtils';
 
@@ -663,7 +664,7 @@ describe('BashTool', () => {
       .spyOn(toolUseFollowUp, 'submitFollowUp')
       .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
-    const parentRunId = 'bash-tool-bg-parent' as RunId;
+    const parentRunId = generateRunId();
     const parentLease = defaultSession().followUps.claimLive(
       parentRunId,
       'flow',
@@ -712,7 +713,7 @@ describe('BashTool', () => {
     // by asserting the host resume port gets invoked once the run completes.
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(DONE_EXEC_RESULT);
 
-    const parentRunId = 'bash-tool-bg-wake-parent' as RunId;
+    const parentRunId = generateRunId();
     const tryResumeRun = vi.fn().mockResolvedValue(true);
     await installPlatform(BASH_PLATFORM_OPTIONS, {
       agentResume: { tryResumeRun },
@@ -754,7 +755,7 @@ describe('BashTool', () => {
     // that port is even invoked.
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(DONE_EXEC_RESULT);
 
-    const parentRunId = 'bash-tool-bg-finalize-before-wake' as RunId;
+    const parentRunId = generateRunId();
     let releaseResume: (() => void) | undefined;
     let handleAtResumeTime: unknown;
     let runId = '' as RunId;
@@ -801,7 +802,7 @@ describe('BashTool', () => {
   it('fails background run when its result metadata cannot be persisted', async () => {
     const resolveCommand = holdCommand();
     await installPlatform(BASH_PLATFORM_OPTIONS);
-    const parentRunId = 'bash-result-meta-failure' as RunId;
+    const parentRunId = generateRunId();
     const recorded = recordSessionEvents(defaultSession());
 
     const launchResult = await launchBackgroundBash(parentRunId);
@@ -838,7 +839,7 @@ describe('BashTool', () => {
       throw new Error('delivery formatting blew up');
     });
     await installPlatform(BASH_PLATFORM_OPTIONS);
-    const parentRunId = 'bash-completion-path-throw' as RunId;
+    const parentRunId = generateRunId();
     const recorded = recordSessionEvents(defaultSession());
 
     const launchResult = await launchBackgroundBash(parentRunId);
@@ -866,7 +867,7 @@ describe('BashTool', () => {
   it('persists a killed background command as interrupted, not failed', async () => {
     const resolveCommand = holdCommand();
     await installPlatform(BASH_PLATFORM_OPTIONS);
-    const parentRunId = 'bash-killed-background' as RunId;
+    const parentRunId = generateRunId();
     const recorded = recordSessionEvents(defaultSession());
 
     const launchResult = await launchBackgroundBash(parentRunId);

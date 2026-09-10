@@ -8,8 +8,8 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { DesktopAgentRunHost } from '@desktop/main/desktopAgentRunHost';
 import type { DiffSource } from '@hosts/uiHosts';
 
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type { RunId } from '@shared/schemas';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type {
@@ -671,19 +671,21 @@ describe('desktop tool edit approval', () => {
         cancel: (selector) => controller.cancel(selector),
       });
 
+      // Hex id: this request is published on the run aggregate, whose key
+      // RunIdSchema validates.
       const resultPromise = session.interactions.requestToolEditApproval(
         toolEditApprovalRequest({
           path: '/workspace/cleanup.tex',
           originalContent: 'old\n',
           proposedContent: 'new\n',
           sourceTool: 'write_file',
-          runId: 'run-cleanup' as RunId,
+          runId: 'dec0de' as RunId,
         }),
       );
       await waitForPreviews();
 
       // Pending interactions are session-owned: sweep the owning session.
-      releaseRunResources('run-cleanup' as RunId, session);
+      releaseRunResources('dec0de' as RunId, session);
 
       await expect(resultPromise).resolves.toMatchObject({
         action: 'reject',

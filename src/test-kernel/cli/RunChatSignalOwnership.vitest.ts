@@ -527,8 +527,8 @@ describe('runChat signal ownership wiring', () => {
         expect(mocks.createChatSessionController).toHaveBeenCalled(),
       );
       const session = defaultSession();
-      const ownRoot = 'stream:clear-own-root' as RunId;
-      const history = 'stream:clear-history' as RunId;
+      const ownRoot = 'c1ea40007007' as RunId;
+      const history = 'c1ea4041570f' as RunId;
       // Both land the way the transcript summary's runs hydrate: top-level
       // runs in the view, only one of them this chat's root.
       session.publish(
@@ -556,9 +556,7 @@ describe('runChat signal ownership wiring', () => {
       getSlashCommandContext().resetSession();
 
       await vi.waitFor(() =>
-        expect(released.mock.calls.map(([runId]) => runId)).toEqual([
-          ownRoot,
-        ]),
+        expect(released.mock.calls.map(([runId]) => runId)).toEqual([ownRoot]),
       );
     } finally {
       exitTui.resolve();

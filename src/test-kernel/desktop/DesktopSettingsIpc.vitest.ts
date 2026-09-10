@@ -522,7 +522,7 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM,
+        command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_RUN,
         runId: 'a0a1b2c3',
       }),
     ).toBe(true);

@@ -27,6 +27,7 @@ import {
 import { installPlatform } from '@test/support/setupPlatform';
 import { releaseRunResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
+import { generateRunId } from '@utils/core';
 
 import {
   eventsOfType,
@@ -55,7 +56,7 @@ type WaitNodeServiceOverrides = Partial<
   modelHandler?: WaitNodeModelHandlerOverrides;
   session?: Partial<ToolUseServices['session']>;
   /** Run identity the node reads off `services.runScope`. */
-  runId?: string;
+  runId?: RunId;
   /** Session owning this run's status machine and approvals. */
   ownerSession?: SessionHandle;
   signal?: AbortSignal;
@@ -73,7 +74,7 @@ function createWaitNodeServices(
     session,
     signal,
     stopAfterCycle,
-    runId = 'test-stream',
+    runId = generateRunId(),
     ...topLevel
   } = overrides;
   const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
@@ -394,7 +395,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('pauses the goal after a failed parent cycle', async () => {
-    const runId = 'wait-node-error-goal' as RunId;
+    const runId = generateRunId();
     const { shared, setApprovalBypassState, ownerSession } =
       await startErroredGoal(runId, 'finish the refactor', 'cycle failed');
 
@@ -450,7 +451,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('injects an active goal continuation before the blocking wait', async () => {
-    const runId = 'wait-node-active-goal' as RunId;
+    const runId = generateRunId();
     await installPlatform();
 
     await GoalStore.start(runId, 'Finish the autonomous proof audit.');
@@ -522,7 +523,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('keeps injecting active goal continuations across a long run', async () => {
-    const runId = 'wait-node-long-goal' as RunId;
+    const runId = generateRunId();
     await installPlatform();
 
     await GoalStore.start(
@@ -585,7 +586,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('lets queued user follow-up win over an active goal continuation', async () => {
-    const runId = 'wait-node-goal-user-queued' as RunId;
+    const runId = generateRunId();
     await installPlatform();
 
     await GoalStore.start(runId, 'Keep going autonomously.');
@@ -624,7 +625,7 @@ describe('ToolUseWaitNode', () => {
     // which is gated `!isSubagent` and sits after the subagent-suspend branch.
     // So a subagent can never synthesize a continuation against the PARENT's
     // goal, structurally rather than by any check on waitForFollowUp.
-    const runId = 'wait-node-goal-subagent' as RunId;
+    const runId = generateRunId();
     await installPlatform();
 
     await GoalStore.start(runId, 'Parent-owned objective.');
@@ -653,7 +654,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('updates the run session status while waiting and resuming', async () => {
-    const runId = 'wait-node-owner' as RunId;
+    const runId = generateRunId();
     const ownerSession = sessionWithInteractions(undefined);
     const runStatus = ownerSession.status;
     const shared = toolUseRunShared();
@@ -695,7 +696,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
-    const runId = 'wait-node-retry-cancelled-wait' as RunId;
+    const runId = generateRunId();
     const ownerSession = sessionWithInteractions(undefined);
     const runStatus = ownerSession.status;
     // Status is a session fact on the session's plane, the single rail.
@@ -752,7 +753,7 @@ describe('ToolUseWaitNode', () => {
     const info = vi.fn(() => {
       expect(ownerSession.status.get(runId)).toBe(RUN_PHASE.RUNNING);
     });
-    const runId = 'test-stream' as RunId;
+    const runId = generateRunId();
     const logger = Object.assign(new TraceEmitter(), {
       error: vi.fn(),
       info,
@@ -837,7 +838,7 @@ describe('ToolUseWaitNode', () => {
   // batch continues immediately, an active goal must not be paused or lose its
   // unattended bash approval first.
   it('recovers an errored goal from a drained batch without pausing it', async () => {
-    const runId = 'wait-node-error-drained-goal' as RunId;
+    const runId = generateRunId();
     const { shared, setApprovalBypassState, ownerSession } =
       await startErroredGoal(
         runId,
@@ -885,7 +886,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('pauses an errored goal when a drained recovery batch cannot be applied', async () => {
-    const runId = 'wait-node-error-recovery-failed' as RunId;
+    const runId = generateRunId();
     const { shared, setApprovalBypassState, ownerSession } =
       await startErroredGoal(
         runId,

@@ -15,6 +15,7 @@ import {
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 
 import {
+  claimedRunId,
   resetCliState,
   rootRunPending,
   rootRunId,
@@ -182,7 +183,7 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     rootRunPending.set(true);
-    rootRunId.set('status-pending-root' as RunId);
+    claimedRunId.set('status-pending-root' as RunId);
 
     const updates = installTerminalTitleUpdates('/work/coauthor');
 
@@ -196,7 +197,7 @@ describe('installTerminalTitleUpdates', () => {
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
     rootRunPending.set(true);
-    rootRunId.set('transition-root' as RunId);
+    claimedRunId.set('transition-root' as RunId);
     setPhase('transition-root', RUN_PHASE.WAITING);
     setPhase('transition-child', RUN_PHASE.RUNNING);
     await flushTitleUpdate();
@@ -261,7 +262,7 @@ describe('installTerminalTitleUpdates', () => {
     expectNoTitleWrites();
   });
 
-  it('returns to idle when only the canonical stream phase changes', async () => {
+  it('returns to idle when only the canonical run phase changes', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     enableOscTitles();

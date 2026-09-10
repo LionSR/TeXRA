@@ -20,6 +20,7 @@ import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore } from '@tools/goal';
 import { proposalApprovals, releaseRunResources } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
+import { generateRunId } from '@utils/core';
 
 // Local file imports
 import {
@@ -98,7 +99,7 @@ describe('PlanTool — update (plan approval)', () => {
   it('keeps an approved plan in displayed work-plan state and defers steps to the todo tool', async () => {
     await installPlatform(false);
     const { decisions, resultPromise, events, workPlanState } = startPlanUpdate(
-      'stream:plan-approve' as RunId,
+      generateRunId(),
       plan.objective,
     );
 
@@ -117,7 +118,7 @@ describe('PlanTool — update (plan approval)', () => {
 
   it('keeps a later plan gated after delegated work approval is granted', async () => {
     await installPlatform(false);
-    const runId = 'stream:plan-after-delegation-grant' as RunId;
+    const runId = generateRunId();
     const { decisions, events, interactions } = createRecordingHost();
     const session = sessionWithInteractions(interactions);
     const workPlanState = new WorkPlanState();
@@ -154,7 +155,7 @@ describe('PlanTool — update (plan approval)', () => {
   it('clears a rejected plan from displayed work-plan state', async () => {
     await installPlatform(false);
     const { decisions, resultPromise, events, workPlanState } = startPlanUpdate(
-      'stream:plan-reject' as RunId,
+      generateRunId(),
       plan.objective,
     );
 
@@ -175,7 +176,7 @@ describe('PlanTool — update (plan approval)', () => {
   it('does not attribute a lifecycle cancellation to the user', async () => {
     await installPlatform(false);
     const { decisions, resultPromise, events } = startPlanUpdate(
-      'stream:plan-cancel' as RunId,
+      generateRunId(),
       plan.objective,
     );
 
@@ -196,7 +197,7 @@ describe('PlanTool — update (plan approval)', () => {
   });
 
   it('approve_and_goal starts a goal using the plan document as the objective', async () => {
-    const runId = 'stream:plan-goal' as RunId;
+    const runId = generateRunId();
     await installPlatform(true);
 
     const { decisions, resultPromise, events, session } = startPlanUpdate(
@@ -223,9 +224,7 @@ describe('PlanTool — update (plan approval)', () => {
       // The approved plan document seeds the goal verbatim.
       expect(goal!.objective).toBe(plan.objective);
       expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-      expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
-        false,
-      );
+      expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(false);
       expect(
         events.filter((entry) => entry.event === 'setApprovalBypassState'),
       ).toEqual([
@@ -249,7 +248,7 @@ describe('PlanTool — update (plan approval)', () => {
   });
 
   it('approve_and_goal applies the explicitly broadened approval scope', async () => {
-    const runId = 'stream:plan-goal-all' as RunId;
+    const runId = generateRunId();
     await installPlatform(true);
 
     const { decisions, resultPromise, events, session } = startPlanUpdate(
@@ -294,7 +293,7 @@ describe('PlanTool — update (plan approval)', () => {
   });
 
   it('approve_and_goal retargets an existing goal to the approved plan', async () => {
-    const runId = 'stream:plan-goal-retarget' as RunId;
+    const runId = generateRunId();
     await installPlatform(true);
 
     const existing = await GoalStore.start(runId, 'Old objective');
@@ -321,9 +320,7 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal!.objective).toBe(followUpPlan.objective);
       expect(goal!.objective).not.toContain('Old objective');
       expect(session.approvals.bash.bypass.isBypassed(runId)).toBe(true);
-      expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(
-        false,
-      );
+      expect(session.approvals.toolEdit.bypass.isBypassed(runId)).toBe(false);
     } finally {
       await GoalStore.forget(runId);
       releaseRunResources(runId, session);
@@ -331,7 +328,7 @@ describe('PlanTool — update (plan approval)', () => {
   });
 
   it('approve_and_goal explicitly reports when goal is disabled before resolution', async () => {
-    const runId = 'stream:plan-goal-disabled' as RunId;
+    const runId = generateRunId();
     const platform = await installPlatform(true);
 
     try {
@@ -367,21 +364,21 @@ describe('PlanTool — update (plan approval)', () => {
 });
 
 describe('PlanTool — pause/complete (goal lifecycle)', () => {
-  const STREAM_ID = 'stream:plan-lifecycle' as RunId;
+  const RUN_ID = generateRunId();
 
   beforeEach(async () => {
     await installPlatform(true);
   });
 
   afterEach(async () => {
-    await GoalStore.forget(STREAM_ID);
+    await GoalStore.forget(RUN_ID);
   });
 
   async function callTool(input: unknown) {
     const tool = new PlanTool();
     return withToolEnvironment(
       {
-        run: { runId: STREAM_ID },
+        run: { runId: RUN_ID },
         call: { tracker: new FileInteractionState() },
       },
       () => tool.call(input),
@@ -389,17 +386,17 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   }
 
   it('pauses an active goal with a reason', async () => {
-    await GoalStore.start(STREAM_ID, 'Drive the plan to completion.');
+    await GoalStore.start(RUN_ID, 'Drive the plan to completion.');
     const result = await callTool({
       command: 'pause',
       reason: 'Need API credentials from the user.',
     });
     expect(result.status).toBe('executed');
-    expect(GoalStore.getForRun(STREAM_ID)?.status).toBe('paused');
+    expect(GoalStore.getForRun(RUN_ID)?.status).toBe('paused');
   });
 
   it('completes an active goal by forgetting the record', async () => {
-    await GoalStore.start(STREAM_ID, 'Drive the plan to completion.');
+    await GoalStore.start(RUN_ID, 'Drive the plan to completion.');
     const result = await callTool({
       command: 'complete',
       reason: 'Ran pnpm test; all 142 tests pass.',
@@ -408,7 +405,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     expect(result.output).toContain('all 142 tests pass');
     // Completing is `forget()` — a finished goal is not archived, so no
     // record remains and the wait-node loop has nothing to continue.
-    expect(GoalStore.getForRun(STREAM_ID)).toBeNull();
+    expect(GoalStore.getForRun(RUN_ID)).toBeNull();
   });
 
   it('complete gives plan-only guidance when no goal is running', async () => {
@@ -436,7 +433,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   });
 
   it('rejects whitespace-only reason on pause', async () => {
-    await GoalStore.start(STREAM_ID, 'objective');
+    await GoalStore.start(RUN_ID, 'objective');
     const result = await callTool({ command: 'pause', reason: '   ' });
     expect(result.status).toBe('error');
     expect(result.error).toMatch(/empty/i);

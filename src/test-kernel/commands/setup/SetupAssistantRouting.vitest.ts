@@ -103,7 +103,7 @@ vi.mock('@frontend/secretManager', () => ({
 // SessionHandle) touches this module's other exports.
 vi.mock('@agent/runtime/SessionHandle', () => ({
   defaultSession: () => ({
-    executions: { getAgentHandles: () => agentHandles() },
+    runs: { getAgentHandles: () => agentHandles() },
   }),
 }));
 

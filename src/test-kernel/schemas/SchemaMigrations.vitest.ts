@@ -88,7 +88,7 @@ describe('RunSnapshotSchema.status — canonical phases only', () => {
     (retired) => {
       expect(() =>
         RunSnapshotSchema.parse({
-          runId: 'stream:retired',
+          runId: 'abc123def456',
           status: retired,
         }),
       ).toThrow();
@@ -97,7 +97,7 @@ describe('RunSnapshotSchema.status — canonical phases only', () => {
 
   it('passes a canonical phase through unchanged', () => {
     const result = RunSnapshotSchema.parse({
-      runId: 'stream:canonical',
+      runId: 'abc123def457',
       status: RUN_PHASE.RUNNING,
     });
 

@@ -16,7 +16,7 @@ function runningRuns(session: SessionHandle): Set<RunId> {
   for (const handle of session.runs.getAgentHandles()) {
     running.add(handle.runId);
   }
-  for (const [runId, state] of session.status.getAllStreamStates()) {
+  for (const [runId, state] of session.status.getAllRunStates()) {
     if (isInFlightPhase(state.phase)) running.add(runId);
   }
   return running;

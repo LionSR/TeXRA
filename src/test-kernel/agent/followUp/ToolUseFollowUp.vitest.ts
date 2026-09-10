@@ -11,6 +11,7 @@ import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { generateRunId } from '@utils/core';
 
 function mockTryResume(): Mock<() => Promise<boolean>> {
   return vi.fn(async () => true);
@@ -18,7 +19,9 @@ function mockTryResume(): Mock<() => Promise<boolean>> {
 
 function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   return {
-    executions: { getToolUseFollowUpTarget: () => target },
+    runs: { getToolUseFollowUpTarget: () => target },
+    readRunRecords: () => Effect.succeed([]),
+    status: { clearHold: () => {}, markUnavailable: () => {} },
     followUps: new ToolUseFollowUpQueue(),
     snapshots: {
       preload: () => Effect.void,
@@ -41,15 +44,13 @@ function activeTarget(): ToolUseFollowUpTarget {
   };
 }
 
-const id = (value: string) => value as RunId;
-
 describe('submitFollowUp', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('uses the live child owner while waiting, between turns, and during a turn', async () => {
-    const runId = id('stream:live-child');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     const child = session.followUps.claimLive(runId, 'child')!;
     const tryResumeRun = mockTryResume();
@@ -75,7 +76,7 @@ describe('submitFollowUp', () => {
   });
 
   it('reports input admitted by a live flow as sent', async () => {
-    const runId = id('stream:live-flow');
+    const runId = generateRunId();
     const session = fakeSession(activeTarget());
     const sent: RunId[] = [];
     session.followUps.onSent((sentRunId) => sent.push(sentRunId));
@@ -99,7 +100,7 @@ describe('submitFollowUp', () => {
   });
 
   it('does not report an automatic live-flow notification as user input', async () => {
-    const runId = id('stream:live-flow-notification');
+    const runId = generateRunId();
     const session = fakeSession(activeTarget());
     const sent: RunId[] = [];
     session.followUps.onSent((sentRunId) => sent.push(sentRunId));
@@ -121,7 +122,7 @@ describe('submitFollowUp', () => {
   });
 
   it('enqueues live notifications for a waiting parent without child owner', async () => {
-    const runId = id('stream:waiting-notification');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     const tryResumeRun = mockTryResume();
 
@@ -148,7 +149,7 @@ describe('submitFollowUp', () => {
   });
 
   it('claims one recovery and orders repeated submissions once', async () => {
-    const runId = id('stream:recovery');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     const barrier = createDeferred<boolean>();
     const claimed: unknown[] = [];
@@ -189,7 +190,7 @@ describe('submitFollowUp', () => {
   });
 
   it('releases declined recovery after the submitting fiber is interrupted', async () => {
-    const runId = id('stream:interrupted-submission');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     const resumed = createDeferred<boolean>();
     const admitted = createDeferred<void>();
@@ -213,7 +214,7 @@ describe('submitFollowUp', () => {
   });
 
   it('starts recovery after the child generation releases', async () => {
-    const runId = id('stream:child-release');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     const child = session.followUps.claimLive(runId, 'child')!;
     session.followUps.release(child, 'recoverable');
@@ -231,7 +232,7 @@ describe('submitFollowUp', () => {
   });
 
   it('enqueues live notifications for children-running parent without recovery', async () => {
-    const runId = id('stream:children-running-notification');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     // Create a child-owned entry to simulate the parent having active children.
     const child = session.followUps.claimLive(runId, 'child')!;
@@ -253,7 +254,7 @@ describe('submitFollowUp', () => {
   });
 
   it('keeps children-running explicitly recoverable after child untracking', async () => {
-    const runId = id('stream:children-running');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     const tryResumeRun = mockTryResume();
 
@@ -268,7 +269,7 @@ describe('submitFollowUp', () => {
   });
 
   it('admits a child delivery to the retained queue after the parent completes', async () => {
-    const runId = id('stream:retained-child-generation');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     const parent = session.followUps.claimLive(runId, 'flow')!;
     session.followUps.release(parent, 'recoverable');
@@ -290,13 +291,11 @@ describe('submitFollowUp', () => {
     ).resolves.toEqual({ status: 'queued' });
 
     expect(deriveSpy).not.toHaveBeenCalled();
-    expect(session.followUps.getAll(runId)).toEqual([
-      'retained child result',
-    ]);
+    expect(session.followUps.getAll(runId)).toEqual(['retained child result']);
   });
 
   it('refuses child delivery to a parent with no session', async () => {
-    const runId = id('stream:terminal-child-delivery');
+    const runId = generateRunId();
     const session = fakeSession({
       kind: 'no_session',
       runStatus: 'completed',
@@ -315,12 +314,12 @@ describe('submitFollowUp', () => {
           },
         ),
       ),
-    ).resolves.toEqual({ status: 'failed', reason: 'not_resumable' });
+    ).resolves.toEqual({ status: 'failed', reason: 'finished' });
     expect(tryResumeRun).not.toHaveBeenCalled();
   });
 
   it('admits a replayed child delivery at most once and wakes at most once', async () => {
-    const runId = id('stream:replay-child-delivery');
+    const runId = generateRunId();
     const session = fakeSession({ kind: 'queue' });
     const tryResumeRun = mockTryResume();
     const delivery = {
@@ -360,7 +359,7 @@ describe('submitFollowUp', () => {
 
 describe('ToolUseFollowUpQueue claim exclusivity', () => {
   it('makes recovery-vs-child claims exclusive in either order', () => {
-    const runId = id('stream:claim-race');
+    const runId = generateRunId();
     const recoveryFirst = new ToolUseFollowUpQueue();
     const submission = recoveryFirst.submit(
       runId,
@@ -380,22 +379,18 @@ describe('ToolUseFollowUpQueue claim exclusivity', () => {
 describe('ToolUseFollowUpQueue terminal tombstones', () => {
   it('evicts the oldest tombstone at the historical cap', () => {
     const followUps = new ToolUseFollowUpQueue();
-    const oldest = id('stream:terminalized-0');
-    followUps.terminalize(oldest);
-    for (
-      let index = 1;
-      index <= ToolUseFollowUpQueue.TERMINALIZED_CAP;
-      index += 1
-    ) {
-      followUps.terminalize(id(`stream:terminalized-${index}`));
-    }
+    const runIds = Array.from(
+      { length: ToolUseFollowUpQueue.TERMINALIZED_CAP + 1 },
+      () => generateRunId(),
+    );
+    for (const runId of runIds) followUps.terminalize(runId);
 
     expect(
-      followUps.submit(oldest, { text: 'after eviction' }, 'recoverable'),
+      followUps.submit(runIds[0]!, { text: 'after eviction' }, 'recoverable'),
     ).toMatchObject({ kind: 'queued' });
     expect(
       followUps.submit(
-        id('stream:terminalized-1'),
+        runIds[1]!,
         { text: 'still terminalized' },
         'recoverable',
       ),

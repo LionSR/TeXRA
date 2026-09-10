@@ -127,16 +127,23 @@ function toolContext(runContext: Record<string, unknown> = {}): unknown {
   };
 }
 
-/** Capture the strategy passed to the (single) child run loop launch. */
-function captureRunLoopStrategy(): () => ChildRunStrategy<unknown> | undefined {
-  let strategy: ChildRunStrategy<unknown> | undefined;
+/**
+ * Capture the run id and strategy passed to the (single) child run loop
+ * launch. The launch mints the run id itself, and that is the run a waiting
+ * caller's follow-up must address.
+ */
+function captureRunLoopLaunch(): () => {
+  runId?: RunId;
+  strategy?: ChildRunStrategy<unknown>;
+} {
+  let launch: { runId?: RunId; strategy?: ChildRunStrategy<unknown> } = {};
   mocks.startChildRunLoop.mockImplementation(
-    (params: { strategy: ChildRunStrategy<unknown> }) => {
-      strategy = params.strategy;
+    (params: { runId: RunId; strategy: ChildRunStrategy<unknown> }) => {
+      launch = { runId: params.runId, strategy: params.strategy };
       return completedChildRunLoop();
     },
   );
-  return () => strategy;
+  return () => launch;
 }
 
 describe('codex tool - atomic resume fallback', () => {
@@ -224,7 +231,7 @@ describe('codex tool - atomic resume fallback', () => {
     const runs = {
       getHandle: () => undefined,
     } as any;
-    const getStrategy = captureRunLoopStrategy();
+    const getLaunch = captureRunLoopLaunch();
 
     mocks.importCodexClass.mockImplementation(() => {
       sdkImportStarted.resolve(undefined);
@@ -258,7 +265,7 @@ describe('codex tool - atomic resume fallback', () => {
       },
     );
     const firstResult = await first;
-    getStrategy()?.onTurnSuccess?.({}, { runs } as any);
+    getLaunch().strategy?.onTurnSuccess?.({}, { runs } as any);
     const secondResult = await second;
 
     expect(firstResult.status).toBe('executed');
@@ -268,12 +275,12 @@ describe('codex tool - atomic resume fallback', () => {
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
     expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
     expect(mocks.submitFollowUp).toHaveBeenCalledWith(
-      childRunId,
+      getLaunch().runId,
       'also update the tests',
       expect.objectContaining({ session: expect.anything() }),
     );
 
-    getStrategy()?.releaseSessionOwnership?.();
+    getLaunch().strategy?.releaseSessionOwnership?.();
     expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
   });
 });

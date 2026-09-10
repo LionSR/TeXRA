@@ -15,16 +15,13 @@ import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
  */
 export class StatusBarUsageTracker {
   constructor(
-    private readonly status: Pick<
-      SessionHandle['status'],
-      'getAllStreamStates'
-    >,
+    private readonly status: Pick<SessionHandle['status'], 'getAllRunStates'>,
     private readonly snapshots: Pick<SessionHandle['snapshots'], 'getRunUsage'>,
   ) {}
 
   public get activeRunCount(): number {
     let count = 0;
-    for (const state of this.status.getAllStreamStates().values()) {
+    for (const state of this.status.getAllRunStates().values()) {
       if (isActivePhase(state.phase)) count += 1;
     }
     return count;
@@ -32,7 +29,7 @@ export class StatusBarUsageTracker {
 
   public get totalUsage(): TokenUsageStats {
     const usages: TokenUsageStats[] = [];
-    for (const [runId, state] of this.status.getAllStreamStates()) {
+    for (const [runId, state] of this.status.getAllRunStates()) {
       if (!isInFlightPhase(state.phase)) continue;
       usages.push(...this.snapshots.getRunUsage(runId).values());
     }

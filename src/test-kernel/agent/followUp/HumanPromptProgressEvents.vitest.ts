@@ -21,6 +21,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { generateRunId } from '@utils/core';
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
@@ -83,7 +84,7 @@ describe('human prompt progress events', () => {
 
   it('publishes bash approval events through the tool runtime host', async () => {
     const explicit = createRecordingHost();
-    const runId = 'stream:bash-approval' as RunId;
+    const runId = generateRunId();
 
     const approval = inToolContext(explicit.interactions, runId, () =>
       requestBashApproval({
@@ -125,7 +126,7 @@ describe('human prompt progress events', () => {
 
   it('publishes user question events through the tool runtime host', async () => {
     const explicit = createRecordingHost();
-    const runId = 'stream:user-question' as RunId;
+    const runId = generateRunId();
     const tool = new AskUserQuestionTool();
 
     const result = inToolContext(explicit.interactions, runId, () =>
@@ -206,7 +207,7 @@ describe('human prompt progress events', () => {
     'publishes $label bypass changes through the explicit runtime host',
     ({ kind, setBypass }) => {
       const explicit = createRecordingHost();
-      const runId = `stream:${kind}-bypass` as RunId;
+      const runId = generateRunId();
       const detach = defaultSession().interactions.use(explicit.interactions);
 
       try {
@@ -226,7 +227,7 @@ describe('human prompt progress events', () => {
 
   it('keeps bash and edit session bypasses independent', async () => {
     const explicit = createRecordingHost();
-    const runId = 'stream:bypass-independence' as RunId;
+    const runId = generateRunId();
 
     try {
       currentSession().approvals.toolEdit.bypass.setBypass(runId, true, {
@@ -255,10 +256,8 @@ describe('human prompt progress events', () => {
         silent: true,
       });
 
-      const bypassed = await inToolContext(
-        explicit.interactions,
-        runId,
-        () => requestBashApproval({ command: 'echo bypassed' }),
+      const bypassed = await inToolContext(explicit.interactions, runId, () =>
+        requestBashApproval({ command: 'echo bypassed' }),
       );
 
       expect(bypassed).toEqual({ action: 'approve' });

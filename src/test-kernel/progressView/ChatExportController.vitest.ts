@@ -110,7 +110,7 @@ describe('ChatExportController.exportAsHtml', () => {
     const templatePath = await writeTemplate();
 
     const outcome = await Effect.runPromise(
-      controller.exportAsHtml('missing', templatePath),
+      controller.exportAsHtml('eec404', templatePath),
     );
 
     expect(outcome).toEqual({ status: 'config_missing' });
@@ -177,7 +177,7 @@ describe('ChatExportController.buildExportInput', () => {
 
   it('reports config_missing when nothing is stored', async () => {
     await expect(
-      Effect.runPromise(controller.buildExportInput('missing')),
+      Effect.runPromise(controller.buildExportInput('eec404')),
     ).resolves.toEqual({
       status: 'config_missing',
     });

@@ -587,7 +587,7 @@ describe('progress-check agent prompts', () => {
       'This narrow path takes precedence even when the session is part of a standing project goal.',
     );
     expect(systemPrompt).toContain(
-      'On the narrow path, evaluate only signals stated in the named run reports.',
+      'On the narrow path, evaluate only signals stated in the named execution reports.',
     );
     expect(systemPrompt).toContain(
       'On the narrow path, evaluate only the named reports and explicitly named files.',
@@ -600,10 +600,10 @@ describe('progress-check agent prompts', () => {
     );
   });
 
-  it('gives progressCheck the request and run records from every orchestrator', () => {
+  it('gives progressCheck the request and execution records from every orchestrator', () => {
     for (const agent of [orchestrator, leanOrchestrator]) {
       expect(agent.prompts.systemPrompt).toContain(
-        'Include the latest user request and the relevant run IDs in the delegated instruction.',
+        'Include the latest user request and the relevant execution IDs in the delegated instruction.',
       );
     }
   });

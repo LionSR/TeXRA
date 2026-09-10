@@ -16,6 +16,7 @@ import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
+import { generateRunId } from '@utils/core';
 
 describe('child run delivery', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -38,7 +39,7 @@ describe('child run delivery', () => {
     await Effect.runPromise(
       persistChildRunDelivery(
         { commit: mocks.commit } as unknown as SessionHandle,
-        'exec-1' as RunId,
+        generateRunId(),
         'payload',
         resultMeta,
       ),
@@ -56,7 +57,7 @@ describe('child run delivery', () => {
       Effect.runPromise(
         persistChildRunDelivery(
           { commit: mocks.commit } as unknown as SessionHandle,
-          'exec-1' as RunId,
+          generateRunId(),
           'payload',
           undefined,
         ),

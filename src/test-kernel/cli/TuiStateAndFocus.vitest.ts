@@ -12,7 +12,7 @@ import {
   infoPane,
   openInfoPane,
   rootRunPending,
-  rootRunId,
+  claimedRunId,
   resetCliState,
   setTransientNotice,
   transientNotice,
@@ -679,24 +679,24 @@ describe('CLI TUI row allocation', () => {
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
     expect(rootRunPending.get()).toBe(true);
-    expect(rootRunId.get()).toBeUndefined();
+    expect(claimedRunId.get()).toBeUndefined();
   });
 
-  it('publishes the run-control stream id from the session itself', () => {
+  it('publishes the run-control run id from the session itself', () => {
     const session = new TuiSession();
     session.markRunPending(new Promise<void>(() => {}));
-    expect(rootRunId.get()).toBeUndefined();
+    expect(claimedRunId.get()).toBeUndefined();
 
     // No publish call accompanies this write: the session owns the mirror,
     // so a caller cannot leave the Ctrl-C hint reading a stale claim (#8273).
     session.runId = root;
 
-    expect(rootRunId.get()).toBe(root);
+    expect(claimedRunId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(true);
 
     session.markRunCompleted();
 
-    expect(rootRunId.get()).toBe(root);
+    expect(claimedRunId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(false);
   });
 
@@ -712,7 +712,7 @@ describe('CLI TUI row allocation', () => {
 
     expect(chatTuiCanStartRootRun(session)).toBe(true);
     expect(rootRunPending.get()).toBe(false);
-    expect(rootRunId.get()).toBeUndefined();
+    expect(claimedRunId.get()).toBeUndefined();
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {

@@ -156,8 +156,8 @@ describe('DelegationTools', () => {
 });
 
 describe('DelegateAgentTool resume ownership', () => {
-  const runId = 'resume-ownership-run' as RunId;
-  const parentRunId = 'parent-run' as RunId;
+  const runId = 'ce5c3e0a1d77' as RunId;
+  const parentRunId = 'ba7e0f19c2d4' as RunId;
 
   function makeHandle(): RunHandle {
     return testRunHandle({

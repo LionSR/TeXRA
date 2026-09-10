@@ -158,18 +158,19 @@ describe('CLI agents run command', () => {
     const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
     expect(emission?.json).toEqual({
       category: AgentCategory.ToolUse,
-      runId: 'run-1',
+      executionId: 'run-1',
       outcome: RUN_OUTCOME.COMPLETED,
       response: 'Correct.',
       workingDirectory: '/tmp/project',
     });
-    // `outcome` is the only terminal fact the headless JSON publishes.
+    // `outcome` is the only terminal fact the headless JSON publishes, and the
+    // run id keeps its frozen 0.40 wire key.
     expect(Object.keys(emission?.json ?? {})).toEqual([
       'category',
-      'runId',
       'outcome',
       'response',
       'workingDirectory',
+      'executionId',
     ]);
     expect(emission?.ndjson).toEqual({
       kind: 'agent-result',

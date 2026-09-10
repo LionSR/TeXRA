@@ -11,7 +11,6 @@ import { describe, it, beforeEach, afterEach, vi } from 'vitest';
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
@@ -19,10 +18,11 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { generateRunId } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
-// Test stream ID for the per-stream approval-bypass cases
-const TEST_STREAM_ID = 'TestAgent@model: test.tex' as RunId;
+// Test run id for the per-run approval-bypass cases
+const TEST_RUN_ID = generateRunId();
 
 // Host interactions are attached once per platform install, so each case swaps
 // this reference and the attached port delegates to whatever it holds.
@@ -223,7 +223,7 @@ describe('Tool edit approval gating', () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: false, content: '' });
 
-    defaultSession().approvals.toolEdit.bypass.setBypass(TEST_STREAM_ID, true, {
+    defaultSession().approvals.toolEdit.bypass.setBypass(TEST_RUN_ID, true, {
       silent: true,
     });
 
@@ -231,7 +231,7 @@ describe('Tool edit approval gating', () => {
     // picks it up from the active run context.
     const result = await withRunContext(
       createRunContext({
-        runId: TEST_STREAM_ID,
+        runId: TEST_RUN_ID,
       }),
       () => tool.call({ path: 'doc.txt', content: 'auto' }),
     );
@@ -255,7 +255,7 @@ describe('Tool edit approval gating', () => {
     const requestInRun = (path: string) =>
       withRunContext(
         createRunContext({
-          runId: TEST_STREAM_ID,
+          runId: TEST_RUN_ID,
         }),
         () =>
           requestToolEditApproval({
@@ -271,7 +271,7 @@ describe('Tool edit approval gating', () => {
     await firstPrompted.promise;
 
     assert.strictEqual(handlerCalls, 1);
-    defaultSession().approvals.toolEdit.bypass.setBypass(TEST_STREAM_ID, true, {
+    defaultSession().approvals.toolEdit.bypass.setBypass(TEST_RUN_ID, true, {
       silent: true,
     });
     firstApproval.resolve({ action: 'apply', appliedContent: 'first.txt' });

@@ -186,7 +186,7 @@ describe('child run progress events', () => {
           parentRunId,
           items: [
             expect.objectContaining({
-              runId,
+              childRunId: runId,
               agentName: 'bash',
               status: RUN_PHASE.RUNNING,
               identity: { kind: 'process', tool: 'bash' },
@@ -246,7 +246,7 @@ describe('child run progress events', () => {
         defaultSession().runs.getActiveChildren(parentRunId),
       ).toContainEqual(
         expect.objectContaining({
-          runId: workflowRelaunchRunId,
+          childRunId: workflowRelaunchRunId,
           status: RUN_PHASE.RUNNING,
         }),
       );

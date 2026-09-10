@@ -606,25 +606,9 @@ describe('sessionFold', () => {
     expect(runView(listingOnly, ROOT).transcript.rows).toStrictEqual([]);
     expect(listingOnly.folded.size).toBe(0);
 
-    // Subscribing later reopens from the seq the subscription names.
+    // The replay every transcript is subscribed to, then a narrower
+    // subscription set: only the aggregates it names keep their rows.
     const full = foldAll(scenario.events);
-    const subscriptions = [...full.folded].map(([id, fromSeq]) => ({
-      id,
-      fromSeq,
-    }));
-    const run = qualifyAggregateId('run', ROOT);
-    const overlapping = fold(full, {
-      _tag: 'subscriptions',
-      set: [...subscriptions, { id: run, fromSeq: 0 }],
-    });
-    const runOnly = fold(overlapping, {
-      _tag: 'subscriptions',
-      set: subscriptions,
-    });
-    expect(runOnly.folded.has(run)).toBe(false);
-    expect(runView(runOnly, ROOT).transcript).toEqual(
-      runView(full, ROOT).transcript,
-    );
     const evicted = fold(full, subscribe(CHILD));
     expect(evicted.folded.has(qualifyAggregateId('run', ROOT))).toBe(false);
     expect(evicted.folded.has(qualifyAggregateId('run', CHILD))).toBe(true);

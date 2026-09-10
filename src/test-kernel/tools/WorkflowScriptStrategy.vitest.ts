@@ -25,7 +25,7 @@ import {
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
-const runId = '7154strategy' as RunId;
+const runId = '7154decade01' as RunId;
 const script = `export const meta = {
   name: 'strategy-test',
   description: 'tests the workflow script strategy',
@@ -85,11 +85,7 @@ function strategyParams(
     session: currentSession(),
     fingerprintAgentDependencies: (options) =>
       Effect.runPromise(
-        fingerprintWorkflowAgentDependencies(
-          currentSession(),
-          runId,
-          options,
-        ),
+        fingerprintWorkflowAgentDependencies(currentSession(), runId, options),
       ),
     logger: new TraceEmitter(),
     store: getRunStore(runId),

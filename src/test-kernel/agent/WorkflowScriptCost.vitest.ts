@@ -12,7 +12,7 @@ import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
-const runId = '7154costtest' as RunId;
+const runId = '7154c0570057' as RunId;
 const key = '0000000000000000';
 const meta = `export const meta = {
   name: 'cost-test',

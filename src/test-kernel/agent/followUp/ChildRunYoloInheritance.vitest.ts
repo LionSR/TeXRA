@@ -12,17 +12,15 @@ import {
   proposalApprovals,
   releaseRunResources,
 } from '@tools/approval';
+import { generateRunId } from '@utils/core';
 
 import { createRecordingHost } from '../progressTestUtils';
 
-function runPair(label: string): {
+function runPair(): {
   parent: RunId;
   child: RunId;
 } {
-  return {
-    parent: `stream:${label}-parent` as RunId,
-    child: `stream:${label}-child` as RunId,
-  };
+  return { parent: generateRunId(), child: generateRunId() };
 }
 
 describe('child subagent stream approval inheritance', () => {
@@ -32,7 +30,7 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('mirrors the parent bash bypass onto the child stream', () => {
-    const { parent, child } = runPair('bash');
+    const { parent, child } = runPair();
     currentSession().approvals.bash.bypass.setBypass(parent, true, {
       silent: true,
     });
@@ -47,7 +45,7 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('mirrors the parent tool-edit bypass onto the child stream', () => {
-    const { parent, child } = runPair('edit');
+    const { parent, child } = runPair();
     currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
       silent: true,
     });
@@ -64,7 +62,7 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('leaves the child gated when the parent still prompts', () => {
-    const { parent, child } = runPair('no-bypass');
+    const { parent, child } = runPair();
 
     configureDelegatedChildApprovals(child, parent);
 
@@ -80,7 +78,7 @@ describe('child subagent stream approval inheritance', () => {
     // The bug this guards against: a parent with bash auto-approved but edits
     // still gated must propagate bash to the child without also granting the
     // child tool-edit YOLO.
-    const { parent, child } = runPair('bash-only');
+    const { parent, child } = runPair();
     currentSession().approvals.bash.bypass.setBypass(parent, true, {
       silent: true,
     });
@@ -99,7 +97,7 @@ describe('child subagent stream approval inheritance', () => {
     // used to be a one-shot copy taken at child-creation time, so a bypass
     // enabled on the parent afterwards never reached an already-running
     // child. It must now resolve live off the ancestry link.
-    const { parent, child } = runPair('late-toggle');
+    const { parent, child } = runPair();
 
     configureDelegatedChildApprovals(child, parent);
     expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(
@@ -119,7 +117,7 @@ describe('child subagent stream approval inheritance', () => {
     // exactly like it reaches their bash. Tool-edit inheritance used to be a
     // one-shot grant at delegation launch, so a mid-run toggle left children
     // prompting for every edit.
-    const { parent, child } = runPair('late-edit');
+    const { parent, child } = runPair();
 
     configureDelegatedChildApprovals(child, parent);
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
@@ -146,9 +144,9 @@ describe('child subagent stream approval inheritance', () => {
   it('announces inherited edit-bypass changes for visible descendants', () => {
     const { events, interactions } = createRecordingHost();
     const detach = currentSession().interactions.use(interactions);
-    const { parent, child } = runPair('visible');
-    const grandchild = 'stream:visible-grandchild' as RunId;
-    const pinnedChild = 'stream:pinned-child' as RunId;
+    const { parent, child } = runPair();
+    const grandchild = generateRunId();
+    const pinnedChild = generateRunId();
     currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
       silent: true,
     });
@@ -203,8 +201,8 @@ describe('child subagent stream approval inheritance', () => {
     // so bypass must be carried forward explicitly (see
     // chatSessionController.ts's onStreamResolved) rather than assumed to
     // survive on the same stream id.
-    const roundOne = 'stream:round-1' as RunId;
-    const roundTwo = 'stream:round-2' as RunId;
+    const roundOne = generateRunId();
+    const roundTwo = generateRunId();
 
     currentSession().approvals.setDelegatedWorkBypasses(roundOne, true);
     currentSession().approvals.registerRunParent(roundTwo, roundOne);
@@ -234,7 +232,7 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('an explicit child value overrides inherited bypass without touching the parent', () => {
-    const { parent, child } = runPair('toggle');
+    const { parent, child } = runPair();
     currentSession().approvals.bash.bypass.setBypass(parent, true, {
       silent: true,
     });
@@ -252,7 +250,7 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('preserves a surviving child state when its parent is torn down', () => {
-    const { parent, child } = runPair('torn-down');
+    const { parent, child } = runPair();
     currentSession().approvals.bash.bypass.setBypass(parent, true, {
       silent: true,
     });
@@ -269,7 +267,7 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('pins edit approval for an auto-approved delegation', () => {
-    const { parent, child } = runPair('auto-approved');
+    const { parent, child } = runPair();
 
     configureDelegatedChildApprovals(child, parent, 'auto-approved');
 
@@ -286,7 +284,7 @@ describe('child subagent stream approval inheritance', () => {
     // tool-edit entry even when `isBypassed` already reports true via
     // ancestry — otherwise the grant silently evaporates when the parent
     // later re-gates its own edits while the child's proposal/bash stay on.
-    const { parent, child } = runPair('pin');
+    const { parent, child } = runPair();
     currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
       silent: true,
     });
@@ -309,8 +307,8 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('propagates delegated-task approval through nested orchestrators', () => {
-    const { parent, child } = runPair('orchestrator');
-    const grandchild = 'stream:grandchild-orchestrator' as RunId;
+    const { parent, child } = runPair();
+    const grandchild = generateRunId();
     proposalApprovals().setBypass(parent, true);
 
     configureDelegatedChildApprovals(child, parent);

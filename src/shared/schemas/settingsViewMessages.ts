@@ -1063,7 +1063,7 @@ const UpdateStateSettingMessageSchema = z.object({
 // agent-side plan tool, not the user. Don't add mutation commands here.
 const GetGoalListMessageSchema = commandOnly(CMD.GET_GOAL_LIST);
 const RevealGoalRunMessageSchema = z.object({
-  command: z.literal(CMD.REVEAL_GOAL_STREAM),
+  command: z.literal(CMD.REVEAL_GOAL_RUN),
   runId: RunIdSchema,
 });
 

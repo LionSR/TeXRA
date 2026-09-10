@@ -650,23 +650,28 @@ export const databaseLayer = (
                   `Child creation requires an open parent: ${draft.parent.id}`,
                 );
               }
-              parent = { id: draft.parent.id, startCommit: parentState.startCommit };
+              parent = {
+                id: draft.parent.id,
+                startCommit: parentState.startCommit,
+              };
             }
             // A tombstone names only run directories owned by this
             // lifecycle. Derive the targets under the same write permit
             // and transaction as closure; no caller chooses cleanup paths.
-            const committedDraft =
-              draft.type === 'run.removed'
-                ? {
-                    ...draft,
-                    runIds: (yield* sql.unsafe<Record<string, unknown>>(
-                      deletionRuns,
-                      [draft.aggregateId],
-                    )).map((row) => RunIdSchema.parse(row.runId)),
-                  }
-                : draft.type === 'run.start'
-                  ? { ...draft, parent }
-                  : draft;
+            const committedDraft = yield* Effect.gen(function* () {
+              if (draft.type === 'run.removed') {
+                const owned = yield* sql.unsafe<Record<string, unknown>>(
+                  deletionRuns,
+                  [draft.aggregateId],
+                );
+                return {
+                  ...draft,
+                  runIds: owned.map((row) => RunIdSchema.parse(row.runId)),
+                };
+              }
+              if (draft.type === 'run.start') return { ...draft, parent };
+              return draft;
+            });
             const committedPayload =
               committedDraft === draft ? payload : payloadOf(committedDraft);
             const commit = (yield* sql.unsafe<Record<string, unknown>>(
