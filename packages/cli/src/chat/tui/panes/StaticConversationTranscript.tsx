@@ -20,6 +20,7 @@ import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
+  registerCliStateResetHook,
   rootStreamId as rootStreamIdSignal,
   sessionMeta as sessionMetaSignal,
   type SessionMeta,
@@ -726,6 +727,12 @@ const DUPLICATE_ROW_ID_REPORT_CAP = 1000;
  *  the local-notice counter (`transcript.ts`) both guarantee unique ids; a
  *  collision here means one of those invariants broke upstream. */
 const duplicateRowIdsReported = createBoundedIdSet(DUPLICATE_ROW_ID_REPORT_CAP);
+// `/clear` resets `localEntrySeq` (`transcript.ts`) back to 0 without
+// terminating the TUI, so a local-notice id like `local:0:cli-local` is
+// reusable across the reset. Without this hook, a genuinely new collision
+// after `/clear` that happens to reuse an already-reported id would be
+// mistaken for the old one and suppressed.
+registerCliStateResetHook(() => duplicateRowIdsReported.clear());
 
 function duplicateRowWarningId(entryId: string): string {
   return `duplicate-row-warning:${entryId}`;
@@ -811,10 +818,15 @@ export function buildStaticTranscriptItems(
     source.status,
   );
   const seen = new Set<string>();
+  const markedThisPass = new Set<string>();
   const pendingDuplicates: TranscriptRow[] = [];
   for (const entry of orderedStaticEntries) {
     if (seen.has(entry.id)) {
-      if (!duplicateRowIdsReported.has(entry.id)) {
+      if (
+        !duplicateRowIdsReported.has(entry.id) &&
+        !markedThisPass.has(entry.id)
+      ) {
+        markedThisPass.add(entry.id);
         const warningRow = duplicateRowIdWarningRow(entry);
         items.push({ id: warningRow.id, kind: 'entry', entry: warningRow });
         pendingDuplicates.push(entry);
@@ -1106,9 +1118,14 @@ export function advanceStaticTranscriptState(
   const pendingDuplicates: TranscriptRow[] = [];
   if (plan.appended.length > 0) {
     const seenIds = new Set(nextItems.map((item) => item.id));
+    const markedThisPass = new Set<string>();
     for (const entry of plan.appended) {
       if (seenIds.has(entry.id)) {
-        if (!duplicateRowIdsReported.has(entry.id)) {
+        if (
+          !duplicateRowIdsReported.has(entry.id) &&
+          !markedThisPass.has(entry.id)
+        ) {
+          markedThisPass.add(entry.id);
           const warningRow = duplicateRowIdWarningRow(entry);
           appendItem({ id: warningRow.id, kind: 'entry', entry: warningRow });
           pendingDuplicates.push(entry);
