@@ -727,6 +727,10 @@ const DUPLICATE_ROW_ID_REPORT_CAP = 1000;
  *  collision here means one of those invariants broke upstream. */
 const duplicateRowIdsReported = createBoundedIdSet(DUPLICATE_ROW_ID_REPORT_CAP);
 
+function duplicateRowWarningId(entryId: string): string {
+  return `duplicate-row-warning:${entryId}`;
+}
+
 /**
  * A visible marker for a dropped duplicate-id row, shaped like the local
  * notices `transcript.ts` synthesizes (`origin: 'local'`, host-assigned id).
@@ -739,7 +743,7 @@ const duplicateRowIdsReported = createBoundedIdSet(DUPLICATE_ROW_ID_REPORT_CAP);
  */
 function duplicateRowIdWarningRow(entry: TranscriptRow): TranscriptRow {
   return {
-    id: `duplicate-row-warning:${entry.id}`,
+    id: duplicateRowWarningId(entry.id),
     origin: 'local',
     timestamp: Date.now(),
     level: 'error',
@@ -750,6 +754,30 @@ function duplicateRowIdWarningRow(entry: TranscriptRow): TranscriptRow {
     details: [],
     detailText: transcriptText(''),
   };
+}
+
+/**
+ * Mark each pending duplicate reported — and log it — only for the ones whose
+ * marker row is still present after ring-budget trimming. A marker trimmed
+ * away in the same pass it was inserted never reached the reader, so marking
+ * it reported here would suppress every future retry and the collision would
+ * silently vanish for the rest of a long session (the bug this whole warning
+ * path exists to avoid, just moved one step later).
+ */
+function reportSurvivingDuplicates(
+  pending: readonly TranscriptRow[],
+  survivingItems: readonly StaticTranscriptItem[],
+  context: string,
+): void {
+  if (pending.length === 0) return;
+  const survivingIds = new Set(survivingItems.map((item) => item.id));
+  for (const entry of pending) {
+    if (!survivingIds.has(duplicateRowWarningId(entry.id))) continue;
+    duplicateRowIdsReported.add(entry.id);
+    log.warn(
+      `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in ${context}; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
+    );
+  }
 }
 
 export function buildStaticTranscriptItems(
@@ -783,15 +811,13 @@ export function buildStaticTranscriptItems(
     source.status,
   );
   const seen = new Set<string>();
+  const pendingDuplicates: TranscriptRow[] = [];
   for (const entry of orderedStaticEntries) {
     if (seen.has(entry.id)) {
       if (!duplicateRowIdsReported.has(entry.id)) {
-        duplicateRowIdsReported.add(entry.id);
-        log.warn(
-          `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in a static rebuild; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
-        );
         const warningRow = duplicateRowIdWarningRow(entry);
         items.push({ id: warningRow.id, kind: 'entry', entry: warningRow });
+        pendingDuplicates.push(entry);
       }
       continue;
     }
@@ -804,6 +830,11 @@ export function buildStaticTranscriptItems(
     executionLabels,
     width,
   });
+  reportSurvivingDuplicates(
+    pendingDuplicates,
+    retained.items,
+    'a static rebuild',
+  );
   return {
     items: retained.items,
     rowCount: retained.totals.rows,
@@ -1072,17 +1103,15 @@ export function advanceStaticTranscriptState(
     previousItem = item;
     changed = true;
   };
+  const pendingDuplicates: TranscriptRow[] = [];
   if (plan.appended.length > 0) {
     const seenIds = new Set(nextItems.map((item) => item.id));
     for (const entry of plan.appended) {
       if (seenIds.has(entry.id)) {
         if (!duplicateRowIdsReported.has(entry.id)) {
-          duplicateRowIdsReported.add(entry.id);
-          log.warn(
-            `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in an incremental append; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
-          );
           const warningRow = duplicateRowIdWarningRow(entry);
           appendItem({ id: warningRow.id, kind: 'entry', entry: warningRow });
+          pendingDuplicates.push(entry);
         }
         continue;
       }
@@ -1109,6 +1138,11 @@ export function advanceStaticTranscriptState(
     nextRepaintEpoch += 1;
     changed = true;
   }
+  reportSurvivingDuplicates(
+    pendingDuplicates,
+    nextItems,
+    'an incremental append',
+  );
 
   const cursor = plan.cursor;
   const cursorChanged =
