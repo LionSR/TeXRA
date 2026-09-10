@@ -3,8 +3,9 @@ import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import {
@@ -197,17 +198,19 @@ describe('agent registry', () => {
     }
   });
 
-  it('reloads local-only definitions after sign-out invalidation', async () => {
-    useAgentDirectories();
-    await Effect.runPromise(refresh({ includeRemote: true }));
-    expect(isRemoteAgent('orchestrator')).toBe(true);
-    const remoteFetchCount = listRemoteAgents.mock.calls.length;
+  it.effect('reloads local-only definitions after sign-out invalidation', () =>
+    Effect.gen(function* () {
+      useAgentDirectories();
+      yield* refresh({ includeRemote: true });
+      expect(isRemoteAgent('orchestrator')).toBe(true);
+      const remoteFetchCount = listRemoteAgents.mock.calls.length;
 
-    await Effect.runPromise(invalidateRemoteAgentsAfterSignOut());
+      yield* invalidateRemoteAgentsAfterSignOut();
 
-    expect(isRemoteAgent('orchestrator')).toBe(false);
-    expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
-  });
+      expect(isRemoteAgent('orchestrator')).toBe(false);
+      expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
+    }),
+  );
 
   it('removes remote definitions even when the local rebuild fails', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
@@ -284,42 +287,45 @@ describe('agent registry', () => {
     }
   });
 
-  it('keeps the registry serving when a later refresh fails', async () => {
-    expect(getAgent('assistant')?.name).toBe('assistant');
-
-    useAgentDirectories({
-      builtInToolUse: async () => {
-        throw new Error('refresh failed');
-      },
-    });
-
-    try {
-      await expect(Effect.runPromise(loadAgents())).rejects.toThrow(
-        'refresh failed',
-      );
-
+  it.effect('keeps the registry serving when a later refresh fails', () =>
+    Effect.gen(function* () {
       expect(getAgent('assistant')?.name).toBe('assistant');
-    } finally {
-      useAgentDirectories();
-    }
-  });
 
-  it('includes remote agents in launcher options after local-only startup load', async () => {
-    try {
-      await Effect.runPromise(refresh({ includeRemote: false }));
-      expect(
-        getVisibleAgents('toolUse').map((agent) => agent.name),
-      ).not.toContain('orchestrator');
+      useAgentDirectories({
+        builtInToolUse: async () => {
+          throw new Error('refresh failed');
+        },
+      });
 
-      const options = await Effect.runPromise(computeAgentOptionsData());
+      try {
+        const failure = yield* Effect.flip(loadAgents());
+        expect(String(failure)).toContain('refresh failed');
 
-      expect(options.toolUse.map((option) => option.label)).toContain(
-        'orchestrator',
-      );
-    } finally {
-      await Effect.runPromise(refresh({ includeRemote: false }));
-    }
-  });
+        expect(getAgent('assistant')?.name).toBe('assistant');
+      } finally {
+        useAgentDirectories();
+      }
+    }),
+  );
+
+  it.effect(
+    'includes remote agents in launcher options after local-only startup load',
+    () =>
+      Effect.gen(function* () {
+        yield* refresh({ includeRemote: false });
+        expect(
+          getVisibleAgents('toolUse').map((agent) => agent.name),
+        ).not.toContain('orchestrator');
+
+        const options = yield* computeAgentOptionsData();
+
+        expect(options.toolUse.map((option) => option.label)).toContain(
+          'orchestrator',
+        );
+      }).pipe(
+        Effect.ensuring(refresh({ includeRemote: false }).pipe(Effect.orDie)),
+      ),
+  );
 
   it('includes remote agents in launcher options after pending local-only startup load', async () => {
     const builtInToolUseDir = createDeferred<void>();

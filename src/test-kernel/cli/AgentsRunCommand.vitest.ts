@@ -1,5 +1,5 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
@@ -10,6 +10,7 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -112,131 +113,143 @@ describe('CLI agents run command', () => {
     });
   });
 
-  it('anchors headless tool-use runs on provided files without polluting display text', async () => {
-    const exitCode = await runToolUseAgent(createRunCommandCliContext(), {
-      agent: 'chat',
-      inputFiles: ['problem.md'],
-      contextFiles: ['notes.md'],
-      model: 'gpt54',
-      instruction: 'Assess the proof concisely.',
-    });
+  it.effect(
+    'anchors headless tool-use runs on provided files without polluting display text',
+    () =>
+      Effect.gen(function* () {
+        const exitCode = yield* nativeRun(createRunCommandCliContext(), {
+          agent: 'chat',
+          inputFiles: ['problem.md'],
+          contextFiles: ['notes.md'],
+          model: 'gpt54',
+          instruction: 'Assess the proof concisely.',
+        });
 
-    expect(exitCode).toBe(0);
-    expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: '/tmp/project' }),
-    );
-    expect(
-      cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.resolveCliLaunchAgent.mock.invocationCallOrder[0]);
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
-      'chat',
-      'agentsRun',
-    );
-    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
-      ['problem.md'],
-      ['notes.md'],
-      '/tmp/project',
-      {
-        allowEmptyInput: true,
-        requireWorkspaceFiles: true,
-        readStdinText: expect.any(Function),
-      },
-      expect.any(Function),
-    );
-    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
-    expect(config?.inputFiles).toEqual(['problem.md']);
-    expect(config?.contextFiles).toEqual(['notes.md']);
-    expect(config?.displayInstruction).toBe('Assess the proof concisely.');
-    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
-      recoveryInputIsDurable: true,
-    });
-    expect(config?.instruction).toContain('Primary user input files:');
-    expect(config?.instruction).toContain('- "problem.md"');
-    expect(config?.instruction).toContain('Read-only context files:');
-    expect(config?.instruction).toContain('- "notes.md"');
-    expect(config?.instruction).toContain('Additional user instruction:');
-    expect(config?.instruction).toContain('Assess the proof concisely.');
-    const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
-    expect(emission?.json).toEqual({
-      category: AgentCategory.ToolUse,
-      executionId: 'exec-1',
-      streamId: 'stream-1',
-      outcome: RUN_OUTCOME.COMPLETED,
-      response: 'Correct.',
-      workingDirectory: '/tmp/project',
-    });
-    // `outcome` is the only terminal fact the headless JSON publishes.
-    expect(Object.keys(emission?.json ?? {})).toEqual([
-      'category',
-      'executionId',
-      'streamId',
-      'outcome',
-      'response',
-      'workingDirectory',
-    ]);
-    expect(emission?.ndjson).toEqual({
-      kind: 'agent-result',
-      result: emission.json,
-    });
-    expect(emission?.text).toBe('Correct.');
-  });
+        expect(exitCode).toBe(0);
+        expect(cliInitPlatformMock.initLocalCliPlatform).toHaveBeenCalledWith(
+          expect.objectContaining({ cwd: '/tmp/project' }),
+        );
+        expect(
+          cliInitPlatformMock.initLocalCliPlatform.mock.invocationCallOrder[0],
+        ).toBeLessThan(mocks.resolveCliLaunchAgent.mock.invocationCallOrder[0]);
+        expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
+          'chat',
+          'agentsRun',
+        );
+        expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
+          ['problem.md'],
+          ['notes.md'],
+          '/tmp/project',
+          {
+            allowEmptyInput: true,
+            requireWorkspaceFiles: true,
+            readStdinText: expect.any(Function),
+          },
+          expect.any(Function),
+        );
+        const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
+        expect(config?.inputFiles).toEqual(['problem.md']);
+        expect(config?.contextFiles).toEqual(['notes.md']);
+        expect(config?.displayInstruction).toBe('Assess the proof concisely.');
+        expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
+          recoveryInputIsDurable: true,
+        });
+        expect(config?.instruction).toContain('Primary user input files:');
+        expect(config?.instruction).toContain('- "problem.md"');
+        expect(config?.instruction).toContain('Read-only context files:');
+        expect(config?.instruction).toContain('- "notes.md"');
+        expect(config?.instruction).toContain('Additional user instruction:');
+        expect(config?.instruction).toContain('Assess the proof concisely.');
+        const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
+        expect(emission?.json).toEqual({
+          category: AgentCategory.ToolUse,
+          executionId: 'exec-1',
+          streamId: 'stream-1',
+          outcome: RUN_OUTCOME.COMPLETED,
+          response: 'Correct.',
+          workingDirectory: '/tmp/project',
+        });
+        // `outcome` is the only terminal fact the headless JSON publishes.
+        expect(Object.keys(emission?.json ?? {})).toEqual([
+          'category',
+          'executionId',
+          'streamId',
+          'outcome',
+          'response',
+          'workingDirectory',
+        ]);
+        expect(emission?.ndjson).toEqual({
+          kind: 'agent-result',
+          result: emission.json,
+        });
+        expect(emission?.text).toBe('Correct.');
+      }),
+  );
 
-  it('marks materialized stdin as unavailable for recovery advertising', async () => {
-    mocks.withExpandedRunInputs.mockImplementationOnce(
-      async (
-        _inputSpecs: readonly string[],
-        _contextSpecs: readonly string[],
-        _cwd: string,
-        _options: unknown,
-        run: (inputs: {
-          readonly inputFiles: string[];
-          readonly contextFiles: string[];
-          readonly stdinInputPath?: string;
-        }) => Promise<unknown>,
-      ) =>
-        run({
-          inputFiles: ['.texra-tmp/stdin.tex'],
+  it.effect(
+    'marks materialized stdin as unavailable for recovery advertising',
+    () =>
+      Effect.gen(function* () {
+        mocks.withExpandedRunInputs.mockImplementationOnce(
+          async (
+            _inputSpecs: readonly string[],
+            _contextSpecs: readonly string[],
+            _cwd: string,
+            _options: unknown,
+            run: (inputs: {
+              readonly inputFiles: string[];
+              readonly contextFiles: string[];
+              readonly stdinInputPath?: string;
+            }) => Promise<unknown>,
+          ) =>
+            run({
+              inputFiles: ['.texra-tmp/stdin.tex'],
+              contextFiles: [],
+              stdinInputPath: '.texra-tmp/stdin.tex',
+            }),
+        );
+        yield* nativeRun(createRunCommandCliContext(), {
+          agent: 'chat',
+          inputFiles: ['-'],
           contextFiles: [],
-          stdinInputPath: '.texra-tmp/stdin.tex',
-        }),
-    );
-    await runToolUseAgent(createRunCommandCliContext(), {
-      agent: 'chat',
-      inputFiles: ['-'],
-      contextFiles: [],
-      model: 'gpt54',
-      instruction: 'Assess the proof.',
-    });
+          model: 'gpt54',
+          instruction: 'Assess the proof.',
+        });
 
-    expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
-      recoveryInputIsDurable: false,
-    });
-  });
+        expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
+          recoveryInputIsDurable: false,
+        });
+      }),
+  );
 
-  it('publishes the canonical outcome for a shutdown cancellation', async () => {
-    mocks.executeCliToolUseConfig.mockResolvedValueOnce({
-      ok: true,
-      result: {
-        category: AgentCategory.ToolUse,
-        executionId: 'exec-interrupted',
-        streamId: 'stream-interrupted',
-        outcome: RUN_OUTCOME.CANCELLED,
-        workingDirectory: '/tmp/project',
-      },
-      exitCode: CliExitCode.Interrupted,
-    });
-    const exitCode = await runToolUseAgent(createRunCommandCliContext(), {
-      agent: 'chat',
-      inputFiles: ['problem.md'],
-      contextFiles: [],
-      instruction: 'Assess the proof.',
-    });
+  it.effect('publishes the canonical outcome for a shutdown cancellation', () =>
+    Effect.gen(function* () {
+      mocks.executeCliToolUseConfig.mockResolvedValueOnce({
+        ok: true,
+        result: {
+          category: AgentCategory.ToolUse,
+          executionId: 'exec-interrupted',
+          streamId: 'stream-interrupted',
+          outcome: RUN_OUTCOME.CANCELLED,
+          workingDirectory: '/tmp/project',
+        },
+        exitCode: CliExitCode.Interrupted,
+      });
+      const exitCode = yield* nativeRun(createRunCommandCliContext(), {
+        agent: 'chat',
+        inputFiles: ['problem.md'],
+        contextFiles: [],
+        instruction: 'Assess the proof.',
+      });
 
-    expect(exitCode).toBe(CliExitCode.Interrupted);
-    expect(cliOutputMock.emitCliResult.mock.calls[0]?.[1].json).toMatchObject({
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-  });
+      expect(exitCode).toBe(CliExitCode.Interrupted);
+      expect(cliOutputMock.emitCliResult.mock.calls[0]?.[1].json).toMatchObject(
+        {
+          outcome: RUN_OUTCOME.CANCELLED,
+        },
+      );
+    }),
+  );
 
   it('reports missing instruction before resolving the model', async () => {
     await expect(

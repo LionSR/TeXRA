@@ -1,7 +1,8 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import {
   createRunContext,
@@ -124,143 +125,156 @@ describe('session isolation', () => {
     }
   });
 
-  it('the host-exit drain settles each session under its own root, outside any scope', async () => {
-    const sessionA = createTestSession({
-      roots: createFakeWorkspaceRoots({
-        workspacePath: '/papers/a',
-        storagePath: '/storage/a',
+  it.effect(
+    'the host-exit drain settles each session under its own root, outside any scope',
+    () =>
+      Effect.gen(function* () {
+        const sessionA = createTestSession({
+          roots: createFakeWorkspaceRoots({
+            workspacePath: '/papers/a',
+            storagePath: '/storage/a',
+          }),
+        });
+        const sessionB = createTestSession({
+          roots: createFakeWorkspaceRoots({
+            workspacePath: '/papers/b',
+            storagePath: '/storage/b',
+          }),
+        });
+        const live = [
+          [sessionA, 'a0da01' as ExecutionId],
+          [sessionB, 'b0db01' as ExecutionId],
+        ] as const;
+        const closures = live.map(([session, executionId]) =>
+          vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {
+            expect(
+              runInSession(session, () => ownsExecutionLease(executionId)),
+            ).toBe(true);
+          }),
+        );
+        try {
+          for (const [session, executionId] of live) {
+            const streamId = `stream:${executionId}` as StreamTabId;
+            publishTestRunStart(session, streamId, executionId);
+            session.publish([
+              {
+                type: 'stage.start',
+                aggregateId: aggregateId('stream', streamId),
+                id: `stage:${executionId}`,
+                label: 'Running stage',
+              },
+            ]);
+            yield* Effect.promise(() =>
+              runInSession(session, async () => {
+                await acquireFreshExecutionLease(executionId);
+                session.executions.track(
+                  testExecutionHandle({
+                    executionId,
+                    parentStreamId: `stream:${executionId}` as StreamTabId,
+                    agent: 'assistant',
+                  }),
+                );
+              }),
+            );
+          }
+          // A quit handler runs in no session scope; the process roots answer
+          // there, and neither paper's lease is keyed under them.
+          expect(ownsExecutionLease('a0da01' as ExecutionId)).toBe(false);
+          yield* settleLiveSessionExecutions(new AbortController().signal);
+          for (const [index, [, executionId]] of live.entries()) {
+            expect(closures[index]).toHaveBeenCalledWith(
+              `stream:${executionId}`,
+              {
+                type: 'stage.end',
+                id: `stage:${executionId}`,
+                status: RUN_OUTCOME.CANCELLED,
+              },
+            );
+          }
+          expect(storageMocks.settledUnder.get('a0da01')).toBe('/storage/a');
+          expect(storageMocks.settledUnder.get('b0db01')).toBe('/storage/b');
+          for (const [session, executionId] of live) {
+            expect(
+              runInSession(session, () => ownsExecutionLease(executionId)),
+            ).toBe(false);
+          }
+        } finally {
+          sessionA.dispose();
+          sessionB.dispose();
+        }
       }),
-    });
-    const sessionB = createTestSession({
-      roots: createFakeWorkspaceRoots({
-        workspacePath: '/papers/b',
-        storagePath: '/storage/b',
-      }),
-    });
-    const live = [
-      [sessionA, 'a0da01' as ExecutionId],
-      [sessionB, 'b0db01' as ExecutionId],
-    ] as const;
-    const closures = live.map(([session, executionId]) =>
-      vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {
+  );
+
+  it.effect('a handle interrupt target lands in the run session only', () =>
+    Effect.gen(function* () {
+      const sessionB = createTestSession();
+      const executionId = 'exec:iso-interrupt' as ExecutionId;
+      const streamId = 'stream:iso-interrupt' as StreamTabId;
+      const interrupt = vi.fn();
+      try {
+        const handle = testExecutionHandle({
+          executionId,
+          parentStreamId: streamId,
+          agent: 'assistant',
+        });
+        handle.attachInterruptHandler({ interrupt });
+        sessionB.executions.track(handle);
+
+        const stop = sessionB.executions.kill(executionId);
+        expect(stop.accepted).toBe(true);
+        yield* stop.settlement;
+        expect(interrupt).toHaveBeenCalledOnce();
         expect(
-          runInSession(session, () => ownsExecutionLease(executionId)),
-        ).toBe(true);
-      }),
-    );
-    try {
-      for (const [session, executionId] of live) {
-        const streamId = `stream:${executionId}` as StreamTabId;
-        publishTestRunStart(session, streamId, executionId);
-        session.publish([
-          {
-            type: 'stage.start',
-            aggregateId: aggregateId('stream', streamId),
-            id: `stage:${executionId}`,
-            label: 'Running stage',
-          },
-        ]);
-        await runInSession(session, async () => {
-          await acquireFreshExecutionLease(executionId);
-          session.executions.track(
-            testExecutionHandle({
+          defaultSession().executions.getHandle(executionId),
+        ).toBeUndefined();
+      } finally {
+        sessionB.dispose();
+      }
+    }),
+  );
+
+  it.effect(
+    'runFlowWithLifecycle tracks the handle in the run session, not the default',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({
+            globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
+          }),
+        );
+        const executionId = 'e15001' as ExecutionId;
+        const streamId = 'stream:iso-track' as StreamTabId;
+        const sessionB = createTestSession();
+        const ctx = createTestLaunchContext({
+          executionId,
+          streamId,
+          session: sessionB,
+        });
+
+        try {
+          yield* runFlowWithLifecycle(ctx, async () => {
+            // Mid-run: the handle is registered in session B's registry only.
+            expect(sessionB.executions.getHandle(executionId)).toBeDefined();
+            expect(
+              defaultSession().executions.getHandle(executionId),
+            ).toBeUndefined();
+            return {
+              category: 'toolUse',
+              outcome: RUN_OUTCOME.COMPLETED,
               executionId,
-              parentStreamId: `stream:${executionId}` as StreamTabId,
-              agent: 'assistant',
-            }),
-          );
-        });
-      }
-      // A quit handler runs in no session scope; the process roots answer
-      // there, and neither paper's lease is keyed under them.
-      expect(ownsExecutionLease('a0da01' as ExecutionId)).toBe(false);
-      await Effect.runPromise(
-        settleLiveSessionExecutions(new AbortController().signal),
-      );
-      for (const [index, [, executionId]] of live.entries()) {
-        expect(closures[index]).toHaveBeenCalledWith(`stream:${executionId}`, {
-          type: 'stage.end',
-          id: `stage:${executionId}`,
-          status: RUN_OUTCOME.CANCELLED,
-        });
-      }
-      expect(storageMocks.settledUnder.get('a0da01')).toBe('/storage/a');
-      expect(storageMocks.settledUnder.get('b0db01')).toBe('/storage/b');
-      for (const [session, executionId] of live) {
-        expect(
-          runInSession(session, () => ownsExecutionLease(executionId)),
-        ).toBe(false);
-      }
-    } finally {
-      sessionA.dispose();
-      sessionB.dispose();
-    }
-  });
+              streamId,
+            };
+          });
 
-  it('a handle interrupt target lands in the run session only', async () => {
-    const sessionB = createTestSession();
-    const executionId = 'exec:iso-interrupt' as ExecutionId;
-    const streamId = 'stream:iso-interrupt' as StreamTabId;
-    const interrupt = vi.fn();
-    try {
-      const handle = testExecutionHandle({
-        executionId,
-        parentStreamId: streamId,
-        agent: 'assistant',
-      });
-      handle.attachInterruptHandler({ interrupt });
-      sessionB.executions.track(handle);
-
-      const stop = sessionB.executions.kill(executionId);
-      expect(stop.accepted).toBe(true);
-      await Effect.runPromise(stop.settlement);
-      expect(interrupt).toHaveBeenCalledOnce();
-      expect(
-        defaultSession().executions.getHandle(executionId),
-      ).toBeUndefined();
-    } finally {
-      sessionB.dispose();
-    }
-  });
-
-  it('runFlowWithLifecycle tracks the handle in the run session, not the default', async () => {
-    await installPlatform({
-      globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-    });
-    const executionId = 'e15001' as ExecutionId;
-    const streamId = 'stream:iso-track' as StreamTabId;
-    const sessionB = createTestSession();
-    const ctx = createTestLaunchContext({
-      executionId,
-      streamId,
-      session: sessionB,
-    });
-
-    try {
-      await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
-          // Mid-run: the handle is registered in session B's registry only.
-          expect(sessionB.executions.getHandle(executionId)).toBeDefined();
+          // After completion the run session untracked it; default never saw it.
+          expect(sessionB.executions.getHandle(executionId)).toBeUndefined();
           expect(
             defaultSession().executions.getHandle(executionId),
           ).toBeUndefined();
-          return {
-            category: 'toolUse',
-            outcome: RUN_OUTCOME.COMPLETED,
-            executionId,
-            streamId,
-          };
-        }),
-      );
-
-      // After completion the run session untracked it; default never saw it.
-      expect(sessionB.executions.getHandle(executionId)).toBeUndefined();
-      expect(
-        defaultSession().executions.getHandle(executionId),
-      ).toBeUndefined();
-    } finally {
-      clearStreamStatusForTest(sessionB.status, streamId);
-      sessionB.dispose();
-    }
-  });
+        } finally {
+          clearStreamStatusForTest(sessionB.status, streamId);
+          sessionB.dispose();
+        }
+      }),
+  );
 });

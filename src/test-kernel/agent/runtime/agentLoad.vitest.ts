@@ -1,12 +1,12 @@
 import { strict as assert } from 'node:assert';
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import {
   afterAll,
   beforeAll,
   describe,
-  it,
   beforeEach,
   afterEach,
   vi,
@@ -290,10 +290,12 @@ describe('inline agent definitions', () => {
     }
   });
 
-  it('survives a catalog refresh that rebuilds the cache', async () => {
-    await Effect.runPromise(refresh({ includeRemote: false }));
-    assert.strictEqual(getAgent('inline:scratchpad')?.source, 'inline');
-  });
+  it.live('survives a catalog refresh that rebuilds the cache', () =>
+    Effect.gen(function* () {
+      yield* refresh({ includeRemote: false });
+      assert.strictEqual(getAgent('inline:scratchpad')?.source, 'inline');
+    }),
+  );
 
   it('accepts a registration made after the initial load', () => {
     registerInlineAgents([
@@ -403,30 +405,32 @@ describe('inline agent definitions', () => {
     );
   });
 
-  it('does not expose stored entry arrays through the live registry', async () => {
-    registerInlineAgents([
-      {
-        name: 'immutableEntry',
-        settings: {
-          agentCategory: AgentCategory.ToolUse,
-          tools: ['grep'],
-          defaultOutputFiles: ['report.md'],
+  it.live('does not expose stored entry arrays through the live registry', () =>
+    Effect.gen(function* () {
+      registerInlineAgents([
+        {
+          name: 'immutableEntry',
+          settings: {
+            agentCategory: AgentCategory.ToolUse,
+            tools: ['grep'],
+            defaultOutputFiles: ['report.md'],
+          },
+          prompts: {},
         },
-        prompts: {},
-      },
-    ]);
+      ]);
 
-    const first = getAgent('inline:immutableEntry');
-    assert.ok(first?.tools);
-    assert.ok(first.defaultOutputFiles);
-    first.tools.push('bash');
-    first.defaultOutputFiles.push('mutated.md');
+      const first = getAgent('inline:immutableEntry');
+      assert.ok(first?.tools);
+      assert.ok(first.defaultOutputFiles);
+      first.tools.push('bash');
+      first.defaultOutputFiles.push('mutated.md');
 
-    await Effect.runPromise(refresh({ includeRemote: false }));
-    const restored = getAgent('inline:immutableEntry');
-    assert.deepStrictEqual(restored?.tools, ['grep']);
-    assert.deepStrictEqual(restored?.defaultOutputFiles, ['report.md']);
-  });
+      yield* refresh({ includeRemote: false });
+      const restored = getAgent('inline:immutableEntry');
+      assert.deepStrictEqual(restored?.tools, ['grep']);
+      assert.deepStrictEqual(restored?.defaultOutputFiles, ['report.md']);
+    }),
+  );
 
   it('preserves runtime schemas in object-form tool definitions', async () => {
     const runtimeSchema = z.strictObject({ query: z.string() });

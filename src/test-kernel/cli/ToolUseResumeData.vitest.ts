@@ -1,5 +1,6 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/runtime';
@@ -19,10 +20,10 @@ import { StorageFS } from '@utils/files/storageFS';
 
 setupPlatform({ workspacePath: '/workspace/cli-resume-listing' });
 
-function isCliRunResumable(facts: CliRunResumabilityFacts): Promise<boolean> {
-  return Effect.runPromise(
-    isCliRunResumableEffect(facts, createProcessSession()),
-  );
+function isCliRunResumable(
+  facts: CliRunResumabilityFacts,
+): Effect.Effect<boolean> {
+  return isCliRunResumableEffect(facts, createProcessSession());
 }
 
 const config = {
@@ -70,46 +71,52 @@ afterEach(async () => {
 });
 
 describe('CLI listing resumability', () => {
-  it.each([
+  it.effect.each([
     ['no checkpoint file', { checkpointPresent: false }],
     ['no stamped stream id', { streamId: undefined }],
-  ])(
+  ] as const)(
     'does not advertise a row with %s, without reading its state',
-    async (description, overrides) => {
-      const executionId =
-        `gate-${description.replaceAll(' ', '-')}` as ExecutionId;
-      // A continuable record is on disk, so reading it would answer `true`.
-      // Only the two free facts can produce the `false` asserted below.
-      await writeFlowRecord(executionId, { currentRound: 0, totalRounds: 4 });
+    ([description, overrides]) =>
+      Effect.gen(function* () {
+        const executionId =
+          `gate-${description.replaceAll(' ', '-')}` as ExecutionId;
+        // A continuable record is on disk, so reading it would answer `true`.
+        // Only the two free facts can produce the `false` asserted below.
+        yield* Effect.promise(() =>
+          writeFlowRecord(executionId, { currentRound: 0, totalRounds: 4 }),
+        );
 
-      await expect(
-        isCliRunResumable(listingFacts(executionId, overrides)),
-      ).resolves.toBe(false);
-    },
+        expect(
+          yield* isCliRunResumable(listingFacts(executionId, overrides)),
+        ).toBe(false);
+      }),
   );
 
-  it.each([
+  it.effect.each([
     [
       'a tool-use row',
       { agentCategory: 'toolUse' as AgentConfig['agentCategory'] },
     ],
     ['a workflow row that did not fail', { outcome: RUN_OUTCOME.CANCELLED }],
-  ])(
+  ] as const)(
     'advertises %s without parsing its checkpoint',
-    async (description, overrides) => {
-      const executionId =
-        `free-${description.replaceAll(' ', '-')}` as ExecutionId;
-      // A terminal rejection is on disk, so a parse would answer `false`.
-      // Only the short-circuit can produce the `true` asserted below.
-      await writeFlowRecord(executionId, TERMINAL_REJECTION);
+    ([description, overrides]) =>
+      Effect.gen(function* () {
+        const executionId =
+          `free-${description.replaceAll(' ', '-')}` as ExecutionId;
+        // A terminal rejection is on disk, so a parse would answer `false`.
+        // Only the short-circuit can produce the `true` asserted below.
+        yield* Effect.promise(() =>
+          writeFlowRecord(executionId, TERMINAL_REJECTION),
+        );
 
-      await expect(
-        isCliRunResumable(listingFacts(executionId, overrides)),
-      ).resolves.toBe(true);
-    },
+        expect(
+          yield* isCliRunResumable(listingFacts(executionId, overrides)),
+        ).toBe(true);
+      }),
   );
 
-  it.each([
+  it.effect.each([
     ['the unresolved rejection marker', TERMINAL_REJECTION],
     [
       'legacy compile failure context',
@@ -119,16 +126,15 @@ describe('CLI listing resumability', () => {
         compileFailureContext: 'The generated document did not compile.',
       },
     ],
-  ])(
+  ] as const)(
     'does not advertise a failed workflow with terminal %s as resumable',
-    async (description, shared) => {
-      const executionId =
-        `workflow-terminal-${description.replaceAll(' ', '-')}` as ExecutionId;
-      await writeFlowRecord(executionId, shared);
+    ([description, shared]) =>
+      Effect.gen(function* () {
+        const executionId =
+          `workflow-terminal-${description.replaceAll(' ', '-')}` as ExecutionId;
+        yield* Effect.promise(() => writeFlowRecord(executionId, shared));
 
-      await expect(isCliRunResumable(listingFacts(executionId))).resolves.toBe(
-        false,
-      );
-    },
+        expect(yield* isCliRunResumable(listingFacts(executionId))).toBe(false);
+      }),
   );
 });

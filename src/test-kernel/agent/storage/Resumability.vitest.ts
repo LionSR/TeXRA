@@ -1,6 +1,7 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 import {
   clearStoreCache,
@@ -42,193 +43,209 @@ describe('deriveResumability', () => {
     session = createProcessSession();
   });
 
-  async function writeFlow(executionId: ExecutionId): Promise<void> {
-    await getExecutionStore(executionId).write(
-      flowKey(executionId),
-      BASE_FLOW_RECORD,
+  function writeFlow(executionId: ExecutionId) {
+    return Effect.promise(() =>
+      getExecutionStore(executionId).write(
+        flowKey(executionId),
+        BASE_FLOW_RECORD,
+      ),
     );
   }
 
-  async function writeMeta(
+  function writeMeta(
     executionId: ExecutionId,
     { outcome }: { outcome?: RunOutcome },
-  ): Promise<void> {
-    const streamId = `stream-${executionId}` as StreamTabId;
-    publishTestRunStart(session, streamId, executionId);
-    await session.settlePublications();
-    if (outcome) {
-      await Effect.runPromise(
-        session.commit([
+  ) {
+    return Effect.gen(function* () {
+      const streamId = `stream-${executionId}` as StreamTabId;
+      publishTestRunStart(session, streamId, executionId);
+      yield* Effect.promise(() => session.settlePublications());
+      if (outcome) {
+        yield* session.commit([
           {
             type: 'status',
             aggregateId: aggregateId('stream', streamId),
             phase: outcome,
             cause: 'test outcome',
           },
-        ]),
-      );
-    }
+        ]);
+      }
+    });
   }
 
-  it('keeps a failed execution resumable while its checkpoint exists', async () => {
-    const executionId = 'ac0000' as ExecutionId;
-    await writeMeta(executionId, { outcome: RUN_OUTCOME.FAILED });
-    await writeFlow(executionId);
+  it.effect(
+    'keeps a failed execution resumable while its checkpoint exists',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'ac0000' as ExecutionId;
+        yield* writeMeta(executionId, { outcome: RUN_OUTCOME.FAILED });
+        yield* writeFlow(executionId);
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'checkpoint',
-      outcome: RUN_OUTCOME.FAILED,
-      flowRecord: BASE_FLOW_RECORD,
-    });
-  });
-
-  it('stays resumable when terminal metadata persists but flow deletion fails', async () => {
-    const executionId = 'ac0001' as ExecutionId;
-    await writeMeta(executionId, {});
-    await writeFlow(executionId);
-    const store = getExecutionStore(executionId);
-    vi.spyOn(store, 'delete').mockRejectedValueOnce(
-      new Error('flow delete failed'),
-    );
-
-    await expect(
-      Effect.runPromise(
-        finalizeRun(session, {
-          executionId,
-          outcome: RUN_OUTCOME.COMPLETED,
-          flowRecord: 'delete',
-        }),
-      ),
-    ).resolves.toMatchObject({
-      ok: false,
-      outcomePersisted: true,
-    });
-
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'checkpoint',
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
-  });
-
-  it('does not treat a spent cursor as a checkpoint', async () => {
-    const executionId = 'ac0002' as ExecutionId;
-    await writeMeta(executionId, { outcome: RUN_OUTCOME.COMPLETED });
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      ...BASE_FLOW_RECORD,
-      cursor: { ...BASE_FLOW_RECORD.cursor, nextNodeId: null },
-    });
-
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'unreadable',
-      cause: 'checkpoint is malformed',
-    });
-  });
-
-  it('keeps a preserved checkpoint when terminal metadata fails for a failed execution', async () => {
-    const executionId = 'ac0003' as ExecutionId;
-    await writeMeta(executionId, {});
-    await writeFlow(executionId);
-    vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
-      Effect.die(new Error('metadata disk full')),
-    );
-
-    await expect(
-      Effect.runPromise(
-        finalizeRun(session, {
-          executionId,
+        expect(yield* deriveResumability(executionId, session)).toMatchObject({
+          kind: 'checkpoint',
           outcome: RUN_OUTCOME.FAILED,
-          flowRecord: 'preserve',
+          flowRecord: BASE_FLOW_RECORD,
+        });
+      }),
+  );
+
+  it.effect(
+    'stays resumable when terminal metadata persists but flow deletion fails',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'ac0001' as ExecutionId;
+        yield* writeMeta(executionId, {});
+        yield* writeFlow(executionId);
+        const store = getExecutionStore(executionId);
+        vi.spyOn(store, 'delete').mockRejectedValueOnce(
+          new Error('flow delete failed'),
+        );
+
+        expect(
+          yield* finalizeRun(session, {
+            executionId,
+            outcome: RUN_OUTCOME.COMPLETED,
+            flowRecord: 'delete',
+          }),
+        ).toMatchObject({
+          ok: false,
+          outcomePersisted: true,
+        });
+
+        expect(yield* deriveResumability(executionId, session)).toMatchObject({
+          kind: 'checkpoint',
+          outcome: RUN_OUTCOME.COMPLETED,
+        });
+      }),
+  );
+
+  it.effect('does not treat a spent cursor as a checkpoint', () =>
+    Effect.gen(function* () {
+      const executionId = 'ac0002' as ExecutionId;
+      yield* writeMeta(executionId, { outcome: RUN_OUTCOME.COMPLETED });
+      yield* Effect.promise(() =>
+        getExecutionStore(executionId).write(flowKey(executionId), {
+          ...BASE_FLOW_RECORD,
+          cursor: { ...BASE_FLOW_RECORD.cursor, nextNodeId: null },
         }),
-      ),
-    ).resolves.toMatchObject({
-      ok: false,
-      outcomePersisted: false,
-    });
+      );
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'checkpoint',
-    });
-  });
+      expect(yield* deriveResumability(executionId, session)).toMatchObject({
+        kind: 'unreadable',
+        cause: 'checkpoint is malformed',
+      });
+    }),
+  );
 
-  it('marks cancelled executions with a valid flow record as resumable', async () => {
-    const executionId = 'ac0004' as ExecutionId;
-    await writeMeta(executionId, { outcome: RUN_OUTCOME.CANCELLED });
-    await writeFlow(executionId);
+  it.effect(
+    'keeps a preserved checkpoint when terminal metadata fails for a failed execution',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'ac0003' as ExecutionId;
+        yield* writeMeta(executionId, {});
+        yield* writeFlow(executionId);
+        vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
+          Effect.die(new Error('metadata disk full')),
+        );
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'checkpoint',
-      outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: BASE_FLOW_RECORD,
-    });
-  });
+        expect(
+          yield* finalizeRun(session, {
+            executionId,
+            outcome: RUN_OUTCOME.FAILED,
+            flowRecord: 'preserve',
+          }),
+        ).toMatchObject({
+          ok: false,
+          outcomePersisted: false,
+        });
 
-  it('does not mark cancelled executions resumable without a flow record', async () => {
-    const executionId = 'ac0005' as ExecutionId;
-    await writeMeta(executionId, { outcome: RUN_OUTCOME.CANCELLED });
+        expect(yield* deriveResumability(executionId, session)).toMatchObject({
+          kind: 'checkpoint',
+        });
+      }),
+  );
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'none',
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-  });
+  it.effect(
+    'marks cancelled executions with a valid flow record as resumable',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'ac0004' as ExecutionId;
+        yield* writeMeta(executionId, { outcome: RUN_OUTCOME.CANCELLED });
+        yield* writeFlow(executionId);
 
-  it('marks missing-terminal executions with a valid flow record as resumable', async () => {
-    const executionId = 'ac0006' as ExecutionId;
-    await writeFlow(executionId);
+        expect(yield* deriveResumability(executionId, session)).toMatchObject({
+          kind: 'checkpoint',
+          outcome: RUN_OUTCOME.CANCELLED,
+          flowRecord: BASE_FLOW_RECORD,
+        });
+      }),
+  );
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'checkpoint',
-      flowRecord: BASE_FLOW_RECORD,
-    });
-  });
+  it.effect(
+    'does not mark cancelled executions resumable without a flow record',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'ac0005' as ExecutionId;
+        yield* writeMeta(executionId, { outcome: RUN_OUTCOME.CANCELLED });
 
-  it('accepts an unstamped legacy envelope and preserves extra fields', async () => {
-    const executionId = 'ac0007' as ExecutionId;
-    const legacyRecord = {
-      ...BASE_FLOW_RECORD,
-      legacyOwner: { host: 'extension' },
-    };
-    await getExecutionStore(executionId).write(
-      flowKey(executionId),
-      legacyRecord,
-    );
+        expect(yield* deriveResumability(executionId, session)).toMatchObject({
+          kind: 'none',
+          outcome: RUN_OUTCOME.CANCELLED,
+        });
+      }),
+  );
 
-    const decision = await Effect.runPromise(
-      deriveResumability(executionId, session),
-    );
+  it.effect(
+    'marks missing-terminal executions with a valid flow record as resumable',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'ac0006' as ExecutionId;
+        yield* writeFlow(executionId);
 
-    expect(decision).toMatchObject({ kind: 'checkpoint' });
-    if (decision.kind !== 'checkpoint') return;
-    expect(decision.flowRecord).toEqual(legacyRecord);
-    expect(Object.hasOwn(decision.flowRecord, 'schemaVersion')).toBe(false);
-  });
+        expect(yield* deriveResumability(executionId, session)).toMatchObject({
+          kind: 'checkpoint',
+          flowRecord: BASE_FLOW_RECORD,
+        });
+      }),
+  );
 
-  it('reports missing flow records as not resumable', async () => {
-    const executionId = 'ac0008' as ExecutionId;
+  it.effect(
+    'accepts an unstamped legacy envelope and preserves extra fields',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'ac0007' as ExecutionId;
+        const legacyRecord = {
+          ...BASE_FLOW_RECORD,
+          legacyOwner: { host: 'extension' },
+        };
+        yield* Effect.promise(() =>
+          getExecutionStore(executionId).write(
+            flowKey(executionId),
+            legacyRecord,
+          ),
+        );
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toEqual({
-      kind: 'none',
-      outcome: undefined,
-    });
-  });
+        const decision = yield* deriveResumability(executionId, session);
 
-  it.each([
+        expect(decision).toMatchObject({ kind: 'checkpoint' });
+        if (decision.kind !== 'checkpoint') return;
+        expect(decision.flowRecord).toEqual(legacyRecord);
+        expect(Object.hasOwn(decision.flowRecord, 'schemaVersion')).toBe(false);
+      }),
+  );
+
+  it.effect('reports missing flow records as not resumable', () =>
+    Effect.gen(function* () {
+      const executionId = 'ac0008' as ExecutionId;
+
+      expect(yield* deriveResumability(executionId, session)).toEqual({
+        kind: 'none',
+        outcome: undefined,
+      });
+    }),
+  );
+
+  it.effect.each([
     {
       name: 'reports invalid flow records as not resumable',
       record: { ...BASE_FLOW_RECORD, shared: null },
@@ -244,57 +261,65 @@ describe('deriveResumability', () => {
         schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
       },
     },
-  ])('$name', async ({ record }) => {
-    const executionId = 'ac0009' as ExecutionId;
-    await getExecutionStore(executionId).write(flowKey(executionId), record);
+  ])('$name', ({ record }) =>
+    Effect.gen(function* () {
+      const executionId = 'ac0009' as ExecutionId;
+      yield* Effect.promise(() =>
+        getExecutionStore(executionId).write(flowKey(executionId), record),
+      );
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toEqual({
-      kind: 'unreadable',
-      // The one fault that names the record itself: callers refuse this
-      // cohort as unusable saved state, and every other fault operationally.
-      fault: 'checkpoint-malformed',
-      cause: 'checkpoint is malformed',
-    });
-  });
+      expect(yield* deriveResumability(executionId, session)).toEqual({
+        kind: 'unreadable',
+        // The one fault that names the record itself: callers refuse this
+        // cohort as unusable saved state, and every other fault operationally.
+        fault: 'checkpoint-malformed',
+        cause: 'checkpoint is malformed',
+      });
+    }),
+  );
 
-  it('reports invalid metadata as not resumable even with a valid flow record', async () => {
-    const executionId = 'ac000a' as ExecutionId;
-    vi.spyOn(session, 'readExecutionRecords').mockReturnValue(
-      Effect.die(
-        new z.ZodError([
-          { code: 'custom', path: [], message: 'corrupt execution metadata' },
-        ]),
-      ),
-    );
-    await writeFlow(executionId);
+  it.effect(
+    'reports invalid metadata as not resumable even with a valid flow record',
+    () =>
+      Effect.gen(function* () {
+        const executionId = 'ac000a' as ExecutionId;
+        vi.spyOn(session, 'readExecutionRecords').mockReturnValue(
+          Effect.die(
+            new z.ZodError([
+              {
+                code: 'custom',
+                path: [],
+                message: 'corrupt execution metadata',
+              },
+            ]),
+          ),
+        );
+        yield* writeFlow(executionId);
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'unreadable',
-      cause: 'execution metadata is malformed',
-    });
-  });
+        expect(yield* deriveResumability(executionId, session)).toMatchObject({
+          kind: 'unreadable',
+          cause: 'execution metadata is malformed',
+        });
+      }),
+  );
 
-  it('reports unreadable flow records as not resumable', async () => {
-    const executionId = 'ac000b' as ExecutionId;
-    const store = getExecutionStore(executionId);
-    await writeFlow(executionId);
-    const originalRead = store.read.bind(store);
-    vi.spyOn(store, 'read').mockImplementation(async (key) => {
-      if (key === flowKey(executionId)) {
-        throw new Error('disk offline');
-      }
-      return originalRead(key);
-    });
+  it.effect('reports unreadable flow records as not resumable', () =>
+    Effect.gen(function* () {
+      const executionId = 'ac000b' as ExecutionId;
+      const store = getExecutionStore(executionId);
+      yield* writeFlow(executionId);
+      const originalRead = store.read.bind(store);
+      vi.spyOn(store, 'read').mockImplementation(async (key) => {
+        if (key === flowKey(executionId)) {
+          throw new Error('disk offline');
+        }
+        return originalRead(key);
+      });
 
-    await expect(
-      Effect.runPromise(deriveResumability(executionId, session)),
-    ).resolves.toMatchObject({
-      kind: 'unreadable',
-      cause: 'checkpoint could not be read (disk offline)',
-    });
-  });
+      expect(yield* deriveResumability(executionId, session)).toMatchObject({
+        kind: 'unreadable',
+        cause: 'checkpoint could not be read (disk offline)',
+      });
+    }),
+  );
 });

@@ -2,8 +2,9 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
@@ -98,10 +99,8 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 
 /** Drive and join the native child at the test entry point. */
-function startChildRunLoop<TTurn>(input: ChildRunLoopParams<TTurn>) {
-  return Effect.runPromise(
-    startNativeChildRunLoop(input).pipe(Effect.flatMap(Fiber.join)),
-  );
+function childRunLoop<TTurn>(input: ChildRunLoopParams<TTurn>) {
+  return startNativeChildRunLoop(input).pipe(Effect.flatMap(Fiber.join));
 }
 
 const ownedSessions = new Set<SessionHandle>();
@@ -224,277 +223,310 @@ describe('NativeSubagentStrategy', () => {
     ownedSessions.clear();
   });
 
-  it('resolveDeliveryTarget follows the live run handle, including after detach', async () => {
-    const params = baseParams();
-    const strategy = createNativeSubagentStrategy(params);
+  it.effect(
+    'resolveDeliveryTarget follows the live run handle, including after detach',
+    () =>
+      Effect.gen(function* () {
+        const params = baseParams();
+        const strategy = createNativeSubagentStrategy(params);
 
-    // Before any turn ran, falls back to the static orchestrator stream.
-    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
+        // Before any turn ran, falls back to the static orchestrator stream.
+        expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
 
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRun?.({
-        childStreamId: CHILD_STREAM_ID,
-        deliveryTargetStreamId: params.parentStreamId,
-      });
-      return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
-    });
+        mocks.executeAgent.mockImplementationOnce(
+          async (_config, _id, options) => {
+            options.onRun?.({
+              childStreamId: CHILD_STREAM_ID,
+              deliveryTargetStreamId: params.parentStreamId,
+            });
+            return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
+          },
+        );
 
-    await Effect.runPromise(
-      strategy.launch(fakePorts(), new AbortController().signal),
-    );
-    expect(mocks.executeAgent).toHaveBeenLastCalledWith(
-      params.definition,
-      params.executionId,
-      expect.objectContaining({ isSubagent: true }),
-    );
-    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
+        yield* strategy.launch(fakePorts(), new AbortController().signal);
+        expect(mocks.executeAgent).toHaveBeenLastCalledWith(
+          params.definition,
+          params.executionId,
+          expect.objectContaining({ isSubagent: true }),
+        );
+        expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
 
-    // Detach: the same handle object's deliveryTargetStreamId flips to
-    // undefined (AgentExecutionHandle.detach) — the strategy must track the
-    // LIVE handle, not a stale copy, so it observes this without a new turn.
-    const liveHandle = {
-      childStreamId: CHILD_STREAM_ID,
-      deliveryTargetStreamId: params.parentStreamId as StreamTabId | undefined,
-    };
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRun?.(liveHandle);
-      return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
-    });
-    await Effect.runPromise(
-      strategy.launch(fakePorts(), new AbortController().signal),
-    );
-    expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
-    liveHandle.deliveryTargetStreamId = undefined;
-    expect(strategy.resolveDeliveryTarget?.()).toBeUndefined();
-  });
+        // Detach: the same handle object's deliveryTargetStreamId flips to
+        // undefined (AgentExecutionHandle.detach) — the strategy must track the
+        // LIVE handle, not a stale copy, so it observes this without a new turn.
+        const liveHandle = {
+          childStreamId: CHILD_STREAM_ID,
+          deliveryTargetStreamId: params.parentStreamId as
+            StreamTabId | undefined,
+        };
+        mocks.executeAgent.mockImplementationOnce(
+          async (_config, _id, options) => {
+            options.onRun?.(liveHandle);
+            return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
+          },
+        );
+        yield* strategy.launch(fakePorts(), new AbortController().signal);
+        expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
+        liveHandle.deliveryTargetStreamId = undefined;
+        expect(strategy.resolveDeliveryTarget?.()).toBeUndefined();
+      }),
+  );
 
-  it('uses the same launch primitive in durable single-cycle mode', async () => {
-    const params = {
-      ...baseParams(),
-      executionMode: 'single-cycle' as const,
-      workflowPhase: 'review',
-    };
-    const strategy = createNativeSubagentStrategy(params);
-    const ports = fakePorts();
-    const progress = { message: 'Reading proof' };
-
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onStreamResolved?.(CHILD_STREAM_ID);
-      options.onProgress?.(progress);
-      return toolUseTurnResult('completed', params.executionId, {
-        totalCostUsd: 0.17,
-      });
-    });
-
-    await Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    );
-
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      params.definition,
-      params.executionId,
-      expect.objectContaining({
-        isSubagent: true,
-        parentStreamId: params.parentStreamId,
-        stopAfterCycle: true,
+  it.effect('uses the same launch primitive in durable single-cycle mode', () =>
+    Effect.gen(function* () {
+      const params = {
+        ...baseParams(),
+        executionMode: 'single-cycle' as const,
         workflowPhase: 'review',
-      }),
-    );
-    expect(params.onStreamResolved).toHaveBeenCalledWith(CHILD_STREAM_ID);
-    expect(ports.notify).toHaveBeenCalledWith(progress);
-    expect(ports.recordCost).toHaveBeenCalledWith(0.17);
-  });
+      };
+      const strategy = createNativeSubagentStrategy(params);
+      const ports = fakePorts();
+      const progress = { message: 'Reading proof' };
 
-  it('records a failed turn cost once through interactive loop settlement', async () => {
-    const params = baseParams();
-    const recordCost = vi.fn();
-    mocks.executeAgent.mockResolvedValueOnce(
-      toolUseTurnResult('failed', params.executionId, {
-        totalCostUsd: 0.29,
-        error: { message: 'provider failed', userRetryable: false },
-      }),
-    );
+      mocks.executeAgent.mockImplementationOnce(
+        async (_config, _id, options) => {
+          options.onStreamResolved?.(CHILD_STREAM_ID);
+          options.onProgress?.(progress);
+          return toolUseTurnResult('completed', params.executionId, {
+            totalCostUsd: 0.17,
+          });
+        },
+      );
 
-    const completion = startChildRunLoop({
-      session: params.session,
-      childStreamId: CHILD_STREAM_ID,
-      parentStreamId: params.parentStreamId,
-      executionId: params.executionId,
-      agentName: params.agentName,
-      strategy: createNativeSubagentStrategy(params),
-      recordCost,
-    });
-    await completion;
+      yield* strategy.launch(ports, new AbortController().signal);
 
-    expect(recordCost).toHaveBeenCalledOnce();
-    expect(recordCost).toHaveBeenCalledWith(0.29);
-    expect(mocks.persistChildRunDelivery).toHaveBeenCalledWith(
-      params.session,
-      params.executionId,
-      expect.any(String),
-      expect.objectContaining({
-        result: expect.objectContaining({ cost: 0.29, outcome: 'failed' }),
-      }),
-    );
-  });
-
-  it('persists a typed result-only failure without formatting error prose', async () => {
-    const params = { ...baseParams(), resultOnly: true };
-    const failure = new Error('provider failed');
-    mocks.throwErrorFormatting = true;
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRunError?.(failure);
-      return toolUseTurnResult('failed', params.executionId, {
-        error: { message: failure.message, userRetryable: false },
-      });
-    });
-
-    const completion = startChildRunLoop({
-      session: params.session,
-      childStreamId: CHILD_STREAM_ID,
-      parentStreamId: params.parentStreamId,
-      executionId: params.executionId,
-      agentName: params.agentName,
-      strategy: createNativeSubagentStrategy(params),
-    });
-    await completion;
-
-    expect(mocks.persistChildRunDelivery).toHaveBeenCalledWith(
-      params.session,
-      params.executionId,
-      expect.any(String),
-      expect.objectContaining({
-        producer: 'subagent',
-        result: expect.objectContaining({
-          outcome: 'failed',
-          error: expect.objectContaining({ message: 'provider failed' }),
-        }),
-      }),
-    );
-  });
-
-  it('interrupts when the turn aborts before launch publishes its handle', async () => {
-    const turn = new AbortController();
-    turn.abort();
-    const interrupt = vi.fn();
-    const strategy = createNativeSubagentStrategy(baseParams());
-    mockLaunchPublishing({ interrupt }, 'cancelled');
-
-    await Effect.runPromise(strategy.launch(fakePorts(), turn.signal));
-
-    expect(interrupt).toHaveBeenCalledOnce();
-  });
-
-  it('interrupts once for an already-aborted external signal', async () => {
-    const external = new AbortController();
-    external.abort();
-    const interrupt = vi.fn();
-    const strategy = createNativeSubagentStrategy({
-      ...baseParams(),
-      signal: external.signal,
-    });
-    mockLaunchPublishing({ interrupt }, 'cancelled');
-
-    await Effect.runPromise(
-      strategy.launch(fakePorts(), new AbortController().signal),
-    );
-
-    expect(interrupt).toHaveBeenCalledOnce();
-  });
-
-  it('deduplicates the same external and per-turn abort signal', async () => {
-    const controller = new AbortController();
-    const interrupt = vi.fn();
-    const strategy = createNativeSubagentStrategy({
-      ...baseParams(),
-      signal: controller.signal,
-    });
-    mockLaunchPublishing({ interrupt }, 'cancelled', () => controller.abort());
-
-    await Effect.runPromise(strategy.launch(fakePorts(), controller.signal));
-
-    expect(interrupt).toHaveBeenCalledOnce();
-  });
-
-  it('detaches from the run signal after launch and ignores later aborts', async () => {
-    const controller = new AbortController();
-    const interrupt = vi.fn();
-    const strategy = createNativeSubagentStrategy(baseParams());
-    mockLaunchPublishing({ interrupt }, 'completed');
-
-    await Effect.runPromise(strategy.launch(fakePorts(), controller.signal));
-    controller.abort();
-
-    expect(interrupt).not.toHaveBeenCalled();
-  });
-
-  it('binds resumed-turn cancellation and policy options to the replacement run', async () => {
-    const params = {
-      ...baseParams(),
-      approvalPromptsUnavailable: true,
-      runtimeUnavailableTools: ['bash'],
-    };
-    const childStreamId = CHILD_STREAM_ID;
-    const initialHandle = {
-      childStreamId,
-      deliveryTargetStreamId: params.parentStreamId,
-      interrupt: vi.fn(),
-    };
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRun?.(initialHandle as never);
-      return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
-    });
-    const strategy = createNativeSubagentStrategy(params);
-    await Effect.runPromise(
-      strategy.launch(fakePorts(), new AbortController().signal),
-    );
-
-    mocks.readConfig.mockReturnValue(
-      Effect.succeed({ agentCategory: 'toolUse' }),
-    );
-    mocks.retrieveSessionResumeData.mockReturnValue(
-      Effect.succeed(
-        createToolUseResumeData({ executionId: params.executionId }),
-      ),
-    );
-    const turn = new AbortController();
-    const replacementInterrupt = vi.fn();
-    let replacementReady!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      replacementReady = resolve;
-    });
-    mocks.resumeToolUseTurn.mockImplementationOnce(async (_resume, options) => {
-      options.onRun?.({
-        childStreamId,
-        deliveryTargetStreamId: params.parentStreamId,
-        interrupt: replacementInterrupt,
-      } as never);
-      replacementReady();
-      await new Promise<void>((resolve) =>
-        turn.signal.addEventListener('abort', () => resolve(), {
-          once: true,
+      expect(mocks.executeAgent).toHaveBeenCalledWith(
+        params.definition,
+        params.executionId,
+        expect.objectContaining({
+          isSubagent: true,
+          parentStreamId: params.parentStreamId,
+          stopAfterCycle: true,
+          workflowPhase: 'review',
         }),
       );
-      return toolUseTurnResult('cancelled', params.executionId);
-    });
+      expect(params.onStreamResolved).toHaveBeenCalledWith(CHILD_STREAM_ID);
+      expect(ports.notify).toHaveBeenCalledWith(progress);
+      expect(ports.recordCost).toHaveBeenCalledWith(0.17);
+    }),
+  );
 
-    const resumed = Effect.runPromise(
-      strategy.runTurn!([], fakePorts(), turn.signal),
-    );
-    await ready;
-    expect(mocks.resumeToolUseTurn).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        approvalPromptsUnavailable: true,
-        runtimeUnavailableTools: ['bash'],
+  it.effect(
+    'records a failed turn cost once through interactive loop settlement',
+    () =>
+      Effect.gen(function* () {
+        const params = baseParams();
+        const recordCost = vi.fn();
+        mocks.executeAgent.mockResolvedValueOnce(
+          toolUseTurnResult('failed', params.executionId, {
+            totalCostUsd: 0.29,
+            error: { message: 'provider failed', userRetryable: false },
+          }),
+        );
+
+        yield* childRunLoop({
+          session: params.session,
+          childStreamId: CHILD_STREAM_ID,
+          parentStreamId: params.parentStreamId,
+          executionId: params.executionId,
+          agentName: params.agentName,
+          strategy: createNativeSubagentStrategy(params),
+          recordCost,
+        });
+
+        expect(recordCost).toHaveBeenCalledOnce();
+        expect(recordCost).toHaveBeenCalledWith(0.29);
+        expect(mocks.persistChildRunDelivery).toHaveBeenCalledWith(
+          params.session,
+          params.executionId,
+          expect.any(String),
+          expect.objectContaining({
+            result: expect.objectContaining({ cost: 0.29, outcome: 'failed' }),
+          }),
+        );
       }),
-    );
-    turn.abort();
-    await resumed;
+  );
 
-    expect(initialHandle.interrupt).not.toHaveBeenCalled();
-    expect(replacementInterrupt).toHaveBeenCalledOnce();
-  });
+  it.effect(
+    'persists a typed result-only failure without formatting error prose',
+    () =>
+      Effect.gen(function* () {
+        const params = { ...baseParams(), resultOnly: true };
+        const failure = new Error('provider failed');
+        mocks.throwErrorFormatting = true;
+        mocks.executeAgent.mockImplementationOnce(
+          async (_config, _id, options) => {
+            options.onRunError?.(failure);
+            return toolUseTurnResult('failed', params.executionId, {
+              error: { message: failure.message, userRetryable: false },
+            });
+          },
+        );
+
+        yield* childRunLoop({
+          session: params.session,
+          childStreamId: CHILD_STREAM_ID,
+          parentStreamId: params.parentStreamId,
+          executionId: params.executionId,
+          agentName: params.agentName,
+          strategy: createNativeSubagentStrategy(params),
+        });
+
+        expect(mocks.persistChildRunDelivery).toHaveBeenCalledWith(
+          params.session,
+          params.executionId,
+          expect.any(String),
+          expect.objectContaining({
+            producer: 'subagent',
+            result: expect.objectContaining({
+              outcome: 'failed',
+              error: expect.objectContaining({ message: 'provider failed' }),
+            }),
+          }),
+        );
+      }),
+  );
+
+  it.effect(
+    'interrupts when the turn aborts before launch publishes its handle',
+    () =>
+      Effect.gen(function* () {
+        const turn = new AbortController();
+        turn.abort();
+        const interrupt = vi.fn();
+        const strategy = createNativeSubagentStrategy(baseParams());
+        mockLaunchPublishing({ interrupt }, 'cancelled');
+
+        yield* strategy.launch(fakePorts(), turn.signal);
+
+        expect(interrupt).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect('interrupts once for an already-aborted external signal', () =>
+    Effect.gen(function* () {
+      const external = new AbortController();
+      external.abort();
+      const interrupt = vi.fn();
+      const strategy = createNativeSubagentStrategy({
+        ...baseParams(),
+        signal: external.signal,
+      });
+      mockLaunchPublishing({ interrupt }, 'cancelled');
+
+      yield* strategy.launch(fakePorts(), new AbortController().signal);
+
+      expect(interrupt).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect('deduplicates the same external and per-turn abort signal', () =>
+    Effect.gen(function* () {
+      const controller = new AbortController();
+      const interrupt = vi.fn();
+      const strategy = createNativeSubagentStrategy({
+        ...baseParams(),
+        signal: controller.signal,
+      });
+      mockLaunchPublishing({ interrupt }, 'cancelled', () =>
+        controller.abort(),
+      );
+
+      yield* strategy.launch(fakePorts(), controller.signal);
+
+      expect(interrupt).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect(
+    'detaches from the run signal after launch and ignores later aborts',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        const interrupt = vi.fn();
+        const strategy = createNativeSubagentStrategy(baseParams());
+        mockLaunchPublishing({ interrupt }, 'completed');
+
+        yield* strategy.launch(fakePorts(), controller.signal);
+        controller.abort();
+
+        expect(interrupt).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.live(
+    'binds resumed-turn cancellation and policy options to the replacement run',
+    () =>
+      Effect.gen(function* () {
+        const params = {
+          ...baseParams(),
+          approvalPromptsUnavailable: true,
+          runtimeUnavailableTools: ['bash'],
+        };
+        const childStreamId = CHILD_STREAM_ID;
+        const initialHandle = {
+          childStreamId,
+          deliveryTargetStreamId: params.parentStreamId,
+          interrupt: vi.fn(),
+        };
+        mocks.executeAgent.mockImplementationOnce(
+          async (_config, _id, options) => {
+            options.onRun?.(initialHandle as never);
+            return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
+          },
+        );
+        const strategy = createNativeSubagentStrategy(params);
+        yield* strategy.launch(fakePorts(), new AbortController().signal);
+
+        mocks.readConfig.mockReturnValue(
+          Effect.succeed({ agentCategory: 'toolUse' }),
+        );
+        mocks.retrieveSessionResumeData.mockReturnValue(
+          Effect.succeed(
+            createToolUseResumeData({ executionId: params.executionId }),
+          ),
+        );
+        const turn = new AbortController();
+        const replacementInterrupt = vi.fn();
+        let replacementReady!: () => void;
+        const ready = new Promise<void>((resolve) => {
+          replacementReady = resolve;
+        });
+        mocks.resumeToolUseTurn.mockImplementationOnce(
+          async (_resume, options) => {
+            options.onRun?.({
+              childStreamId,
+              deliveryTargetStreamId: params.parentStreamId,
+              interrupt: replacementInterrupt,
+            } as never);
+            replacementReady();
+            await new Promise<void>((resolve) =>
+              turn.signal.addEventListener('abort', () => resolve(), {
+                once: true,
+              }),
+            );
+            return toolUseTurnResult('cancelled', params.executionId);
+          },
+        );
+
+        const resumed = yield* Effect.forkChild(
+          strategy.runTurn!([], fakePorts(), turn.signal),
+        );
+        yield* Effect.promise(() => ready);
+        expect(mocks.resumeToolUseTurn).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            approvalPromptsUnavailable: true,
+            runtimeUnavailableTools: ['bash'],
+          }),
+        );
+        turn.abort();
+        yield* Fiber.join(resumed);
+
+        expect(initialHandle.interrupt).not.toHaveBeenCalled();
+        expect(replacementInterrupt).toHaveBeenCalledOnce();
+      }),
+  );
 
   it('formatDelivery folds a WAITING turn into a completed-shaped delivery', async () => {
     const params = baseParams();
@@ -515,100 +547,120 @@ describe('NativeSubagentStrategy', () => {
     expect(msg).toContain('status="completed"');
   });
 
-  it('builds the durable result before fallible delivery formatting', async () => {
-    const params = baseParams();
-    const strategy = createNativeSubagentStrategy(params);
-    const turn = toolUseTurnResult('completed', params.executionId) as never;
+  it.effect(
+    'builds the durable result before fallible delivery formatting',
+    () =>
+      Effect.gen(function* () {
+        const params = baseParams();
+        const strategy = createNativeSubagentStrategy(params);
+        const turn = toolUseTurnResult(
+          'completed',
+          params.executionId,
+        ) as never;
 
-    const built = await Effect.runPromise(
-      strategy.buildResultMeta!(turn, false, 1000),
-    );
-    mocks.throwDeliveryFormatting = true;
+        const built = yield* strategy.buildResultMeta!(turn, false, 1000);
+        mocks.throwDeliveryFormatting = true;
 
-    await expect(strategy.formatDelivery(turn, 1000)).rejects.toThrow(
-      'delivery formatting failed',
-    );
-    await expect(
-      Effect.runPromise(strategy.buildResultMeta!(turn, false, 1000)),
-    ).resolves.toBe(built);
-  });
+        yield* Effect.promise(() =>
+          expect(strategy.formatDelivery(turn, 1000)).rejects.toThrow(
+            'delivery formatting failed',
+          ),
+        );
+        expect(yield* strategy.buildResultMeta!(turn, false, 1000)).toBe(built);
+      }),
+  );
 
-  it('does not format prose for a typed-result-only child', async () => {
-    const params = { ...baseParams(), resultOnly: true };
-    const strategy = createNativeSubagentStrategy(params);
-    const turn = toolUseTurnResult('completed', params.executionId) as never;
-    mocks.throwDeliveryFormatting = true;
+  it.effect('does not format prose for a typed-result-only child', () =>
+    Effect.gen(function* () {
+      const params = { ...baseParams(), resultOnly: true };
+      const strategy = createNativeSubagentStrategy(params);
+      const turn = toolUseTurnResult('completed', params.executionId) as never;
+      mocks.throwDeliveryFormatting = true;
 
-    await expect(strategy.formatDelivery(turn, 1000)).resolves.toBe('');
-    await expect(
-      Effect.runPromise(strategy.buildResultMeta!(turn, false, 1000)),
-    ).resolves.toBeDefined();
-  });
+      yield* Effect.promise(() =>
+        expect(strategy.formatDelivery(turn, 1000)).resolves.toBe(''),
+      );
+      expect(yield* strategy.buildResultMeta!(turn, false, 1000)).toBeDefined();
+    }),
+  );
 
-  it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {
-    const params = baseParams();
-    const strategy = createNativeSubagentStrategy(params);
-    const failure = new Error('model overloaded');
+  it.effect(
+    'reports a non-throwing subagent failure via isTurnError, captured from onRunError',
+    () =>
+      Effect.gen(function* () {
+        const params = baseParams();
+        const strategy = createNativeSubagentStrategy(params);
+        const failure = new Error('model overloaded');
 
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRunError?.(failure);
-      return toolUseTurnResult('failed', params.executionId);
-    });
-
-    const turn = await Effect.runPromise(
-      strategy.launch(fakePorts(), new AbortController().signal),
-    );
-    expect(strategy.isTurnError?.(turn)).toBe(true);
-
-    const errMsg = await strategy.formatError(turn, null);
-    expect(errMsg).toContain('model overloaded');
-  });
-
-  it('persists a typed tool-use failure when no flow result exists', async () => {
-    const strategy = createNativeSubagentStrategy(baseParams());
-
-    await expect(
-      Effect.runPromise(strategy.buildResultMeta!(null, true, 10)),
-    ).resolves.toMatchObject({
-      producer: 'subagent',
-      agentName: 'review',
-      result: {
-        category: 'toolUse',
-        outcome: 'failed',
-        response: '',
-        files: [],
-        cost: 0,
-      },
-    });
-  });
-
-  it('stamps parent lineage onto both success and failure manifests', async () => {
-    const params = {
-      ...baseParams(),
-      parentExecutionId: 'parent-exec' as ExecutionId,
-    };
-    const strategy = createNativeSubagentStrategy(params);
-
-    await expect(
-      Effect.runPromise(strategy.buildResultMeta!(null, true, 10)),
-    ).resolves.toMatchObject({ parentExecutionId: 'parent-exec' });
-
-    await expect(
-      Effect.runPromise(
-        strategy.buildResultMeta!(
-          {
-            category: 'toolUse',
-            outcome: 'completed',
-            response: 'done',
-            executionId: params.executionId,
-            streamId: CHILD_STREAM_ID,
+        mocks.executeAgent.mockImplementationOnce(
+          async (_config, _id, options) => {
+            options.onRunError?.(failure);
+            return toolUseTurnResult('failed', params.executionId);
           },
-          false,
-          10,
-        ),
-      ),
-    ).resolves.toMatchObject({ parentExecutionId: 'parent-exec' });
-  });
+        );
+
+        const turn = yield* strategy.launch(
+          fakePorts(),
+          new AbortController().signal,
+        );
+        expect(strategy.isTurnError?.(turn)).toBe(true);
+
+        const errMsg = yield* Effect.promise(async () =>
+          strategy.formatError(turn, null),
+        );
+        expect(errMsg).toContain('model overloaded');
+      }),
+  );
+
+  it.effect(
+    'persists a typed tool-use failure when no flow result exists',
+    () =>
+      Effect.gen(function* () {
+        const strategy = createNativeSubagentStrategy(baseParams());
+
+        expect(yield* strategy.buildResultMeta!(null, true, 10)).toMatchObject({
+          producer: 'subagent',
+          agentName: 'review',
+          result: {
+            category: 'toolUse',
+            outcome: 'failed',
+            response: '',
+            files: [],
+            cost: 0,
+          },
+        });
+      }),
+  );
+
+  it.effect(
+    'stamps parent lineage onto both success and failure manifests',
+    () =>
+      Effect.gen(function* () {
+        const params = {
+          ...baseParams(),
+          parentExecutionId: 'parent-exec' as ExecutionId,
+        };
+        const strategy = createNativeSubagentStrategy(params);
+
+        expect(yield* strategy.buildResultMeta!(null, true, 10)).toMatchObject({
+          parentExecutionId: 'parent-exec',
+        });
+
+        expect(
+          yield* strategy.buildResultMeta!(
+            {
+              category: 'toolUse',
+              outcome: 'completed',
+              response: 'done',
+              executionId: params.executionId,
+              streamId: CHILD_STREAM_ID,
+            },
+            false,
+            10,
+          ),
+        ).toMatchObject({ parentExecutionId: 'parent-exec' });
+      }),
+  );
 
   it('preserves #7491: a failed direct resume throws for child-loop error delivery', async () => {
     const params = baseParams();
@@ -699,14 +751,16 @@ describe('NativeSubagentStrategy', () => {
     });
 
     const strategy = createNativeSubagentStrategy(params);
-    const completion = startChildRunLoop({
-      session: params.session,
-      childStreamId,
-      parentStreamId,
-      executionId,
-      agentName: params.agentName,
-      strategy,
-    });
+    const completion = Effect.runPromise(
+      childRunLoop({
+        session: params.session,
+        childStreamId,
+        parentStreamId,
+        executionId,
+        agentName: params.agentName,
+        strategy,
+      }),
+    );
     try {
       await vi.waitFor(() =>
         expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
@@ -791,105 +845,117 @@ describe('NativeSubagentStrategy', () => {
     }
   });
 
-  it('records the run cumulative cost via ports.recordCost on every turn', async () => {
-    const params = baseParams();
-    const strategy = createNativeSubagentStrategy(params);
-    const ports = fakePorts();
+  it.effect(
+    'records the run cumulative cost via ports.recordCost on every turn',
+    () =>
+      Effect.gen(function* () {
+        const params = baseParams();
+        const strategy = createNativeSubagentStrategy(params);
+        const ports = fakePorts();
 
-    mocks.executeAgent.mockResolvedValueOnce(
-      toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId, {
-        totalCostUsd: 0.42,
+        mocks.executeAgent.mockResolvedValueOnce(
+          toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId, {
+            totalCostUsd: 0.42,
+          }),
+        );
+
+        yield* strategy.launch(ports, new AbortController().signal);
+        expect(ports.recordCost).toHaveBeenCalledWith(0.42);
       }),
-    );
+  );
 
-    await Effect.runPromise(
-      strategy.launch(ports, new AbortController().signal),
-    );
-    expect(ports.recordCost).toHaveBeenCalledWith(0.42);
-  });
+  it.effect(
+    'derives stageLabel/isTerminal/buildResultMeta from a workflow-category config',
+    () =>
+      Effect.gen(function* () {
+        const params = baseParams(createTestSession(), 'workflow');
+        const strategy = createNativeSubagentStrategy(params);
 
-  it('derives stageLabel/isTerminal/buildResultMeta from a workflow-category config', async () => {
-    const params = baseParams(createTestSession(), 'workflow');
-    const strategy = createNativeSubagentStrategy(params);
+        expect(strategy.stageLabel).toBe('Native workflow subagent');
 
-    expect(strategy.stageLabel).toBe('Native workflow subagent');
+        const completedWorkflowTurn = {
+          category: 'workflow' as const,
+          outcome: 'completed' as const,
+          outputs: [],
+          compileFailures: [],
+          executionId: params.executionId,
+          streamId: CHILD_STREAM_ID,
+        };
+        // A workflow flow never produces a WAITING result, so every turn is
+        // terminal — `isWaitingFlowResult` requires `category === 'toolUse'`.
+        expect(strategy.isTerminal(completedWorkflowTurn)).toBe(true);
 
-    const completedWorkflowTurn = {
-      category: 'workflow' as const,
-      outcome: 'completed' as const,
-      outputs: [],
-      compileFailures: [],
-      executionId: params.executionId,
-      streamId: CHILD_STREAM_ID,
-    };
-    // A workflow flow never produces a WAITING result, so every turn is
-    // terminal — `isWaitingFlowResult` requires `category === 'toolUse'`.
-    expect(strategy.isTerminal(completedWorkflowTurn)).toBe(true);
+        expect(yield* strategy.buildResultMeta!(null, true, 10)).toMatchObject({
+          producer: 'subagent',
+          agentName: 'review',
+          result: {
+            category: 'workflow',
+            outcome: 'failed',
+          },
+        });
+      }),
+  );
 
-    await expect(
-      Effect.runPromise(strategy.buildResultMeta!(null, true, 10)),
-    ).resolves.toMatchObject({
-      producer: 'subagent',
-      agentName: 'review',
-      result: {
-        category: 'workflow',
-        outcome: 'failed',
-      },
-    });
-  });
+  it.live(
+    'never reaches runTurn for a workflow child — the loop breaks on the first terminal turn',
+    () =>
+      Effect.gen(function* () {
+        const session = defaultSession();
+        const childStreamId =
+          'native-workflow-loop-child#native-workflow-loop-exec' as StreamTabId;
+        const parentStreamId = 'native-workflow-loop-parent' as StreamTabId;
+        const executionId = 'native-workflow-loop-exec' as ExecutionId;
+        const interactions = { emit: vi.fn() } as never;
+        const params = {
+          ...baseParams(session, 'workflow'),
+          executionId,
+          parentStreamId,
+          interactions,
+        };
 
-  it('never reaches runTurn for a workflow child — the loop breaks on the first terminal turn', async () => {
-    const session = defaultSession();
-    const childStreamId =
-      'native-workflow-loop-child#native-workflow-loop-exec' as StreamTabId;
-    const parentStreamId = 'native-workflow-loop-parent' as StreamTabId;
-    const executionId = 'native-workflow-loop-exec' as ExecutionId;
-    const interactions = { emit: vi.fn() } as never;
-    const params = {
-      ...baseParams(session, 'workflow'),
-      executionId,
-      parentStreamId,
-      interactions,
-    };
+        mocks.executeAgent.mockResolvedValueOnce({
+          category: 'workflow',
+          outcome: 'completed',
+          outputs: [],
+          compileFailures: [],
+          executionId,
+          streamId: childStreamId,
+        });
 
-    mocks.executeAgent.mockResolvedValueOnce({
-      category: 'workflow',
-      outcome: 'completed',
-      outputs: [],
-      compileFailures: [],
-      executionId,
-      streamId: childStreamId,
-    });
+        const strategy = createNativeSubagentStrategy(params);
+        // `runTurn` is present on the merged strategy (unlike workflow-script's
+        // strategy), but the loop must never call it for a workflow child: the
+        // first turn is always terminal, and `childRunLoop.ts` breaks on a
+        // terminal turn before ever consulting `runTurn`.
+        expect(strategy.runTurn).toBeDefined();
 
-    const strategy = createNativeSubagentStrategy(params);
-    // `runTurn` is present on the merged strategy (unlike workflow-script's
-    // strategy), but the loop must never call it for a workflow child: the
-    // first turn is always terminal, and `childRunLoop.ts` breaks on a
-    // terminal turn before ever consulting `runTurn`.
-    expect(strategy.runTurn).toBeDefined();
+        try {
+          yield* childRunLoop({
+            session: params.session,
+            childStreamId,
+            parentStreamId,
+            executionId,
+            agentName: params.agentName,
+            strategy,
+          });
 
-    try {
-      await startChildRunLoop({
-        session: params.session,
-        childStreamId,
-        parentStreamId,
-        executionId,
-        agentName: params.agentName,
-        strategy,
-      });
+          yield* Effect.promise(() =>
+            vi.waitFor(() =>
+              expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
+            ),
+          );
+          yield* Effect.promise(() =>
+            vi.waitFor(() =>
+              expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
+            ),
+          );
 
-      await vi.waitFor(() =>
-        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
-      );
-      await vi.waitFor(() =>
-        expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-      );
-
-      expect(mocks.resumeToolUseTurn).not.toHaveBeenCalled();
-      expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
-    } finally {
-      session.followUps.terminalize(childStreamId);
-      session.status.clearStream(childStreamId);
-    }
-  });
+          expect(mocks.resumeToolUseTurn).not.toHaveBeenCalled();
+          expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+        } finally {
+          session.followUps.terminalize(childStreamId);
+          session.status.clearStream(childStreamId);
+        }
+      }),
+  );
 });

@@ -10,8 +10,9 @@ import {
   type TurnEvent,
   type TurnRequest,
 } from '@texra-ai/llm/turn';
+import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 const CONFIG = {
   protocol: 'openrouter-chat',
@@ -156,13 +157,11 @@ function call(index: number, args: string, metadata = true): object {
   };
 }
 function run(model: Model, request: TurnRequest = REQUEST) {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const turn = yield* model.prepareTurn(request);
-      assert.equal(turn.mode, 'foreground');
-      return yield* model.generateTurn(turn);
-    }),
-  );
+  return Effect.gen(function* () {
+    const turn = yield* model.prepareTurn(request);
+    assert.equal(turn.mode, 'foreground');
+    return yield* model.generateTurn(turn);
+  });
 }
 function errors(exit: Exit.Exit<unknown, ModelError>) {
   assert(Exit.isFailure(exit));
@@ -172,234 +171,251 @@ function errors(exit: Exit.Exit<unknown, ModelError>) {
 }
 
 describe('native OpenRouter Chat', () => {
-  it('preserves ordered media, complete reasoning, annotations, receipt and tool settlement through rehydrated replay', async () => {
-    const sent: Record<string, any>[] = [];
-    const fetch = vi.fn<typeof globalThis.fetch>(async (url, init) => {
-      expect(url).toBe('https://synthetic.invalid/api/v1/chat/completions');
-      expect(new Headers(init?.headers).get('Authorization')).toBe(
-        'Bearer selected-key',
-      );
-      sent.push(JSON.parse(String(init?.body)));
-      if (sent.length === 2)
-        return response(sse(frame({ content: 'Done.' }, 'stop')));
-      return response(
-        sse(
-          frame({ reasoning: null, reasoning_details: null }),
-          frame({ reasoning: '', reasoning_details: [] }),
-          frame({ reasoning: 'plain', reasoning_details: DETAILS.slice(0, 2) }),
-          frame({ reasoning: null, reasoning_details: DETAILS.slice(2) }),
-          frame({ content: 'Search now.', annotations: [FILE, CITATION] }),
-          frame({ tool_calls: [call(1, '{"q":'), call(0, '{')] }),
-          frame({
-            tool_calls: [call(0, '"q":"a"}', false), call(1, '"b"}', false)],
-          }),
-          {
-            choices: [
-              {
-                index: 0,
-                finish_reason: 'tool_calls',
-                native_finish_reason: 'tool_use',
-              },
-            ],
-          },
-          {
-            choices: [
-              {
-                index: 0,
-                delta: {},
-                finish_reason: 'tool_calls',
-                native_finish_reason: 'tool_use',
-              },
-            ],
-            usage: USAGE,
-            service_tier: 'standard',
-          },
-          { choices: [], usage: USAGE },
-        ),
-      );
-    });
-    const model = openrouterChatModel(CONFIG, {
-      apiKey: 'selected-key',
-      fetch,
-    });
-    const request: TurnRequest = {
-      system: '',
-      tools: TOOLS,
-      toolChoice: { name: 'search' },
-      effort: 'minimal',
-      stopSequences: ['END'],
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { kind: 'text', text: 'image label' },
-            {
-              kind: 'image',
-              mimeType: 'IMAGE/PNG',
-              base64: '',
-              detail: 'high',
-            },
-            { kind: 'text', text: 'audio label' },
-            { kind: 'audio', mimeType: 'audio/mpeg', base64: 'AA==' },
-            { kind: 'text', text: 'PDF label' },
-            { kind: 'document', mimeType: 'application/pdf', base64: '' },
-          ],
-        },
-      ],
-    };
-    const events = await Effect.runPromise(
+  it.effect(
+    'preserves ordered media, complete reasoning, annotations, receipt and tool settlement through rehydrated replay',
+    () =>
       Effect.gen(function* () {
+        const sent: Record<string, any>[] = [];
+        const fetch = vi.fn<typeof globalThis.fetch>(async (url, init) => {
+          expect(url).toBe('https://synthetic.invalid/api/v1/chat/completions');
+          expect(new Headers(init?.headers).get('Authorization')).toBe(
+            'Bearer selected-key',
+          );
+          sent.push(JSON.parse(String(init?.body)));
+          if (sent.length === 2)
+            return response(sse(frame({ content: 'Done.' }, 'stop')));
+          return response(
+            sse(
+              frame({ reasoning: null, reasoning_details: null }),
+              frame({ reasoning: '', reasoning_details: [] }),
+              frame({
+                reasoning: 'plain',
+                reasoning_details: DETAILS.slice(0, 2),
+              }),
+              frame({ reasoning: null, reasoning_details: DETAILS.slice(2) }),
+              frame({ content: 'Search now.', annotations: [FILE, CITATION] }),
+              frame({ tool_calls: [call(1, '{"q":'), call(0, '{')] }),
+              frame({
+                tool_calls: [
+                  call(0, '"q":"a"}', false),
+                  call(1, '"b"}', false),
+                ],
+              }),
+              {
+                choices: [
+                  {
+                    index: 0,
+                    finish_reason: 'tool_calls',
+                    native_finish_reason: 'tool_use',
+                  },
+                ],
+              },
+              {
+                choices: [
+                  {
+                    index: 0,
+                    delta: {},
+                    finish_reason: 'tool_calls',
+                    native_finish_reason: 'tool_use',
+                  },
+                ],
+                usage: USAGE,
+                service_tier: 'standard',
+              },
+              { choices: [], usage: USAGE },
+            ),
+          );
+        });
+        const model = openrouterChatModel(CONFIG, {
+          apiKey: 'selected-key',
+          fetch,
+        });
+        const request: TurnRequest = {
+          system: '',
+          tools: TOOLS,
+          toolChoice: { name: 'search' },
+          effort: 'minimal',
+          stopSequences: ['END'],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { kind: 'text', text: 'image label' },
+                {
+                  kind: 'image',
+                  mimeType: 'IMAGE/PNG',
+                  base64: '',
+                  detail: 'high',
+                },
+                { kind: 'text', text: 'audio label' },
+                { kind: 'audio', mimeType: 'audio/mpeg', base64: 'AA==' },
+                { kind: 'text', text: 'PDF label' },
+                { kind: 'document', mimeType: 'application/pdf', base64: '' },
+              ],
+            },
+          ],
+        };
         const turn = yield* model.prepareTurn(request);
         assert.equal(turn.mode, 'foreground');
-        return yield* Stream.runCollect(model.streamTurn(turn));
-      }),
-    );
-    expect(events[0].kind).toBe('identified');
-    expect(
-      events
-        .map((event) =>
-          event.kind === 'delta' && event.part === 'reasoning'
-            ? event.text
-            : '',
-        )
-        .join(''),
-    ).toBe('plansummary');
-    const completed = events.findLast((event) => event.kind === 'completed');
-    assert(completed?.kind === 'completed');
-    const result = completed.result;
-    expect(result).toMatchObject({
-      providerResponseId: 'generation-1',
-      returnedModel: 'returned-model',
-      finishReason: 'tool-calls',
-      finishEvidence: { kind: 'openrouter', nativeFinishReason: 'tool_use' },
-      usage: {
-        inputTokens: 11,
-        cachedInputTokens: 3,
-        reasoningTokens: 5,
-        providerUsage: {
-          kind: 'openrouter',
-          cost: 0,
-          isByok: false,
-          costDetails: { upstreamInferenceCost: 0.125 },
-          inputDetails: { cacheWriteTokens: 4 },
-          outputDetails: { acceptedPredictionTokens: 0 },
-          serviceTier: 'standard',
-        },
-      },
-    });
-    expect(result.content.map((part) => part.kind)).toEqual([
-      'reasoning',
-      'message',
-      'local-call',
-      'local-call',
-      'file-annotation',
-      'url-citation',
-    ]);
-    expect(result.content[0]).toMatchObject({
-      kind: 'reasoning',
-      summary: [],
-      evidence: {
-        kind: 'openrouter-reasoning',
-        plain: 'plain',
-        details: [
-          { kind: 'text', text: '', signature: null },
-          { kind: 'text', text: 'plan', signature: 'signature' },
-          { kind: 'summary', summary: 'summary' },
-          { kind: 'encrypted', data: 'opaque==' },
-          {
-            kind: 'server-tool-call',
-            arguments: '{ "q": "x" }',
-            result: ' raw hosted result ',
+        const events = yield* Stream.runCollect(model.streamTurn(turn));
+        expect(events[0].kind).toBe('identified');
+        expect(
+          events
+            .map((event) =>
+              event.kind === 'delta' && event.part === 'reasoning'
+                ? event.text
+                : '',
+            )
+            .join(''),
+        ).toBe('plansummary');
+        const completed = events.findLast(
+          (event) => event.kind === 'completed',
+        );
+        assert(completed?.kind === 'completed');
+        const result = completed.result;
+        expect(result).toMatchObject({
+          providerResponseId: 'generation-1',
+          returnedModel: 'returned-model',
+          finishReason: 'tool-calls',
+          finishEvidence: {
+            kind: 'openrouter',
+            nativeFinishReason: 'tool_use',
           },
-        ],
-      },
-    });
-    expect('content' in result.content[0]).toBe(false);
-    const restored = JSON.parse(JSON.stringify(result));
-    const followUp: TurnRequest = {
-      ...request,
-      messages: [
-        ...request.messages,
-        {
-          role: 'assistant',
-          origin: restored.requestedOrigin,
-          content: restored.content,
-        },
-        {
-          role: 'tool',
-          results: [
+          usage: {
+            inputTokens: 11,
+            cachedInputTokens: 3,
+            reasoningTokens: 5,
+            providerUsage: {
+              kind: 'openrouter',
+              cost: 0,
+              isByok: false,
+              costDetails: { upstreamInferenceCost: 0.125 },
+              inputDetails: { cacheWriteTokens: 4 },
+              outputDetails: { acceptedPredictionTokens: 0 },
+              serviceTier: 'standard',
+            },
+          },
+        });
+        expect(result.content.map((part) => part.kind)).toEqual([
+          'reasoning',
+          'message',
+          'local-call',
+          'local-call',
+          'file-annotation',
+          'url-citation',
+        ]);
+        expect(result.content[0]).toMatchObject({
+          kind: 'reasoning',
+          summary: [],
+          evidence: {
+            kind: 'openrouter-reasoning',
+            plain: 'plain',
+            details: [
+              { kind: 'text', text: '', signature: null },
+              { kind: 'text', text: 'plan', signature: 'signature' },
+              { kind: 'summary', summary: 'summary' },
+              { kind: 'encrypted', data: 'opaque==' },
+              {
+                kind: 'server-tool-call',
+                arguments: '{ "q": "x" }',
+                result: ' raw hosted result ',
+              },
+            ],
+          },
+        });
+        expect('content' in result.content[0]).toBe(false);
+        const restored = JSON.parse(JSON.stringify(result));
+        const followUp: TurnRequest = {
+          ...request,
+          messages: [
+            ...request.messages,
             {
-              callOrdinal: 0,
-              status: 'success',
-              content: [{ kind: 'text', text: 'A' }],
+              role: 'assistant',
+              origin: restored.requestedOrigin,
+              content: restored.content,
             },
             {
-              callOrdinal: 1,
-              status: 'error',
-              content: [{ kind: 'text', text: 'B' }],
+              role: 'tool',
+              results: [
+                {
+                  callOrdinal: 0,
+                  status: 'success',
+                  content: [{ kind: 'text', text: 'A' }],
+                },
+                {
+                  callOrdinal: 1,
+                  status: 'error',
+                  content: [{ kind: 'text', text: 'B' }],
+                },
+              ],
             },
           ],
-        },
-      ],
-    };
-    await run(model, followUp);
-    expect(sent[0]).toMatchObject({
-      stream: true,
-      max_completion_tokens: 100,
-      reasoning: { effort: 'minimal' },
-      stop: ['END'],
-      tool_choice: { type: 'function', function: { name: 'search' } },
-    });
-    expect(sent[0].messages[1].content).toEqual([
-      { type: 'text', text: 'image label' },
-      {
-        type: 'image_url',
-        image_url: { url: 'data:IMAGE/PNG;base64,', detail: 'high' },
-      },
-      { type: 'text', text: 'audio label' },
-      { type: 'input_audio', input_audio: { data: 'AA==', format: 'mp3' } },
-      { type: 'text', text: 'PDF label' },
-      { type: 'file', file: { file_data: 'data:application/pdf;base64,' } },
-    ]);
-    expect(sent[1].messages[2]).toMatchObject({
-      role: 'assistant',
-      content: 'Search now.',
-      reasoning: 'plain',
-      reasoning_details: DETAILS,
-      annotations: [FILE, CITATION],
-      tool_calls: [
-        { id: 'call-0', function: { name: 'search', arguments: '{"q":"a"}' } },
-        { id: 'call-1', function: { name: 'fetch', arguments: '{"q":"b"}' } },
-      ],
-    });
-    expect(sent[1].messages.slice(-2)).toEqual([
-      { role: 'tool', tool_call_id: 'call-0', content: 'A' },
-      { role: 'tool', tool_call_id: 'call-1', content: 'Error: B' },
-    ]);
-    for (const order of [
-      [1, 0, 2, 3, 4, 5],
-      [0, 2, 1, 3, 4, 5],
-      [0, 1, 4, 2, 3, 5],
-    ]) {
-      const exit = await Effect.runPromiseExit(
-        model.prepareTurn({
-          ...followUp,
-          messages: followUp.messages.map((message) =>
-            message.role === 'assistant'
-              ? {
-                  ...message,
-                  content: order.map((index) => result.content[index]),
-                }
-              : message,
-          ),
-        }),
-      );
-      expect(errors(exit)[0].kind).toBe('unsupported');
-    }
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
+        };
+        yield* run(model, followUp);
+        expect(sent[0]).toMatchObject({
+          stream: true,
+          max_completion_tokens: 100,
+          reasoning: { effort: 'minimal' },
+          stop: ['END'],
+          tool_choice: { type: 'function', function: { name: 'search' } },
+        });
+        expect(sent[0].messages[1].content).toEqual([
+          { type: 'text', text: 'image label' },
+          {
+            type: 'image_url',
+            image_url: { url: 'data:IMAGE/PNG;base64,', detail: 'high' },
+          },
+          { type: 'text', text: 'audio label' },
+          { type: 'input_audio', input_audio: { data: 'AA==', format: 'mp3' } },
+          { type: 'text', text: 'PDF label' },
+          { type: 'file', file: { file_data: 'data:application/pdf;base64,' } },
+        ]);
+        expect(sent[1].messages[2]).toMatchObject({
+          role: 'assistant',
+          content: 'Search now.',
+          reasoning: 'plain',
+          reasoning_details: DETAILS,
+          annotations: [FILE, CITATION],
+          tool_calls: [
+            {
+              id: 'call-0',
+              function: { name: 'search', arguments: '{"q":"a"}' },
+            },
+            {
+              id: 'call-1',
+              function: { name: 'fetch', arguments: '{"q":"b"}' },
+            },
+          ],
+        });
+        expect(sent[1].messages.slice(-2)).toEqual([
+          { role: 'tool', tool_call_id: 'call-0', content: 'A' },
+          { role: 'tool', tool_call_id: 'call-1', content: 'Error: B' },
+        ]);
+        for (const order of [
+          [1, 0, 2, 3, 4, 5],
+          [0, 2, 1, 3, 4, 5],
+          [0, 1, 4, 2, 3, 5],
+        ]) {
+          const exit = yield* Effect.exit(
+            model.prepareTurn({
+              ...followUp,
+              messages: followUp.messages.map((message) =>
+                message.role === 'assistant'
+                  ? {
+                      ...message,
+                      content: order.map((index) => result.content[index]),
+                    }
+                  : message,
+              ),
+            }),
+          );
+          expect(errors(exit)[0].kind).toBe('unsupported');
+        }
+        expect(fetch).toHaveBeenCalledTimes(2);
+      }),
+  );
 
-  it.each([
+  it.effect.each([
     ['absent', {}, {}],
     ['null plain', { reasoning: null }, { reasoning: null }],
     ['empty plain', { reasoning: '' }, { reasoning: '' }],
@@ -410,88 +426,97 @@ describe('native OpenRouter Chat', () => {
       { reasoning: '', reasoning_details: [] },
       { reasoning: '', reasoning_details: [] },
     ],
-  ])(
+  ] as const)(
     'retains %s reasoning-field presence through a subsequent request',
-    async (_, delta, expected) => {
-      const bodies: any[] = [];
-      const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
-        bodies.push(JSON.parse(String(init?.body)));
-        return response(sse(frame(delta), frame({}, 'stop')));
-      });
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
-      const result = await run(model);
-      await run(model, {
-        messages: [
-          ...REQUEST.messages,
-          {
-            role: 'assistant',
-            origin: result.requestedOrigin,
-            content: result.content,
-          },
-          { role: 'user', content: [{ kind: 'text', text: 'Continue.' }] },
-        ],
-      });
-      const assistant = bodies[1].messages[1];
-      expect(
-        Object.fromEntries(
-          Object.entries(assistant).filter(([key]) =>
-            key.startsWith('reasoning'),
+    ([_, delta, expected]) =>
+      Effect.gen(function* () {
+        const bodies: any[] = [];
+        const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+          bodies.push(JSON.parse(String(init?.body)));
+          return response(sse(frame(delta), frame({}, 'stop')));
+        });
+        const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+        const result = yield* run(model);
+        yield* run(model, {
+          messages: [
+            ...REQUEST.messages,
+            {
+              role: 'assistant',
+              origin: result.requestedOrigin,
+              content: result.content,
+            },
+            { role: 'user', content: [{ kind: 'text', text: 'Continue.' }] },
+          ],
+        });
+        const assistant = bodies[1].messages[1];
+        expect(
+          Object.fromEntries(
+            Object.entries(assistant).filter(([key]) =>
+              key.startsWith('reasoning'),
+            ),
           ),
-        ),
-      ).toEqual(expected);
-    },
+        ).toEqual(expected);
+      }),
   );
 
-  it('accepts identity-free terminal accounting, repeated terminal reasons and a DONE sharing its byte chunk with later data', async () => {
-    const wire =
-      ': keep-alive\r\nretry: 1\r\n\r\n' +
-      sse(
-        frame({ content: 'α\nβ' }),
-        { choices: [{ finish_reason: 'stop', native_finish_reason: null }] },
-        {
-          choices: [{ finish_reason: 'stop' }],
-          usage: {
-            prompt_tokens: 0,
-            completion_tokens: 0,
-            total_tokens: 0,
-            cost: 0,
-            is_byok: true,
+  it.effect(
+    'accepts identity-free terminal accounting, repeated terminal reasons and a DONE sharing its byte chunk with later data',
+    () =>
+      Effect.gen(function* () {
+        const wire =
+          ': keep-alive\r\nretry: 1\r\n\r\n' +
+          sse(
+            frame({ content: 'α\nβ' }),
+            {
+              choices: [{ finish_reason: 'stop', native_finish_reason: null }],
+            },
+            {
+              choices: [{ finish_reason: 'stop' }],
+              usage: {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                cost: 0,
+                is_byok: true,
+              },
+            },
+          ) +
+          'data: {"error":{"message":"must not be consumed"}}\n\n';
+        const encoded = new TextEncoder().encode(wire);
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            for (const byte of encoded.slice(0, -100))
+              controller.enqueue(new Uint8Array([byte]));
+            controller.enqueue(encoded.slice(-100));
+            controller.close();
           },
-        },
-      ) +
-      'data: {"error":{"message":"must not be consumed"}}\n\n';
-    const encoded = new TextEncoder().encode(wire);
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        for (const byte of encoded.slice(0, -100))
-          controller.enqueue(new Uint8Array([byte]));
-        controller.enqueue(encoded.slice(-100));
-        controller.close();
-      },
-    });
-    const fetch = vi.fn<typeof globalThis.fetch>(async () => response(body));
-    const result = await run(
-      openrouterChatModel(CONFIG, { apiKey: 'key', fetch }),
-    );
-    expect(result.content).toEqual([
-      { kind: 'message', content: [{ kind: 'text', text: 'α\nβ' }] },
-    ]);
-    expect(result.usage).toMatchObject({
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      providerUsage: { cost: 0, isByok: true },
-    });
-    assert(result.providerResponseId !== null);
-    expect(result.finishEvidence).toEqual({
-      kind: 'openrouter',
-      nativeFinishReason: null,
-    });
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(body.locked).toBe(false);
-  });
+        });
+        const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+          response(body),
+        );
+        const result = yield* run(
+          openrouterChatModel(CONFIG, { apiKey: 'key', fetch }),
+        );
+        expect(result.content).toEqual([
+          { kind: 'message', content: [{ kind: 'text', text: 'α\nβ' }] },
+        ]);
+        expect(result.usage).toMatchObject({
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          providerUsage: { cost: 0, isByok: true },
+        });
+        assert(result.providerResponseId !== null);
+        expect(result.finishEvidence).toEqual({
+          kind: 'openrouter',
+          nativeFinishReason: null,
+        });
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(body.locked).toBe(false);
+      }),
+  );
 
-  it.each([
+  it.effect.each([
     [
       'image disabled',
       { ...CONFIG, supportsImageInput: false },
@@ -515,17 +540,19 @@ describe('native OpenRouter Chat', () => {
     ['raw audio', CONFIG, { kind: 'audio', mimeType: 'audio/L16', base64: '' }],
     ['video', CONFIG, { kind: 'video', mimeType: 'video/mp4', base64: '' }],
     ['non-PDF', CONFIG, { kind: 'document', mimeType: 'text/csv', base64: '' }],
-  ] as const)('rejects %s before I/O', async (_, config, part) => {
-    const fetch = vi.fn<typeof globalThis.fetch>();
-    const model = openrouterChatModel(config, { apiKey: 'key', fetch });
-    const exit = await Effect.runPromiseExit(
-      model.prepareTurn({ messages: [{ role: 'user', content: [part] }] }),
-    );
-    expect(errors(exit)[0].kind).toBe('unsupported');
-    expect(fetch).not.toHaveBeenCalled();
-  });
+  ] as const)('rejects %s before I/O', ([_, config, part]) =>
+    Effect.gen(function* () {
+      const fetch = vi.fn<typeof globalThis.fetch>();
+      const model = openrouterChatModel(config, { apiKey: 'key', fetch });
+      const exit = yield* Effect.exit(
+        model.prepareTurn({ messages: [{ role: 'user', content: [part] }] }),
+      );
+      expect(errors(exit)[0].kind).toBe('unsupported');
+      expect(fetch).not.toHaveBeenCalled();
+    }),
+  );
 
-  it.each([
+  it.effect.each([
     ['unsupported effort', { effort: 'medium' }],
     ['parallel', { parallelToolCalls: false }],
     ['background', { mode: 'background' }],
@@ -534,18 +561,19 @@ describe('native OpenRouter Chat', () => {
     ['unknown named tool', { toolChoice: { name: 'missing' } }],
   ] as const)(
     'rejects %s and does not issue an automatic request',
-    async (_, controls) => {
-      const fetch = vi.fn<typeof globalThis.fetch>();
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
-      const exit = await Effect.runPromiseExit(
-        model.prepareTurn({ ...REQUEST, ...controls }),
-      );
-      expect(errors(exit)[0].kind).toBe('unsupported');
-      expect(fetch).not.toHaveBeenCalled();
-    },
+    ([_, controls]) =>
+      Effect.gen(function* () {
+        const fetch = vi.fn<typeof globalThis.fetch>();
+        const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+        const exit = yield* Effect.exit(
+          model.prepareTurn({ ...REQUEST, ...controls }),
+        );
+        expect(errors(exit)[0].kind).toBe('unsupported');
+        expect(fetch).not.toHaveBeenCalled();
+      }),
   );
 
-  it.each([
+  it.effect.each([
     [
       'missing index',
       [
@@ -659,97 +687,101 @@ describe('native OpenRouter Chat', () => {
       ],
     ],
     ['missing finish', [frame({ content: 'partial' })]],
-  ])('fails %s without producing a completed result', async (_, frames) => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
-      response(sse(...frames)),
-    );
-    const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
-    const exit = await Effect.runPromiseExit(
-      Effect.gen(function* () {
-        const turn = yield* model.prepareTurn({ ...REQUEST, tools: TOOLS });
-        assert.equal(turn.mode, 'foreground');
-        return yield* Stream.runCollect(model.streamTurn(turn));
-      }),
-    );
-    expect(errors(exit)[0].kind).toBe('malformed-output');
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([401, 429, 200])(
-    'preserves HTTP %s or in-band failure, original code and PDF evidence',
-    async (status) => {
-      const error = {
-        code: status === 200 ? 'server_error' : status,
-        message: 'Provider failed',
-        metadata: { file_annotations: [FILE] },
-      };
-      const wire =
-        status === 200
-          ? sse(frame({ content: 'partial' }), {
-              ...IDENTITY,
-              error,
-              choices: [{ finish_reason: 'error' }],
-            })
-          : JSON.stringify({ error });
+  ] as const)('fails %s without producing a completed result', ([_, frames]) =>
+    Effect.gen(function* () {
       const fetch = vi.fn<typeof globalThis.fetch>(async () =>
-        response(wire, status),
+        response(sse(...frames)),
       );
       const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
-      const exit = await Effect.runPromiseExit(
+      const exit = yield* Effect.exit(
         Effect.gen(function* () {
-          const turn = yield* model.prepareTurn(REQUEST);
+          const turn = yield* model.prepareTurn({ ...REQUEST, tools: TOOLS });
           assert.equal(turn.mode, 'foreground');
-          return yield* model.generateTurn(turn);
+          return yield* Stream.runCollect(model.streamTurn(turn));
         }),
       );
-      const failure = errors(exit)[0];
-      expect(failure).toMatchObject({
-        kind: status === 401 ? 'authentication' : 'provider-rejection',
-        message: 'Provider failed',
-        requestId: 'request-1',
-        cause: error,
-        providerEvidence: {
-          kind: 'openrouter',
-          origin: { protocol: 'openrouter-chat' },
-          fileAnnotations: [{ kind: 'file-annotation', hash: 'file-hash' }],
-        },
-      });
-      if (status === 200) expect(failure.responseId).toBe('generation-1');
-      expect(failure.providerEvidence?.origin).toEqual({
-        protocol: 'openrouter-chat',
-        codecVersion: 1,
-        requestedModel: CONFIG.requestedModel,
-        deployment: CONFIG.deployment,
-      });
+      expect(errors(exit)[0].kind).toBe('malformed-output');
       expect(fetch).toHaveBeenCalledTimes(1);
-    },
+    }),
   );
 
-  it.each(['missing DONE', 'invalid JSON', 'connection'] as const)(
-    'classifies %s without retry',
-    async (variant) => {
-      const cause = new Error('Disconnected');
-      const fetch = vi.fn<typeof globalThis.fetch>(async () => {
-        if (variant === 'connection') throw cause;
-        return response(
-          variant === 'invalid JSON'
-            ? 'data: {broken}\n\n'
-            : `data: ${JSON.stringify(frame({ content: 'partial' }, 'stop'))}\n\n`,
+  it.effect.each([401, 429, 200])(
+    'preserves HTTP %s or in-band failure, original code and PDF evidence',
+    (status) =>
+      Effect.gen(function* () {
+        const error = {
+          code: status === 200 ? 'server_error' : status,
+          message: 'Provider failed',
+          metadata: { file_annotations: [FILE] },
+        };
+        const wire =
+          status === 200
+            ? sse(frame({ content: 'partial' }), {
+                ...IDENTITY,
+                error,
+                choices: [{ finish_reason: 'error' }],
+              })
+            : JSON.stringify({ error });
+        const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+          response(wire, status),
         );
-      });
-      const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
-      const exit = await Effect.runPromiseExit(
-        Effect.gen(function* () {
-          const turn = yield* model.prepareTurn(REQUEST);
-          assert.equal(turn.mode, 'foreground');
-          return yield* model.generateTurn(turn);
-        }),
-      );
-      expect(errors(exit)[0].kind).toBe(
-        variant === 'connection' ? 'transport' : 'malformed-output',
-      );
-      expect(fetch).toHaveBeenCalledTimes(1);
-    },
+        const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+        const exit = yield* Effect.exit(
+          Effect.gen(function* () {
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert.equal(turn.mode, 'foreground');
+            return yield* model.generateTurn(turn);
+          }),
+        );
+        const failure = errors(exit)[0];
+        expect(failure).toMatchObject({
+          kind: status === 401 ? 'authentication' : 'provider-rejection',
+          message: 'Provider failed',
+          requestId: 'request-1',
+          cause: error,
+          providerEvidence: {
+            kind: 'openrouter',
+            origin: { protocol: 'openrouter-chat' },
+            fileAnnotations: [{ kind: 'file-annotation', hash: 'file-hash' }],
+          },
+        });
+        if (status === 200) expect(failure.responseId).toBe('generation-1');
+        expect(failure.providerEvidence?.origin).toEqual({
+          protocol: 'openrouter-chat',
+          codecVersion: 1,
+          requestedModel: CONFIG.requestedModel,
+          deployment: CONFIG.deployment,
+        });
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
+  );
+
+  it.effect.each(['missing DONE', 'invalid JSON', 'connection'] as const)(
+    'classifies %s without retry',
+    (variant) =>
+      Effect.gen(function* () {
+        const cause = new Error('Disconnected');
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => {
+          if (variant === 'connection') throw cause;
+          return response(
+            variant === 'invalid JSON'
+              ? 'data: {broken}\n\n'
+              : `data: ${JSON.stringify(frame({ content: 'partial' }, 'stop'))}\n\n`,
+          );
+        });
+        const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+        const exit = yield* Effect.exit(
+          Effect.gen(function* () {
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert.equal(turn.mode, 'foreground');
+            return yield* model.generateTurn(turn);
+          }),
+        );
+        expect(errors(exit)[0].kind).toBe(
+          variant === 'connection' ? 'transport' : 'malformed-output',
+        );
+        expect(fetch).toHaveBeenCalledTimes(1);
+      }),
   );
 
   it.each(['headers', 'body', 'body with distinct cleanup'] as const)(
@@ -839,40 +871,46 @@ describe('native OpenRouter Chat', () => {
     },
   );
 
-  it('preserves the original malformed frame and a distinct reader cleanup defect', async () => {
-    const cleanup = new Error('Cancellation failed');
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(
-          new TextEncoder().encode(
-            `data: ${JSON.stringify(frame({ content: 'partial' }))}\n\ndata: {bad}\n\n`,
-          ),
-        );
-      },
-      cancel() {
-        throw cleanup;
-      },
-    });
-    const fetch = vi.fn<typeof globalThis.fetch>(async () => response(body));
-    const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
-    const exit = await Effect.runPromiseExit(
+  it.effect(
+    'preserves the original malformed frame and a distinct reader cleanup defect',
+    () =>
       Effect.gen(function* () {
-        const turn = yield* model.prepareTurn(REQUEST);
-        assert.equal(turn.mode, 'foreground');
-        return yield* Stream.runDrain(model.streamTurn(turn));
+        const cleanup = new Error('Cancellation failed');
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify(frame({ content: 'partial' }))}\n\ndata: {bad}\n\n`,
+              ),
+            );
+          },
+          cancel() {
+            throw cleanup;
+          },
+        });
+        const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+          response(body),
+        );
+        const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
+        const exit = yield* Effect.exit(
+          Effect.gen(function* () {
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert.equal(turn.mode, 'foreground');
+            return yield* Stream.runDrain(model.streamTurn(turn));
+          }),
+        );
+        expect(errors(exit)[0]).toMatchObject({
+          kind: 'malformed-output',
+          responseId: 'generation-1',
+          requestId: 'request-1',
+        });
+        assert(Exit.isFailure(exit));
+        expect(
+          exit.cause.reasons.some(
+            (reason) => Cause.isDieReason(reason) && reason.defect === cleanup,
+          ),
+        ).toBe(true);
+        expect(body.locked).toBe(false);
       }),
-    );
-    expect(errors(exit)[0]).toMatchObject({
-      kind: 'malformed-output',
-      responseId: 'generation-1',
-      requestId: 'request-1',
-    });
-    assert(Exit.isFailure(exit));
-    expect(
-      exit.cause.reasons.some(
-        (reason) => Cause.isDieReason(reason) && reason.defect === cleanup,
-      ),
-    ).toBe(true);
-    expect(body.locked).toBe(false);
-  });
+  );
 });

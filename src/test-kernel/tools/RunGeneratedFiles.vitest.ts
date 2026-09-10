@@ -1,7 +1,8 @@
 import * as path from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { platform } from '@platform/platform';
@@ -47,42 +48,48 @@ describe('listRunGeneratedFiles', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('lists in path order, skipping KV-named subtrees and concurrent disappearance', async () => {
-    failStatFor(
-      path.join(RUN_PATH, 'vanished.tex'),
-      fsError('ENOENT', 'entry disappeared after readDir'),
-    );
+  it.effect(
+    'lists in path order, skipping KV-named subtrees and concurrent disappearance',
+    () =>
+      Effect.gen(function* () {
+        failStatFor(
+          path.join(RUN_PATH, 'vanished.tex'),
+          fsError('ENOENT', 'entry disappeared after readDir'),
+        );
 
-    await expect(
-      Effect.runPromise(listRunGeneratedFiles(EXECUTION_ID, session)),
-    ).resolves.toEqual([
-      { path: 'blocked.tex', size: 7, isDirectory: false },
-      { path: 'sub', size: 0, isDirectory: true },
-      { path: 'sub/nested.tex', size: 6, isDirectory: false },
-      { path: 'unreadable.tex', size: 10, isDirectory: false },
-      { path: 'z.tex', size: 3, isDirectory: false },
-    ]);
-  });
+        expect(yield* listRunGeneratedFiles(EXECUTION_ID, session)).toEqual([
+          { path: 'blocked.tex', size: 7, isDirectory: false },
+          { path: 'sub', size: 0, isDirectory: true },
+          { path: 'sub/nested.tex', size: 6, isDirectory: false },
+          { path: 'unreadable.tex', size: 10, isDirectory: false },
+          { path: 'z.tex', size: 3, isDirectory: false },
+        ]);
+      }),
+  );
 
-  it('omits an entry whose intermediate component is no longer a directory', async () => {
-    failStatFor(
-      path.join(RUN_PATH, 'blocked.tex'),
-      fsError('ENOTDIR', 'parent path is no longer a directory'),
-    );
+  it.effect(
+    'omits an entry whose intermediate component is no longer a directory',
+    () =>
+      Effect.gen(function* () {
+        failStatFor(
+          path.join(RUN_PATH, 'blocked.tex'),
+          fsError('ENOTDIR', 'parent path is no longer a directory'),
+        );
 
-    const files = await Effect.runPromise(
-      listRunGeneratedFiles(EXECUTION_ID, session),
-    );
+        const files = yield* listRunGeneratedFiles(EXECUTION_ID, session);
 
-    expect(files.map((file) => file.path)).not.toContain('blocked.tex');
-  });
+        expect(files.map((file) => file.path)).not.toContain('blocked.tex');
+      }),
+  );
 
-  it('propagates operational stat failures', async () => {
-    const error = fsError('EACCES', 'generated file is unreadable');
-    failStatFor(path.join(RUN_PATH, 'unreadable.tex'), error);
+  it.effect('propagates operational stat failures', () =>
+    Effect.gen(function* () {
+      const error = fsError('EACCES', 'generated file is unreadable');
+      failStatFor(path.join(RUN_PATH, 'unreadable.tex'), error);
 
-    await expect(
-      Effect.runPromise(listRunGeneratedFiles(EXECUTION_ID, session)),
-    ).rejects.toBe(error);
-  });
+      expect(
+        yield* Effect.flip(listRunGeneratedFiles(EXECUTION_ID, session)),
+      ).toBe(error);
+    }),
+  );
 });

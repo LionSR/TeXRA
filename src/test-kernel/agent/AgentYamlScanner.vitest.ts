@@ -3,8 +3,9 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect } from 'vitest';
 
 // Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
@@ -25,6 +26,10 @@ async function createAgentDir(
   return agentDir;
 }
 
+/** The temp directory as an Effect, so the scan reads real files on disk. */
+const agentDir = (files: Record<string, readonly string[]>) =>
+  Effect.promise(() => createAgentDir(files));
+
 function toolUseAgent(name: string, systemPrompt: string): string[] {
   return [
     `name: ${name}`,
@@ -38,137 +43,141 @@ function toolUseAgent(name: string, systemPrompt: string): string[] {
 describe('agent YAML scanner', () => {
   beforeAll(() => installPlatform({}, { fs: nodeFilesystem }));
 
-  it('derives workflow round counts from inherited settings and prompts', async () => {
-    const agentDir = await createAgentDir({
-      'base.yaml': [
-        'name: base',
-        'settings:',
-        '  agentCategory: workflow',
-        '  rounds: 4',
-        'prompts:',
-        '  userRequest: base',
-      ],
-      'child.yaml': [
-        'name: child',
-        'inherits: base',
-        'prompts:',
-        '  userRequest: child',
-      ],
-      'prompt-base.yaml': [
-        'name: prompt-base',
-        'settings:',
-        '  agentCategory: workflow',
-        '  rounds: 1',
-        'prompts:',
-        '  userRequest:',
-        '    - first',
-        '    - second',
-        '    - third',
-      ],
-      'prompt-child.yaml': ['name: prompt-child', 'inherits: prompt-base'],
-      'missing-parent.yaml': [
-        'name: missing-parent',
-        'inherits: no-such-parent',
-      ],
-    });
+  it.live(
+    'derives workflow round counts from inherited settings and prompts',
+    () =>
+      Effect.gen(function* () {
+        const dir = yield* agentDir({
+          'base.yaml': [
+            'name: base',
+            'settings:',
+            '  agentCategory: workflow',
+            '  rounds: 4',
+            'prompts:',
+            '  userRequest: base',
+          ],
+          'child.yaml': [
+            'name: child',
+            'inherits: base',
+            'prompts:',
+            '  userRequest: child',
+          ],
+          'prompt-base.yaml': [
+            'name: prompt-base',
+            'settings:',
+            '  agentCategory: workflow',
+            '  rounds: 1',
+            'prompts:',
+            '  userRequest:',
+            '    - first',
+            '    - second',
+            '    - third',
+          ],
+          'prompt-child.yaml': ['name: prompt-child', 'inherits: prompt-base'],
+          'missing-parent.yaml': [
+            'name: missing-parent',
+            'inherits: no-such-parent',
+          ],
+        });
 
-    const { entries } = await Effect.runPromise(
-      scanDirectory(agentDir, 'custom'),
-    );
+        const { entries } = yield* scanDirectory(dir, 'custom');
 
-    expect(entries.find((entry) => entry.name === 'child')?.rounds).toBe(4);
-    expect(entries.find((entry) => entry.name === 'prompt-child')?.rounds).toBe(
-      3,
-    );
-    expect(
-      entries.find((entry) => entry.name === 'missing-parent')?.rounds,
-    ).toBeUndefined();
-  });
-
-  it('uses the YAML name as the canonical registry name', async () => {
-    const agentDir = await createAgentDir({
-      'Readable Helper.yaml': toolUseAgent('helper', 'help'),
-    });
-
-    const { entries } = await Effect.runPromise(
-      scanDirectory(agentDir, 'custom'),
-    );
-
-    expect(entries.map((entry) => entry.name)).toEqual(['helper']);
-  });
-
-  it('skips agent names that are not identifiers', async () => {
-    const agentDir = await createAgentDir({
-      'review.yaml': [
-        'name: review team',
-        'description: Verifies manuscripts.',
-        'settings:',
-        '  agentCategory: toolUse',
-        'prompts:',
-        '  systemPrompt: review',
-      ],
-    });
-
-    const { entries } = await Effect.runPromise(
-      scanDirectory(agentDir, 'custom'),
-    );
-
-    expect(entries).toEqual([]);
-  });
-
-  it('skips duplicate YAML names instead of returning colliding entries', async () => {
-    const agentDir = await createAgentDir({
-      'first.yaml': toolUseAgent('shared', 'first'),
-      'second.yaml': toolUseAgent('shared', 'second'),
-      'unique.yaml': toolUseAgent('unique', 'unique'),
-    });
-
-    const { entries } = await Effect.runPromise(
-      scanDirectory(agentDir, 'custom'),
-    );
-
-    expect(entries.map((entry) => entry.name)).toEqual(['unique']);
-  });
-
-  it('skips a file with malformed YAML instead of throwing', async () => {
-    const agentDir = await createAgentDir({
-      'broken.yaml': ['name: "unterminated'],
-      'valid.yaml': toolUseAgent('valid', 'hi'),
-    });
-
-    const { entries } = await Effect.runPromise(
-      scanDirectory(agentDir, 'custom'),
-    );
-
-    expect(entries.map((entry) => entry.name)).toEqual(['valid']);
-  });
-
-  it('reports skipped custom YAML files as scan issues', async () => {
-    const agentDir = await createAgentDir({
-      'broken.yaml': ['name: "unterminated'],
-      'retired.yaml': [
-        'name: retired',
-        'settings:',
-        '  agentCategory: workflow',
-        '  documentTag: documents',
-      ],
-      'valid.yaml': toolUseAgent('valid', 'hi'),
-    });
-
-    const { entries, issues } = await Effect.runPromise(
-      scanDirectory(agentDir, 'custom'),
-    );
-
-    expect(entries.map((entry) => entry.name)).toEqual(['valid']);
-    expect(issues).toEqual([
-      expect.objectContaining({
-        path: 'broken.yaml',
-        message: expect.stringMatching(/unterminated|Nested mappings|YAML/iu),
+        expect(entries.find((entry) => entry.name === 'child')?.rounds).toBe(4);
+        expect(
+          entries.find((entry) => entry.name === 'prompt-child')?.rounds,
+        ).toBe(3);
+        expect(
+          entries.find((entry) => entry.name === 'missing-parent')?.rounds,
+        ).toBeUndefined();
       }),
-      expect.objectContaining({
-        path: 'retired.yaml',
-        message: expect.stringContaining('documentTag'),
+  );
+
+  it.live('uses the YAML name as the canonical registry name', () =>
+    Effect.gen(function* () {
+      const dir = yield* agentDir({
+        'Readable Helper.yaml': toolUseAgent('helper', 'help'),
+      });
+
+      const { entries } = yield* scanDirectory(dir, 'custom');
+
+      expect(entries.map((entry) => entry.name)).toEqual(['helper']);
+    }),
+  );
+
+  it.live('skips agent names that are not identifiers', () =>
+    Effect.gen(function* () {
+      const dir = yield* agentDir({
+        'review.yaml': [
+          'name: review team',
+          'description: Verifies manuscripts.',
+          'settings:',
+          '  agentCategory: toolUse',
+          'prompts:',
+          '  systemPrompt: review',
+        ],
+      });
+
+      const { entries } = yield* scanDirectory(dir, 'custom');
+
+      expect(entries).toEqual([]);
+    }),
+  );
+
+  it.live(
+    'skips duplicate YAML names instead of returning colliding entries',
+    () =>
+      Effect.gen(function* () {
+        const dir = yield* agentDir({
+          'first.yaml': toolUseAgent('shared', 'first'),
+          'second.yaml': toolUseAgent('shared', 'second'),
+          'unique.yaml': toolUseAgent('unique', 'unique'),
+        });
+
+        const { entries } = yield* scanDirectory(dir, 'custom');
+
+        expect(entries.map((entry) => entry.name)).toEqual(['unique']);
       }),
-    ]);
-  });
+  );
+
+  it.live('skips a file with malformed YAML instead of throwing', () =>
+    Effect.gen(function* () {
+      const dir = yield* agentDir({
+        'broken.yaml': ['name: "unterminated'],
+        'valid.yaml': toolUseAgent('valid', 'hi'),
+      });
+
+      const { entries } = yield* scanDirectory(dir, 'custom');
+
+      expect(entries.map((entry) => entry.name)).toEqual(['valid']);
+    }),
+  );
+
+  it.live('reports skipped custom YAML files as scan issues', () =>
+    Effect.gen(function* () {
+      const dir = yield* agentDir({
+        'broken.yaml': ['name: "unterminated'],
+        'retired.yaml': [
+          'name: retired',
+          'settings:',
+          '  agentCategory: workflow',
+          '  documentTag: documents',
+        ],
+        'valid.yaml': toolUseAgent('valid', 'hi'),
+      });
+
+      const { entries, issues } = yield* scanDirectory(dir, 'custom');
+
+      expect(entries.map((entry) => entry.name)).toEqual(['valid']);
+      expect(issues).toEqual([
+        expect.objectContaining({
+          path: 'broken.yaml',
+          message: expect.stringMatching(/unterminated|Nested mappings|YAML/iu),
+        }),
+        expect.objectContaining({
+          path: 'retired.yaml',
+          message: expect.stringContaining('documentTag'),
+        }),
+      ]);
+    }),
+  );
 });

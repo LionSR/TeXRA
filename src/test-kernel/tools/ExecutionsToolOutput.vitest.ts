@@ -5,8 +5,9 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, afterEach, describe, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
 import {
@@ -446,326 +447,351 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(output.includes(`/executions/${executionId}/report`));
   });
 
-  it('points a non-process execution at /conversation instead of dumping its transcript', async () => {
-    const executionId = generateExecutionId();
-    await Effect.runPromise(
-      registerExecution(
-        defaultSession(),
-        executionId,
-        AgentConfigSchema.parse({
-          agent: 'chat',
-          instruction: 'Check the proof.',
-          agentCategory: AgentCategory.ToolUse,
-        }),
-        'chat',
-        {
-          streamId: `chat@model#${executionId}` as StreamTabId,
-          identity: { kind: 'agent', agent: 'chat' },
-        },
-      ),
-    );
-
-    const result = await readOutput(executionId);
-
-    assert.equal(result.status, 'executed');
-    assert.ok(
-      (result.output ?? '').includes(`/executions/${executionId}/conversation`),
-    );
-  });
-
-  it('exposes the canonical workflow aggregate without full instructions', async () => {
-    const executionId = await registerWorkflowExecution('observable');
-    const timestamp = new Date().toISOString();
-    const longStageId = `stage-${'s'.repeat(2_500)}-stage-tail`;
-    const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
-    const longTitle = `Draft ${'t'.repeat(3_000)}-title-tail`;
-    const longError = `Failure ${'e'.repeat(4_000)}-error-tail`;
-    const longFiles = Array.from(
-      { length: 513 },
-      (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
-    );
-    await Effect.runPromise(
-      writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
-        lifecycle: 'active',
-        currentStageId: longStageId,
-        stages: [
+  it.effect(
+    'points a non-process execution at /conversation instead of dumping its transcript',
+    () =>
+      Effect.gen(function* () {
+        const executionId = generateExecutionId();
+        yield* registerExecution(
+          defaultSession(),
+          executionId,
+          AgentConfigSchema.parse({
+            agent: 'chat',
+            instruction: 'Check the proof.',
+            agentCategory: AgentCategory.ToolUse,
+          }),
+          'chat',
           {
-            id: longStageId,
-            title: longTitle,
-            order: 0,
-            lifecycle: 'active',
-            startedAt: timestamp,
+            streamId: `chat@model#${executionId}` as StreamTabId,
+            identity: { kind: 'agent', agent: 'chat' },
           },
-        ],
-        calls: [
-          {
-            id: longCallId,
-            label: '   ',
-            stageId: longStageId,
-            agent: 'writer',
-            files: { input: longFiles, context: [], media: [] },
-            childExecutionId: 'abcdef123456',
-            attempts: [
-              {
-                number: 1,
-                id: '111111111111',
-                startedAt: timestamp,
-                completedAt: timestamp,
-              },
-              {
-                number: 2,
-                id: '222222222222',
-                childStreamId: 'writer#222222222222',
-                model: 'historical-model',
-                costUsd: 0.2,
-                startedAt: timestamp,
-                completedAt: timestamp,
-              },
-              {
-                number: 3,
-                id: 'abcdef123456',
-                childStreamId: 'writer#abcdef123456',
-                model: 'replacement-model',
-                costUsd: 0.3,
-                startedAt: timestamp,
-                completedAt: timestamp,
-              },
-            ],
-            status: 'failed',
-            error: longError,
-            timestamps: {
-              createdAt: timestamp,
+        );
+
+        const result = yield* Effect.promise(() => readOutput(executionId));
+
+        assert.equal(result.status, 'executed');
+        assert.ok(
+          (result.output ?? '').includes(
+            `/executions/${executionId}/conversation`,
+          ),
+        );
+      }),
+  );
+
+  it.effect(
+    'exposes the canonical workflow aggregate without full instructions',
+    () =>
+      Effect.gen(function* () {
+        const executionId = yield* Effect.promise(() =>
+          registerWorkflowExecution('observable'),
+        );
+        const timestamp = new Date().toISOString();
+        const longStageId = `stage-${'s'.repeat(2_500)}-stage-tail`;
+        const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
+        const longTitle = `Draft ${'t'.repeat(3_000)}-title-tail`;
+        const longError = `Failure ${'e'.repeat(4_000)}-error-tail`;
+        const longFiles = Array.from(
+          { length: 513 },
+          (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
+        );
+        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+          lifecycle: 'active',
+          currentStageId: longStageId,
+          stages: [
+            {
+              id: longStageId,
+              title: longTitle,
+              order: 0,
+              lifecycle: 'active',
               startedAt: timestamp,
-              updatedAt: timestamp,
-              completedAt: timestamp,
             },
-          },
-        ],
-        timestamps: { createdAt: timestamp, updatedAt: timestamp },
-      }),
-    );
-
-    const result = await new ExecutionsTool().call({
-      path: `/executions/${executionId}`,
-    });
-    const output = result.output ?? '';
-    assert.equal(result.status, 'executed');
-    assert.ok(output.includes('"currentPhase"'));
-    assert.ok(output.includes('"calls"'));
-    assert.ok(output.includes('"stageBlocked": 0'));
-    assert.ok(output.includes('"childExecutionId": "abcdef123456"'));
-    assert.ok(output.includes('"number": 3'));
-    assert.ok(output.includes('"childStreamId": "writer#222222222222"'));
-    assert.ok(output.includes('"model": "historical-model"'));
-    assert.ok(output.includes('"costUsd": 0.2'));
-    assert.ok(output.includes('"error": "Failure '));
-    assert.ok(!output.includes('"number": 1'));
-    assert.ok(!output.includes('private full instruction'));
-    assert.ok(!output.includes('stage-tail'));
-    assert.ok(!output.includes('call-tail'));
-    assert.ok(!output.includes('title-tail'));
-    assert.ok(!output.includes('error-tail'));
-    assert.ok(!output.includes('file-tail'));
-    assert.ok(output.length < 20_000);
-    assert.ok(
-      (
-        await Effect.runPromise(
-          getExecutionRecords(defaultSession(), executionId).readMeta(),
-        )
-      )?.workflow,
-    );
-  });
-
-  it('keeps cancellation reasons on the aggregate and omits per-call error', async () => {
-    const executionId = await registerWorkflowExecution('cancelled-summary');
-    const timestamp = new Date().toISOString();
-    await Effect.runPromise(
-      writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
-        lifecycle: 'cancelled',
-        stages: [],
-        calls: [
-          {
-            id: 'cancelled-call',
-            label: 'Cancelled call',
-            issued: true,
-            kind: 'document',
-            files: { input: [], context: [], media: [] },
-            attempts: [],
-            status: 'cancelled',
-            timestamps: {
-              createdAt: timestamp,
-              updatedAt: timestamp,
-              completedAt: timestamp,
-            },
-          },
-        ],
-        error: 'Workflow cancelled by user.',
-        timestamps: {
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          completedAt: timestamp,
-        },
-      }),
-    );
-
-    const result = await new ExecutionsTool().call({
-      path: `/executions/${executionId}`,
-    });
-    const output = result.output ?? '';
-
-    assert.equal(result.status, 'executed');
-    assert.ok(output.includes('"error": "Workflow cancelled by user."'));
-    assert.ok(output.includes('"status": "cancelled"'));
-    assert.equal(output.match(/"error":/g)?.length, 1);
-  });
-
-  it('keeps a failed call ahead of newer completed current-stage calls when bounded', async () => {
-    const executionId = await registerWorkflowExecution('failed-rank');
-    const base = Date.parse('2026-04-01T00:00:00.000Z');
-    const completedCalls = Array.from({ length: 8 }, (_, index) => {
-      const updatedAt = new Date(base + (index + 1) * 1_000).toISOString();
-      return {
-        id: `completed-${index}`,
-        label: `Completed ${index}`,
-        stageId: 'stage-2',
-        files: { input: [], context: [], media: [] },
-        attempts: [],
-        status: 'completed' as const,
-        timestamps: {
-          createdAt: updatedAt,
-          updatedAt,
-          completedAt: updatedAt,
-        },
-      };
-    });
-    const failedAt = new Date(base).toISOString();
-    await Effect.runPromise(
-      writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
-        lifecycle: 'active',
-        currentStageId: 'stage-2',
-        stages: [
-          {
-            id: 'stage-1',
-            title: 'Earlier stage',
-            order: 0,
-            lifecycle: 'failed',
-            startedAt: failedAt,
-            completedAt: failedAt,
-          },
-          {
-            id: 'stage-2',
-            title: 'Current stage',
-            order: 1,
-            lifecycle: 'active',
-            startedAt: failedAt,
-          },
-        ],
-        calls: [
-          {
-            id: 'older-failed',
-            label: 'Older failed',
-            stageId: 'stage-1',
-            files: { input: [], context: [], media: [] },
-            attempts: [
-              {
-                number: 1,
-                startedAt: failedAt,
-                completedAt: failedAt,
+          ],
+          calls: [
+            {
+              id: longCallId,
+              label: '   ',
+              stageId: longStageId,
+              agent: 'writer',
+              files: { input: longFiles, context: [], media: [] },
+              childExecutionId: 'abcdef123456',
+              attempts: [
+                {
+                  number: 1,
+                  id: '111111111111',
+                  startedAt: timestamp,
+                  completedAt: timestamp,
+                },
+                {
+                  number: 2,
+                  id: '222222222222',
+                  childStreamId: 'writer#222222222222',
+                  model: 'historical-model',
+                  costUsd: 0.2,
+                  startedAt: timestamp,
+                  completedAt: timestamp,
+                },
+                {
+                  number: 3,
+                  id: 'abcdef123456',
+                  childStreamId: 'writer#abcdef123456',
+                  model: 'replacement-model',
+                  costUsd: 0.3,
+                  startedAt: timestamp,
+                  completedAt: timestamp,
+                },
+              ],
+              status: 'failed',
+              error: longError,
+              timestamps: {
+                createdAt: timestamp,
+                startedAt: timestamp,
+                updatedAt: timestamp,
+                completedAt: timestamp,
               },
-            ],
-            status: 'failed',
-            error: 'expected failure',
-            timestamps: {
-              createdAt: failedAt,
-              startedAt: failedAt,
-              updatedAt: failedAt,
-              completedAt: failedAt,
             },
-          },
-          ...completedCalls,
-        ],
-        timestamps: { createdAt: failedAt, updatedAt: failedAt },
+          ],
+          timestamps: { createdAt: timestamp, updatedAt: timestamp },
+        });
+
+        const result = yield* Effect.promise(() =>
+          new ExecutionsTool().call({
+            path: `/executions/${executionId}`,
+          }),
+        );
+        const output = result.output ?? '';
+        assert.equal(result.status, 'executed');
+        assert.ok(output.includes('"currentPhase"'));
+        assert.ok(output.includes('"calls"'));
+        assert.ok(output.includes('"stageBlocked": 0'));
+        assert.ok(output.includes('"childExecutionId": "abcdef123456"'));
+        assert.ok(output.includes('"number": 3'));
+        assert.ok(output.includes('"childStreamId": "writer#222222222222"'));
+        assert.ok(output.includes('"model": "historical-model"'));
+        assert.ok(output.includes('"costUsd": 0.2'));
+        assert.ok(output.includes('"error": "Failure '));
+        assert.ok(!output.includes('"number": 1'));
+        assert.ok(!output.includes('private full instruction'));
+        assert.ok(!output.includes('stage-tail'));
+        assert.ok(!output.includes('call-tail'));
+        assert.ok(!output.includes('title-tail'));
+        assert.ok(!output.includes('error-tail'));
+        assert.ok(!output.includes('file-tail'));
+        assert.ok(output.length < 20_000);
+        assert.ok(
+          (yield* getExecutionRecords(defaultSession(), executionId).readMeta())
+            ?.workflow,
+        );
       }),
-    );
+  );
 
-    const result = await new ExecutionsTool().call({
-      path: `/executions/${executionId}`,
-    });
-    const output = result.output ?? '';
-
-    assert.equal(result.status, 'executed');
-    assert.ok(output.includes('"id": "older-failed"'));
-    assert.ok(output.includes('"omittedCalls": 1'));
-    assert.ok(!output.includes('"id": "completed-0"'));
-  });
-
-  it('keeps an earlier-stage live call ahead of current-stage terminal calls when bounded', async () => {
-    const executionId = await registerWorkflowExecution('ranked');
-    const timestamp = new Date().toISOString();
-    const terminalCalls = Array.from({ length: 8 }, (_, index) => ({
-      id: `current-terminal-${index}`,
-      label: `Current terminal ${index}`,
-      stageId: 'stage-2',
-      files: { input: [], context: [], media: [] },
-      attempts: [],
-      status: 'completed' as const,
-      timestamps: {
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        completedAt: timestamp,
-      },
-    }));
-    await Effect.runPromise(
-      writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
-        lifecycle: 'active',
-        currentStageId: 'stage-2',
-        stages: [
-          {
-            id: 'stage-1',
-            title: 'Earlier stage',
-            order: 0,
-            lifecycle: 'completed',
-            startedAt: timestamp,
+  it.effect(
+    'keeps cancellation reasons on the aggregate and omits per-call error',
+    () =>
+      Effect.gen(function* () {
+        const executionId = yield* Effect.promise(() =>
+          registerWorkflowExecution('cancelled-summary'),
+        );
+        const timestamp = new Date().toISOString();
+        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+          lifecycle: 'cancelled',
+          stages: [],
+          calls: [
+            {
+              id: 'cancelled-call',
+              label: 'Cancelled call',
+              issued: true,
+              kind: 'document',
+              files: { input: [], context: [], media: [] },
+              attempts: [],
+              status: 'cancelled',
+              timestamps: {
+                createdAt: timestamp,
+                updatedAt: timestamp,
+                completedAt: timestamp,
+              },
+            },
+          ],
+          error: 'Workflow cancelled by user.',
+          timestamps: {
+            createdAt: timestamp,
+            updatedAt: timestamp,
             completedAt: timestamp,
           },
-          {
-            id: 'stage-2',
-            title: 'Current stage',
-            order: 1,
-            lifecycle: 'active',
-            startedAt: timestamp,
-          },
-        ],
-        calls: [
-          ...terminalCalls,
-          {
-            id: 'earlier-live',
-            label: 'Earlier live',
-            stageId: 'stage-1',
-            files: { input: [], context: [], media: [] },
-            attempts: [{ number: 1, startedAt: timestamp }],
-            status: 'running',
-            timestamps: {
-              createdAt: timestamp,
-              startedAt: timestamp,
-              updatedAt: timestamp,
-            },
-          },
-        ],
-        timestamps: { createdAt: timestamp, updatedAt: timestamp },
+        });
+
+        const result = yield* Effect.promise(() =>
+          new ExecutionsTool().call({
+            path: `/executions/${executionId}`,
+          }),
+        );
+        const output = result.output ?? '';
+
+        assert.equal(result.status, 'executed');
+        assert.ok(output.includes('"error": "Workflow cancelled by user."'));
+        assert.ok(output.includes('"status": "cancelled"'));
+        assert.equal(output.match(/"error":/g)?.length, 1);
       }),
-    );
+  );
 
-    const result = await new ExecutionsTool().call({
-      path: `/executions/${executionId}`,
-    });
-    const output = result.output ?? '';
+  it.effect(
+    'keeps a failed call ahead of newer completed current-stage calls when bounded',
+    () =>
+      Effect.gen(function* () {
+        const executionId = yield* Effect.promise(() =>
+          registerWorkflowExecution('failed-rank'),
+        );
+        const base = Date.parse('2026-04-01T00:00:00.000Z');
+        const completedCalls = Array.from({ length: 8 }, (_, index) => {
+          const updatedAt = new Date(base + (index + 1) * 1_000).toISOString();
+          return {
+            id: `completed-${index}`,
+            label: `Completed ${index}`,
+            stageId: 'stage-2',
+            files: { input: [], context: [], media: [] },
+            attempts: [],
+            status: 'completed' as const,
+            timestamps: {
+              createdAt: updatedAt,
+              updatedAt,
+              completedAt: updatedAt,
+            },
+          };
+        });
+        const failedAt = new Date(base).toISOString();
+        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+          lifecycle: 'active',
+          currentStageId: 'stage-2',
+          stages: [
+            {
+              id: 'stage-1',
+              title: 'Earlier stage',
+              order: 0,
+              lifecycle: 'failed',
+              startedAt: failedAt,
+              completedAt: failedAt,
+            },
+            {
+              id: 'stage-2',
+              title: 'Current stage',
+              order: 1,
+              lifecycle: 'active',
+              startedAt: failedAt,
+            },
+          ],
+          calls: [
+            {
+              id: 'older-failed',
+              label: 'Older failed',
+              stageId: 'stage-1',
+              files: { input: [], context: [], media: [] },
+              attempts: [
+                {
+                  number: 1,
+                  startedAt: failedAt,
+                  completedAt: failedAt,
+                },
+              ],
+              status: 'failed',
+              error: 'expected failure',
+              timestamps: {
+                createdAt: failedAt,
+                startedAt: failedAt,
+                updatedAt: failedAt,
+                completedAt: failedAt,
+              },
+            },
+            ...completedCalls,
+          ],
+          timestamps: { createdAt: failedAt, updatedAt: failedAt },
+        });
 
-    assert.equal(result.status, 'executed');
-    assert.ok(output.includes('"id": "earlier-live"'));
-    assert.ok(output.includes('"omittedCalls": 1'));
-    assert.ok(!output.includes('"id": "current-terminal-7"'));
-  });
+        const result = yield* Effect.promise(() =>
+          new ExecutionsTool().call({
+            path: `/executions/${executionId}`,
+          }),
+        );
+        const output = result.output ?? '';
+
+        assert.equal(result.status, 'executed');
+        assert.ok(output.includes('"id": "older-failed"'));
+        assert.ok(output.includes('"omittedCalls": 1'));
+        assert.ok(!output.includes('"id": "completed-0"'));
+      }),
+  );
+
+  it.effect(
+    'keeps an earlier-stage live call ahead of current-stage terminal calls when bounded',
+    () =>
+      Effect.gen(function* () {
+        const executionId = yield* Effect.promise(() =>
+          registerWorkflowExecution('ranked'),
+        );
+        const timestamp = new Date().toISOString();
+        const terminalCalls = Array.from({ length: 8 }, (_, index) => ({
+          id: `current-terminal-${index}`,
+          label: `Current terminal ${index}`,
+          stageId: 'stage-2',
+          files: { input: [], context: [], media: [] },
+          attempts: [],
+          status: 'completed' as const,
+          timestamps: {
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            completedAt: timestamp,
+          },
+        }));
+        yield* writeWorkflowExecutionSnapshot(defaultSession(), executionId, {
+          lifecycle: 'active',
+          currentStageId: 'stage-2',
+          stages: [
+            {
+              id: 'stage-1',
+              title: 'Earlier stage',
+              order: 0,
+              lifecycle: 'completed',
+              startedAt: timestamp,
+              completedAt: timestamp,
+            },
+            {
+              id: 'stage-2',
+              title: 'Current stage',
+              order: 1,
+              lifecycle: 'active',
+              startedAt: timestamp,
+            },
+          ],
+          calls: [
+            ...terminalCalls,
+            {
+              id: 'earlier-live',
+              label: 'Earlier live',
+              stageId: 'stage-1',
+              files: { input: [], context: [], media: [] },
+              attempts: [{ number: 1, startedAt: timestamp }],
+              status: 'running',
+              timestamps: {
+                createdAt: timestamp,
+                startedAt: timestamp,
+                updatedAt: timestamp,
+              },
+            },
+          ],
+          timestamps: { createdAt: timestamp, updatedAt: timestamp },
+        });
+
+        const result = yield* Effect.promise(() =>
+          new ExecutionsTool().call({
+            path: `/executions/${executionId}`,
+          }),
+        );
+        const output = result.output ?? '';
+
+        assert.equal(result.status, 'executed');
+        assert.ok(output.includes('"id": "earlier-live"'));
+        assert.ok(output.includes('"omittedCalls": 1'));
+        assert.ok(!output.includes('"id": "current-terminal-7"'));
+      }),
+  );
 
   it('shows one model for a workflow run in both the listing and its summary', async () => {
     const executionId = await registerWorkflowExecution(

@@ -2,7 +2,8 @@ import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { describe, expect } from 'vitest';
 
 import { Effect } from 'effect';
 import {
@@ -202,60 +203,76 @@ describe('CLI context config defaults', () => {
     expect(context.configWarnings).toEqual([]);
   });
 
-  it('reports unknown and invalid workspace config fields without failing', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({
-        unknown: true,
-        'texra.model': 'claude-opus-4-7',
-        'texra.chat': { other: true, model: 'deepseekT' },
+  it.effect(
+    'reports unknown and invalid workspace config fields without failing',
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* Effect.promise(() =>
+          workspaceWithConfig(
+            JSON.stringify({
+              unknown: true,
+              'texra.model': 'claude-opus-4-7',
+              'texra.chat': { other: true, model: 'deepseekT' },
+            }),
+          ),
+        );
+
+        const loaded = yield* loadWorkspaceCliConfig(workspace);
+
+        expect(loaded.values.chat?.model).toBe('deepseekT');
+        expect(loaded.values.model).toBeUndefined();
+        expect(loaded.warnings.join('\n')).toContain('unknown');
+        expect(loaded.warnings.join('\n')).toContain('model');
+        expect(loaded.warnings.join('\n')).toContain('chat.other');
       }),
-    );
+  );
 
-    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
+  it.effect('accepts the CLI-only ChatGPT Codex preference key', () =>
+    Effect.gen(function* () {
+      const workspace = yield* Effect.promise(() =>
+        workspaceWithConfig(
+          JSON.stringify({
+            'texra.chatgptCodex.preferSubscription': true,
+          }),
+        ),
+      );
 
-    expect(loaded.values.chat?.model).toBe('deepseekT');
-    expect(loaded.values.model).toBeUndefined();
-    expect(loaded.warnings.join('\n')).toContain('unknown');
-    expect(loaded.warnings.join('\n')).toContain('model');
-    expect(loaded.warnings.join('\n')).toContain('chat.other');
-  });
+      const loaded = yield* loadWorkspaceCliConfig(workspace);
 
-  it('accepts the CLI-only ChatGPT Codex preference key', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({
-        'texra.chatgptCodex.preferSubscription': true,
+      expect(loaded.warnings).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    'accepts prefixed command sections from unified workspace config',
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* Effect.promise(() =>
+          workspaceWithConfig(
+            JSON.stringify({
+              'texra.agent': 'generic',
+              'texra.model': 'gpt55',
+              'texra.chat': { agent: 'chat', model: 'deepseekT' },
+              'texra.run': { agent: 'criticize', model: 'sonnet46T' },
+            }),
+          ),
+        );
+
+        const loaded = yield* loadWorkspaceCliConfig(workspace);
+
+        expect(loaded.values.agent).toBe('generic');
+        expect(loaded.values.model).toBe('gpt55');
+        expect(loaded.values.chat).toEqual({
+          agent: 'chat',
+          model: 'deepseekT',
+        });
+        expect(loaded.values.run).toEqual({
+          agent: 'criticize',
+          model: 'sonnet46T',
+        });
+        expect(loaded.warnings).toEqual([]);
       }),
-    );
-
-    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
-
-    expect(loaded.warnings).toEqual([]);
-  });
-
-  it('accepts prefixed command sections from unified workspace config', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({
-        'texra.agent': 'generic',
-        'texra.model': 'gpt55',
-        'texra.chat': { agent: 'chat', model: 'deepseekT' },
-        'texra.run': { agent: 'criticize', model: 'sonnet46T' },
-      }),
-    );
-
-    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
-
-    expect(loaded.values.agent).toBe('generic');
-    expect(loaded.values.model).toBe('gpt55');
-    expect(loaded.values.chat).toEqual({
-      agent: 'chat',
-      model: 'deepseekT',
-    });
-    expect(loaded.values.run).toEqual({
-      agent: 'criticize',
-      model: 'sonnet46T',
-    });
-    expect(loaded.warnings).toEqual([]);
-  });
+  );
 
   it('canonicalizes existing workspace paths before reading config', async () => {
     const root = await makeTempDir('texra-cli-context-link-', tempDirs);
@@ -278,28 +295,38 @@ describe('CLI context config defaults', () => {
     expect(context.outputFormat).toBe('json');
   });
 
-  it('reports malformed workspace config files without failing', async () => {
-    const workspace = await workspaceWithConfig('{');
+  it.effect('reports malformed workspace config files without failing', () =>
+    Effect.gen(function* () {
+      const workspace = yield* Effect.promise(() => workspaceWithConfig('{'));
 
-    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
+      const loaded = yield* loadWorkspaceCliConfig(workspace);
 
-    expect(loaded.values).toEqual({});
-    expect(loaded.path).toContain(join('.texra', 'config.json'));
-    expect(loaded.warnings.join('\n')).toContain('Could not parse');
-  });
+      expect(loaded.values).toEqual({});
+      expect(loaded.path).toContain(join('.texra', 'config.json'));
+      expect(loaded.warnings.join('\n')).toContain('Could not parse');
+    }),
+  );
 
-  it('reports unreadable workspace config files without treating them as absent', async () => {
-    const workspace = await makeTempDir('texra-cli-context-', tempDirs);
-    await mkdir(join(workspace, '.texra', 'config.json'), {
-      recursive: true,
-    });
+  it.effect(
+    'reports unreadable workspace config files without treating them as absent',
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-context-', tempDirs),
+        );
+        yield* Effect.promise(() =>
+          mkdir(join(workspace, '.texra', 'config.json'), {
+            recursive: true,
+          }),
+        );
 
-    const loaded = await Effect.runPromise(loadWorkspaceCliConfig(workspace));
+        const loaded = yield* loadWorkspaceCliConfig(workspace);
 
-    expect(loaded.values).toEqual({});
-    expect(loaded.path).toContain(join('.texra', 'config.json'));
-    expect(loaded.warnings.join('\n')).toContain('Could not read');
-  });
+        expect(loaded.values).toEqual({});
+        expect(loaded.path).toContain(join('.texra', 'config.json'));
+        expect(loaded.warnings.join('\n')).toContain('Could not read');
+      }),
+  );
 
   it('ignores unknown TEXRA_MODEL values before they reach runtime', async () => {
     const context = await cliContext({

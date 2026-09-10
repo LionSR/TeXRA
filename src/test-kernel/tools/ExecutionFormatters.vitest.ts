@@ -1,6 +1,7 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { beforeEach, afterEach, describe, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { beforeEach, afterEach, describe, vi } from 'vitest';
 import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunOutcome } from '@shared/schemas';
@@ -55,139 +56,148 @@ describe('getExecutionStatusInfo', () => {
     mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
   });
 
-  it.each<{ outcome?: RunOutcome; expected: string }>([
+  it.effect.each<{ outcome?: RunOutcome; expected: string }>([
     { outcome: undefined, expected: 'unknown' },
     { outcome: 'cancelled', expected: 'cancelled' },
   ])(
     'reports $expected when the live handle is gone and nothing owns the run',
-    async ({ outcome, expected }) => {
-      persisted({ outcome }, 'no-checkpoint');
+    ({ outcome, expected }) =>
+      Effect.gen(function* () {
+        persisted({ outcome }, 'no-checkpoint');
 
-      const info = await Effect.runPromise(
-        getExecutionStatusInfo('exec-1', session),
-      );
+        const info = yield* getExecutionStatusInfo('exec-1', session);
 
-      assert.strictEqual(info.status, expected);
-    },
+        assert.strictEqual(info.status, expected);
+      }),
   );
 
-  it('reads no checkpoint and no lease for a row that recorded its outcome', async () => {
-    // The listing's whole budget: one metadata row (here the caller's own),
-    // and nothing else for a run that already said how it ended.
-    persisted(null, 'no-checkpoint');
+  it.effect(
+    'reads no checkpoint and no lease for a row that recorded its outcome',
+    () =>
+      Effect.gen(function* () {
+        // The listing's whole budget: one metadata row (here the caller's own),
+        // and nothing else for a run that already said how it ended.
+        persisted(null, 'no-checkpoint');
 
-    const info = await Effect.runPromise(
-      getExecutionStatusInfo('exec-1', session, {
-        outcome: 'completed',
+        const info = yield* getExecutionStatusInfo('exec-1', session, {
+          outcome: 'completed',
+        });
+
+        assert.strictEqual(info.status, 'completed');
+        assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
+        assert.strictEqual(mocks.exists.mock.calls.length, 0);
+        assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 0);
       }),
-    );
+  );
 
-    assert.strictEqual(info.status, 'completed');
-    assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
-    assert.strictEqual(mocks.exists.mock.calls.length, 0);
-    assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 0);
-  });
+  it.effect('costs one lease read and one stat for a settled row', () =>
+    Effect.gen(function* () {
+      persisted({}, 'no-checkpoint');
 
-  it('costs one lease read and one stat for a settled row', async () => {
-    persisted({}, 'no-checkpoint');
+      const info = yield* getExecutionStatusInfo('exec-1', session, {});
 
-    const info = await Effect.runPromise(
-      getExecutionStatusInfo('exec-1', session, {}),
-    );
+      assert.strictEqual(info.status, 'unknown');
+      assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
+      assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 1);
+      assert.strictEqual(mocks.exists.mock.calls.length, 1);
+    }),
+  );
 
-    assert.strictEqual(info.status, 'unknown');
-    assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
-    assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 1);
-    assert.strictEqual(mocks.exists.mock.calls.length, 1);
-  });
+  it.effect(
+    'reports a checkpointless run a live foreign owner holds as held',
+    () =>
+      Effect.gen(function* () {
+        // A background shell holds its execution lease for its whole lifetime and
+        // never writes a flow record, so the checkpoint stat cannot decide it.
+        persisted({}, 'no-checkpoint');
+        mocks.inspectExecutionLease.mockResolvedValue({
+          status: 'held',
+          owner: { pid: 5150, hostname: 'other-host' },
+        });
 
-  it('reports a checkpointless run a live foreign owner holds as held', async () => {
-    // A background shell holds its execution lease for its whole lifetime and
-    // never writes a flow record, so the checkpoint stat cannot decide it.
-    persisted({}, 'no-checkpoint');
-    mocks.inspectExecutionLease.mockResolvedValue({
-      status: 'held',
-      owner: { pid: 5150, hostname: 'other-host' },
-    });
+        const info = yield* getExecutionStatusInfo('exec-1', session, {});
 
-    const info = await Effect.runPromise(
-      getExecutionStatusInfo('exec-1', session, {}),
-    );
+        assert.strictEqual(info.status, 'unknown');
+        assert.match(info.detail ?? '', /pid 5150 on other-host/);
+        assert.strictEqual(mocks.exists.mock.calls.length, 0);
+      }),
+  );
 
-    assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /pid 5150 on other-host/);
-    assert.strictEqual(mocks.exists.mock.calls.length, 0);
-  });
+  it.effect('calls a checkpointed run nobody owns interrupted', () =>
+    Effect.gen(function* () {
+      persisted({}, 'checkpoint');
+      mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
 
-  it('calls a checkpointed run nobody owns interrupted', async () => {
-    persisted({}, 'checkpoint');
-    mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
+      const info = yield* getExecutionStatusInfo('exec-1', session);
 
-    const info = await Effect.runPromise(
-      getExecutionStatusInfo('exec-1', session),
-    );
+      assert.strictEqual(info.status, 'cancelled');
+      // Presence, not validity: a stat cannot promise the record can be resumed.
+      assert.match(
+        info.detail ?? '',
+        /interrupted; a flow record remains \(not validated here\)/,
+      );
+    }),
+  );
 
-    assert.strictEqual(info.status, 'cancelled');
-    // Presence, not validity: a stat cannot promise the record can be resumed.
-    assert.match(
-      info.detail ?? '',
-      /interrupted; a flow record remains \(not validated here\)/,
-    );
-  });
+  it.effect(
+    'does not call a run cancelled while another process holds it',
+    () =>
+      Effect.gen(function* () {
+        persisted({}, 'checkpoint');
+        mocks.inspectExecutionLease.mockResolvedValue({
+          status: 'held',
+          owner: { pid: 4242, hostname: 'other-host' },
+        });
 
-  it('does not call a run cancelled while another process holds it', async () => {
-    persisted({}, 'checkpoint');
-    mocks.inspectExecutionLease.mockResolvedValue({
-      status: 'held',
-      owner: { pid: 4242, hostname: 'other-host' },
-    });
+        const info = yield* getExecutionStatusInfo('exec-1', session);
 
-    const info = await Effect.runPromise(
-      getExecutionStatusInfo('exec-1', session),
-    );
+        assert.strictEqual(info.status, 'unknown');
+        assert.match(info.detail ?? '', /pid 4242 on other-host/);
+      }),
+  );
 
-    assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /pid 4242 on other-host/);
-  });
+  it.effect(
+    'does not settle a run whose lease this process holds with no run',
+    () =>
+      Effect.gen(function* () {
+        // Nothing durable behind the lease: no outcome ever written.
+        persisted({}, 'checkpoint');
+        mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
 
-  it('does not settle a run whose lease this process holds with no run', async () => {
-    // Nothing durable behind the lease: no outcome ever written.
-    persisted({}, 'checkpoint');
-    mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
+        const info = yield* getExecutionStatusInfo('exec-1', session);
 
-    const info = await Effect.runPromise(
-      getExecutionStatusInfo('exec-1', session),
-    );
+        assert.strictEqual(info.status, 'unknown');
+        assert.match(info.detail ?? '', /no live run/);
+      }),
+  );
 
-    assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /no live run/);
-  });
+  it.effect(
+    'still reports the outcome while this process lags releasing the lease',
+    () =>
+      Effect.gen(function* () {
+        // A finished child untracks its handle and writes the outcome long before
+        // its loop releases the execution lease (#8093), and the parent reads the
+        // run inside exactly that window.
+        persisted({ outcome: 'completed' }, 'checkpoint');
+        mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
 
-  it('still reports the outcome while this process lags releasing the lease', async () => {
-    // A finished child untracks its handle and writes the outcome long before
-    // its loop releases the execution lease (#8093), and the parent reads the
-    // run inside exactly that window.
-    persisted({ outcome: 'completed' }, 'checkpoint');
-    mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
+        const info = yield* getExecutionStatusInfo('exec-1', session);
 
-    const info = await Effect.runPromise(
-      getExecutionStatusInfo('exec-1', session),
-    );
+        assert.strictEqual(info.status, 'completed');
+      }),
+  );
 
-    assert.strictEqual(info.status, 'completed');
-  });
+  it.effect('reports an unreadable lease rather than a terminal reading', () =>
+    Effect.gen(function* () {
+      persisted({}, 'checkpoint');
+      mocks.inspectExecutionLease.mockRejectedValue(new Error('lease corrupt'));
 
-  it('reports an unreadable lease rather than a terminal reading', async () => {
-    persisted({}, 'checkpoint');
-    mocks.inspectExecutionLease.mockRejectedValue(new Error('lease corrupt'));
+      const info = yield* getExecutionStatusInfo('exec-1', session);
 
-    const info = await Effect.runPromise(
-      getExecutionStatusInfo('exec-1', session),
-    );
-
-    assert.strictEqual(info.status, 'unknown');
-    assert.match(info.detail ?? '', /cannot read \(lease corrupt\)/);
-  });
+      assert.strictEqual(info.status, 'unknown');
+      assert.match(info.detail ?? '', /cannot read \(lease corrupt\)/);
+    }),
+  );
 });
 
 describe('turnAttributionNote', () => {
@@ -195,27 +205,36 @@ describe('turnAttributionNote', () => {
     vi.clearAllMocks();
   });
 
-  it('does not call an accepted turn running once its stream is terminal', async () => {
-    // The handle outlives the stream's terminal phase, so handle presence
-    // alone must not word the note as "still running".
-    const handle = testExecutionHandle({
-      executionId: 'exec-1',
-      parentStreamId: 'stream-1',
-      agent: 'test',
-    });
-    session.executions.track(handle);
-    seedStreamStatusForTest(session.status, 'stream-1', { phase: 'completed' });
-    const store = {
-      getExecutionId: () => 'exec-1',
-      readTurnState: async () => ({
-        activeTurn: { token: 'turn-2' },
-        lastCompletedTurn: { token: 'turn-1' },
+  it.effect(
+    'does not call an accepted turn running once its stream is terminal',
+    () =>
+      Effect.gen(function* () {
+        // The handle outlives the stream's terminal phase, so handle presence
+        // alone must not word the note as "still running".
+        const handle = testExecutionHandle({
+          executionId: 'exec-1',
+          parentStreamId: 'stream-1',
+          agent: 'test',
+        });
+        session.executions.track(handle);
+        seedStreamStatusForTest(session.status, 'stream-1', {
+          phase: 'completed',
+        });
+        const store = {
+          getExecutionId: () => 'exec-1',
+          readTurnState: async () => ({
+            activeTurn: { token: 'turn-2' },
+            lastCompletedTurn: { token: 'turn-1' },
+          }),
+        } as unknown as Parameters<typeof turnAttributionNote>[0];
+
+        const note = yield* turnAttributionNote(store, session);
+
+        assert.match(
+          note ?? '',
+          /turn turn-2 ended with its run \(completed\)/,
+        );
+        assert.doesNotMatch(note ?? '', /still running/);
       }),
-    } as unknown as Parameters<typeof turnAttributionNote>[0];
-
-    const note = await Effect.runPromise(turnAttributionNote(store, session));
-
-    assert.match(note ?? '', /turn turn-2 ended with its run \(completed\)/);
-    assert.doesNotMatch(note ?? '', /still running/);
-  });
+  );
 });
