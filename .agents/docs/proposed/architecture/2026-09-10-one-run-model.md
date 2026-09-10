@@ -6,9 +6,10 @@ circling, stated as one design with its deletion ledger and its order against
 the runtime lane. It supersedes the census's Section 4 families: they are
 symptoms of one cause and are resolved here together, not one at a time.
 
-This note examines `main` at `e446f18894` on 2026-09-10. Every family in the
-census was re-investigated against live code before this was written; the
-corrections that came out of that are in section 8, so nobody re-derives them.
+This note examines `main` at `2b4e9ffcba` on 2026-09-10, the commit after
+#12189 and #12199 landed. Every family in the census was re-investigated
+against live code before this was written; the corrections that came out of
+that are in section 8, so nobody re-derives them.
 
 ## 1. The cause, and why the census is a local minimum
 
@@ -40,7 +41,13 @@ written as exactly one row type; a derived value has exactly one fold;
 nothing derived is persisted and nothing persisted is derived. Two folds are
 legitimate only when they answer different questions over the same rows
 (display versus resume). Two folds answering the same question is the
-defect.
+defect. The one admissible persisted derivation is a checkpoint: a snapshot
+the rows can always rebuild and that loses every conflict with them, kept
+only to bound replay cost. A snapshot that carries a fact no row carries is
+not a checkpoint, it is a second store; PR1's `flow.snapshot` is written to
+"restore what no row carries" ([PR1 §2.6](2026-09-08-pr1-run-ledger-foundation.md)),
+and that gap closes by giving those facts rows, not by keeping the snapshot
+authoritative.
 
 **R2. Commands in, facts out.** A UI never calls the runtime. It sends an
 intent from one command vocabulary; the runtime answers with facts. A request
@@ -63,15 +70,15 @@ not touched.
 
 ## 3. The model: seven facts, one declaration each
 
-| Fact about a run   | Declared today (spellings)                                                                                                                                                   | Declared in 1.0                                                                                               |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Identity           | `ExecutionId`, `StreamTabId`, `runId`, `storageKey`, `RunScope.agentName`, four stream prefixes                                                                              | `ExecutionId` (branded); `RunIdentity` for what kind of thing it is                                           |
-| Parent edge        | `parentStreamId`, `parentExecutionId`, `isSubagent`, `isChildExecution`, `background`, five persisted carriers, two "is child of" implementations                            | `parent: { id, startCommit } \| null` and `mode: 'inband' \| 'detached'` on `run.start`                       |
-| Phase and outcome  | `StreamPhase`, `StreamLifecycleStatus`, `ExecutionStatus`, `HistoryRunStatus`, `WORKFLOW_EXECUTION_LIFECYCLE`, `ExecutionMeta.outcome`, the `status` fact, the `result` fact | `RunPhase` folded from rows; `RunOutcome` its terminal subset; one `run.end` row                              |
-| Tool-call outcome  | `ToolResult.status`, `ToolStatus`, `TOOL_USE_STATUS`, `ToolUseLog.isError`, `normalizeToolUseData`                                                                           | `ToolCallStatus` on `tool.result`; the card's status is the fold of it                                        |
-| Result             | `AgentFlowResult`, `AgentFinalResult`, `ResultEvent`, `ResultMeta`; `totalCostUsd`, `cost`, `usage.totalCost`                                                                | The `run.end` payload; every in-memory result type is `z.infer` of it; one `usage`                            |
-| Events             | `AgentEvent` interfaces, `TranscriptEventSchemas`, the `durable(...)` arms, the CLI NDJSON rename table                                                                      | `sessionEvent.ts` is the vocabulary; trace and CLI projections are `.pick()`s of it                           |
-| Waiting on a human | Four decision vocabularies, an in-memory pending set, a fold, a parallel inquiry database and protocol, three refusal switch tables, `useOwnApiKey`                          | `request.opened` / `request.decided` over the seven kinds; pending is the fold; inquiry is a threaded request |
+| Fact about a run   | Declared today (spellings)                                                                                                                          | Declared in 1.0                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Identity           | `ExecutionId`, `StreamTabId`, `runId`, `storageKey`, `RunScope.agentName`, four stream prefixes                                                     | `ExecutionId` (branded); `RunIdentity` for what kind of thing it is                                           |
+| Parent edge        | `parentStreamId`, `parentExecutionId`, `isSubagent`, `isChildExecution`, `background`, five persisted carriers, two "is child of" implementations   | `parent: { id, startCommit } \| null` on `run.start`; everything else is `parent !== null`                    |
+| Phase and outcome  | `StreamPhase`, `StreamLifecycleStatus`, `ExecutionStatus`, `HistoryRunStatus`, `ExecutionMeta.outcome`, the `status` fact, the `result` fact        | `RunPhase` folded from `run.start`, `run.activate`, `flow.step`, `run.end`; `RunOutcome` its terminal subset  |
+| Tool-call outcome  | `ToolResult.status`, `ToolStatus`, `TOOL_USE_STATUS`, `ToolUseLog.isError`, `normalizeToolUseData`                                                  | `ToolCallStatus` on `tool.result`; the card's status is the fold of it                                        |
+| Result             | `AgentFlowResult`, `AgentFinalResult`, `ResultEvent`, `ResultMeta`; `totalCostUsd`, `cost`, `usage.totalCost`                                       | The `run.end` payload; every in-memory result type is `z.infer` of it; one `usage`                            |
+| Events             | `AgentEvent` interfaces, `TranscriptEventSchemas`, the `durable(...)` arms, the CLI NDJSON rename table                                             | `sessionEvent.ts` is the vocabulary; trace and CLI projections are `.pick()`s of it                           |
+| Waiting on a human | Four decision vocabularies, an in-memory pending set, a fold, a parallel inquiry database and protocol, three refusal switch tables, `useOwnApiKey` | `request.opened` / `request.decided` over the seven kinds; pending is the fold; inquiry is a threaded request |
 
 ### 3.1 Identity
 
@@ -133,31 +140,57 @@ still deletes every name above and keeps only the second counter.
 
 ### 3.2 Parent edge
 
-`run.start` carries `parent: { id: ExecutionId, startCommit } | null` and
-`mode`. That is the whole edge. `parentStreamId` and `parentExecutionId` are
+`run.start` carries `parent: { id: ExecutionId, startCommit } | null`. That
+is the whole edge. `parentStreamId` and `parentExecutionId` are
 one pointer; the one site that used both, the inquiry continuation's "the
 stream now runs a different execution" guard
 ([inquiryContinuation.ts:198-209](../../../../src/tools/inquiry/inquiryContinuation.ts)),
 tests a condition the seq-1 rule makes unrepresentable, and the field it
 guards is explicitly a legacy-manifest reader the 1.0 policy retires.
 `isSubagent` is never stored, it is projected from `handle.isChildExecution`
-at every write; `isChildExecution` is `parent !== null`. `background` is the
-only real second fact here: bash sets it without a parent
-([bash.ts:544-546](../../../../src/tools/bash.ts)), so it is a launch mode,
-not a child flag, and is named as one. The five persisted carriers of the
-parent pointer collapse to the `run.start` row; "is a direct child of X" has
-one implementation, over the fold.
+at every write; `isChildExecution` is `parent !== null`. So is `background`:
+every writer sets it `true` beside a parent
+([bash.ts:546](../../../../src/tools/bash.ts),
+[agentCliShared.ts:312](../../../../src/tools/agentCliShared.ts),
+[detachedChildRun.ts:71](../../../../src/tools/delegation/detachedChildRun.ts)),
+the default is `parentExecutionId !== undefined`
+([executionLifecycle.ts:151](../../../../src/agent/storage/executionLifecycle.ts)),
+in-band children set it too, and its one production reader turns it into a
+CLI "don't switch view to this child" hint
+([sessionProgressSubscription.ts:80](../../../../packages/cli/src/runtime/sessionProgressSubscription.ts)).
+The census's first draft of this note called it a launch mode; it is not, it
+is the parent edge spelled as a boolean a fourth time, and it is deleted. The
+five persisted carriers of the parent pointer collapse to the `run.start`
+row; "is a direct child of X" has one implementation, over the fold.
 
 ### 3.3 Phase, outcome, and tool-call status
 
-`RunPhase` is folded from rows: `running`, `waiting`, and the three
-`RunOutcome` values. It is already that today under the name `StreamPhase`
+`RunPhase` is `running`, `waiting`, and the three `RunOutcome` values. It is
+already that today under the name `StreamPhase`
 ([stream.ts:80-89](../../../../src/shared/schemas/stream.ts)); the name
-changes because there is no stream. `WORKFLOW_EXECUTION_LIFECYCLE` uses the
-same shape with `active` for `running` and `waiting` for "not yet started",
-with no translator because no code ever had to reconcile them; it adopts the
-`RunPhase` words. `ExecutionStatus` and `HistoryRunStatus` are projections
-with one translator each, and survive only inside the CLI projection.
+changes because there is no stream. It is folded from rows that already
+exist or that PR1 defines, and no row exists to carry it: `run.start` and
+`run.activate` put a run in `running`, `flow.step` with `waiting` or `halted`
+parks it (PR1 §2.2 writes that row for every wait, including the ordinary
+tool-use turn that parks for a future follow-up with no request open), a
+later `run.activate` resumes it, and `run.end` ends it. Today the `status`
+fact ([sessionEvent.ts:291-299](../../../../src/shared/schemas/sessionEvent.ts))
+carries those transitions as a phase-plus-previous-phase pair beside the
+rows that cause them; under R1 the transition is the fold of the cause, and
+the `status` row is deleted once `flow.step` lands.
+
+Workflow scheduling keeps its own lifecycle. A workflow call is a
+scheduling unit, not a run: its `waiting` means "not yet started" and its
+`skipped` has no run counterpart, so folding it into `RunPhase` would be
+lossy. The duplicate there is different: `WORKFLOW_CALL_STATUS`
+([workflowExecutionSnapshot.ts:18-27](../../../../src/shared/schemas/workflowExecutionSnapshot.ts))
+and `WorkflowCallProgress.status`
+([workflowCallProgress.ts:96-141](../../../../src/shared/schemas/workflowCallProgress.ts))
+are two nine-value enums for one call, joined by a translator that collapses
+`stageBlocked` into `declared`. One enum, on the row, and the progress
+projection is a `.pick()`. `ExecutionStatus` and `HistoryRunStatus` are
+projections of `RunOutcome` with one translator each, and survive only
+inside the CLI projection.
 
 The terminal fact is written once, as `run.end { outcome, error?, usage,
 output }`. Today it is written twice, as the `status` fact and the `result`
@@ -254,7 +287,23 @@ restart the run-state fold sees the open request and parks again. An inquiry
 is a request whose `thread` names an earlier request, which gives it
 multi-turn for free; its record in the global database stays, because
 cross-project scope is a real difference, but it carries the same schema and
-no second protocol. `useOwnApiKey` is a host command that ends in
+no second protocol.
+
+An inquiry today does not park the run: the tool returns `dispatched` and
+the answer, whenever it comes, is turned into a `[inquiry]` user follow-up
+that wakes or resumes the run
+([inquiryContinuation.ts:172-234](../../../../src/tools/inquiry/inquiryContinuation.ts)).
+That delivery path is not inquiry-specific. "A follow-up arrives for a run
+that is not live, so resume it" is exactly what `submitFollowUp` already does
+for every recoverable target
+([ToolUseFollowUp.ts:139-197](../../../../src/agent/followUp/ToolUseFollowUp.ts)).
+So the rule is one sentence: **a `request.decided` for a request its run is
+not parked on is delivered as a follow-up.** The run either resumes from the
+fold or, if live, drains it at its next turn boundary. The continuation
+module, its staleness guard, and its legacy-manifest reader are that sentence
+implemented a second time, and are deleted. Whether a given kind parks the
+run or returns immediately is a property of the tool, not of the protocol.
+`useOwnApiKey` is a host command that ends in
 `request.decided { action: 'retry', credentials: 'personal' }` and is
 documented as exactly that today
 ([runtimeRequest.ts:96-98](../../../../src/shared/session/runtimeRequest.ts)).
@@ -278,27 +327,39 @@ carries the total.
 ### 3.9 Model identity (independent of the run model)
 
 The catalogs derive from llm-zoo correctly except for three hand copies:
-`UsageProviderSchema` (bridged from `ModelProvider` by an unchecked cast that
-is wrong for two members), `ReasoningEffort` spelled three times with a
+`UsageProviderSchema`, `ReasoningEffort` spelled three times with a
 drop-on-miss inverse, and availability computed once and fanned into four
-wire fields plus a fifth settings-only flag. Each becomes a derivation:
-`UsageProvider` is `ModelProvider`, `ReasoningEffort` is llm-zoo's, and
+wire fields plus a fifth settings-only flag.
+
+`UsageProviderSchema` ([usage.ts:6-20](../../../../src/shared/schemas/usage.ts))
+is not `ModelProvider` with mistakes; it is a different fact. It carries
+`openai-response` beside `openai` because usage is recorded per wire surface,
+and the Responses API bills differently from Chat Completions. The wire
+surface already has one declaration in the 1.0 provider package: the
+origin's `protocol` ([turn.ts:29-44](../../../../packages/llm/src/turn.ts)),
+`openai-responses`, `openai-chat`, `anthropic-messages`, and so on. A usage
+record's provider is the protocol of the turn that produced it, read off the
+origin the package already attaches to every response. `unknown` disappears
+because every turn has an origin; the unchecked casts in the two OpenAI
+handlers disappear with the handlers. The usage-log edge function's
+`provider` column is an external contract and takes the protocol names under
+the same versioning rule as the CLI. `ReasoningEffort` is llm-zoo's, and
 availability is one discriminated field. This family is real but touches
 nothing above and can land in any order.
 
 ## 4. What this deletes
 
-| Deleted                                                                                                                                                                  | Lines (measured)       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
-| `streamTab.ts`, `StreamTabIdSchema`, four prefixes, `streamPrefix` threading, `streamTabIdOverride`, `getAgentHandleByStream`, the `endsWith('#')` guard                 | ~28 + call sites       |
-| `StreamSnapshotStore.ts`, `streamSnapshot.ts`, `executionMetaFromEvents`                                                                                                 | 382 + meta fold        |
-| `AgentEvent` hand interfaces in `events.ts` (kept: the `.pick()` type)                                                                                                   | most of 295            |
-| `AgentFlowResult.ts`, `AgentFinalResult.ts`, `executionRecords.ts` result arms (kept: `z.infer`s)                                                                        | most of 317            |
-| `normalizeToolUseData`, `ToolUseLog.isError`, the second tool status enum                                                                                                | ~60                    |
-| `SessionHostInteractions.pending`, the inquiry continuation module, three refusal tables, three of four decision vocabularies                                            | ~400 of 1001 + 262     |
-| `goalPaused`, the `status`/`result` twin, `ExecutionMeta.outcome`, the description pair, `parentStreamId`, `isSubagent`, five parent carriers, the second `isChild` impl | scattered              |
-| One aggregate kind, one sequence counter, one claim per run; `RunAggregates`                                                                                             | in PR1 before it lands |
-| The CLI NDJSON rename table                                                                                                                                              | 124                    |
+| Deleted                                                                                                                                                                                                               | Lines (measured)       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `streamTab.ts`, `StreamTabIdSchema`, four prefixes, `streamPrefix` threading, `streamTabIdOverride`, `getAgentHandleByStream`, the `endsWith('#')` guard                                                              | ~28 + call sites       |
+| `StreamSnapshotStore.ts`, `streamSnapshot.ts`, `executionMetaFromEvents`                                                                                                                                              | 382 + meta fold        |
+| `AgentEvent` hand interfaces in `events.ts` (kept: the `.pick()` type)                                                                                                                                                | most of 295            |
+| `AgentFlowResult.ts`, `AgentFinalResult.ts`, `executionRecords.ts` result arms (kept: `z.infer`s)                                                                                                                     | most of 317            |
+| `normalizeToolUseData`, `ToolUseLog.isError`, the second tool status enum                                                                                                                                             | ~60                    |
+| `SessionHostInteractions.pending`, the inquiry continuation module, three refusal tables, three of four decision vocabularies                                                                                         | ~400 of 1001 + 262     |
+| `goalPaused`, the `status`/`result` twin, `ExecutionMeta.outcome`, the description pair, `parentStreamId`, `isSubagent`, `background`, five parent carriers, the second `isChild` impl, the second workflow-call enum | scattered              |
+| One aggregate kind, one sequence counter, one claim per run; `RunAggregates`                                                                                                                                          | in PR1 before it lands |
+| The CLI NDJSON rename table                                                                                                                                                                                           | 124                    |
 
 The numbers are file sizes, not a promise; the point is that every row is a
 deletion of a vocabulary, and none is a rename with an alias left behind. Per
@@ -310,7 +371,9 @@ the 1.0 direction no transitional alias outlives its PR, and
 - The ledger rows PR1 defines (`flow.step`, `model.message`, `tool.intent`,
   `tool.result`, `flow.snapshot`) and the money-window semantics. This note
   changes what aggregate they land on and what key names them, nothing
-  about when they are written.
+  about when they are written. `flow.snapshot` stays as the checkpoint R1
+  admits, under PR1 §4.4's reconcile-never-overwrite rule; its §2.6 open
+  problem (reflection state no row carries) is closed by rows, per R1.
 - The `Surface`, per-viewer state, and the one-fold renderer contract.
 - `RunIdentity`, `AgentCategory`, and `aggregateId`'s canonical encoding.
   `aggregateId` accepts the branded run id for the `run` kind; Codex's review
@@ -339,8 +402,8 @@ first removes a documented deviation from PR1 before it is written.
    `CLAUDE.md` `p-queue` bullet the census flagged. Move the census's
    Section 4 to point here.
 2. **S1, identity and aggregate.** Brand the run id; delete `StreamTabId`
-   and its minting; one `run` aggregate; `parent` and `mode` on `run.start`;
-   `RunScope` shrinks. One PR, compiler-driven, about 150 files. The
+   and its minting; one `run` aggregate; `parent` on `run.start`, `background`
+   gone; `RunScope` shrinks. One PR, compiler-driven, about 150 files. The
    persisted-state keys change in the fresh namespace only.
 3. **S2, vocabulary.** `sessionEvent.ts` as the only declaration; the trace
    `.pick()`; `run.end`, `run.description`; one `ToolCallStatus`; delete the
@@ -391,7 +454,14 @@ The re-investigation refuted or amended these census claims:
   the collapse changes the key's contents, not a column.
 - `RunKind`, `RunDescriptor`, and `ExecutionMeta.category` do not exist; an
   earlier consolidation note that named them is historical.
-- `background` is a real launch-mode fact, not a redundant child flag.
+- `background` looked like a launch-mode fact in the first search pass (bash
+  sets it) and is not: every writer sets it beside a parent, in-band children
+  included, and its one reader is a CLI view-switch hint. It is the parent
+  edge as a boolean (section 3.2).
+- `WORKFLOW_EXECUTION_LIFECYCLE` is not `StreamPhase` renamed: a workflow
+  call has `skipped` and a "not started" `waiting` that a run does not. The
+  duplicate in that family is the pair of nine-value call-status enums
+  (section 3.3).
 - The `ChildStreamPort` copy is a voluntary layering convention, not a
   ratchet workaround; it is not blocked by the dependency rule and stays or
   goes on its own merits, outside this note.
