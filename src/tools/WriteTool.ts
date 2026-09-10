@@ -1,12 +1,8 @@
-// Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - tools
-import { hostPort } from '@common/hostPort';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import replacementEngine from '@replacement/engine';
@@ -29,23 +25,12 @@ const WriteInputSchema = z.strictObject({
 
 export type WriteInput = z.infer<typeof WriteInputSchema>;
 
-/**
- * The edit flow, bound to the calling turn: both steps read the working
- * directory, the read-before-edit tracker, and the approval host from the
- * run context the tool was called in, not from the fiber that runs them.
- */
-interface FileEditPorts {
-  readonly resolveWritableTarget: typeof resolveWritableTarget;
-  readonly applyApprovedFileEdit: typeof applyApprovedFileEdit;
-}
-
 const write = Effect.fn('WriteFileTool.execute')(function* (
-  ports: FileEditPorts,
   input: WriteInput,
 ): Effect.fn.Return<ToolResult, unknown> {
-  const prepared = yield* hostPort(() =>
-    ports.resolveWritableTarget(input.path, { missing: 'allow' }),
-  );
+  const prepared = yield* resolveWritableTarget(input.path, {
+    missing: 'allow',
+  });
   if ('blocked' in prepared) {
     return prepared.blocked;
   }
@@ -54,29 +39,27 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
     ? replacementEngine.applyFor(input.content, 'tex-write')
     : input.content;
 
-  return yield* hostPort(() =>
-    ports.applyApprovedFileEdit({
-      path,
-      displayPath,
-      originalContent,
-      proposedContent,
-      sourceTool: 'write_file',
-      startLine: 'approval',
-      present: ({ appliedContent }) => {
-        const originalLineCount = countLines(originalContent);
-        const newLineCount = countLines(appliedContent);
-        const action = exists ? 'Overwrote' : 'Created';
-        const replacementNote =
-          exists && originalLineCount > 0
-            ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
-            : undefined;
-        return {
-          summary: `${action} ${displayPath} (${newLineCount} lines)`,
-          output: replacementNote ? `written\n\n${replacementNote}` : 'written',
-        };
-      },
-    }),
-  );
+  return yield* applyApprovedFileEdit({
+    path,
+    displayPath,
+    originalContent,
+    proposedContent,
+    sourceTool: 'write_file',
+    startLine: 'approval',
+    present: ({ appliedContent }) => {
+      const originalLineCount = countLines(originalContent);
+      const newLineCount = countLines(appliedContent);
+      const action = exists ? 'Overwrote' : 'Created';
+      const replacementNote =
+        exists && originalLineCount > 0
+          ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
+          : undefined;
+      return {
+        summary: `${action} ${displayPath} (${newLineCount} lines)`,
+        output: replacementNote ? `written\n\n${replacementNote}` : 'written',
+      };
+    },
+  });
 });
 
 export class WriteFileTool extends defineTool({
@@ -87,14 +70,6 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected execute(input: WriteInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(
-      write(
-        {
-          resolveWritableTarget: AsyncLocalStorage.bind(resolveWritableTarget),
-          applyApprovedFileEdit: AsyncLocalStorage.bind(applyApprovedFileEdit),
-        },
-        input,
-      ),
-    );
+    return effectRuntime().runPromise(write(input));
   }
 }

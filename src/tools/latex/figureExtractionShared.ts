@@ -74,7 +74,7 @@ export const buildLimitedAttachments = Effect.fn(
 )(function* (
   paths: readonly string[],
   { limit, describe, mimeType }: AttachmentLimitOptions,
-): Effect.fn.Return<AttachmentLimitResult, Error> {
+): Effect.fn.Return<AttachmentLimitResult, unknown> {
   if (paths.length === 0 || limit <= 0) {
     return { attachments: [], limitedPaths: [], limitReached: false };
   }
@@ -83,14 +83,10 @@ export const buildLimitedAttachments = Effect.fn(
   const attachments = yield* Effect.forEach(
     limitedPaths,
     (filePath) =>
-      Effect.tryPromise({
-        try: () =>
-          buildFileAttachment({
-            filePath,
-            description: describe(filePath),
-            mimeType,
-          }),
-        catch: ensureError,
+      buildFileAttachment({
+        filePath,
+        description: describe(filePath),
+        mimeType,
       }),
     { concurrency: ATTACHMENT_CONCURRENCY },
   );

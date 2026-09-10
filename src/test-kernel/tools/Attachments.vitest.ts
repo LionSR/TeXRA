@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { buildBytesAttachment } from '@tools/attachments';
@@ -17,11 +18,13 @@ function pngHeader(width: number, height: number): Buffer {
 }
 
 function buildImageAttachment(bytes: Buffer) {
-  return buildBytesAttachment({
-    path: 'figure.png',
-    mimeType: 'image/png',
-    bytes,
-  });
+  return Effect.runSync(
+    buildBytesAttachment({
+      path: 'figure.png',
+      mimeType: 'image/png',
+      bytes,
+    }),
+  );
 }
 
 describe('buildBytesAttachment oversized-image handling', () => {

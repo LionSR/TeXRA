@@ -1,12 +1,8 @@
-// Node imports
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - tools
-import { hostPort } from '@common/hostPort';
 import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
@@ -39,33 +35,20 @@ const EditInputSchema = z.strictObject({
 
 export type EditInput = z.infer<typeof EditInputSchema>;
 
-/**
- * The edit flow, bound to the calling turn: both steps read the working
- * directory, the read-before-edit tracker, and the approval host from the
- * run context the tool was called in, not from the fiber that runs them.
- */
-interface FileEditPorts {
-  readonly resolveWritableTarget: typeof resolveWritableTarget;
-  readonly applyApprovedFileEdit: typeof applyApprovedFileEdit;
-}
-
 const edit = Effect.fn('EditFileTool.execute')(function* (
-  ports: FileEditPorts,
   input: EditInput,
 ): Effect.fn.Return<ToolResult, unknown> {
   const { old_str, new_str, replace_all } = input;
-  const prepared = yield* hostPort(() =>
-    ports.resolveWritableTarget(input.path, {
-      validate: ({ displayPath }) => {
-        if (old_str.length === 0) {
-          throw new ToolError(
-            `old_str must not be empty for ${displayPath}. ` +
-              `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
-          );
-        }
-      },
-    }),
-  );
+  const prepared = yield* resolveWritableTarget(input.path, {
+    validate: ({ displayPath }) => {
+      if (old_str.length === 0) {
+        throw new ToolError(
+          `old_str must not be empty for ${displayPath}. ` +
+            `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
+        );
+      }
+    },
+  });
   if ('blocked' in prepared) {
     return prepared.blocked;
   }
@@ -95,20 +78,18 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   });
 
   const occurrenceWord = pluralize(replacement.count, 'occurrence');
-  return yield* hostPort(() =>
-    ports.applyApprovedFileEdit({
-      path,
-      displayPath,
-      originalContent,
-      proposedContent: replacement.content,
-      sourceTool: 'edit_file',
-      startLine: 'approval',
-      present: () => ({
-        summary: `Edited ${displayPath}: replaced ${replacement.count} ${occurrenceWord}`,
-        output: `Replaced ${replacement.count} ${occurrenceWord}.`,
-      }),
+  return yield* applyApprovedFileEdit({
+    path,
+    displayPath,
+    originalContent,
+    proposedContent: replacement.content,
+    sourceTool: 'edit_file',
+    startLine: 'approval',
+    present: () => ({
+      summary: `Edited ${displayPath}: replaced ${replacement.count} ${occurrenceWord}`,
+      output: `Replaced ${replacement.count} ${occurrenceWord}.`,
     }),
-  );
+  });
 });
 
 export class EditFileTool extends defineTool({
@@ -119,14 +100,6 @@ export class EditFileTool extends defineTool({
   schema: EditInputSchema,
 }) {
   protected execute(input: EditInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(
-      edit(
-        {
-          resolveWritableTarget: AsyncLocalStorage.bind(resolveWritableTarget),
-          applyApprovedFileEdit: AsyncLocalStorage.bind(applyApprovedFileEdit),
-        },
-        input,
-      ),
-    );
+    return effectRuntime().runPromise(edit(input));
   }
 }

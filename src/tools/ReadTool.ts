@@ -227,7 +227,7 @@ export class ReadFileTool extends defineTool({
     });
 
     if (emlImages.length > 0) {
-      result.files = emlImages.map((img) =>
+      result.files = yield* Effect.forEach(emlImages, (img) =>
         buildBytesAttachment({
           path: img.filename,
           mimeType: img.mimeType,
@@ -275,13 +275,11 @@ export class ReadFileTool extends defineTool({
     resolved: WorkspacePathResolution,
   ): Effect.fn.Return<ToolResult, unknown> {
     const copy = ATTACHMENT_COPY[kind];
-    const attachment = yield* hostPort(() =>
-      buildFileAttachment({
-        filePath: resolved.fsPath,
-        description: `${copy.label} returned by read_file tool.`,
-        resolved,
-      }),
-    );
+    const attachment = yield* buildFileAttachment({
+      filePath: resolved.fsPath,
+      description: `${copy.label} returned by read_file tool.`,
+      resolved,
+    });
 
     const baseSummary = `Attached ${copy.label} ${attachment.path}.`;
     const summary = input.range
