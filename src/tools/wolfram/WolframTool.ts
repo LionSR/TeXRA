@@ -1,3 +1,6 @@
+// Node imports
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 // Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
@@ -53,20 +56,33 @@ const WolframInputSchema = z.strictObject({
 
 type WolframInput = z.infer<typeof WolframInputSchema>;
 
+/**
+ * The calling turn's ambient collaborators, taken in `execute` rather than
+ * read from the program's fiber: the approval prompt and the command runner
+ * both resolve the session, its bypass state and its workspace roots from
+ * ambient storage, and the in-progress card belongs to this tool call.
+ */
+interface WolframPorts {
+  readonly requestApproval: typeof requestBashApproval;
+  readonly runTool: typeof runToolWithCheck;
+  readonly onExecutionReady: (() => void) | undefined;
+}
+
 const runWolfram = Effect.fn('WolframTool.execute')(function* (
+  ports: WolframPorts,
   input: WolframInput,
 ) {
   const command = wolframApprovalCommand(input.code);
-  const approval = yield* hostPort(() => requestBashApproval({ command }));
+  const approval = yield* hostPort(() => ports.requestApproval({ command }));
   if (approval.action !== 'approve') {
     return buildBashApprovalRejectedResult(command, approval);
   }
 
-  getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady?.();
+  ports.onExecutionReady?.();
 
   const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
   const result = yield* hostPort(() =>
-    runToolWithCheck('wolframscript', ['-code', input.code], {
+    ports.runTool('wolframscript', ['-code', input.code], {
       showError: false,
       truncate: false,
       timeout: effectiveTimeout,
@@ -108,6 +124,12 @@ export class WolframTool extends defineTool({
   schema: WolframInputSchema,
 }) {
   protected execute(input: WolframInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(runWolfram(input));
+    const ports: WolframPorts = {
+      requestApproval: AsyncLocalStorage.bind(requestBashApproval),
+      runTool: AsyncLocalStorage.bind(runToolWithCheck),
+      onExecutionReady:
+        getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady,
+    };
+    return effectRuntime().runPromise(runWolfram(ports, input));
   }
 }

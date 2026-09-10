@@ -128,7 +128,10 @@ const ATTACHMENT_COPY: Record<
  */
 interface ReadPorts {
   readonly signal: AbortSignal | undefined;
-  readonly toolRoot: () => string | undefined;
+  readonly resolve: (targetPath: string) => {
+    path: WorkspacePathResolution;
+    display: string;
+  };
   readonly recordRead: (path: string) => void;
 }
 
@@ -140,13 +143,18 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected execute(input: ReadInput): Promise<ToolResult> {
-    // The read tracker and the working directory belong to the calling turn,
-    // so they are bound here and handed to the program rather than read from
-    // a fiber. `toolRoot` stays a thunk so the abort check still comes first.
+    // The read tracker and path resolution belong to the calling turn: the
+    // working directory comes from its RunContext and the fallback root from
+    // its workspace, both async-local. Binding the whole resolve step — not
+    // just the working-directory lookup — keeps the workspace fallback on the
+    // caller's context too. They stay thunks so the abort check still comes
+    // first.
     const context = getCurrentToolCallContext();
     const ports: ReadPorts = {
       signal: context?.signal,
-      toolRoot: AsyncLocalStorage.bind(currentToolRoot),
+      resolve: AsyncLocalStorage.bind((targetPath: string) =>
+        resolveAndFormat(targetPath, currentToolRoot()),
+      ),
       recordRead: AsyncLocalStorage.bind(recordToolFileRead),
     };
     return effectRuntime().runPromise(this.read(ports, input));
@@ -162,11 +170,7 @@ export class ReadFileTool extends defineTool({
     if (ports.signal?.aborted) {
       return yield* Effect.fail(new ToolError('Cancelled before execution.'));
     }
-    const root = ports.toolRoot();
-    const { path: resolved, display: displayPath } = resolveAndFormat(
-      input.path,
-      root,
-    );
+    const { path: resolved, display: displayPath } = ports.resolve(input.path);
     const filePath = resolved.fsPath;
 
     const attachmentKind = this.getAttachmentConfig(resolved.absolute);

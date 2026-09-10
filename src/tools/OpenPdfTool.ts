@@ -17,8 +17,8 @@ import { effectRuntime } from '@platform/processRuntime';
 import {
   fileLocationDisplayPath,
   ToolError,
-  type ExecutionId,
   type FileLocation,
+  type RunStorageFileLocation,
   type ToolResult,
 } from '@shared/schemas';
 import {
@@ -56,7 +56,14 @@ interface OpenPdfPorts {
    * absolute run-storage path must resolve without ever asking for one.
    */
   readonly toolRoot: () => string | undefined;
-  readonly executionId: ExecutionId | undefined;
+  /**
+   * The requested path's run-storage identity, resolved in the caller's turn:
+   * the run-storage root is `workspaceRoots().storage`, which is per-session
+   * ambient state, so recognising the path must not depend on whichever roots
+   * the program's fiber carries. Undefined when this run has no storage of its
+   * own or the path lies outside it.
+   */
+  readonly runStorageLocation: RunStorageFileLocation | undefined;
 }
 
 const openPdfProgram = Effect.fn('OpenPdfTool.execute')(function* (
@@ -106,10 +113,15 @@ export class OpenPdfTool extends defineTool({
   protected execute(input: OpenPdfInput): Promise<ToolResult> {
     // The session and the run it belongs to are the calling turn's, so they
     // are read here and handed to the program rather than from a fiber.
+    const executionId = getRunContextExecutionId(tryUseRunContext());
+    const trimmedPath = input.path.trim();
     const ports: OpenPdfPorts = {
       openPdf: currentSession().interactions.openPdf,
       toolRoot: AsyncLocalStorage.bind(currentToolRoot),
-      executionId: getRunContextExecutionId(tryUseRunContext()),
+      runStorageLocation:
+        executionId && trimmedPath
+          ? runStorageLocationFromAbsolutePath(trimmedPath, executionId)
+          : undefined,
     };
     return effectRuntime().runPromise(openPdfProgram(ports, input));
   }
@@ -125,11 +137,8 @@ const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
       return yield* Effect.fail(new ToolError('path is required.'));
     }
 
-    const runStorageLocation = ports.executionId
-      ? runStorageLocationFromAbsolutePath(trimmed, ports.executionId)
-      : undefined;
-    if (runStorageLocation) {
-      return runStorageLocation;
+    if (ports.runStorageLocation) {
+      return ports.runStorageLocation;
     }
 
     const resolved = resolveWorkspaceRelativePath(trimmed, ports.toolRoot());
