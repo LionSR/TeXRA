@@ -19,10 +19,7 @@ import {
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import {
-  RunLeaseActiveError,
-  inspectRunLease,
-} from '@agent/storage/runLease';
+import { RunLeaseActiveError, inspectRunLease } from '@agent/storage/runLease';
 import { getRunRecords } from '@agent/storage/RunKVStore';
 import { checkpointExists } from '@agent/storage/resumability';
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
@@ -291,10 +288,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   session.status.clearHold(runId, { discardRetainedPhase: true });
   if (lease?.status === 'held') {
     releaseQueue();
-    session.status.markUnavailable(
-      runId,
-      runHeldMessage(lease.owner.pid),
-    );
+    session.status.markUnavailable(runId, runHeldMessage(lease.owner.pid));
     return { failed: 'owned_elsewhere' };
   }
   if (willLaunch && options.onResumeResolved) {
@@ -364,10 +358,7 @@ function refusalFor(
   runId: RunId,
 ): ResumeRunResult | undefined {
   if (error instanceof RunLeaseActiveError) {
-    session.status.markUnavailable(
-      runId,
-      runHeldMessage(error.owner.pid),
-    );
+    session.status.markUnavailable(runId, runHeldMessage(error.owner.pid));
     return { failed: 'owned_elsewhere' };
   }
   if (error instanceof ResumeSessionUnavailableError) {
@@ -393,10 +384,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const runStatus = session.status;
   const followUpsQueue = session.followUps;
 
-  if (
-    session.runs.getHandle(resume.runId)
-      ?.suspendedTerminationStarted
-  ) {
+  if (session.runs.getHandle(resume.runId)?.suspendedTerminationStarted) {
     followUpsQueue.release(queueLease, 'recoverable');
     return REFUSED;
   }

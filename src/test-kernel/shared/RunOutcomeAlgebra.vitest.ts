@@ -65,9 +65,7 @@ describe('run outcome algebra', () => {
 
 describe('stream phase transition table', () => {
   const phases = RunPhaseSchema.options;
-  const causes = Object.values(
-    RUN_TRANSITION_CAUSE,
-  ) as RunTransitionCause[];
+  const causes = Object.values(RUN_TRANSITION_CAUSE) as RunTransitionCause[];
 
   type CauseRow = Record<RunTransitionCause, readonly RunPhase[]>;
 

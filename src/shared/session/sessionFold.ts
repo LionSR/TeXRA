@@ -21,7 +21,7 @@
  * in the subscription set (its `view.folded` entry), and only when its seq
  * is above that entry, which it then advances. `view.cursor` moves on tail rows
  * alone. Existence: a stream exists iff its `run.start` has folded and its
- * `stream.removed` has not; the two share one `latest` entry, so the
+ * `run.removed` has not; the two share one `latest` entry, so the
  * tombstone is final under every read, ids are never reused (decision 9),
  * and a fact naming any other stream changes nothing. Listing hydration is
  * authoritative (7.2): at the replay marker every stream no listing row of
@@ -35,14 +35,14 @@
  *
  * The publication contract (decision D5): every view `fold` returns is
  * immutable, and untouched branches are shared by reference between levels.
- * `view.streams`, `view.policy`, `view.folded`, `view.queuedFollowUps`, and
+ * `view.runs`, `view.policy`, `view.folded`, `view.queuedFollowUps`, and
  * a transcript's `rows` and `taskGroups` are copied at most once per `fold`
  * call, by the write that touches them (`writableMap`,
  * `writableTranscriptArray`), and never written after the call returns.
  * The copy belongs to the write, not to the input: an entry that projects no
  * row, one that lands no task group, and a delete of a key its map never
  * held all leave those branches the objects the previous level published.
- * Every `StreamView` value, every `TranscriptView` value, and the
+ * Every `RunView` value, every `TranscriptView` value, and the
  * `SessionView` envelope are replaced on change and never mutated. A host
  * that compares any of these by identity sees exactly what changed, and an
  * older view is stable to read for as long as it is held. It is not a fold
@@ -50,7 +50,7 @@
  * value they index, per transcript (row and group positions, the measured
  * live text, the newest thinking row) and per view (the current claims, the
  * newest commit per listing entry, the live text per row, the local
- * snapshot, streams by owner, the streams whose lifecycle ended, the
+ * snapshot, runs by owner, the runs whose lifecycle ended, the
  * aggregates the listing named), and those are single-owner, advancing with
  * the latest level only. The invariant the copy rests on: an arm that writes
  * a container reports `changed`, so `foldWith` publishes the envelope
@@ -65,8 +65,8 @@ import {
   AgentCategory,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
-  STREAM_LIFECYCLE_READY,
+  RUN_PHASE,
+  RUN_LIFECYCLE_READY,
   STREAMING_TEXT_MESSAGE_TYPES,
   isPlainAgentIdentity,
   listingTypeOf,
@@ -107,37 +107,37 @@ import {
   createCompactionActivityProjection,
   settleCompactionActivities,
   type CompactionActivityProjection,
-} from '@shared/streams/compactionActivityProjection';
-import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
-import { streamStageFromStageStart } from '@shared/streams/stage';
+} from '@shared/runs/compactionActivityProjection';
+import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
+import { runStageFromStageStart } from '@shared/runs/stage';
 import {
   compareByNewestCreationTime,
   compareBySeqNo,
-} from '@shared/streams/streamOrdering';
+} from '@shared/runs/runOrdering';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
   isTranscriptSettlementPhase,
-} from '@shared/streams/streamStatus';
+} from '@shared/runs/runStatus';
 import {
-  streamHeldMessage,
-  streamInterruptedMessage,
-  streamStatusCopy,
-} from '@shared/streams/streamStatusDisplay';
+  runHeldMessage,
+  runInterruptedMessage,
+  runStatusCopy,
+} from '@shared/runs/runStatusDisplay';
 import {
   isTaskGroupLifecycleEntry,
   upsertTaskGroupFromStreamLog,
-} from '@shared/streams/taskGroupProjection';
+} from '@shared/runs/taskGroupProjection';
 import {
   workflowMarkerOf,
   workflowRunModel,
   type ChildRunProgress,
-} from '@shared/streams/workflowRunModel';
+} from '@shared/runs/workflowRunModel';
 import { isObject } from '@utils/core';
 import { createTranscriptFold } from './traceFold';
 import { StreamLog } from './traceEntries';
 
-import type { SessionView, StreamView, TranscriptView } from './sessionView';
+import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
 type TranscriptEntryEvent = Extract<
@@ -145,7 +145,7 @@ type TranscriptEntryEvent = Extract<
   { type: 'transcript.entry' }
 >;
 
-/** Workflow-script stream ids whose run model a batch derives at its end. */
+/** Workflow-script run ids whose run model a batch derives at its end. */
 type DeferredRunModels = Set<RunId> | null;
 
 /** Canonical dashboard rows a workflow-script run model reads. */
@@ -180,9 +180,9 @@ export function fold(
   for (const each of input as readonly FoldInput[]) {
     next = foldWith(next, each, deferred);
   }
-  for (const streamId of deferred) {
-    const stream = next.streams.get(streamId);
-    if (stream) setStream(next, withRunModel(next, stream));
+  for (const runId of deferred) {
+    const stream = next.runs.get(runId);
+    if (stream) setRun(next, withRunModel(next, stream));
   }
   return next;
 }
@@ -221,9 +221,9 @@ function foldWith(
       // tombstone and all, because retention pruned it while this surface
       // was away and no later read can deliver the deletion.
       const { listed } = sessionIndexesOf(next);
-      for (const id of [...next.streams.keys()]) {
-        if (!listed.has(qualifyAggregateId('stream', id)))
-          foldStreamRemoved(next, id, deferred);
+      for (const id of [...next.runs.keys()]) {
+        if (!listed.has(qualifyAggregateId('run', id)))
+          foldRunRemoved(next, id, deferred);
       }
       listed.clear();
       reconcileExistence(next, input.existence, deferred);
@@ -242,17 +242,17 @@ function reconcileExistence(
   for (const { aggregateId, ownerId } of existence.claims) {
     claims.set(aggregateId, ownerId);
     const target = aggregateTarget(aggregateId);
-    if (target.kind !== 'stream') continue;
-    const stream = view.streams.get(target.id);
+    if (target.kind !== 'run') continue;
+    const stream = view.runs.get(target.id);
     if (!stream || stream.ownerId === ownerId) continue;
-    setStream(view, { ...stream, ownerId });
+    setRun(view, { ...stream, ownerId });
     walkUp(view, stream.id, stream.id, deferred);
   }
   for (const id of existence.removedAggregateIds) {
     claims.delete(id);
     if (view.folded.has(id)) writableMap(view, 'folded').delete(id);
     const target = aggregateTarget(id);
-    if (target.kind === 'stream') foldStreamRemoved(view, target.id, deferred);
+    if (target.kind === 'run') foldRunRemoved(view, target.id, deferred);
     if (
       target.kind === 'inquiry' &&
       view.inquiries.some((inquiry) => inquiry.threadId === target.id)
@@ -275,19 +275,19 @@ interface SessionIndexes {
    *  process can still write for them. */
   readonly ended: Set<RunId>;
   /** Streams by their current claimant, so a local snapshot
-   *  recomputes exactly the streams a changed owner holds. */
+   *  recomputes exactly the runs a changed owner holds. */
   readonly byOwner: Map<string, Set<RunId>>;
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
-   *  lifecycle entry outlives its stream: it is what keeps a tombstone
+   *  lifecycle entry outlives its run: it is what keeps a tombstone
    *  final when a read replays the `run.start` beneath it. */
   readonly latest: Map<string, number>;
-  /** Live text per `${stream}/${row}`, beside the rows rather than inside
+  /** Live text per `${run}/${row}`, beside the rows rather than inside
    *  them: a chunk can reach the fold before its row (5.2). A row paints
    *  its durable text joined with this entry; the entry goes when the row
-   *  finalizes, the stream ends, the stream is removed, or its transcript
+   *  finalizes, the run ends, the run is removed, or its transcript
    *  tier is evicted. */
   readonly inflight: Map<string, string>;
   /** This process's local truth, the snapshot the next one diffs against:
@@ -297,10 +297,10 @@ interface SessionIndexes {
 
 /** Keyed by the stream index; a copied index inherits its predecessor's
  *  entry, so every level of one session resolves the same indexes. */
-const SESSION_INDEXES = new WeakMap<SessionView['streams'], SessionIndexes>();
+const SESSION_INDEXES = new WeakMap<SessionView['runs'], SessionIndexes>();
 
 function sessionIndexesOf(view: SessionView): SessionIndexes {
-  let indexes = SESSION_INDEXES.get(view.streams);
+  let indexes = SESSION_INDEXES.get(view.runs);
   if (!indexes) {
     indexes = {
       listed: new Set(),
@@ -311,7 +311,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       inflight: new Map(),
       local: { self: [], dead: [], unreadable: [] },
     };
-    SESSION_INDEXES.set(view.streams, indexes);
+    SESSION_INDEXES.set(view.runs, indexes);
   }
   return indexes;
 }
@@ -328,7 +328,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
  */
 let owned = new WeakSet<object>();
 
-type ViewMapKey = 'streams' | 'policy' | 'folded' | 'queuedFollowUps';
+type ViewMapKey = 'runs' | 'policy' | 'folded' | 'queuedFollowUps';
 
 /** The view's map under `key`, copied once per call before its first write. */
 function writableMap<K extends ViewMapKey>(
@@ -340,8 +340,8 @@ function writableMap<K extends ViewMapKey>(
   const copy = new Map(
     current as Iterable<readonly [unknown, unknown]>,
   ) as SessionView[K];
-  if (key === 'streams') {
-    SESSION_INDEXES.set(copy as SessionView['streams'], sessionIndexesOf(view));
+  if (key === 'runs') {
+    SESSION_INDEXES.set(copy as SessionView['runs'], sessionIndexesOf(view));
   }
   owned.add(copy);
   view[key] = copy;
@@ -369,13 +369,13 @@ function writableTranscriptArray<K extends TranscriptArrayKey>(
   return copy;
 }
 
-function inflightKey(streamId: RunId, rowId: string): string {
-  return `${streamId}/${rowId}`;
+function inflightKey(runId: RunId, rowId: string): string {
+  return `${runId}/${rowId}`;
 }
 
 /** Drop a stream's live text and its streaming cursors: the stream ended,
  *  was removed, or lost its transcript tier (5.2, "In-flight text"). */
-function clearInflight(view: SessionView, stream: StreamView): void {
+function clearInflight(view: SessionView, stream: RunView): void {
   const prefix = `${stream.id}/`;
   const { inflight } = sessionIndexesOf(view);
   for (const key of inflight.keys()) {
@@ -466,14 +466,22 @@ function emptyTranscript(): TranscriptView {
 /** A stream with no rounds recorded yet. */
 const NO_ROUNDS = Object.freeze({});
 
+/** The run a run-aggregate event names; null for any other aggregate kind. */
+function runIdOf(aggregateId: AggregateId): RunId | null {
+  const target = aggregateTarget(aggregateId);
+  return target.kind === 'run' ? target.id : null;
+}
+
 /** A stream in its initial shape, minted by its `run.start` alone. */
-function createStream(view: SessionView, event: RunStartEvent): StreamView {
-  const id = aggregateTarget(event.aggregateId).id;
-  const status = STREAM_LIFECYCLE_READY;
+function createStream(
+  view: SessionView,
+  event: RunStartEvent,
+  id: RunId,
+): RunView {
+  const status = RUN_LIFECYCLE_READY;
   const identity = event.identity;
   const common = {
     id,
-    runId: event.runId,
     identity,
     isRemote: event.isRemote,
     ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,
@@ -488,7 +496,7 @@ function createStream(view: SessionView, event: RunStartEvent): StreamView {
     substate: null,
     durableOutcome: null,
     statusDetail: null,
-    ...streamStatusCopy(status),
+    ...runStatusCopy(status),
     createdAt: event.commit,
     runStartedAt: null,
     lastTimestamp: event.at,
@@ -499,7 +507,7 @@ function createStream(view: SessionView, event: RunStartEvent): StreamView {
       event.category === AgentCategory.ToolUse &&
       isPlainAgentIdentity(identity),
     context: null,
-    parentId: event.parentStreamId ?? null,
+    parentId: event.parent === null ? null : event.parent.id,
     ancestors: [],
     childIds: [],
     rollup: { total: 0, running: 0, finished: 0 },
@@ -539,11 +547,11 @@ function createStream(view: SessionView, event: RunStartEvent): StreamView {
 /**
  * Land a stream value in the index and keep the paper-level rollup (5.1)
  * current from the group it left and the group it entered. Every write to
- * `view.streams` goes through here; `dropStream` is the one removal.
+ * `view.runs` goes through here; `dropRun` is the one removal.
  */
-function setStream(view: SessionView, stream: StreamView): void {
-  const previous = view.streams.get(stream.id);
-  writableMap(view, 'streams').set(stream.id, stream);
+function setRun(view: SessionView, stream: RunView): void {
+  const previous = view.runs.get(stream.id);
+  writableMap(view, 'runs').set(stream.id, stream);
   if (previous?.ownerId !== stream.ownerId) {
     reindexOwner(view, stream.id, previous?.ownerId ?? null, stream.ownerId);
   }
@@ -552,8 +560,8 @@ function setStream(view: SessionView, stream: StreamView): void {
   }
 }
 
-function dropStream(view: SessionView, stream: StreamView): void {
-  writableMap(view, 'streams').delete(stream.id);
+function dropRun(view: SessionView, stream: RunView): void {
+  writableMap(view, 'runs').delete(stream.id);
   reindexOwner(view, stream.id, stream.ownerId, null);
   sessionIndexesOf(view).ended.delete(stream.id);
   countGroups(view, stream.group, undefined);
@@ -561,14 +569,14 @@ function dropStream(view: SessionView, stream: StreamView): void {
 
 function reindexOwner(
   view: SessionView,
-  streamId: RunId,
+  runId: RunId,
   from: string | null,
   to: string | null,
 ): void {
   const { byOwner } = sessionIndexesOf(view);
   if (from !== null) {
     const ownedIds = byOwner.get(from);
-    ownedIds?.delete(streamId);
+    ownedIds?.delete(runId);
     if (ownedIds?.size === 0) byOwner.delete(from);
   }
   if (to !== null) {
@@ -577,14 +585,14 @@ function reindexOwner(
       ownedIds = new Set();
       byOwner.set(to, ownedIds);
     }
-    ownedIds.add(streamId);
+    ownedIds.add(runId);
   }
 }
 
 function countGroups(
   view: SessionView,
-  left: StreamView['group'] | undefined,
-  entered: StreamView['group'] | undefined,
+  left: RunView['group'] | undefined,
+  entered: RunView['group'] | undefined,
 ): void {
   const rollup = { ...view.rollup };
   if (left === 'running' || left === 'waiting' || left === 'interrupted') {
@@ -604,26 +612,26 @@ function countGroups(
 // Ordering and topology
 // ---------------------------------------------------------------------------
 
-function orderingKey(stream: StreamView): {
+function orderingKey(stream: RunView): {
   name: string;
   creationTimestamp: number;
 } {
   return { name: stream.id, creationTimestamp: stream.createdAt };
 }
 
-/** `ids` with `id` placed by the `streamOrdering` rule. */
+/** `ids` with `id` placed by the `runOrdering` rule. */
 function insertOrdered(
   view: SessionView,
   ids: readonly RunId[],
   id: RunId,
 ): RunId[] {
   const next = ids.filter((existing) => existing !== id);
-  const stream = view.streams.get(id);
+  const stream = view.runs.get(id);
   if (!stream) return next;
   const key = orderingKey(stream);
   let at = next.length;
   for (let i = 0; i < next.length; i += 1) {
-    const other = view.streams.get(next[i]);
+    const other = view.runs.get(next[i]);
     if (other && compareByNewestCreationTime(key, orderingKey(other)) < 0) {
       at = i;
       break;
@@ -633,23 +641,17 @@ function insertOrdered(
   return next;
 }
 
-function withoutId(
-  ids: readonly RunId[],
-  id: RunId,
-): RunId[] {
+function withoutId(ids: readonly RunId[], id: RunId): RunId[] {
   return ids.filter((existing) => existing !== id);
 }
 
 /** Root first. A parent edge always names a stream the view holds: the fold
  *  re-roots a child whose parent it lacks (5.2, `ancestors`). */
-function ancestorsOf(
-  view: SessionView,
-  stream: StreamView,
-): StreamView['ancestors'] {
-  const chain: StreamView['ancestors'] = [];
+function ancestorsOf(view: SessionView, stream: RunView): RunView['ancestors'] {
+  const chain: RunView['ancestors'] = [];
   let parentId = stream.parentId;
   while (parentId !== null) {
-    const parent = view.streams.get(parentId);
+    const parent = view.runs.get(parentId);
     if (!parent) break;
     chain.unshift({ id: parent.id, label: parent.label });
     parentId = parent.parentId;
@@ -660,22 +662,22 @@ function ancestorsOf(
 /** Whether `stream` is `ancestorId` itself or sits below it. */
 function isDescendantOf(
   view: SessionView,
-  stream: StreamView,
+  stream: RunView,
   ancestorId: RunId,
 ): boolean {
-  let cursor: StreamView | undefined = stream;
+  let cursor: RunView | undefined = stream;
   while (cursor) {
     if (cursor.id === ancestorId) return true;
     cursor =
-      cursor.parentId === null ? undefined : view.streams.get(cursor.parentId);
+      cursor.parentId === null ? undefined : view.runs.get(cursor.parentId);
   }
   return false;
 }
 
 /** Recompute `ancestors` for a stream and its descendants (a moved subtree,
  *  or a relabelled parent). O(subtree), once per such change. */
-function refreshAncestors(view: SessionView, streamId: RunId): void {
-  const stream = view.streams.get(streamId);
+function refreshAncestors(view: SessionView, runId: RunId): void {
+  const stream = view.runs.get(runId);
   if (!stream) return;
   const ancestors = ancestorsOf(view, stream);
   const unchanged =
@@ -685,7 +687,7 @@ function refreshAncestors(view: SessionView, streamId: RunId): void {
         a.id === stream.ancestors[i].id &&
         a.label === stream.ancestors[i].label,
     );
-  if (!unchanged) setStream(view, { ...stream, ancestors });
+  if (!unchanged) setRun(view, { ...stream, ancestors });
   for (const childId of stream.childIds) refreshAncestors(view, childId);
 }
 
@@ -704,7 +706,7 @@ function refreshAncestors(view: SessionView, streamId: RunId): void {
  * listening for the answer; the durable phase and the listed approval stay,
  * so a resume can re-ask.
  */
-function withAggregates(view: SessionView, stream: StreamView): StreamView {
+function withAggregates(view: SessionView, stream: RunView): RunView {
   const { local } = sessionIndexesOf(view);
   const owner = stream.ownerId;
   const own = owner !== null && local.self.includes(owner);
@@ -712,7 +714,7 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const heldElsewhere = heldBy !== null;
   const held = own || heldElsewhere;
-  const pendingOwn = view.approvals.some((a) => a.streamId === stream.id);
+  const pendingOwn = view.approvals.some((a) => a.runId === stream.id);
   const interrupted = !isTerminalOutcomePhase(stream.status) && !held;
   const waiting = pendingOwn && held;
   const durableOutcome =
@@ -720,12 +722,12 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
     (!own || sessionIndexesOf(view).ended.has(stream.id))
       ? stream.status
       : null;
-  const unreadable = local.unreadable.find((u) => u.streamId === stream.id);
+  const unreadable = local.unreadable.find((u) => u.runId === stream.id);
   const rollup = { total: 0, running: 0, finished: 0 };
   let descendantWaiting = false;
   let descendantNeedsUser = false;
   for (const childId of stream.childIds) {
-    const child = view.streams.get(childId);
+    const child = view.runs.get(childId);
     if (!child) continue;
     rollup.total += 1 + child.rollup.total;
     rollup.running +=
@@ -735,14 +737,14 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
     if (child.approval !== 'none') descendantWaiting = true;
     if (child.forceExpanded) descendantNeedsUser = true;
   }
-  let group: StreamView['group'] = 'recent';
+  let group: RunView['group'] = 'recent';
   if (interrupted) group = 'interrupted';
   else if (waiting) group = 'waiting';
   else if (isInFlightPhase(stream.status)) group = 'running';
-  let approval: StreamView['approval'] = 'none';
+  let approval: RunView['approval'] = 'none';
   if (waiting) approval = 'own';
   else if (descendantWaiting) approval = 'descendant';
-  const copy = streamStatusCopy(stream.status, {
+  const copy = runStatusCopy(stream.status, {
     substate: stream.substate ?? undefined,
     interrupted,
   });
@@ -750,9 +752,9 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   let statusDetail: string | null = unreadable?.detail ?? null;
   if (statusDetail === null && interrupted) {
-    statusDetail = streamInterruptedMessage();
+    statusDetail = runInterruptedMessage();
   } else if (statusDetail === null && heldBy !== null) {
-    statusDetail = streamHeldMessage(ownerPid(heldBy));
+    statusDetail = runHeldMessage(ownerPid(heldBy));
   }
   if (
     stream.group === group &&
@@ -786,11 +788,11 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
 // Workflow-script run model
 // ---------------------------------------------------------------------------
 
-function isWorkflowScriptRun(stream: StreamView): boolean {
+function isWorkflowScriptRun(stream: RunView): boolean {
   return stream.identity.kind === 'multiAgentWorkflow';
 }
 
-function childProgressOf(child: StreamView): ChildRunProgress {
+function childProgressOf(child: RunView): ChildRunProgress {
   const totals = sumUsageStats(Object.values(child.usage));
   return {
     ...(child.runStartedAt === null
@@ -803,7 +805,7 @@ function childProgressOf(child: StreamView): ChildRunProgress {
 }
 
 /** Whether a child's change moved a value its parent's run board reads. */
-function childProgressChanged(prev: StreamView, next: StreamView): boolean {
+function childProgressChanged(prev: RunView, next: RunView): boolean {
   if (prev === next) return false;
   if (
     prev.runStartedAt !== next.runStartedAt ||
@@ -863,11 +865,11 @@ function runModelInputs(transcript: TranscriptView): {
 }
 
 /** `transcript.run` for a workflow-script run, derived now. */
-function withRunModel(view: SessionView, stream: StreamView): StreamView {
+function withRunModel(view: SessionView, stream: RunView): RunView {
   if (!isWorkflowScriptRun(stream)) return stream;
   const childProgress = new Map<RunId, ChildRunProgress>();
   for (const childId of stream.childIds) {
-    const child = view.streams.get(childId);
+    const child = view.runs.get(childId);
     if (child) childProgress.set(childId, childProgressOf(child));
   }
   const transcript = stream.transcript;
@@ -876,7 +878,7 @@ function withRunModel(view: SessionView, stream: StreamView): StreamView {
     ...runModelInputs(transcript),
     workflowAttemptId: indexes.workflowAttemptId,
     plan: indexes.plan,
-    streamPhase: stream.status,
+    runPhase: stream.status,
     // A terminal outcome with nothing left to settle its cards.
     runDurablyFinal: stream.durableOutcome !== null,
     childProgress,
@@ -887,9 +889,9 @@ function withRunModel(view: SessionView, stream: StreamView): StreamView {
 /** Derive the run model now, or note the stream for the end of the batch. */
 function runModelAt(
   view: SessionView,
-  stream: StreamView,
+  stream: RunView,
   deferred: DeferredRunModels,
-): StreamView {
+): RunView {
   if (!isWorkflowScriptRun(stream)) return stream;
   if (deferred) {
     deferred.add(stream.id);
@@ -913,11 +915,11 @@ function walkUp(
   let id = startId;
   while (id !== null && !seen.has(id)) {
     seen.add(id);
-    const current = view.streams.get(id);
+    const current = view.runs.get(id);
     if (!current) return;
     let next = withAggregates(view, current);
     if (id === boardId) next = runModelAt(view, next, deferred);
-    if (next !== current) setStream(view, next);
+    if (next !== current) setRun(view, next);
     id = current.parentId;
   }
 }
@@ -1002,7 +1004,7 @@ function isStreamingTextRow(row: TranscriptRow): row is StreamingTextRow {
  * full-log child that is not a workflow run, a detached process or an
  * external-CLI session, whose verbatim log is the point of opening it.
  */
-function lifecycleToTaskGroups(stream: StreamView): boolean {
+function lifecycleToTaskGroups(stream: RunView): boolean {
   return (
     stream.category === AgentCategory.Workflow ||
     isPlainAgentIdentity(stream.identity)
@@ -1030,7 +1032,7 @@ function projectRow(
  */
 function applyEntry(
   view: SessionView,
-  stream: StreamView,
+  stream: RunView,
   entry: StreamLogEntry,
 ): TranscriptView {
   const next = replaceTranscript(stream.transcript, {});
@@ -1093,10 +1095,7 @@ function applyEntry(
 }
 
 /** Finalize unmatched compaction starts when the turn settles. */
-function withSettledTranscript(
-  stream: StreamView,
-  finishedAt: number,
-): StreamView {
+function withSettledTranscript(stream: RunView, finishedAt: number): RunView {
   if (!isTranscriptSettlementPhase(stream.status)) return stream;
   const changed = settleCompactionActivities(
     indexesOf(stream.transcript).compactionState,
@@ -1216,13 +1215,13 @@ function latestConversationLine(
 function advanceSettledRows(
   rows: readonly TranscriptRow[],
   start: number,
-  streamFinal: boolean,
+  runFinal: boolean,
 ): number {
   let index = Math.min(start, rows.length);
   while (index < rows.length) {
     const row = rows[index];
     if (!isSettledRow(row, index < rows.length - 1)) {
-      if (promotesOnlyOnTypedTerminalState(row) || !streamFinal) break;
+      if (promotesOnlyOnTypedTerminalState(row) || !runFinal) break;
     }
     index += 1;
   }
@@ -1232,13 +1231,13 @@ function advanceSettledRows(
 /** The transcript-derived fields of a stream, after its rows or its
  *  settlement moved: `settledRows`, `thinkingActive`, `compactingActive`,
  *  and `latestLine`. */
-function withTranscriptFacts(stream: StreamView): StreamView {
+function withTranscriptFacts(stream: RunView): RunView {
   const { transcript } = stream;
-  const streamFinal = isTranscriptSettlementPhase(stream.status);
+  const runFinal = isTranscriptSettlementPhase(stream.status);
   const settledRows = advanceSettledRows(
     transcript.rows,
     transcript.settledRows,
-    streamFinal,
+    runFinal,
   );
   const { thinkingRowId } = indexesOf(transcript);
   const lastThinking =
@@ -1287,12 +1286,12 @@ function withTranscriptFacts(stream: StreamView): StreamView {
  * changed anything.
  */
 function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
-  const stream = view.streams.get(chunk.streamId);
+  const stream = view.runs.get(chunk.runId);
   if (!stream) return false;
   const indexes = indexesOf(stream.transcript);
   const cursor = indexes.streaming.get(chunk.rowId);
   if (!cursor && rowById(stream.transcript, chunk.rowId)) return false;
-  const key = inflightKey(chunk.streamId, chunk.rowId);
+  const key = inflightKey(chunk.runId, chunk.rowId);
   const { inflight } = sessionIndexesOf(view);
   const held = inflight.get(key) ?? '';
   if (chunk.to <= held.length) return false;
@@ -1332,7 +1331,7 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
       lifecycleToTaskGroups(stream),
     );
   }
-  setStream(view, { ...stream, transcript });
+  setRun(view, { ...stream, transcript });
   return true;
 }
 
@@ -1342,7 +1341,7 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
 
 /** A tool-use fact on a stream whose arm cannot hold it is a publisher or
  *  category defect, made loud at the fold's boundary. */
-function wrongArm(stream: StreamView, event: DisplaySessionEvent): never {
+function wrongArm(stream: RunView, event: DisplaySessionEvent): never {
   throw new Error(
     `${event.type} names ${stream.id}, a ${stream.category} stream; the fact belongs to the ${AgentCategory.ToolUse} arm`,
   );
@@ -1351,9 +1350,9 @@ function wrongArm(stream: StreamView, event: DisplaySessionEvent): never {
 /** The event's own arm applied to its stream (topology, session slices, and
  *  the transcript tier are handled by the caller). */
 function applyOwnArm(
-  stream: StreamView,
+  stream: RunView,
   event: Exclude<DisplaySessionEvent, TranscriptEntryEvent>,
-): StreamView {
+): RunView {
   switch (event.type) {
     case 'log':
     case 'stage.end':
@@ -1389,8 +1388,8 @@ function applyOwnArm(
     }
     case 'status': {
       const freshRun =
-        event.phase === STREAM_PHASE.RUNNING &&
-        event.previousPhase !== STREAM_PHASE.RUNNING;
+        event.phase === RUN_PHASE.RUNNING &&
+        event.previousPhase !== RUN_PHASE.RUNNING;
       return withSettledTranscript(
         {
           ...stream,
@@ -1405,7 +1404,7 @@ function applyOwnArm(
       );
     }
     case 'stage.start': {
-      const stage = streamStageFromStageStart({
+      const stage = runStageFromStageStart({
         kind: event.kind ?? undefined,
         label: event.label,
         index: event.index ?? undefined,
@@ -1418,7 +1417,7 @@ function applyOwnArm(
     case 'usage':
       return {
         ...stream,
-        usage: { ...stream.usage, [event.storageKey]: event.usage },
+        usage: { ...stream.usage, [event.runId]: event.usage },
       };
     case 'context.state':
       return {
@@ -1476,11 +1475,11 @@ function applyOwnArm(
           'drop',
         ),
       };
-    case 'setParentStream':
-      return event.parentStreamId === stream.parentId
-        ? stream
-        : { ...stream, parentId: event.parentStreamId };
-    case 'updateStreamDescription':
+    case 'run.detach':
+      // The edge severed: the child is top level from here (one run model,
+      // section 3.2). A run never acquires a new parent.
+      return stream.parentId === null ? stream : { ...stream, parentId: null };
+    case 'updateRunDescription':
       return { ...stream, description: event.description };
     case 'result':
       // The lifecycle's last word; the phase is the `status` fact's (PRD 6,
@@ -1491,7 +1490,7 @@ function applyOwnArm(
     case 'approval.policy':
     case 'inquiryThreadUpdated':
     case 'updateQueuedFollowUps':
-    case 'stream.removed':
+    case 'run.removed':
       return stream;
   }
 }
@@ -1500,25 +1499,25 @@ function applyOwnArm(
  *  aggregates see them. */
 function applySessionSlices(
   view: SessionView,
-  streamId: RunId | null,
+  runId: RunId | null,
   event: DisplaySessionEvent,
 ): void {
   switch (event.type) {
     case 'run.start':
       // The initial snapshot rides the existence fact (PRD 6, item 2); a
       // legacy import carries none and leaves the entry to `approval.policy`.
-      if (event.approvalPolicy && streamId !== null) {
-        writableMap(view, 'policy').set(streamId, event.approvalPolicy);
+      if (event.approvalPolicy && runId !== null) {
+        writableMap(view, 'policy').set(runId, event.approvalPolicy);
       }
       return;
     case 'approval.requested':
       // A set keyed by request id (5.2); a replayed request is below the
       // pair's `latest` entry and never reaches here.
-      if (streamId === null) return;
+      if (runId === null) return;
       view.approvals = [
         ...view.approvals,
         {
-          streamId,
+          runId,
           requestId: event.requestId,
           payload: event.payload,
         },
@@ -1530,8 +1529,8 @@ function applySessionSlices(
       );
       return;
     case 'approval.policy':
-      if (streamId !== null)
-        writableMap(view, 'policy').set(streamId, event.snapshot);
+      if (runId !== null)
+        writableMap(view, 'policy').set(runId, event.snapshot);
       return;
     case 'inquiryThreadUpdated': {
       const {
@@ -1553,8 +1552,8 @@ function applySessionSlices(
       return;
     }
     case 'updateQueuedFollowUps':
-      if (streamId !== null)
-        writableMap(view, 'queuedFollowUps').set(streamId, event.messages);
+      if (runId !== null)
+        writableMap(view, 'queuedFollowUps').set(runId, event.messages);
       return;
     default:
       return;
@@ -1568,30 +1567,30 @@ function applySessionSlices(
  */
 function relink(
   view: SessionView,
-  stream: StreamView,
+  stream: RunView,
   previousParentId: RunId | null,
 ): void {
   const previousParent =
-    previousParentId === null ? undefined : view.streams.get(previousParentId);
+    previousParentId === null ? undefined : view.runs.get(previousParentId);
   if (previousParent) {
-    setStream(view, {
+    setRun(view, {
       ...previousParent,
       childIds: withoutId(previousParent.childIds, stream.id),
     });
   }
   let parent =
-    stream.parentId === null ? undefined : view.streams.get(stream.parentId);
+    stream.parentId === null ? undefined : view.runs.get(stream.parentId);
   if (parent && isDescendantOf(view, parent, stream.id)) {
     // An edge onto the stream's own subtree would close a loop; the tree is
     // what every reader walks, so the edge is refused and the stream keeps
     // its previous parent (or the top level).
     parent = previousParent;
-    setStream(view, { ...stream, parentId: previousParent?.id ?? null });
+    setRun(view, { ...stream, parentId: previousParent?.id ?? null });
   } else if (!parent && stream.parentId !== null) {
-    setStream(view, { ...stream, parentId: null });
+    setRun(view, { ...stream, parentId: null });
   }
   if (parent) {
-    setStream(view, {
+    setRun(view, {
       ...parent,
       childIds: insertOrdered(view, parent.childIds, stream.id),
     });
@@ -1606,10 +1605,10 @@ function relink(
 
 /** The stream a durable event names: its aggregate, except for the thread
  *  aggregate of an inquiry (5.1). */
-function streamOf(event: DisplaySessionEvent): RunId | null {
+function runOfEvent(event: DisplaySessionEvent): RunId | null {
   return event.type === 'inquiryThreadUpdated'
     ? null
-    : aggregateTarget(event.aggregateId).id;
+    : runIdOf(event.aggregateId);
 }
 
 /** Returns whether the event changed anything. */
@@ -1634,41 +1633,41 @@ function foldDurable(
   const newest = latest.get(listingKey);
   if (newest !== undefined && event.commit <= newest) return traceChanged;
 
-  const streamId = streamOf(event);
-  if (streamId === null) {
+  const runId = runOfEvent(event);
+  if (runId === null) {
     latest.set(listingKey, event.commit);
     applySessionSlices(view, null, event);
     return true;
   }
-  const known = view.streams.get(streamId);
+  const known = view.runs.get(runId);
   // Existence: only `run.start` mints a stream, once. A fact for a stream
   // the view has no `run.start` for changes nothing and leaves no entry (its
   // publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   latest.set(listingKey, event.commit);
-  if (event.type === 'stream.removed') {
-    return foldStreamRemoved(view, streamId, deferred);
+  if (event.type === 'run.removed') {
+    return foldRunRemoved(view, runId, deferred);
   }
   const created = !known;
-  const before = known ?? createStream(view, event as RunStartEvent);
+  const before = known ?? createStream(view, event as RunStartEvent, runId);
 
-  applySessionSlices(view, streamId, event);
+  applySessionSlices(view, runId, event);
   const own = applyOwnArm(before, event);
-  if (event.type === 'result') sessionIndexesOf(view).ended.add(streamId);
+  if (event.type === 'result') sessionIndexesOf(view).ended.add(runId);
   if (event.type === 'status') {
     const { ended } = sessionIndexesOf(view);
     // A fresh run can end again; a terminal phase ends every live row (5.2,
     // "In-flight text": a run can end with a row unfinalized).
-    if (own.status === STREAM_PHASE.RUNNING && before.status !== own.status) {
-      ended.delete(streamId);
+    if (own.status === RUN_PHASE.RUNNING && before.status !== own.status) {
+      ended.delete(runId);
     }
     if (isTerminalOutcomePhase(own.status)) clearInflight(view, own);
   }
-  let next: StreamView = {
+  let next: RunView = {
     ...own,
     lastTimestamp: event.at,
   };
-  setStream(view, next);
+  setRun(view, next);
 
   if (created || next.parentId !== before.parentId) {
     relink(view, next, created ? null : before.parentId);
@@ -1677,14 +1676,14 @@ function foldDurable(
   if (next.label !== before.label) {
     for (const childId of next.childIds) refreshAncestors(view, childId);
   }
-  next = view.streams.get(next.id)!;
+  next = view.runs.get(next.id)!;
   const aggregated =
     own.status !== before.status
       ? withAggregates(view, withTranscriptFacts(next))
       : withAggregates(view, next);
   // The run model's own inputs: the stream's existence and status.
   const runInputsMoved = created || own.status !== before.status;
-  setStream(
+  setRun(
     view,
     runInputsMoved ? runModelAt(view, aggregated, deferred) : aggregated,
   );
@@ -1711,7 +1710,8 @@ function foldTraceEvent(
 ): boolean {
   const retained = view.folded.get(event.aggregateId);
   if (retained === undefined || event.seq <= retained) return false;
-  let stream = view.streams.get(aggregateTarget(event.aggregateId).id);
+  const runId = runIdOf(event.aggregateId);
+  let stream = runId === null ? undefined : view.runs.get(runId);
   if (!stream) return false;
   const indexes = indexesOf(stream.transcript);
   if (event.type === 'status') indexes.trace.status(event.phase);
@@ -1729,7 +1729,7 @@ function foldTraceEvent(
   // A filtered fact still advances its source cursor. Keep the stream and
   // transcript references stable when that fact produced no presentation.
   if (change.appended.length === 0 && change.dirtied.length === 0) return true;
-  setStream(
+  setRun(
     view,
     runModelAt(
       view,
@@ -1752,18 +1752,19 @@ function foldTranscriptRow(
 ): boolean {
   const retained = view.folded.get(event.aggregateId);
   if (retained === undefined || event.seq <= retained) return false;
-  const stream = view.streams.get(aggregateTarget(event.aggregateId).id);
+  const runId = runIdOf(event.aggregateId);
+  const stream = runId === null ? undefined : view.runs.get(runId);
   if (!stream) return false;
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
-  const withEntry: StreamView = {
+  const withEntry: RunView = {
     ...stream,
     lastTimestamp: event.at,
     transcript: applyEntry(view, stream, event.entry),
   };
   const next = withTranscriptFacts(withEntry);
-  setStream(view, next);
+  setRun(view, next);
   if (entryAffectsRunModel(event.entry)) {
-    setStream(view, runModelAt(view, next, deferred));
+    setRun(view, runModelAt(view, next, deferred));
   }
   return true;
 }
@@ -1775,14 +1776,14 @@ function foldTranscriptRow(
  * lifecycle one is what outranks a replayed `run.start` beneath the
  * tombstone.
  */
-function foldStreamRemoved(
+function foldRunRemoved(
   view: SessionView,
-  streamId: RunId,
+  runId: RunId,
   deferred: DeferredRunModels,
 ): boolean {
-  const stream = view.streams.get(streamId);
+  const stream = view.runs.get(runId);
   if (!stream) return false;
-  dropStream(view, stream);
+  dropRun(view, stream);
   clearInflight(view, stream);
   // A map that never held this stream is left alone: a delete that removes
   // nothing must not copy the map it publishes.
@@ -1790,20 +1791,18 @@ function foldStreamRemoved(
   if (view.queuedFollowUps.has(stream.id)) {
     writableMap(view, 'queuedFollowUps').delete(stream.id);
   }
-  writableMap(view, 'folded').delete(qualifyAggregateId('stream', stream.id));
-  if (view.approvals.some((a) => a.streamId === stream.id)) {
-    view.approvals = view.approvals.filter((a) => a.streamId !== stream.id);
+  writableMap(view, 'folded').delete(qualifyAggregateId('run', stream.id));
+  if (view.approvals.some((a) => a.runId === stream.id)) {
+    view.approvals = view.approvals.filter((a) => a.runId !== stream.id);
   }
-  if (view.inquiries.some((i) => i.parentStreamId === stream.id)) {
-    view.inquiries = view.inquiries.filter(
-      (i) => i.parentStreamId !== stream.id,
-    );
+  if (view.inquiries.some((i) => i.parentRunId === stream.id)) {
+    view.inquiries = view.inquiries.filter((i) => i.parentRunId !== stream.id);
   }
   view.order = withoutId(view.order, stream.id);
   const parent =
-    stream.parentId === null ? undefined : view.streams.get(stream.parentId);
+    stream.parentId === null ? undefined : view.runs.get(stream.parentId);
   if (parent) {
-    setStream(view, {
+    setRun(view, {
       ...parent,
       childIds: withoutId(parent.childIds, stream.id),
     });
@@ -1812,9 +1811,9 @@ function foldStreamRemoved(
   // A child whose parent is gone is top-level: no dangling edge, no
   // ancestors (5.2, `ancestors`).
   for (const childId of stream.childIds) {
-    const child = view.streams.get(childId);
+    const child = view.runs.get(childId);
     if (!child) continue;
-    setStream(view, { ...child, parentId: null });
+    setRun(view, { ...child, parentId: null });
     view.order = insertOrdered(view, view.order, childId);
     refreshAncestors(view, childId);
   }
@@ -1822,9 +1821,9 @@ function foldStreamRemoved(
 }
 
 /**
- * The local snapshot names the streams whose owner entered or left the held
+ * The local snapshot names the runs whose owner entered or left the held
  * set and those entering or leaving `unreadable` (5.2, "Incremental"), so an
- * owner exiting recomputes exactly the streams it owned, never the view.
+ * owner exiting recomputes exactly the runs it owned, never the view.
  */
 function foldLocal(
   view: SessionView,
@@ -1853,23 +1852,23 @@ function foldLocal(
   }
   const touched = new Set<RunId>();
   for (const owner of changedOwners) {
-    for (const streamId of indexes.byOwner.get(owner) ?? []) {
-      touched.add(streamId);
+    for (const runId of indexes.byOwner.get(owner) ?? []) {
+      touched.add(runId);
     }
   }
   const unreadableBefore = new Map(
-    previous.unreadable.map((u) => [u.streamId, u.detail]),
+    previous.unreadable.map((u) => [u.runId, u.detail]),
   );
   const unreadableAfter = new Map(
-    local.unreadable.map((u) => [u.streamId, u.detail]),
+    local.unreadable.map((u) => [u.runId, u.detail]),
   );
-  for (const [streamId, detail] of unreadableBefore) {
-    if (unreadableAfter.get(streamId) !== detail) touched.add(streamId);
+  for (const [runId, detail] of unreadableBefore) {
+    if (unreadableAfter.get(runId) !== detail) touched.add(runId);
   }
-  for (const [streamId, detail] of unreadableAfter) {
-    if (unreadableBefore.get(streamId) !== detail) touched.add(streamId);
+  for (const [runId, detail] of unreadableAfter) {
+    if (unreadableBefore.get(runId) !== detail) touched.add(runId);
   }
-  for (const streamId of touched) walkUp(view, streamId, streamId, deferred);
+  for (const runId of touched) walkUp(view, runId, runId, deferred);
 }
 
 /**
@@ -1891,14 +1890,13 @@ function foldSubscriptions(
     if (subscribed.has(id)) continue;
     writableMap(view, 'folded').delete(id);
     const target = aggregateTarget(id);
-    const stream =
-      target.kind === 'stream' ? view.streams.get(target.id) : undefined;
+    const stream = target.kind === 'run' ? view.runs.get(target.id) : undefined;
     if (!stream) continue;
     clearInflight(view, stream);
     const evicted = withTranscriptFacts({
       ...stream,
       transcript: emptyTranscript(),
     });
-    setStream(view, runModelAt(view, evicted, deferred));
+    setRun(view, runModelAt(view, evicted, deferred));
   }
 }

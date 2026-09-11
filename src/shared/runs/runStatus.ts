@@ -40,9 +40,7 @@ export function deriveRunOutcome(facts: {
  * fails with a named error instead of an undefined-property crash
  * downstream.
  */
-export function runOutcomeToCliRunStatus(
-  outcome: RunOutcome,
-): CliRunStatus {
+export function runOutcomeToCliRunStatus(outcome: RunOutcome): CliRunStatus {
   switch (outcome) {
     case RUN_OUTCOME.COMPLETED:
       return CLI_RUN_STATUS.COMPLETED;
@@ -89,9 +87,7 @@ export function isTranscriptSettlementPhase(
   return phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 
-export function isActivePhase(
-  phase: RunLifecycleStatus | undefined,
-): boolean {
+export function isActivePhase(phase: RunLifecycleStatus | undefined): boolean {
   return phase === RUN_PHASE.RUNNING;
 }
 
@@ -129,9 +125,7 @@ export function canTransitionRunPhase(
   }
 
   if (isTerminalOutcomePhase(from)) {
-    return (
-      cause === RUN_TRANSITION_CAUSE.RESUME && to === RUN_PHASE.RUNNING
-    );
+    return cause === RUN_TRANSITION_CAUSE.RESUME && to === RUN_PHASE.RUNNING;
   }
 
   switch (cause) {

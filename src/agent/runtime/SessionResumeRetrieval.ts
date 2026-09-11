@@ -128,11 +128,7 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     }
 
     if (agentConfig.agentCategory === AgentCategory.Workflow) {
-      return yield* retrieveWorkflowResumeData(
-        runId,
-        agentConfig,
-        session,
-      );
+      return yield* retrieveWorkflowResumeData(runId, agentConfig, session);
     }
 
     logger.warn(`Unknown agent config type for run: ${runId}`);
@@ -164,20 +160,15 @@ const retrieveToolUseResumeData = Effect.fn('retrieveToolUseResumeData')(
 
         const parsedShared = parseToolUseShared(flowRecord.shared);
         if (!parsedShared.success) {
-          logger.warn(
-            `Invalid flow record structure for run: ${runId}`,
-            {
-              data: { error: parsedShared.error },
-            },
-          );
+          logger.warn(`Invalid flow record structure for run: ${runId}`, {
+            data: { error: parsedShared.error },
+          });
           return null;
         }
 
         const { stateSlices } = parsedShared.data;
         if (stateSlices === null) {
-          logger.warn(
-            `Invalid flow record structure for run: ${runId}`,
-          );
+          logger.warn(`Invalid flow record structure for run: ${runId}`);
           return null;
         }
 
@@ -237,9 +228,7 @@ const retrieveWorkflowResumeData = Effect.fn('retrieveWorkflowResumeData')(
           flowRecord.shared,
         );
         if (!parseResult.success) {
-          logger.warn(
-            `Invalid workflow flow record for run: ${runId}`,
-          );
+          logger.warn(`Invalid workflow flow record for run: ${runId}`);
           return null;
         }
 

@@ -51,8 +51,7 @@ export function taskGroupDisplayStatus(
   group: Pick<TaskGroup, 'status'>,
   runDurableOutcome: RunOutcome | undefined,
 ): TaskGroupStatus {
-  return runDurableOutcome !== undefined &&
-    group.status === RUN_PHASE.RUNNING
+  return runDurableOutcome !== undefined && group.status === RUN_PHASE.RUNNING
     ? runDurableOutcome
     : group.status;
 }

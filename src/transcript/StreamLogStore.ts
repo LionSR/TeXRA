@@ -9,15 +9,13 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
-import { StreamLog, type StreamLogDelta } from '@shared/session/traceEntries';
+import { StreamLog } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
-import { createListenerSet } from '@utils/core/listenerSet';
 
 type TranscriptDatabase = Pick<
   Context.Service.Shape<typeof Database>,
   'readAggregate' | 'readListing'
 >;
-type StreamLogListener = (runId: RunId, delta: StreamLogDelta) => void;
 export type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
@@ -71,7 +69,6 @@ export class StreamLogStore {
   private readonly runs = new Map<RunId, RunState>();
   private readonly known = new Set<RunId>();
   private readonly releaseRequests = new Set<RunId>();
-  private readonly listeners = createListenerSet<StreamLogListener>();
   private readonly gate = Semaphore.makeUnsafe(1);
 
   private constructor(
@@ -106,9 +103,6 @@ export class StreamLogStore {
     return new StreamLogStore({ kind: 'ephemeral', reason: normalized });
   }
 
-  onChange(listener: StreamLogListener): () => void {
-    return this.listeners.add(listener);
-  }
   get(runId: RunId): StreamLog | undefined {
     return this.runs.get(runId)?.log;
   }
@@ -215,7 +209,6 @@ export class StreamLogStore {
       }
       this.known.add(runId);
       Object.assign(this.ensureRunState(runId), entries);
-      this.notify(runId, true);
     });
   }
 
@@ -246,7 +239,9 @@ export class StreamLogStore {
         state.fold ??= createTranscriptFold(state.log);
         applyEvent(state.log, state.fold, event);
         state.seq = event.seq;
-        this.notify(runId);
+        // Nothing here reads the log's change buffers; drain them so they do
+        // not grow with the resident log.
+        state.log.drainEmission();
       }),
     );
   }
@@ -366,12 +361,5 @@ export class StreamLogStore {
       this.runs.set(runId, state);
     }
     return state;
-  }
-
-  private notify(runId: RunId, reset = false): void {
-    const log = this.get(runId);
-    if (log === undefined) return;
-    const delta = { ...log.drainEmission(), reset };
-    for (const listener of this.listeners) listener(runId, delta);
   }
 }

@@ -92,8 +92,7 @@ describe('stream status display labels', () => {
       }),
     ).toBe('Resuming');
     expect(
-      progressHeaderStatus(RUN_PHASE.RUNNING, RUN_SUBSTATE.RESUMING)
-        .displayKey,
+      progressHeaderStatus(RUN_PHASE.RUNNING, RUN_SUBSTATE.RESUMING).displayKey,
     ).toBe('resuming');
   });
 

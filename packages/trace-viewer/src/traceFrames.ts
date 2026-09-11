@@ -291,8 +291,7 @@ export function traceFrame(
 ): EventsFrame {
   const { listing, transcript } = traceEvents(trace);
   const named = subscribe.aggregates.some(
-    (aggregate) =>
-      aggregate.id === qualifyAggregateId('run', trace.runId),
+    (aggregate) => aggregate.id === qualifyAggregateId('run', trace.runId),
   );
   const checkedAggregateIds = [
     ...new Set(listing.flatMap(referencedAggregates)),

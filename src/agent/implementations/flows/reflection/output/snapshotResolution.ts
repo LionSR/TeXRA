@@ -22,10 +22,7 @@ export async function resolveBaseFilesForDiff(
   return Promise.all(
     baseFiles.map(async (loc) => {
       if (loc.kind !== 'workspace') return loc;
-      const snapshotAbsolute = getOriginalSnapshotPath(
-        runId,
-        loc.relativePath,
-      );
+      const snapshotAbsolute = getOriginalSnapshotPath(runId, loc.relativePath);
       if (!(await AbsoluteFS.isFile(snapshotAbsolute))) return loc;
       return createRunStorageLocation(
         snapshotAbsolute,

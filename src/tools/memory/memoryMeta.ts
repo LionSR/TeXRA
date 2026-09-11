@@ -147,7 +147,5 @@ export function setPinnedMeta(
 
 /** Format attribution for display: "agentName (runId)" or just "agentName". */
 export function formatAttribution(meta: MemoryFileMeta): string {
-  return meta.runId
-    ? `${meta.modifiedBy} (${meta.runId})`
-    : meta.modifiedBy;
+  return meta.runId ? `${meta.modifiedBy} (${meta.runId})` : meta.modifiedBy;
 }

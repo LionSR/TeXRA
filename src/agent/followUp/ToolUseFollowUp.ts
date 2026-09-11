@@ -147,11 +147,7 @@ function admitFollowUp(
   if (target.kind === 'active') {
     // A child loop remains the owner during active inner turns, so input joins
     // its ordered queue rather than creating a second turn driver.
-    const submission = ownerSession.followUps.submit(
-      runId,
-      item,
-      'live_owner',
-    );
+    const submission = ownerSession.followUps.submit(runId, item, 'live_owner');
     if (submission.kind === 'duplicate') return { status: 'sent' };
     if (submission.kind === 'delivered_live') {
       if (options.mode === 'live_notification') return { status: 'queued' };

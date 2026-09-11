@@ -26,13 +26,6 @@ import type {
   ProgressPermissionKind,
   RunId,
 } from '@shared/schemas';
-import {
-  APPROVE_ALL_DELEGATED_WORK_ACTION,
-  APPROVE_SESSION_ACTION,
-  approvalDecisionArms,
-  type PermissionDecision,
-  sessionBypassRequest,
-} from '@shared/session/approvalDecision';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever } from '@utils/core';
@@ -105,7 +98,7 @@ export type PendingApprovalKind = ProgressPermissionKind;
 /** One request the user's attention is on: a fold fact, read once. */
 interface AttentionRequest {
   readonly requestId: string;
-  readonly streamId: RunId;
+  readonly runId: RunId;
   readonly kind: PendingApprovalKind;
   /** The fact's payload; the host payload replaces it when presented. */
   readonly payload: PermissionPayload;
@@ -133,8 +126,8 @@ const decided = signal<ReadonlySet<string>>(new Set());
 /** Jump-to-waiting: the focused stream's requests lead the order. */
 const promoted = signal<
   | {
-      readonly streamId: RunId;
-      readonly includeStreamIds: ReadonlySet<RunId>;
+      readonly runId: RunId;
+      readonly includeRunIds: ReadonlySet<RunId>;
     }
   | undefined
 >(undefined);
@@ -145,10 +138,10 @@ const INTERRUPT: ApprovalDecision = {
 };
 
 /** Whether `payload` presents; a hook keys its host entry by the same id. */
-export function approvalPayloadStreamId(
+export function approvalPayloadRunId(
   payload: Pick<ApprovalPayload, 'data'>,
 ): RunId | undefined {
-  return payload.data.streamId || undefined;
+  return payload.data.runId || undefined;
 }
 
 function inquiryHostRequest(
@@ -180,7 +173,7 @@ export function attentionRequests(
 ): readonly AttentionRequest[] {
   const requests: AttentionRequest[] = view.approvals.map((approval) => ({
     requestId: approval.requestId,
-    streamId: approval.streamId,
+    runId: approval.runId,
     kind: approval.payload.kind,
     payload: approval.payload,
   }));
@@ -190,15 +183,14 @@ export function attentionRequests(
     if (!entry) continue;
     requests.push({
       requestId: entry[0],
-      streamId: entry[1].payload.data.streamId as RunId,
+      runId: entry[1].payload.data.runId as RunId,
       kind: 'externalInquiry',
       payload: entry[1].payload,
     });
   }
   if (!lead) return requests;
   const leads = (request: AttentionRequest): boolean =>
-    request.streamId === lead.streamId ||
-    lead.includeStreamIds.has(request.streamId);
+    request.runId === lead.runId || lead.includeRunIds.has(request.runId);
   return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
 }
 
@@ -254,8 +246,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   const lead = promoted.get();
   const leads = (request: AttentionRequest): boolean =>
     lead !== undefined &&
-    (request.streamId === lead.streamId ||
-      lead.includeStreamIds.has(request.streamId));
+    (request.runId === lead.runId || lead.includeRunIds.has(request.runId));
   candidates.sort((a, b) => {
     const leadDelta = Number(leads(b.request)) - Number(leads(a.request));
     if (leadDelta !== 0) return leadDelta;
@@ -273,19 +264,19 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
 });
 
 /**
- * Stable-partition the pending requests so `streamId`'s lead, then re-read
+ * Stable-partition the pending requests so `runId`'s lead, then re-read
  * the head. Used by jump-to-waiting: focusing a session surfaces that
- * session's request immediately. `includeStreamIds` lets a composite surface
- * promote requests owned by the streams it presents, such as a workflow
+ * session's request immediately. `includeRunIds` lets a composite surface
+ * promote requests owned by the runs it presents, such as a workflow
  * popup's direct children.
  */
-export function promoteApprovalsForStream(
-  streamId: RunId,
-  options: { readonly includeStreamIds?: ReadonlySet<RunId> } = {},
+export function promoteApprovalsForRun(
+  runId: RunId,
+  options: { readonly includeRunIds?: ReadonlySet<RunId> } = {},
 ): void {
   promoted.set({
-    streamId,
-    includeStreamIds: options.includeStreamIds ?? new Set(),
+    runId,
+    includeRunIds: options.includeRunIds ?? new Set(),
   });
 }
 
@@ -333,73 +324,58 @@ function settleHost(
 }
 
 /** Issue runtime requests in order; a refusal reads in the conversation. */
-function issue(streamId: RunId, ...requests: RuntimeRequest[]): void {
+function issue(runId: RunId, ...requests: RuntimeRequest[]): void {
   const session = currentSession();
   void effectRuntime().runPromise(
     Effect.forEach(requests, (request) => session.requests.request(request), {
       discard: true,
     }).pipe(
       Effect.match({
-        onFailure: (error) => appendLocalRequestRefusal(error, streamId),
+        onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () => undefined,
       }),
     ),
   );
 }
 
-/** The runtime requests `arms` names, in the order they name them. */
-function issueArms(
-  streamId: RunId,
-  arms: readonly { readonly runtime: RuntimeRequest }[],
-): void {
-  issue(streamId, ...arms.map((arm) => arm.runtime));
+function bypassRequest(
+  runId: RunId,
+  bypass: ApprovalBypassKind | undefined,
+): RuntimeRequest[] {
+  if (bypass === undefined) return [];
+  return [
+    {
+      kind: 'policy.set',
+      change: { field: 'bypass', runId, bypass, enabled: true },
+    },
+  ];
 }
 
-/**
- * The TUI decision in the shared vocabulary's terms: the bag the modals hand
- * over is host-neutral plus the bypass the card named, and a bypass on an
- * accepted decision IS one of that vocabulary's actions. A refusal's
- * provenance (queue failure, policy denial, typed text) collapses into the
- * one `feedback` string the protocol carries.
- */
-function rejectDecision(decision: ApprovalDecision): {
+function rejection(decision: ApprovalDecision): {
   readonly action: 'reject';
-  readonly feedback: string | undefined;
+  readonly feedback: string | null;
 } {
-  const { rejectionCause, rejectionReason, userMessage } = decision;
   return {
     action: 'reject',
-    feedback: rejectionCause ?? rejectionReason ?? userMessage,
+    feedback:
+      decision.rejectionCause ??
+      decision.rejectionReason ??
+      decision.userMessage ??
+      null,
   };
 }
 
-function bashDecision(decision: ApprovalDecision): PermissionDecision<'bash'> {
-  if (!decision.accepted) return rejectDecision(decision);
-  return {
-    action: decision.bypass === 'bash' ? APPROVE_SESSION_ACTION : 'approve',
-  };
-}
+type DecisionOf<K extends RuntimeRequest['kind']> =
+  Extract<RuntimeRequest, { kind: K }> extends { decision: infer D }
+    ? D
+    : never;
 
-function proposalDecision(
-  decision: ApprovalDecision,
-): PermissionDecision<'proposal'> {
-  if (!decision.accepted) return rejectDecision(decision);
-  return {
-    action:
-      decision.bypass === 'superYolo'
-        ? APPROVE_ALL_DELEGATED_WORK_ACTION
-        : 'approve',
-  };
-}
-
-function planDecision(
-  decision: ApprovalDecision,
-): PermissionDecision<'planApproval'> {
-  if (!decision.accepted) return rejectDecision(decision);
+function planDecision(decision: ApprovalDecision): DecisionOf<'decision.plan'> {
+  if (!decision.accepted) return rejection(decision);
   if (decision.planAction === 'approve_and_goal') {
     return {
       action: 'approve_and_goal',
-      autoApproveAll: decision.goalAutoApproveAll,
+      autoApproveAll: decision.goalAutoApproveAll ?? null,
     };
   }
   return { action: 'approve' };
@@ -407,11 +383,11 @@ function planDecision(
 
 function userQuestionDecision(
   decision: ApprovalDecision,
-): PermissionDecision<'userQuestion'> {
+): DecisionOf<'decision.userQuestion'> {
   if (decision.accepted && decision.userQuestionAnswers) {
     return { action: 'submit', answers: decision.userQuestionAnswers };
   }
-  if (decision.rejectionCause !== undefined) return rejectDecision(decision);
+  if (decision.rejectionCause !== undefined) return rejection(decision);
   return {
     action: 'skip',
     feedback: decision.userMessage || USER_QUESTION_SKIPPED_FEEDBACK,
@@ -419,10 +395,9 @@ function userQuestionDecision(
 }
 
 /**
- * Apply one decision: the three kinds a host hook answers resolve their
- * latch, the rest become the `decision.*` requests the shared vocabulary
- * names (PRD 8.2), each preceded by the `policy.set` the modal's bypass
- * choice names.
+ * Apply one decision: the hook-settled kinds resolve their latch, the rest
+ * become `decision.*` requests (PRD 8.2), each preceded by the `policy.set`
+ * the modal's bypass choice names.
  */
 function decideRequest(
   request: AttentionRequest,
@@ -430,45 +405,69 @@ function decideRequest(
   decision: ApprovalDecision,
 ): void {
   markDecided(request.requestId);
-  const { streamId } = request;
+  const { runId } = request;
+  const approvalId = request.requestId;
   switch (payload.kind) {
     case 'toolEdit':
     case 'retry':
     case 'externalInquiry':
       if (decision.accepted && decision.bypass === 'toolEdit') {
-        issue(streamId, sessionBypassRequest(streamId, 'toolEdit'));
+        issue(runId, ...bypassRequest(runId, decision.bypass));
       }
       settleHost(request.requestId, decision);
       return;
     case 'bash':
-      issueArms(
-        streamId,
-        approvalDecisionArms<'bash'>(payload, bashDecision(decision)),
+      issue(
+        runId,
+        ...bypassRequest(
+          runId,
+          decision.accepted ? decision.bypass : undefined,
+        ),
+        {
+          kind: 'decision.bash',
+          runId,
+          approvalId,
+          decision: decision.accepted
+            ? { action: 'approve' }
+            : rejection(decision),
+        },
       );
       return;
     case 'planApproval':
-      issueArms(
-        streamId,
-        approvalDecisionArms<'planApproval'>(payload, planDecision(decision)),
-      );
+      issue(runId, {
+        kind: 'decision.plan',
+        runId,
+        approvalId,
+        decision: planDecision(decision),
+      });
       return;
-    case 'proposal':
-      issueArms(
-        streamId,
-        approvalDecisionArms<'proposal'>(payload, proposalDecision(decision)),
-      );
-      if (decision.accepted && decision.bypass === 'superYolo') {
-        approveQueuedDelegatedWorkForStream(streamId);
-      }
-      return;
-    case 'userQuestion':
-      issueArms(
-        streamId,
-        approvalDecisionArms<'userQuestion'>(
-          payload,
-          userQuestionDecision(decision),
+    case 'proposal': {
+      const delegated = decision.accepted && decision.bypass === 'superYolo';
+      issue(
+        runId,
+        ...bypassRequest(
+          runId,
+          decision.accepted ? decision.bypass : undefined,
         ),
+        {
+          kind: 'decision.proposal',
+          runId,
+          approvalId,
+          decision: decision.accepted
+            ? { action: 'approve' }
+            : rejection(decision),
+        },
       );
+      if (delegated) approveQueuedDelegatedWorkForRun(runId);
+      return;
+    }
+    case 'userQuestion':
+      issue(runId, {
+        kind: 'decision.userQuestion',
+        runId,
+        approvalId,
+        decision: userQuestionDecision(decision),
+      });
       return;
   }
   assertNever(payload, 'Unhandled approval payload kind');
@@ -566,14 +565,14 @@ export function settleHostRequestsWhere(
   return count;
 }
 
-/** Approve every delegated request pending on `streamId` once its bypass is
+/** Approve every delegated request pending on `runId` once its bypass is
  *  on: the decisions the user's super-YOLO choice implied. */
-function approveQueuedDelegatedWorkForStream(streamId: RunId): void {
+function approveQueuedDelegatedWorkForRun(runId: RunId): void {
   const view = sessionView().get();
   const host = hostRequests.get();
   const done = decided.get();
   for (const request of attentionRequests(view, host, undefined)) {
-    if (request.streamId !== streamId || done.has(request.requestId)) continue;
+    if (request.runId !== runId || done.has(request.requestId)) continue;
     if (
       request.kind !== 'proposal' &&
       request.kind !== 'toolEdit' &&

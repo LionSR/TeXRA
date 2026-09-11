@@ -11,9 +11,7 @@ export const WORKFLOW_RUN_LIFECYCLE = {
   CANCELLED: 'cancelled',
 } as const;
 const WorkflowRunLifecycleSchema = z.enum(WORKFLOW_RUN_LIFECYCLE);
-type WorkflowRunLifecycle = z.infer<
-  typeof WorkflowRunLifecycleSchema
->;
+type WorkflowRunLifecycle = z.infer<typeof WorkflowRunLifecycleSchema>;
 
 export const WORKFLOW_CALL_STATUS = {
   PLANNED: 'planned',
@@ -27,9 +25,7 @@ export const WORKFLOW_CALL_STATUS = {
   CACHED: 'cached',
 } as const;
 const WorkflowRunCallStatusSchema = z.enum(WORKFLOW_CALL_STATUS);
-type WorkflowRunCallStatus = z.infer<
-  typeof WorkflowRunCallStatusSchema
->;
+type WorkflowRunCallStatus = z.infer<typeof WorkflowRunCallStatusSchema>;
 
 /**
  * What an interactive control request does to the workflow-script `agent()`
@@ -101,16 +97,15 @@ const WorkflowRunCallBaseSchema = z.strictObject({
   error: z.never().optional(),
 });
 
-const WorkflowRunIssuedCallSchema =
-  WorkflowRunCallBaseSchema.extend({
-    /** Set at issue time; older persisted issued calls predate this marker. */
-    issued: z.literal(true).optional(),
-    kind: WorkflowCallKindSchema.optional(),
-    agent: z.string().optional(),
-    /** Declared by the script at issue time, then the host-resolved model. */
-    model: z.string().optional(),
-    childRunId: RunIdSchema.optional(),
-  });
+const WorkflowRunIssuedCallSchema = WorkflowRunCallBaseSchema.extend({
+  /** Set at issue time; older persisted issued calls predate this marker. */
+  issued: z.literal(true).optional(),
+  kind: WorkflowCallKindSchema.optional(),
+  agent: z.string().optional(),
+  /** Declared by the script at issue time, then the host-resolved model. */
+  model: z.string().optional(),
+  childRunId: RunIdSchema.optional(),
+});
 
 type MaybeIssuedCall = Pick<
   z.infer<typeof WorkflowRunIssuedCallSchema>,
@@ -372,6 +367,4 @@ export const WorkflowRunSnapshotSchema = z
         });
     }
   });
-export type WorkflowRunSnapshot = z.infer<
-  typeof WorkflowRunSnapshotSchema
->;
+export type WorkflowRunSnapshot = z.infer<typeof WorkflowRunSnapshotSchema>;

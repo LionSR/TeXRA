@@ -161,10 +161,7 @@ async function stopProjectRuns(session: SessionHandle): Promise<void> {
   await runInSession(session, async () => {
     const stops = runs.getActiveIds().flatMap((runId) => {
       if (runs.getHandle(runId)?.isChild) return [];
-      return [
-        runs.kill(runId, { detachActiveChildren: false })
-          .settlement,
-      ];
+      return [runs.kill(runId, { detachActiveChildren: false }).settlement];
     });
     await effectRuntime().runPromise(
       Effect.all(stops, { concurrency: 'unbounded' }),

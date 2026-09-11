@@ -122,10 +122,7 @@ export function ConversationPane(
   const allNotices = useSignal(noticesSignal);
   const stream = runViewOf(view, activeRunId);
   const runNotices = noticesFor(allNotices, activeRunId);
-  const entries = mergeLocalNotices(
-    stream?.transcript.rows ?? [],
-    runNotices,
-  );
+  const entries = mergeLocalNotices(stream?.transcript.rows ?? [], runNotices);
   const displayEntries = pendingTranscriptEntries(
     entries,
     mergedSettledRows(

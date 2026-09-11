@@ -124,8 +124,7 @@ export class AgentReviewRunController {
   private stop(run: AgentReviewRunToken): Effect.Effect<void> {
     const handle = run.handle;
     if (!handle) return Effect.void;
-    if (run.session.runs.getHandle(handle.runId) !== handle)
-      return Effect.void;
+    if (run.session.runs.getHandle(handle.runId) !== handle) return Effect.void;
     return run.session.runs.stopAgentRun(handle.runId, {
       detachActiveChildren: detachSubagentsOnStop(),
     });

@@ -68,9 +68,7 @@ interface CliExecuteOptions {
   readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
   /** Called during signal shutdown after CANCELLED status is durable and the
    *  resumable checkpoint has been drained, before the signal handler exits. */
-  readonly onInterruptedRunFinalized?: (
-    runId: RunId,
-  ) => void | Promise<void>;
+  readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedRun?: (
     resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
@@ -376,8 +374,7 @@ export function executeCliRequest(
             ) {
               const advertise = yield* Effect.try({
                 try: () =>
-                  options.canAdvertiseInterruptedRun?.(resumability) ??
-                  true,
+                  options.canAdvertiseInterruptedRun?.(resumability) ?? true,
                 catch: (error: unknown) => error,
               });
               if (advertise) {
@@ -465,8 +462,7 @@ export function executeCliRequest(
         // recovery notice has been flushed.
         if (
           resumableCheckpoint &&
-          (options.canAdvertiseInterruptedRun?.(resumableCheckpoint) ??
-            true) &&
+          (options.canAdvertiseInterruptedRun?.(resumableCheckpoint) ?? true) &&
           options.onInterruptedRunFinalized
         ) {
           await effectRuntime().runPromise(

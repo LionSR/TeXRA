@@ -15,10 +15,7 @@ import {
 } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import {
-  aggregateId as qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 

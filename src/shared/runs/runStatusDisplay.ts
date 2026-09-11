@@ -25,8 +25,7 @@ export type RunStatusDisplayKey =
  * only the label and tone change.
  */
 const STREAM_DISPLAY_INTERRUPTED = 'interrupted';
-type RunStatusCopyKey =
-  RunStatusDisplayKey | typeof STREAM_DISPLAY_INTERRUPTED;
+type RunStatusCopyKey = RunStatusDisplayKey | typeof STREAM_DISPLAY_INTERRUPTED;
 
 /**
  * Display key for a `RunLifecycleStatus` (a `RunPhase`, or the `ready`
@@ -83,8 +82,7 @@ export const RUN_STATUS_TONE = {
   NEUTRAL: 'neutral',
   WARNING: 'warning',
 } as const;
-type RunStatusTone =
-  (typeof RUN_STATUS_TONE)[keyof typeof RUN_STATUS_TONE];
+type RunStatusTone = (typeof RUN_STATUS_TONE)[keyof typeof RUN_STATUS_TONE];
 
 const RUN_STATUS_TONES: Record<RunStatusCopyKey, RunStatusTone> = {
   [RUN_SUBSTATE.STARTING]: RUN_STATUS_TONE.RUNNING,

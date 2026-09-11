@@ -51,9 +51,7 @@ function taskRow(task: TaskSpec): WorkflowTaskRow {
     id: task.id,
     label: task.id,
     ...(task.phase === undefined ? {} : { phase: task.phase }),
-    ...(task.childRunId === undefined
-      ? {}
-      : { childRunId: task.childRunId }),
+    ...(task.childRunId === undefined ? {} : { childRunId: task.childRunId }),
     ...(task.attemptId === undefined ? {} : { attemptId: task.attemptId }),
   };
   const status = task.status ?? 'running';

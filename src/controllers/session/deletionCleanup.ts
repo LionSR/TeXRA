@@ -33,10 +33,7 @@ const log = createLog('DeletionCleanup');
  * and the removal is no longer detected. TeXRA 1.0's file-ownership design
  * owns that remaining contract (#12139).
  */
-const removeRunDirectories = (
-  storage: string,
-  runIds: readonly RunId[],
-) =>
+const removeRunDirectories = (storage: string, runIds: readonly RunId[]) =>
   Effect.tryPromise({
     try: async () => {
       const runs = path.join(

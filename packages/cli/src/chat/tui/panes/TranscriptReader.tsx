@@ -51,8 +51,7 @@ export function TranscriptReader({
   // new row, a patched row, a text chunk), so the transcript is the
   // identity the effect and memos below key on to stay live while the
   // reader is open.
-  const transcript =
-    runViewOf(view, runId)?.transcript ?? EMPTY_TRANSCRIPT;
+  const transcript = runViewOf(view, runId)?.transcript ?? EMPTY_TRANSCRIPT;
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
   // Recomputed as the run appends rows, so the reader stays live rather than

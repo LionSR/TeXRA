@@ -128,21 +128,15 @@ class StorageFSKVStore extends KVStore implements RunKVStore {
   }
 
   override async write<T = unknown>(key: string, value: T): Promise<void> {
-    await runWithRunLeaseWriteFence(this.runId, () =>
-      super.write(key, value),
-    );
+    await runWithRunLeaseWriteFence(this.runId, () => super.write(key, value));
   }
 
   override async delete(key: string): Promise<void> {
-    await runWithRunLeaseWriteFence(this.runId, () =>
-      super.delete(key),
-    );
+    await runWithRunLeaseWriteFence(this.runId, () => super.delete(key));
   }
 
   async clear(): Promise<void> {
-    return runWithRunLeaseWriteFence(this.runId, () =>
-      this.deleteDir(),
-    );
+    return runWithRunLeaseWriteFence(this.runId, () => this.deleteDir());
   }
 
   getRunId(): RunId {
@@ -185,7 +179,10 @@ export function runMetaFromEvents(
     (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
       row.type === 'run.start' && row.aggregateId === id,
   );
-  if (!start || rows.some((row) => row.aggregateId === id && row.type === 'run.removed'))
+  if (
+    !start ||
+    rows.some((row) => row.aggregateId === id && row.type === 'run.removed')
+  )
     return null;
   const status = rows.findLast(
     (row) => row.aggregateId === id && row.type === 'status',
@@ -218,8 +215,7 @@ export function runMetaFromEvents(
       description?.type === 'run.description'
         ? description.description
         : undefined,
-    workflow:
-      workflow?.type === 'run.workflow' ? workflow.workflow : undefined,
+    workflow: workflow?.type === 'run.workflow' ? workflow.workflow : undefined,
   });
 }
 
@@ -239,10 +235,7 @@ export function runRecordFromEvents(
 }
 
 /** Native access to named run metadata, with no file-backed read arm. */
-export function getRunRecords(
-  session: SessionHandle,
-  runId: RunId,
-) {
+export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = aggregateId('run', runId);
   const read = <A>(
     select: (rows: readonly SessionEvent[]) => A,
@@ -288,8 +281,7 @@ export function getRunRecords(
     readWorkspaceFiles: (): Effect.Effect<string[], Error> =>
       read((rows) => {
         const event = rows.findLast(
-          (row) =>
-            row.aggregateId === id && row.type === 'run.workspaceFiles',
+          (row) => row.aggregateId === id && row.type === 'run.workspaceFiles',
         );
         return event?.type === 'run.workspaceFiles' ? event.paths : [];
       }),

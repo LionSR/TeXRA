@@ -310,9 +310,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       id: call.id,
       label: call.label,
       ...(phase !== undefined ? { phase } : {}),
-      ...(call.childRunId !== undefined
-        ? { childRunId: call.childRunId }
-        : {}),
+      ...(call.childRunId !== undefined ? { childRunId: call.childRunId } : {}),
       // Project only invocation facts the snapshot owns. Historical issued
       // calls may carry any subset and predate both explicit markers.
       ...(call.kind !== undefined && { kind: call.kind }),
@@ -488,8 +486,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         // yet is thereby unrepresentable.
         if (call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED) continue;
         const runChanged =
-          call.childRunId !== undefined &&
-          last?.childRunId !== call.childRunId;
+          call.childRunId !== undefined && last?.childRunId !== call.childRunId;
         // The host resolves agent and model after the card first appears;
         // a live card re-emits so it names what actually runs.
         const factsChanged =

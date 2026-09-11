@@ -330,8 +330,7 @@ export function createSessionSurfaces(options: {
     const surface = entry.surface$.get();
     let runId = resolveSelected(entry.view$.get(), surface);
     if (request.kind === 'record' && request.action.kind === 'start') {
-      runId =
-        request.action.target === 'launch' ? null : request.action.target;
+      runId = request.action.target === 'launch' ? null : request.action.target;
     }
     const origin: DraftOrigin = {
       runId,
@@ -401,11 +400,7 @@ export function createSessionSurfaces(options: {
         // The runtime's refusal also reaches the stream it was made on
         // (7.6): that stream's controls paint it, and nothing here
         // swallows it.
-        if (
-          !result.ok &&
-          result.error._tag !== 'Cancelled' &&
-          runId !== null
-        ) {
+        if (!result.ok && result.error._tag !== 'Cancelled' && runId !== null) {
           const current = entry.surface$.get();
           setSurface(entry, {
             ...current,

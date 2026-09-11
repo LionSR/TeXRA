@@ -117,8 +117,6 @@ export function getLeanLanguageServices(): LeanLanguageServices {
  * host owns server lifetime itself (the VS Code bridge) — only the direct
  * CLI/desktop adapter implements {@link LeanLanguageServices.stopSessionsForRun}.
  */
-export async function stopLeanServersForEndedRun(
-  runId: RunId,
-): Promise<void> {
+export async function stopLeanServersForEndedRun(runId: RunId): Promise<void> {
   await services?.stopSessionsForRun?.(runId);
 }

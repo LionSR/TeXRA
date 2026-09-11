@@ -21,10 +21,7 @@ import {
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  runMetaFromEvents,
-  runRecordFromEvents,
-} from './RunKVStore';
+import { runMetaFromEvents, runRecordFromEvents } from './RunKVStore';
 import { checkpointExists } from './resumability';
 const log = createLog('RunListing');
 const RUN_STORAGE_CONCURRENCY = 32;
@@ -124,10 +121,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
   const results = yield* Effect.forEach(
     runs,
     ([id, rows]) =>
-      Effect.gen(function* (): Effect.fn.Return<
-        RunListingEntry | null,
-        Error
-      > {
+      Effect.gen(function* (): Effect.fn.Return<RunListingEntry | null, Error> {
         const [meta, record] = yield* Effect.try({
           try: () =>
             [
@@ -160,9 +154,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
       }).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
-            log.warn(
-              `Skipping corrupt run ${id}: ${toErrorMessage(error)}`,
-            );
+            log.warn(`Skipping corrupt run ${id}: ${toErrorMessage(error)}`);
             return null;
           }),
         ),

@@ -174,11 +174,7 @@ export function formatSubagentDelivery(
         result.diffs.map((diff) => [diff.path, diff] as const),
       );
       lines.push(
-        ...formatWorkflowOutputs(
-          result.outputs,
-          options.runId,
-          diffsByPath,
-        ),
+        ...formatWorkflowOutputs(result.outputs, options.runId, diffsByPath),
       );
     }
     if (result.compileFailures.length > 0) {
@@ -487,10 +483,7 @@ export async function buildSubagentResult(
   let diffsUnavailable: string | undefined;
   if (result.category === 'workflow' && result.outputs.length > 0) {
     try {
-      diffInfos = await computeAndWriteWorkflowDiffs(
-        runId,
-        result.outputs,
-      );
+      diffInfos = await computeAndWriteWorkflowDiffs(runId, result.outputs);
     } catch (err) {
       // Diff computation failure is non-fatal: deliver without diffs, but tell
       // the orchestrator to read the output files directly.

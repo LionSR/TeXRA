@@ -144,9 +144,7 @@ describe('desktop preview host', () => {
           ...preview,
           showErrorMessage,
         }),
-        run: {} as Parameters<
-          typeof createDesktopHostRequests
-        >[0]['run'],
+        run: {} as Parameters<typeof createDesktopHostRequests>[0]['run'],
         files,
         snapshot: createHostSnapshotSource({
           project: {

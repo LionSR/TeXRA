@@ -45,19 +45,11 @@ import { flowKey } from '@agent/node/persistedFlow';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { RunStatusInfo } from '@agent/runtime/RunHandle';
-import {
-  getRunStore,
-  getRunRecords,
-} from '@agent/storage/RunKVStore';
+import { getRunStore, getRunRecords } from '@agent/storage/RunKVStore';
 import { inspectRunLease } from '@agent/storage/runLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { createLog } from '@logger/logUtils';
-import type {
-  RunId,
-  RunMeta,
-  RunOutcome,
-  RunPhase,
-} from '@shared/schemas';
+import type { RunId, RunMeta, RunOutcome, RunPhase } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunLiveness');
@@ -104,69 +96,64 @@ function heldElsewhereReason(owner: LeaseOwnerRecord): string {
  */
 const OWNED_HERE_REASON = "held by this process's lease with no live run";
 
-export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(
-  function* (
-    runId: RunId,
-    session: SessionHandle,
-    knownMeta?: KnownRunMeta,
-  ): Effect.fn.Return<RunLiveness> {
-    const { runs } = session;
-    const handle = runs.getHandle(runId);
-    if (handle) return { kind: 'live', info: runs.getStatus(handle) };
+export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
+  runId: RunId,
+  session: SessionHandle,
+  knownMeta?: KnownRunMeta,
+): Effect.fn.Return<RunLiveness> {
+  const { runs } = session;
+  const handle = runs.getHandle(runId);
+  if (handle) return { kind: 'live', info: runs.getStatus(handle) };
 
-    const store = getRunStore(runId);
-    return yield* Effect.gen(function* (): Effect.fn.Return<
-      RunLiveness,
-      unknown
-    > {
-      const meta =
-        knownMeta === undefined
-          ? yield* getRunRecords(session, runId).readMeta()
-          : knownMeta;
-      // A recorded outcome is the run's own fact, not the lease's: a finished
-      // child untracks its handle and writes the outcome long before its loop
-      // releases the run lease, and the parent reads the run inside
-      // exactly that window (#8093).
-      if (meta?.outcome !== undefined) {
-        return { kind: 'settled', outcome: meta.outcome };
-      }
-      const lease = yield* Effect.tryPromise({
-        try: () =>
-          runInSession(session, () => inspectRunLease(runId)),
-        catch: (error) => error,
-      });
-      if (lease.status === 'held') {
-        return { kind: 'unsettled', reason: heldElsewhereReason(lease.owner) };
-      }
-      if (lease.status === 'owned') {
-        log.warn(
-          `Run ${runId} holds this process's lease with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
-        );
-        return { kind: 'unsettled', reason: OWNED_HERE_REASON };
-      }
-      // Nobody owns the run: a checkpoint left behind is one that stopped
-      // without finishing, and none at all leaves nothing to continue.
-      return (yield* Effect.tryPromise({
-        try: () =>
-          runInSession(session, () => store.exists(flowKey(runId))),
-        catch: (error) => error,
-      }))
-        ? { kind: 'interrupted' }
-        : { kind: 'settled' };
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.sync((): RunLiveness => {
-          const cause = toErrorMessage(error);
-          log.warn(
-            `Cannot read the durable facts for run ${runId}: ${cause}`,
-            { data: error },
-          );
-          return {
-            kind: 'unsettled',
-            reason: `in a state this process cannot read (${cause})`,
-          };
-        }),
-      ),
-    );
-  },
-);
+  const store = getRunStore(runId);
+  return yield* Effect.gen(function* (): Effect.fn.Return<
+    RunLiveness,
+    unknown
+  > {
+    const meta =
+      knownMeta === undefined
+        ? yield* getRunRecords(session, runId).readMeta()
+        : knownMeta;
+    // A recorded outcome is the run's own fact, not the lease's: a finished
+    // child untracks its handle and writes the outcome long before its loop
+    // releases the run lease, and the parent reads the run inside
+    // exactly that window (#8093).
+    if (meta?.outcome !== undefined) {
+      return { kind: 'settled', outcome: meta.outcome };
+    }
+    const lease = yield* Effect.tryPromise({
+      try: () => runInSession(session, () => inspectRunLease(runId)),
+      catch: (error) => error,
+    });
+    if (lease.status === 'held') {
+      return { kind: 'unsettled', reason: heldElsewhereReason(lease.owner) };
+    }
+    if (lease.status === 'owned') {
+      log.warn(
+        `Run ${runId} holds this process's lease with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
+      );
+      return { kind: 'unsettled', reason: OWNED_HERE_REASON };
+    }
+    // Nobody owns the run: a checkpoint left behind is one that stopped
+    // without finishing, and none at all leaves nothing to continue.
+    return (yield* Effect.tryPromise({
+      try: () => runInSession(session, () => store.exists(flowKey(runId))),
+      catch: (error) => error,
+    }))
+      ? { kind: 'interrupted' }
+      : { kind: 'settled' };
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync((): RunLiveness => {
+        const cause = toErrorMessage(error);
+        log.warn(`Cannot read the durable facts for run ${runId}: ${cause}`, {
+          data: error,
+        });
+        return {
+          kind: 'unsettled',
+          reason: `in a state this process cannot read (${cause})`,
+        };
+      }),
+    ),
+  );
+});

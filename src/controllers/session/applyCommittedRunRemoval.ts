@@ -11,25 +11,25 @@ import { ensureError } from '@utils/errors/errorMessage';
 const log = createLog('RunRemoval');
 
 /** Apply a committed deletion to local state and remove its goal record. */
-export const applyCommittedRunRemoval = Effect.fn(
-  'applyCommittedRunRemoval',
-)(function* (session: SessionHandle, stream: RunId) {
-  session.runs.detachChildren(stream);
-  session.status.clearRun(stream);
-  session.interactions.discardRun(stream);
-  releaseRunResources(stream, session);
-  yield* Effect.tryPromise({
-    try: async () =>
-      runInSession(session, () => GoalStore.removeRecords([stream])),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        log.warn(
-          'The stream was removed, but its goal record could not be cleared.',
-          { data: error },
-        );
-      }),
-    ),
-  );
-});
+export const applyCommittedRunRemoval = Effect.fn('applyCommittedRunRemoval')(
+  function* (session: SessionHandle, stream: RunId) {
+    session.runs.detachChildren(stream);
+    session.status.clearRun(stream);
+    session.interactions.discardRun(stream);
+    releaseRunResources(stream, session);
+    yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(session, () => GoalStore.removeRecords([stream])),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          log.warn(
+            'The stream was removed, but its goal record could not be cleared.',
+            { data: error },
+          );
+        }),
+      ),
+    );
+  },
+);

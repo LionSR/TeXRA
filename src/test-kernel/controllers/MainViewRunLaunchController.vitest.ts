@@ -28,8 +28,7 @@ vi.mock('@controllers/mainView/teamCatalogPorts', () => ({
 }));
 vi.mock('@controllers/mainView/MainViewRunController', () => ({
   prepareMainViewRunRequest: mocks.prepareMainViewRunRequest,
-  prepareMainViewTeamRunRequest:
-    mocks.prepareMainViewTeamRunRequest,
+  prepareMainViewTeamRunRequest: mocks.prepareMainViewTeamRunRequest,
 }));
 
 const { prepareMainViewRunLaunch } =
@@ -50,9 +49,7 @@ function teamMessage(teamId = 'physicist'): MainViewExecuteMessage {
 }
 
 function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
-  return Effect.runPromise(
-    prepareMainViewRunLaunch(teamMessage(teamId), host),
-  );
+  return Effect.runPromise(prepareMainViewRunLaunch(teamMessage(teamId), host));
 }
 
 describe('main-view run launch controller', () => {

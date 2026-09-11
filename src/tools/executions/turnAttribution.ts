@@ -10,10 +10,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 // Local imports
 
-import {
-  resolveRunLiveness,
-  type RunLiveness,
-} from './runLiveness';
+import { resolveRunLiveness, type RunLiveness } from './runLiveness';
 
 /** How the accepted turn's fate reads, given what owns the run. */
 function turnFate(token: string, liveness: RunLiveness): string {
@@ -64,10 +61,7 @@ export const turnAttributionNote = Effect.fn('turnAttributionNote')(function* (
   if (!active || active.token === completed) {
     return null;
   }
-  const liveness = yield* resolveRunLiveness(
-    store.getRunId(),
-    session,
-  );
+  const liveness = yield* resolveRunLiveness(store.getRunId(), session);
   const fate = turnFate(active.token, liveness);
   const showing = completed
     ? `showing the latest completed turn (${completed}).`

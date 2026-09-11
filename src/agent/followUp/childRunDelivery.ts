@@ -18,14 +18,10 @@ export const deliverChildRunFollowUp = Effect.fn('deliverChildRunFollowUp')(
     readonly followUp: FollowUpQueueInput;
     readonly session: SessionHandle;
   }): Effect.fn.Return<ChildRunDeliveryResult, Error> {
-    const result = yield* submitFollowUp(
-      params.targetRunId,
-      params.followUp,
-      {
-        session: params.session,
-        mode: 'child_delivery',
-      },
-    );
+    const result = yield* submitFollowUp(params.targetRunId, params.followUp, {
+      session: params.session,
+      mode: 'child_delivery',
+    });
     if (result.status === 'failed') {
       return { kind: 'failed', reason: result.reason };
     }

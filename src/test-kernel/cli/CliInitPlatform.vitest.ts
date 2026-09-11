@@ -416,10 +416,7 @@ describe('CLI platform init', () => {
 
     type NodePlatformOptions = {
       readonly agentResume: {
-        tryResumeRun(
-          runId: RunId,
-          recovery?: unknown,
-        ): Promise<boolean>;
+        tryResumeRun(runId: RunId, recovery?: unknown): Promise<boolean>;
       };
     };
     const createNodePlatformCalls = mocks.createNodePlatform.mock

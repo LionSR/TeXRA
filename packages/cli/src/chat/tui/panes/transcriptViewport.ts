@@ -65,11 +65,7 @@ export function selectTranscriptEntriesForViewport(
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (!isRenderableTranscriptEntry(entry)) continue;
-    const entryRows = estimateLiveTranscriptEntryRows(
-      entry,
-      width,
-      runLabels,
-    );
+    const entryRows = estimateLiveTranscriptEntryRows(entry, width, runLabels);
     if (usedRows + entryRows > maxRows) {
       if (selected.length === 0) {
         selected.unshift(entry);

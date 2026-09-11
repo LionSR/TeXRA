@@ -360,11 +360,7 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
       RUN_PHASE.RUNNING,
       RUN_TRANSITION_CAUSE.LIFECYCLE,
     ) ||
-    runStatus.transition(
-      runId,
-      RUN_PHASE.RUNNING,
-      RUN_TRANSITION_CAUSE.RESUME,
-    );
+    runStatus.transition(runId, RUN_PHASE.RUNNING, RUN_TRANSITION_CAUSE.RESUME);
   if (transitioned || runStatus.get(runId) === RUN_PHASE.RUNNING) {
     return;
   }

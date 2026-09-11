@@ -300,8 +300,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         const agentName =
           runId === undefined
             ? undefined
-            : getRunContextSession(ctx)?.runs.getHandle(runId)
-                ?.agentName;
+            : getRunContextSession(ctx)?.runs.getHandle(runId)?.agentName;
         const meta = createMeta(agentName, runId, existingMeta);
         return Effect.tryPromise({
           try: () =>

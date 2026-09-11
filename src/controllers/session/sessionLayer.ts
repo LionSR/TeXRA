@@ -651,10 +651,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
       Effect.all(
         runs.getActiveIds().flatMap((runId) => {
           if (runs.getHandle(runId)?.isChild) return [];
-          return [
-            runs.kill(runId, { detachActiveChildren: false })
-              .settlement,
-          ];
+          return [runs.kill(runId, { detachActiveChildren: false }).settlement];
         }),
         { concurrency: 'unbounded', discard: true },
       ),

@@ -423,8 +423,7 @@ export function toolUseStyledLines(
   // paint time and the shared model was built without them. Re-derive the
   // preview through the shared rule rather than restating its precedence here.
   const headerPreview =
-    normalizeToolName(toolUse.toolName) === 'executions' &&
-    options.runLabels
+    normalizeToolName(toolUse.toolName) === 'executions' && options.runLabels
       ? toolHeaderPreview(toolUse, {
           runLabels: options.runLabels,
         })

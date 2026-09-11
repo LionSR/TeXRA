@@ -8,9 +8,7 @@ import { AgentCategory } from '@shared/schemas';
 
 describe('MainViewRunController', () => {
   it('keeps missing selections explicit before schema prefaults apply', () => {
-    expect(prepareMainViewRunRequest({ model: 'gpt-5.4' }).valid).toBe(
-      false,
-    );
+    expect(prepareMainViewRunRequest({ model: 'gpt-5.4' }).valid).toBe(false);
     expect(prepareMainViewRunRequest({ agent: 'direct-agent' })).toEqual({
       valid: false,
       message: 'Choose an agent, a model, and a run type first.',

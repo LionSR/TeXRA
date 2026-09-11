@@ -92,9 +92,7 @@ export async function applyCliModelSelection(
   }
 
   const activeFlow = context.session.runId
-    ? defaultSession().runs.getToolUseFlowContext(
-        context.session.runId,
-      )
+    ? defaultSession().runs.getToolUseFlowContext(context.session.runId)
     : undefined;
   if (!activeFlow) {
     appendLocalAssistantTranscript(

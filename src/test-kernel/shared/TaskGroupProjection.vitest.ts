@@ -129,9 +129,7 @@ describe('task-group StreamLog projection', () => {
     );
     // Anything else — still running, unwinding from a stop, owned by another
     // process — leaves the transcript's own status standing.
-    expect(taskGroupDisplayStatus(group!, undefined)).toBe(
-      RUN_PHASE.RUNNING,
-    );
+    expect(taskGroupDisplayStatus(group!, undefined)).toBe(RUN_PHASE.RUNNING);
   });
 
   it('ignores ordinary log rows', () => {

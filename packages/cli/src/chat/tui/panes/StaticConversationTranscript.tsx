@@ -496,11 +496,7 @@ function retainedStaticTranscriptTail(
   // supplies the previous entry's bottom margin, so row-collapse adjustments
   // never trigger a second layout pass for an item that is already measured.
   const baseFor = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
-    staticTranscriptItemBaseMetrics(
-      item,
-      options.width,
-      options.runLabels,
-    );
+    staticTranscriptItemBaseMetrics(item, options.width, options.runLabels);
 
   let start = items.length - 1;
   const newest = items[start];
@@ -653,11 +649,7 @@ function ensureStaticSessionHeader({
     identityLine: sessionHeaderIdentityLine(meta, source.child),
     meta,
   };
-  const headerMetrics = staticTranscriptItemMetrics(
-    header,
-    width,
-    runLabels,
-  );
+  const headerMetrics = staticTranscriptItemMetrics(header, width, runLabels);
   const firstItem = items[0];
   let nextRowCount: number;
   let nextByteCount: number;
@@ -954,10 +946,7 @@ export function advanceStaticTranscriptState(
   // A label-content change (a child's human label arriving after its
   // executions row printed) rewrites rows already in scrollback, so it repaints
   // from a known origin; a bare width change is repainted by Ink's resize path.
-  const labelsChanged = !runLabelsEqual(
-    runLabels,
-    current.runLabels,
-  );
+  const labelsChanged = !runLabelsEqual(runLabels, current.runLabels);
   const layoutChanged = width !== current.layoutWidth || labelsChanged;
   let nextItems = current.items;
   let nextRowCount = current.rowCount;
@@ -966,11 +955,7 @@ export function advanceStaticTranscriptState(
   let changed = layoutChanged;
 
   if (layoutChanged) {
-    const recomputed = staticTranscriptItemsTotals(
-      nextItems,
-      width,
-      runLabels,
-    );
+    const recomputed = staticTranscriptItemsTotals(nextItems, width, runLabels);
     const trimmed = trimStaticTranscriptItems(nextItems, {
       budgets: ringBudgets,
       runLabels,

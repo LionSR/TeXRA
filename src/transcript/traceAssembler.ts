@@ -33,10 +33,7 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   if (!(yield* session.transcripts.hasAuthoritativeRun(runId)))
     return { status: 'streamLogs_missing' };
   const [entries, snapshot] = yield* Effect.all(
-    [
-      session.transcripts.readEntries(runId),
-      session.snapshots.read(runId),
-    ],
+    [session.transcripts.readEntries(runId), session.snapshots.read(runId)],
     { concurrency: 2 },
   );
   return {

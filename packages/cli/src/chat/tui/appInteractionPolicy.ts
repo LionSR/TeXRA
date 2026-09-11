@@ -135,8 +135,7 @@ export function approvalVisibleForSelection({
   if (runId === undefined || runId === selectedRunId) return true;
   const asking = view.runs.get(runId);
   return (
-    asking?.ancestors.some((ancestor) => ancestor.id === selectedRunId) ??
-    false
+    asking?.ancestors.some((ancestor) => ancestor.id === selectedRunId) ?? false
   );
 }
 

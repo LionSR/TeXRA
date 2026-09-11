@@ -144,10 +144,8 @@ Parameters map directly to subagent-result delivery attributes:
         });
         if (
           directory === undefined &&
-          (yield* getRunRecords(
-            session,
-            input.execution_id,
-          ).readMeta()) === null
+          (yield* getRunRecords(session, input.execution_id).readMeta()) ===
+            null
         )
           return yield* Effect.fail(
             new ToolError(
@@ -193,10 +191,7 @@ Parameters map directly to subagent-result delivery attributes:
         // Determine original content for diff display. In-place workflow
         // outputs can make source and destination the same workspace file, so
         // the pre-run snapshot is the only reliable "before" image.
-        const snapshotPath = getOriginalSnapshotPath(
-          runId,
-          dest.relativePath,
-        );
+        const snapshotPath = getOriginalSnapshotPath(runId, dest.relativePath);
         const snapshotContent = (await AbsoluteFS.isFile(snapshotPath))
           ? await AbsoluteFS.read(snapshotPath)
           : undefined;

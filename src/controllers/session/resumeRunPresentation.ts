@@ -1,6 +1,9 @@
 import { Effect } from 'effect';
 import { describeFollowUpFailure } from '@agent/runtime';
-import { resumeClaimedRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
+import {
+  resumeClaimedRun,
+  type ResumeRunOptions,
+} from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 import type { RunId } from '@shared/schemas';

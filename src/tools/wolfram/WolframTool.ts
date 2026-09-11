@@ -110,9 +110,7 @@ const runWolfram = Effect.fn('WolframTool.execute')(function* (
   if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
 
   const details = parts.join('\n') || 'No error details available';
-  return yield* Effect.fail(
-    new ToolError(`Wolfram run failed: ${details}`),
-  );
+  return yield* Effect.fail(new ToolError(`Wolfram run failed: ${details}`));
 });
 
 export class WolframTool extends defineTool({
@@ -127,8 +125,7 @@ export class WolframTool extends defineTool({
     const ports: WolframPorts = {
       requestApproval: AsyncLocalStorage.bind(requestBashApproval),
       runTool: AsyncLocalStorage.bind(runToolWithCheck),
-      onRunReady:
-        getCurrentToolContexts()?.callContext?.hooks?.onRunReady,
+      onRunReady: getCurrentToolContexts()?.callContext?.hooks?.onRunReady,
     };
     return effectRuntime().runPromise(runWolfram(ports, input));
   }

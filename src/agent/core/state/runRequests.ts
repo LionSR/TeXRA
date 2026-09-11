@@ -20,9 +20,7 @@ export type RunValidationResult =
   | { valid: true; request: ValidatedRunRequest }
   | { valid: false; message: string; issue?: z.ZodIssue };
 
-export function validateRunRequest(
-  request: RunRequest,
-): RunValidationResult {
+export function validateRunRequest(request: RunRequest): RunValidationResult {
   const parseResult = AgentConfigSchema.safeParse(request.config);
   if (!parseResult.success) {
     const issue = parseResult.error.issues[0];

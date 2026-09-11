@@ -4,10 +4,7 @@ import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import type { SessionHandle } from '@agent/runtime';
 import type { FollowUpQueueInput } from '@agent/followUp';
 import { createLog } from '@logger/logUtils';
-import {
-  aggregateId as qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('ProgressFollowUpSubmit');

@@ -543,10 +543,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       () => effectRuntime().runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () => runtimeSession.flushArtifacts(),
-    afterRunSettlement: [
-      () => clearStoreCache(),
-      () => disposeDiffRefresh(),
-    ],
+    afterRunSettlement: [() => clearStoreCache(), () => disposeDiffRefresh()],
   });
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),

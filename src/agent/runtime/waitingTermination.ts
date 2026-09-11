@@ -16,10 +16,7 @@ import {
   type FinalizeRunResult,
   retainFlowRecordUnlessCompleted,
 } from '@agent/storage/runLifecycle';
-import {
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { RunHandle } from './RunHandle';
 import type { RunLanes } from './runLanes';
@@ -33,9 +30,7 @@ const logger = createChannelTrace('runRegistry');
  */
 export interface WaitingTerminationContext {
   readonly publishResult: (event: ResultEvent, runId: RunId) => void;
-  readonly releaseRootRunLease: (
-    runId: RunId,
-  ) => Effect.Effect<void, Error>;
+  readonly releaseRootRunLease: (runId: RunId) => Effect.Effect<void, Error>;
   readonly finalizeRun: (
     input: FinalizeRunInput,
   ) => Effect.Effect<FinalizeRunResult, Error>;
@@ -86,9 +81,7 @@ export class WaitingTermination {
    * stop of a suspended native subagent still surfaces a terminal event even
    * though the turn's own trace is already gone.
    */
-  terminateWaitingHandle(
-    handle: RunHandle,
-  ): Effect.Effect<void> | undefined {
+  terminateWaitingHandle(handle: RunHandle): Effect.Effect<void> | undefined {
     const teardown = handle.beginSuspendedTermination();
     if (!teardown) return undefined;
     const cancelledResult: ResultEvent = {

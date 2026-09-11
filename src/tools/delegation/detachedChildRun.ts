@@ -40,26 +40,24 @@ import type { ChildRun } from './childRun';
  * callers resolve differently (an approved override's display name vs. its
  * registry name) and which reaches only the durable launch label.
  */
-export const registerChildRun = Effect.fn('registerChildRun')(
-  function* (
-    session: SessionHandle,
-    input: {
-      readonly runId: RunId;
-      /** Canonical config, already parsed by the launch site. */
-      readonly config: AgentConfig;
-      readonly agentName: string;
-      readonly userFollowUpSupport: UserFollowUpSupport;
-      readonly parentRunId?: RunId;
-    },
-  ): Effect.fn.Return<void, Error> {
-    const { runId, config } = input;
-    yield* registerRun(session, runId, config, input.agentName, {
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport: input.userFollowUpSupport,
-      parentRunId: input.parentRunId,
-    });
+export const registerChildRun = Effect.fn('registerChildRun')(function* (
+  session: SessionHandle,
+  input: {
+    readonly runId: RunId;
+    /** Canonical config, already parsed by the launch site. */
+    readonly config: AgentConfig;
+    readonly agentName: string;
+    readonly userFollowUpSupport: UserFollowUpSupport;
+    readonly parentRunId?: RunId;
   },
-);
+): Effect.fn.Return<void, Error> {
+  const { runId, config } = input;
+  yield* registerRun(session, runId, config, input.agentName, {
+    identity: { kind: 'agent', agent: config.agent },
+    userFollowUpSupport: input.userFollowUpSupport,
+    parentRunId: input.parentRunId,
+  });
+});
 
 /** The strategy wiring a launch site supplies inside the guard. */
 interface DetachedChildRunLaunch<TTurn> {
@@ -137,8 +135,7 @@ export function startDetachedChildRunLoop<TTurn>(
           } else {
             launch = yield* input.buildLaunch();
           }
-          autoCloseOnLaunchFailure =
-            launch.strategy.autoCloseChildRun === true;
+          autoCloseOnLaunchFailure = launch.strategy.autoCloseChildRun === true;
           const {
             createChildRun: _createChildRun,
             buildLaunch: _buildLaunch,

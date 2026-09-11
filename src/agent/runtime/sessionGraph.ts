@@ -52,12 +52,8 @@ export interface SessionGraph {
     runId: RunId,
   ) => Effect.Effect<Effect.Effect<void>>;
   readonly releaseRunClaims: (runId: RunId) => Effect.Effect<void>;
-  readonly runRecords: (
-    id: RunId,
-  ) => Effect.Effect<readonly SessionEvent[]>;
-  readonly runChildren: (
-    id: RunId,
-  ) => Effect.Effect<readonly SessionEvent[]>;
+  readonly runRecords: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
+  readonly runChildren: (id: RunId) => Effect.Effect<readonly SessionEvent[]>;
   readonly recordListing: () => Effect.Effect<readonly SessionEvent[]>;
   /** Transient text shares the existing session-input source, never the event table. */
   readonly publishText: (

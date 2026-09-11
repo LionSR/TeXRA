@@ -26,9 +26,7 @@ export function clearRunStatusForTest(
   machine.clearRun(runId);
 }
 
-export function clearAllRunStatusesForTest(
-  machine: RunStatusMachine,
-): void {
+export function clearAllRunStatusesForTest(machine: RunStatusMachine): void {
   machine.clearAll();
 }
 

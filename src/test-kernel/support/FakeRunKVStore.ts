@@ -1,8 +1,5 @@
 import { Effect } from 'effect';
-import type {
-  getRunRecords,
-  RunKVStore,
-} from '@agent/storage/RunKVStore';
+import type { getRunRecords, RunKVStore } from '@agent/storage/RunKVStore';
 import type { RunId } from '@shared/schemas';
 
 /**

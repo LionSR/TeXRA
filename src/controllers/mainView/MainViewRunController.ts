@@ -30,11 +30,7 @@ export function prepareMainViewRunRequest(
     };
   }
 
-  return buildMainViewRunRequest(
-    message,
-    message.agent,
-    message.agentCategory,
-  );
+  return buildMainViewRunRequest(message, message.agent, message.agentCategory);
 }
 
 export function prepareMainViewTeamRunRequest(

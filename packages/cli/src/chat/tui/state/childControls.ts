@@ -4,11 +4,7 @@
  * how a stream is presented. Surface decisions over fold facts; nothing
  * here derives topology.
  */
-import {
-  RUN_PHASE,
-  type RunPhase,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { childElapsedMs } from '@shared/runs/childElapsed';
 import { formatCompactDuration } from '@utils/core';
@@ -52,10 +48,7 @@ export function resolveChildListTarget(
   return activeRunId;
 }
 
-export function isWorkflowScriptRun(
-  view: SessionView,
-  runId: RunId,
-): boolean {
+export function isWorkflowScriptRun(view: SessionView, runId: RunId): boolean {
   return runViewOf(view, runId)?.identity?.kind === 'multiAgentWorkflow';
 }
 
@@ -63,9 +56,7 @@ export function isWorkflowScriptRun(
  * A workflow-script run is presented through its popup over its parent;
  * every other stream becomes the active conversation.
  */
-export function presentRun(
-  runId: RunId,
-): 'stream' | 'workflowPopup' {
+export function presentRun(runId: RunId): 'stream' | 'workflowPopup' {
   const view = currentView();
   if (isWorkflowScriptRun(view, runId)) {
     const parentId = runViewOf(view, runId)?.parentId;

@@ -81,9 +81,7 @@ export type AgentRuntimeFlowResult = AgentFlowResult | WaitingToolUseFlowResult;
 export function isWaitingFlowResult(
   result: AgentRuntimeFlowResult,
 ): result is WaitingToolUseFlowResult {
-  return (
-    result.category === 'toolUse' && result.outcome === RUN_PHASE.WAITING
-  );
+  return result.category === 'toolUse' && result.outcome === RUN_PHASE.WAITING;
 }
 
 /** The discriminant of {@link AgentFlowResult}: which flow produced the result. */

@@ -80,9 +80,7 @@ export class ToolUseFollowUpQueue {
   private readonly terminalized = createBoundedIdSet<RunId>(
     ToolUseFollowUpQueue.TERMINALIZED_CAP,
   );
-  private readonly releaseObservers = new Set<
-    (runId: RunId) => void
-  >();
+  private readonly releaseObservers = new Set<(runId: RunId) => void>();
   private readonly sentObservers = new Set<(runId: RunId) => void>();
   private disposed = false;
 

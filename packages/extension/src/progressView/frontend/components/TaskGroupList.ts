@@ -182,8 +182,8 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) hasRuns = false;
 
   /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) runStatus:
-    RunLifecycleStatus | undefined = undefined;
+  @property({ attribute: false }) runStatus: RunLifecycleStatus | undefined =
+    undefined;
 
   /** The fold's final outcome once no producer can close another group. */
   @property({ attribute: false }) durableOutcome: RunOutcome | null = null;

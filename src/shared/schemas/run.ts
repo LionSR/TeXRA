@@ -10,8 +10,7 @@ export const CLI_RUN_STATUS = {
   ERROR: 'error',
 } as const;
 
-export type CliRunStatus =
-  (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
+export type CliRunStatus = (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
 
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
@@ -125,9 +124,7 @@ export const RUN_LIFECYCLE_UNAVAILABLE = 'unavailable' as const;
 export const RUN_LIFECYCLE_READY = 'ready' as const;
 
 export type RunLifecycleStatus =
-  | RunPhase
-  | typeof RUN_LIFECYCLE_READY
-  | typeof RUN_LIFECYCLE_UNAVAILABLE;
+  RunPhase | typeof RUN_LIFECYCLE_READY | typeof RUN_LIFECYCLE_UNAVAILABLE;
 
 export const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */

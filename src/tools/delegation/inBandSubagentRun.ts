@@ -16,11 +16,7 @@
 import { Cause, Effect, Exit, Fiber, Semaphore } from 'effect';
 
 // Local imports
-import {
-  getRunStore,
-  getRunRecords,
-  type ResultMeta,
-} from '@agent/storage';
+import { getRunStore, getRunRecords, type ResultMeta } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript';
 import {
   prepareAgentDefinition,
@@ -171,9 +167,7 @@ const executeInBand = Effect.fn('executeInBand')(
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
-    const store = runInSession(options.session, () =>
-      getRunStore(runId),
-    );
+    const store = runInSession(options.session, () => getRunStore(runId));
 
     yield* registerChildRun(options.session, {
       runId,
@@ -419,8 +413,7 @@ export const executeStableSubagentInBand = Effect.fn(
           (reservation) =>
             Effect.sync(() => {
               reservation.users -= 1;
-              if (reservation.users === 0)
-                stableRuns.delete(options.runId);
+              if (reservation.users === 0) stableRuns.delete(options.runId);
             }),
         );
         return yield* reservation.semaphore.withPermit(

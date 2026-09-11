@@ -23,10 +23,7 @@ import {
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { Disposable } from '@platform/interfaces';
-import {
-  aggregateId as qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 
 import type { PollEventListener } from './PollingSourceBase';
 
@@ -71,15 +68,10 @@ interface BoundSubscription {
 
 export class RunSubscriptionRegistry<K extends string, Input> {
   private readonly logger: Pick<AgentTrace, 'info' | 'warn'>;
-  private readonly perRun = new Map<
-    RunId,
-    Map<K, BoundSubscription>
-  >();
+  private readonly perRun = new Map<RunId, Map<K, BoundSubscription>>();
   private readonly releaseHooks = new Map<SessionHandle, () => void>();
 
-  constructor(
-    private readonly opts: RunSubscriptionRegistryOptions<K, Input>,
-  ) {
+  constructor(private readonly opts: RunSubscriptionRegistryOptions<K, Input>) {
     this.logger = opts.logger ?? createLog(opts.name);
     // Source-key changes are internal bookkeeping. The registry emits the UI
     // signal only after its binding map has reached the corresponding state.
@@ -103,8 +95,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
       // AsyncLocalStorage (the github tool's execute()), but onEvent fires
       // later from the detached poll loop where the ALS is empty.
       const session = currentSession();
-      const bound =
-        this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
+      const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
       const existing = bound.get(key);
       if (existing) {
         this.ensureReleaseHook(session);

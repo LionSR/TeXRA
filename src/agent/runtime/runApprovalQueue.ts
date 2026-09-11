@@ -142,10 +142,7 @@ interface RunApprovalController {
    * Serialize one prompt at a time per stream, re-checking the stream's bypass
    * at dispatch rather than at enqueue.
    */
-  enqueue<T>(
-    runId: RunId | undefined,
-    approval: QueuedApproval<T>,
-  ): Promise<T>;
+  enqueue<T>(runId: RunId | undefined, approval: QueuedApproval<T>): Promise<T>;
 }
 
 function createRunApprovalController(
@@ -210,10 +207,7 @@ export interface SessionApprovals {
    * both mint a fresh `RunId` that would otherwise start every bypass
    * kind ungated.
    */
-  registerRunParent(
-    childRunId: RunId,
-    parentRunId: RunId,
-  ): void;
+  registerRunParent(childRunId: RunId, parentRunId: RunId): void;
   /**
    * Promote a stream out of its approval ancestry while preserving each
    * effective bypass value as an explicit value on the stream.
@@ -252,9 +246,7 @@ export function createSessionApprovals(
   const parentOf = new Map<RunId, RunId>();
   const resolveParent = (runId: RunId): RunId | undefined =>
     parentOf.get(runId);
-  const resolveDescendants = (
-    runId: RunId,
-  ): readonly RunId[] => {
+  const resolveDescendants = (runId: RunId): readonly RunId[] => {
     const descendants: RunId[] = [];
     const pending = [runId];
     const seen = new Set(pending);
@@ -314,9 +306,7 @@ export function createSessionApprovals(
     }
   }
 
-  const bypassesFor = (
-    runId: RunId,
-  ): ApprovalPolicySnapshot['bypasses'] => ({
+  const bypassesFor = (runId: RunId): ApprovalPolicySnapshot['bypasses'] => ({
     bash: bashBypass.isBypassed(runId),
     toolEdit: toolEditBypass.isBypassed(runId),
     superYolo: proposal.isBypassed(runId),

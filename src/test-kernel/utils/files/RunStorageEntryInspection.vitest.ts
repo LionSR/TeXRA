@@ -94,9 +94,9 @@ describe('inspectRunStorageEntry', () => {
       throw missing(target);
     };
 
-    await expect(
-      inspectRunStorageEntry(runId, 'missing.tex'),
-    ).resolves.toEqual({ kind: 'missing' });
+    await expect(inspectRunStorageEntry(runId, 'missing.tex')).resolves.toEqual(
+      { kind: 'missing' },
+    );
     await expect(
       inspectRunStorageEntry(runId, '../outside.tex'),
     ).resolves.toMatchObject({ kind: 'invalid' });
@@ -157,9 +157,9 @@ describe('inspectRunStorageEntry', () => {
       throw Object.assign(new Error('Denied'), { code: 'EACCES' });
     };
 
-    await expect(
-      inspectRunStorageEntry(runId, 'result.tex'),
-    ).rejects.toThrow('Denied');
+    await expect(inspectRunStorageEntry(runId, 'result.tex')).rejects.toThrow(
+      'Denied',
+    );
   });
 
   it('recovers run identity from absolute run-storage paths', () => {

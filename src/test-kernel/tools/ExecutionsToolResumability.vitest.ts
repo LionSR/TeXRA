@@ -14,10 +14,7 @@ const BASE_FLOW_RECORD: FlowRecord = {
   cursor: { nextNodeId: 'start' },
 };
 
-async function writeRecord(
-  runId: RunId,
-  record: unknown,
-): Promise<void> {
+async function writeRecord(runId: RunId, record: unknown): Promise<void> {
   await getRunStore(runId).write(flowKey(runId), record);
 }
 

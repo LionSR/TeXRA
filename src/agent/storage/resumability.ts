@@ -97,9 +97,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   const metaFields = { outcome: metaResult.success?.outcome };
   const checkpoint = yield* Effect.tryPromise({
     try: () =>
-      runInSession(session, () =>
-        getRunStore(runId).read(flowKey(runId)),
-      ),
+      runInSession(session, () => getRunStore(runId).read(flowKey(runId))),
     catch: ensureError,
   }).pipe(Effect.result);
   if (checkpoint._tag === 'Failure') {
@@ -139,9 +137,7 @@ export const checkpointExists = Effect.fn('checkpointExists')(function* (
 ): Effect.fn.Return<boolean> {
   return yield* Effect.tryPromise({
     try: () =>
-      runInSession(session, () =>
-        getRunStore(runId).exists(flowKey(runId)),
-      ),
+      runInSession(session, () => getRunStore(runId).exists(flowKey(runId))),
     catch: ensureError,
   }).pipe(
     Effect.catch((error) =>

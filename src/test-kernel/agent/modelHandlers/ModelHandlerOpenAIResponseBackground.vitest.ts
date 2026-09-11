@@ -154,9 +154,7 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
 
     assert.ok(
       messages.some((message) =>
-        message.includes(
-          'active provider profile disables background run',
-        ),
+        message.includes('active provider profile disables background run'),
       ),
     );
     assert.equal(

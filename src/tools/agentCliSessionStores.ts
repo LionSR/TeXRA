@@ -116,11 +116,7 @@ export function registerRuntimeShutdownHandlers(
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
     hooks.runSettlement(settleLiveSessionRuns(signal)),
   );
-  registerHandlers(
-    lifecycle,
-    SHUTDOWN_PHASE.ON,
-    hooks.afterRunSettlement,
-  );
+  registerHandlers(lifecycle, SHUTDOWN_PHASE.ON, hooks.afterRunSettlement);
 }
 
 function registerHandlers(

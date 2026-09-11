@@ -126,11 +126,7 @@ export async function inspectRunStorageEntry(
   if (isFile(type)) {
     return {
       kind: 'file',
-      location: createRunStorageLocation(
-        absolutePath,
-        normalizedPath,
-        runId,
-      ),
+      location: createRunStorageLocation(absolutePath, normalizedPath, runId),
     };
   }
   if (isDirectory(type)) return { kind: 'directory', absolutePath };

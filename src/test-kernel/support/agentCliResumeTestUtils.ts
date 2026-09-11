@@ -6,9 +6,7 @@ import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import type { ChildRun } from '@tools/delegation/childRun';
 
-export function createFakeAgentCliChildRun(
-  childRunId: RunId,
-): ChildRun {
+export function createFakeAgentCliChildRun(childRunId: RunId): ChildRun {
   const logger = createTestRunTrace(childRunId, new StreamLog()).trace;
   return {
     childRunId,

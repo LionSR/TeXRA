@@ -19,7 +19,6 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
-  RunIdSchema,
   GoalStateSchema,
   InquiryThreadUpdatedEventSchema,
   OwnerIdSchema,
@@ -29,10 +28,10 @@ import {
   RunIdentitySchema,
   RunOutcomeSchema,
   RunUsageMapSchema,
-  STREAM_LIFECYCLE_READY,
-  StreamPhaseSchema,
-  StreamStageSchema,
-  StreamSubstateSchema,
+  RUN_LIFECYCLE_READY,
+  RunPhaseSchema,
+  RunStageSchema,
+  RunSubstateSchema,
   RunIdSchema,
   TaskGroupSchema,
   TodoItemSchema,
@@ -41,8 +40,8 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import { STREAM_STATUS_TONE } from '@shared/streams/streamStatusDisplay';
-import type { WorkflowRunModel } from '@shared/streams/workflowRunModel';
+import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
+import type { WorkflowRunModel } from '@shared/runs/workflowRunModel';
 
 /** Which session (paper) a view is of: the session's storage root. */
 const SessionKeySchema = z.string().min(1);
@@ -75,20 +74,14 @@ const TranscriptViewSchema = z.object({
 });
 export type TranscriptView = z.infer<typeof TranscriptViewSchema>;
 
-const StreamGroupSchema = z.enum([
-  'running',
-  'waiting',
-  'interrupted',
-  'recent',
-]);
+const RunGroupSchema = z.enum(['running', 'waiting', 'interrupted', 'recent']);
 /** The section a stream sorts into. Its labels and section order are one
- *  table in `@shared/streams/streamStatusDisplay`, not a per-host switch. */
-export type StreamGroup = z.infer<typeof StreamGroupSchema>;
+ *  table in `@shared/runs/runStatusDisplay`, not a per-host switch. */
+export type RunGroup = z.infer<typeof RunGroupSchema>;
 
-const StreamViewCommonSchema = z.object({
+const RunViewCommonSchema = z.object({
+  /** The run id: the aggregate's logical id, minted once at launch. */
   id: RunIdSchema,
-  /** From `run.start`; 1:1 with `id`, never changes. */
-  runId: RunIdSchema,
   /** From `run.start`; every stream has one. */
   identity: RunIdentitySchema,
   // Launch facts from the `run.start` payload, never derived (5.2).
@@ -109,8 +102,8 @@ const StreamViewCommonSchema = z.object({
   /** The durable phase, or `ready` before the first `status` folds. An
    *  interrupted stream keeps it and reads as interrupted through the copy;
    *  unavailability is `readOnly`, never a status (5.2). */
-  status: z.union([StreamPhaseSchema, z.literal(STREAM_LIFECYCLE_READY)]),
-  substate: StreamSubstateSchema.nullable(),
+  status: z.union([RunPhaseSchema, z.literal(RUN_LIFECYCLE_READY)]),
+  substate: RunSubstateSchema.nullable(),
   /**
    * The terminal status once nothing can move it: for a run this process
    * owns, after its lifecycle's `result` has folded (a user stop publishes
@@ -123,17 +116,17 @@ const StreamViewCommonSchema = z.object({
   /** Banner copy beside the label: the local unreadable detail, else the
    *  interrupted or held notice; null otherwise. */
   statusDetail: z.string().nullable(),
-  // G4: one table (`streamStatusDisplay`) spells both, through the status
+  // G4: one table (`runStatusDisplay`) spells both, through the status
   // and substate or the interrupted reading.
   statusLabel: z.string(),
-  tone: z.enum(STREAM_STATUS_TONE),
+  tone: z.enum(RUN_STATUS_TONE),
   /** Immutable: the commit ordinal of this stream's `run.start`; the
    *  ordering key. */
   createdAt: CommitOrdinalSchema,
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
-  stage: StreamStageSchema.nullable(),
+  stage: RunStageSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** A native tool-use resume can target this run: a plain agent identity in
    *  the tool-use category. The rule lives here so no host restates it. */
@@ -143,7 +136,7 @@ const StreamViewCommonSchema = z.object({
   parentId: RunIdSchema.nullable(),
   /** Root first. */
   ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
-  /** `streamOrdering` rule. */
+  /** `runOrdering` rule. */
   childIds: z.array(RunIdSchema),
   /** Descendants by status. No waiting or interrupted count: both force
    *  expansion, so a collapsed parent never hides a row that needs the user. */
@@ -158,7 +151,7 @@ const StreamViewCommonSchema = z.object({
   /** This stream or a descendant needs the user; outranks the surface's
    *  collapsed choice. */
   forceExpanded: z.boolean(),
-  group: StreamGroupSchema,
+  group: RunGroupSchema,
   usage: RunUsageMapSchema,
   /** The newest thinking row is still streaming. */
   thinkingActive: z.boolean(),
@@ -174,30 +167,30 @@ const StreamViewCommonSchema = z.object({
   compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,
 });
 
-const ToolUseStreamViewSchema = StreamViewCommonSchema.extend({
+const ToolUseRunViewSchema = RunViewCommonSchema.extend({
   category: z.literal(AgentCategory.ToolUse),
   todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
-  /** Per stream: concurrent streams hold independent goals. */
+  /** Per stream: concurrent runs hold independent goals. */
   goal: GoalStateSchema,
   outputs: RoundKeyedOutputSidecarValueSchemas.outputFiles,
 });
 
-const WorkflowStreamViewSchema = StreamViewCommonSchema.extend({
+const WorkflowRunViewSchema = RunViewCommonSchema.extend({
   category: z.literal(AgentCategory.Workflow),
   files: RoundKeyedOutputSidecarValueSchemas.outputFiles,
 });
 
-const StreamViewSchema = z.discriminatedUnion('category', [
-  ToolUseStreamViewSchema,
-  WorkflowStreamViewSchema,
+const RunViewSchema = z.discriminatedUnion('category', [
+  ToolUseRunViewSchema,
+  WorkflowRunViewSchema,
 ]);
-export type StreamView = z.infer<typeof StreamViewSchema>;
+export type RunView = z.infer<typeof RunViewSchema>;
 
 /** A pending approval: which stream is asking, and the request the UI shows.
  *  The list is a set keyed by `requestId` (5.2). */
 const ApprovalRequestSchema = z.object({
-  streamId: RunIdSchema,
+  runId: RunIdSchema,
   requestId: z.string(),
   payload: PermissionPayloadSchema,
 });
@@ -205,8 +198,8 @@ export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 
 const SessionViewSchema = z.object({
   key: SessionKeySchema,
-  streams: z.map(RunIdSchema, StreamViewSchema),
-  /** Top-level ids, `streamOrdering` rule. */
+  runs: z.map(RunIdSchema, RunViewSchema),
+  /** Top-level ids, `runOrdering` rule. */
   order: z.array(RunIdSchema),
   /** The drained tail position, including rows no longer materialized.
    *  Listing and history rows never advance it. */
@@ -238,7 +231,7 @@ export type SessionView = z.infer<typeof SessionViewSchema>;
 export function emptySessionView(key: string, cursor = 0): SessionView {
   return {
     key,
-    streams: new Map(),
+    runs: new Map(),
     order: [],
     cursor,
     folded: new Map(),
@@ -250,40 +243,37 @@ export function emptySessionView(key: string, cursor = 0): SessionView {
   };
 }
 
-/** The read shape `descendantStreams` needs: satisfied by `SessionView`
+/** The read shape `descendantRuns` needs: satisfied by `SessionView`
  *  itself and by any deep-readonly projection of it (a `Map` structurally
  *  satisfies `ReadonlyMap`), so a consumer holding a readonly view never
  *  needs to re-derive the walk to keep its own copy. */
-type StreamTopology = {
-  readonly streams: ReadonlyMap<
-    RunId,
-    { readonly childIds: readonly RunId[] }
-  >;
+type RunTopology = {
+  readonly runs: ReadonlyMap<RunId, { readonly childIds: readonly RunId[] }>;
 };
 
 /**
- * Every stream under `rootStreamId`, parents first: the topology `childIds`
+ * Every stream under `rootRunId`, parents first: the topology `childIds`
  * (root to leaf) and `ancestors` (leaf to root) already state on every row,
  * so a host walks the fold's own facts instead of re-deriving them.
  */
-export function descendantStreams(
-  view: StreamTopology,
-  rootStreamId: RunId | undefined,
+export function descendantRuns(
+  view: RunTopology,
+  rootRunId: RunId | undefined,
   { includeRoot }: { includeRoot: boolean },
 ): readonly RunId[] {
-  if (rootStreamId === undefined) return [];
+  if (rootRunId === undefined) return [];
   const out: RunId[] = [];
   // An index cursor over an append-only queue keeps this linear in the
   // topology's size; `Array.shift()` would re-index the remainder on every
   // pop and make a large fan-out's walk quadratic.
-  const pending = [rootStreamId];
+  const pending = [rootRunId];
   const seen = new Set<RunId>();
   for (let cursor = 0; cursor < pending.length; cursor++) {
     const id = pending[cursor]!;
-    const stream = view.streams.get(id);
+    const stream = view.runs.get(id);
     if (!stream || seen.has(id)) continue;
     seen.add(id);
-    if (includeRoot || id !== rootStreamId) out.push(id);
+    if (includeRoot || id !== rootRunId) out.push(id);
     pending.push(...stream.childIds);
   }
   return out;

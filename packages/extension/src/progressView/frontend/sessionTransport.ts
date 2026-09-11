@@ -15,10 +15,7 @@ import {
   installWebviewRuntime,
   WebviewSessions,
 } from '@controllers/session/webviewSessionLayer';
-import {
-  aggregateId as qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { hostBridge } from '@shared/hostBridge';
 import { toSignal, type StreamSignal } from '@shared/signals';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';

@@ -257,9 +257,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       host.events.length = 0;
       signal.events.length = 0;
 
-      expect(registry.unbind('stream-a' as RunId, 'owner/repo')).toBe(
-        true,
-      );
+      expect(registry.unbind('stream-a' as RunId, 'owner/repo')).toBe(true);
 
       expect(signal.events).toEqual([
         { event: 'githubSubscriptionsChanged', payload: undefined },

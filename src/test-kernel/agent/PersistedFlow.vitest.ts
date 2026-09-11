@@ -49,9 +49,9 @@ function expectStoredRecord(
   runId: RunId,
   expected: Record<string, unknown>,
 ): Promise<void> {
-  return expect(
-    store.read<FlowRecord>(flowKey(runId)),
-  ).resolves.toMatchObject(expected);
+  return expect(store.read<FlowRecord>(flowKey(runId))).resolves.toMatchObject(
+    expected,
+  );
 }
 
 describe('PersistedFlow', () => {

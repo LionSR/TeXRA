@@ -13,11 +13,7 @@ import {
 } from '@agent/storage/runLease';
 import type { RunKVStore } from '@agent/storage/RunKVStore';
 import { createLog } from '@logger/logUtils';
-import {
-  RunIdSchema,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { RunIdSchema, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
@@ -155,10 +151,7 @@ export class SubagentCommitError extends SubagentDurabilityError {
 
 const MAX_STABLE_ATTEMPTS = 1_024;
 
-function stableAttemptRunId(
-  logicalRunId: RunId,
-  attempt: number,
-): RunId {
+function stableAttemptRunId(logicalRunId: RunId, attempt: number): RunId {
   if (attempt === 0) return logicalRunId;
   return deriveRunId({ attempt, logicalRunId });
 }

@@ -15,9 +15,7 @@ interface RunPathTarget {
   resourceSuffix: string;
 }
 
-function runTargetFromPath(
-  path: unknown,
-): RunPathTarget | undefined {
+function runTargetFromPath(path: unknown): RunPathTarget | undefined {
   if (typeof path !== 'string') return undefined;
   const segments = path.split('/').filter(Boolean);
   if (segments[0] !== 'executions' || segments.length < 2) return undefined;

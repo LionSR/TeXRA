@@ -96,9 +96,7 @@ describe('ProgressWorkflowRunActionsController', () => {
     const config = createWorkflowConfig({ outputFiles: ['declared.tex'] });
     const { controller, fileOperations } =
       createProgressWorkflowRunActionsHarness({
-        knownWorkspaceOutputs: new Map([
-          [RUN_A, new Set(['generated.tex'])],
-        ]),
+        knownWorkspaceOutputs: new Map([[RUN_A, new Set(['generated.tex'])]]),
       });
 
     await controller.runFileOperation(RUN_A, 'clean', config);

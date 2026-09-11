@@ -12,17 +12,10 @@ import { Cause, Effect, Exit, Semaphore, type Fiber } from 'effect';
 //
 // Host-agnostic, VS Code-free.
 
-import {
-  finalizeRun,
-  getRunStore,
-  type ResultMeta,
-} from '@agent/storage';
+import { finalizeRun, getRunStore, type ResultMeta } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import type {
-  ChildTurnRef,
-  ChildTurnState,
-} from '@agent/storage/RunKVStore';
+import type { ChildTurnRef, ChildTurnState } from '@agent/storage/RunKVStore';
 import {
   assertOwnedRunLease,
   RunLeaseLostError,
@@ -35,10 +28,7 @@ import {
 } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import { retainFlowRecordUnlessCompleted } from '@agent/storage/runLifecycle';
-import type {
-  RunHandle,
-  RunInterruptHandler,
-} from '@agent/runtime/RunHandle';
+import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
 import type {
   FollowUpQueue,
   FollowUpQueueBatchItem,
@@ -540,9 +530,7 @@ function persistTurnStateBestEffort(
 ): Effect.Effect<void> {
   return Effect.tryPromise({
     try: () =>
-      runInSession(session, () =>
-        getRunStore(runId).writeTurnState(state),
-      ),
+      runInSession(session, () => getRunStore(runId).writeTurnState(state)),
     catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
@@ -590,10 +578,7 @@ interface PendingChildDelivery {
  * enqueue site and the deferred wake site, which resolve the target at
  * different times.
  */
-function warnDetachedChildDelivery(
-  logger: AgentTrace,
-  runId: RunId,
-): void {
+function warnDetachedChildDelivery(logger: AgentTrace, runId: RunId): void {
   logger.warn(
     'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
     { data: { runId } },
@@ -773,9 +758,7 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
             flowRecord: 'preserve',
           }),
         );
-        const released = yield* Effect.exit(
-          session.releaseRunLease(runId),
-        );
+        const released = yield* Effect.exit(session.releaseRunLease(runId));
         const failures: unknown[] = [];
         if (Exit.isFailure(finalized))
           failures.push(Cause.squash(finalized.cause));
@@ -784,10 +767,7 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
           failures.push(Cause.squash(released.cause));
         if (failures.length > 0)
           return yield* Effect.fail(
-            new AggregateError(
-              failures,
-              `Run ${runId} launch cleanup failed`,
-            ),
+            new AggregateError(failures, `Run ${runId} launch cleanup failed`),
           );
       });
     }),
@@ -811,8 +791,7 @@ export function startChildRunLoop<TTurn>(
     const budget = params.budgeted
       ? yield* childRunBudgetFor(runSession)
       : undefined;
-    const { childRun, parentRunId, runId, agentName, strategy } =
-      params;
+    const { childRun, parentRunId, runId, agentName, strategy } = params;
     // Agent-CLI children log to their own presentation stream; native children
     // have no stream tab of their own here (each turn already logs through its
     // own run trace inside `runFlowWithLifecycle`), so this is a channel-only
@@ -996,11 +975,7 @@ export function startChildRunLoop<TTurn>(
           Effect.gen(function* () {
             while (!loop.isInterrupted()) {
               turnIndex += 1;
-              const turnRef = mintChildTurnRef(
-                runId,
-                attemptId,
-                turnIndex,
-              );
+              const turnRef = mintChildTurnRef(runId, attemptId, turnIndex);
               emitTurnDiagnostic(logger, 'turn.accepted', {
                 runId,
                 turnRef,
@@ -1048,9 +1023,7 @@ export function startChildRunLoop<TTurn>(
                 strategy,
                 runId,
                 resolveDefaultDeliveryTarget: () =>
-                  childRun
-                    ? childRunHandle?.deliveryTarget
-                    : parentRunId,
+                  childRun ? childRunHandle?.deliveryTarget : parentRunId,
                 logger,
                 turn,
                 turnRef,
@@ -1107,12 +1080,7 @@ export function startChildRunLoop<TTurn>(
               // the instant this turn settled); then just drain the next batch. A
               // follow-up already raced into the queue resumes immediately instead
               // of genuinely waiting.
-              yield* submitPendingDelivery(
-                delivery,
-                runSession,
-                runId,
-                logger,
-              );
+              yield* submitPendingDelivery(delivery, runSession, runId, logger);
               childRun?.waitForInput();
               if (loop.isInterrupted()) break;
 

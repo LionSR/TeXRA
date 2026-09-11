@@ -67,9 +67,7 @@ export async function runPackRunDir(
  * Delete a run's runDir. Irreversible. Used when the user discards a run
  * from the progress-view toolbar.
  */
-export async function runCleanRunDir(
-  runId: RunId,
-): Promise<FileOpResult> {
+export async function runCleanRunDir(runId: RunId): Promise<FileOpResult> {
   const runDirAbsolute = await findRunDir(runId);
   if (!runDirAbsolute) {
     log.warn(`Run directory not found for run ${runId}`);

@@ -386,9 +386,7 @@ export function projectTranscriptRow(
         kind: 'tool',
         toolUse,
         model: toolRowModel(toolUse, {
-          ...(ctx.runLabels
-            ? { runLabels: ctx.runLabels }
-            : {}),
+          ...(ctx.runLabels ? { runLabels: ctx.runLabels } : {}),
           parsedOutput: entry.data.output,
         }),
       };

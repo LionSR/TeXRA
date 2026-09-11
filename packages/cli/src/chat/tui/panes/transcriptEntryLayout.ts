@@ -423,14 +423,7 @@ export function transcriptEntryLayout(
   const columns = transcriptColumns(width, inset);
   return {
     columns,
-    lines: entryLines(
-      row,
-      mode,
-      columns,
-      colorEnabled,
-      maxRows,
-      runLabels,
-    ),
+    lines: entryLines(row, mode, columns, colorEnabled, maxRows, runLabels),
     inset,
     marginBottomRows,
     marginTopRows,

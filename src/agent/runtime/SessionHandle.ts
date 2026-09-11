@@ -3,11 +3,11 @@
  *
  * It is a **composition record**, not a facade: it re-exposes no per-concern
  * methods, so callers address each owner directly
- * (`session.interactions.x(...)`, `session.executions.y(...)`). It has no
+ * (`session.interactions.x(...)`, `session.runs.y(...)`). It has no
  * readiness gate: a restored session is usable the moment it is constructed,
  * and what a stream with no live flow context in this process is gets decided
  * by the fold's `readOnly` and `group` rules over the session's view, never
- * by a boot pass. It composes {@link ExecutionRegistry},
+ * by a boot pass. It composes {@link RunRegistry},
  * {@link SessionHostInteractions}, and the other session-scoped owners.
  *
  * A session is one per workspace storage root, built and held by the
@@ -28,7 +28,7 @@
  *
  * It is deliberately NOT a conversation/session API (send/stream/resume/history):
  * Anthropic shipped and then deleted exactly that shape in the Agent SDK.
- * Continuity stays in options + storage (`ValidatedExecutionRequest`). The
+ * Continuity stays in options + storage (`ValidatedRunRequest`). The
  * session is justified only as the ownership container.
  */
 
@@ -49,11 +49,11 @@ import type {
 } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
-  ownsExecutionLease,
-  releaseOwnedExecutionLease,
-  validateOwnedExecutionLease,
-} from '@agent/storage/executionLease';
-import { finalizeRun } from '@agent/storage/executionLifecycle';
+  ownsRunLease,
+  releaseOwnedRunLease,
+  validateOwnedRunLease,
+} from '@agent/storage/runLease';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
@@ -70,13 +70,13 @@ import {
   interruptedWorkflowCall,
   isTranscriptEvent,
   RUN_OUTCOME,
-  STREAM_PHASE,
+  RUN_PHASE,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
-  type StreamPhase,
+  type RunPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
@@ -86,12 +86,12 @@ import {
   isRunningStreamingTextEntry,
   nonterminalWorkflowCall,
 } from '@shared/session/traceEntries';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type {
   StreamLogStore,
   StreamLogStoreMode,
 } from '@transcript/StreamLogStore';
-import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { RunSnapshotStore } from '@transcript/RunSnapshotStore';
 import { throwAggregated } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -99,8 +99,8 @@ import {
   runInSession,
   tryUseRunContext,
 } from './RunContext';
-import { ExecutionRegistry } from './executionRegistry';
-import { StreamStatusMachine } from './StreamStatusService';
+import { RunRegistry } from './runRegistry';
+import { RunStatusMachine } from './RunStatusService';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -115,7 +115,7 @@ import { ModelRetryGate } from './ModelRetryGate';
 import {
   createSessionApprovals,
   type SessionApprovals,
-} from './streamApprovalQueue';
+} from './runApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
@@ -159,11 +159,11 @@ export class SessionHandle {
    */
   readonly viewChanges: Stream.Stream<SessionView>;
   /**
-   * Per-run execution handles: registration, lookup, change listeners, and
+   * Per-run run handles: registration, lookup, change listeners, and
    * subagent lineage. Hears every canonical `status` fact from
    * {@link publishStatus}, in publish order.
    */
-  readonly executions: ExecutionRegistry;
+  readonly runs: RunRegistry;
   /**
    * The session's event plane (PRD 7.1, contract C7): what a renderer reads
    * with `events.all(session.now())`. The reads only: publishing goes
@@ -195,7 +195,7 @@ export class SessionHandle {
    */
   readonly subscriptions: SessionGraph['subscriptions'];
   /** Session-scoped status plane. */
-  readonly status: StreamStatusMachine;
+  readonly status: RunStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
   readonly transcripts: StreamLogStore;
   /**
@@ -208,7 +208,7 @@ export class SessionHandle {
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
   /** Session-owned per-stream sidecar store for runs launched in this session. */
-  readonly snapshots: StreamSnapshotStore;
+  readonly snapshots: RunSnapshotStore;
   /** The store's projection of the durable facts, called inside `publish`. */
   private readonly applySnapshotEvent: (
     event: SessionEvent,
@@ -227,7 +227,7 @@ export class SessionHandle {
   /** Host policy for provider-output cleanup and continuation joining. */
   readonly responseTextProcessing: ResponseTextProcessing;
   /**
-   * Session-owned bridge from a workflow-script grandchild's execution id to
+   * Session-owned bridge from a workflow-script grandchild's run id to
    * its run's engine skip/retry control. Populated by the workflow-script
    * strategy while a run is in flight; a host (the CLI child list) consumes it
    * to skip/retry a focused grandchild `agent()` call.
@@ -245,7 +245,7 @@ export class SessionHandle {
     init: SessionHandleInit &
       Pick<SessionHandle, 'transcripts'> & {
         readonly roots: WorkspaceRoots;
-        readonly snapshots: StreamSnapshotStore;
+        readonly snapshots: RunSnapshotStore;
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
   ) {
@@ -262,26 +262,25 @@ export class SessionHandle {
     this.requests = graph.requests;
     this.inputs = graph.inputs;
     this.subscriptions = graph.subscriptions;
-    const status = new StreamStatusMachine(
+    const status = new RunStatusMachine(
       (event) => this.publishStatus(event),
-      (streamId, detail) => this.setUnreadable(streamId, detail),
+      (runId, detail) => this.setUnreadable(runId, detail),
     );
     this.followUps = new ToolUseFollowUpQueue();
     const interactions = new SessionHostInteractions(this);
     // The approval authority publishes a stream's full policy snapshot on
     // every effective bypass change; `setApprovalPolicy` below publishes the
     // same snapshot when the policy half moves.
-    const approvals = createSessionApprovals(interactions, (streamId) =>
-      this.publishApprovalPolicy(streamId),
+    const approvals = createSessionApprovals(interactions, (runId) =>
+      this.publishApprovalPolicy(runId),
     );
-    this.executions = new ExecutionRegistry({
-      streamStatus: status,
+    this.runs = new RunRegistry({
+      runStatus: status,
       publish: (events) => this.publish(events),
       approvals,
-      publishResult: (event, streamId) => this.publishRunEvent(streamId, event),
-      finalizeExecution: (input) => finalizeRun(this, input),
-      releaseRootExecutionLease: (runId) =>
-        this.releaseExecutionLease(runId),
+      publishResult: (event, runId) => this.publishRunEvent(runId, event),
+      finalizeRun: (input) => finalizeRun(this, input),
+      releaseRootRunLease: (runId) => this.releaseRunLease(runId),
     });
 
     this.status = status;
@@ -315,7 +314,7 @@ export class SessionHandle {
     this.teardown.add(() => this.modelRetries.dispose());
     // Drop bypass state before the interaction slot settles pending approvals.
     this.teardown.add(() => this.approvals.clearAll());
-    this.teardown.add(() => this.executions.dispose());
+    this.teardown.add(() => this.runs.dispose());
     this.teardown.add(() => this.followUps.dispose());
   }
 
@@ -332,10 +331,8 @@ export class SessionHandle {
     // rule, PRD 5.2) gets its own `approval.policy`. A reservation still
     // short of its `run.start` is not in the view: its launcher stamps the
     // initial snapshot, read from this new value, on that event instead.
-    for (const streamId of SubscriptionRef.getUnsafe(
-      this.view,
-    ).streams.keys()) {
-      this.publishApprovalPolicy(streamId);
+    for (const runId of SubscriptionRef.getUnsafe(this.view).runs.keys()) {
+      this.publishApprovalPolicy(runId);
     }
   }
 
@@ -345,10 +342,10 @@ export class SessionHandle {
    * `run.start` as the initial snapshot; every later change is published
    * through {@link publishApprovalPolicy}. Never a toggle delta.
    */
-  approvalPolicySnapshotFor(streamId: RunId): ApprovalPolicySnapshot {
+  approvalPolicySnapshotFor(runId: RunId): ApprovalPolicySnapshot {
     return {
       policy: this.texraApprovalPolicy,
-      bypasses: this.approvals.bypassesFor(streamId),
+      bypasses: this.approvals.bypassesFor(runId),
     };
   }
 
@@ -356,18 +353,18 @@ export class SessionHandle {
    * The one emitter of `approval.policy` (PRD one-fold-three-renderers,
    * section 6, item 2), for a change after the run's `run.start`.
    */
-  private publishApprovalPolicy(streamId: RunId): void {
+  private publishApprovalPolicy(runId: RunId): void {
     this.publish([
       {
         type: 'approval.policy',
-        aggregateId: qualifyAggregateId('run', streamId),
-        snapshot: this.approvalPolicySnapshotFor(streamId),
+        aggregateId: qualifyAggregateId('run', runId),
+        snapshot: this.approvalPolicySnapshotFor(runId),
       },
     ]);
   }
 
   /**
-   * End ownership of one execution after the facts it queued have committed.
+   * End ownership of one run after the facts it queued have committed.
    * An optional post-drain operation publishes lifecycle state that belongs
    * after those facts; it runs before the claim is unlinked.
    * The claim is unlinked whatever the drain did: resumability is the
@@ -376,7 +373,7 @@ export class SessionHandle {
    * drain's error is the one the caller sees, and the release's is logged.
    * This is the one exit choreography every run driver calls.
    */
-  releaseExecutionLease(
+  releaseRunLease(
     runId: RunId,
     afterArtifactsDrained: Effect.Effect<void, Error> = Effect.void,
   ): Effect.Effect<void, Error> {
@@ -386,7 +383,7 @@ export class SessionHandle {
           yield* Effect.tryPromise({
             try: () =>
               runInSession(this, async () => {
-                await validateOwnedExecutionLease(runId);
+                await validateOwnedRunLease(runId);
                 await this.flushArtifacts();
               }),
             catch: ensureError,
@@ -406,12 +403,11 @@ export class SessionHandle {
         }),
       );
       const claimRelease = yield* Effect.exit(
-        this.graph.releaseExecutionClaims(runId),
+        this.graph.releaseRunClaims(runId),
       );
       const fileRelease = yield* Effect.exit(
         Effect.tryPromise({
-          try: () =>
-            runInSession(this, () => releaseOwnedExecutionLease(runId)),
+          try: () => runInSession(this, () => releaseOwnedRunLease(runId)),
           catch: ensureError,
         }),
       );
@@ -420,7 +416,7 @@ export class SessionHandle {
       );
       const primary = failures.shift();
       for (const error of failures)
-        logger.warn(`Execution ${runId}: lease release also failed`, {
+        logger.warn(`Run ${runId}: lease release also failed`, {
           data: error,
         });
       if (primary !== undefined)
@@ -429,10 +425,10 @@ export class SessionHandle {
   }
 
   /** Admit the run's existing claim before resume reads or mutations. */
-  acquireExecutionClaims(
+  acquireRunClaims(
     runId: RunId,
   ): Effect.Effect<Effect.Effect<void, Error>, Error> {
-    return this.graph.acquireExecutionClaims(runId).pipe(
+    return this.graph.acquireRunClaims(runId).pipe(
       Effect.map((release) =>
         release.pipe(
           Effect.catchCause((cause) =>
@@ -450,7 +446,7 @@ export class SessionHandle {
    * The host-facing name for "everything this session owes storage has
    * landed": a session's durable artifacts are the facts it publishes, so
    * this is exactly {@link settlePublications}. Hosts call it on shutdown and
-   * every run driver reaches it through {@link releaseExecutionLease}.
+   * every run driver reaches it through {@link releaseRunLease}.
    */
   flushArtifacts(): Promise<void> {
     return this.settlePublications();
@@ -481,14 +477,14 @@ export class SessionHandle {
    * transcript order. Returns a detach disposer the run bundles into its
    * trace teardown.
    */
-  attachRunTrace(trace: AgentTrace, streamId: RunId): () => void {
-    return trace.subscribe((event) => this.publishRunEvent(streamId, event));
+  attachRunTrace(trace: AgentTrace, runId: RunId): () => void {
+    return trace.subscribe((event) => this.publishRunEvent(runId, event));
   }
 
   /**
    * Publish one run-scoped trace event as its durable arm (`runEventDraft`);
    * a trace event with no arm goes nowhere. Shared by `attachRunTrace` (the
-   * live per-run trace subscription above) and by `ExecutionRegistry`'s
+   * live per-run trace subscription above) and by `RunRegistry`'s
    * injected `publishResult` constructor callback, which needs the identical
    * forwarding for a terminal event synthesized *after* the originating run's
    * own trace has already been disposed — killing a native subagent suspended
@@ -496,23 +492,23 @@ export class SessionHandle {
    * run's own (already-torn-down) trace, but has no other way to reach this
    * session's `onResult` subscribers.
    */
-  publishRunEvent(streamId: RunId, event: AgentEvent): void {
+  publishRunEvent(runId: RunId, event: AgentEvent): void {
     if (this.disposed) return;
     if (event.type === 'stream.chunk') {
       this.schedulePublication(
-        this.graph.publishText(streamId, event.id, redactSecrets(event.text)),
+        this.graph.publishText(runId, event.id, redactSecrets(event.text)),
       );
       return;
     }
     this.schedulePublication(
       Effect.suspend(() => {
         const draft = runEventDraft(
-          streamId,
+          runId,
           event.type === 'stream.end'
             ? {
                 ...event,
                 finalText:
-                  event.finalText ?? this.graph.readText(streamId, event.id),
+                  event.finalText ?? this.graph.readText(runId, event.id),
               }
             : event,
         );
@@ -530,30 +526,30 @@ export class SessionHandle {
   /**
    * Publish one canonical status fact from the session's status machine. The
    * runtime's status consumers hear it only after the event batch commits:
-   * the recorders' status ports and the execution registry's waiters and
+   * the recorders' status ports and the run registry's waiters and
    * child rosters cannot announce a rejected write.
    */
   publishStatus(event: StatusEvent): void {
     if (this.disposed) return;
     this.schedulePublication(
       Effect.suspend(() => {
-        const closure = this.statusClosureFacts(event.streamId, event.phase);
+        const closure = this.statusClosureFacts(event.runId, event.phase);
         return this.graph.publish([...closure, statusDraft(event)]);
       }),
     );
   }
 
   /** Final text facts committed immediately before a status closes its entries. */
-  statusClosureFacts(streamId: RunId, phase: StreamPhase): SessionEventDraft[] {
+  statusClosureFacts(runId: RunId, phase: RunPhase): SessionEventDraft[] {
     const closure: SessionEventDraft[] = [];
-    if (phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase)) {
-      for (const entry of this.transcripts.get(streamId)?.getRange(0) ?? []) {
+    if (phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase)) {
+      for (const entry of this.transcripts.get(runId)?.getRange(0) ?? []) {
         if (!isRunningStreamingTextEntry(entry)) continue;
         closure.push({
           type: 'stream.end',
-          aggregateId: qualifyAggregateId('run', streamId),
+          aggregateId: qualifyAggregateId('run', runId),
           id: entry.id,
-          finalText: this.graph.readText(streamId, entry.id) ?? entry.text,
+          finalText: this.graph.readText(runId, entry.id) ?? entry.text,
         });
       }
     }
@@ -598,7 +594,7 @@ export class SessionHandle {
     const graph = this.graph;
     return this.publicationGate.withPermit(
       Effect.gen(function* () {
-        const updateResult = update(yield* graph.executionRecords(runId));
+        const updateResult = update(yield* graph.runRecords(runId));
         yield* graph.publish(updateResult.events);
         return updateResult.value;
       }),
@@ -606,16 +602,12 @@ export class SessionHandle {
   }
 
   /** Internal typed metadata accessors read the database, never the display fold. */
-  readExecutionRecords(
-    runId: RunId,
-  ): Effect.Effect<readonly SessionEvent[]> {
-    return this.graph.executionRecords(runId);
+  readRunRecords(runId: RunId): Effect.Effect<readonly SessionEvent[]> {
+    return this.graph.runRecords(runId);
   }
 
-  readExecutionChildren(
-    runId: RunId,
-  ): Effect.Effect<readonly SessionEvent[]> {
-    return this.graph.executionChildren(runId);
+  readRunChildren(runId: RunId): Effect.Effect<readonly SessionEvent[]> {
+    return this.graph.runChildren(runId);
   }
 
   readRecordListing(): Effect.Effect<readonly SessionEvent[]> {
@@ -674,7 +666,7 @@ export class SessionHandle {
           }
 
           if (event.type !== 'status') return;
-          this.executions.handleStatus(target.id);
+          this.runs.handleStatus(target.id);
         }),
       ),
     );
@@ -718,14 +710,14 @@ export class SessionHandle {
 
   /** The status machine's hold on a stream this process cannot read, or its
    *  release: local truth the fold reads as `readOnly` (PRD 5.1). */
-  private setUnreadable(streamId: RunId, detail: string | null): void {
+  private setUnreadable(runId: RunId, detail: string | null): void {
     if (this.disposed) return;
     effectRuntime().runFork(
       SubscriptionRef.update(this.graph.local, (local) => {
-        const rest = local.unreadable.filter((u) => u.streamId !== streamId);
+        const rest = local.unreadable.filter((u) => u.runId !== runId);
         return {
           ...local,
-          unreadable: detail === null ? rest : [...rest, { streamId, detail }],
+          unreadable: detail === null ? rest : [...rest, { runId, detail }],
         };
       }),
     );
@@ -777,7 +769,7 @@ export function forEachLiveSession(
  * their first ON-phase handler, after reachable drivers have unwound and
  * before sessions or persistence services are disposed.
  *
- * Each owned execution keeps its checkpoint and receives CANCELLED unless a
+ * Each owned run keeps its checkpoint and receives CANCELLED unless a
  * driver has already persisted another outcome. Under the same lease, publish
  * canonical closure facts for its running transcript entries using the outcome
  * that remains authoritative. Release waits for those publications to commit.
@@ -785,112 +777,111 @@ export function forEachLiveSession(
  * separate lifecycle race; keepExistingOutcome only protects earlier writes.
  *
  * The caller's phase deadline bounds the drain. An expired deadline is logged
- * for each skipped execution and checked again after its outcome write.
+ * for each skipped run and checked again after its outcome write.
  */
-export const settleLiveSessionExecutions = Effect.fn(
-  'settleLiveSessionExecutions',
-)(function* (signal: AbortSignal) {
-  const pending: { session: SessionHandle; runId: RunId }[] = [];
-  forEachLiveSession((session) => {
-    for (const runId of session.executions.getActiveIds()) {
-      pending.push({ session, runId });
-    }
-  });
-  for (const { session, runId } of pending) {
-    if (signal.aborted) {
-      logger.warn(
-        `Host exit deadline passed before execution ${runId} could settle`,
-      );
-      continue;
-    }
-    const settlement = Effect.gen(function* () {
-      if (!runInSession(session, () => ownsExecutionLease(runId))) return;
-      const tracked = session.executions.getHandle(runId) !== undefined;
-      // Read the committed transcript once after queued publications settle.
-      // Host exit needs no presentation residency or mutable writer handle.
-      const transcript = yield* Effect.exit(
-        Effect.gen(function* () {
-          yield* Effect.tryPromise({
-            try: () => session.settlePublications(),
-            catch: ensureError,
-          });
-          return tracked
-            ? yield* session.transcripts.readEntries(runId)
-            : [];
-        }),
-      );
-      yield* session.releaseExecutionLease(
-        runId,
-        Effect.gen(function* () {
-          const finalization = yield* finalizeRun(session, {
-            runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            flowRecord: 'preserve',
-            keepExistingOutcome: true,
-          });
-          if (!finalization.ok) {
-            throw new Error(
-              `Failed to persist the CANCELLED outcome for execution ${runId}`,
-              { cause: finalization.error },
-            );
-          }
-          if (signal.aborted) {
-            logger.warn(
-              `Host exit deadline passed after execution ${runId}'s outcome was written; its transcript groups stay open`,
-            );
-            return;
-          }
-          if (!tracked) {
-            logger.warn(
-              `Execution ${runId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
-            );
-            return;
-          }
-          // A failed read must still pass through the owner's release
-          // choreography after recording the terminal outcome.
-          if (Exit.isFailure(transcript)) throw Cause.squash(transcript.cause);
-          // These are ordinary canonical facts. The lease owner settles their
-          // publication before unlinking the claim, so replay sees the same
-          // closure as the resident transcript.
-          for (const entry of transcript.value) {
-            if (isRunningGroupEntry(entry)) {
-              session.publishRunEvent(runId, {
-                type: 'stage.end',
-                id: entry.id,
-                status: finalization.outcome,
-              });
-            } else if (isRunningStreamingTextEntry(entry)) {
-              session.publishRunEvent(runId, {
-                type: 'stream.end',
-                id: entry.id,
-              });
-            } else {
-              const call = nonterminalWorkflowCall(entry);
-              if (call)
-                session.publishRunEvent(runId, {
-                  type: 'workflow.call',
-                  logId: entry.id,
-                  stageId: entry.groupId,
-                  call: interruptedWorkflowCall(call),
-                });
-            }
-          }
-        }),
-      );
+export const settleLiveSessionRuns = Effect.fn('settleLiveSessionRuns')(
+  function* (signal: AbortSignal) {
+    const pending: { session: SessionHandle; runId: RunId }[] = [];
+    forEachLiveSession((session) => {
+      for (const runId of session.runs.getActiveIds()) {
+        pending.push({ session, runId });
+      }
     });
-    yield* settlement.pipe(
-      Effect.scoped,
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          logger.warn(
-            `Failed to settle execution ${runId} at host exit; a later launch classifies it from its checkpoint`,
-            { data: Cause.squash(cause) },
-          );
-        }),
-      ),
-    );
-  }
-});
+    for (const { session, runId } of pending) {
+      if (signal.aborted) {
+        logger.warn(
+          `Host exit deadline passed before run ${runId} could settle`,
+        );
+        continue;
+      }
+      const settlement = Effect.gen(function* () {
+        if (!runInSession(session, () => ownsRunLease(runId))) return;
+        const tracked = session.runs.getHandle(runId) !== undefined;
+        // Read the committed transcript once after queued publications settle.
+        // Host exit needs no presentation residency or mutable writer handle.
+        const transcript = yield* Effect.exit(
+          Effect.gen(function* () {
+            yield* Effect.tryPromise({
+              try: () => session.settlePublications(),
+              catch: ensureError,
+            });
+            return tracked ? yield* session.transcripts.readEntries(runId) : [];
+          }),
+        );
+        yield* session.releaseRunLease(
+          runId,
+          Effect.gen(function* () {
+            const finalization = yield* finalizeRun(session, {
+              runId,
+              outcome: RUN_OUTCOME.CANCELLED,
+              flowRecord: 'preserve',
+              keepExistingOutcome: true,
+            });
+            if (!finalization.ok) {
+              throw new Error(
+                `Failed to persist the CANCELLED outcome for run ${runId}`,
+                { cause: finalization.error },
+              );
+            }
+            if (signal.aborted) {
+              logger.warn(
+                `Host exit deadline passed after run ${runId}'s outcome was written; its transcript groups stay open`,
+              );
+              return;
+            }
+            if (!tracked) {
+              logger.warn(
+                `Run ${runId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
+              );
+              return;
+            }
+            // A failed read must still pass through the owner's release
+            // choreography after recording the terminal outcome.
+            if (Exit.isFailure(transcript))
+              throw Cause.squash(transcript.cause);
+            // These are ordinary canonical facts. The lease owner settles their
+            // publication before unlinking the claim, so replay sees the same
+            // closure as the resident transcript.
+            for (const entry of transcript.value) {
+              if (isRunningGroupEntry(entry)) {
+                session.publishRunEvent(runId, {
+                  type: 'stage.end',
+                  id: entry.id,
+                  status: finalization.outcome,
+                });
+              } else if (isRunningStreamingTextEntry(entry)) {
+                session.publishRunEvent(runId, {
+                  type: 'stream.end',
+                  id: entry.id,
+                });
+              } else {
+                const call = nonterminalWorkflowCall(entry);
+                if (call)
+                  session.publishRunEvent(runId, {
+                    type: 'workflow.call',
+                    logId: entry.id,
+                    stageId: entry.groupId,
+                    call: interruptedWorkflowCall(call),
+                  });
+              }
+            }
+          }),
+        );
+      });
+      yield* settlement.pipe(
+        Effect.scoped,
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            logger.warn(
+              `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
+              { data: Cause.squash(cause) },
+            );
+          }),
+        ),
+      );
+    }
+  },
+);
 
 let defaultSessionFallbackWarned = false;
 

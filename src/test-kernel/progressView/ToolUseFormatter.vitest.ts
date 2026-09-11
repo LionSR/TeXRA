@@ -82,10 +82,7 @@ function toolUseRow(
     messageType: 'toolUse',
     data,
   });
-  return projectTranscriptRow(
-    entry,
-    runLabels ? { runLabels } : {},
-  ) as ToolRow;
+  return projectTranscriptRow(entry, runLabels ? { runLabels } : {}) as ToolRow;
 }
 
 /** Renders an `executions` tool call with subagent labels and returns the title. */

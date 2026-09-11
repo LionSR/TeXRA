@@ -24,14 +24,8 @@ describe('agent shutdown', () => {
     const firstSession = createTestSession();
     const secondSession = createTestSession();
     const compatibilitySession = defaultSession();
-    const firstDrain = vi.spyOn(
-      firstSession.runs,
-      'killBackgroundProcesses',
-    );
-    const secondDrain = vi.spyOn(
-      secondSession.runs,
-      'killBackgroundProcesses',
-    );
+    const firstDrain = vi.spyOn(firstSession.runs, 'killBackgroundProcesses');
+    const secondDrain = vi.spyOn(secondSession.runs, 'killBackgroundProcesses');
     const compatibilityDrain = vi.spyOn(
       compatibilitySession.runs,
       'killBackgroundProcesses',
@@ -68,11 +62,9 @@ describe('agent shutdown', () => {
   it('preserves the shared shutdown order around host hooks', async () => {
     const session = createTestSession();
     const order: string[] = [];
-    vi.spyOn(session.runs, 'killBackgroundProcesses').mockImplementation(
-      () => {
-        order.push('agent-shutdown');
-      },
-    );
+    vi.spyOn(session.runs, 'killBackgroundProcesses').mockImplementation(() => {
+      order.push('agent-shutdown');
+    });
 
     try {
       const lifecycle = createLifecycleHost();

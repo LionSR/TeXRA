@@ -292,10 +292,7 @@ export interface AgentResumePort {
    * already active/resuming, etc.) — callers should fall back to leaving
    * the message queued for the next manual resume.
    */
-  tryResumeRun(
-    runId: RunId,
-    recovery?: RecoveryContinuation,
-  ): Promise<boolean>;
+  tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
