@@ -2,7 +2,6 @@ import { join } from 'node:path';
 import { app } from 'electron';
 import { Effect } from 'effect';
 
-import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
@@ -217,10 +216,6 @@ export async function initializeElectronPlatform(
   // Register the shared Node-host agent runtime: the direct Lean language
   // services (lake env lean --server).
   initNodeAgentRuntime(lifecycle);
-  // Goal continuation and follow-up polish read the same bundled templates as
-  // the extension; one call registers every row of the prompt table, so
-  // desktop cannot wire one prompt and forget another the way it once did.
-  initializeBundledPrompts(resourcesPath);
   // Project skills follow each project's session; only the bundle is fixed.
   initializeNodeRuntimeSkills({ resourcesPath });
 

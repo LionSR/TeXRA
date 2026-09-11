@@ -69,10 +69,9 @@ export const RoundNumberSchema = z.int().nonnegative();
 /**
  * Schema factory for the canonical record: `{ "0": T[], "1": T[], … }`.
  * Callers attach their own field policy (`.prefault({})`, `.optional()`).
- * Keys must be canonical round keys ({@link RoundKeyStringSchema}), so a
- * validated record enumerates
- * in ascending round order per the ES2015+ integer-key rule and no two keys
- * name the same round.
+ * Keys must be canonical round keys ({@link RoundKeyStringSchema}). A
+ * validated record therefore enumerates in ascending round order, per the
+ * ES2015+ integer-key rule, and no two of its keys name the same round.
  */
 export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
   return z.record(RoundKeyStringSchema, z.array(valueSchema));

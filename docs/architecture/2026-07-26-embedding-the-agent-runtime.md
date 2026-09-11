@@ -555,12 +555,6 @@ says so.
 
 ## 4. What degrades gracefully (safe to skip)
 
-- **`initializeBundledPrompts(resourcesPath)`:** Registers the packaged
-  `resources/` root for the bundled polish prompt
-  (`src/agent/runtime/bundledPrompts.ts`). The goal continuation is inline and
-  always renders; polish rejects without a root, so an embedder that skips
-  this call loses follow-up polish loudly. Skipping it is safe only if the
-  embedder renders no polish prompt.
 - **`initializeNodeRuntimeSkills({…})`:** Runtime skills degrade to an empty
   catalog: `if (sources.length === 0) return { catalog: '', issues: [] };`
   (`src/skills/runtimeSkills.ts:57-59`; registration at
@@ -619,9 +613,8 @@ classification makes that distinction.
   account probes (Codex/xAI eligibility) and applies the CLI's
   `--helper-model` flag.
 
-### Optional, graceful (2)
+### Optional, graceful (1)
 
-- `:378` — `initializeBundledPrompts(context.resourcesPath)` (§4).
 - `:387` — `initializeNodeRuntimeSkills({…})` (§4).
 
 ### Cross-check against desktop
@@ -631,7 +624,7 @@ how a shipped host obtains full feature parity rather than proving that every
 call is a minimum runtime requirement:
 `initPlatform` at `packages/desktop/src/main/platform/index.ts:272`,
 `initNodeAgentRuntime` at `:317`, and `bootstrapNodeAgentDirectories` at
-`:324`. It also calls the two optional ones (`:318`, `:319`). Product policy is
+`:324`. It also calls the optional one (`:319`). Product policy is
 not necessarily CLI-only:
 desktop also calls
 `seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION)` at
@@ -650,11 +643,7 @@ desktop also calls
    `src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **Feature-parity registration is once-per-process.** A second
    `initNodeAgentRuntime` throws or double-registers
-   (`src/platform/defaults/nodeHost.ts:129-131`). Contrast
-   `initializeBundledPrompts`, which is explicitly re-entrant
-   (`src/agent/runtime/bundledPrompts.ts`: a later call replaces the resources
-   root and drops the cache) because CLI validation re-enters platform init in
-   one process.
+   (`src/platform/defaults/nodeHost.ts:129-131`).
 3. **`bootstrapNodeAgentDirectories` uses an ambiguous string guard key.** A
    module-level `Map` stores `resourcesPath` under the guard key
    `${channel}:${versionStateKey}`

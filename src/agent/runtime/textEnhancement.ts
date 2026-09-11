@@ -4,7 +4,7 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import { isNonEmptyString } from '@utils/core';
 
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
-import { renderPolishPrompt } from './bundledPrompts';
+import { POLISH_PROMPT_PREFIX } from './bundledPrompts';
 import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
 
 const log = createLog('TextEnhancement');
@@ -21,14 +21,12 @@ export async function polishTextWithAI(
   stores: ModelOptionStores,
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
-    const prompt = await renderPolishPrompt(text);
-
     const helperResult = await createHelperModelKit(stores);
     if (!helperResult.kit) {
       throw new Error(helperResult.reason);
     }
     const responseText = await runHelperModelCompletion(helperResult.kit, {
-      userPrompt: prompt,
+      userPrompt: POLISH_PROMPT_PREFIX + text,
     });
     if (!isNonEmptyString(responseText)) {
       throw new Error('Model returned no text.');

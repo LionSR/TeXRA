@@ -13,9 +13,7 @@ const packageName = '@texra-ai/cli';
 const packageDir = 'package/';
 
 // Templates only the VS Code extension and the desktop app read. None of
-// these belongs in the CLI tarball. `templates/instructionPolish.yaml`
-// is deliberately absent from this list: bundledPrompts.ts keeps a polish row
-// registered for the CLI, so shipping that one later is legitimate.
+// these belongs in the CLI tarball.
 const EXTENSION_ONLY_TEMPLATES = new Set([
   'dist/resources/templates/agentCreatorToolUse.yaml',
   'dist/resources/templates/agentCreatorWorkflow.yaml',

@@ -27,46 +27,12 @@ import {
 } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
-function namedImportSources(source: string, importedName: string): string[] {
-  const bindingPattern = new RegExp(`\\b${importedName}\\b`, 'u');
-  return [
-    ...source.matchAll(
-      /\b(?:import|export)\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/gu,
-    ),
-    ...source.matchAll(
-      /\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*\(?\s*(?:await\s*)?import\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)?/gu,
-    ),
-  ]
-    .filter((match) => bindingPattern.test(match[1]))
-    .map((match) => match[2]);
-}
-
 function readDesktopMainIndex(): Promise<string> {
   return readFile(desktopSourcePath('main', 'index.ts'), 'utf8');
 }
 
-function readDesktopPlatformIndex(): Promise<string> {
-  return readFile(desktopSourcePath('main', 'platform', 'index.ts'), 'utf8');
-}
-
 function readDesktopBootstrap(): Promise<string> {
   return readFile(desktopSourcePath('main', 'bootstrap.ts'), 'utf8');
-}
-
-// Asserts each needle first occurs after the anchor, in the given order.
-function expectOrderedAfter(
-  source: string,
-  anchor: string,
-  needles: readonly string[],
-): void {
-  const anchorIndex = source.indexOf(anchor);
-  expect(anchorIndex).toBeGreaterThanOrEqual(0);
-  let previousIndex = anchorIndex;
-  for (const needle of needles) {
-    const index = source.indexOf(needle, anchorIndex);
-    expect(index).toBeGreaterThan(previousIndex);
-    previousIndex = index;
-  }
 }
 
 describe('desktop composition root and launch environment', () => {
@@ -203,20 +169,6 @@ describe('desktop composition root and launch environment', () => {
 
     expect(initPlatformFiles).toEqual([
       'packages/desktop/src/main/platform/index.ts',
-    ]);
-  });
-
-  // Desktop once wired `polishTextWithAI` while initializing only the goal
-  // prompt, so every follow-up polish failed (#10365). The single table-driven
-  // initializer is what makes that unrepeatable — assert desktop calls it.
-  it('initializes every bundled prompt from the resource bundle', async () => {
-    const source = await readDesktopPlatformIndex();
-
-    expect(namedImportSources(source, 'initializeBundledPrompts')).toContain(
-      '@agent/runtime',
-    );
-    expectOrderedAfter(source, 'const resourcesPath = resolveResourcesPath', [
-      'initializeBundledPrompts(resourcesPath)',
     ]);
   });
 

@@ -113,9 +113,6 @@ export { createAgentResponseTextConnector } from './textConnection';
 // RunHandle
 export type { AgentRunHandle } from './RunHandle';
 
-// bundledPrompts
-export { initializeBundledPrompts } from './bundledPrompts';
-
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';
 
