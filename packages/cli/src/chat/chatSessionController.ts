@@ -646,6 +646,10 @@ export function createChatSessionController(
         effectRuntime().runPromise(Deferred.await(claimedRun)),
       )
     ) {
+      // The slot went to another run: nothing will ever complete this
+      // Deferred, so settle it here or the awaiting fiber parks until
+      // shutdown.
+      Deferred.doneUnsafe(claimedRun, Effect.void);
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
       );
@@ -825,6 +829,10 @@ export function createChatSessionController(
     // any `await` below, see tryClaimRootRunSlot and the matching comment
     // in resume().
     if (!session.tryClaimRootRunSlot(runPromise.then(() => undefined))) {
+      // The slot went to another run: nothing will ever complete this
+      // Deferred, so settle it here or the awaiting fiber parks until
+      // shutdown.
+      Deferred.doneUnsafe(autoResumeRun, Effect.succeed(false));
       return Promise.resolve(false);
     }
     const attemptCancellation = { cancellationRequested: false };
