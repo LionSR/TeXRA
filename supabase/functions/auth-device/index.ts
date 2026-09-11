@@ -6,8 +6,8 @@
  * code plus a verification URL, and polls for completion. The user opens the
  * URL in a browser on ANY device, signs in with the normal Supabase OAuth web
  * flow, and approves the code. The poll endpoint then mints a NATIVE GoTrue
- * session (same magic-link mint as auth-github), so tokens refresh through
- * GoTrue's standard rotation.
+ * session (admin magic-link token consumed server-side), so tokens refresh
+ * through GoTrue's standard rotation.
  *
  * Routes:
  * - POST /code    - Start a device authorization (anonymous; returns
@@ -15,7 +15,7 @@
  * - GET  /verify  - Browser verification page (sign in + approve/deny the code)
  * - POST /approve - Approve or deny a user code (requires a user JWT)
  * - POST /token   - CLI poll endpoint; RFC 8628 error codes until approved,
- *                   then a one-time session payload (auth-github shape)
+ *                   then a one-time GoTrue session payload
  *
  * Security:
  * - Device codes are high-entropy bearer secrets, stored only as SHA-256
@@ -75,7 +75,7 @@ const USER_CODE_INSERT_ATTEMPTS = 4;
 // =============================================================================
 
 // The edge runtime hands over paths including the function slug
-// (/auth-device/code), same as the auth-github function.
+// (/auth-device/code).
 const app = new Hono<{ Variables: SupabaseClientVariables }>().basePath(
   '/auth-device',
 );

@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -29,12 +29,11 @@ const rootDir = resolve(
   process.env.TEXRA_REMOTE_AGENTS_ROOT ?? join(scriptDir, '..'),
 );
 const remoteAgentsDir = resolve(rootDir, 'prompts/agents/remote');
-const configPath = resolve(rootDir, 'docs/supabase/remote-agents.config.json');
+const configPath = resolve(remoteAgentsDir, 'catalog.json');
 
-// Placement and visibility for each agent in prompts/agents/remote/. The YAML files
-// are the source of truth for description / tools / agentCategory; folder and
-// visibility live in docs/supabase/remote-agents.config.json so the generated
-// SQL stays aligned with production without editing every YAML.
+// Placement and visibility for each agent in prompts/agents/remote/. The YAML
+// files are the source of truth for description / tools / agentCategory;
+// folder and visibility live in catalog.json beside them.
 const AGENT_PLACEMENT =
   JSON.parse(readFileSync(configPath, 'utf8')).agents ?? {};
 
@@ -45,74 +44,42 @@ function discoverYamlFiles(dir) {
 }
 
 function readAgentYaml(filePath) {
-  const text = readFileSync(filePath, 'utf8');
-  const parsed = YAML.parse(text) ?? {};
+  const parsed = YAML.parse(readFileSync(filePath, 'utf8')) ?? {};
   const settings = parsed.settings ?? {};
-  const name = parsed.name ?? basename(filePath, '.yaml');
-  const explicitCategory =
-    settings.agentCategory ?? parsed.agentCategory ?? undefined;
   const relativePath = relative(remoteAgentsDir, filePath).replaceAll(
     '\\',
     '/',
   );
-  const inferredCategory = relativePath.startsWith('tool_use/')
+  // The directory fixes the category; the YAML must state the same one.
+  const agentCategory = relativePath.startsWith('tool_use/')
     ? 'toolUse'
     : 'workflow';
-
+  const tools = settings.tools ?? [];
   if (
-    relativePath.startsWith('workflow/') &&
-    explicitCategory !== undefined &&
-    explicitCategory !== 'workflow'
+    typeof parsed.name !== 'string' ||
+    settings.agentCategory !== agentCategory ||
+    !Array.isArray(tools) ||
+    !tools.every((tool) => typeof tool === 'string')
   ) {
     throw new Error(
-      `Agent "${name}" is located in workflow/ but specifies agentCategory "${explicitCategory}".`,
-    );
-  }
-  if (
-    relativePath.startsWith('tool_use/') &&
-    explicitCategory !== undefined &&
-    explicitCategory !== 'toolUse'
-  ) {
-    throw new Error(
-      `Agent "${name}" is located in tool_use/ but specifies agentCategory "${explicitCategory}".`,
+      `${relativePath} must declare a string name, settings.agentCategory: ` +
+        `${agentCategory}, and settings.tools as a list of tool names.`,
     );
   }
 
   return {
-    name,
+    name: parsed.name,
     description: parsed.description,
-    inherits: parsed.inherits,
-    agentCategory: explicitCategory ?? inferredCategory,
-    explicitCategory: explicitCategory !== undefined,
-    tools: normalizeTools(settings.tools),
+    agentCategory,
+    tools: tools.length > 0 ? tools : undefined,
   };
-}
-
-function normalizeTools(tools) {
-  if (!Array.isArray(tools)) {
-    return undefined;
-  }
-
-  const names = tools
-    .map((tool) => {
-      if (typeof tool === 'string') {
-        return tool;
-      }
-      if (tool && typeof tool === 'object' && typeof tool.name === 'string') {
-        return tool.name;
-      }
-      return undefined;
-    })
-    .filter(Boolean);
-
-  return names.length > 0 ? names : undefined;
 }
 
 function placementFor(agent) {
   const placement = AGENT_PLACEMENT[agent.name];
   if (!placement) {
     throw new Error(
-      `Agent "${agent.name}" has no placement entry in docs/supabase/remote-agents.config.json. ` +
+      `Agent "${agent.name}" has no placement entry in prompts/agents/remote/catalog.json. ` +
         `Add { "folder": "...", "visibility": [...] } for it.`,
     );
   }
@@ -132,94 +99,22 @@ function placementFor(agent) {
   return placement;
 }
 
-function storagePath(agent, placement) {
-  return `${placement.folder}/${agent.name}.yaml`;
-}
-
-function resolveInheritedFields(agents) {
-  const byName = new Map(agents.map((agent) => [agent.name, agent]));
-
-  function walkParents(agent, visit, seen = new Set()) {
-    if (seen.has(agent.name)) {
-      return;
-    }
-    seen.add(agent.name);
-
-    visit(agent);
-
-    if (!agent.inherits) {
-      return;
-    }
-    const parent = byName.get(agent.inherits);
-    if (parent) {
-      walkParents(parent, visit, seen);
-    }
-  }
-
-  for (const agent of agents) {
-    walkParents(agent, (current) => {
-      if (!agent.description && current.description) {
-        agent.description = current.description;
-      }
-      if (!agent.tools && current.tools) {
-        agent.tools = current.tools;
-      }
-      if (!agent.explicitCategory && current.explicitCategory) {
-        agent.agentCategory = current.agentCategory;
-        agent.explicitCategory = true;
-      }
-    });
-  }
-}
-
 function loadAgents() {
   if (!existsSync(remoteAgentsDir)) {
     throw new Error(`Missing remote agents directory: ${remoteAgentsDir}`);
   }
 
-  const agents = discoverYamlFiles(remoteAgentsDir).map(readAgentYaml);
-  resolveInheritedFields(agents);
-
-  return agents
+  return discoverYamlFiles(remoteAgentsDir)
+    .map(readAgentYaml)
     .map((agent) => {
       const placement = placementFor(agent);
       return {
         ...agent,
-        storagePath: storagePath(agent, placement),
+        storagePath: `${placement.folder}/${agent.name}.yaml`,
         visibility: placement.visibility,
-        folder: placement.folder,
       };
     })
-    .sort(compareAgents);
-}
-
-function compareAgents(a, b) {
-  const byGroup = groupOrder(a) - groupOrder(b);
-  if (byGroup !== 0) {
-    return byGroup;
-  }
-  return a.name.localeCompare(b.name);
-}
-
-function groupKey(agent) {
-  if (agent.agentCategory !== 'toolUse') {
-    return 'workflow';
-  }
-  return agent.folder;
-}
-
-function groupOrder(agent) {
-  const key = groupKey(agent);
-  if (key === 'workflow') return 0;
-  if (key === 'tool-use') return 1;
-  return 2;
-}
-
-function groupSectionTitle(key) {
-  if (key === 'workflow') return 'Workflow agents';
-  if (key === 'tool-use') return 'Tool-use agents';
-  if (key === 'tool-use-lean') return 'Tool-use agents (Lean)';
-  return `Tool-use agents (${key})`;
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function sqlString(value) {
@@ -258,40 +153,13 @@ function buildSql(agents) {
   const lines = [
     '-- Generated by scripts/sync-remote-agents.mjs. Do not commit.',
     '-- Source of truth: prompts/agents/remote/**/*.yaml and',
-    '-- docs/supabase/remote-agents.config.json.',
+    '-- prompts/agents/remote/catalog.json.',
     '',
   ];
 
-  const groups = new Map();
   for (const agent of agents) {
-    const key = groupKey(agent);
-    const items = groups.get(key) ?? [];
-    items.push(agent);
-    groups.set(key, items);
-  }
-
-  const sortedKeys = [...groups.keys()].sort((a, b) => {
-    if (a === 'workflow') return -1;
-    if (b === 'workflow') return 1;
-    if (a === 'tool-use') return -1;
-    if (b === 'tool-use') return 1;
-    return a.localeCompare(b);
-  });
-
-  for (const key of sortedKeys) {
-    lines.push(
-      '-- ---------------------------------------------------------------------------',
-    );
-    lines.push(`-- ${groupSectionTitle(key)}`);
-    lines.push(
-      '-- ---------------------------------------------------------------------------',
-    );
+    lines.push(buildInsert(agent));
     lines.push('');
-
-    for (const agent of groups.get(key)) {
-      lines.push(buildInsert(agent));
-      lines.push('');
-    }
   }
 
   lines.push('-- Verify');

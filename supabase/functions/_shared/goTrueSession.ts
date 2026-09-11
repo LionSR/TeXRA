@@ -55,10 +55,10 @@ export async function mintGoTrueSession(
 }
 
 /**
- * Session payload shared by GoTrue-session-minting auth endpoints
- * (auth-github /exchange, /refresh and auth-device /token). Returns a plain
- * object type (not a named interface) so it stays structurally assignable to
- * the `Record<string, unknown>` body parameter of `jsonResponse`.
+ * Session payload returned by the GoTrue-session-minting auth-device /token
+ * route. Returns a plain object type (not a named interface) so it stays
+ * structurally assignable to the `Record<string, unknown>` body parameter of
+ * `jsonResponse`.
  */
 export function sessionResponseBody(session: Session) {
   return {

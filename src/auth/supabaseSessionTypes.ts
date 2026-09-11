@@ -17,7 +17,7 @@ const SupabaseSessionSchema = z.object({
 });
 export type SupabaseSession = z.infer<typeof SupabaseSessionSchema>;
 
-/** Response schema for GitHub token exchange and refresh Edge Functions. */
+/** Response schema for the GoTrue session the auth-device /token route returns. */
 export const GitHubTokenExchangeSchema = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
