@@ -24,6 +24,3 @@ export const TEMP_EXTENSIONS = [
 ];
 
 export const HISTORY_DIR = 'History';
-
-// Default maximum number of reflection rounds for housekeeping operations
-export const DEFAULT_MAX_ROUNDS = 5;

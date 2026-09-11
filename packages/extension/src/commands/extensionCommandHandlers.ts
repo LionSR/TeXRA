@@ -85,7 +85,6 @@ export interface ExtensionCommandActions {
   ): Promise<void>;
   resetMainView(): Promise<void>;
   cleanBuild(): Promise<void>;
-  cleanOutput(): Promise<void>;
   pack(config: PackConfig): Promise<void>;
   clean(config: CleanConfig): Promise<void>;
   compare(
@@ -148,7 +147,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
   ...SETTINGS_TAB_COMMAND_HANDLERS,
   'texra.showDashboard': (actions) => awaitTrue(actions.showSettings()),
   'texra.mainView.reset': (actions) => awaitTrue(actions.resetMainView()),
-  'texra.cleanOutput': (actions) => awaitTrue(actions.cleanOutput()),
   'texra.cleanBuild': (actions) => awaitTrue(actions.cleanBuild()),
   'texra.pack': definedHandler(
     z.tuple([PackConfigSchema]),

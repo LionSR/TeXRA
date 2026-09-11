@@ -55,9 +55,8 @@ export class ProgressWorkflowRunActionsController {
     config: AgentConfig | undefined,
   ): Promise<void> {
     await this.withWorkflowConfig(stream, config, async (config) => {
-      // Round keys are non-negative integers by construction (enforced by
-      // the shared RoundKeySchema at every write into the snapshot store's
-      // accumulator, see `@shared/schemas/roundIndexed.ts`), so this record
+      // Round keys are canonical non-negative integers by construction
+      // (`roundIndexedRecord` in `@shared/schemas/roundIndexed.ts`), so this record
       // already enumerates ascending per the ES2015+ integer-key spec rule;
       // runLatexdiffForRun consumes `outputsByRound` in that order
       // without needing an explicit sort here.

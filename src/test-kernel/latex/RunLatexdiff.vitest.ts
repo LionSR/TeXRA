@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   scanRunDirForOutputs: vi.fn(),
   discoverLatestRunOutputs: vi.fn(),
   runLatexdiffFromMetadata: vi.fn(),
-  runLatexdiffViaWorkspaceScan: vi.fn(),
 }));
 
 vi.mock('@latex/latexdiff/runOutputFiles', () => ({
@@ -30,7 +29,6 @@ vi.mock('@latex/latexdiff/outputDiscovery', () => ({
 
 vi.mock('@latex/latexdiff/diffOperations', () => ({
   runLatexdiffFromMetadata: mocks.runLatexdiffFromMetadata,
-  runLatexdiffViaWorkspaceScan: mocks.runLatexdiffViaWorkspaceScan,
 }));
 
 const { runLatexdiffForRun } = await import('@latex/latexdiff/runLatexdiff');
@@ -73,20 +71,16 @@ describe('runLatexdiffForRun', () => {
     mocks.runLatexdiffFromMetadata.mockReturnValue(
       Effect.succeed(EMPTY_OUTCOME),
     );
-    mocks.runLatexdiffViaWorkspaceScan.mockReturnValue(
-      Effect.succeed(EMPTY_OUTCOME),
-    );
   });
 
   it.effect('uses caller-supplied outputs without any discovery', () =>
     Effect.gen(function* () {
       const rounds = roundMap();
-      const result = yield* runLatexdiffForRun({
+      yield* runLatexdiffForRun({
         ...baseRequest,
         outputsByRound: rounds,
       });
 
-      expect(result.source).toBe('metadata');
       expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalledWith(
         expect.objectContaining({ rounds }),
       );
@@ -106,7 +100,6 @@ describe('runLatexdiffForRun', () => {
           runId: 'abc123',
         });
 
-        expect(result.source).toBe('run-dir-scan');
         expect(result.runId).toBe('abc123');
         expect(mocks.scanRunDirForOutputs).toHaveBeenCalledWith(
           'abc123',
@@ -131,9 +124,9 @@ describe('runLatexdiffForRun', () => {
           runId: 'abc123',
         });
 
-        expect(result.source).toBe('workspace-scan');
+        expect(result.outcome.results).toEqual([]);
         expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
-        expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalled();
+        expect(mocks.runLatexdiffFromMetadata).not.toHaveBeenCalled();
       }),
   );
 
@@ -146,10 +139,9 @@ describe('runLatexdiffForRun', () => {
           runId: 'not-hex!',
         });
 
-        expect(result.source).toBe('workspace-scan');
+        expect(result.outcome.results).toEqual([]);
         expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
         expect(mocks.discoverLatestRunOutputs).not.toHaveBeenCalled();
-        expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalled();
       }),
   );
 
@@ -164,7 +156,6 @@ describe('runLatexdiffForRun', () => {
 
       const result = yield* runLatexdiffForRun({ ...baseRequest });
 
-      expect(result.source).toBe('metadata');
       expect(result.runId).toBe('def456');
       expect(mocks.discoverLatestRunOutputs).toHaveBeenCalledWith(
         runDiscovery,
@@ -180,22 +171,17 @@ describe('runLatexdiffForRun', () => {
     }),
   );
 
+  // Save-as-copy files beside the source are user files, not workflow outputs.
   it.effect(
-    'falls back to a workspace scan when auto-discovery finds nothing',
+    'reports no diff operations when auto-discovery finds nothing',
     () =>
       Effect.gen(function* () {
         mocks.discoverLatestRunOutputs.mockReturnValue(Effect.succeed(null));
 
         const result = yield* runLatexdiffForRun({ ...baseRequest });
 
-        expect(result.source).toBe('workspace-scan');
-        expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalledWith(
-          expect.objectContaining({
-            agent: 'revise',
-            model: 'claude-opus-4-8',
-            inputFile: 'paper.tex',
-          }),
-        );
+        expect(result.outcome.results).toEqual([]);
+        expect(mocks.runLatexdiffFromMetadata).not.toHaveBeenCalled();
       }),
   );
 });
@@ -223,12 +209,11 @@ describe('runLatexdiffForRun diagnostics', () => {
       mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
       const logs = captureLogEntries();
 
-      const result = yield* runLatexdiffForRun({
+      yield* runLatexdiffForRun({
         ...baseRequest,
         runId: 'abc123',
       });
 
-      expect(result.source).toBe('run-dir-scan');
       expect(
         logs.has('DEBUG', 'test', 'Using run-dir scan outputs from run abc123'),
       ).toBe(true);

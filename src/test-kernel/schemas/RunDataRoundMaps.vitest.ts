@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { z } from 'zod';
-import {
-  roundIndexedRecord,
-  RoundKeySchema,
-  RoundNumberSchema,
-} from '@shared/schemas';
+import { roundIndexedRecord, RoundNumberSchema } from '@shared/schemas';
 
 const StringItemSchema = z.string();
 
@@ -15,20 +11,6 @@ describe('round-key/round-number invariant: non-negative safe integers only', ()
     expect(RoundNumberSchema.safeParse(5).success).toBe(true);
     expect(RoundNumberSchema.safeParse(-1).success).toBe(false);
     expect(RoundNumberSchema.safeParse(1.5).success).toBe(false);
-  });
-
-  it.each([
-    { key: '0', data: 0 },
-    { key: '5', data: 5 },
-  ])('RoundKeySchema coerces $key to $data', ({ key, data }) => {
-    expect(RoundKeySchema.safeParse(key)).toMatchObject({
-      success: true,
-      data,
-    });
-  });
-
-  it.each(['-1', '1.5'])('RoundKeySchema rejects %s', (key) => {
-    expect(RoundKeySchema.safeParse(key).success).toBe(false);
   });
 
   it('roundIndexedRecord() accepts non-negative integer keys', () => {

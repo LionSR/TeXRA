@@ -203,13 +203,6 @@
         "icon": "$(mortar-board)"
       },
       {
-        "command": "texra.cleanOutput",
-        "title": "Clean All LLM Output Files (Workspace-wide)",
-        "shortTitle": "Clean LLM Outputs",
-        "category": "TeXRA",
-        "icon": "$(clear-all)"
-      },
-      {
         "command": "texra.cleanBuild",
         "title": "Clean All Build Files (Workspace-wide)",
         "shortTitle": "Clean Build Files",
@@ -589,13 +582,12 @@
           {
             "id": "texra.gettingStarted.housekeeping",
             "title": "Manual path: clean up when you're done",
-            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar or the command palette.\n\n[Clean all outputs](command:texra.walkthroughWorkspaceAction?%5B%22texra.cleanOutput%22%5D) | [Clean build files](command:texra.walkthroughWorkspaceAction?%5B%22texra.cleanBuild%22%5D)",
+            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar or the command palette.\n\n[Clean build files](command:texra.walkthroughWorkspaceAction?%5B%22texra.cleanBuild%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot showing pack and clean buttons in the Progress toolbar"
             },
             "completionEvents": [
-              "onCommand:texra.cleanOutput",
               "onCommand:texra.cleanBuild",
               "onCommand:texra.pack",
               "onCommand:texra.clean"
@@ -653,11 +645,6 @@
           "command": "texra.indentTeX",
           "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@1"
-        },
-        {
-          "command": "texra.cleanOutput",
-          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
-          "group": "navigation@2"
         },
         {
           "command": "texra.cleanBuild",
@@ -760,10 +747,6 @@
         },
         {
           "command": "texra.runSetupAssistant",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.cleanOutput",
           "when": "texra.activated"
         },
         {

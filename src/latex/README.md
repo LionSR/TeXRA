@@ -83,9 +83,7 @@ The files have distinct roles:
   logger and an optional file service, no state);
   `TikzPictureManager.ts` extracts and renders standalone TikZ pictures;
   `acceptedFileTarget.ts` resolves where an
-  accepted/edited file should land and commits the replacement;
-  `mergeFileUtils.ts` parses the `_rN_`-suffixed filenames TeXRA's merge
-  workflow generates.
+  accepted/edited file should land and commits the replacement.
 - **Remote sources** — `arxivIdentifier.ts` normalizes an arXiv ID out of a
   URL or bare string; `arxivProcessor.ts` downloads and unpacks arXiv source
   archives. `overleafProject.ts` is the pure, host-neutral parsing and

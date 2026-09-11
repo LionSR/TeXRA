@@ -3,7 +3,8 @@
  *
  * Resolves which round outputs to diff: preferring caller-supplied metadata,
  * then a run-id-scoped run-dir scan, then agent/model/input auto-discovery —
- * and dispatches to the metadata-driven or workspace-scan diff engine. This is
+ * and runs the metadata-driven diff engine over them. When none resolve, the
+ * run has no diff operations; no workspace filename is parsed instead. This is
  * the single source of truth shared by every host (VS Code command, CLI,
  * desktop); each host keeps only its own UX (progress chrome, prompts, result
  * rendering) and calls this with a {@link DiffProgressReporter}.
@@ -24,10 +25,7 @@ import type {
   RoundIndexed,
 } from '@shared/schemas';
 
-import {
-  runLatexdiffFromMetadata,
-  runLatexdiffViaWorkspaceScan,
-} from './diffOperations';
+import { runLatexdiffFromMetadata } from './diffOperations';
 import { discoverLatestRunOutputs } from './outputDiscovery';
 import {
   scanRunDirForOutputs,
@@ -63,9 +61,6 @@ export function normalizeRunLatexdiffOutputsByRound(
     : null;
 }
 
-/** How the round outputs fed to the diff engine were resolved. */
-type LatexdiffOutputsSource = 'metadata' | 'run-dir-scan' | 'workspace-scan';
-
 export interface RunLatexdiffForRunParams {
   readonly agent: string;
   readonly model: string;
@@ -92,7 +87,6 @@ interface LatexdiffExecutionResult {
   readonly outcome: DiffRunOutcome;
   /** Resolved run, when one was identified. */
   readonly runId?: RunId;
-  readonly source: LatexdiffOutputsSource;
 }
 
 export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
@@ -113,9 +107,6 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
     const runId = params.runId ?? undefined;
 
     let outputsByRound = params.outputsByRound ?? null;
-    let source: LatexdiffOutputsSource = outputsByRound
-      ? 'metadata'
-      : 'workspace-scan';
     let discoveredRunId: RunId | undefined;
 
     // When the caller pins a runId (progress-toolbar invocations do), scope
@@ -134,7 +125,6 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
         );
         if (scanned) {
           outputsByRound = scanned;
-          source = 'run-dir-scan';
           discoveredRunId = parsedRunId.data;
           yield* Effect.logDebug(
             `Using run-dir scan outputs from run ${parsedRunId.data}`,
@@ -161,7 +151,6 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
       );
       if (discovered) {
         outputsByRound = discovered.rounds;
-        source = 'metadata';
         discoveredRunId = discovered.runId;
         yield* Effect.logDebug(
           `Using metadata outputs from run ${discovered.runId}`,
@@ -169,27 +158,21 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
       }
     }
 
-    const rounds = outputsByRound;
-    const outcome = yield* rounds
-      ? runLatexdiffFromMetadata({
-          rounds,
-          mathMarkup,
-          generateBetweenRoundDiffs,
-          latexdiff,
-          progress,
-        })
-      : runLatexdiffViaWorkspaceScan({
-          agent,
-          model,
-          inputFile,
-          outputFiles,
-          mathMarkup,
-          generateBetweenRoundDiffs,
-          latexdiff,
-          progress,
-        });
+    // Hosts report an empty outcome as "no diff operations for this run".
+    if (!outputsByRound) {
+      yield* Effect.logWarning(`No workflow outputs found for ${inputFile}`);
+      return { outcome: { results: [] } };
+    }
 
-    return { outcome, runId: discoveredRunId, source };
+    const outcome = yield* runLatexdiffFromMetadata({
+      rounds: outputsByRound,
+      mathMarkup,
+      generateBetweenRoundDiffs,
+      latexdiff,
+      progress,
+    });
+
+    return { outcome, runId: discoveredRunId };
   },
   // One channel for the whole run, so the discovery steps and the diff engine
   // below both land on the caller's channel.
