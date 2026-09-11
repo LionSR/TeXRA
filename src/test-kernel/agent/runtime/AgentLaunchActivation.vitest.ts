@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
-  getPersistedUserFollowUpSupport: vi.fn(),
   load: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
@@ -28,10 +27,6 @@ vi.mock('@transcript', async (importActual) => ({
   createRunTrace: mocks.createTrace,
 }));
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
-vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
-  getPersistedUserFollowUpSupport: mocks.getPersistedUserFollowUpSupport,
-}));
 vi.mock('@agent/storage/runLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/runLease')>()),
   acquireResumedRunLease: mocks.acquireResumedRunLease,
@@ -52,7 +47,6 @@ import {
 import {
   RUN_OUTCOME,
   RUN_PHASE,
-  USER_FOLLOW_UP_SUPPORT,
   type RunId,
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -224,9 +218,6 @@ describe('native agent launch activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.acquireResumedRunLease.mockResolvedValue('existing');
-    mocks.getPersistedUserFollowUpSupport.mockReturnValue(
-      Effect.succeed(USER_FOLLOW_UP_SUPPORT.UNSUPPORTED),
-    );
   });
 
   it.each([

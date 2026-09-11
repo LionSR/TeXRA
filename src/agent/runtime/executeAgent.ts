@@ -14,10 +14,7 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import {
-  acquireResumedRunOwnership,
-  getPersistedUserFollowUpSupport,
-} from '@agent/storage/runLifecycle';
+import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { getRunRecords } from '@agent/storage/RunKVStore';
 import { assertOwnedRunLease } from '@agent/storage/runLease';
 import { AgentError } from '@common/errors';
@@ -29,7 +26,6 @@ import {
   type RequestEnsureProgressViewPayload,
   type RunOutcome,
   type SubagentProgressUpdate,
-  type UserFollowUpSupport,
 } from '@shared/schemas';
 import {
   AgentCategory,
@@ -326,8 +322,6 @@ export interface SubagentRunOptions {
    * `RunFlowLifecycleOptions.workflowPhase`.
    */
   workflowPhase?: string;
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  userFollowUpSupport?: UserFollowUpSupport;
 }
 
 /** Options for executeAgent. */
@@ -409,8 +403,6 @@ export function executeAgent(
       runId,
       resumed: options.resumed,
       onRunResolved: options.onRunResolved,
-      parentRunId: options.parentRunId,
-      userFollowUpSupport: options.userFollowUpSupport,
       session: options.session,
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
@@ -554,10 +546,7 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     const runSession = options.session;
     const setup = yield* Effect.exit(
       Effect.gen(function* () {
-        const [meta, userFollowUpSupport] = yield* Effect.all([
-          getRunRecords(runSession, resume.runId).readMeta(),
-          getPersistedUserFollowUpSupport(resume.runId, runSession),
-        ]);
+        const meta = yield* getRunRecords(runSession, resume.runId).readMeta();
         const parentRunId = meta?.parentRunId;
         const definition = yield* prepareAgentDefinition({
           config: resume.agentConfig,
@@ -571,8 +560,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
           resumed: true,
           modelHandlerCompatibilityKey:
             resume.shared.modelHandlerCompatibilityKey,
-          parentRunId,
-          userFollowUpSupport,
           session: runSession,
           toolPolicy: {
             approvalPromptsUnavailable: options.approvalPromptsUnavailable,

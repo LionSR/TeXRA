@@ -47,7 +47,6 @@ import {
   aggregateId as qualifyAggregateId,
   type AgentSource,
   type RunId,
-  type UserFollowUpSupport,
 } from '@shared/schemas';
 import {
   AgentCategory,
@@ -108,13 +107,6 @@ interface AgentLaunchInput {
    * launch warnings.
    */
   onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
-  /** The launching run, when this run is a delegated child of another. */
-  parentRunId?: RunId;
-  /** A workflow-script run's resume anchor, stamped on `run.start`
-   *  (decision 9): the checkpoint it journals into. */
-  checkpointId?: string;
-  /** Runtime behavior declared by the launch source, stamped on `run.start`. */
-  userFollowUpSupport?: UserFollowUpSupport;
   /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */

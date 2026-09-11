@@ -308,7 +308,6 @@ export function createNativeSubagentStrategy(
               // This strategy only ever launches child runs: naming the parent
               // is what admits the WAITING result it consumes as a loop turn.
               parentRunId: params.parentRunId,
-              userFollowUpSupport: params.userFollowUpSupport,
               ...(params.runMode === 'single-cycle'
                 ? { stopAfterCycle: true }
                 : {}),
