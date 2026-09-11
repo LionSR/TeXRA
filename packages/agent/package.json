@@ -52,7 +52,7 @@
     "@anthropic-ai/sdk": "^0.124.0",
     "@cantoo/pdf-lib": "^2.9.1",
     "@date-fns/tz": "^1.5.0",
-    "@effect/sql-sqlite-node": "4.0.0-rc.112",
+    "@effect/sql-sqlite-node": "4.0.0-rc.113",
     "@google/genai": "^2.21.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
@@ -117,12 +117,12 @@
     "yaml": "^2.9.0"
   },
   "peerDependencies": {
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.113",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.113",
     "esbuild": "^0.28.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "zod": "^4.4.3"

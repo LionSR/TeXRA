@@ -22,12 +22,12 @@
     "ws": "8.21.3"
   },
   "peerDependencies": {
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.113",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/ws": "8.18.1",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.113",
     "zod": "4.4.3"
   }
 }
