@@ -480,7 +480,6 @@ describe('child run progress events', () => {
               description: 'Cancelled admission',
               config,
               registerFailedMessage: 'registration failed',
-              store: codexThreadsFor,
               startLoop,
               summary: 'unreachable',
               launchedLine: 'unreachable',
@@ -543,7 +542,6 @@ describe('child run progress events', () => {
                 description: 'Fail during synchronous loop setup',
                 config,
                 registerFailedMessage: 'registration failed',
-                store: codexThreadsFor,
                 startLoop: (context) => {
                   childRun = context.childRun;
                   childRunId = context.runId;

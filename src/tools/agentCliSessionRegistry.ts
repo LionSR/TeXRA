@@ -5,15 +5,14 @@ import type { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RunId } from '@shared/schemas';
 
 /**
- * What the registry tracks about one live agent-CLI session: the child run's
- * identity and its follow-up address. Live handles are resolved on demand
+ * What the registry tracks about one live agent-CLI session: its follow-up
+ * address. Live handles are resolved on demand
  * through the session's own {@link RunRegistry}, injected once at
  * construction — entries carry no registry pointer of their own, so an entry
  * can never point across sessions. Provider specifics (codex thread, claude
  * model/permission mode/…) stay with the provider's own loop closure.
  */
 export interface AgentCliSessionEntry {
-  childRunId: RunId;
   runId: RunId;
 }
 

@@ -5,7 +5,7 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { RunRegistry } from '@agent/runtime/runRegistry';
-import type { RunId, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import {
   testRunHandle,
   testRunRegistry,
@@ -19,10 +19,7 @@ describe('AgentCliSessionRegistry', () => {
       Effect.gen(function* () {
         const runs = testRunRegistry();
         const registry = new AgentCliSessionRegistry(runs);
-        const entry = {
-          childStreamId: 'child-a' as RunId,
-          runId: 'run-a' as RunId,
-        };
+        const entry = { runId: 'run-a' as RunId };
 
         try {
           const releaseInitialClaim = registry.claim('session-a');
@@ -91,16 +88,13 @@ describe('AgentCliSessionRegistry', () => {
     const registry = new AgentCliSessionRegistry(runs);
     const runA = 'run-a' as RunId;
     const runB = 'run-b' as RunId;
-    const entry = (runId: RunId, childStreamId: RunId) => ({
-      childStreamId,
-      runId,
-    });
+    const entry = (runId: RunId) => ({ runId });
     const releasePending = registry.claim('pending-session');
 
     try {
-      registry.register('session-a', entry(runA, 'child-a' as RunId));
-      registry.register('session-a-alias', entry(runA, 'child-a' as RunId));
-      registry.register('session-b', entry(runB, 'child-b' as RunId));
+      registry.register('session-a', entry(runA));
+      registry.register('session-a-alias', entry(runA));
+      registry.register('session-b', entry(runB));
 
       registry.releaseByRunId(runA);
 
@@ -119,14 +113,11 @@ describe('AgentCliSessionRegistry', () => {
     const runId = 'run-in-flight' as RunId;
     const interrupt = vi.fn();
     const registry = new AgentCliSessionRegistry({
-      getAgentHandleByStream: () => ({ interrupt }),
+      getHandle: () => ({ interrupt }),
     } as unknown as RunRegistry);
     const releaseClaim = registry.claim('reserved-session');
 
-    registry.trackInFlight({
-      childStreamId: 'child-in-flight' as RunId,
-      runId,
-    });
+    registry.trackInFlight({ runId });
 
     expect(registry.lookup('reserved-session')).toBeUndefined();
     registry.interruptAll();
@@ -145,17 +136,15 @@ describe('AgentCliSessionRegistry', () => {
     const interruptB = vi.fn();
 
     const handleA = testRunHandle({
-      runId: 'run-a',
-      parentStreamId: 'parent-a' as RunId,
-      childStreamId: 'child-a' as RunId,
+      runId: 'run-a' as RunId,
+      parent: 'parent-a' as RunId,
       agent: 'codex',
     });
     handleA.attachInterruptHandler({ interrupt: interruptA });
     runs.track(handleA);
     const handleB = testRunHandle({
-      runId: 'run-b',
-      parentStreamId: 'parent-b' as RunId,
-      childStreamId: 'child-b' as RunId,
+      runId: 'run-b' as RunId,
+      parent: 'parent-b' as RunId,
       agent: 'claude',
     });
     handleB.attachInterruptHandler({ interrupt: interruptB });
@@ -163,14 +152,8 @@ describe('AgentCliSessionRegistry', () => {
 
     try {
       registry.claim('pending-session');
-      registry.register('session-a', {
-        childStreamId: 'child-a' as RunId,
-        runId: 'run-a' as RunId,
-      });
-      registry.register('session-b', {
-        childStreamId: 'child-b' as RunId,
-        runId: 'run-b' as RunId,
-      });
+      registry.register('session-a', { runId: 'run-a' as RunId });
+      registry.register('session-b', { runId: 'run-b' as RunId });
 
       registry.interruptAll();
 

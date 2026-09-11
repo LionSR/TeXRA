@@ -158,7 +158,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       labels,
     );
 
-    const result = yield* submitFollowUp(stored.childRunId, prompt, {
+    const result = yield* submitFollowUp(stored.runId, prompt, {
       session: params.session,
     });
     if (result.status === 'failed') {
@@ -576,12 +576,12 @@ export function startAgentCliLoop<TTurn>(
       onTurnError,
       loopFailedMessage,
     } = params;
-    const { childRunId, logger } = childRun;
+    const { logger } = childRun;
     const registry = store(params.session);
 
     // The one entry this loop registers and tracks: the child run's identity
     // and follow-up address. Live handles are resolved by the registry itself.
-    const target: AgentCliSessionEntry = { childRunId, runId };
+    const target: AgentCliSessionEntry = { runId };
 
     // Fresh and resumed session/thread ids are registered after the first
     // successful turn is persisted, immediately before its result reaches the
