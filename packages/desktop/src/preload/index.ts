@@ -32,8 +32,3 @@ installElectronHostBridge({
     ),
   sendToMain: (channel, message) => ipcRenderer.send(channel, message),
 });
-
-// Host marker only: `BaseWebviewApp.isDesktopHost` reads its presence. The
-// open projects and the one this window shows arrive over the bridge
-// (`desktopProjectMessages.ts`), not through preload arguments.
-contextBridge.exposeInMainWorld('texraDesktop', {});

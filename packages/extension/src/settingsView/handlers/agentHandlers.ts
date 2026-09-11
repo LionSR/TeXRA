@@ -25,7 +25,7 @@ import {
   templateAgentNamePrompt,
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
-import type { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
+import { getRemoteAgentPromptConfig } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
@@ -57,7 +57,6 @@ import {
 export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
   private readonly directoryController: SettingsAgentDirectoryController;
-  private readonly remotePromptController: SettingsRemoteAgentPromptController;
   private readonly roster: AgentRosterController;
   private readonly agentActions;
   private readonly activeCustomAgentDeletions = new Set<string>();
@@ -78,7 +77,6 @@ export class AgentHandlers {
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.roster = controllers.roster;
-    this.remotePromptController = controllers.remotePromptController;
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),
@@ -200,9 +198,7 @@ export class AgentHandlers {
       this.ctx,
       'Failed to view remote agent prompt',
       async () => {
-        const result = await this.remotePromptController.getPromptConfig(
-          data.agentName,
-        );
+        const result = await getRemoteAgentPromptConfig(data.agentName);
         if (!result.ok) {
           await showLoggedMessage(this.ctx.channel, result.message);
           return;

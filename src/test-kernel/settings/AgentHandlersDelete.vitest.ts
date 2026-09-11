@@ -68,7 +68,7 @@ vi.mock('@controllers/settingsView/SettingsTeamRosterController', () => ({
 vi.mock(
   '@controllers/settingsView/SettingsRemoteAgentPromptController',
   () => ({
-    SettingsRemoteAgentPromptController: class {},
+    getRemoteAgentPromptConfig: vi.fn(),
   }),
 );
 vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({

@@ -235,13 +235,15 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
   });
 
-  it('stores submitted keys before refreshing profile and model data', async () => {
-    const fixture = await createFixture();
+  it('stores prompted keys before refreshing profile and model data', async () => {
+    const fixture = await createFixture({
+      promptInput: '  sk-google-secret  ',
+    });
 
     await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
       command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
       provider: 'google',
-      apiKey: '  sk-google-secret  ',
+      apiKey: undefined,
     });
 
     expect(await fixture.secrets.get('apiKey.google')).toBe('sk-google-secret');
@@ -299,12 +301,12 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   ] as const)(
     'invalidates and refreshes %s subscription usage after a key change',
     async (provider, usageProvider) => {
-      const fixture = await createFixture();
+      const fixture = await createFixture({ promptInput: 'new-secret' });
 
       await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
         command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
         provider,
-        apiKey: 'new-secret',
+        apiKey: undefined,
       });
 
       expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
