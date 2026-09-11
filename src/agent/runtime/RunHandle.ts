@@ -138,7 +138,7 @@ export class RunHandle<
   constructor(
     /**
      * The run's birth facts, the same object its `run.start` published and its
-     * terminal `result` reports. Held whole rather than copied field by field,
+     * `run.end` row closes. Held whole rather than copied field by field,
      * so the handle and the event plane cannot describe the run differently.
      */
     readonly run: RunFacts,
