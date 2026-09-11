@@ -225,9 +225,117 @@ describe('Anthropic tool conversion', () => {
       ['question', 'thread_id'],
     );
   });
+
+  it('emits valid object input schemas for the first CLI chat tools', () => {
+    const definitions = [
+      new BashTool().definition,
+      new ReadFileTool().definition,
+      new WriteFileTool().definition,
+      new EditFileTool().definition,
+      new GlobTool().definition,
+      new GrepTool().definition,
+    ];
+
+    const tools = toAnthropicTools(definitions);
+    const customTools = tools.flatMap((tool) =>
+      'type' in tool
+        ? []
+        : [
+            tool as unknown as {
+              name: string;
+              input_schema: Record<string, unknown>;
+            },
+          ],
+    );
+
+    expect(customTools.map((tool) => tool.name)).toContain('grep');
+    for (const tool of customTools) {
+      expect(tool.input_schema?.type, tool.name).toBe('object');
+    }
+  });
+});
+
+describe('Crossref provider schema compatibility', () => {
+  it('accepts flattened fields from the inactive command branch', () => {
+    const schema = new CrossrefSearchTool().definition.zodSchema;
+
+    expect(
+      schema?.safeParse({
+        command: 'search',
+        query: 'attention',
+        doi: '10.1000/ignored',
+      }).success,
+    ).toBe(true);
+    expect(
+      schema?.safeParse({
+        command: 'doi',
+        doi: '10.1000/example',
+        query: 'ignored',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('still requires the selected branch and rejects unknown fields', () => {
+    const schema = new CrossrefSearchTool().definition.zodSchema;
+
+    expect(schema?.safeParse({ command: 'search' }).success).toBe(false);
+    expect(schema?.safeParse({ command: 'doi' }).success).toBe(false);
+    expect(
+      schema?.safeParse({
+        command: 'search',
+        query: 'attention',
+        unknown: true,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('toOpenAITools additional coverage', () => {
+  it('leaves Chat Completions function tools non-strict', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'delegate_workflow',
+        description: 'Delegate workflow',
+        parameters: {
+          type: 'object',
+          properties: { instruction: { type: 'string' } },
+          required: ['instruction'],
+          additionalProperties: false,
+        },
+      },
+    ];
+
+    const tools = toOpenAITools(defs);
+    expect(tools.length).toBe(1);
+    expect(tools[0].type).toBe('function');
+    expect(tools[0].function.name).toBe('delegate_workflow');
+    expect(tools[0].function.strict).toBe(undefined);
+  });
 });
 
 describe('toOpenAIResponseTools', () => {
+  it('converts tool definitions to Response API format', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'echo',
+        description: 'Echo value',
+        parameters: {
+          type: 'object',
+          properties: { value: { type: 'string' } },
+          required: ['value'],
+          additionalProperties: false,
+        },
+      },
+    ];
+
+    const tools = toOpenAIResponseTools(defs);
+    expect(tools.length).toBe(1);
+    const tool = tools[0] as FunctionTool;
+    expect(tool.type).toBe('function');
+    expect(tool.name).toBe('echo');
+    expect(tool.parameters).toStrictEqual(defs[0].parameters);
+  });
+
   // web_search collapses to the native WebSearchTool when (and only when) the
   // model supports it, regardless of whether function calling is also enabled.
   it.each([
@@ -322,6 +430,11 @@ describe('toGoogleTools', () => {
   // NOTE: Native googleSearch is disabled because Google's regular content
   // generation API does NOT support combining googleSearch with functionDeclarations.
   // This is a Live API only feature. All tools are converted to function declarations.
+
+  it('returns empty array for empty input', () => {
+    const tools = toGoogleTools([]);
+    expect(tools).toStrictEqual([]);
+  });
 
   // Every tool (including web_search) becomes a function declaration wrapped in a
   // single Tool object; native googleSearch is never emitted.
@@ -585,6 +698,27 @@ describe('toGoogleTools', () => {
       );
     },
   );
+
+  it.each([
+    'contains',
+    'if',
+    'then',
+    'else',
+    'dependentSchemas',
+    'prefixItems',
+  ])('rejects the unsupported Google %s keyword', (keyword) => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'unsupported_input',
+        parameters: {
+          type: 'object',
+          properties: {
+            value: { type: 'array', [keyword]: { type: 'string' } },
+          },
+        },
+      }),
+    ).toThrow(`Google tool schemas do not support the "${keyword}" keyword.`);
+  });
 
   it('rejects array-valued Google schema types', () => {
     expect(() =>

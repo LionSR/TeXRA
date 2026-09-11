@@ -107,6 +107,23 @@ describe('arXiv processor logger channel', () => {
       ).toBe(true);
     }).pipe(withDiagnostics),
   );
+
+  it.effect('logs extraction failures on the owner channel', () =>
+    Effect.gen(function* () {
+      const logs = captureLogEntries();
+      const dir = yield* Effect.promise(() =>
+        makeTempDir('texra-arxiv-', tempDirs),
+      );
+      const missingTar = path.join(dir, 'missing.tar');
+
+      const fallback = yield* ArxivProcessor.extractTarFile(missingTar, dir);
+
+      expect(fallback.success).toBe(false);
+      expect(
+        logs.has('ERROR', 'arxivProcessor', 'Failed to extract tar file'),
+      ).toBe(true);
+    }).pipe(withDiagnostics),
+  );
 });
 
 describe('arXiv source download filenames', () => {

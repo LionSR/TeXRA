@@ -97,3 +97,24 @@ describe('bundled prompt loader', () => {
 // haven't wired the bundle (tests, partial wiring, file-read errors). Drift
 // between the two paths would silently disable the completion-audit
 // discipline. Both must render the same template.
+describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
+  it('continuation template in YAML is fully reflected in the inline fallback', () => {
+    const loader = readFileSync(
+      resolve(REPO_ROOT, 'src/agent/runtime/bundledPrompts.ts'),
+      'utf8',
+    );
+
+    // The fallback is built from string-array `.join('\n')` literals, so
+    // we can't compare full bytes. Instead require that every non-trivial
+    // line of the YAML template appears verbatim in the loader source.
+    const lines = goalYaml.continuation.template
+      .split('\n')
+      .filter((l) => l.trim().length >= 4);
+    for (const line of lines) {
+      expect(
+        loader,
+        `Inline fallback in bundledPrompts.ts is missing this continuation line — update both files in lockstep:\n  ${line}`,
+      ).toContain(line);
+    }
+  });
+});

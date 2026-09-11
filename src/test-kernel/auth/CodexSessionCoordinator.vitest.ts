@@ -155,6 +155,28 @@ function makeCoordinator(
 }
 
 describe('CodexSessionCoordinator', () => {
+  it.effect('reports signed-out with no stored session', () =>
+    Effect.gen(function* () {
+      const coordinator = makeCoordinator(memoryStorage());
+      expect(yield* Effect.promise(() => coordinator.getStatus())).toEqual({
+        signedIn: false,
+      });
+    }),
+  );
+
+  it.effect(
+    'reports signed-in with email/account from the stored session',
+    () =>
+      Effect.gen(function* () {
+        const coordinator = makeCoordinator(memoryStorage(session()));
+        expect(yield* Effect.promise(() => coordinator.getStatus())).toEqual({
+          signedIn: true,
+          email: 'user@example.com',
+          accountId: 'acct-0',
+        });
+      }),
+  );
+
   it.effect('does not refresh a token outside the 5-minute buffer', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(
@@ -584,4 +606,49 @@ describe('CodexSessionCoordinator', () => {
       });
     }),
   );
+
+  it('builds an authorize request with the required PKCE + Codex params', () => {
+    const coordinator = makeCoordinator(memoryStorage());
+    const req = coordinator.buildAuthorizeRequest(1455);
+    const url = new URL(req.url);
+    expect(url.origin + url.pathname).toBe(
+      'https://auth.openai.com/oauth/authorize',
+    );
+    expect(url.searchParams.get('client_id')).toBe(
+      'app_EMoamEEZ73f0CkXaXp7hrann',
+    );
+    expect(url.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:1455/auth/callback',
+    );
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(url.searchParams.get('originator')).toBe('texra');
+    expect(url.searchParams.get('state')).toBe(req.state);
+    expect(req.verifier.length).toBeGreaterThan(0);
+  });
+
+  it.effect('signs out by deleting the stored session', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(session());
+      const coordinator = makeCoordinator(storage);
+      yield* Effect.promise(() => coordinator.signOut());
+      expect(storage.peek()).toBeUndefined();
+    }),
+  );
+});
+
+describe('codexAccountLabel', () => {
+  it('prefers the email, then the account id, then a descriptive fallback', () => {
+    expect(
+      codexAccountLabel({ email: 'person@example.com', accountId: 'acct-1' }),
+    ).toBe('person@example.com');
+    expect(codexAccountLabel({ accountId: 'acct-1' })).toBe('acct-1');
+    expect(codexAccountLabel({})).toBe('your ChatGPT account');
+  });
+
+  it('treats a null wire payload the same as an absent one', () => {
+    expect(codexAccountLabel({ email: null, accountId: null })).toBe(
+      'your ChatGPT account',
+    );
+    expect(codexAccountLabel(null)).toBe('your ChatGPT account');
+  });
 });
