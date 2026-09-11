@@ -36,9 +36,9 @@ export class LogList extends LitElement {
   @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
 
-  private static readonly MAX_CACHED_STREAMS = 5;
+  private static readonly MAX_CACHED_RUNS = 5;
   private readonly runCache = new LRUCache<RunId, CachedRun>({
-    max: LogList.MAX_CACHED_STREAMS,
+    max: LogList.MAX_CACHED_RUNS,
   });
   private activeRunId: RunId | null = null;
   private shouldScrollToBottom = false;

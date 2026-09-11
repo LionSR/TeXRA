@@ -15,11 +15,14 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   runIdentityDisplayName,
+  type CompileFailure,
   type FoldInput,
+  type OutputFileInfo,
   type StreamLogEntry,
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
+
 import { projectTranscriptRow, type TranscriptRow } from '@shared/transcript';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -28,11 +31,13 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
+
 import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import {
   workflowRunModel,
   type ChildRunProgress,
 } from '@shared/runs/workflowRunModel';
+import { createExternalLocation } from '@utils/files/fileLocation';
 
 import {
   CHILD,
@@ -56,6 +61,16 @@ function runView(view: SessionView, id: RunId): RunView {
   const found = view.runs.get(id);
   if (!found) throw new Error(`run ${id} missing from the view`);
   return found;
+}
+
+/** The three round-keyed maps of a tool-use run, which holds its output
+ *  files in `outputs` (a workflow run holds them in `files`). */
+function roundMapsOf(view: SessionView, id: RunId) {
+  const run = runView(view, id);
+  if (run.category !== AgentCategory.ToolUse)
+    throw new Error(`run ${id} is not a tool-use run`);
+  const { outputs, missingOutputs, compileFailures } = run;
+  return { outputs, missingOutputs, compileFailures };
 }
 
 /** Full replay through the production reducer (the resync path). */
@@ -587,6 +602,184 @@ describe('sessionFold', () => {
     });
     expect(listed.cursor).toBe(5);
     expect(listed.runs.has(ROOT)).toBe(true);
+  });
+
+  it('takes the run total from the newest cumulative usage row, on a cold read and on replay', () => {
+    // `usage` is a latest-only listing key, so a cold read hands the fold one
+    // row per run. Each row therefore carries the run's cumulative totals,
+    // and the fold replaces rather than accumulates.
+    const log = new Log();
+    const start = log.emit(CHILD, 2000, {
+      type: 'run.start',
+      identity: CHILD_IDENTITY,
+      userFollowUpSupport: 'unsupported',
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      parent: null,
+    });
+    const rounds = [
+      { inputTokens: 100, outputTokens: 10, cost: 0.01 },
+      { inputTokens: 300, outputTokens: 25, cost: 0.03 },
+      { inputTokens: 600, outputTokens: 45, cost: 0.06 },
+    ].map((usage, index) =>
+      log.emit(CHILD, 2010 + index, { type: 'usage', runId: CHILD, usage }),
+    );
+    const total = {
+      inputTokens: 600,
+      outputTokens: 45,
+      cost: 0.06,
+      cacheReadInputTokens: 0,
+      cacheMissInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      reasoningTokens: 0,
+    };
+
+    // The cold listing read: start plus the newest usage row.
+    const listing = foldAll([
+      { _tag: 'event', read: 'listing', event: start },
+      { _tag: 'event', read: 'listing', event: rounds[2]! },
+    ]);
+    expect(runView(listing, CHILD).usage).toStrictEqual(total);
+
+    // The aggregate replay then brings all three rows back. The total is the
+    // newest row: not 1000 (the three rows summed onto the listing row), and
+    // not 300 (the row a delta-shaped publisher would have left last).
+    const replayed = foldAll(
+      rounds.map((event) => ({ _tag: 'event', read: 'aggregate', event })),
+      listing,
+    );
+    expect(runView(replayed, CHILD).usage).toStrictEqual(total);
+
+    // And a replay with no listing read in front reaches the same total.
+    const fromScratch = foldAll([
+      { _tag: 'event', read: 'aggregate', event: start },
+      ...rounds.map((event) => ({
+        _tag: 'event' as const,
+        read: 'aggregate' as const,
+        event,
+      })),
+    ]);
+    expect(runView(fromScratch, CHILD).usage).toStrictEqual(total);
+  });
+
+  it('takes each round map from the newest row, on a cold read and on replay', () => {
+    // `addOutputFiles`, `updateMissingOutputs` and `updateCompileFailures`
+    // are latest-only listing keys, so a cold read hands the fold one row of
+    // each per run. Every row therefore carries the run's whole round map
+    // (`OutputState`), and the fold replaces rather than merges.
+    const log = new Log();
+    const start = log.emit(CHILD, 3000, {
+      type: 'run.start',
+      identity: CHILD_IDENTITY,
+      userFollowUpSupport: 'unsupported',
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      parent: null,
+    });
+    const outputOf = (round: number): OutputFileInfo => ({
+      source: `paper_r${round}.tex`,
+      location: createExternalLocation(`/tmp/paper_r${round}.tex`),
+      round,
+      lineage: null,
+      diff: null,
+    });
+    const failureOf = (round: number): CompileFailure => ({
+      round,
+      displayName: `paper_r${round}.tex`,
+      output: createExternalLocation(`/tmp/paper_r${round}.tex`),
+      log: createExternalLocation(`/tmp/paper_r${round}.log`),
+      logRelativePath: `compile/r${round}.log`,
+    });
+    const firstRound = [
+      log.emit(CHILD, 3010, {
+        type: 'addOutputFiles',
+        filesByRound: { 0: [outputOf(0)] },
+      }),
+      log.emit(CHILD, 3011, {
+        type: 'updateMissingOutputs',
+        filesByRound: { 0: ['intro.tex'] },
+      }),
+      log.emit(CHILD, 3012, {
+        type: 'updateCompileFailures',
+        filesByRound: { 0: [failureOf(0)] },
+      }),
+    ];
+    // The second round republishes the run's whole map, the first round
+    // included; round 1 compiled cleanly and produced no missing outputs.
+    const secondRound = [
+      log.emit(CHILD, 3020, {
+        type: 'addOutputFiles',
+        filesByRound: { 0: [outputOf(0)], 1: [outputOf(1)] },
+      }),
+      log.emit(CHILD, 3021, {
+        type: 'updateMissingOutputs',
+        filesByRound: { 0: ['intro.tex'], 1: [] },
+      }),
+      log.emit(CHILD, 3022, {
+        type: 'updateCompileFailures',
+        filesByRound: { 0: [failureOf(0)], 1: [] },
+      }),
+    ];
+    const bothRounds = {
+      // An empty round is not a round the outputs tab shows, so a compile
+      // failure map drops it; a missing-output map keeps it, where it means
+      // "checked, nothing missing".
+      outputs: { 0: [outputOf(0)], 1: [outputOf(1)] },
+      missingOutputs: { 0: ['intro.tex'], 1: [] },
+      compileFailures: { 0: [failureOf(0)] },
+    };
+
+    // The cold listing read: the start plus the newest row of each type.
+    const listing = foldAll([
+      { _tag: 'event', read: 'listing', event: start },
+      ...secondRound.map((event) => ({
+        _tag: 'event' as const,
+        read: 'listing' as const,
+        event,
+      })),
+    ]);
+    expect(roundMapsOf(listing, CHILD)).toStrictEqual(bothRounds);
+
+    // The aggregate replay then brings the first round's rows back under the
+    // listing row; the commit guard drops them and the map stands.
+    const replayed = foldAll(
+      firstRound.map((event) => ({
+        _tag: 'event' as const,
+        read: 'aggregate' as const,
+        event,
+      })),
+      listing,
+    );
+    expect(roundMapsOf(replayed, CHILD)).toStrictEqual(bothRounds);
+
+    // And a replay with no listing read in front reaches the same maps.
+    const fromScratch = foldAll(
+      [start, ...firstRound, ...secondRound].map((event) => ({
+        _tag: 'event' as const,
+        read: 'aggregate' as const,
+        event,
+      })),
+    );
+    expect(roundMapsOf(fromScratch, CHILD)).toStrictEqual(bothRounds);
+
+    // A row is the map, so a round it does not name is not in the run's
+    // state: the newest row replaces what the view holds, never merges.
+    const dropped = foldAll(
+      [
+        log.emit(CHILD, 3030, {
+          type: 'addOutputFiles',
+          filesByRound: { 1: [outputOf(1)] },
+        }),
+      ].map((event) => ({
+        _tag: 'event' as const,
+        read: 'all' as const,
+        event,
+      })),
+      fromScratch,
+    );
+    expect(roundMapsOf(dropped, CHILD).outputs).toStrictEqual({
+      1: [outputOf(1)],
+    });
   });
 
   it('folds transcript rows only for subscribed aggregates and evicts them on unsubscribe', () => {

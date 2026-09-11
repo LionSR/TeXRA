@@ -3,8 +3,8 @@ import * as path from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
 
 import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
-import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import {
@@ -38,6 +38,7 @@ import {
   extractFilenameHeaderDocuments,
   normalizeDocumentName,
 } from './extraction/filenameHeaders';
+import { reportMissingOutputs, type OutputState } from './outputState';
 
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
 async function writeRoundOutput(
@@ -75,6 +76,9 @@ export class XmlOutputManager {
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentTrace,
     private readonly fileService: TaskRunFileService,
+    /** The run's round map: a missing-output report records the round and
+     *  publishes the whole map, since the fact is a latest-only listing row. */
+    private readonly outputState: OutputState,
   ) {}
 
   private extractMultipleDocumentsByRegex(
@@ -119,7 +123,7 @@ export class XmlOutputManager {
       (_, i) => `<unextracted document ${i + 1}>`,
     );
 
-    reportMissingOutputs(this.logger, {
+    reportMissingOutputs(this.outputState, this.logger, {
       round,
       missing,
       xmlFile: outputLocation.absolutePath,
@@ -140,7 +144,7 @@ export class XmlOutputManager {
     );
     if (missing.length === 0) return;
 
-    reportMissingOutputs(this.logger, {
+    reportMissingOutputs(this.outputState, this.logger, {
       round,
       missing,
       xmlFile: outputLocation.absolutePath,
@@ -205,7 +209,7 @@ export class XmlOutputManager {
       .map((file) => file.name)
       .filter((name) => !matchedNames.has(name));
     if (unmatchedFiles.length > 0) {
-      reportMissingOutputs(this.logger, {
+      reportMissingOutputs(this.outputState, this.logger, {
         round,
         missing: unmatchedFiles,
         xmlFile: outputLocation.absolutePath,

@@ -6,17 +6,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
+import { emptySessionView } from '@shared/session/sessionView';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
   readConversation: vi.fn(),
-  readMeta: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
   getRunRecords: vi.fn(() => ({
     readConfig: () => Effect.promise(() => mocks.readConfig()),
-    readMeta: () => Effect.promise(() => mocks.readMeta()),
   })),
 }));
 
@@ -39,8 +38,15 @@ vi.mock('@transcript', () => ({
 // Imported after vi.mock so the mocked dependency is in place.
 import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
 
+// The run itself comes from the session's cold fold; these cases are about
+// the config/conversation triple, so the view holds no run.
+const session = {
+  readView: (_runIds: readonly RunId[]) =>
+    Effect.succeed(emptySessionView('export-test')),
+} as SessionHandle;
+
 const loadChatExportInput = (id: RunId) =>
-  Effect.runPromise(loadChatExportInputEffect(id, {} as SessionHandle));
+  Effect.runPromise(loadChatExportInputEffect(id, session));
 
 const config = {
   agent: 'correct',
@@ -61,7 +67,6 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
   beforeEach(() => {
     mocks.readConfig.mockResolvedValue(null);
     mocks.readConversation.mockResolvedValue(null);
-    mocks.readMeta.mockResolvedValue(null);
   });
 
   it('normalizes a stored-but-empty conversation array to null, matching "no conversation"', async () => {

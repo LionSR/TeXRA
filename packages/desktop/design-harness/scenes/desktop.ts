@@ -1,5 +1,5 @@
 // Desktop scenes: the real rail, workbench, and pane templates over folded
-// SessionViews (one per project), never hand-built stream fixtures. Screenshots
+// SessionViews (one per project), never hand-built run fixtures. Screenshots
 // of these are the verification for the desktop boards.
 import { html, nothing, type TemplateResult } from 'lit';
 
@@ -56,8 +56,8 @@ function runningOnlyView(): SessionView {
 
 /**
  * The fan-out with a chat on `search`: the shared fixture carries no
- * transcript rows on a tool-use stream, and the desktop boards show that
- * stream's conversation, so the child gets a user turn, two tool rows, and
+ * transcript rows on a tool-use run, and the desktop boards show that
+ * run's conversation, so the child gets a user turn, two tool rows, and
  * the reply, all before its bash approval.
  */
 function withConversation(): SessionView {
@@ -195,11 +195,11 @@ const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
   >`;
 
 /** The conversation pane as `main.ts` composes it: the desktop header row,
- *  then the one conversation shell's pieces for the selected stream. */
+ *  then the one conversation shell's pieces for the selected run. */
 const conversationPane = (
   projects: readonly RailProject[],
   active: RailProject,
-  stream: RunView | undefined,
+  run: RunView | undefined,
   body: TemplateResult | typeof nothing,
   options: { chip?: boolean; dock?: boolean } = {},
 ) =>
@@ -225,7 +225,7 @@ const conversationPane = (
             : html`<div class="h-dock">
                 <session-composer
                   compact
-                  .stream=${stream ?? null}
+                  .run=${run ?? null}
                   .surface=${active.surface}
                 ></session-composer>
                 ${conversationDockTemplate()}
@@ -235,11 +235,11 @@ const conversationPane = (
     </div>
   </main>`;
 
-/** What `progress-app` puts in the column for a selected stream: its header
+/** What `progress-app` puts in the column for a selected run: its header
  *  (label, ancestors path, status) over its transcript. */
-const transcriptBody = (project: RailProject, stream: RunView) =>
-  html`<stream-header .stream=${stream} .view=${project.view}></stream-header>
-    <log-list .stream=${stream} .surface=${project.surface}></log-list>`;
+const transcriptBody = (project: RailProject, run: RunView) =>
+  html`<run-header .run=${run} .view=${project.view}></run-header>
+    <log-list .run=${run} .surface=${project.surface}></log-list>`;
 
 const pdfPane = createPdfPane();
 const tab = (
@@ -285,7 +285,7 @@ function sceneDesktopProjects(): TemplateResult {
     project(CT, runningOnlyView()),
     project(TN, fanOutView()),
   ];
-  const stream = lp.view.runs.get(CHILD);
+  const run = lp.view.runs.get(CHILD);
   const tabs = [
     tab('pdf', 'main.pdf', '/paper/main.pdf'),
     tab('editor', 'section2.tex', '/paper/section2.tex'),
@@ -297,8 +297,8 @@ function sceneDesktopProjects(): TemplateResult {
     conversationPane(
       projects,
       lp,
-      stream,
-      stream ? transcriptBody(lp, stream) : nothing,
+      run,
+      run ? transcriptBody(lp, run) : nothing,
     ),
     workbench(lp.display.key, tabs, tabs[0].id, pdfPane.frameFor(tabs[0])),
   );
@@ -309,15 +309,15 @@ function sceneDesktopProjects(): TemplateResult {
 function sceneDesktopOneProject(): TemplateResult {
   const lp = project(LP, withConversation(), CHILD);
   const projects = [lp];
-  const stream = lp.view.runs.get(CHILD);
+  const run = lp.view.runs.get(CHILD);
   return desktopFrame(
     '288px minmax(0,1fr)',
     rail(projects, shellOf('LP', ['LP'])),
     conversationPane(
       projects,
       lp,
-      stream,
-      stream ? transcriptBody(lp, stream) : nothing,
+      run,
+      run ? transcriptBody(lp, run) : nothing,
     ),
   );
 }
@@ -357,7 +357,7 @@ function sceneDesktopNarrow(): TemplateResult {
     project(CT, runningOnlyView()),
     project(TN, fanOutView()),
   ];
-  const stream = lp.view.runs.get(CHILD);
+  const run = lp.view.runs.get(CHILD);
   return html`<div
     class="h-desktop"
     id="frame"
@@ -367,8 +367,8 @@ function sceneDesktopNarrow(): TemplateResult {
     ${conversationPane(
       projects,
       lp,
-      stream,
-      stream ? transcriptBody(lp, stream) : nothing,
+      run,
+      run ? transcriptBody(lp, run) : nothing,
     )}
   </div>`;
 }
@@ -382,7 +382,7 @@ function sceneDesktopSubagents(): TemplateResult {
     project(CT, runningOnlyView()),
     project(TN, fanOutView()),
   ];
-  const stream = lp.view.runs.get(CHILD);
+  const run = lp.view.runs.get(CHILD);
   const root = lp.view.runs.get(ROOT);
   const tabs = [
     tab('subagents', `Subagents · ${root?.rollup.total ?? 0}`),
@@ -394,8 +394,8 @@ function sceneDesktopSubagents(): TemplateResult {
     conversationPane(
       projects,
       lp,
-      stream,
-      stream ? transcriptBody(lp, stream) : nothing,
+      run,
+      run ? transcriptBody(lp, run) : nothing,
     ),
     workbench(
       lp.display.key,
@@ -419,18 +419,18 @@ function sceneDesktopRun(): TemplateResult {
   );
   const co = project(CO, view, rootId ?? null);
   const projects = [co, project(LP, fanOutView())];
-  const stream = rootId ? view.runs.get(rootId) : undefined;
+  const run = rootId ? view.runs.get(rootId) : undefined;
   return desktopFrame(
     '288px minmax(0,1fr)',
     rail(projects, shellOf('CO', ['CO', 'LP'])),
     conversationPane(
       projects,
       co,
-      stream,
-      stream?.category === 'workflow'
+      run,
+      run?.category === 'workflow'
         ? html`<workflow-run-board
             summary
-            .stream=${stream}
+            .run=${run}
             .view=${view}
             .surface=${co.surface}
             .nowMs=${BOARD_NOW}

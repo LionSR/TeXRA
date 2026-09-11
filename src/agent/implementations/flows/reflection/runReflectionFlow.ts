@@ -152,7 +152,13 @@ export async function runReflectionFlow(
   ).map((file) => fileService.locateSource(file));
 
   const outputState = createOutputState();
-  const xmlManager = new XmlOutputManager(config, logger, fileService);
+  const xmlManager = new XmlOutputManager(
+    config,
+    logger,
+    fileService,
+    outputState,
+  );
+
   const diffManager = new LatexDiffManager(
     setting.isRewrite,
     () => getOutputFilesByRound(outputState),

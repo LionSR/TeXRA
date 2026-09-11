@@ -10,8 +10,15 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { roundsToPersisted, setCompileFailures } from '../output/outputState';
+import {
+  ensureRoundData,
+  getCompileFailuresByRound,
+  getOutputFilesByRound,
+  roundsToPersisted,
+  setCompileFailures,
+} from '../output/outputState';
 import { compileFailuresOf, runCompileCheck } from '../output/compileCheck';
+
 import { extractFilesFromXml } from '../output/outputFileExtraction';
 import { traceFileLineage } from '../output/lineageMapping';
 import { resolveBaseFilesForDiff } from '../output/snapshotResolution';
@@ -175,12 +182,12 @@ export class OutputNode extends BaseNode<
       summary = { fileInfos: [], filesToOpen: [] };
     }
 
-    outputState.rounds.set(currentRound, {
-      round: currentRound,
-      rawOutput: null,
-      outputs: [],
-      compileFailures: [],
-    });
+    // Drop what this round produced, keeping what was already reported
+    // missing for it: `post` republishes the run's whole map from here.
+    const roundData = ensureRoundData(outputState, currentRound);
+    roundData.rawOutput = null;
+    roundData.outputs = [];
+    roundData.compileFailures = [];
 
     return {
       summary,
@@ -202,14 +209,23 @@ export class OutputNode extends BaseNode<
     const { summary } = execRes;
     const compileFailures = compileFailuresOf(execRes.compileResult);
 
-    // Emit output files event
+    // Both facts are latest-only listing rows: a cold fold keeps just the
+    // newest row of each type per run, so each row carries the run's whole
+    // round map rather than the round that just finished. The current round
+    // rides the summary, which a fallback round may have dropped from state.
     emitRunFact(logger, 'addOutputFiles', {
-      filesByRound: { [currentRound]: summary.fileInfos },
+      filesByRound: {
+        ...getOutputFilesByRound(outputState),
+        [currentRound]: summary.fileInfos,
+      },
     });
 
     if (execRes.emitCompileFailures) {
       emitRunFact(logger, 'updateCompileFailures', {
-        filesByRound: { [currentRound]: compileFailures },
+        filesByRound: {
+          ...getCompileFailuresByRound(outputState),
+          [currentRound]: compileFailures,
+        },
       });
     }
 
@@ -244,8 +260,10 @@ export class OutputNode extends BaseNode<
     if (endTurn) {
       await tryOperation(async () => {
         const validationResult = await checkExpectedOutputs(
+          outputState,
           this.services,
           outputLocation,
+
           currentRound,
           summary.stage,
         );

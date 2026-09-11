@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   validateOwnedRunLease: vi.fn(),
   acquireResumedRunLease: vi.fn(),
   prepareAgentDefinition: vi.fn(),
-  readMeta: vi.fn(),
+  readRunEnd: vi.fn(),
+  runExists: vi.fn(),
   executeAgent: vi.fn(),
   finalizeRun: vi.fn(),
   registerRun: vi.fn(),
@@ -28,7 +29,8 @@ vi.mock('@agent/storage', () => ({
       catch: ensureError,
     }),
   getRunRecords: () => ({
-    readMeta: () => Effect.sync(() => mocks.readMeta()),
+    readRunEnd: () => Effect.sync(() => mocks.readRunEnd()),
+    exists: () => Effect.sync(() => mocks.runExists()),
   }),
 }));
 
@@ -142,7 +144,8 @@ describe('runAgent run ownership', () => {
     mocks.prepareAgentDefinition.mockImplementation(({ config }) => ({
       config,
     }));
-    mocks.readMeta.mockReturnValue({ runId: 'assistant#run-agent-owner' });
+    mocks.readRunEnd.mockReturnValue(null);
+    mocks.runExists.mockReturnValue(true);
     mocks.releaseOwnedRunLease.mockResolvedValue(undefined);
     mocks.validateOwnedRunLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
@@ -177,11 +180,11 @@ describe('runAgent run ownership', () => {
   });
 
   it.effect(
-    'does not retain an abort listener when resume metadata is missing',
+    'does not retain an abort listener when the resumed run is not found',
     () =>
       Effect.gen(function* () {
         const signal = new AbortController().signal;
-        mocks.readMeta.mockReturnValueOnce(null);
+        mocks.runExists.mockReturnValueOnce(false);
         expect(
           yield* Effect.flip(
             runAgent(
@@ -190,7 +193,7 @@ describe('runAgent run ownership', () => {
             ),
           ),
         ).toMatchObject({
-          message: `Run metadata not found for ${EXECUTION_ID}`,
+          message: `Run not found: ${EXECUTION_ID}`,
         });
         expect(getEventListeners(signal, 'abort')).toEqual([]);
       }),
@@ -306,10 +309,7 @@ describe('runAgent run ownership', () => {
 
   it('restores a cancelled outcome when resume fails before lifecycle startup', async () => {
     const launchError = new Error('resume launch failed');
-    mocks.readMeta.mockReturnValueOnce({
-      outcome: RUN_OUTCOME.CANCELLED,
-      runId: 'assistant#run-agent-owner',
-    });
+    mocks.readRunEnd.mockReturnValueOnce({ outcome: RUN_OUTCOME.CANCELLED });
     mocks.executeAgent.mockRejectedValueOnce(launchError);
 
     await expect(launch()).rejects.toBe(launchError);

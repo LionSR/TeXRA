@@ -85,15 +85,15 @@ export async function showCliSessionStatus(
   const meta = sessionMeta.get();
   const view = currentView();
   const activeRunId = activeRunIdSignal.get();
-  const stream = runViewOf(view, activeRunId);
-  // The children a status line counts: the active stream's, else its
+  const run = runViewOf(view, activeRunId);
+  // The children a status line counts: the active run's, else its
   // parent's (a focused leaf reports its siblings' activity).
   const countedParent =
-    stream && stream.childIds.length === 0 && stream.parentId
-      ? runViewOf(view, stream.parentId)
-      : stream;
+    run && run.childIds.length === 0 && run.parentId
+      ? runViewOf(view, run.parentId)
+      : run;
   const activeChildSessions = runningChildCount(view, countedParent);
-  const model = stream?.model ?? (meta.model || context.initialModel);
+  const model = run?.model ?? (meta.model || context.initialModel);
   const prospectiveRoute = await activeSubscriptionUsageRoute(model);
   appendLocalAssistantTranscript(
     formatCliSessionStatus({
@@ -101,18 +101,18 @@ export async function showCliSessionStatus(
       model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: stream?.usage.usageRoute,
+        usageRoute: run?.usage.usageRoute,
         prospectiveRoute,
       }),
       approvalBypasses:
         activeRunId === undefined
           ? undefined
           : view.policy.get(activeRunId)?.bypasses,
-      statusLabel: stream?.statusLabel,
+      statusLabel: run?.statusLabel,
       activeChildSessions,
       goal: activeRunId ? GoalStore.getForRun(activeRunId) : undefined,
       activeSkills: activeSkillNamesFor(activeRunId),
-      sessionId: stream ? context.session.runId : undefined,
+      sessionId: run ? context.session.runId : undefined,
       commandName: context.cliContext.commandName,
       cwd: context.cliContext.cwd,
       processCwd: context.processCwd,

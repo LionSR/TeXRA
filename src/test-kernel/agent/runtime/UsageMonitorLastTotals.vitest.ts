@@ -92,6 +92,38 @@ describe('UsageMonitor', () => {
     });
   });
 
+  it('publishes the run total on every usage row while billing the round', async () => {
+    await withMonitor(async ({ monitor, events }) => {
+      const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+      const state = AgentRunStateSnapshotSchema.parse({});
+      const round = {
+        inputTokens: 100,
+        outputTokens: 10,
+        cost: 0.01,
+        responseTimeMs: 50,
+        provider: 'openai' as const,
+      };
+      recordCycleMetrics(state, 50, round);
+      await monitor.recordUsage(state);
+      recordCycleMetrics(state, 50, round);
+      await monitor.recordUsage(state);
+
+      // The session row is a snapshot of the run's spend (the fold replaces
+      // the run's total with the newest row), so the second round's row
+      // carries both rounds.
+      const rows = traceEventsOfType(events, 'usage');
+      expect(rows.map((row) => row.usage.inputTokens)).toEqual([100, 200]);
+      expect(rows.map((row) => row.usage.outputTokens)).toEqual([10, 20]);
+      expect(rows.map((row) => row.usage.cost)).toEqual([0.01, 0.02]);
+
+      // Backend billing stays per round: two calls, one round each.
+      expect(log).toHaveBeenCalledTimes(2);
+      for (const call of log.mock.calls) {
+        expect(call[0]).toMatchObject({ inputTokens: 100, outputTokens: 10 });
+      }
+    });
+  });
+
   it('does not replay prior usage during a usage-less tool-use continuation', async () => {
     await withMonitor(async ({ monitor, events }) => {
       const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});

@@ -61,7 +61,7 @@ export interface SessionSurfaces {
   runtimeRequest(key: string, request: RuntimeRequest): void;
   hostRequest(key: string, request: HostRequest): void;
   /** The composer's Send for the resolved selection: a follow-up to the
-   *  selected stream, else a launch from the launcher's instruction. The
+   *  selected run, else a launch from the launcher's instruction. The
    *  button and the run accelerator both land here. */
   submit(key: string): void;
   /** Fires after any session's view, surface, or host changed. */
@@ -166,7 +166,7 @@ export function createSessionSurfaces(options: {
       subscribedTranscript: '',
       unsubscribe: () => undefined,
     };
-    // The per-stream maps drop what the view no longer holds (PRD 9), the
+    // The per-run maps drop what the view no longer holds (PRD 9), the
     // launcher's selections follow the host's catalogs, and the transcript
     // subscription follows the selection.
     entry.unsubscribe = subscribeToSignalChanges(
@@ -374,7 +374,7 @@ export function createSessionSurfaces(options: {
         sending: new Set([...current.sending, request.runId]),
       });
     }
-    // A new request on the stream retires the answer to the last one.
+    // A new request on the run retires the answer to the last one.
     if (runId !== null && entry.surface$.get().rejected.has(runId)) {
       const current = entry.surface$.get();
       const rejected = new Map(current.rejected);
@@ -397,8 +397,8 @@ export function createSessionSurfaces(options: {
       .then((result) => {
         if (held.get(key) !== entry) return;
         presentResult(entry, result);
-        // The runtime's refusal also reaches the stream it was made on
-        // (7.6): that stream's controls paint it, and nothing here
+        // The runtime's refusal also reaches the run it was made on
+        // (7.6): that run's controls paint it, and nothing here
         // swallows it.
         if (!result.ok && result.error._tag !== 'Cancelled' && runId !== null) {
           const current = entry.surface$.get();
@@ -433,12 +433,12 @@ export function createSessionSurfaces(options: {
     const view = entry.view$.get();
     const runId = resolveSelected(view, surface);
     if (runId !== null) {
-      const stream = view.runs.get(runId);
+      const run = view.runs.get(runId);
       const draft = surface.drafts.get(runId) ?? EMPTY_DRAFT;
       // The same decision the composer's Send takes, from the same fold
       // fields: a run that ended or that another process owns takes no
       // follow-up, however the send was reached.
-      if (!stream || !canSendFollowUp(stream, draft)) return;
+      if (!run || !canSendFollowUp(run, draft)) return;
       const text = draft.text.trim();
       const mediaFiles = draft.images.flatMap((image) =>
         image.path === null ? [] : [image.path],

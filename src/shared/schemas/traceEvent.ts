@@ -64,8 +64,8 @@ export const TranscriptEventSchemas = {
     skills: ActiveSkillsSnapshotSchema.shape.skills.readonly(),
   }),
   usage: trace('usage', {
-    /** The run whose usage this is: the row's own run, or a child whose
-     *  spend a parent's usage map keys by that child's id. */
+    /** The run this spend is attributed to: the row's own run, or the
+     *  agent-CLI child a parent logs a turn for through its own trace. */
     runId: RunIdSchema,
     usage: ExtendedTokenUsageStatsSchema,
     recordTranscript: z.boolean().optional(),

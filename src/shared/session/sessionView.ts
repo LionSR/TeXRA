@@ -106,9 +106,9 @@ const RunViewCommonSchema = z.object({
   substate: RunSubstateSchema.nullable(),
   /**
    * The terminal status once nothing can move it: for a run this process
-   * owns, after its lifecycle's `result` has folded (a user stop publishes
-   * CANCELLED while the flow still writes its closing rows); for any other
-   * run, the terminal status itself. Null while anything can still move.
+   * owns, after its `run.end` has folded (a user stop publishes CANCELLED
+   * while the flow still writes its closing rows); for any other run, the
+   * terminal status itself. Null while anything can still move.
    * What licenses a host to paint an open group as interrupted and the
    * session to release the run's sidecar record.
    */
@@ -155,8 +155,10 @@ const RunViewCommonSchema = z.object({
    *  collapsed choice. */
   forceExpanded: z.boolean(),
   group: RunGroupSchema,
-  /** The run's metered total across every `usage` row it has folded, one
-   *  entry per reporting run kept in the fold's private index. */
+  /** The run's metered total: the newest `usage` row this run has folded.
+   *  Each row carries the run's cumulative totals, not a round's delta, so a
+   *  cold listing read — which delivers only the newest row per run — leaves
+   *  the same total here as a full aggregate replay. */
   usage: TokenUsageStatsSchema,
   /** The newest thinking row is still streaming. */
   thinkingActive: z.boolean(),
@@ -168,6 +170,10 @@ const RunViewCommonSchema = z.object({
   transcript: TranscriptViewSchema,
   // Shared by both categories: `updateMissingOutputs` and
   // `updateCompileFailures` apply to either arm alike (sessionFold.ts).
+  // Each row of those facts carries the run's whole round map, so a cold
+  // listing read — which delivers only the newest row per run — leaves the
+  // same rounds here as a full aggregate replay.
+
   missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
   compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,
 });

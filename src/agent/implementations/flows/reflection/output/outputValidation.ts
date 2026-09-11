@@ -6,17 +6,20 @@
  */
 
 import { debugInternal, type StageHandle } from '@agent/trace';
-import {
-  emitRunFact,
-  reportMissingOutputs,
-} from '@agent/runtime/runFactEvents';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
-import { withOutputStage, type OutputDependencies } from './outputState';
+import {
+  publishMissingOutputs,
+  reportMissingOutputs,
+  withOutputStage,
+  type OutputDependencies,
+  type OutputState,
+} from './outputState';
 
 /** Checks that expected output files exist. */
 export async function checkExpectedOutputs(
+  state: OutputState,
   deps: OutputDependencies,
   outputLocation: FileLocation,
   currRound: number,
@@ -45,7 +48,7 @@ export async function checkExpectedOutputs(
           const xmlExists = await AbsoluteFS.exists(
             outputLocation.absolutePath,
           );
-          reportMissingOutputs(deps.logger, {
+          reportMissingOutputs(state, deps.logger, {
             round: currRound,
             missing,
             xmlFile: xmlExists ? outputLocation.absolutePath : null,
@@ -68,9 +71,7 @@ export async function checkExpectedOutputs(
       // A round with nothing missing reports an empty set so consumers can
       // distinguish "checked, all present" from "never reported".
       if (missing.length === 0) {
-        emitRunFact(deps.logger, 'updateMissingOutputs', {
-          filesByRound: { [currRound]: [] },
-        });
+        publishMissingOutputs(state, deps.logger, currRound, []);
       }
 
       return { missing };

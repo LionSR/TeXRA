@@ -60,7 +60,7 @@
 
 import {
   aggregateTarget,
-  mergeRounds,
+  nonEmptyRounds,
   aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
@@ -84,7 +84,6 @@ import {
   type StreamLogEntry,
   type RunId,
   type TaskGroup,
-  type TokenUsageStats,
   type TextChunk,
   type TranscriptSubscription,
   type WorkflowDeclaredPlan,
@@ -292,10 +291,6 @@ interface SessionIndexes {
    *  finalizes, the run ends, the run is removed, or its transcript
    *  tier is evicted. */
   readonly inflight: Map<string, string>;
-  /** Per run, the latest `usage` row of each reporting run: what
-   *  `RunView.usage` totals, kept here so a redelivered row for one
-   *  reporter replaces its entry instead of counting twice. */
-  readonly usage: Map<RunId, Record<string, TokenUsageStats>>;
   /** This process's local truth, the snapshot the next one diffs against:
    *  a fold input, never durable. */
   local: LocalRuntimeState;
@@ -315,7 +310,6 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       claims: new Map(),
       latest: new Map(),
       inflight: new Map(),
-      usage: new Map(),
       local: { self: [], dead: [], unreadable: [] },
     };
     SESSION_INDEXES.set(view.runs, indexes);
@@ -571,9 +565,7 @@ function setRun(view: SessionView, run: RunView): void {
 function dropRun(view: SessionView, run: RunView): void {
   writableMap(view, 'runs').delete(run.id);
   reindexOwner(view, run.id, run.ownerId, null);
-  const indexes = sessionIndexesOf(view);
-  indexes.ended.delete(run.id);
-  indexes.usage.delete(run.id);
+  sessionIndexesOf(view).ended.delete(run.id);
   countGroups(view, run.group, undefined);
 }
 
@@ -1359,7 +1351,6 @@ function wrongArm(run: RunView, event: DisplaySessionEvent): never {
 /** The event's own arm applied to its run (topology, session slices, and
  *  the transcript tier are handled by the caller). */
 function applyOwnArm(
-  view: SessionView,
   run: RunView,
   event: Exclude<DisplaySessionEvent, TranscriptEntryEvent>,
 ): RunView {
@@ -1423,12 +1414,17 @@ function applyOwnArm(
     }
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
-    case 'usage': {
-      const { usage } = sessionIndexesOf(view);
-      const reporters = { ...usage.get(run.id), [event.runId]: event.usage };
-      usage.set(run.id, reporters);
-      return { ...run, usage: sumUsageStats(Object.values(reporters)) };
-    }
+    case 'usage':
+      // `usage` is a latest-only listing key, so a cold read delivers exactly
+      // one row per run: the row must be — and is — the run's cumulative
+      // total, published by the single reporter for that run (`UsageMonitor`
+      // for a model-driven run, the agent-CLI loop for its own child run).
+      // The newest row therefore replaces the total; summing here would
+      // double-count every earlier round an aggregate replay brings on top of
+      // the listing row. The one-element sum normalizes the extended payload
+      // (`elapsedTime`, `percentageCached`, `toolUseTokens`) down to the
+      // view's `TokenUsageStats` shape.
+      return { ...run, usage: sumUsageStats([event.usage]) };
     case 'context.state':
       return {
         ...run,
@@ -1453,33 +1449,23 @@ function applyOwnArm(
       return run.category === AgentCategory.ToolUse
         ? { ...run, goal: event.state }
         : wrongArm(run, event);
+    // The three round-keyed facts are latest-only listing keys, so a cold
+    // read delivers exactly one row of each per run and the commit guard
+    // drops the earlier rows an aggregate replay brings: each row carries
+    // the run's whole map (the producer holds it in `OutputState`), and the
+    // newest row therefore replaces the map rather than merging into it.
     case 'addOutputFiles':
       return run.category === AgentCategory.Workflow
-        ? {
-            ...run,
-            files: mergeRounds(run.files, event.filesByRound, 'drop'),
-          }
-        : {
-            ...run,
-            outputs: mergeRounds(run.outputs, event.filesByRound, 'drop'),
-          };
+        ? { ...run, files: nonEmptyRounds(event.filesByRound) }
+        : { ...run, outputs: nonEmptyRounds(event.filesByRound) };
     case 'updateMissingOutputs':
-      return {
-        ...run,
-        missingOutputs: mergeRounds(
-          run.missingOutputs,
-          event.filesByRound,
-          'keep',
-        ),
-      };
+      // An empty round here is a fact, not an absence: the round was checked
+      // and nothing was missing.
+      return { ...run, missingOutputs: { ...event.filesByRound } };
     case 'updateCompileFailures':
       return {
         ...run,
-        compileFailures: mergeRounds(
-          run.compileFailures,
-          event.filesByRound,
-          'drop',
-        ),
+        compileFailures: nonEmptyRounds(event.filesByRound),
       };
     case 'run.detach':
       // The edge severed: the child is top level from here (one run model,
@@ -1668,7 +1654,7 @@ function foldDurable(
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 
   applySessionSlices(view, runId, event);
-  const own = applyOwnArm(view, before, event);
+  const own = applyOwnArm(before, event);
   if (event.type === 'run.end') {
     // The run ended; a terminal phase ends every live row (5.2, "In-flight
     // text": a run can end with a row unfinalized).

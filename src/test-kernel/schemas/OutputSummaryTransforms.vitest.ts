@@ -57,6 +57,7 @@ function roundOutput(overrides: Partial<RoundOutput> = {}): RoundOutput {
     rawOutput: null,
     outputs: [],
     compileFailures: [],
+    missingOutputs: [],
     ...overrides,
   };
 }

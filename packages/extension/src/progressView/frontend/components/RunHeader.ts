@@ -173,7 +173,7 @@ export class RunHeader extends LitElement {
         max-width: 100%;
       }
 
-      #activeStreamName {
+      #activeRunName {
         flex: 1;
         min-width: 8ch;
         margin: 0;
@@ -473,10 +473,10 @@ export class RunHeader extends LitElement {
     const goal: GoalState =
       run.category === 'toolUse' ? run.goal : { active: false };
     const identity = run.identity;
-    // An agent run takes its category's chrome; a legacy run with no
-    // identity, a process, or a workflow container takes the neutral one.
+    // An agent run takes its category's chrome; a process or a workflow
+    // container takes the neutral one.
     const toolbarButtons =
-      identity?.kind === 'agent'
+      identity.kind === 'agent'
         ? TOOLBAR_BUTTONS[run.category]
         : NEUTRAL_TOOLBAR;
     // Resume, Run new, and Restore reach the host's `nativeAgentRun` gate,
@@ -548,10 +548,10 @@ export class RunHeader extends LitElement {
       <div class="log-header">
         <div class="header-left">
           ${this.renderAncestors(run)}
-          <h1 id=${ELEMENT_IDS.ACTIVE_STREAM_NAME} data-run=${run.id}>
+          <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
             ${run.label}
           </h1>
-          <wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
+          <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}
             >${run.description ?? run.label} · ${run.id}</wa-tooltip
           >
           <span
@@ -573,7 +573,7 @@ export class RunHeader extends LitElement {
         <div class="header-actions">
           <wa-button-group
             id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
-            label="Stream actions"
+            label="Run actions"
           >
             ${repeat(
               toolbarButtonViews,
@@ -604,7 +604,7 @@ export class RunHeader extends LitElement {
               variant="neutral"
               size="s"
               type="button"
-              aria-label="Stream actions"
+              aria-label="Run actions"
               >${waIcon('ellipsis')}</wa-button
             >
             <div class="header-overflow-status">
@@ -617,7 +617,7 @@ export class RunHeader extends LitElement {
             )}
           </wa-dropdown>
           <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}
-            >Stream actions</wa-tooltip
+            >Run actions</wa-tooltip
           >
         </div>
       </div>

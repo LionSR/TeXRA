@@ -120,22 +120,17 @@ export function cloneRoundIndexed<T>(
 }
 
 /**
- * Round-keyed merge shared by the session view and stream-state folds: an
- * empty round drops the key for files and compile failures (the tab shows no
- * empty round), and overwrites for missing outputs (an empty list clears the
- * round's missing set).
+ * The rounds that hold something. A producer publishes its whole map, so the
+ * fold takes the map as it is; a round with nothing in it is not a round any
+ * tab shows, so files and compile failures drop it. Missing outputs keep
+ * their empty rounds, which mean "checked, nothing missing".
  */
-export function mergeRounds<T>(
-  current: RoundIndexed<T>,
-  incoming: RoundIndexed<T>,
-  emptyRound: 'drop' | 'keep',
-): RoundIndexed<T> {
-  const next: RoundIndexed<T> = { ...current };
-  for (const key of Object.keys(incoming)) {
+export function nonEmptyRounds<T>(rounds: RoundIndexed<T>): RoundIndexed<T> {
+  const next: RoundIndexed<T> = {};
+  for (const key of Object.keys(rounds)) {
     const round = Number(key);
-    const files = incoming[round];
-    if (emptyRound === 'drop' && files.length === 0) delete next[round];
-    else next[round] = files;
+    const items = rounds[round];
+    if (items.length > 0) next[round] = items;
   }
   return next;
 }

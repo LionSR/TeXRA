@@ -6,7 +6,7 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 export interface ProgressToolbarButton {
   id: string;
   icon: TeXRAIconName;
-  /** Which per-stream bypass this toggle reflects and dispatches. */
+  /** Which per-run bypass this toggle reflects and dispatches. */
   bypassKind?: ApprovalBypassKind;
   /**
    * Frontend-only action the header carries out itself instead of posting to
@@ -33,7 +33,7 @@ export const ELEMENT_IDS = {
   GENERATED_FILES: 'generatedFiles',
   GENERATED_FILES_COLLAPSIBLE: 'generatedFilesCollapsible',
   STREAM_TABS: 'runTabs',
-  ACTIVE_STREAM_NAME: 'activeStreamName',
+  ACTIVE_RUN_NAME: 'activeRunName',
   STATUS_INDICATOR: 'statusIndicator',
   GOAL_CHIP: 'goalChip',
   PROGRESS_BADGE: 'progressBadge',
@@ -204,7 +204,7 @@ export const TOOLBAR_BUTTONS = {
 };
 
 /**
- * Toolbar for a stream with no known agent category — identity still pending,
+ * Toolbar for a run with no known agent category — identity still pending,
  * or a non-agent run (process, multi-agent workflow container). Only the
  * category-neutral actions; never a fabricated category's chrome.
  */

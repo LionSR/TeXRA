@@ -24,7 +24,7 @@ import {
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { TraceDocument } from '@transcript';
 
-/** The run's display name: the same identity rule every host's stream tab
+/** The run's display name: the same identity rule every host's run tab
  *  labels with, so the page title and the tab cannot disagree. */
 export function traceDisplayName(trace: TraceDocument): string {
   return runIdentityDisplayName(trace.meta.identity);
@@ -215,7 +215,7 @@ function traceHost(trace: TraceDocument): HostSnapshot {
 
 /**
  * The one frame that answers a `Subscribe` over an exported trace: the
- * listing, the transcript rows of the stream when the subscriber named it,
+ * listing, the transcript rows of the run when the subscriber named it,
  * the marker, an empty local snapshot, and the trace's host snapshot. A
  * trace has no tail.
  */

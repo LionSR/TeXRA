@@ -5,12 +5,12 @@ import { Effect } from 'effect';
  * "No handle in this process" is not liveness. A run this shell never
  * launched, one another TeXRA process owns, and one whose owner crashed all
  * look identical from the registry, so a missing handle (or a missing
- * `meta.outcome`) can never on its own justify telling a model that a run
+ * `run.end` row) can never on its own justify telling a model that a run
  * finished — or that it is still running. The ladder below asks the cheapest
  * durable fact that can decide the question, and stops there:
  *
  * 1. a handle in this process — the registry's phase is the live truth;
- * 2. a persisted `meta.outcome` — the run recorded how it ended, which is its
+ * 2. the `run.end` row's outcome — the run recorded how it ended, which is its
  *    own durable fact and outranks a lease this process is merely slow to
  *    release (#8093);
  * 3. a lease a live foreign owner holds, or one this process holds with no run

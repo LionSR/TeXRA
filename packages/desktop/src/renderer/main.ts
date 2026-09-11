@@ -364,7 +364,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 }
 
 // The one conversation shell both hosts render: its empty state is the
-// launcher, its conversation branch the selected stream. `rerenderShell`
+// launcher, its conversation branch the selected run. `rerenderShell`
 // hands it the active project's session.
 const conversationView = document.createElement('progress-app') as ProgressApp;
 conversationView.placement = 'desktop';
@@ -394,9 +394,9 @@ function taskConversationTemplate(): TemplateResult {
   const startupPanelVisible = startupTeamPanel.isVisible();
   const projects = railProjects();
   const activeProject = activeRailProject(projects);
-  // The sidebar is the only home for the rail's per-stream pending-approval
+  // The sidebar is the only home for the rail's per-run pending-approval
   // badge (RunTabs.ts). Collapsing it removes that cue entirely, so a
-  // call held at the approval gate — often on a workflow's child stream, not
+  // call held at the approval gate — often on a workflow's child run, not
   // the one on screen — can stall with zero visible affordance (#11511).
   // Surface the same signal on the toggle that reopens the rail.
   const hasPendingApproval = (activeProject?.view.rollup.waiting ?? 0) > 0;
@@ -748,16 +748,16 @@ function observeSurfaceResizes(): void {
  * reopened the sidebar once. A user who re-collapses it mid-run must not be
  * fought on every unrelated signal change; only a newly appearing off-screen
  * approval (one not in this set) reopens it again, including a new request
- * on a stream whose earlier one was answered.
+ * on a run whose earlier one was answered.
  */
 let sidebarRevealedForApprovalIds = new Set<string>();
 
 /**
  * Auto-reveals a collapsed sidebar when a pending approval lands on a
- * stream other than the one on screen. That is the dead-end case: the
- * request card lives on the pending stream's own view (one home for the
+ * run other than the one on screen. That is the dead-end case: the
+ * request card lives on the pending run's own view (one home for the
  * decision), so a collapsed, non-viewed rail leaves nothing to click
- * (#11511 — per-call workflow review cards land on a child stream, not the
+ * (#11511 — per-call workflow review cards land on a child run, not the
  * one the user is watching). The preference belongs to the project's surface.
  */
 function revealSidebarForOffScreenApproval(): void {
@@ -963,7 +963,7 @@ function openCommandPalette(): void {
   shortcutBootstrap.open();
 }
 
-// Clear the active stream so the conversation shell shows its empty state.
+// Clear the active run so the conversation shell shows its empty state.
 function returnToLauncher(): void {
   projectSessions.act(shell.active, { kind: 'selectNew' });
 }
@@ -1176,8 +1176,8 @@ function wireShellEvents(): void {
     const key = sessionOf(event);
     if (!key) return;
     projectSessions.act(key, event.detail);
-    // The rail is bound to one active stream across every section: picking
-    // a stream in another project's tree picks that project too (PRD 12.2).
+    // The rail is bound to one active run across every section: picking
+    // a run in another project's tree picks that project too (PRD 12.2).
     if (event.detail.kind === 'select' && key !== shell.active) {
       selectProject(key);
     }

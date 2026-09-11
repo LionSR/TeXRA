@@ -77,9 +77,9 @@ vi.mock('@agent/index/agentRegistry', () => ({
 vi.mock('@agent/storage', () => ({
   getRunStore: mocks.getRunStore,
   getRunRecords: (_session: unknown, runId: RunId) => ({
-    readMeta: () =>
+    exists: () =>
       Effect.tryPromise({
-        try: () => mocks.getRunStore(runId).readMeta(),
+        try: () => mocks.getRunStore(runId).exists(),
         catch: ensureError,
       }),
     readResultMeta: () =>
@@ -345,7 +345,8 @@ function memoryRunStore() {
     write: vi.fn(async (key: string, value: unknown) => {
       kv.set(key, value);
     }),
-    readMeta: vi.fn(async () => null),
+    // Nothing registered: the run's `run.start` is not in the log.
+    exists: vi.fn(async () => false),
     readResultMeta: vi.fn(async () => resultMeta),
     readRunEnd: vi.fn(async () => runEnd),
     recordRunEnd: (value: unknown) => {
@@ -413,7 +414,7 @@ function completedChildStore(
       .fn()
       .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
     read: vi.fn().mockResolvedValue(stableAttempt(logicalRunId, 'committed')),
-    readMeta: vi.fn(async () => ({ outcome: runEnd.outcome })),
+    exists: vi.fn(async () => true),
     readRunEnd: vi.fn().mockResolvedValue(runEnd),
     readResultMeta: vi.fn().mockResolvedValue({
       producer: 'subagent',

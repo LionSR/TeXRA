@@ -15,6 +15,7 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { RunScope } from '@agent/runtime/RunScope';
+import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   type CompileFailure,
   type FileLocation,
@@ -23,6 +24,7 @@ import {
   type RoundOutput,
 } from '@shared/schemas';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 export interface OutputState {
   rounds: Map<number, RoundOutput>;
@@ -104,17 +106,37 @@ export function ensureRoundData(
     rawOutput: null,
     outputs: [],
     compileFailures: [],
+    missingOutputs: [],
   };
   state.rounds.set(round, data);
   return data;
 }
 
+/**
+ * One per-round field of every round the state holds, in the round-indexed
+ * shape the run facts carry. Those facts are latest-only listing rows, so
+ * each one must carry the run's whole map rather than the round just
+ * finished: after a restart the cold fold keeps only the newest row.
+ */
+function roundIndexedBy<T>(
+  state: OutputState,
+  pick: (data: RoundOutput) => T[],
+): RoundIndexed<T> {
+  return Object.fromEntries(
+    Array.from(state.rounds, ([round, data]) => [round, pick(data)]),
+  );
+}
+
 export function getOutputFilesByRound(
   state: OutputState,
 ): RoundIndexed<OutputFileInfo> {
-  return Object.fromEntries(
-    Array.from(state.rounds, ([round, data]) => [round, data.outputs]),
-  );
+  return roundIndexedBy(state, (data) => data.outputs);
+}
+
+export function getCompileFailuresByRound(
+  state: OutputState,
+): RoundIndexed<CompileFailure> {
+  return roundIndexedBy(state, (data) => data.compileFailures);
 }
 
 export function setCompileFailures(
@@ -123,4 +145,49 @@ export function setCompileFailures(
   failures: CompileFailure[],
 ): void {
   ensureRoundData(state, round).compileFailures = failures;
+}
+
+/**
+ * Record a round's missing outputs and publish the run's whole map. Every
+ * producer of a missing-output observation goes through here (or through
+ * {@link reportMissingOutputs}, which adds the transcript row), so the row
+ * the session stores is always the run's current state.
+ */
+export function publishMissingOutputs(
+  state: OutputState,
+  trace: AgentTrace,
+  round: number,
+  missing: string[],
+): void {
+  ensureRoundData(state, round).missingOutputs = missing;
+  emitRunFact(trace, 'updateMissingOutputs', {
+    filesByRound: roundIndexedBy(state, (data) => data.missingOutputs),
+  });
+}
+
+/**
+ * One report, two artifacts: the human-facing transcript row and the
+ * `updateMissingOutputs` run fact always travel together, so the round map
+ * and the transcript can never diverge.
+ *
+ * The `missingOutputs` domain row is the human-facing transcript log and is
+ * deliberately distinct from the run fact: it carries only the round's
+ * unmatched outputs and the XML file they were expected in.
+ */
+export function reportMissingOutputs(
+  state: OutputState,
+  trace: AgentTrace,
+  info: {
+    round: number;
+    missing: string[];
+    xmlFile: string | null;
+  },
+): void {
+  const { round, missing, xmlFile } = info;
+  trace.domain({
+    key: 'missingOutputs',
+    text: `${formatResultCount(missing.length, 'output file')} missing`,
+    data: { missing, xmlFile },
+  });
+  publishMissingOutputs(state, trace, round, missing);
 }
