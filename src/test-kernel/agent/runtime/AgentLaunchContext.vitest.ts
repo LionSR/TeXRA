@@ -39,6 +39,7 @@ import {
   type AgentLaunchContext,
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   RUN_OUTCOME,
@@ -294,15 +295,18 @@ describe('AgentLaunchContext', () => {
     ]);
 
     try {
+      // Rejected while preparing the definition, before any execution is
+      // registered for the unknown model.
       await expect(
-        buildAgentLaunchContext({
-          config: AgentConfigSchema.parse({
-            agent: 'chat',
-            model: '__unregistered_model_for_launch_context_test__',
+        Effect.runPromise(
+          prepareAgentDefinition({
+            config: AgentConfigSchema.parse({
+              agent: 'chat',
+              model: '__unregistered_model_for_launch_context_test__',
+            }),
+            session,
           }),
-          runId: EXECUTION_ID,
-          session,
-        }),
+        ),
       ).rejects.toThrow('is not registered');
     } finally {
       session.dispose();
@@ -318,6 +322,47 @@ describe('AgentLaunchContext', () => {
         (event) => event.event === 'requestShowInstruction',
       ),
     ).toHaveLength(1);
+  });
+
+  it('presents an assembly failure once, through its terminal result', async () => {
+    // Regression: the launch catch used to toast an assembly failure beside
+    // the `result` event's own toast, so the user saw the error twice.
+    const recording = createRecordingHost();
+    const session = createTestSession();
+    session.interactions.use(recording.interactions);
+    const detachToast = attachTerminalResultToast(
+      session,
+      session.interactions,
+    );
+    publishTestRunStart(session, EXECUTION_ID);
+    mocks.resolve.mockReturnValueOnce({ entry: { path: '/agents/chat.yaml' } });
+    mocks.load.mockResolvedValueOnce([
+      { agentCategory: AgentCategory.ToolUse },
+      {},
+    ]);
+    mocks.createHandler.mockRejectedValueOnce(new Error('handler failed'));
+
+    try {
+      await expect(
+        buildAgentLaunchContext({
+          config: AgentConfigSchema.parse({
+            agent: 'chat',
+            model: 'gpt55',
+            agentCategory: AgentCategory.ToolUse,
+          }),
+          runId: EXECUTION_ID,
+          session,
+          resumed: true,
+          modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+        }),
+      ).rejects.toThrow('handler failed');
+      expect(
+        recording.events.filter((event) => event.event === 'requestShowError'),
+      ).toHaveLength(1);
+    } finally {
+      detachToast();
+      session.dispose();
+    }
   });
 
   it('projects model changes into the active run context', async () => {

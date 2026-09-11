@@ -345,7 +345,10 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   launchSignal?: AbortSignal;
   /** The run's `run.start` was committed by an earlier activation (a resume). */
   resumed?: boolean;
-  /** The caller owns presentation for failures before the run lifecycle. */
+  /**
+   * The caller owns presentation for failures before registration (read by
+   * `runAgent`'s prepare step; after that the run's `result` event presents).
+   */
   suppressErrorNotification?: boolean;
   /**
    * Fires with the run id once its `run.start` is published, before the run
@@ -413,8 +416,6 @@ export function executeAgent(
       onRunResolved: options.onRunResolved,
       parentRunId: options.parentRunId,
       userFollowUpSupport: options.userFollowUpSupport,
-      suppressErrorNotification:
-        options.suppressErrorNotification ?? isSubagent,
       session: options.session,
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
       copilotRouteOverride: options.copilotRouteOverride,
@@ -577,7 +578,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
             resume.shared.modelHandlerCompatibilityKey,
           parentRunId,
           userFollowUpSupport,
-          suppressErrorNotification: true,
           session: runSession,
           toolPolicy: {
             approvalPromptsUnavailable: options.approvalPromptsUnavailable,

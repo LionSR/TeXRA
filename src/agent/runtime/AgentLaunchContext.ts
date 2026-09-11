@@ -115,8 +115,6 @@ interface AgentLaunchInput {
   checkpointId?: string;
   /** Runtime behavior declared by the launch source, stamped on `run.start`. */
   userFollowUpSupport?: UserFollowUpSupport;
-  /** Skip the `requestShowError` toast -- for callers that show their own UI. */
-  suppressErrorNotification?: boolean;
   /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
@@ -277,23 +275,6 @@ function beginRunStage(
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
-function notifyLaunchFailure(
-  error: unknown,
-  input: { session: SessionHandle; suppressErrorNotification?: boolean },
-): void {
-  if (
-    !input.suppressErrorNotification &&
-    !(error instanceof ZodError) &&
-    !hasErrorPresentationClaimed(error)
-  ) {
-    input.session.interactions.emit(
-      'requestShowError',
-      { message: toErrorMessage(error) },
-      { replayWhenAttached: true },
-    );
-  }
-}
-
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (
     input: {
@@ -359,16 +340,44 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       );
     }
 
+    // Validated before registration, so a typo'd model name registers no
+    // FAILED execution and surfaces only its targeted instruction.
+    const modelConfig = yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(input.session, () =>
+          validateModelExists(fullConfig.model, interactions),
+        ),
+      catch: ensureError,
+    });
+    yield* failIfAborted(input.signal);
+
     const config: AgentConfig = {
       ...fullConfig,
       agentCategory: setting.agentCategory,
     };
-    return { config, setting, prompt, resolution };
+    return { config, setting, prompt, resolution, modelConfig };
   },
+  // No run exists yet, so no `result` event will present this failure: the
+  // generic toast is its one surface. Once assembly begins, the terminal
+  // `result` event is the only presentation.
   (effect, input) =>
     effect.pipe(
       Effect.onError((cause) =>
-        Effect.sync(() => notifyLaunchFailure(Cause.squash(cause), input)),
+        Effect.sync(() => {
+          const error = Cause.squash(cause);
+          if (
+            input.suppressErrorNotification ||
+            error instanceof ZodError ||
+            hasErrorPresentationClaimed(error)
+          ) {
+            return;
+          }
+          input.session.interactions.emit(
+            'requestShowError',
+            { message: toErrorMessage(error) },
+            { replayWhenAttached: true },
+          );
+        }),
       ),
     ),
 );
@@ -383,16 +392,8 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     resources: Array<() => void | Promise<void>>,
   ): Effect.fn.Return<AgentLaunchContext, Error> {
     yield* failIfAborted(input.signal);
-    const { config, setting, prompt, resolution } = input.definition;
-    const interactions = input.session.interactions;
-    const modelConfig = yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(input.session, () =>
-          validateModelExists(config.model, interactions),
-        ),
-      catch: ensureError,
-    });
-    yield* failIfAborted(input.signal);
+    const { config, setting, prompt, resolution, modelConfig } =
+      input.definition;
 
     // The session is resolved once at the boundary (buildAgentLaunchContext)
     // and carried in, so a delegated launch inherits the parent run's session
@@ -645,7 +646,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
               },
             );
           }
-          notifyLaunchFailure(err, input);
         }),
       ),
     );
