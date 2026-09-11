@@ -6,23 +6,12 @@ import { z } from 'zod';
 
 import {
   buildConfigListItems,
-  buildEnumItems,
   coerceSettingInput,
-  formatSettingValue,
   isConfigResetInput,
-  settingDisplayName,
   settingEditKind,
-  settingStoreLabel,
   validateSettingInput,
 } from '@cli/chat/tui/forms/ConfigForm';
-import {
-  buildConfigCategoryItems,
-  configCategoryLabel,
-} from '@cli/chat/tui/forms/configCategories';
-import {
-  CliConfigForm,
-  createCliConfigFormProps,
-} from '@cli/chat/tui/forms/CliConfigForm';
+import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
 import {
   buildProviderApiKeyItems,
   formatProviderApiKeySummary,
@@ -86,6 +75,26 @@ vi.mock('@cli/runtime/githubToken', () => ({
   saveGitHubToken: githubTokenRuntime.save,
   removeGitHubToken: githubTokenRuntime.remove,
 }));
+
+type ConfigFormProps = Parameters<
+  typeof import('@cli/chat/tui/forms/ConfigForm').ConfigForm
+>[0];
+const configFormProps = vi.hoisted(() => ({
+  current: undefined as ConfigFormProps | undefined,
+}));
+// Record the props `/config` hands the real form, so the wiring tests can call
+// its read/write/reset callbacks without walking the menus keypress by keypress.
+vi.mock('@cli/chat/tui/forms/ConfigForm', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/chat/tui/forms/ConfigForm')>();
+  return {
+    ...actual,
+    ConfigForm: (props: ConfigFormProps) => {
+      configFormProps.current = props;
+      return actual.ConfigForm(props);
+    },
+  };
+});
 
 function apiKeyStatuses(
   overrides: Partial<Record<ApiProvider, ApiKeyStatus>> = {},
@@ -182,50 +191,22 @@ async function submitGitHubToken(
   stdin.write('\r');
 }
 
-interface RenderedConfigFormProps {
-  entries?: readonly SurfacedSettingEntry[];
-  readValue?: (entry: SurfacedSettingEntry) => unknown;
-  writeValue?: (
-    entry: SurfacedSettingEntry,
-    value: unknown,
-  ) => void | Promise<void>;
-  resetValue?: (entry: SurfacedSettingEntry) => void | Promise<void>;
-  onError?: (error: unknown) => void;
-  formRenderers?: Readonly<
-    Record<string, (onBack: () => void) => React.JSX.Element>
-  >;
-  formLinks?: readonly {
-    readonly name: string;
-    readonly label: string;
-    readonly description: string;
-  }[];
-  availableRows?: number;
+/** Mount the open `/config` form once and return the props it gave ConfigForm. */
+async function renderConfigFormProps(): Promise<ConfigFormProps> {
+  configFormProps.current = undefined;
+  const rendered = await renderInkElement(
+    activeForm.get()?.render(() => undefined, 20),
+  );
+  rendered.instance.unmount();
+  if (!configFormProps.current) {
+    throw new TypeError('Expected /config to render ConfigForm');
+  }
+  return configFormProps.current;
 }
 
-function renderConfigFormProps(): RenderedConfigFormProps {
-  const node = activeForm.get()?.render(() => {}, 20) as {
-    type?: (props: unknown) => unknown;
-    props?: unknown;
-  };
-  if (typeof node?.type !== 'function') {
-    throw new TypeError('Expected /config form adapter element');
-  }
-  const rendered = node.type(node.props) as {
-    type?: unknown;
-    props?: ReturnType<typeof Object>;
-  };
-  if (rendered.type === CliConfigForm) {
-    const props = rendered.props as Parameters<typeof CliConfigForm>[0];
-    if (!props.stores) throw new TypeError('Expected /config stores');
-    // The spread narrows `stores` from optional to required for the input type.
-    return createCliConfigFormProps({ ...props, stores: props.stores });
-  }
-  return (rendered.props ?? {}) as RenderedConfigFormProps;
-}
-
-function openConfigFormProps(
+async function openConfigFormProps(
   stores = makeFakeSettingsStores().stores,
-): RenderedConfigFormProps {
+): Promise<ConfigFormProps> {
   registerBuiltinSlashCommands({ getConfigStores: () => stores });
   openCliSlashCommandForm('config', '');
   return renderConfigFormProps();
@@ -499,7 +480,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
 });
 
 describe('/config slash command wiring', () => {
-  it('wires the roster and reads through the injected CLI stores', () => {
+  it('wires the roster and reads through the injected CLI stores', async () => {
     const { stores, config } = makeFakeSettingsStores();
     // Seed the git-author config slot the CLI reads from.
     void config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
@@ -508,13 +489,13 @@ describe('/config slash command wiring', () => {
     expect(openCliSlashCommandForm('config', '')).toBe(true);
     expect(activeForm.get()?.commandName).toBe('config');
 
-    const props = renderConfigFormProps();
-    expect(props.entries?.map((entry) => entry.key)).toEqual(
+    const props = await renderConfigFormProps();
+    expect(props.entries.map((entry) => entry.key)).toEqual(
       CLI_STATE_SETTINGS.map((entry) => entry.key),
     );
 
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    expect(props.readValue?.(markCommits)).toBe(false);
+    expect(props.readValue(markCommits)).toBe(false);
   });
 
   // Regression: `/config` used to persist `texra.approvalPolicy` with a bare
@@ -530,9 +511,9 @@ describe('/config slash command wiring', () => {
       },
     });
     openCliSlashCommandForm('config', '');
-    const props = renderConfigFormProps();
+    const props = await renderConfigFormProps();
 
-    await props.writeValue?.(
+    await props.writeValue(
       entryByKey(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
       'yolo',
     );
@@ -543,12 +524,12 @@ describe('/config slash command wiring', () => {
 
   it('persists writes through the accessor to the CLI store', async () => {
     const { stores, config } = makeFakeSettingsStores();
-    const props = openConfigFormProps(stores);
+    const props = await openConfigFormProps(stores);
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await props.writeValue?.(markCommits, false);
+    await props.writeValue(markCommits, false);
 
     expect(isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
-    expect(props.readValue?.(markCommits)).toBe(false);
+    expect(props.readValue(markCommits)).toBe(false);
   });
 
   it('emits a deferred command echo before a configuration error', async () => {
@@ -562,41 +543,43 @@ describe('/config slash command wiring', () => {
     });
     openCliSlashCommandForm('config', '', () => events.push('echo'));
 
-    await renderConfigFormProps().onError?.(new Error('write failed'));
-    await renderConfigFormProps().onError?.(new Error('write failed again'));
+    await (await renderConfigFormProps()).onError?.(new Error('write failed'));
+    await (
+      await renderConfigFormProps()
+    ).onError?.(new Error('write failed again'));
 
     expect(events).toEqual(['echo', 'error', 'error']);
   });
 
   it('resets a git setting by deleting the stored key', async () => {
     const { stores, config } = makeFakeSettingsStores();
-    const props = openConfigFormProps(stores);
+    const props = await openConfigFormProps(stores);
     const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
 
-    await props.writeValue?.(authorName, 'someone-else');
+    await props.writeValue(authorName, 'someone-else');
     expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(true);
 
-    await props.resetValue?.(authorName);
+    await props.resetValue(authorName);
     // The key is deleted, so reads fall back to the default identity.
     expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(false);
-    expect(props.readValue?.(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
+    expect(props.readValue(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
   });
 
   it('turns OpenRouter off when Prefer Kimi Code is enabled', async () => {
     const { stores, globalState } = makeFakeSettingsStores();
     await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
-    const props = openConfigFormProps(stores);
+    const props = await openConfigFormProps(stores);
     const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
-    await props.writeValue?.(preferKimiCode, true);
+    await props.writeValue(preferKimiCode, true);
 
     expect(globalState.get(GlobalStateKey.KIMI_CODE_PREFER)).toBe(true);
-    expect(props.readValue?.(entryByKey(GlobalStateKey.USE_OPENROUTER))).toBe(
+    expect(props.readValue(entryByKey(GlobalStateKey.USE_OPENROUTER))).toBe(
       false,
     );
 
     // Disabling the preference leaves the OpenRouter toggle untouched.
     await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
-    await props.writeValue?.(preferKimiCode, false);
+    await props.writeValue(preferKimiCode, false);
     expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
   });
 });

@@ -100,18 +100,18 @@ export function isConfigResetInput(
   return isCtrlInput(input, key, 'r');
 }
 
-export function formatSettingValue(value: unknown): string {
+function formatSettingValue(value: unknown): string {
   if (typeof value === 'boolean') return value ? 'on' : 'off';
   if (value === '' || value == null) return '(empty)';
   return String(value);
 }
 
 /** The store the CLI reads/writes this setting from (`entry.slots.cli`). */
-export function settingStoreLabel(entry: SurfacedSettingEntry): string {
+function settingStoreLabel(entry: SurfacedSettingEntry): string {
   return settingSlot(entry, 'cli');
 }
 
-export function settingDisplayName(entry: SurfacedSettingEntry): string {
+function settingDisplayName(entry: SurfacedSettingEntry): string {
   return entry.title ?? stripPrefix(entry.key);
 }
 
@@ -136,7 +136,7 @@ export function buildConfigListItems(
   });
 }
 
-export function buildEnumItems(
+function buildEnumItems(
   entry: SurfacedSettingEntry,
 ): Array<SelectItem<string>> {
   const values = settingEnumOptions(entry) ?? [];
@@ -148,7 +148,7 @@ export function buildEnumItems(
   }));
 }
 
-export interface ConfigFormProps {
+interface ConfigFormProps {
   readonly entries: readonly SurfacedSettingEntry[];
   readonly readValue: (entry: SurfacedSettingEntry) => unknown;
   readonly writeValue: (

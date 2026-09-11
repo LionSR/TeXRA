@@ -18,13 +18,12 @@ import {
   type SettingsStores,
 } from '@shared/config/settingsAccess';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { AgentRosterForm } from './AgentRosterForm';
-import { ConfigForm, type ConfigFormProps } from './ConfigForm';
+import { ConfigForm } from './ConfigForm';
 import {
   formatGitHubTokenSummary,
   GitHubTokenForm,
@@ -49,16 +48,6 @@ export interface CliConfigFormProps {
    * Omitted by `texra config edit`, whose process holds no session to update.
    */
   readonly onApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
-}
-
-interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
-  readonly stores: SettingsStores;
-  readonly apiKeyStatusView?: ProviderApiKeyStatusView;
-  readonly markProviderApiKeySet?: (provider: ApiProvider) => void;
-  readonly refreshApiKeyStatuses?: () => void | Promise<void>;
-  readonly githubTokenStatusView?: GitHubTokenStatusView;
-  readonly markGitHubTokenSet?: () => void;
-  readonly refreshGitHubTokenStatus?: () => void | Promise<void>;
 }
 
 type StatusViewBase = { readonly loading: boolean; readonly error: boolean };
@@ -138,19 +127,36 @@ const buildGitHubTokenStatusView = (
 ): GitHubTokenStatusView => ({ status, loading: false, error: false });
 
 /**
- * Construct the canonical CLI configuration interface. Both the standalone
- * command and the in-chat form use this function, so persistence and runtime
- * side effects cannot diverge between entry points.
+ * Canonical CLI configuration form. Both `texra config` and `/config` mount
+ * it, so persistence and runtime side effects cannot diverge between them.
  */
-export function createCliConfigFormProps(
-  props: CreateCliConfigFormPropsInput,
-): ConfigFormProps {
-  const { stores } = props;
-  const apiKeyStatusView =
-    props.apiKeyStatusView ?? (INITIAL_STATUS_VIEW as ProviderApiKeyStatusView);
-  const githubTokenStatusView =
-    props.githubTokenStatusView ??
-    (INITIAL_STATUS_VIEW as GitHubTokenStatusView);
+export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
+  const [stores] = useState(() => props.stores ?? platformSettingsStores());
+  const onError = useRef(props.onError);
+  onError.current = props.onError;
+
+  const {
+    view: apiKeyStatusView,
+    refresh: refreshApiKeyStatuses,
+    mark: markApiKey,
+  } = useAsyncStatusView({
+    initial: INITIAL_STATUS_VIEW as ProviderApiKeyStatusView,
+    load: loadProviderApiKeyStatuses,
+    buildView: buildApiKeyStatusView,
+    onErrorRef: onError,
+  });
+
+  const {
+    view: githubTokenStatusView,
+    refresh: refreshGitHubTokenStatus,
+    mark: markGitHubToken,
+  } = useAsyncStatusView({
+    initial: INITIAL_STATUS_VIEW as GitHubTokenStatusView,
+    load: loadGitHubTokenStatus,
+    buildView: buildGitHubTokenStatusView,
+    onErrorRef: onError,
+  });
+
   // The one CLI write path for a `/config` row: the same
   // `applyStateSettingUpdate` the extension and desktop settings views call, so
   // a row that carries a live side effect (approval policy) cannot be persisted
@@ -191,136 +197,84 @@ export function createCliConfigFormProps(
       bumpCodexPreferenceVersion();
     }
   };
-  return {
-    availableRows: props.availableRows,
-    entries: CLI_STATE_SETTINGS,
-    readValue: (entry) => readSetting(entry, stores, 'cli'),
-    writeValue: (entry, value) => applyUpdate(entry, value),
-    resetValue: (entry) => applyUpdate(entry, null),
-    formLinks: [
-      {
-        name: 'agents',
-        label: 'Agents',
-        description: 'workspace roster and user default team',
-      },
-      {
-        name: 'api-keys',
-        label: 'API keys',
-        description: formatProviderApiKeySummary(apiKeyStatusView),
-      },
-      {
-        name: 'github-token',
-        label: 'GitHub token',
-        description: formatGitHubTokenSummary(githubTokenStatusView),
-      },
-    ],
-    formRenderers: {
-      agents: (onBack) => (
-        <AgentRosterForm
-          availableRows={props.availableRows}
-          onClose={onBack}
-          onError={props.onError}
-        />
-      ),
-      'api-keys': (onBack) => (
-        <ProviderApiKeyForm
-          availableRows={props.availableRows}
-          statusView={apiKeyStatusView}
-          onSave={async (provider, key) => {
-            await saveProviderApiKey(provider, key);
-            props.markProviderApiKeySet?.(provider);
-            await props.refreshApiKeyStatuses?.();
-          }}
-          onDone={onBack}
-          onCancel={onBack}
-        />
-      ),
-      'github-token': (onBack) => (
-        <GitHubTokenForm
-          availableRows={props.availableRows}
-          statusView={githubTokenStatusView}
-          onSave={async (token) => {
-            await saveGitHubToken(token);
-            props.markGitHubTokenSet?.();
-            await props.refreshGitHubTokenStatus?.();
-          }}
-          onRemove={async () => {
-            await removeGitHubToken();
-            await props.refreshGitHubTokenStatus?.();
-          }}
-          onDone={onBack}
-          onCancel={onBack}
-        />
-      ),
-      tools: (onBack) => (
-        <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
-      ),
-      skills: (onBack) => (
-        <SkillsSettingsForm
-          availableRows={props.availableRows}
-          stores={stores}
-          onClose={onBack}
-        />
-      ),
-    },
-    onClose: props.onClose,
-    onError: props.onError,
-  };
-}
-
-/** Canonical CLI configuration form, shared by `texra config` and `/config`. */
-export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
-  const [stores] = useState(() => props.stores ?? platformSettingsStores());
-  const onError = useRef(props.onError);
-  onError.current = props.onError;
-
-  const {
-    view: apiKeyStatusView,
-    refresh: refreshApiKeyStatuses,
-    mark: markApiKey,
-  } = useAsyncStatusView({
-    initial: INITIAL_STATUS_VIEW as ProviderApiKeyStatusView,
-    load: loadProviderApiKeyStatuses,
-    buildView: buildApiKeyStatusView,
-    onErrorRef: onError,
-  });
-
-  const {
-    view: githubTokenStatusView,
-    refresh: refreshGitHubTokenStatus,
-    mark: markGitHubToken,
-  } = useAsyncStatusView({
-    initial: INITIAL_STATUS_VIEW as GitHubTokenStatusView,
-    load: loadGitHubTokenStatus,
-    buildView: buildGitHubTokenStatusView,
-    onErrorRef: onError,
-  });
-
-  const markProviderApiKeySet = useCallback(
-    (provider: ApiProvider) => {
-      markApiKey((current) => ({
-        statuses: { ...current.statuses, [provider]: 'set' },
-      }));
-    },
-    [markApiKey],
-  );
-
-  const markGitHubTokenSet = useCallback(() => {
-    markGitHubToken(() => ({ status: 'secret' }));
-  }, [markGitHubToken]);
 
   return (
     <ConfigForm
-      {...createCliConfigFormProps({
-        ...props,
-        stores,
-        apiKeyStatusView,
-        markProviderApiKeySet,
-        refreshApiKeyStatuses,
-        githubTokenStatusView,
-        markGitHubTokenSet,
-        refreshGitHubTokenStatus,
-      })}
+      availableRows={props.availableRows}
+      entries={CLI_STATE_SETTINGS}
+      readValue={(entry) => readSetting(entry, stores, 'cli')}
+      writeValue={(entry, value) => applyUpdate(entry, value)}
+      resetValue={(entry) => applyUpdate(entry, null)}
+      formLinks={[
+        {
+          name: 'agents',
+          label: 'Agents',
+          description: 'workspace roster and user default team',
+        },
+        {
+          name: 'api-keys',
+          label: 'API keys',
+          description: formatProviderApiKeySummary(apiKeyStatusView),
+        },
+        {
+          name: 'github-token',
+          label: 'GitHub token',
+          description: formatGitHubTokenSummary(githubTokenStatusView),
+        },
+      ]}
+      formRenderers={{
+        agents: (onBack) => (
+          <AgentRosterForm
+            availableRows={props.availableRows}
+            onClose={onBack}
+            onError={props.onError}
+          />
+        ),
+        'api-keys': (onBack) => (
+          <ProviderApiKeyForm
+            availableRows={props.availableRows}
+            statusView={apiKeyStatusView}
+            onSave={async (provider, key) => {
+              await saveProviderApiKey(provider, key);
+              markApiKey((current) => ({
+                statuses: { ...current.statuses, [provider]: 'set' },
+              }));
+              await refreshApiKeyStatuses();
+            }}
+            onDone={onBack}
+            onCancel={onBack}
+          />
+        ),
+        'github-token': (onBack) => (
+          <GitHubTokenForm
+            availableRows={props.availableRows}
+            statusView={githubTokenStatusView}
+            onSave={async (token) => {
+              await saveGitHubToken(token);
+              markGitHubToken(() => ({ status: 'secret' }));
+              await refreshGitHubTokenStatus();
+            }}
+            onRemove={async () => {
+              await removeGitHubToken();
+              await refreshGitHubTokenStatus();
+            }}
+            onDone={onBack}
+            onCancel={onBack}
+          />
+        ),
+        tools: (onBack) => (
+          <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
+        ),
+        skills: (onBack) => (
+          <SkillsSettingsForm
+            availableRows={props.availableRows}
+            stores={stores}
+            onClose={onBack}
+          />
+        ),
+      }}
+      onClose={props.onClose}
+      onError={props.onError}
     />
   );
 }
