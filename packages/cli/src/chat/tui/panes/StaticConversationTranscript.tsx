@@ -6,7 +6,7 @@
 
 import path from 'node:path';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
@@ -1122,37 +1122,20 @@ export function StaticConversationTranscript({
       width: normalizedWidth,
     }),
   );
-  const items =
-    state.ownerKey === ownerKey
-      ? state.items
-      : buildStaticTranscriptItems({
-          source,
-          runLabels: subagentRunLabels,
-          meta: sessionMeta,
-          maxRows,
-          width: normalizedWidth,
-        }).items;
-  useEffect(() => {
-    setState((current) =>
-      advanceStaticTranscriptState(current, {
-        eraseRequest,
-        runLabels: subagentRunLabels,
-        maxRows,
-        meta: sessionMeta,
-        ownerKey,
-        source,
-        width: normalizedWidth,
-      }),
-    );
-  }, [
+  // Reconcile before committing the render. Updating derived transcript state
+  // in an effect commits stale rows first and schedules another React update
+  // for every source change, even when only the scan position has advanced.
+  const nextState = advanceStaticTranscriptState(state, {
     eraseRequest,
+    runLabels: subagentRunLabels,
     maxRows,
+    meta: sessionMeta,
     ownerKey,
-    sessionMeta,
     source,
-    subagentRunLabels,
-    normalizedWidth,
-  ]);
+    width: normalizedWidth,
+  });
+  if (nextState !== state) setState(nextState);
+  const items = nextState.items;
   const repaintKey = `${renderKey}:${state.repaintEpoch}`;
   const previousRenderKey = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {

@@ -266,13 +266,17 @@ export function App(props: AppProps): React.JSX.Element {
   const childListAvailable = childListValues.length > 0;
   const selectedChild = runViewOf(view, selectedChildValue);
   const selectedChildKillable = killableRunId(selectedChild) !== undefined;
-  useEffect(() => {
-    dispatchChildListSelection({
-      kind: 'reconcile',
-      activeRunId,
-      values: childListValues,
-    });
-  }, [activeRunId, childListValues]);
+  const reconcileSelection = {
+    kind: 'reconcile' as const,
+    activeRunId,
+    values: childListValues,
+  };
+  if (
+    reduceChildListSelection(childListSelection, reconcileSelection) !==
+    childListSelection
+  ) {
+    dispatchChildListSelection(reconcileSelection);
+  }
   // Stream focus can also move through lifecycle completion or a numeric
   // accelerator. Align the selected row before the changed frame is painted;
   // ordinary row reconciliation still preserves manual list selection.
