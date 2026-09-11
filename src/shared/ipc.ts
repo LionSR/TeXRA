@@ -128,8 +128,8 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_AGENT_SELECTION: 'updateAgentSelection',
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
-  // Every catalog-derived snapshot (`DERIVED_SETTINGS_SNAPSHOTS`), keyed by
-  // its `snapshot` field.
+  // Every catalog-derived snapshot in `settingsViewMessages.ts`'s
+  // derived-snapshot list, keyed by its `snapshot` field.
   UPDATE_SETTINGS_SNAPSHOT: 'updateSettingsSnapshot',
   UPDATE_SKILLS_LIST: 'updateSkillsList',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
