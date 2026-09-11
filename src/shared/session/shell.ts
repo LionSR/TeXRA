@@ -17,40 +17,14 @@ export interface Shell {
   readonly collapsed: readonly string[];
 }
 
-export type ShellAction =
-  | { readonly kind: 'activate'; readonly session: string }
-  | { readonly kind: 'open'; readonly session: string }
-  | { readonly kind: 'close'; readonly session: string }
-  | {
-      readonly kind: 'collapse';
-      readonly session: string;
-      readonly collapsed: boolean;
-    };
+export type ShellAction = {
+  readonly kind: 'collapse';
+  readonly session: string;
+  readonly collapsed: boolean;
+};
 
 export function applyShellAction(shell: Shell, action: ShellAction): Shell {
   switch (action.kind) {
-    case 'activate':
-      return shell.open.includes(action.session)
-        ? { ...shell, active: action.session }
-        : {
-            ...shell,
-            active: action.session,
-            open: [...shell.open, action.session],
-          };
-    case 'open':
-      return shell.open.includes(action.session)
-        ? shell
-        : { ...shell, open: [...shell.open, action.session] };
-    case 'close': {
-      const open = shell.open.filter((key) => key !== action.session);
-      if (open.length === 0) return shell;
-      return {
-        ...shell,
-        open,
-        collapsed: shell.collapsed.filter((key) => key !== action.session),
-        active: shell.active === action.session ? open[0] : shell.active,
-      };
-    }
     case 'collapse': {
       const without = shell.collapsed.filter((key) => key !== action.session);
       return {
