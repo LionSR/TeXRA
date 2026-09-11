@@ -590,14 +590,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Select a stream this window just launched (the launch's
-   *  `onStreamResolved` callback): the launching surface selects it. */
+   *  `onRunResolved` callback): the launching surface selects it. */
   public presentLaunchedRun(runId: RunId): void {
     this.surfaceAction({ kind: 'select', runId });
   }
 
-  public async revealRun(
-    runId: RunId,
-  ): Promise<ProgressRunRevealResult> {
+  public async revealRun(runId: RunId): Promise<ProgressRunRevealResult> {
     const view = SubscriptionRef.getUnsafe(this.session.view);
     if (!view.runs.has(runId)) return 'missing';
     await this.showProgressView();
@@ -606,8 +604,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public runLabel(runId: RunId): string | undefined {
-    return SubscriptionRef.getUnsafe(this.session.view).runs.get(runId)
-      ?.label;
+    return SubscriptionRef.getUnsafe(this.session.view).runs.get(runId)?.label;
   }
 
   public async popOutToEditor(): Promise<void> {

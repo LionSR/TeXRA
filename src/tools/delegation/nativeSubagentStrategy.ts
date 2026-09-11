@@ -146,7 +146,7 @@ export interface ChildRunLaunchOptions {
   /** Caller cancellation for a durable in-band launch. */
   readonly signal?: AbortSignal;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
-  readonly onStreamResolved?: (runId: RunId) => void;
+  readonly onRunResolved?: (runId: RunId) => void;
 }
 
 interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
@@ -292,7 +292,7 @@ export function createNativeSubagentStrategy(
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             runtimeUnavailableTools: params.runtimeUnavailableTools,
             workflowPhase: params.workflowPhase,
-            onStreamResolved: params.onStreamResolved,
+            onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
               ports.notify(update),
             onRunError: (err: unknown) => {
@@ -319,10 +319,7 @@ export function createNativeSubagentStrategy(
           // than parked on a queue no follow-up will ever reach. Record the
           // turn's facts first so the failure meta and the parent's cost
           // accounting keep what the run actually spent.
-          if (
-            params.runMode === 'single-cycle' &&
-            isWaitingFlowResult(turn)
-          ) {
+          if (params.runMode === 'single-cycle' && isWaitingFlowResult(turn)) {
             lastResult = toDeliveryResult(turn, params.runId);
             ports.recordCost(turn.totalCostUsd);
             return yield* Effect.fail(
@@ -419,8 +416,7 @@ export function createNativeSubagentStrategy(
           built.result,
           {
             runId: params.runId,
-            memoryMisses: toDeliveryResult(turn, params.runId)
-              .memoryMisses,
+            memoryMisses: toDeliveryResult(turn, params.runId).memoryMisses,
             wallTimeMs: built.wallTimeMs,
             workingDirectory: params.workingDirectory,
           },
@@ -432,9 +428,7 @@ export function createNativeSubagentStrategy(
     formatError: (turn, err) => {
       if (params.resultOnly) return '';
       const wallTimeMs = Date.now() - params.startedAt;
-      const result = turn
-        ? toDeliveryResult(turn, params.runId)
-        : lastResult;
+      const result = turn ? toDeliveryResult(turn, params.runId) : lastResult;
       return formatSubagentError(
         params.runId,
         params.agentName,

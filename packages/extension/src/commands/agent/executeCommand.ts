@@ -66,7 +66,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
         copilotRouteOverride: wrapped?.copilotRouteOverride,
         onRun,
-        onStreamResolved: presentLaunchedProgressRun,
+        onRunResolved: presentLaunchedProgressRun,
       }),
     );
   } catch (error) {

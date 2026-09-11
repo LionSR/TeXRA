@@ -183,7 +183,7 @@ export function createDesktopAgentRun(
       { kind: 'fresh', ...request },
       { session },
       {
-        onStreamResolved: options.onLaunched,
+        onRunResolved: options.onLaunched,
         ...runOptions,
       },
     );

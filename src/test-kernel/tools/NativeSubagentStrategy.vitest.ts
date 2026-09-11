@@ -161,7 +161,7 @@ function baseParams(
     parentRunId: RunIdSchema.parse('0acc00000001'),
     session: parentSession,
     startedAt: Date.now(),
-    onStreamResolved: vi.fn(),
+    onRunResolved: vi.fn(),
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
   };
 }
@@ -278,7 +278,7 @@ describe('NativeSubagentStrategy', () => {
     const progress = { message: 'Reading proof' };
 
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onStreamResolved?.(CHILD_RUN_ID);
+      options.onRunResolved?.(CHILD_RUN_ID);
       options.onProgress?.(progress);
       return toolUseTurnResult('completed', params.runId, {
         totalCostUsd: 0.17,
@@ -298,7 +298,7 @@ describe('NativeSubagentStrategy', () => {
         workflowPhase: 'review',
       }),
     );
-    expect(params.onStreamResolved).toHaveBeenCalledWith(CHILD_RUN_ID);
+    expect(params.onRunResolved).toHaveBeenCalledWith(CHILD_RUN_ID);
     expect(ports.notify).toHaveBeenCalledWith(progress);
     expect(ports.recordCost).toHaveBeenCalledWith(0.17);
   });
@@ -627,7 +627,7 @@ describe('NativeSubagentStrategy', () => {
         session.runs.trackAgentRun(handle, {
           status: RUN_PHASE.RUNNING,
         });
-        options.onStreamResolved?.(childRunId);
+        options.onRunResolved?.(childRunId);
         options.onRun?.(handle);
         session.status.transitionToWaiting(childRunId, 'wait');
         return waitingTurn('initial response');

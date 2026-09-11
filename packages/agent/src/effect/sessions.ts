@@ -381,7 +381,7 @@ function start(
               onRun: (live) => {
                 handle = live;
               },
-              onStreamResolved: (_, runTrace) => {
+              onRunResolved: (_, runTrace) => {
                 detach = runTrace.subscribe((event) => {
                   if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
                     log.warn(

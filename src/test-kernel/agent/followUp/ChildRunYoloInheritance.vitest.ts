@@ -199,7 +199,7 @@ describe('child subagent stream approval inheritance', () => {
   it('lets a conversation round inherit bypass from the previous round via the session-level ancestry link', () => {
     // Mirrors the CLI: every chat round mints a brand-new root RunId,
     // so bypass must be carried forward explicitly (see
-    // chatSessionController.ts's onStreamResolved) rather than assumed to
+    // chatSessionController.ts's onRunResolved) rather than assumed to
     // survive on the same stream id.
     const roundOne = generateRunId();
     const roundTwo = generateRunId();

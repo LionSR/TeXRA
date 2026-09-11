@@ -250,7 +250,7 @@ export async function launchSetupAssistant(): Promise<
           { kind: 'fresh', config },
           {
             session: defaultSession(),
-            onStreamResolved: presentLaunchedProgressRun,
+            onRunResolved: presentLaunchedProgressRun,
           },
         ),
       );

@@ -169,7 +169,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-        onStreamResolved: inheritChildStreamApprovals,
+        onRunResolved: inheritChildStreamApprovals,
         onCost: recordCost,
         notify: notifyParentTrace,
       }),
@@ -225,7 +225,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-        onStreamResolved: inheritChildStreamApprovals,
+        onRunResolved: inheritChildStreamApprovals,
         userFollowUpSupport,
       };
 

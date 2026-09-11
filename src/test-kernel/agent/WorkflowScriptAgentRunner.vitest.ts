@@ -404,7 +404,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         const prepared = await options.prepare();
         mocks.preparedOptions.push(prepared);
         expect(reported(report, 'childRunId')).toEqual([options.runId]);
-        prepared.onStreamResolved?.(options.runId);
+        prepared.onRunResolved?.(options.runId);
         return { runId: 'bbbbbb222222', result };
       },
     );
@@ -713,10 +713,10 @@ describe('createWorkflowScriptAgentRunner', () => {
     await runner(invocation());
 
     const prepared = mocks.preparedOptions[0] as {
-      onStreamResolved?: (runId: RunId) => void;
+      onRunResolved?: (runId: RunId) => void;
     };
-    expect(prepared.onStreamResolved).toEqual(expect.any(Function));
-    prepared.onStreamResolved?.('stream:child' as RunId);
+    expect(prepared.onRunResolved).toEqual(expect.any(Function));
+    prepared.onRunResolved?.('stream:child' as RunId);
     expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
       'stream:child',
       runId,

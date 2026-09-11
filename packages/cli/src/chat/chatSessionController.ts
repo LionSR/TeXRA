@@ -433,7 +433,7 @@ export function createChatSessionController(
   const interruptActiveRun = (): void => {
     runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
     // The run id is known from the mint, but a stop can only land on a run
-    // the fold holds; `onStreamResolved` re-reads `stopRequested` for a stop
+    // the fold holds; `onRunResolved` re-reads `stopRequested` for a stop
     // asked in the launch gap.
     const runId = session.runId;
     if (!runId || !runViewOf(currentView(), runId)) return;
@@ -609,7 +609,7 @@ export function createChatSessionController(
                     warnApprovalDenied(sessionContext, 'Tool or edit approval'),
                   runtimeUnavailableTools:
                     getDefaultUnavailableToolNames('cli'),
-                  onStreamResolved: (resolvedRunId) => {
+                  onRunResolved: (resolvedRunId) => {
                     // Each chat round mints a fresh root run id, so
                     // bash/tool-edit/super-YOLO bypass, which is
                     // keyed per stream, would otherwise reset every round even
@@ -733,7 +733,7 @@ export function createChatSessionController(
         // the pre-resume one, so a Ctrl-C in the window before adoption could
         // not fabricate an interrupted marker on a stream this resume is
         // leaving behind. It also found nothing to interrupt, so re-read the
-        // request here, the way `startRootRun`'s `onStreamResolved` does -
+        // request here, the way `startRootRun`'s `onRunResolved` does -
         // and let it land on the run the user asked to continue. `resumeRun`
         // re-reads `isCancellationRequested` once this hook returns, so the
         // stop still refuses the launch; this only decides which stream it

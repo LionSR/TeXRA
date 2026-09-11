@@ -318,7 +318,7 @@ class AgentReviewServiceImpl {
             session: run.session,
             onRun: (handle) =>
               effectRuntime().runPromise(this.reviewRuns.bind(run, handle)),
-            onStreamResolved: presentLaunchedProgressRun,
+            onRunResolved: presentLaunchedProgressRun,
           },
         ),
       );

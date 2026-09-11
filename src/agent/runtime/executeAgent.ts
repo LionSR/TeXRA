@@ -353,7 +353,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * own surface state. The run's trace comes with it, before its first
    * event, for a consumer that must hear every trace event.
    */
-  onStreamResolved?: (runId: RunId, trace: AgentTrace) => void;
+  onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
   /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: () => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
@@ -410,7 +410,7 @@ export function executeAgent(
       definition,
       runId,
       resumed: options.resumed,
-      onRunResolved: options.onStreamResolved,
+      onRunResolved: options.onRunResolved,
       parentRunId: options.parentRunId,
       userFollowUpSupport: options.userFollowUpSupport,
       suppressErrorNotification:

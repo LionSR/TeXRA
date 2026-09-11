@@ -19,7 +19,7 @@ import { beforeEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 interface RunAgentOptions {
   readonly onRun?: (handle: unknown) => void | Promise<void>;
-  readonly onStreamResolved?: (runId: string, trace: unknown) => void;
+  readonly onRunResolved?: (runId: string, trace: unknown) => void;
 }
 
 /** A session view run entry as the package's fold keys it. */
@@ -237,7 +237,7 @@ const PLATFORM = {
   storage: { getGlobalStoragePath: () => '/global-storage' },
   processes: { selfIdentity: async () => 'test-start' },
 } as unknown as AgentPlatform;
-/** The run's trace as `onStreamResolved` hands it over: the event source. */
+/** The run's trace as `onRunResolved` hands it over: the event source. */
 const TRACE = { subscribe: mocks.subscribe };
 /** The run's handle as `onRun` hands it over: the interrupt target. */
 const HANDLE = { runId: mocks.runId, interrupt: vi.fn() };
@@ -297,7 +297,7 @@ function completeRunView(): Promise<void> {
 
 /** The run entering the session, then its final view folding. */
 async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
-  options.onStreamResolved?.('ae0001', TRACE);
+  options.onRunResolved?.('ae0001', TRACE);
   await enterRun('ae0001');
   await options.onRun?.(HANDLE);
   await completeRunView();
@@ -352,7 +352,7 @@ describe('agent package run lifecycle', () => {
   it('delivers the launch events: the trace is subscribed when the stream resolves, before the run handle exists', async () => {
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('ae0001', TRACE);
+        options.onRunResolved?.('ae0001', TRACE);
         // The instruction log, the root stage, and the launch warnings fire
         // here, before `onRun`.
         mocks.eventListener?.(EVENT);
@@ -374,7 +374,7 @@ describe('agent package run lifecycle', () => {
   it('discards trace events when the caller only awaits the result', async () => {
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('ae0001', TRACE);
+        options.onRunResolved?.('ae0001', TRACE);
         await enterRun('ae0001');
         await options.onRun?.(HANDLE);
         mocks.eventListener?.(EVENT);
@@ -720,7 +720,7 @@ describe('agent package run lifecycle', () => {
       Effect.gen(function* () {
         mocks.runValidatedAgent.mockImplementationOnce(
           async (_input: unknown, options: RunAgentOptions) => {
-            options.onStreamResolved?.('ae0001', TRACE);
+            options.onRunResolved?.('ae0001', TRACE);
             await enterRun('ae0001');
             await options.onRun?.(HANDLE);
             return RESULT;
@@ -747,7 +747,7 @@ describe('agent package run lifecycle', () => {
     let finishRun: ((result: typeof RESULT) => void) | undefined;
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('ae0001', TRACE);
+        options.onRunResolved?.('ae0001', TRACE);
         await enterRun('ae0001');
         await options.onRun?.(HANDLE);
         return await new Promise<typeof RESULT>((resolve) => {
@@ -781,7 +781,7 @@ describe('agent package run lifecycle', () => {
     let landRunStart: (() => void) | undefined;
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('ae0001', TRACE);
+        options.onRunResolved?.('ae0001', TRACE);
         // The fold lands the run's `run.start` asynchronously: the session's
         // current level predates the run until this resolves.
         await new Promise<void>((resolve) => {

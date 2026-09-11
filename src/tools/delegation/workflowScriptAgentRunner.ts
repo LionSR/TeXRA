@@ -252,7 +252,7 @@ export function createWorkflowScriptAgentRunner(
               // approval follows the parent's corresponding bypass. The run's own
               // stream inherits from the orchestrator, so nested delegation remains
               // transitive.
-              onStreamResolved: (resolvedRunId) => {
+              onRunResolved: (resolvedRunId) => {
                 configureDelegatedChildApprovals(
                   resolvedRunId,
                   run.runId,

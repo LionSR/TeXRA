@@ -295,7 +295,7 @@ function mockWaitingChildOnce(
         agent: 'review',
       });
       defaultSession().runs.track(handle);
-      runOptions.onStreamResolved?.(runId);
+      runOptions.onRunResolved?.(runId);
       runOptions.onRun?.(handle);
       options.afterRun?.(handle);
       return {

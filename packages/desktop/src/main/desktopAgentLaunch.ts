@@ -22,7 +22,7 @@ export type DesktopAgentLaunchOptions = Pick<
   | 'modelHandlerCompatibilityKey'
   | 'preferHelperModel'
   | 'onRun'
-  | 'onStreamResolved'
+  | 'onRunResolved'
 >;
 
 /** Start a desktop run; its awaiting host owns failure presentation. */
@@ -43,7 +43,7 @@ export async function launchDesktopAgent(
       copilotRouteOverride: options.copilotRouteOverride,
       ...(options.preferHelperModel && { preferHelperModel: true }),
       onRun: options.onRun,
-      onStreamResolved: options.onStreamResolved,
+      onRunResolved: options.onRunResolved,
       suppressErrorNotification: true,
       openWorkflowOutput: async (result) => {
         const output = selectAutoOpenFinalOutput(result);

@@ -13,15 +13,13 @@ export async function revealProgressRun(
 }
 
 /**
- * Select a stream this window just launched (the launch's `onStreamResolved`
+ * Select a stream this window just launched (the launch's `onRunResolved`
  * callback). The surface's own selection; a fact never carries focus.
  */
 export function presentLaunchedProgressRun(runId: RunId): void {
   ProgressViewProvider.getInstance()?.presentLaunchedRun(runId);
 }
 
-export function getProgressRunLabel(
-  runId: RunId,
-): string | undefined {
+export function getProgressRunLabel(runId: RunId): string | undefined {
   return ProgressViewProvider.getInstance()?.runLabel(runId);
 }

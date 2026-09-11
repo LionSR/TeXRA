@@ -235,7 +235,7 @@ type ToolUseRunResult<Outcome> = {
 
 /** The subset of `executeAgent`'s options every mock implementation below reads. */
 type ExecuteAgentMockOptions = {
-  readonly onStreamResolved?: (id: RunId) => void;
+  readonly onRunResolved?: (id: RunId) => void;
 };
 
 function makeInit(
@@ -816,7 +816,7 @@ describe('createChatSessionController', () => {
         runs.trackAgentRun(childHandle, {
           status: RUN_PHASE.RUNNING,
         });
-        options.onStreamResolved?.(runId);
+        options.onRunResolved?.(runId);
         return rootRunResult.promise;
       },
     );
@@ -896,7 +896,7 @@ describe('createChatSessionController', () => {
           rootARunId = runId;
           trackLiveRun(runs, runId, null, 'a0000a');
           trackLiveRun(runs, childARun, runId, 'ca0001');
-          options.onStreamResolved?.(runId);
+          options.onRunResolved?.(runId);
           return runA.promise;
         },
       )
@@ -908,7 +908,7 @@ describe('createChatSessionController', () => {
         ) => {
           rootBRunId = runId;
           trackLiveRun(runs, runId, null, 'b0000b');
-          options.onStreamResolved?.(runId);
+          options.onRunResolved?.(runId);
           return runB.promise;
         },
       );
@@ -972,7 +972,7 @@ describe('createChatSessionController', () => {
       ) => {
         rootRun = runId;
         trackLiveRun(runs, runId, null, 'root');
-        options.onStreamResolved?.(runId);
+        options.onRunResolved?.(runId);
         releaseChildActivation = runs.reserveChildActivation({
           runId: childRun,
           parentRunId: runId,

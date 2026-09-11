@@ -13,11 +13,7 @@ import {
   type RunId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import {
-  aggregateError,
-  generateRunId,
-  linkAbortSignals,
-} from '@utils/core';
+import { aggregateError, generateRunId, linkAbortSignals } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { applyHelperModelPreference } from './helperModelPreference';
@@ -43,7 +39,7 @@ export interface RunAgentOptions extends Pick<
   | 'modelHandlerCompatibilityKey'
   | 'copilotRouteOverride'
   | 'onRun'
-  | 'onStreamResolved'
+  | 'onRunResolved'
   | 'onIdle'
   | 'launchSignal'
   | 'openWorkflowOutput'
@@ -108,9 +104,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
     ? null
     : yield* getRunRecords(runSession, runId).readMeta();
   if (!shouldRegister && !prior)
-    return yield* Effect.fail(
-      new Error(`Run metadata not found for ${runId}`),
-    );
+    return yield* Effect.fail(new Error(`Run metadata not found for ${runId}`));
   const launchAbortController = new AbortController();
   const detachLaunchAbortLink = linkAbortSignals(
     [executeAgentOptions.launchSignal],
@@ -160,16 +154,10 @@ export const runAgent = Effect.fn('runAgent')(function* (
             ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
         if (shouldRegister) {
-          yield* registerRun(
-            runSession,
-            runId,
-            config,
-            config.agent,
-            {
-              identity: { kind: 'agent', agent: config.agent },
-              userFollowUpSupport,
-            },
-          );
+          yield* registerRun(runSession, runId, config, config.agent, {
+            identity: { kind: 'agent', agent: config.agent },
+            userFollowUpSupport,
+          });
         } else {
           yield* acquireResumedRunOwnership(runSession, runId);
         }
@@ -225,9 +213,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
         if (Exit.isFailure(artifacts))
           failures.push(Cause.squash(artifacts.cause));
         if (Exit.isFailure(artifacts) || artifacts.value !== true) {
-          const release = yield* Effect.exit(
-            runSession.releaseRunLease(runId),
-          );
+          const release = yield* Effect.exit(runSession.releaseRunLease(runId));
           if (Exit.isFailure(release))
             failures.push(Cause.squash(release.cause));
         }
@@ -249,10 +235,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
       Effect.sync(() => {
         detachLaunchAbortLink();
         detachLaunchInterrupt?.();
-        if (
-          launchHandle &&
-          runSession.runs.getHandle(runId) === launchHandle
-        ) {
+        if (launchHandle && runSession.runs.getHandle(runId) === launchHandle) {
           runSession.runs.untrack(runId);
         }
       }),
