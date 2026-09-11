@@ -251,8 +251,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const now = useLiveNowMsSince([runStartedAt]);
 
   const subagentCount = displayRun?.rollup.total ?? 0;
-  // Every request awaiting the user: the fold's approvals and open
-  // inquiries, the same list the modal and the title read.
+  // Every request awaiting the user: the fold's pending approvals, the
+  // same list the modal and the title read.
   const attention = attentionRequests(view);
 
   // Nested-session location: the nearest workflow-script ancestor's open
