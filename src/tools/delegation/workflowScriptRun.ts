@@ -429,13 +429,15 @@ export async function runPersistedWorkflowScriptWithProgress(
         const { status } = call;
         const baseline = last ? undefined : hydratedBaseline.get(call.id);
         if (baseline !== undefined) {
-          // A reset historical call is current only once `issueCall` issues
-          // it in this attempt (hydration resets it to declared), which
-          // cannot collapse when hydration and reissue share a clock tick.
-          // Sweep-only terminalization of an omitted call therefore stays
-          // silent.
+          // A reset historical call is current only once `issueCall` stamps
+          // this attempt's invocation facts on it, and `kind` is the one
+          // every issued call carries — hydration restores none of them, so
+          // admission cannot collapse when hydration and reissue share a
+          // clock tick. Status alone would not do: the settle sweep
+          // terminalizes a call this script never issued to `skipped`, and
+          // that bookkeeping for the previous attempt stays silent here.
           if (baseline.status === WORKFLOW_CALL_STATUS.DECLARED) {
-            if (status === WORKFLOW_CALL_STATUS.DECLARED) continue;
+            if (call.kind === undefined) continue;
           } else if (
             baseline.status === status &&
             baseline.childRunId === call.childRunId

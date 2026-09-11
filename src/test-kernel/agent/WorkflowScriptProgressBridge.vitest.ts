@@ -616,6 +616,26 @@ return 'done'`,
     expect(retry.events.some((event) => event.type === 'workflow.call')).toBe(
       false,
     );
+
+    // The same omission when the prior snapshot is hydrated too: the dropped
+    // call is reset to `declared`, then the settle sweep terminalizes it to
+    // not-reached. That sweep is bookkeeping for the previous attempt, so it
+    // must stay out of this attempt's cards.
+    clearStoreCache();
+    const hydrated = recordingTrace();
+    const resumed = await runScript(
+      hydrated.trace,
+      'omitted-hydrated-call-resumed',
+      `${meta}
+return 'done'`,
+      { initialSnapshot: failed.snapshot },
+    );
+    expect(
+      resumed.snapshot.calls.map((call) => [call.id, call.status]),
+    ).toEqual([['historical', 'skipped']]);
+    expect(
+      hydrated.events.some((event) => event.type === 'workflow.call'),
+    ).toBe(false);
   });
 
   it('keeps phase counts when an agent opens the stage before phase()', async () => {
