@@ -153,7 +153,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
     await controller.postStartupData();
 
     expect(posted.map(commandOf)).toEqual([
-      SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+      SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
       SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
     ]);
@@ -164,7 +164,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
     finishRefresh?.();
     await vi.waitFor(() => {
       expect(posted.map(commandOf)).toEqual([
-        SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+        SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
         SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
         SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
         SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,

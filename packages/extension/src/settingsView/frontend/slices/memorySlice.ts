@@ -1,5 +1,5 @@
 /**
- * Memory handlers: UPDATE_MEMORY, UPDATE_MEMORY_ENABLED, UPDATE_MEMORY_PREVIEW.
+ * Memory handlers: UPDATE_MEMORY, UPDATE_MEMORY_PREVIEW.
  */
 
 import { create } from 'mutative';
@@ -7,15 +7,11 @@ import { create } from 'mutative';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
-import { applySettingsSnapshot, memoryItems } from '../settingsState';
+import { memoryItems } from '../settingsState';
 
 export const memoryHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY]: (data) => {
     memoryItems.set(data.items);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED]: (data) => {
-    applySettingsSnapshot(data.values);
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW]: (data) => {

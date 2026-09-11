@@ -10,7 +10,7 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import type { DerivedSettingsSnapshot, RunId } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -116,7 +116,8 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       createStubDesktopToolingSettingsController({
         postLatexConfigValues: () =>
           postToRenderer({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+            snapshot: 'latex',
             values: {},
           }),
       }),
@@ -148,6 +149,17 @@ function findPosted(
   command: string,
 ): RendererMessage | undefined {
   return posted.find((message) => commandOf(message) === command);
+}
+
+function findSnapshot(
+  posted: readonly RendererMessage[],
+  snapshot: DerivedSettingsSnapshot,
+): RendererMessage | undefined {
+  return posted.find(
+    (message) =>
+      commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT &&
+      (message as { snapshot?: unknown }).snapshot === snapshot,
+  );
 }
 
 function createFailureReportingFixture(workspaceState: FakeStateStore) {
@@ -223,10 +235,9 @@ describe('desktop settings IPC', () => {
         SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
       ]),
     });
-    expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS),
-    ).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+    expect(findSnapshot(posted, 'git-author')).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+      snapshot: 'git-author',
       values: {
         [WorkspaceStateKey.GIT_MARK_COMMITS]: true,
         [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'TeXRA Bot',
@@ -324,7 +335,8 @@ describe('desktop settings IPC', () => {
       'Desktop TeXRA',
     );
     expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+      snapshot: 'git-author',
       values: { [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'Desktop TeXRA' },
     });
 
@@ -370,7 +382,8 @@ describe('desktop settings IPC', () => {
       workspaceState.get(WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED),
     ).toBe(false);
     expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+      snapshot: 'approval',
       values: {
         [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]: false,
       },
@@ -394,7 +407,8 @@ describe('desktop settings IPC', () => {
 
     expect(globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP)).toBe(true);
     expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+      snapshot: 'multi-agent',
       values: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
     });
   });
@@ -706,10 +720,9 @@ describe('desktop settings IPC', () => {
     expect(postToolingStartupData).toHaveBeenCalledOnce();
     expect(postAgentStartupData).toHaveBeenCalledOnce();
 
-    expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
-    ).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+    expect(findSnapshot(posted, 'approval')).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+      snapshot: 'approval',
       values: {
         [BASH_APPROVAL_CONFIG_KEY]: false,
         [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
@@ -754,10 +767,9 @@ describe('desktop settings IPC', () => {
     expect(config.lastTargetFor('texra.toolUse.requireBashApproval')).toBe(
       'workspace',
     );
-    expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
-    ).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+    expect(findSnapshot(posted, 'approval')).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+      snapshot: 'approval',
       values: { [BASH_APPROVAL_CONFIG_KEY]: false },
     });
   });
@@ -829,10 +841,9 @@ describe('desktop settings IPC', () => {
 
     expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
     expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
-    expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_SETTINGS),
-    ).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_SETTINGS,
+    expect(findSnapshot(posted, 'skills')).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+      snapshot: 'skills',
       values: {
         [AGENT_SKILLS_CONFIG_KEY]: false,
         [WorkspaceStateKey.DISABLED_SKILLS]: [],

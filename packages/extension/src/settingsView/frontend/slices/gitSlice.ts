@@ -1,27 +1,21 @@
 /**
- * Git + integrations handlers: UPDATE_GIT_AUTHOR_SETTINGS,
- * UPDATE_GITHUB_TOKEN_STATUS, UPDATE_CHATGPT_AUTH_STATUS,
- * UPDATE_GROK_AUTH_STATUS, UPDATE_PR_SUBSCRIPTIONS.
+ * Git + integrations handlers: UPDATE_GITHUB_TOKEN_STATUS,
+ * UPDATE_CHATGPT_AUTH_STATUS, UPDATE_GROK_AUTH_STATUS,
+ * UPDATE_PR_SUBSCRIPTIONS. The git-author snapshot arrives through
+ * UPDATE_SETTINGS_SNAPSHOT (miscSettingsSlice.ts).
  */
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
-  applySettingsSnapshot,
   chatgptAuth,
   githubTokenStatus,
-  gitSettingsLoaded,
   grokAuth,
   prSubscriptions,
 } from '../settingsState';
 
 export const gitHandlers = {
-  [SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS]: (data) => {
-    applySettingsSnapshot(data.values);
-    gitSettingsLoaded.set(true);
-  },
-
   [SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS]: (data) => {
     githubTokenStatus.set(data.status);
   },
