@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Deferred, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 import ignore from 'ignore';
 
 // Local imports - common
@@ -30,13 +30,6 @@ const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
   ignores: () => false,
   ignoreFiles: [],
 };
-
-/**
- * The shared load, or nothing when no load has succeeded yet. Callers that
- * arrive while a load is in flight await its outcome instead of starting a
- * second one; a failed load clears this so the next caller retries.
- */
-let sharedLoad: Deferred.Deferred<GitignoreMatcher, unknown> | undefined;
 
 const readGitignoreFile = (
   absolutePath: string,
@@ -83,72 +76,54 @@ const readGlobalGitignore = (): Effect.Effect<
   );
 };
 
-const loadGitignoreMatcher = Effect.fn('loadGitignoreMatcher')(function* () {
-  const workspacePath = WorkspaceFS.getPath();
-  if (!workspacePath) {
-    return EMPTY_GITIGNORE_MATCHER;
-  }
-
-  const sources = (yield* Effect.all(
-    [
-      readGlobalGitignore(),
-      readWorkspaceGitignore('.gitignore_global'),
-      readWorkspaceGitignore('.gitignore'),
-    ],
-    // The three policies were read together and fail fast, as Promise.all did.
-    { concurrency: 'unbounded' },
-  )).filter(filterNotNull);
-
-  if (sources.length === 0) {
-    return EMPTY_GITIGNORE_MATCHER;
-  }
-
-  const ig = ignore();
-  for (const source of sources) {
-    ig.add(source.content);
-  }
-
-  return {
-    ignores: (relativePath: string): boolean => {
-      if (!relativePath || relativePath === '.') {
-        return false;
-      }
-      const normalized = toPosixPath(relativePath);
-      // Try plain path first; also try with trailing slash so that
-      // directory-only rules (e.g. "dist/") match bare directory names
-      // ("dist") the same way the old minimatch-based parser did.
-      // Known deviation from strict git spec: a *file* named "dist" would
-      // also be ignored by a "dist/" rule, because we cannot distinguish
-      // files from directories without a stat call. The old parser had the
-      // same behaviour (it expanded "dist/" → ["dist", "dist/**"]).
-      return ig.ignores(normalized) || ig.ignores(normalized + '/');
-    },
-    ignoreFiles: sources.map((source) => source.absolutePath),
-  };
-});
-
+/**
+ * Build the ignore matcher for the current workspace from its ignore policy
+ * files. Read on every call: the workspace is scoped per session and a
+ * process can serve several projects, and each call should see the policy as
+ * it is on disk now.
+ */
 export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(
-  function* (): Effect.fn.Return<GitignoreMatcher, unknown> {
-    const inFlight = sharedLoad;
-    if (inFlight) {
-      return yield* Deferred.await(inFlight);
+  function* () {
+    const workspacePath = WorkspaceFS.getPath();
+    if (!workspacePath) {
+      return EMPTY_GITIGNORE_MATCHER;
     }
-    const deferred = Deferred.makeUnsafe<GitignoreMatcher, unknown>();
-    sharedLoad = deferred;
-    // The load completes even if the caller that started it is interrupted:
-    // every other caller is waiting on this Deferred, and an interrupted
-    // shared load would strand them.
-    return yield* Effect.uninterruptible(
-      loadGitignoreMatcher().pipe(
-        Effect.onExit((exit) =>
-          Effect.sync(() => {
-            if (Exit.isFailure(exit) && sharedLoad === deferred) {
-              sharedLoad = undefined;
-            }
-            Deferred.doneUnsafe(deferred, exit);
-          }),
-        ),
-      ),
-    );
+
+    const sources = (yield* Effect.all(
+      [
+        readGlobalGitignore(),
+        readWorkspaceGitignore('.gitignore_global'),
+        readWorkspaceGitignore('.gitignore'),
+      ],
+      // The three policies were read together and fail fast, as Promise.all did.
+      { concurrency: 'unbounded' },
+    )).filter(filterNotNull);
+
+    if (sources.length === 0) {
+      return EMPTY_GITIGNORE_MATCHER;
+    }
+
+    const ig = ignore();
+    for (const source of sources) {
+      ig.add(source.content);
+    }
+
+    return {
+      ignores: (relativePath: string): boolean => {
+        if (!relativePath || relativePath === '.') {
+          return false;
+        }
+        const normalized = toPosixPath(relativePath);
+        // Try plain path first; also try with trailing slash so that
+        // directory-only rules (e.g. "dist/") match bare directory names
+        // ("dist") the same way the old minimatch-based parser did.
+        // Known deviation from strict git spec: a *file* named "dist" would
+        // also be ignored by a "dist/" rule, because we cannot distinguish
+        // files from directories without a stat call. The old parser had the
+        // same behaviour (it expanded "dist/" → ["dist", "dist/**"]).
+        return ig.ignores(normalized) || ig.ignores(normalized + '/');
+      },
+      ignoreFiles: sources.map((source) => source.absolutePath),
+    };
   },
 );

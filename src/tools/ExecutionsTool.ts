@@ -541,15 +541,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      // Identity comes only from the stamped execution row; pre-identity rows
-      // lost their reader per #9590 Stage 7 and degrade to the config-derived
-      // display category, loudly.
+      // Identity comes only from the stamped execution row, which always
+      // carries one; without a row the display falls back to the config.
       const identity = meta?.identity;
-      if (meta && !identity) {
-        log.warn(
-          `Execution ${executionId} is a pre-identity row; showing config-derived category only (reader retired per #9590 Stage 7)`,
-        );
-      }
       const category = executionDisplayCategory(identity, record);
       const info = yield* getExecutionStatusInfo(
         executionId,
@@ -813,16 +807,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       }
 
       // Filter out fields irrelevant to this agent's category. Identity comes
-      // only from the stamped execution row; a pre-identity row (reader retired
-      // per #9590 Stage 7) degrades to the config-derived category, loudly.
+      // only from the stamped execution row.
       const meta = yield* records.readMeta();
-      const identity = meta?.identity;
-      if (meta && !identity) {
-        log.warn(
-          `Execution ${executionId} is a pre-identity row; filtering config by its config-derived category only (reader retired per #9590 Stage 7)`,
-        );
-      }
-      const category = executionDisplayCategory(identity, record);
+      const category = executionDisplayCategory(meta?.identity, record);
       return executed(serializeFilteredConfig(record, category));
     },
   );
