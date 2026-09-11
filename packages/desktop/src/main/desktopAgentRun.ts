@@ -13,16 +13,14 @@ import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
+  validateRunRequest,
   type PresentationEventHandlers,
+  type RunRequest,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
   type SessionHandle,
-} from '@agent/runtime';
-import {
-  validateRunRequest,
-  type RunRequest,
   type ValidatedRunRequest,
-} from '@agent/core/state/runRequests';
+} from '@agent/runtime';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
