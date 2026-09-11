@@ -10,13 +10,9 @@ const outputRoot = path.join(packageRoot, 'dist/types');
 const tsconfig = JSON.parse(
   await readFile(path.join(repositoryRoot, 'tsconfig.json'), 'utf8'),
 );
-const aliases = Object.entries(tsconfig.compilerOptions.paths)
-  .filter(([, targets]) =>
-    targets.every(
-      (target) => !target.replace(/^\.\//u, '').startsWith('node_modules/'),
-    ),
-  )
-  .toSorted(([left], [right]) => right.length - left.length);
+const aliases = Object.entries(tsconfig.compilerOptions.paths).toSorted(
+  ([left], [right]) => right.length - left.length,
+);
 
 async function resolveSource(specifier) {
   for (const [pattern, targets] of aliases) {

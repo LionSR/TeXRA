@@ -97,13 +97,12 @@ const HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
       '@settingsView/**',
       '@frontend/**',
       '@resources/**',
-      '@common/state/**',
-      '@common/webview/**',
       '@cli/**',
       '@desktop/**',
+      '@test/**',
     ],
     message:
-      'Production src code must not import extension, CLI, or desktop host layers; route host access through platform or host adapters.',
+      'Production src code must not import extension, CLI, or desktop host layers or the test kernel; route host access through platform or host adapters.',
   },
 ];
 

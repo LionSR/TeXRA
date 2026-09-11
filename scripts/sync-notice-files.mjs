@@ -10,8 +10,7 @@ import process from 'node:process';
 // two npm packages are distributed separately, and an attribution obligation
 // attaches to each), so the duplication is required; what is NOT required is
 // maintaining five copies by hand and hoping they agree.
-// Mirrors sync-tsconfig-paths.mjs: in `--check` mode this is the CI diff gate,
-// failing when a copy has drifted out of sync with the root NOTICE.
+// In `--check` mode this is the CI diff gate, failing when a copy has drifted out of sync with the root NOTICE.
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

@@ -1,6 +1,6 @@
 /**
  * Shared path aliases derived from tsconfig.json for Vite build configs.
- * Extension esbuild reads its generated package tsconfig directly.
+ * Extension esbuild reads its package tsconfig, which extends the root.
  */
 
 import { resolve, dirname } from 'node:path';

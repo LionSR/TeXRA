@@ -1,5 +1,3 @@
-import { fork } from 'node:child_process';
-import { once } from 'node:events';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -127,11 +125,6 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
-    ...(process.env.TEXRA_TEST_NODE
-      ? { pool: executablePool(process.env.TEXRA_TEST_NODE) }
-      : {}),
-    passWithNoTests: false,
     testTimeout: kernelTimeoutMs,
     hookTimeout: kernelTimeoutMs,
     projects: [
@@ -187,52 +180,6 @@ function quickJsWasmPlugin() {
       return {
         code: `export default Uint8Array.from(Buffer.from(${JSON.stringify(contents.toString('base64'))}, 'base64'));`,
         map: null,
-      };
-    },
-  };
-}
-
-/** Transform on the tool host and execute the unchanged suite on the requested Node host. */
-function executablePool(execPath) {
-  return {
-    name: 'node-executable',
-    createPoolWorker(options) {
-      let child;
-      return {
-        name: 'node-executable',
-        async start() {
-          child = fork(resolve(options.distPath, 'workers/forks.js'), [], {
-            execPath,
-            execArgv: options.execArgv,
-            env: options.env,
-            serialization: 'advanced',
-            stdio: 'pipe',
-          });
-          child.stdout.pipe(options.project.vitest.logger.outputStream, {
-            end: false,
-          });
-          child.stderr.pipe(options.project.vitest.logger.errorStream, {
-            end: false,
-          });
-        },
-        on(event, listener) {
-          child.on(event, listener);
-        },
-        off(event, listener) {
-          child.off(event, listener);
-        },
-        send(message) {
-          child.send(message);
-        },
-        deserialize(value) {
-          return value;
-        },
-        async stop() {
-          if (child.exitCode !== null || child.signalCode !== null) return;
-          const exited = once(child, 'exit');
-          child.kill();
-          await exited;
-        },
       };
     },
   };

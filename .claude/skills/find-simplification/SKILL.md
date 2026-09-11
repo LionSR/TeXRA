@@ -73,7 +73,7 @@ For every symbol or behavior, classify consumers before writing:
 - Non-production corpus: `src/test-kernel/`, docs, snapshots, comments.
 - Ambiguous corpus: `scripts/` and `docs/scripts/` — some are release/CI tooling that counts as production. Inspect usage before classifying.
 
-Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared in `src/shared/schemas/coreSettings.ts` or `stateSettings.ts` and consumed by the native settings view. Grep those boundaries as well as imports. `npm run check:dead-code` (knip) can help, but it is not a substitute for reading public interfaces, dynamic event names, tests, and docs. When a ratchet baseline lists the symbol, the find is proving the baseline entry can shrink, not discovering the dead code.
+Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared in `src/shared/schemas/coreSettings.ts` or `stateSettings.ts` and consumed by the native settings view. Grep those boundaries as well as imports. `npm run check:dead-code-ratchet` (knip) can help, but it is not a substitute for reading public interfaces, dynamic event names, tests, and docs. When a ratchet baseline lists the symbol, the find is proving the baseline entry can shrink, not discovering the dead code.
 
 Reject or downgrade a candidate when:
 

@@ -1,7 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreDependencies": [".*"],
-  "ignoreBinaries": [".*"],
   "workspaces": {
     ".": {
       "entry": [
@@ -12,7 +10,7 @@
       "project": ["src/**/*.{ts,mts}!", "!src/**/*.js", "!src/test-kernel/**!"]
     },
     "packages/extension": {
-      "entry": ["src/extension.ts!", "src/**/frontend/index.ts!"],
+      "entry": ["src/**/frontend/index.ts!"],
       "project": ["src/**/*.{ts,tsx,mts}!"]
     },
     "packages/agent": {
@@ -26,14 +24,6 @@
       "project": ["src/**/*.{ts,mts}!", "scripts/*.mjs!"]
     },
     "packages/llm": {
-      "entry": [
-        "src/openrouterChat.ts!",
-        "src/turn.ts!",
-        "src/openaiChat.ts!",
-        "src/openaiResponses.ts!",
-        "src/anthropicMessages.ts!",
-        "src/googleInteractions.ts!"
-      ],
       "project": ["src/**/*.{ts,mts}!"]
     },
     "packages/cli": {
@@ -45,12 +35,10 @@
         "src/main/bootstrap.ts!",
         "src/main/index.ts!",
         "src/preload/index.ts!",
-        "src/renderer/main.ts!",
         "tests/**/*.{ts,tsx}",
         "design-harness/**/*.{ts,mjs}!"
       ],
-      "project": ["src/**/*.{ts,tsx,mts}!"],
-      "ignore": ["src/renderer/vite-env.d.ts"]
+      "project": ["src/**/*.{ts,tsx,mts}!"]
     },
     "packages/trace-viewer": {
       "entry": ["vite.standalone.config.ts"]

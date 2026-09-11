@@ -73,10 +73,7 @@ const SHARED_AGENT_IMPORT_ALLOWLIST_SET = new Set<string>(
   SHARED_AGENT_IMPORT_ALLOWLIST,
 );
 
-const HOST_LAYER_IMPORT_SPECIFIERS = [
-  '@common/state',
-  '@common/webview',
-] as const;
+const HOST_LAYER_IMPORT_SPECIFIERS = ['@common/webview'] as const;
 
 const HOST_LAYER_IMPORT_PREFIXES = [
   '@webview/',
@@ -85,7 +82,6 @@ const HOST_LAYER_IMPORT_PREFIXES = [
   '@settingsView/',
   '@frontend/',
   '@resources/',
-  '@common/state/',
   '@common/webview/',
   '@cli/',
   '@desktop/',

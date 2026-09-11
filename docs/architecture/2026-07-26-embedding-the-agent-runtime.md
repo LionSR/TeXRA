@@ -8,7 +8,7 @@ checkout with equivalent alias-aware bundler configuration, or replace the
 aliases with resolvable paths. The repository's Vite builds derive their alias
 map from `tsconfig.json` (`scripts/aliases.mjs:14-20`,
 `packages/extension/vite.config.mts:5`), while the extension's esbuild bundle
-reads its generated package tsconfig (`packages/extension/esbuild.config.mjs:34-48`).
+reads its package tsconfig, which extends the root one (`packages/extension/esbuild.config.mjs:34-48`).
 Nothing here is a stable contract — this note documents what an external
 program has to do _today_ to get a `runAgent` call to complete, so that SDK work
 has a measurable baseline.

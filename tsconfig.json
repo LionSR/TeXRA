@@ -18,17 +18,7 @@
         "./src/shared/*.ts",
         "./src/shared/*/index.ts"
       ],
-      "@common/state/*": [
-        "./packages/extension/src/common/state/*",
-        "./packages/extension/src/common/state/*.ts",
-        "./packages/extension/src/common/state/*/index.ts"
-      ],
       "@common/webview": ["./packages/extension/src/common/webview/index.ts"],
-      "@common/webview/*": [
-        "./packages/extension/src/common/webview/*",
-        "./packages/extension/src/common/webview/*.ts",
-        "./packages/extension/src/common/webview/*/index.ts"
-      ],
       "@common/*": [
         "./src/common/*",
         "./src/common/*.ts",
@@ -135,17 +125,6 @@
         "./src/platform/*",
         "./src/platform/*.ts",
         "./src/platform/*/index.ts"
-      ],
-      "turndown-plugin-gfm": ["./src/types/ambient.d.ts"],
-      "data-uri-to-buffer": [
-        "./node_modules/data-uri-to-buffer/dist/node.d.ts"
-      ],
-      "@openrouter/sdk": ["./node_modules/@openrouter/sdk/esm/index.d.ts"],
-      "@openrouter/sdk/models": [
-        "./node_modules/@openrouter/sdk/esm/models/index.d.ts"
-      ],
-      "@openrouter/sdk/models/errors": [
-        "./node_modules/@openrouter/sdk/esm/models/errors/index.d.ts"
       ],
       "@controllers/*": [
         "./src/controllers/*",
