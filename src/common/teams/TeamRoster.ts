@@ -16,18 +16,16 @@ interface TeamRosterAgentCatalog {
 export interface TeamRosterResolution {
   /**
    * Agent keys that resolved against the catalog at resolve time. Contains
-   * only canonical source keys — never raw member names (see {@link nameSlots}).
+   * only canonical source keys — never raw member names.
    */
   readonly keys: ByCategory<string[]>;
   /**
-   * Roster member names that did not resolve to a catalog entry at resolve
-   * time, per category. Nothing persists these: the roster stores the team
-   * reference and re-resolves `preset.agents` on read, so a member activates
-   * the moment it appears in the catalog (sign-in, install) without a stored
-   * slot. They exist to feed `unresolvedNames` for the availability preflight.
+   * Member names that did not resolve to a catalog entry at resolve time,
+   * across all categories in canonical order, for the availability preflight.
+   * Nothing persists these: the roster stores the team reference and
+   * re-resolves `preset.agents` on read, so a member activates the moment it
+   * appears in the catalog (sign-in, install).
    */
-  readonly nameSlots: ByCategory<string[]>;
-  /** Unresolved member names across all categories, in canonical order. */
   readonly unresolvedNames: string[];
 }
 
@@ -57,13 +55,12 @@ export function resolveTeamRoster(
   preset: AgentModePreset,
 ): TeamRosterResolution {
   const resolved = byCategory((category) =>
-    resolveAgentKeys(state, category, preset.agents[category]),
+    resolvePresetAgents(preset.agents[category], state.getAgents(category)),
   );
   return {
-    keys: byCategory((category) => resolved[category].keys),
-    nameSlots: byCategory((category) => resolved[category].nameSlots),
+    keys: byCategory((category) => resolved[category].resolved.map(agentKeyOf)),
     unresolvedNames: AGENT_CATEGORIES.flatMap(
-      (category) => resolved[category].nameSlots,
+      (category) => resolved[category].missing,
     ),
   };
 }
@@ -80,23 +77,19 @@ export function teamHostedNamesForPreflight(
   return new Set(preset.texraHostedAgents ?? unresolvedNames);
 }
 
-function resolveAgentKeys(
-  state: TeamRosterAgentCatalog,
-  category: AgentCategory,
-  names: string[],
-): { keys: string[]; nameSlots: string[] } {
-  const entries = state.getAgents(category);
-  const keys: string[] = [];
-  const nameSlots: string[] = [];
+/** Split a preset's member names into catalog entries and unmatched names. */
+export function resolvePresetAgents<
+  T extends { readonly name: string; readonly source: AgentSource },
+>(
+  names: readonly string[],
+  agents: readonly T[],
+): { resolved: T[]; missing: string[] } {
+  const resolved: T[] = [];
+  const missing: string[] = [];
   for (const name of names) {
-    const entry = entries.find((candidate) =>
-      agentMatchesIdentifier(candidate, name),
-    );
-    if (entry) {
-      keys.push(agentKeyOf(entry));
-    } else {
-      nameSlots.push(name);
-    }
+    const entry = agents.find((agent) => agentMatchesIdentifier(agent, name));
+    if (entry) resolved.push(entry);
+    else missing.push(name);
   }
-  return { keys, nameSlots };
+  return { resolved, missing };
 }

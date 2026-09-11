@@ -30,7 +30,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import type { FakeProcesses } from '@test/support/FakePlatform';
 import { StorageFS } from '@utils/files/storageFS';
 import type { z } from 'zod';
 
@@ -234,10 +233,6 @@ async function acquire(runId: RunId): Promise<void> {
   await acquireResumedRunLease(runId);
 }
 
-function fakeProcesses(): FakeProcesses {
-  return platform().processes as FakeProcesses;
-}
-
 /**
  * Gate one filesystem probe of lease state so a concurrent step can
  * interleave: `readFile` for a claim's content, `stat` for the own-file
@@ -271,7 +266,6 @@ function gateNextLeaseRead(operation: 'readFile' | 'stat' = 'readFile'): {
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  fakeProcesses().reset();
   await Promise.all([...ownedRunIds].map(releaseOwnedRunLease));
   ownedRunIds.clear();
   await StorageFS.delete(WORKSPACE_STORAGE_LAYOUT.runLeases, {
@@ -343,7 +337,11 @@ describe('cross-process run leases', () => {
     {
       label: 'a live pid whose identity cannot be read',
       owner: async () => {
-        fakeProcesses().setIdentity(process.pid, undefined);
+        const readIdentity = nodeProcesses.identity;
+        vi.spyOn(nodeProcesses, 'identity').mockImplementation(async (pid) =>
+          pid === process.pid ? undefined : readIdentity(pid),
+        );
+        vi.spyOn(nodeProcesses, 'selfIdentity').mockResolvedValue(undefined);
         return { pid: process.pid, processStart: '1', hostname: os.hostname() };
       },
     },

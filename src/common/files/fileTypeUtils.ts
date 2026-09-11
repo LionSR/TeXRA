@@ -9,14 +9,12 @@ import { FILE_HANDLING_RULES } from './fileHandlingRules';
  * Note: This is distinct from DocumentFileType in utils/config/constants.ts
  * which defines UI file input field types.
  */
-export type ExtensionCategory =
-  'input' | 'context' | 'media' | 'audio' | 'edited';
+export type ExtensionCategory = 'input' | 'context' | 'media' | 'edited';
 
 const INCLUDED_EXTENSIONS: Record<ExtensionCategory, readonly string[]> = {
   input: FILE_HANDLING_RULES.included.inputExtensions,
   context: FILE_HANDLING_RULES.included.contextExtensions,
   media: FILE_HANDLING_RULES.included.mediaExtensions,
-  audio: [],
   edited: FILE_HANDLING_RULES.included.editedExtensions,
 };
 

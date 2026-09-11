@@ -40,20 +40,12 @@ describe('extension team auth catalog refresh scope', () => {
                       workflow: [],
                       toolUse: ['remote:orchestrator'],
                     },
-                    nameSlots: {
-                      workflow: [],
-                      toolUse: [],
-                    },
                     unresolvedNames: [],
                   }
                 : {
                     keys: {
                       workflow: [],
                       toolUse: [],
-                    },
-                    nameSlots: {
-                      workflow: [],
-                      toolUse: ['orchestrator'],
                     },
                     unresolvedNames: ['orchestrator'],
                   },

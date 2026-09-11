@@ -1,5 +1,7 @@
 import { Effect } from 'effect';
 
+import { hostPort } from '@common/hostPort';
+
 export type TeamAvailabilityChoice = 'sign-in' | 'continue' | 'cancel';
 
 export type TeamAvailabilityPreflightResult<T> =
@@ -43,12 +45,6 @@ function unavailableTexraHostedNames<T>(
     .unresolvedNames(value)
     .filter((name) => options.texraHostedNames.has(name));
 }
-
-/** Call a host dialog or auth port from the preflight program. */
-const hostPort = <A>(
-  call: () => A | PromiseLike<A>,
-): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: async () => call(), catch: (error) => error });
 
 /**
  * Decide whether an incomplete team may proceed before its caller writes or

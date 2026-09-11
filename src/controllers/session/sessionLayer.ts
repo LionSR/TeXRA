@@ -161,7 +161,7 @@ const ownerLiveness = Layer.effectDiscard(
       const dead: OwnerId[] = [];
       for (const owner of owners) {
         // The one thing `proveOwnerLiveness` awaits is
-        // `ProcessesPort.identity`, declared `Promise<string | undefined>`
+        // `nodeProcesses.identity`, declared `Promise<string | undefined>`
         // with unreadable meaning undefined, and the `kill(pid, 0)` beside it
         // catches its own throw. A rejection here would end this prober's
         // stream for the life of the process, so that total contract is the
@@ -751,8 +751,8 @@ export function installProcessRuntime(
       ? Layer.effect(
           ProcessIdentity,
           Effect.map(
-            // Non-rejecting by port contract: the one caller that passes a
-            // pending read passes `ProcessesPort.selfIdentity()`, declared as
+            // Non-rejecting by contract: the one caller that passes a
+            // pending read passes `nodeProcesses.selfIdentity()`, declared as
             // `string | undefined`, unreadable being undefined.
             Effect.promise(() => processStart),
             (start) => ({ ownerId: processOwnerId(start) }),

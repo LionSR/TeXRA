@@ -151,25 +151,6 @@ export interface StorageProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Process liveness
-// ---------------------------------------------------------------------------
-
-/**
- * Kernel facts about processes, used to prove whether the owner recorded in
- * a run lease is still the same process. An identity is an opaque
- * string that cannot change while a process runs and that no later process
- * with the same pid can repeat: two equal strings name one process, two
- * different strings name two. Its format is the port's business; callers
- * only compare it verbatim.
- */
-export interface ProcessesPort {
-  /** Start identity of `pid`, or undefined when it cannot be read. */
-  identity(pid: number): Promise<string | undefined>;
-  /** This process's own identity; memoized once read, retried until then. */
-  selfIdentity(): Promise<string | undefined>;
-}
-
-// ---------------------------------------------------------------------------
 // Cross-process file locks
 // ---------------------------------------------------------------------------
 
@@ -293,32 +274,4 @@ export interface AgentResumePort {
    * the message queued for the next manual resume.
    */
   tryResumeRun(runId: RunId, recovery?: RecoveryContinuation): Promise<boolean>;
-}
-
-// ---------------------------------------------------------------------------
-// Host environment
-// ---------------------------------------------------------------------------
-
-/**
- * Host-owned reads of the current process's raw OS/runtime environment: the
- * `probe_environment` tool's OS/arch/shell summary, and the packaged-Electron
- * check native-binary resolution uses to locate `app.asar.unpacked`
- * resources. Other `process`/`os` reads (e.g. the platform/arch key each
- * vendor CLI's binary resolver selects its npm package by) are unrelated
- * lookups, not environment reporting, and stay where they are.
- */
-export interface HostEnvironmentPort {
-  /** OS, architecture, kernel release, and shell of the current process. */
-  hostInfo(): {
-    readonly platform: string;
-    readonly arch: string;
-    readonly osRelease: string;
-    readonly shell: string;
-  };
-  /**
-   * `process.resourcesPath` when running inside a packaged Electron app.
-   * `undefined` in development mode (`defaultApp === true`) and in
-   * non-Electron runtimes (VS Code extension host, CLI, plain Node.js).
-   */
-  packagedElectronResourcesPath(): string | undefined;
 }

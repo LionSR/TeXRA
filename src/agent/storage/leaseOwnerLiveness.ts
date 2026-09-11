@@ -3,13 +3,13 @@ import * as os from 'node:os';
 import { z } from 'zod';
 
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 
 const log = createLog('LeaseOwnerLiveness');
 
 /**
  * Identity of the process that owns a run lease: a pid, the opaque
- * process-start identity the `processes` port produced for it when the lease
+ * process-start identity `nodeProcesses` produced for it when the lease
  * was written (null where the host could not read one), and the machine it
  * runs on. Liveness is a kernel fact derived from these three fields;
  * nothing here is compared to a clock and no socket protocol is involved.
@@ -34,7 +34,7 @@ export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 export async function currentLeaseOwner(): Promise<LeaseOwnerRecord> {
   return {
     pid: process.pid,
-    processStart: (await platform().processes.selfIdentity()) ?? null,
+    processStart: (await nodeProcesses.selfIdentity()) ?? null,
     hostname: os.hostname(),
   };
 }
@@ -79,7 +79,7 @@ export async function proveOwnerLiveness(
     return 'unprovable';
   }
   if (pidProvablyDead(owner.pid)) return 'dead';
-  const observed = await platform().processes.identity(owner.pid);
+  const observed = await nodeProcesses.identity(owner.pid);
   if (observed === undefined) {
     // The process may have exited between the two probes.
     if (pidProvablyDead(owner.pid)) return 'dead';

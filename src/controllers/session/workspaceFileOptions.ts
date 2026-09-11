@@ -1,14 +1,13 @@
 /**
  * The launcher's file catalogs of one workspace (PRD one-fold-three-renderers,
  * 8.1, `HostSnapshot.fileOptions`): the base candidates from the input rules
- * and the edited candidates from the edited rules, listed with the user's
- * file-list settings through the platform's directory reader, so both hosts
- * list the same files for the same folder.
+ * and the edited candidates from the edited rules, listed through the
+ * platform's directory reader, so both hosts list the same files for the same
+ * folder.
  */
 import {
   getEditedFileListConfig,
   getFileListConfig,
-  loadFileListSettings,
   type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
@@ -25,8 +24,8 @@ function listFiles(root: string, config: FileFilterConfig): Promise<string[]> {
 }
 
 /**
- * List the workspace files of one listable type under the current file-list
- * settings. Empty when no workspace is open.
+ * List the workspace files of one listable type under the product's
+ * file-listing rules. Empty when no workspace is open.
  */
 export async function listWorkspaceFilesOfType(
   fileType: ListableFileType,
@@ -35,7 +34,7 @@ export async function listWorkspaceFilesOfType(
   // the process-wide workspace instead.
   workspacePath: string | undefined,
 ): Promise<string[]> {
-  const config = getFileListConfig(fileType, loadFileListSettings());
+  const config = getFileListConfig(fileType);
   if (!workspacePath) return [];
   return listFiles(workspacePath, config);
 }
@@ -49,7 +48,7 @@ export async function workspaceFileOptions(
   if (!workspacePath) return { baseFile: [], editedFile: [], commit: ['HEAD'] };
   const [baseFile, editedFile] = await Promise.all([
     listWorkspaceFilesOfType('input', workspacePath),
-    listFiles(workspacePath, getEditedFileListConfig(loadFileListSettings())),
+    listFiles(workspacePath, getEditedFileListConfig()),
   ]);
   return { baseFile, editedFile, commit: ['HEAD'] };
 }
