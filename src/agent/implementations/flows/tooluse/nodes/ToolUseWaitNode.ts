@@ -1,7 +1,6 @@
 import { BaseNode } from '@agent/node';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   applyFollowUpBatch,
   userFollowUpInstruction,
@@ -65,8 +64,8 @@ export class ToolUseWaitNode extends BaseNode<
     // retry layer already absorbed transient errors before we reach here —
     // instead of leaving the record `active` while the loop is actually
     // stalled. A drained batch continues immediately and keeps the goal live.
-    // The goalPaused event makes the pause user-visible: a silent stop
-    // mid-objective reads as a hang.
+    // The pause lands as the next `goalStateChanged` fact, which is what
+    // hosts surface so a silent stop mid-objective does not read as a hang.
     if (prepRes.afterError && !hasDrainedFollowUps) {
       await this.pauseActiveGoal(runId);
     } else if (!isChild) {
@@ -218,6 +217,5 @@ export class ToolUseWaitNode extends BaseNode<
     await setGoalSessionAutoApproval(runId, false, {
       session: this.services.runScope.session,
     });
-    emitRunFact(this.services.logger, 'goalPaused', { runId });
   }
 }

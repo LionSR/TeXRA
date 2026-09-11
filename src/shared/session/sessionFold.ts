@@ -1443,10 +1443,6 @@ function applyOwnArm(
       return stream.category === AgentCategory.ToolUse
         ? { ...stream, goal: event.state }
         : wrongArm(stream, event);
-    case 'goalPaused':
-      // The pause itself lands as the next `goalStateChanged`; hosts surface
-      // the notice from the fact, not from a view field.
-      return stream;
     case 'addOutputFiles':
       return stream.category === AgentCategory.Workflow
         ? {

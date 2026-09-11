@@ -284,10 +284,11 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
 });
 
 /**
- * The durable arms every renderer folds. Run-scoped arms mirror `AgentEvent`
- * (`src/agent/trace/events.ts`); session-scoped arms mirror the session
- * facts with the payload flattened. `run.removed` is the tombstone: the
- * last row of its aggregate, final (PRD 5.2, "Existence").
+ * The durable arms every renderer folds. This is the one declaration of the
+ * run vocabulary: the trace's `AgentEvent` (`src/agent/trace/events.ts`) is
+ * derived from these arms, minus the aggregate qualification. Session-scoped
+ * arms carry the session facts with the payload flattened. `run.removed` is
+ * the tombstone: the last row of its aggregate, final (PRD 5.2, "Existence").
  */
 const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   RunStartDraftSchema,
@@ -341,7 +342,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('updateCompileFailures', {
     filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
   }),
-  durable('goalPaused', {}),
   RunRemovedDraftSchema,
   durable('updateRunDescription', { description: z.string() }),
   /** Goal is per run; the fact carries the state so the fold never reads

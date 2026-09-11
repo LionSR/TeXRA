@@ -83,14 +83,12 @@ describe('UsageMonitor', () => {
       await monitor.recordUsage(state);
 
       const usageEvent = traceEventsOfType(events, 'usage').at(0);
-      expect(usageEvent?.payload).toMatchObject({
+      expect(usageEvent).toMatchObject({
         usage: {
           usageRoute: 'chatgpt-subscription',
         },
       });
-      expect(usageEvent?.payload.usage).not.toHaveProperty(
-        'viaChatGptSubscription',
-      );
+      expect(usageEvent?.usage).not.toHaveProperty('viaChatGptSubscription');
     });
   });
 

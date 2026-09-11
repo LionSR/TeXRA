@@ -30,10 +30,8 @@ function subscribeOverTestSession() {
 function emitUsage(session: SessionHandle): void {
   session.publishRunEvent(runId, {
     type: 'usage',
-    payload: {
-      runId,
-      usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-    },
+    runId,
+    usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
   });
 }
 

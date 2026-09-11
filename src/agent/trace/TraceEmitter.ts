@@ -139,10 +139,11 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Structured emitters ───────────────────────────────────────────
 
-  usage(payload: UsageReport, options: UsageEmitOptions = {}): void {
+  usage(report: UsageReport, options: UsageEmitOptions = {}): void {
     this.emit({
       type: 'usage',
-      payload,
+      runId: report.runId,
+      usage: report.usage,
       recordTranscript: options.recordTranscript,
       stageId: options.stageId,
     });

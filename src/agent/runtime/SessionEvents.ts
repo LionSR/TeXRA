@@ -127,29 +127,14 @@ export function runEventDraft(
   runId: RunId,
   event: AgentEvent,
 ): SessionEventDraft | null {
+  if (event.type === 'stream.chunk') return null;
   const aggregateId = qualifyAggregateId('run', runId);
-  switch (event.type) {
-    case 'stream.chunk':
-      return null;
-    case 'usage':
-      return {
-        type: event.type,
-        aggregateId,
-        ...event.payload,
-        recordTranscript: event.recordTranscript,
-        stageId: event.stageId,
-      };
-    case 'run.config':
-    case 'result': {
-      // The aggregate is the run: the row carries no second copy of its id.
-      const { runId: _runId, ...body } = event;
-      return { ...body, aggregateId };
-    }
-    default:
-      // Trace arrays are readonly; publication validates and serializes them
-      // at the database boundary without changing their contents.
-      return { ...event, aggregateId } as SessionEventDraft;
+  if (event.type === 'run.config' || event.type === 'result') {
+    // The aggregate is the run: the row carries no second copy of its id.
+    const { runId: _runId, ...body } = event;
+    return { ...body, aggregateId };
   }
+  return { ...event, aggregateId };
 }
 
 /** The `status` arm of one canonical status fact, on the run it names. */

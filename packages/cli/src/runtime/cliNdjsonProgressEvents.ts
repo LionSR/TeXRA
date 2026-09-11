@@ -128,7 +128,6 @@ export interface CliNdjsonProgressEventPayloads {
   /** Round advance projected from stage.start with kind round. */
   updateRoundStage: { streamId: RunId; roundStage: RoundStage };
   updateQueuedFollowUps: { streamId: RunId };
-  goalPaused: { streamId: RunId };
   updateActiveSubagents: {
     parentStreamId: RunId;
     children: CliNdjsonActiveChildRow[];

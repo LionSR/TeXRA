@@ -141,7 +141,6 @@ const PROGRESS_PROJECTION_CASES = {
   addOutputFiles: {
     source: runEvent({
       type: 'addOutputFiles',
-      runId,
       filesByRound: { 1: [] },
     }),
     payload: { streamId: runId, filesByRound: { 1: [] } },
@@ -149,7 +148,6 @@ const PROGRESS_PROJECTION_CASES = {
   updateMissingOutputs: {
     source: runEvent({
       type: 'updateMissingOutputs',
-      runId,
       filesByRound: { 1: ['missing.tex'] },
     }),
     payload: {
@@ -160,7 +158,6 @@ const PROGRESS_PROJECTION_CASES = {
   updateCompileFailures: {
     source: runEvent({
       type: 'updateCompileFailures',
-      runId,
       filesByRound: { 1: [] },
     }),
     payload: { streamId: runId, filesByRound: { 1: [] } },
@@ -186,10 +183,7 @@ const PROGRESS_PROJECTION_CASES = {
     },
   },
   updateStreamUsage: {
-    source: runEvent({
-      type: 'usage',
-      payload: { runId: usageRunId, usage },
-    }),
+    source: runEvent({ type: 'usage', runId: usageRunId, usage }),
     payload: {
       streamId: runId,
       storageKey: usageRunId,
@@ -208,7 +202,6 @@ const PROGRESS_PROJECTION_CASES = {
   updateTodos: {
     source: runEvent({
       type: 'updateTodos',
-      runId,
       todos: [
         {
           content: 'Check the compactness lemma.',
@@ -231,7 +224,6 @@ const PROGRESS_PROJECTION_CASES = {
   updatePlan: {
     source: runEvent({
       type: 'updatePlan',
-      runId,
       plan: { objective: 'Check the compactness lemma.' },
     }),
     payload: {
@@ -263,10 +255,6 @@ const PROGRESS_PROJECTION_CASES = {
       aggregateId: qualifyAggregateId('run', runId),
       messages: ['queued'],
     }),
-    payload: { streamId: runId },
-  },
-  goalPaused: {
-    source: runEvent({ type: 'goalPaused', runId }),
     payload: { streamId: runId },
   },
   updateStreamDescription: {

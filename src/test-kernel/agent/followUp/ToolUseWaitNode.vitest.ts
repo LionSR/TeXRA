@@ -32,9 +32,7 @@ import { generateRunId } from '@utils/core';
 import {
   eventsOfType,
   recordSessionEvents,
-  recordTraceEvents,
   sessionWithInteractions,
-  traceEventsOfType,
   testRunScope,
   toolUseRunShared,
   withTestRunContext,
@@ -399,7 +397,6 @@ describe('ToolUseWaitNode', () => {
       await startErroredGoal(runId, 'finish the refactor', 'cycle failed');
 
     const logger = new TraceEmitter();
-    const recorded = recordTraceEvents(logger);
     const waitForFollowUp = vi.fn();
     const services = createWaitNodeServices({
       logger,
@@ -422,11 +419,6 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).not.toHaveBeenCalled();
       expect(goal?.status).toBe('paused');
-      expect(traceEventsOfType(recorded.events, 'goalPaused')).toContainEqual(
-        expect.objectContaining({
-          runId,
-        }),
-      );
       expect(setApprovalBypassState).toHaveBeenCalledWith({
         runId,
         kind: 'bash',

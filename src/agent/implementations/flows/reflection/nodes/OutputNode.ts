@@ -197,7 +197,6 @@ export class OutputNode extends BaseNode<
   ): Promise<string | undefined> {
     const { logger, outputState, runScope, getRejectOnCompileFailure } =
       this.services;
-    const { runId } = runScope;
     const interactions = runScope.session.interactions;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary } = execRes;
@@ -205,13 +204,11 @@ export class OutputNode extends BaseNode<
 
     // Emit output files event
     emitRunFact(logger, 'addOutputFiles', {
-      runId,
       filesByRound: { [currentRound]: summary.fileInfos },
     });
 
     if (execRes.emitCompileFailures) {
       emitRunFact(logger, 'updateCompileFailures', {
-        runId,
         filesByRound: { [currentRound]: compileFailures },
       });
     }

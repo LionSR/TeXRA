@@ -198,8 +198,6 @@ function projectCliSessionEvent(
         event: 'updateCompileFailures',
         payload: { streamId: runId, filesByRound: event.filesByRound },
       };
-    case 'goalPaused':
-      return { event: 'goalPaused', payload: { streamId: runId } };
     case 'stage.start': {
       // The frozen public wire carries round progress only; phase progress
       // stays internal.
