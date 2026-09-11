@@ -196,7 +196,7 @@ describe('desktop IPC adapters', () => {
 
     await onboarding.refreshOnboardingFunnel();
     await flushAsync();
-    // Backfilled veteran: State 2 (done), no onboarding UI shown.
+    // Veteran with firstRunDone set: State 2 (done), no onboarding UI shown.
     expectFunnelState(onboarding, 'done');
   });
 

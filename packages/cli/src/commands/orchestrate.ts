@@ -165,8 +165,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // State 1 continuation (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): on a true
   // first run the picker hands straight to a chat session owned by the setup
   // agent instead of the launcher. Existing users (firstRunDone set) and users
-  // who pinned an agent via env land on the launcher as before. `orchestrate` has no `--agent` flag here; the env override is the
-  // only explicit agent pin this entry point honors.
+  // who pinned an agent via env land on the launcher as before. `orchestrate`
+  // has no `--agent` flag here; the env override is the only explicit agent
+  // pin this entry point honors.
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
     firstRunDone: getFirstRunDone(services.globalState),
