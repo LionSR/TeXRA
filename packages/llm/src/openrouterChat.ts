@@ -2,7 +2,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Cause, Effect, Exit, Stream } from 'effect';
+import { Cause, Effect, Stream } from 'effect';
 import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
@@ -11,6 +11,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  readerAbortSignal,
   ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
@@ -701,33 +702,7 @@ export function openrouterChatModel(
           const parameters = yield* requestBody(turn, config);
           let reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
             undefined;
-          // The later signal finalizer aborts before cancellation is awaited.
-          yield* Effect.addFinalizer((exit) => {
-            if (reader === undefined) return Effect.void;
-            const body = reader;
-            return Effect.tryPromise({
-              try: () => body.cancel(),
-              catch: (cause) => cause,
-            }).pipe(
-              Effect.catch((cause) => {
-                if (
-                  (signal.aborted && cause === signal.reason) ||
-                  (Exit.isFailure(exit) &&
-                    exit.cause.reasons.some(
-                      (reason) =>
-                        Cause.isFailReason(reason) &&
-                        reason.error instanceof ModelError &&
-                        reason.error.kind === 'transport' &&
-                        reason.error.cause === cause,
-                    ))
-                )
-                  return Effect.void;
-                return Effect.die(cause);
-              }),
-              Effect.ensuring(Effect.sync(() => body.releaseLock())),
-            );
-          });
-          const signal = yield* Effect.abortSignal;
+          const signal = yield* readerAbortSignal(() => reader);
           const response = yield* Effect.tryPromise({
             try: () =>
               http(endpoint.toString(), {

@@ -14,6 +14,7 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
+  readerAbortSignal,
   ResolvedTurnSchema,
   sameModelOrigin,
   TurnRequestSchema,
@@ -708,37 +709,7 @@ export function googleInteractionsModel(
 
           let reader: ReadableStreamDefaultReader<unknown> | undefined =
             undefined;
-          // Finalizers are LIFO: abort the request before awaiting reader cleanup.
-          yield* Effect.addFinalizer((exit) => {
-            const body = reader;
-            if (body === undefined) return Effect.void;
-            const cancel = Effect.tryPromise({
-              try: () => body.cancel(),
-              catch: (cause) => cause,
-            }).pipe(
-              Effect.catch((cause) => {
-                // Cancel repeats an errored reader's original failure; distinct
-                // cleanup defects remain part of the scope's combined failure.
-                if (
-                  (signal.aborted && cause === signal.reason) ||
-                  (Exit.isFailure(exit) &&
-                    exit.cause.reasons.some(
-                      (reason) =>
-                        Cause.isFailReason(reason) &&
-                        reason.error instanceof ModelError &&
-                        reason.error.kind === 'transport' &&
-                        reason.error.cause === cause,
-                    ))
-                )
-                  return Effect.void;
-                return Effect.die(cause);
-              }),
-            );
-            return cancel.pipe(
-              Effect.ensuring(Effect.sync(() => body.releaseLock())),
-            );
-          });
-          const signal = yield* Effect.abortSignal;
+          const signal = yield* readerAbortSignal(() => reader);
           const source = yield* Effect.tryPromise({
             try: () =>
               client.interactions.create(

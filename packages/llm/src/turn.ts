@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect, Result, Stream } from 'effect';
+import { Cause, Data, Effect, Exit, Result, type Scope, Stream } from 'effect';
 import { z } from 'zod';
 
 const TextPartSchema = z
@@ -1593,6 +1593,45 @@ const ModelErrorFieldsSchema = z.strictObject({
 export class ModelError extends Data.TaggedError('ModelError')<
   z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
 > {}
+
+/**
+ * The request signal for a streamed body, with the body reader cancelled at
+ * scope close. The cancel finalizer is registered before the signal's abort
+ * finalizer, so LIFO order aborts the request before cancellation joins a
+ * pending read. Cancel repeats an errored reader's original failure; only that
+ * repeat (the abort reason or the primary transport cause) is dropped, and
+ * distinct cleanup defects stay in the scope's combined failure.
+ */
+export const readerAbortSignal = (
+  reader: () => ReadableStreamDefaultReader<unknown> | undefined,
+): Effect.Effect<AbortSignal, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    yield* Effect.addFinalizer((exit) => {
+      const body = reader();
+      if (body === undefined) return Effect.void;
+      return Effect.tryPromise({
+        try: () => body.cancel(),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.catch((cause) =>
+          (signal.aborted && cause === signal.reason) ||
+          (Exit.isFailure(exit) &&
+            exit.cause.reasons.some(
+              (reason) =>
+                Cause.isFailReason(reason) &&
+                reason.error instanceof ModelError &&
+                reason.error.kind === 'transport' &&
+                reason.error.cause === cause,
+            ))
+            ? Effect.void
+            : Effect.die(cause),
+        ),
+        Effect.ensuring(Effect.sync(() => body.releaseLock())),
+      );
+    });
+    const signal = yield* Effect.abortSignal;
+    return signal;
+  });
 
 /** An input estimate with its counted scope, not generation usage. */
 export const InputTokenEstimateSchema = z
