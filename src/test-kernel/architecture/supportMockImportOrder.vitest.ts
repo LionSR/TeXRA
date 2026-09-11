@@ -16,7 +16,7 @@ import {
 /**
  * Architecture guard for the shared mock modules extracted by #10361.
  *
- * Those modules register `vi.mock(...)` when they evaluate, and their factories
+ * Those modules register a repository-module mock when they evaluate, and their factories
  * close over `vi.hoisted` bags, so a suite must evaluate each shared-mock
  * import before anything that could load the mocked module. The mechanical
  * convention is: shared `@test/support/*Mock` imports sit immediately after
