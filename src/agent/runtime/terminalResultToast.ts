@@ -50,6 +50,24 @@ export function trackTerminalResultPresentation(
   };
 }
 
+/**
+ * Present a classified failure on a host: its instruction (a missing API key)
+ * or its error toast. An abort presents nothing. Returns what the host's emit
+ * returned, so a caller can await a host that settles once it is on screen.
+ */
+export function presentAgentFailure(
+  interactions: SessionHostInteractions,
+  error: Parameters<typeof agentErrorPresentation>[0],
+  options: { replayWhenAttached?: boolean } = {},
+): unknown {
+  const toast = agentErrorPresentation(error);
+  if (toast?.type === 'instruction')
+    return interactions.emit('requestShowInstruction', toast.payload, options);
+  if (toast?.type === 'error')
+    return interactions.emit('requestShowError', toast.payload, options);
+  return undefined;
+}
+
 /** Returns a detach disposer; callers detach when the run/host tears down. */
 export function attachTerminalResultToast(
   session: SessionHandle,
@@ -58,11 +76,6 @@ export function attachTerminalResultToast(
 ): () => void {
   return session.onResult((event) => {
     if (!event.error || isChildResult(session, event)) return;
-    const toast = agentErrorPresentation(event.error);
-    if (toast?.type === 'instruction') {
-      interactions.emit('requestShowInstruction', toast.payload, options);
-    } else if (toast?.type === 'error') {
-      interactions.emit('requestShowError', toast.payload, options);
-    }
+    presentAgentFailure(interactions, event.error, options);
   });
 }

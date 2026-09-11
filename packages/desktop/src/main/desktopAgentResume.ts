@@ -2,9 +2,12 @@ import { Cause, Effect, Exit } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { runInSession, type SessionHandle } from '@agent/runtime';
 import {
-  agentErrorPresentation,
+  presentAgentFailure,
+  runInSession,
+  type SessionHandle,
+} from '@agent/runtime';
+import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
@@ -110,21 +113,14 @@ export class DesktopProcessResumeOwner {
       data: toLogData(error),
     });
     const primaryError = primaryAgentError(error);
-    const presentation = agentErrorPresentation({
-      kind: classifyAgentError(primaryError),
-      message: `Resume failed: ${toErrorMessage(primaryError)}`,
-    });
-    if (presentation?.type === 'instruction') {
-      session.interactions.emit(
-        'requestShowInstruction',
-        presentation.payload,
-        { replayWhenAttached: true },
-      );
-    } else if (presentation?.type === 'error') {
-      session.interactions.emit('requestShowError', presentation.payload, {
-        replayWhenAttached: true,
-      });
-    }
+    presentAgentFailure(
+      session.interactions,
+      {
+        kind: classifyAgentError(primaryError),
+        message: `Resume failed: ${toErrorMessage(primaryError)}`,
+      },
+      { replayWhenAttached: true },
+    );
     return false;
   }
 }

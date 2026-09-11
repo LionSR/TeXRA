@@ -75,6 +75,7 @@ export { classifyRun } from './runClassification';
 // terminalResultToast
 export {
   attachTerminalResultToast,
+  presentAgentFailure,
   trackTerminalResultPresentation,
 } from './terminalResultToast';
 
@@ -93,8 +94,6 @@ export type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
-
-// textEnhancement
 
 // selectAutoOpenFinalOutput
 export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';

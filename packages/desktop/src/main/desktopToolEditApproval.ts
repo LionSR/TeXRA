@@ -29,8 +29,6 @@ type DesktopToolEditApprovalUi = Pick<
 
 interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
-  /** Parent directory for per-request temp directories; defaults to the OS temp dir. */
-  tempRoot?: string;
 }
 
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
@@ -44,10 +42,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview> {
-    const tempDir = await createTexraTempDir(
-      'texra-tool-edit-',
-      this.options.tempRoot,
-    );
+    const tempDir = await createTexraTempDir('texra-tool-edit-');
     const { originalPath, proposedPath } = await effectRuntime().runPromise(
       writeApprovalTempFiles({
         directory: tempDir,

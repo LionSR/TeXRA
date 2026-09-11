@@ -1,8 +1,6 @@
 import { shell, type WebContents } from 'electron';
 import { tryParseUrl } from '@utils/core';
 
-import { createDesktopErrorReporter } from './desktopIpcTypes.js';
-
 const ALLOWED_HTTPS_HOSTS = new Set<string>([
   'github.com',
   'www.github.com',
@@ -31,17 +29,15 @@ function routeOrDeny(
 }
 
 interface DesktopNavigationPolicyOptions {
-  onAsyncError?: (error: unknown) => void;
+  onAsyncError: (error: unknown) => void;
 }
 
 export function installDesktopNavigationPolicy(
   webContents: WebContents,
-  options: DesktopNavigationPolicyOptions = {},
+  { onAsyncError }: DesktopNavigationPolicyOptions,
 ): void {
-  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
-
   webContents.setWindowOpenHandler(({ url }) => {
-    routeOrDeny(url, reportAsyncError);
+    routeOrDeny(url, onAsyncError);
     return { action: 'deny' };
   });
 
@@ -51,7 +47,7 @@ export function installDesktopNavigationPolicy(
     url: string,
   ): void => {
     event.preventDefault();
-    routeOrDeny(url, reportAsyncError);
+    routeOrDeny(url, onAsyncError);
   };
   webContents.on('will-navigate', denyAndRoute);
   webContents.on('will-redirect', denyAndRoute);

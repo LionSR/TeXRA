@@ -7,18 +7,17 @@ import {
 } from '../shared/desktopShellMessages.js';
 import { buildDesktopOnboardingSetStateMessage } from '../shared/desktopOnboardingMessages.js';
 import {
-  createDesktopErrorReporter,
-  type DesktopCommandMessage,
-  type DesktopMessageHandler,
-  type DesktopRenderer,
-} from './desktopIpcTypes.js';
-import {
   DESKTOP_DOCS_URL,
   DESKTOP_SHELL_IPC_COMMANDS,
   dispatchDesktopCommand,
   postDesktopSettingsView,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
+import type {
+  DesktopCommandMessage,
+  DesktopMessageHandler,
+  DesktopRenderer,
+} from './desktopIpcTypes.js';
 
 interface DesktopShellActionFactoryOptions extends Pick<
   MessageHost,
@@ -30,7 +29,7 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openPath(filePath: string): Promise<void>;
   openWorkspaceFolder(): Promise<void>;
   signIn(): Promise<void>;
-  onAsyncError?: (error: unknown) => void;
+  onAsyncError: (error: unknown) => void;
 }
 
 /**
@@ -47,7 +46,7 @@ export function createDesktopShellActions(
   renderer: DesktopRenderer,
   options: DesktopShellActionFactoryOptions,
 ): DesktopShellActions {
-  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
+  const reportAsyncError = options.onAsyncError;
 
   function openWorkbench(kind: DesktopWorkbenchKind) {
     renderer.postToRenderer({

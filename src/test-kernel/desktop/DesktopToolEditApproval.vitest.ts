@@ -1,4 +1,4 @@
-import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -53,13 +53,6 @@ async function pathExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/** Polls until `dir` is empty; fails the test if cleanup never completes. */
-async function waitForEmptyDir(dir: string): Promise<void> {
-  await vi.waitFor(async () => {
-    expect(await readdir(dir)).toEqual([]);
-  });
 }
 
 async function loadApprovalModules(workspacePath = '/workspace') {
@@ -178,12 +171,10 @@ async function createApprovalFixture(
     workspacePath?: string;
   } = {},
 ) {
-  const tempRoot = await createTempRoot();
   const modules = await loadApprovalModules(options.workspacePath);
   const session = disposeAfterTest(createTestSession());
   const host = new modules.desktopModule.DesktopToolEditApprovalHost({
     ui: options.ui ?? createStubDesktopAgentRunHost(),
-    tempRoot,
   });
   const stagePreview = vi.spyOn(host, 'stagePreview');
   const controller = disposeAfterTest(
@@ -201,7 +192,18 @@ async function createApprovalFixture(
     ...modules,
     controller,
     session,
-    tempRoot,
+    /** Waits until every staged preview's directory has been removed. */
+    async waitForStagedCleanup() {
+      await vi.waitFor(async () => {
+        const previews = await Promise.all(
+          stagePreview.mock.results.map(({ value }) => value),
+        );
+        for (const preview of previews)
+          await expect(
+            pathExists(path.dirname(preview.proposedPath)),
+          ).resolves.toBe(false);
+      });
+    },
     async waitForPreviews(count = 1) {
       await vi.waitFor(() => expect(stagePreview).toHaveBeenCalledTimes(count));
       await Promise.all(stagePreview.mock.results.map(({ value }) => value));
@@ -553,7 +555,7 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'cleans up a run approval cancelled during initialization',
     async () => {
-      const { requestToolEditApproval, controller, tempRoot } =
+      const { requestToolEditApproval, controller, waitForStagedCleanup } =
         await createApprovalFixture();
 
       const resultPromise = requestToolEditApproval({
@@ -573,14 +575,14 @@ describe('desktop tool edit approval', () => {
         action: 'reject',
         cause: 'Owning run ended.',
       });
-      await waitForEmptyDir(tempRoot);
+      await waitForStagedCleanup();
     },
   );
 
   approvalTest(
     'cleans up an approval when disposed during initialization',
     async () => {
-      const { requestToolEditApproval, controller, tempRoot } =
+      const { requestToolEditApproval, controller, waitForStagedCleanup } =
         await createApprovalFixture();
 
       const resultPromise = requestToolEditApproval({
@@ -596,15 +598,19 @@ describe('desktop tool edit approval', () => {
         action: 'reject',
         cause: SESSION_DISPOSED_CAUSE,
       });
-      await waitForEmptyDir(tempRoot);
+      await waitForStagedCleanup();
     },
   );
 
   approvalTest(
     'cancels only tool-edit approvals selected for the owning run',
     async () => {
-      const { requestToolEditApproval, controller, waitForPreviews, tempRoot } =
-        await createApprovalFixture();
+      const {
+        requestToolEditApproval,
+        controller,
+        waitForPreviews,
+        waitForStagedCleanup,
+      } = await createApprovalFixture();
 
       const cancelledPromise = requestToolEditApproval({
         path: '/workspace/cancelled.tex',
@@ -651,7 +657,7 @@ describe('desktop tool edit approval', () => {
         action: 'reject',
         feedback: 'Retained request resolved normally.',
       });
-      await waitForEmptyDir(tempRoot);
+      await waitForStagedCleanup();
     },
   );
 
@@ -663,7 +669,7 @@ describe('desktop tool edit approval', () => {
         controller,
         waitForPreviews,
         session,
-        tempRoot,
+        waitForStagedCleanup,
       } = await createApprovalFixture();
       session.interactions.use({
         requestToolEditApproval: (request) =>
@@ -691,8 +697,7 @@ describe('desktop tool edit approval', () => {
         action: 'reject',
         cause: 'Stream resources released.',
       });
-      await waitForEmptyDir(tempRoot);
-      expect(await readdir(tempRoot)).toEqual([]);
+      await waitForStagedCleanup();
     },
   );
 });

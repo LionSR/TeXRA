@@ -62,7 +62,7 @@ export interface DesktopPtyHostOptions {
   onData(sessionId: string, data: string): void;
   /** Reports process exit so the UI can mark the session finished. */
   onExit(sessionId: string, exitCode: number): void;
-  onError?(error: unknown): void;
+  onError(error: unknown): void;
   /** Overrides native-module loading for a controlled host environment. */
   loadPty?: () => Promise<NodePtyModule>;
 }
@@ -225,7 +225,7 @@ export function createDesktopPtyHost(
           } catch (error) {
             // Resizing a pty whose process already exited throws; the exit
             // handler has cleaned up, so this is not actionable.
-            options.onError?.(error);
+            options.onError(error);
           }
         },
         dispose: () => {
@@ -233,7 +233,7 @@ export function createDesktopPtyHost(
           try {
             child.kill();
           } catch (error) {
-            options.onError?.(error);
+            options.onError(error);
           }
         },
       };

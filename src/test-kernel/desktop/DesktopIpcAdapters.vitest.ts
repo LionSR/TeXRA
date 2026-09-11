@@ -54,6 +54,7 @@ async function createShellHarness(
       openWorkspaceFolder: vi.fn(async () => {}),
       signIn: vi.fn(async () => {}),
       showInfoMessage: vi.fn(),
+      onAsyncError: vi.fn(),
       ...overrides,
     },
   );
@@ -83,9 +84,9 @@ async function createOnboardingHarness({
     { postToRenderer },
     {
       hasCredential: () => false,
-      selectSetupAgent: async () => {},
       kickoffSetup: async () => {},
       signInWithChatGpt: async () => {},
+      onAsyncError: vi.fn(),
       ...options,
       state,
     },
@@ -174,18 +175,14 @@ describe('desktop IPC adapters', () => {
   });
 
   it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
-    const selectSetupAgent = vi.fn(async () => {});
     const { onboarding } = await createOnboardingHarness({
       hasCredential: () => true,
-      selectSetupAgent,
     });
 
     await onboarding.refreshOnboardingFunnel();
     await flushAsync();
     // Credential present, firstRunDone not set: State 1 (setup card).
     expectFunnelState(onboarding, 'setup');
-    // selectSetupAgent callback fires on State 1 entry.
-    expect(selectSetupAgent).toHaveBeenCalled();
   });
 
   it('derives State 2 (done) for backfilled veterans with firstRunDone set', async () => {
@@ -220,39 +217,26 @@ describe('desktop IPC adapters', () => {
   });
 
   it('runs the real kickoff path on runSetup and refreshes after', async () => {
-    const callOrder: string[] = [];
-    const selectSetupAgent = vi.fn(async () => {
-      callOrder.push('select');
-    });
-    const kickoffSetup = vi.fn(async () => {
-      callOrder.push('kickoff');
-    });
+    const kickoffSetup = vi.fn(async () => {});
     const { onboarding } = await createOnboardingHarness({
       hasCredential: () => true,
-      selectSetupAgent,
       kickoffSetup,
     });
 
     await onboarding.runSetup();
     await flushAsync();
 
-    // Real run-setup path: `runSetup` selects the setup agent and kicks off the
-    // conversation, then recomputes the funnel. The follow-up refresh enters
-    // State 1 (credential present) so it also selects the setup agent — hence
-    // `select` fires twice, framing `kickoff`. The terminal state is 'setup'.
+    // Real run-setup path: `runSetup` kicks off the conversation, then
+    // recomputes the funnel, which enters State 1 (credential present).
     expect(kickoffSetup).toHaveBeenCalledOnce();
-    expect(selectSetupAgent).toHaveBeenCalledTimes(2);
-    expect(callOrder).toEqual(['select', 'kickoff', 'select']);
     expectFunnelState(onboarding, 'setup');
   });
 
   it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {
     // A credential probe that resolves on the next macrotask, so two refreshes
-    // started back-to-back genuinely overlap in flight. `selectSetupAgent`
-    // would only fire when `previous !== 'setup'`; if the two refreshes
-    // interleaved and both computed against `previous === undefined`, it would
-    // be called twice. Serialized, the second refresh sees `previous === 'setup'`
-    // and does not re-select.
+    // started back-to-back genuinely overlap in flight. Serialized, the
+    // second refresh sees `previous === 'setup'` and reports no change. (The
+    // assertion pins the terminal state; it is not a strict interleave probe.)
     let credentialPresent = false;
     const hasCredential = vi.fn(
       () =>
@@ -260,26 +244,19 @@ describe('desktop IPC adapters', () => {
           setTimeout(() => resolve(credentialPresent), 0);
         }),
     );
-    const selectSetupAgent = vi.fn(async () => {});
-    const { onboarding } = await createOnboardingHarness({
-      hasCredential,
-      selectSetupAgent,
-    });
+    const { onboarding } = await createOnboardingHarness({ hasCredential });
     const funnelStates: string[] = [];
     onboarding.onFunnelChange((state) => funnelStates.push(state));
 
-    // First refresh: no credential yet, needs-credential. Second refresh: a
-    // credential lands, setup. Fire them overlapping (no await between).
+    // Fire them overlapping (no await between); the credential lands before
+    // either probe resolves.
     const first = onboarding.refreshOnboardingFunnel();
     credentialPresent = true;
     const second = onboarding.refreshOnboardingFunnel();
     await Promise.all([first, second]);
     await flushAsync();
 
-    // The terminal state is consistent (setup), and the State 0 to 1
-    // transition selected the setup agent exactly once: proof the refreshes
-    // did not interleave and clobber `previousFunnelState`.
-    expect(funnelStates.at(-1)).toBe('setup');
-    expect(selectSetupAgent).toHaveBeenCalledOnce();
+    // One change, to setup.
+    expect(funnelStates).toEqual(['setup']);
   });
 });

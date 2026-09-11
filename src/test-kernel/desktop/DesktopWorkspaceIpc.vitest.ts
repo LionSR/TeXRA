@@ -61,6 +61,8 @@ function createIpc(
     browserViews: createBrowserViews(),
     toWindowBounds: (bounds) => bounds,
     getWorkspacePath: () => workspacePath,
+    getEnvironmentSummary: async () => EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+    onAsyncError: vi.fn(),
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
