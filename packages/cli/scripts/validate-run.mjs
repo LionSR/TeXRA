@@ -791,10 +791,10 @@ function validateRunCommand() {
     assertSuccess(json, 'texra run JSON');
     const jsonResult = JSON.parse(json.stdout);
     assert(
-      jsonResult.category === 'workflow',
+      jsonResult.output?.category === 'workflow',
       'JSON run output should serialize the workflow result',
     );
-    const finalOutput = jsonResult.outputs.at(-1);
+    const finalOutput = jsonResult.output.outputs.at(-1);
     assert(
       outputPathPattern.test(finalOutput?.relativePath ?? ''),
       'JSON run output should report the run-storage output path',
@@ -882,11 +882,13 @@ function validateToolUseAgentRunCommand() {
 
     const jsonResult = JSON.parse(result.stdout);
     assert(
-      jsonResult.category === 'toolUse',
+      jsonResult.output?.category === 'toolUse',
       'JSON agent run output should serialize the tool-use result',
     );
     assert(
-      String(jsonResult.response ?? '').includes('Validated CLI Runtime'),
+      String(jsonResult.output?.response ?? '').includes(
+        'Validated CLI Runtime',
+      ),
       'tool-use agent run should return the validation model response',
     );
   } finally {
@@ -1030,7 +1032,7 @@ prompts:
       report.includes('(±23,±22)') &&
         report.includes('det(I+A)=4') &&
         report.includes('1/4'),
-      'workflow-script run should contain all structured mathematical results',
+      `workflow-script run should contain all structured mathematical results\nreport:\n${report}`,
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -1085,11 +1087,11 @@ function validateMultiAgentRunCommand() {
       'multi-agent run should select an available preset root agent',
     );
     assert(
-      jsonResult.result?.category === 'toolUse',
+      jsonResult.result?.output?.category === 'toolUse',
       'multi-agent JSON output should serialize the tool-use result',
     );
     assert(
-      String(jsonResult.result?.response ?? '').includes(
+      String(jsonResult.result?.output?.response ?? '').includes(
         'Validated CLI Runtime',
       ),
       'multi-agent run should return the validation model response',
@@ -1121,11 +1123,11 @@ function validateMultiAgentRunCommand() {
       'instruction-only multi-agent JSON output should identify the preset',
     );
     assert(
-      inlineJsonResult.result?.category === 'toolUse',
+      inlineJsonResult.result?.output?.category === 'toolUse',
       'instruction-only multi-agent JSON output should serialize the tool-use result',
     );
     assert(
-      String(inlineJsonResult.result?.response ?? '').includes(
+      String(inlineJsonResult.result?.output?.response ?? '').includes(
         'Validated CLI Runtime',
       ),
       'instruction-only multi-agent run should return the validation model response',
