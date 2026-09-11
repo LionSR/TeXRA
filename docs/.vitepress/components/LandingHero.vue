@@ -54,7 +54,7 @@ async function copyCli() {
     <p class="lh-eyebrow">Open-source multi-agent AI for theorists</p>
     <h1 class="lh-headline">
       Derive it, check it,<br />
-      write it into your paper.
+      do good work.
     </h1>
     <p class="lh-tagline">
       You direct an orchestrator. It delegates to specialist agents that search
