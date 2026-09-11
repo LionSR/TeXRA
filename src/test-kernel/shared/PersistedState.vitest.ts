@@ -20,7 +20,7 @@ const StateSchema = z.object({
 describe('PersistedState loading', () => {
   const storage = {
     get: vi.fn(),
-    update: vi.fn<(key: string, value: unknown) => Promise<void>>(),
+    update: vi.fn<(key: string, value: unknown) => void>(),
   };
 
   let warn: MockInstance<typeof console.warn>;

@@ -19,7 +19,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import { z } from 'zod';
 import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
-import type { StateStore } from '@platform/interfaces';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import '@settingsView/frontend';
@@ -27,7 +26,10 @@ import { hostBridge, postMessage } from '@shared/hostBridge';
 import { DESKTOP_THEME_KIND } from '@shared/schemas';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
 import { applyShellAction, type Shell } from '@shared/session/shell';
-import { PersistedState } from '@shared/state/PersistedState';
+import {
+  PersistedState,
+  type KeyValueStore,
+} from '@shared/state/PersistedState';
 
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 
@@ -149,7 +151,7 @@ const startupTeamPanel = createStartupTeamPanel({
 
 // The renderer's own interaction state survives a reload in
 // `localStorage`; the preload bridge's `getState` is in-memory only.
-const rendererState: StateStore = {
+const rendererState: KeyValueStore = {
   get<T>(key: string, defaultValue?: T): T {
     const raw = window.localStorage.getItem(key);
     if (raw === null) return defaultValue as T;
@@ -158,7 +160,6 @@ const rendererState: StateStore = {
   update(key, value) {
     if (value === undefined) window.localStorage.removeItem(key);
     else window.localStorage.setItem(key, JSON.stringify(value));
-    return Promise.resolve();
   },
 };
 // The one Shell of this window (PRD 9): which projects are open and which one

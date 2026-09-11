@@ -1,15 +1,15 @@
 import { z } from 'zod';
 
-import type { StateStore } from '@platform/interfaces';
+/** A renderer's synchronous key-value store; `undefined` removes a key. */
+export interface KeyValueStore {
+  get<T>(key: string, defaultValue?: T): T;
+  update(key: string, value: unknown): void;
+}
 
 /**
- * Create a {@link StateStore} over webview host state. All keys share a single
- * state object, cached in memory to avoid repeated getState() calls on rapid
- * updates.
- *
- * A key is removed by updating it to `undefined`, as with a Memento. `update`
- * returns an already-resolved promise because `setState` is synchronous and
- * cannot fail — that is not a dropped write.
+ * Create a {@link KeyValueStore} over webview host state. All keys share a
+ * single state object, cached in memory to avoid repeated getState() calls on
+ * rapid updates.
  *
  * @example
  * import { hostBridge } from '@shared/hostBridge';
@@ -18,7 +18,7 @@ import type { StateStore } from '@platform/interfaces';
 export function createWebviewStorage(hostBridge: {
   getState(): unknown;
   setState(state: unknown): void;
-}): StateStore {
+}): KeyValueStore {
   // Cache full state - read once, update in memory
   const cache = (hostBridge.getState() as Record<string, unknown>) ?? {};
 
@@ -34,13 +34,12 @@ export function createWebviewStorage(hostBridge: {
         cache[key] = value;
       }
       hostBridge.setState(cache);
-      return Promise.resolve();
     },
   };
 }
 
 /**
- * Renderer UI state persisted under one key of a `StateStore`, validated by a
+ * Renderer UI state persisted under one key of a `KeyValueStore`, validated by a
  * Zod schema. Two renderers use it: the Progress-View surfaces over
  * `createWebviewStorage(hostBridge)`, and the desktop shell's collapsed-group
  * set over localStorage.
@@ -62,7 +61,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   private state: T;
 
   constructor(
-    private readonly storage: StateStore,
+    private readonly storage: KeyValueStore,
     private readonly key: string,
     private readonly schema: z.ZodType<T>,
   ) {
@@ -90,25 +89,8 @@ export class PersistedState<T extends Record<string, unknown>> {
       },
     );
     const defaults = this.schema.parse({});
-    this.persist(defaults);
+    this.storage.update(this.key, defaults);
     return defaults;
-  }
-
-  /**
-   * Write through to storage. The promise is deliberately not awaited — every
-   * caller is a synchronous UI path — but a rejection must not escape as an
-   * unhandled rejection, which on the desktop main process is an uncaught
-   * error with no attribution to the failing key. Warn loudly instead.
-   */
-  private persist(value: T): void {
-    void Promise.resolve(this.storage.update(this.key, value)).catch(
-      (error: unknown) => {
-        console.warn(
-          `[PersistedState] Failed to persist ${this.key}; the in-memory value is now ahead of storage.`,
-          error,
-        );
-      },
-    );
   }
 
   /** Get current state (shallow copy) */
@@ -119,7 +101,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   /** Replace entire state */
   setState(state: T): void {
     this.state = { ...state };
-    this.persist(this.state);
+    this.storage.update(this.key, this.state);
   }
 }
 

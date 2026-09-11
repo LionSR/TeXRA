@@ -11,7 +11,6 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 
-import type { StateStore } from '@platform/interfaces';
 import type { SessionType, RunId } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
@@ -33,7 +32,10 @@ import {
   type Surface,
   type SurfaceAction,
 } from '@shared/session/surface';
-import { PersistedState } from '@shared/state/PersistedState';
+import {
+  PersistedState,
+  type KeyValueStore,
+} from '@shared/state/PersistedState';
 
 import { playCompletionSound } from './audioNotification';
 import {
@@ -87,7 +89,7 @@ function withPickedPaths(
 }
 
 export function createSessionSurfaces(options: {
-  readonly storage: StateStore;
+  readonly storage: KeyValueStore;
   /** Desktop requests present through their host session. The extension
    *  surface owns its request notices. Choose the owner when wiring a shell. */
   readonly hostRequestFailureOwner: 'host' | 'surface';
