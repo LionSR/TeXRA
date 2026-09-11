@@ -574,7 +574,7 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/model/xai/xaiPreference.ts'),
   },
   maxImageDimension: {
-    schema: z.number().min(100).max(10000).prefault(2000),
+    schema: z.int().min(100).max(10000).prefault(2000),
     description:
       'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
     honoredBy: everyHost('src/utils/media/img.ts'),
@@ -586,7 +586,7 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/tools/latex/ExtractBibliographyTool.ts'),
   },
   'bib.zoteroPort': {
-    schema: z.number().min(1).max(65535).prefault(23119),
+    schema: z.int().min(1).max(65535).prefault(23119),
     description:
       'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
     honoredBy: everyHost('src/tools/zotero/bbtClient.ts'),
@@ -678,7 +678,7 @@ const CORE_SETTING_ROWS: Record<
   // assistant's host-neutral `update_config` writer is recorded separately so
   // a CLI-written value is recognized without mislabeling the writer as a reader.
   'git.numberOfCommitsToShow': {
-    schema: z.number().min(1).max(1000).prefault(20),
+    schema: z.int().min(1).max(1000).prefault(20),
     description:
       'Number of recent commits to show in the commit selection dropdown',
     honoredBy: {
