@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 
 import {
   getFileListConfig,
-  loadFileListSettings,
   type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
@@ -23,15 +22,13 @@ export class FileLister {
   }
 
   private workspacePath = WorkspaceFS.getPath();
-  private settings = loadFileListSettings();
 
   public refresh(): void {
     this.workspacePath = WorkspaceFS.getPath();
-    this.settings = loadFileListSettings();
   }
 
   public list(fileType: ListableFileType): Promise<string[]> {
-    return this.listFiles(getFileListConfig(fileType, this.settings));
+    return this.listFiles(getFileListConfig(fileType));
   }
 
   private async listFiles(config: FileFilterConfig): Promise<string[]> {

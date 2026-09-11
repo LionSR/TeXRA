@@ -72,7 +72,6 @@ export const selectMediaFiles = createMultiPicker({
   openLabel: 'Select Media',
   filters: () => ({
     'Image files': getFilterExtensions('media'),
-    'Audio files': getFilterExtensions('audio'),
   }),
 });
 

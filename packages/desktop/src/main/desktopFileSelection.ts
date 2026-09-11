@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 
 import {
   getFileListConfig,
-  loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
@@ -89,7 +88,7 @@ export function createDesktopFileSelection(
     fileOptions: () => workspaceFileOptions(workspacePath),
     async pickFiles(fileType, currentFile) {
       if (!workspacePath) return null;
-      const listConfig = getFileListConfig(fileType, loadFileListSettings());
+      const listConfig = getFileListConfig(fileType);
       const defaultPath =
         currentFile == null
           ? workspacePath

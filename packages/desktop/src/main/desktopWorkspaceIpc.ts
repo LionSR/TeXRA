@@ -10,11 +10,11 @@
 import { basename, dirname, join } from 'node:path';
 import { isFileNotFoundError } from '@common/errors';
 import {
-  loadFileListSettings,
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
 } from '@common/files/fileListingRules';
+import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { appSignals } from '@eventBus/AppSignals';
 import { platform } from '@platform/platform';
@@ -228,7 +228,6 @@ export function createDesktopWorkspaceIpc(
         return;
       }
 
-      const settings = loadFileListSettings();
       // The project tree is a code editor, not the agent input picker. Reuse
       // the shared ignore policy, but do not inherit
       // the input picker's `.ts`/`.js`/`.json` exclusions. Only known binary
@@ -242,7 +241,7 @@ export function createDesktopWorkspaceIpc(
             '.vsix',
           ]),
         ],
-        excludeDirs: settings.ignoredDirectories,
+        excludeDirs: [...FILE_HANDLING_RULES.ignored.directories],
         excludeKeywords: [],
         excludeFiles: [],
       });

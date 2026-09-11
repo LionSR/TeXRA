@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  getFileListConfig,
-  loadFileListSettings,
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
