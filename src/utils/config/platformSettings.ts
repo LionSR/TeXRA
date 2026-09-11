@@ -28,6 +28,11 @@ export function initProcessSettingHost(host: SettingHost): void {
   processSettingHost = host;
 }
 
+/** The host this process is, as installed by {@link initProcessSettingHost}. */
+export function getProcessSettingHost(): SettingHost {
+  return processSettingHost;
+}
+
 /**
  * The three setting slots for the calling context: the session's workspace
  * config and state, and the process global state. `settingsAccess` resolves

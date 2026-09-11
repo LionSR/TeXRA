@@ -6,9 +6,10 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
-import { defaultBranch, parseGitHubSlug } from '@cli/runtime/gitOps';
+import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { parseGitHubSlug } from '@tools/github/githubSlug';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn().mockResolvedValue(true),
@@ -182,13 +183,17 @@ describe('parseGitHubSlug', () => {
   it.each([
     ['https://github.com/owner/repo.git', { owner: 'owner', repo: 'repo' }],
     ['git@github.com:owner/repo.git', { owner: 'owner', repo: 'repo' }],
+    ['ssh://git@github.com/owner/repo.git', { owner: 'owner', repo: 'repo' }],
     ['https://github.com/owner/repo/', { owner: 'owner', repo: 'repo' }],
   ])('parses %s', (url, expected) => {
     expect(parseGitHubSlug(url)).toEqual(expected);
   });
 
-  it('rejects remotes outside GitHub', () => {
-    expect(parseGitHubSlug('https://gitlab.com/owner/repo.git')).toBeNull();
+  it.each([
+    'https://gitlab.com/owner/repo.git',
+    'https://gitlab.com/group/github.com/owner/repo.git',
+  ])('rejects %s, which is not a GitHub remote', (url) => {
+    expect(parseGitHubSlug(url)).toBeNull();
   });
 });
 

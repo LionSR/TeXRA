@@ -55,21 +55,3 @@ export function localBranchExists(cwd: string, branch: string): boolean {
 export function ghAvailable(cwd: string): boolean {
   return gh(cwd, '--version').success;
 }
-
-export interface GitHubSlug {
-  readonly owner: string;
-  readonly repo: string;
-}
-
-/** Parse `owner/repo` from an https or ssh GitHub remote URL. */
-export function parseGitHubSlug(url: string): GitHubSlug | null {
-  const cleaned = url
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\.git$/, '');
-  const match = cleaned.match(/github\.com[/:]([^/]+)\/([^/]+)$/);
-  if (!match) return null;
-  const [, owner, repo] = match;
-  if (!owner || !repo) return null;
-  return { owner, repo };
-}

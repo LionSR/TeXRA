@@ -15,6 +15,7 @@ import { ToolResult } from '@shared/schemas';
 import { retryTransientFetch } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { ensureArray } from '@utils/core';
 import {
   formatResultCount,
@@ -39,12 +40,9 @@ const LeanLoogleInputSchema = z.strictObject({
       'Search query (type signature or name pattern). Pass an array of strings to batch multiple searches in one call.',
     ),
   /** Maximum number of results to return per query */
-  limit: z
-    .int()
-    .min(1)
-    .max(20)
-    .prefault(10)
-    .describe('Max results per query (default: 10)'),
+  limit: nullishWithDefault(z.int().min(1).max(20), 10).describe(
+    'Max results per query (default: 10)',
+  ),
 });
 
 type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;

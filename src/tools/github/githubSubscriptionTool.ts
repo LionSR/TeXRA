@@ -54,6 +54,7 @@ import {
 } from './subscriptionBindings';
 import { SharedIssuePollingSource } from './IssuePollingSource';
 import { SharedPRPollingSource } from './PRPollingSource';
+import { parseGitHubSlug } from './githubSlug';
 import type { GhIssue } from './prTypes';
 
 const SUBSCRIPTION_PATH_DESCRIPTION =
@@ -386,19 +387,6 @@ function execList(): ToolResult {
   );
 }
 
-// GitHub SSH/HTTPS URL → { owner, repo }. Handles `.git` suffix, and repo
-// names that themselves contain dots (e.g. `org.github.io`, `my.config`).
-const GITHUB_URL_RE =
-  /^(?:git@github\.com:|https:\/\/github\.com\/)([^/]+)\/(.+?)(?:\.git)?\/?$/;
-
-function parseGitHubRemote(
-  remoteUrl: string,
-): { owner: string; repo: string } | undefined {
-  const m = remoteUrl.trim().match(GITHUB_URL_RE);
-  if (!m) return undefined;
-  return { owner: m[1], repo: m[2] };
-}
-
 const gitInDir = (
   args: string[],
   cwd: string,
@@ -522,7 +510,7 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
           ),
       ),
     );
-    const remote = parseGitHubRemote(remoteUrl);
+    const remote = parseGitHubSlug(remoteUrl);
     if (!remote) {
       return yield* Effect.fail(
         new ToolError(`origin remote is not a github.com URL: ${remoteUrl}`),

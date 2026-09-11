@@ -14,6 +14,7 @@ import {
 import { executed } from '@tools/core/result';
 
 // Local file imports
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
 
@@ -33,12 +34,9 @@ const SendToTerminalInputSchema = z.strictObject({
     .describe(
       'The command to run inside the integrated terminal. One line; no embedded newlines.',
     ),
-  label: z
-    .string()
-    .prefault('setup')
-    .describe(
-      `Short suffix for the terminal tab name; the tool prepends "${TERMINAL_NAME_PREFIX}".`,
-    ),
+  label: nullishWithDefault(z.string(), 'setup').describe(
+    `Short suffix for the terminal tab name; the tool prepends "${TERMINAL_NAME_PREFIX}".`,
+  ),
   timeout: z
     .int()
     .min(1_000)
