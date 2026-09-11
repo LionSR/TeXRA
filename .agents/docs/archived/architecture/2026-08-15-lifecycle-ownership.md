@@ -288,7 +288,7 @@ so the 2026-08-15 ruling recorded above is executed. Values left in the old
 slot are abandoned, not migrated; each reader warns once via
 `warnAbandonedSlotValue`, which retires after 2026-11-19.
 `interactionOwnership` needed no new ruling: it was already promoted to the
-shared registry contract in `docs/design/2026-08-01-execution-interaction-ownership.md`,
+shared registry contract in `.agents/docs/archived/architecture/2026-08-01-run-interaction-ownership.md`,
 and the code matches.
 
 Also verified in this sweep: **LaTeX compiles are uniformly signal-less**

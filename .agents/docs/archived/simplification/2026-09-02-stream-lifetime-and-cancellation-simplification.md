@@ -66,7 +66,7 @@ a budget to add.
   removal rejection and ruled it deliberately uncapped
   (`SessionState.ts:144-160`). §2.B.1 keeps it uncapped and merges its
   sibling into it; it does not reintroduce an eviction policy.
-- **`docs/design/2026-08-01-execution-interaction-ownership.md`** names
+- **`.agents/docs/archived/architecture/2026-08-01-run-interaction-ownership.md`** names
   `AgentExecutionHandle.parentStreamId` as the lineage the runtime owns.
   §2.D takes that as the authority claim.
 - **`.agents/docs/archived/architecture/2026-08-15-lifecycle-ownership.md` §2** rules

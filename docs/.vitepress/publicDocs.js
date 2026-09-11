@@ -26,7 +26,7 @@ export const publicRootDocs = [
 ];
 
 // Root-level directories whose contents are published (minus any per-page
-// exclusions in `srcExclude`, e.g. the guide/desktop* beta pages).
+// exclusions in `srcExclude`, e.g. the guide/desktop.md beta page).
 export const publicRootDirs = ['guide'];
 
 // Sources excluded from the public build. Root-level *.md entries are internal
@@ -34,8 +34,6 @@ export const publicRootDirs = ['guide'];
 export const srcExclude = [
   'README.md',
   'guide/desktop.md',
-  'guide/desktop-migration.md',
-  'design/**',
   'dev/**',
   'architecture/**',
   'supabase/**',

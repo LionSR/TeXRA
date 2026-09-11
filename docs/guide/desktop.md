@@ -67,8 +67,24 @@ On first launch, configure the desktop app explicitly:
 
 <p class="hero-caption">First-run setup is explicit: open your project, sign in, add keys, review settings, then confirm a small task lands in the Progress view.</p>
 
-For details about which settings, history, and credentials are shared with the
-extension and CLI, see [Shared Data Across TeXRA Apps](/guide/desktop-migration).
+### What carries over from the extension and CLI
+
+The desktop app, the VS Code extension, and the CLI read the same native TeXRA
+configuration: workspace settings in `.texra/config.json` and global settings
+and shared task data under `~/.texra`. Opening the same project therefore
+shares:
+
+- workspace and global values stored in TeXRA configuration, including
+  approval, telemetry, skill, model-behavior, bibliography, and selected TikZ
+  and LaTeX replacement settings;
+- history and execution records; and
+- project files, custom instructions, and checked-in agent definitions.
+
+Agent and team rosters, tool enablement and availability, model visibility, and
+host-specific LaTeX compile and formatter preferences stay in each host's
+state. Credentials are host-specific too: the extension uses VS Code Secret
+Storage, while the desktop and command-line hosts use their own secure stores,
+so provider API keys and sign-in sessions are added separately in each app.
 
 ## Logs
 
@@ -97,7 +113,6 @@ Docs will be updated when signed installers and auto-update manifests are live.
 
 ## Related Docs
 
-- [Shared Data Across TeXRA Apps](/guide/desktop-migration)
 - [Configuration](/guide/configuration)
 - [Remote Agents](/guide/remote-agents)
 - [Troubleshooting](/guide/troubleshooting)

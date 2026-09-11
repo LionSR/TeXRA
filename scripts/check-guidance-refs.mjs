@@ -58,11 +58,6 @@ const GUIDANCE_DIRS = [
   'docs/guide',
 ];
 
-// Dated point-in-time records, not standing instructions. They describe the
-// tree as it was and are expected to cite paths that have since moved; the same
-// carve-out `docs/scripts/check-root-docs.mjs` makes for its timestamped dirs.
-const ARCHIVAL_DIRS = ['docs/dev/audits'];
-
 // Escape hatch for prose that names a path precisely because it is gone —
 // e.g. CLAUDE.md's "`src/common/webview/` does not exist". Put
 // `<!-- guidance-refs-ignore -->` anywhere in the paragraph. It scopes to the
@@ -120,19 +115,16 @@ const BUILD_OUTPUT = /(^|\/)(dist|out|releases|node_modules)(\/|$)/;
 /**
  * Collect .md files under a directory, recursively.
  *
- * Keys stay POSIX-separated regardless of host OS: they are compared against
- * the forward-slash literals in ARCHIVAL_DIRS and printed in failure output.
- * Building them with `join()` would yield backslashes on Windows, silently
- * defeating the archival carve-out there while Linux CI stayed green. Only the
- * absolute path handed to the filesystem goes through `join()`, which accepts
- * forward slashes on every platform.
+ * Keys stay POSIX-separated regardless of host OS, because they are printed in
+ * failure output as repo paths. Only the absolute path handed to the
+ * filesystem goes through `join()`, which accepts forward slashes on every
+ * platform.
  */
 function markdownFilesIn(dir) {
   const abs = join(repoRoot, dir);
   if (!existsSync(abs)) return [];
   return walkFiles(abs, {
     include: (relativePath) => relativePath.endsWith('.md'),
-    prune: (relativePath) => ARCHIVAL_DIRS.includes(`${dir}/${relativePath}`),
   }).map((entry) => `${dir}/${entry.relativePath}`);
 }
 

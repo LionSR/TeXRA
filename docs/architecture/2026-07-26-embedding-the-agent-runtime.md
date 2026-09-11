@@ -137,22 +137,25 @@ Not part of the process bootstrap, and not in
 `packages/cli/src/runtime/initPlatform.ts` at all, but a session is still
 required.
 
-`runAgent` falls back to `defaultSession()` when the caller passes no session
-(`src/agent/runtime/runAgent.ts:93`), and `defaultSession()` throws
+`RunAgentOptions.session` is required (`src/agent/runtime/runAgent.ts:46`);
+`runAgent` has no default-session fallback. Host code that reads the process
+default through `defaultSession()` gets
 `'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.'`
-(`src/agent/runtime/SessionHandle.ts:480-485`).
+until one exists (`src/agent/runtime/SessionHandle.ts:921-927`).
 
 Two ways out:
 
-- `initializeDefaultSession({ transcripts: await StreamLogStore.open() })` —
-  the process-default session (`src/agent/runtime/SessionHandle.ts:445-452`,
-  called once; a second call throws). This is what the CLI
-  (`packages/cli/src/runtime/transcriptSession.ts:45`) and the extension
-  (`packages/extension/src/extension.ts:275`) do.
+- `initializeDefaultSession({})` — the process-default session, which builds
+  its own transcript store over the session's event database and returns the
+  handle to pass as `options.session`
+  (`src/agent/runtime/SessionHandle.ts:889-896`, called once; a second call
+  throws). This is what the CLI
+  (`packages/cli/src/runtime/transcriptSession.ts:29`) and the extension
+  (`packages/extension/src/extension.ts:529`) do, each also passing its
+  `responseTextProcessing`.
 - Construct your own `SessionHandle` and pass it as `options.session`
-  (`RunAgentOptions` picks `session` through to `executeAgent`,
-  `src/agent/runtime/runAgent.ts:37`). Then `defaultSession()` is never
-  consulted.
+  (`runAgent` forwards it to `executeAgent`). Then the process default is
+  never initialized or consulted.
 
 ### Prerequisite B — `await loadAgents(...)`
 
@@ -175,10 +178,12 @@ the selected session's stable `SessionHostInteractions` object. A host attaches
 its adapter with `session.interactions.use(...)` and detaches that adapter
 when the host presentation lifetime ends. An embedder that is certain no
 response-bearing interaction can occur may leave the session unattached.
-Otherwise, a non-interactive embedder must attach an explicit rejection policy;
-the minimal `{ cancel: () => {} }` adapter in the example below causes
-unsupported requests to receive their typed cancellation result instead of
-remaining parked.
+Otherwise, a non-interactive embedder must attach a host that answers every
+request kind its runs can raise. A method the host omits does not decline the
+request: a run-scoped request stays parked for a decision on its approval row.
+The adapter in the example below answers retry prompts with a denial, and
+`approvalPromptsUnavailable` (§3) keeps the approval-gated tools away from the
+model.
 
 ### Putting it together
 
@@ -201,7 +206,6 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { effectRuntime } from '@platform/processRuntime';
 import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
-import { StreamLogStore } from '@transcript';
 import { runAgent } from '@agent/runtime/runAgent';
 import { validateRunRequest } from '@agent/core/state/runRequests';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -220,11 +224,10 @@ initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
 installProcessRuntime(await nodeProcesses.selfIdentity()); // Step 3 needs it
 await effectRuntime().runPromise(bootstrapNodeAgentDirectories({/* … */})); // Step 3
 
-const session = initializeDefaultSession({
-  transcripts: await StreamLogStore.open(),
-});
+const session = initializeDefaultSession({});
 const detachHostInteractions = session.interactions.use({
   cancel: () => {},
+  requestRetry: async () => ({ action: 'deny', reason: 'No retry prompts.' }),
 }); // see §3 — DO NOT SKIP
 await loadAgents({ includeRemote: false });
 
@@ -238,7 +241,10 @@ const validated = validateExecutionRequest({
 if (!validated.valid) throw new Error(validated.message);
 
 try {
-  await runAgent(validated.request, { session });
+  await runAgent(validated.request, {
+    session,
+    approvalPromptsUnavailable: true,
+  });
 } finally {
   detachHostInteractions();
 }
@@ -372,53 +378,57 @@ documentation.
 
 ## 3. The headless minimum for interactions — the one section to read
 
-**`session.interactions.use({ cancel: () => {} })` is safe. Attaching
-nothing is not.** This is the inverse of what the mostly-optional method
-signatures suggest, and it is the single highest-consequence fact in this
-document.
+**A host must answer every blocking request its runs can raise. Attaching
+nothing, or attaching a host that omits the method a run calls, parks that
+run.** The mostly-optional method signatures suggest otherwise, and this is
+the single highest-consequence fact in this document.
 
 ### The mechanism
 
 Every blocking interaction goes through `SessionHostInteractions.enqueue`
-(`src/agent/runtime/HostInteractions.ts:595-618`), which adds the pending
+(`src/agent/runtime/HostInteractions.ts:784-814`), which adds the pending
 record to `this.pending` and then calls `dispatch`:
 
 ```ts
-// src/agent/runtime/HostInteractions.ts:615-617
+// src/agent/runtime/HostInteractions.ts:811-812
 this.pending.add(pending);
-if (this.pending.size === 1) this.notifyPendingCountChange();
 this.dispatch(pending);
 ```
 
 `dispatch` starts with:
 
 ```ts
-// src/agent/runtime/HostInteractions.ts:667-669
+// src/agent/runtime/HostInteractions.ts:901-906
 private dispatch(pending: PendingSessionInteraction): void {
   const attachment = this.activeAttachment;
-  if (!attachment) return;
+  if (!attachment) {
+    this.warnParked(pending);
+    return;
+  }
 ```
 
 The pending promise has already been created and registered. With no
-attachment, `dispatch` returns **without settling it and without scheduling
-anything that will**. The agent awaits that promise forever.
+attachment, `dispatch` logs a warning and returns **without settling it**.
 
-With an attachment whose method is simply _omitted_, the optional-call yields
-`undefined` and the very next branch settles it:
+With an attachment whose method is simply _omitted_, the optional call yields
+`undefined`, and the next branch settles only a request that names no run
+(`src/agent/runtime/HostInteractions.ts:914-933`):
 
 ```ts
-// src/agent/runtime/HostInteractions.ts:678-681
 if (!result) {
+  if (pending.fact) {
+    // run-scoped: stays pending for a decision on its approval row
+    return;
+  }
   this.deletePending(pending);
   pending.settle(pending.cancellationResult());
   return;
 }
 ```
 
-Each request wrapper supplies its own `cancellationResult` factory
-(`src/agent/runtime/HostInteractions.ts:450-521`; the factory table is at
-`:217-235`), so the run receives a well-typed "declined/cancelled" answer and
-continues.
+A run-scoped request stays pending until a surface settles it through the
+session (`settleRequest` / `settleRetry`), a cancel reaches it, or the session
+is disposed. For an embedder with no surface, that is a hang.
 
 Nothing in the runtime attaches interactions for you. A fresh `SessionHandle`
 constructs an empty `SessionHostInteractions`
@@ -429,16 +439,15 @@ directly (`SessionHostInteractions.use`,
 
 ### The affected calls
 
-Six request kinds park when unattached — `requestToolEditApproval`,
-`requestBashApproval`, `requestPlanApproval`, `requestAgentProposal`,
-`requestRetry`, `askUserQuestion`
-(`src/agent/runtime/HostInteractions.ts:450-521`).
+Six request kinds park when unattached or unanswered —
+`requestToolEditApproval`, `requestBashApproval`, `requestPlanApproval`,
+`requestAgentProposal`, `requestRetry`, `askUserQuestion`
+(`src/agent/runtime/HostInteractions.ts:564-630`).
 
 `openExternalInquiry` is deliberately excluded: it reads
 `this.activeAttachment?.interactions.openExternalInquiry?.(request)` directly
-(`src/agent/runtime/HostInteractions.ts:523-530`), and its comment at `:526-529`
-explicitly says this is to avoid "parking the agent while no UI is attached" —
-the runtime already knows the parking behaviour exists.
+(`src/agent/runtime/HostInteractions.ts:632-641`), and its comment explicitly
+says this is to avoid "parking the agent while no UI is attached".
 
 ### Escape hatches, and why they are not a substitute
 
@@ -448,7 +457,7 @@ the runtime already knows the parking behaviour exists.
   _if_ a host eventually attaches.
 - **Interrupting a retained run handle settles pending interactions.**
   `RunAgentOptions.onRun` exposes an `AgentRunHandle`
-  (`src/agent/runtime/runAgent.ts:29-42`;
+  (`src/agent/runtime/runAgent.ts:31-46`;
   `src/agent/runtime/RunHandle.ts`). Retain it and call
   `handle.interrupt()` to abort the run; both workflow and tool-use
   interruption call `runSession.interactions.cancel`
@@ -476,12 +485,13 @@ the runtime already knows the parking behaviour exists.
 ### The typed shape
 
 `cancel` is the one **required** member of `HostInteractions`
-(`src/agent/runtime/HostInteractions.ts:336`); every other member — the seven
+(`src/agent/runtime/HostInteractions.ts:389`); every other member — the seven
 request methods plus `emit`, `dispose`, the diagnostics readers, and
 `setApprovalBypassState` — is optional
-(`src/agent/runtime/HostInteractions.ts:293-338`). So the compiler already
-forces you to write `{ cancel: … }` — the trap is not a badly-typed object, it
-is **never calling `interactions.use` at all**, which no type can catch.
+(`src/agent/runtime/HostInteractions.ts:347-390`). So the compiler forces you
+to write `{ cancel: … }`, and nothing more. The trap is not a badly-typed
+object: it is **never calling `interactions.use`**, or attaching a host that
+omits a request method a run will call. No type catches either.
 
 ### The headless embedder contract (issue #9256)
 
@@ -489,11 +499,11 @@ Issue #9256 asked what a session should do when no interaction host is ever
 attached at all. The ruling: **no runtime semantic change.** Parking (above)
 stays — it is what lets a desktop per-window reattach pick up a request that
 parked before it attached — and the runtime installs no default attachment.
-Instead, the ruling names the mechanism above as the contract: attach at
-least `{ cancel: () => {} }`, and use `approvalPromptsUnavailable: true` to
-remove the most common case that is reachable without any attachment at all
-(a headless run without `approvalPromptsUnavailable` can also reach
-`requestRetry` without an attachment; both gaps are closed by the flag).
+Instead, the contract is on the caller: attach a host that answers each
+request kind a run can raise, and use `approvalPromptsUnavailable: true` to
+remove the approval kinds, the most common ones. The flag does not reach
+`requestRetry`, so a headless host answers it itself; the package's own
+headless host denies it (`packages/agent/src/effect/sessions.ts:199-213`).
 
 **`approvalPromptsUnavailable: true` is the real headless answer for that
 case**, not merely a partial mitigation: an agent that cannot be asked simply
@@ -518,11 +528,12 @@ note above says, the flag does not touch `requestRetry` or `askUserQuestion`
 dispatch — it only narrows which tools can raise the approval kinds that were
 the reachable hang.
 
-**The diagnostic for getting it wrong anyway:** #9225 made an unattached
-`dispatch` log a warning before returning, naming the parked request kind and
-stream and prescribing the `{ cancel: () => {} }` minimum
-(`src/agent/runtime/HostInteractions.ts:654-659` calls `warnParked`, defined
-at `:685-696`).
+**The diagnostic for getting it wrong anyway:** an unattached `dispatch` logs
+a warning before returning, naming the parked request kind and run and
+prescribing a host that answers requests
+(`src/agent/runtime/HostInteractions.ts:901-906` calls `warnParked`, defined
+at `:947-958`). A request parked because the attached host omits its method
+is logged at `info` (`:914-924`).
 
 **Why there is no runtime default.** `activeAttachment` is the most recently
 attached host (`this.attachments.at(-1)`,
@@ -663,7 +674,8 @@ desktop also calls
    `SessionHandle`.
 6. **Some failure modes cluster at run time, not startup.** A missing
    `loadAgents` throws at agent resolution, and a missing interactions
-   attachment hangs mid-run. Neither fails fast at bootstrap.
+   attachment, or a host that omits a request method the run calls, parks the
+   run mid-way. Neither fails fast at bootstrap.
 
 ## 7. Related documents
 

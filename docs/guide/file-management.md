@@ -150,8 +150,7 @@ TeXRA handles file paths as follows:
 ### File discovery rules
 
 TeXRA uses built-in file extensions and exclusions when discovering inputs,
-context, edited files, and media. The former `texra.files.*` configuration keys
-have been removed. Read the [file discovery section of the configuration guide](./configuration.md#file-discovery).
+context, edited files, and media. Read the [file discovery section of the configuration guide](./configuration.md#file-discovery).
 
 ## Output file naming
 
