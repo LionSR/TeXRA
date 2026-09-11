@@ -50,7 +50,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
-import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
@@ -630,16 +630,16 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     );
     for (let replay = 0; replay < 100; replay++) {
       await Effect.runPromise(
-        deliverChildRunFollowUp({
-          targetRunId: PARENT_RUN_ID,
-          followUp: {
+        submitFollowUp(
+          PARENT_RUN_ID,
+          {
             text: report!,
             origin: 'subagent_result',
             // Derived from the persisted turn token exactly as production does.
             deliveryId: `${completed!.token}:delivery`,
           },
-          session,
-        }),
+          { session },
+        ),
       );
     }
     await session.settlePublications();
@@ -656,15 +656,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
     // A distinct delivery identity with identical text is a distinct turn.
     await Effect.runPromise(
-      deliverChildRunFollowUp({
-        targetRunId: PARENT_RUN_ID,
-        followUp: {
+      submitFollowUp(
+        PARENT_RUN_ID,
+        {
           text: report!,
           origin: 'subagent_result',
           deliveryId: `${completed!.token}:delivery:other`,
         },
-        session,
-      }),
+        { session },
+      ),
     );
     await waitForCompletedResumes(2);
     await session.settlePublications();

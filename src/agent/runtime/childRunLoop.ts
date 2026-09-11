@@ -35,8 +35,10 @@ import type {
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import { enqueueLiveFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  enqueueLiveFollowUp,
+  submitFollowUp,
+} from '@agent/followUp/ToolUseFollowUp';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
@@ -710,12 +712,10 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     warnDetachedChildDelivery(logger, runId);
     return;
   }
-  const delivery = yield* deliverChildRunFollowUp({
-    targetRunId,
-    followUp: pending.followUp,
+  const delivery = yield* submitFollowUp(targetRunId, pending.followUp, {
     session,
   });
-  if (delivery.kind === 'failed') {
+  if (delivery.status === 'failed') {
     logger.warn(
       `Turn result not delivered: parent stream is unavailable (${delivery.reason}). The result remains in the run report.`,
       {
@@ -726,7 +726,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
         },
       },
     );
-  } else if (delivery.wake === 'failed') {
+  } else if (delivery.status === 'queued' && delivery.wake === 'failed') {
     logger.warn(
       'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
       { data: { runId, parentRunId: targetRunId } },

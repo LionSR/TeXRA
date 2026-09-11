@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   tryUseRunContext: vi.fn(),
   currentSession: vi.fn(),
   submitFollowUp: vi.fn(),
-  deliverChildRunFollowUp: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/RunContext', () => {
@@ -28,10 +27,6 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
 vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>()),
   submitFollowUp: mocks.submitFollowUp,
-}));
-
-vi.mock('@agent/followUp/childRunDelivery', () => ({
-  deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
 // Local imports
@@ -129,9 +124,6 @@ describe('DelegateAgentTool resume ownership', () => {
     mocks.currentSession.mockReturnValue({
       runs: { getHandle: () => makeHandle() },
     } as never);
-    mocks.deliverChildRunFollowUp.mockReturnValue(
-      Effect.succeed({ kind: 'delivered' }),
-    );
   });
 
   it('reports a merged recovery failure to the parent', async () => {
@@ -148,10 +140,12 @@ describe('DelegateAgentTool resume ownership', () => {
     });
 
     await vi.waitFor(() =>
-      assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1),
+      assert.strictEqual(mocks.submitFollowUp.mock.calls.length, 2),
     );
-    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
-      expect.objectContaining({ targetRunId: parentRunId }),
+    expect(mocks.submitFollowUp).toHaveBeenLastCalledWith(
+      parentRunId,
+      expect.objectContaining({ origin: 'subagent_result' }),
+      expect.anything(),
     );
   });
 });

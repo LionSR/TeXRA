@@ -21,7 +21,7 @@ import {
 } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
-  deliverChildRunFollowUp: vi.fn(),
+  submitFollowUp: vi.fn(),
   executeAgent: vi.fn(),
   finalizeRun: vi.fn(),
   persistChildRunDelivery: vi.fn(),
@@ -81,8 +81,9 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
-vi.mock('@agent/followUp/childRunDelivery', () => ({
-  deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
+vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>()),
+  submitFollowUp: mocks.submitFollowUp,
 }));
 
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -209,9 +210,7 @@ describe('NativeSubagentStrategy', () => {
     });
     mocks.throwDeliveryFormatting = false;
     mocks.throwErrorFormatting = false;
-    mocks.deliverChildRunFollowUp.mockReturnValue(
-      Effect.succeed({ kind: 'delivered' }),
-    );
+    mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
     mocks.persistChildRunDelivery.mockReturnValue(Effect.void);
     mocks.writeTurnState.mockResolvedValue(undefined);
     mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
@@ -662,7 +661,7 @@ describe('NativeSubagentStrategy', () => {
     });
     try {
       await vi.waitFor(() =>
-        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1),
       );
 
       expect(
@@ -680,7 +679,7 @@ describe('NativeSubagentStrategy', () => {
         expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(1),
       );
       await vi.waitFor(() =>
-        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2),
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2),
       );
 
       expect(
@@ -698,7 +697,7 @@ describe('NativeSubagentStrategy', () => {
         expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2),
       );
       await vi.waitFor(() =>
-        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(3),
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(3),
       );
 
       expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
@@ -729,8 +728,8 @@ describe('NativeSubagentStrategy', () => {
       ]);
       expect(session.followUps.getAll(childRunId)).toEqual([]);
       expect(session.status.get(childRunId)).toBe(RUN_PHASE.WAITING);
-      const resumedDeliveries = mocks.deliverChildRunFollowUp.mock.calls.filter(
-        ([delivery]) => delivery.followUp.text.includes('follow-up response'),
+      const resumedDeliveries = mocks.submitFollowUp.mock.calls.filter(
+        ([, followUp]) => followUp.text.includes('follow-up response'),
       );
       expect(resumedDeliveries).toHaveLength(2);
     } finally {
@@ -810,7 +809,7 @@ describe('NativeSubagentStrategy', () => {
       });
 
       await vi.waitFor(() =>
-        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
+        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1),
       );
       await vi.waitFor(() =>
         expect(session.followUps.hasLiveOwner(childRunId)).toBe(false),

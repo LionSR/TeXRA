@@ -62,7 +62,7 @@ interface SubmitFollowUpOptions {
    * ordinary continuation: its parent counts the child as active until the
    * delivery has landed, so it always finds a live or recoverable queue.
    */
-  readonly mode?: 'live_notification' | 'child_delivery';
+  readonly mode?: 'live_notification';
   /**
    * Fires once admission is decided, before any recovery resume runs. `true`
    * means the input now belongs to the stream (sent, queued, or already

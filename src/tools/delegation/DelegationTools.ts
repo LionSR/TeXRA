@@ -28,7 +28,6 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
@@ -93,14 +92,14 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
       );
       return;
     }
-    const delivery = yield* deliverChildRunFollowUp({
+    const delivery = yield* submitFollowUp(
       targetRunId,
-      followUp: { text: msg, origin: 'subagent_result' },
-      session,
-    });
-    if (delivery.kind !== 'delivered') {
+      { text: msg, origin: 'subagent_result' },
+      { session },
+    );
+    if (delivery.status === 'failed') {
       log.warn(
-        `Also failed to deliver the wake-failure error for '${runId}' to the parent (${delivery.kind}).`,
+        `Also failed to deliver the wake-failure error for '${runId}' to the parent (${delivery.reason}).`,
       );
     }
   },
