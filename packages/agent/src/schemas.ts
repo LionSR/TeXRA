@@ -5,7 +5,6 @@ export {
 } from '@agent/core/definition/AgentConfig';
 export type {
   AgentConfig,
-  AgentConfigInput,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 export {
@@ -40,4 +39,9 @@ export {
   RUN_OUTCOME,
   RunOutcomeSchema,
 } from '@shared/schemas';
-export type { AgentSource, RunId, RunOutcome } from '@shared/schemas';
+export type {
+  AgentConfigInput,
+  AgentSource,
+  RunId,
+  RunOutcome,
+} from '@shared/schemas';

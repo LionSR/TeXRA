@@ -7,8 +7,6 @@ import {
   ToolUseAgentConfigFieldsSchema,
 } from '@shared/schemas';
 
-export { DEFAULT_WORKFLOW_AGENT, type AgentConfigInput } from '@shared/schemas';
-
 /**
  * Materialize the absent-category default before the discriminated union
  * selects a variant.
