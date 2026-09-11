@@ -190,9 +190,7 @@ export function mergeLocalNotices(
       next += 1;
     }
   };
-  for (const notice of [...runNotices].sort(
-    (a, b) => a.afterSeq - b.afterSeq,
-  )) {
+  for (const notice of runNotices.toSorted((a, b) => a.afterSeq - b.afterSeq)) {
     flushThrough(notice.afterSeq);
     const previous = out.at(-1);
     const seq = previous?.settlementSeqNo ?? previous?.seqNo;

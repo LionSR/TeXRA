@@ -610,8 +610,8 @@ function sameCatalogSchemaKind(actual: unknown, expected: unknown): boolean {
     return false;
   }
   if (actual instanceof z.ZodEnum && expected instanceof z.ZodEnum) {
-    const actualOptions = [...actual.options].sort();
-    const expectedOptions = [...expected.options].sort();
+    const actualOptions = actual.options.toSorted();
+    const expectedOptions = expected.options.toSorted();
     return (
       actualOptions.length === expectedOptions.length &&
       actualOptions.every((option, index) => option === expectedOptions[index])

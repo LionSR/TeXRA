@@ -4,13 +4,13 @@
 import { strict as assert } from 'node:assert';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 
 // Third-party imports
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { waitForCondition } from '@test/support/asyncTestUtils';
 import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
@@ -20,18 +20,6 @@ import { BinaryResolverService } from '@utils/system/binaryResolver';
 // ---------------------------------------------------------------------------
 // execUtils
 // ---------------------------------------------------------------------------
-
-async function waitFor(
-  description: string,
-  check: () => boolean,
-  attempts = 50,
-): Promise<void> {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (check()) return;
-    await sleep(20);
-  }
-  throw new Error(`Timed out waiting for ${description}`);
-}
 
 // Signal delivery to a whole process group, and the kernel reaping the members,
 // is not instant — and gets markedly slower when the suite is saturating every
@@ -45,8 +33,7 @@ async function waitFor(
 const PROCESS_EXIT_TEST_TIMEOUT_MS = 30_000;
 
 function waitForProcessExit(pid: number): Promise<void> {
-  return waitFor(
-    `process ${pid} to exit`,
+  return waitForCondition(
     () => {
       try {
         process.kill(pid, 0);
@@ -55,7 +42,11 @@ function waitForProcessExit(pid: number): Promise<void> {
         return true;
       }
     },
-    500,
+    {
+      timeoutMs: 10_000,
+      intervalMs: 20,
+      timeoutMessage: `Timed out waiting for process ${pid} to exit`,
+    },
   );
 }
 
@@ -90,7 +81,11 @@ describe('executeCommand', () => {
       env: { PID_FILE: pidFile },
     });
 
-    await waitFor(pidFile, () => existsSync(pidFile));
+    await waitForCondition(() => existsSync(pidFile), {
+      timeoutMs: 1000,
+      intervalMs: 20,
+      timeoutMessage: `Timed out waiting for ${pidFile}`,
+    });
     const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
     assert.ok(Number.isInteger(childPid) && childPid > 0);
     return { promise, childPid };
@@ -237,7 +232,11 @@ describe('executeCommand', () => {
         },
       );
 
-      await waitFor('child pid', () => childPid !== undefined);
+      await waitForCondition(() => childPid !== undefined, {
+        timeoutMs: 1000,
+        intervalMs: 20,
+        timeoutMessage: 'Timed out waiting for child pid',
+      });
       assert.ok(childPid && childPid > 0);
 
       controller.abort();

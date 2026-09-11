@@ -22,6 +22,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import type { MemoryViewItem } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { isOwnDetailsToggle } from '@shared/litControllers/detailsToggle';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
@@ -131,13 +132,13 @@ export class MemoryItem extends LitElement {
   }
 
   private handleContentsShow(event: Event): void {
-    if (event.target !== event.currentTarget) return;
+    if (!isOwnDetailsToggle(event)) return;
     this.contentsOpened = true;
     this.requestPreviewIfNeeded();
   }
 
   private handleContentsHide(event: Event): void {
-    if (event.target !== event.currentTarget) return;
+    if (!isOwnDetailsToggle(event)) return;
     this.contentsOpened = false;
   }
 

@@ -9,6 +9,8 @@ import {
 } from 'lit';
 import { property, state } from 'lit/decorators.js';
 
+import { isOwnDetailsToggle } from '@shared/litControllers/detailsToggle';
+
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
@@ -54,13 +56,12 @@ export abstract class CollapsiblePanel extends LitElement {
   }
 
   private handleShow(e: Event): void {
-    // Ignore bubbled events from nested wa-details
-    if (e.target !== e.currentTarget) return;
+    if (!isOwnDetailsToggle(e)) return;
     this.open = true;
   }
 
   private handleHide(e: Event): void {
-    if (e.target !== e.currentTarget) return;
+    if (!isOwnDetailsToggle(e)) return;
     this.open = false;
   }
 }

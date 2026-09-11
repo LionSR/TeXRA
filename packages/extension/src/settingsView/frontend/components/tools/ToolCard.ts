@@ -28,6 +28,7 @@ import type {
   ToolDashboardItem,
   ToolInstallAction,
 } from '@shared/schemas';
+import { isOwnDetailsToggle } from '@shared/litControllers/detailsToggle';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -205,12 +206,12 @@ export class ToolCard extends LitElement {
   }
 
   private handleGuideShow(event: Event): void {
-    if (event.target !== event.currentTarget) return;
+    if (!isOwnDetailsToggle(event)) return;
     this.guideExpanded = true;
   }
 
   private handleGuideHide(event: Event): void {
-    if (event.target !== event.currentTarget) return;
+    if (!isOwnDetailsToggle(event)) return;
     this.guideExpanded = false;
   }
 
