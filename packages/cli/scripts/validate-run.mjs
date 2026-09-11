@@ -372,9 +372,7 @@ function validateToolsCommand() {
     assertSuccess(initial, 'texra tools list JSON');
     const records = parseJson(initial.stdout, 'tools list JSON');
     assert(Array.isArray(records), 'tools list JSON should be an array');
-    const target = records.find(
-      (record) => record.toggleable === true && record.comingSoon !== true,
-    );
+    const target = records.find((record) => record.toggleable === true);
     assert(
       target,
       `tools list should include a toggleable integration\nstdout:\n${initial.stdout}`,
