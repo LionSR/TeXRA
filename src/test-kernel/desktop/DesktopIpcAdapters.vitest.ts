@@ -234,10 +234,9 @@ describe('desktop IPC adapters', () => {
 
   it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {
     // A credential probe that resolves on the next macrotask, so two refreshes
-    // started back-to-back genuinely overlap in flight. If they interleaved,
-    // both would compute against `previous === undefined` and each report a
-    // change. Serialized, the second refresh sees `previous === 'setup'` and
-    // reports none.
+    // started back-to-back genuinely overlap in flight. Serialized, the
+    // second refresh sees `previous === 'setup'` and reports no change. (The
+    // assertion pins the terminal state; it is not a strict interleave probe.)
     let credentialPresent = false;
     const hasCredential = vi.fn(
       () =>
@@ -257,8 +256,7 @@ describe('desktop IPC adapters', () => {
     await Promise.all([first, second]);
     await flushAsync();
 
-    // One change, to setup: proof the refreshes did not interleave and
-    // clobber `previousFunnelState`.
+    // One change, to setup.
     expect(funnelStates).toEqual(['setup']);
   });
 });

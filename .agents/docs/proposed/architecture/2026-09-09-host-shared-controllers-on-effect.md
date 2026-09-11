@@ -111,7 +111,8 @@ refresh is written twice —
 `ProgressViewProvider.ts:397-431` and `desktopOnboardingIpc.ts:100-132` are
 the same five steps in the same order (probe in a try with a near-identical
 "Credential probe failed; treating as no credential" warning, plan the
-transition, store it, publish, `clearDeclined`, `selectSetupAgent`), both
+transition, store it, publish, `clearDeclined`, and on the extension
+`selectSetupAgent`; desktop discards that transition), both
 holding a private `previousFunnelState` and both wrapped in the same shared
 `OnboardingRefreshQueue`. Three small credential paths are written three
 times: [`providerApiKey.ts`](../../../../packages/cli/src/runtime/providerApiKey.ts)
@@ -432,7 +433,8 @@ and `shutdownExtension`'s re-activation idempotency.
 the Electron quit path with its renderer veto, per-project session scoping,
 `DesktopPromptController`'s correlated renderer prompts, the N-sessions
 registry, the `hasAuthoritativeStream` pre-check in resume, and
-`selectSetupAgent` as a documented no-op. It loses the `toolEditAction`
+discarding the `selectSetupAgent` transition, as the CLI does
+(`runOnboarding.tsx`). It loses the `toolEditAction`
 pass-through.
 
 **CLI.** Rendering, terminal ownership, and everything the study confirmed is
