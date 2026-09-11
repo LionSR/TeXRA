@@ -26,7 +26,7 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
 const packagedRoot = join(desktopRoot, 'dist-packaged');
 const desktopRequire = createRequire(join(desktopRoot, 'package.json'));
-const { _electron: electron } = desktopRequire('playwright');
+const { _electron: electron } = desktopRequire('@playwright/test');
 
 const READINESS_TIMEOUT_MS = 30_000;
 const SHUTDOWN_GRACE_MS = 5_000;

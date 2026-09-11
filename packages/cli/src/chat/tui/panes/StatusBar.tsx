@@ -1,5 +1,4 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
-import { Badge } from '@inkjs/ui';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
@@ -338,12 +337,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         <Box gap={1}>
           {display.left.map((segment, index) =>
             segment.badge ? (
-              <Badge
+              <Text
                 key={`${segment.text}-${index}`}
-                color={segment.badgeColor ?? COLOR_ERROR}
+                backgroundColor={segment.badgeColor ?? COLOR_ERROR}
               >
-                {segment.text}
-              </Badge>
+                {' '}
+                <Text color="black">{segment.text.toUpperCase()}</Text>{' '}
+              </Text>
             ) : (
               <Text
                 key={`${segment.text}-${index}`}

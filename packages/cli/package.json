@@ -53,7 +53,6 @@
     "validate:tui": "node scripts/validate-tui.mjs"
   },
   "dependencies": {
-    "@inkjs/ui": "^2.0.0",
     "clipboardy": "^5.3.2"
   },
   "devDependencies": {
