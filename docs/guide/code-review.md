@@ -187,12 +187,6 @@ model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
 An unset variable expands to an empty string, which the action treats as "use
 the default".
 
-::: info Migrating from older setups
-Older per-provider variables such as `TEXRA_REVIEW_DEEPSEEK_MODEL` are no
-longer read by the external action. Move those values into
-`TEXRA_REVIEW_MODEL_DEFAULTS`.
-:::
-
 ## Writing your own review prompt
 
 By default, the action reviews with its bundled general-purpose prompt. If

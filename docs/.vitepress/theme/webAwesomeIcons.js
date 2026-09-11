@@ -11,38 +11,26 @@
 import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown';
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons/faArrowLeft';
 import { faArrowRight } from '@fortawesome/free-solid-svg-icons/faArrowRight';
-import { faArrowRotateLeft } from '@fortawesome/free-solid-svg-icons/faArrowRotateLeft';
 import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons/faArrowsRotate';
 import { faArrowUp } from '@fortawesome/free-solid-svg-icons/faArrowUp';
 import { faArrowUpRightFromSquare } from '@fortawesome/free-solid-svg-icons/faArrowUpRightFromSquare';
-import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
-import { faBan } from '@fortawesome/free-solid-svg-icons/faBan';
 import { faBolt } from '@fortawesome/free-solid-svg-icons/faBolt';
 import { faBook } from '@fortawesome/free-solid-svg-icons/faBook';
-import { faBookmark } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faBox } from '@fortawesome/free-solid-svg-icons/faBox';
 import { faBoxArchive } from '@fortawesome/free-solid-svg-icons/faBoxArchive';
-import { faBuilding } from '@fortawesome/free-solid-svg-icons/faBuilding';
 import { faBullseye } from '@fortawesome/free-solid-svg-icons/faBullseye';
-import { faCaretDown } from '@fortawesome/free-solid-svg-icons/faCaretDown';
 import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine';
-import { faChartPie } from '@fortawesome/free-solid-svg-icons/faChartPie';
 import { faCheck } from '@fortawesome/free-solid-svg-icons/faCheck';
-import { faCheckDouble } from '@fortawesome/free-solid-svg-icons/faCheckDouble';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons/faChevronDown';
-import { faChevronLeft } from '@fortawesome/free-solid-svg-icons/faChevronLeft';
 import { faChevronRight } from '@fortawesome/free-solid-svg-icons/faChevronRight';
 import { faChevronUp } from '@fortawesome/free-solid-svg-icons/faChevronUp';
-import { faCircle } from '@fortawesome/free-solid-svg-icons/faCircle';
 import { faCircleCheck } from '@fortawesome/free-solid-svg-icons/faCircleCheck';
 import { faCircleDot } from '@fortawesome/free-solid-svg-icons/faCircleDot';
 import { faCircleExclamation } from '@fortawesome/free-solid-svg-icons/faCircleExclamation';
 import { faCircleInfo } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
-import { faCircleQuestion } from '@fortawesome/free-solid-svg-icons/faCircleQuestion';
 import { faCircleStop } from '@fortawesome/free-solid-svg-icons/faCircleStop';
 import { faCircleUser } from '@fortawesome/free-solid-svg-icons/faCircleUser';
 import { faCircleXmark } from '@fortawesome/free-solid-svg-icons/faCircleXmark';
-import { faClock } from '@fortawesome/free-solid-svg-icons/faClock';
 import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
 import { faCloud } from '@fortawesome/free-solid-svg-icons/faCloud';
 import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown';
@@ -58,7 +46,6 @@ import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy';
 import { faCube } from '@fortawesome/free-solid-svg-icons/faCube';
 import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase';
 import { faDiagramProject } from '@fortawesome/free-solid-svg-icons/faDiagramProject';
-import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload';
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons/faEllipsis';
 import { faEraser } from '@fortawesome/free-solid-svg-icons/faEraser';
 import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
@@ -78,28 +65,20 @@ import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons/faGlobe';
 import { faGraduationCap } from '@fortawesome/free-solid-svg-icons/faGraduationCap';
 import { faHashtag } from '@fortawesome/free-solid-svg-icons/faHashtag';
-import { faHeart } from '@fortawesome/free-solid-svg-icons/faHeart';
 import { faImage } from '@fortawesome/free-solid-svg-icons/faImage';
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
-import { faLayerGroup } from '@fortawesome/free-solid-svg-icons/faLayerGroup';
 import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
 import { faLink } from '@fortawesome/free-solid-svg-icons/faLink';
 import { faListCheck } from '@fortawesome/free-solid-svg-icons/faListCheck';
-import { faListUl } from '@fortawesome/free-solid-svg-icons/faListUl';
 import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
-import { faMagnifyingGlassChart } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlassChart';
 import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
-import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
 import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
-import { faPaperPlane } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
-import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { faPlusMinus } from '@fortawesome/free-solid-svg-icons/faPlusMinus';
 import { faReply } from '@fortawesome/free-solid-svg-icons/faReply';
-import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons/faRightFromBracket';
 import { faRightToBracket } from '@fortawesome/free-solid-svg-icons/faRightToBracket';
 import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
 import { faRocket } from '@fortawesome/free-solid-svg-icons/faRocket';
@@ -108,18 +87,15 @@ import { faRuler } from '@fortawesome/free-solid-svg-icons/faRuler';
 import { faScrewdriverWrench } from '@fortawesome/free-solid-svg-icons/faScrewdriverWrench';
 import { faServer } from '@fortawesome/free-solid-svg-icons/faServer';
 import { faShield } from '@fortawesome/free-solid-svg-icons/faShield';
-import { faSpinner } from '@fortawesome/free-solid-svg-icons/faSpinner';
 import { faTerminal } from '@fortawesome/free-solid-svg-icons/faTerminal';
 import { faThumbtack } from '@fortawesome/free-solid-svg-icons/faThumbtack';
 import { faThumbtackSlash } from '@fortawesome/free-solid-svg-icons/faThumbtackSlash';
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation';
-import { faUser } from '@fortawesome/free-solid-svg-icons/faUser';
 import { faUsers } from '@fortawesome/free-solid-svg-icons/faUsers';
 import { faVideo } from '@fortawesome/free-solid-svg-icons/faVideo';
 import { faVolumeHigh } from '@fortawesome/free-solid-svg-icons/faVolumeHigh';
 import { faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons/faWandMagicSparkles';
-import { faWindowMaximize } from '@fortawesome/free-solid-svg-icons/faWindowMaximize';
 import { faWrench } from '@fortawesome/free-solid-svg-icons/faWrench';
 import { faXmark } from '@fortawesome/free-solid-svg-icons/faXmark';
 import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
@@ -141,38 +117,26 @@ const icons = {
   'arrow-down': faArrowDown,
   'arrow-left': faArrowLeft,
   'arrow-right': faArrowRight,
-  'arrow-rotate-left': faArrowRotateLeft,
   'arrow-up': faArrowUp,
   'arrow-up-right-from-square': faArrowUpRightFromSquare,
   'arrows-rotate': faArrowsRotate,
-  'backward-step': faBackwardStep,
-  ban: faBan,
   bolt: faBolt,
   book: faBook,
-  bookmark: faBookmark,
   bullseye: faBullseye,
   box: faBox,
   'box-archive': faBoxArchive,
-  building: faBuilding,
-  'caret-down': faCaretDown,
   'chart-line': faChartLine,
-  'chart-pie': faChartPie,
   check: faCheck,
-  'check-double': faCheckDouble,
   'chevron-down': faChevronDown,
-  'chevron-left': faChevronLeft,
   'chevron-right': faChevronRight,
   'chevron-up': faChevronUp,
-  circle: faCircle,
   'circle-check': faCircleCheck,
   'circle-dot': faCircleDot,
   'circle-exclamation': faCircleExclamation,
   'circle-info': faCircleInfo,
-  'circle-question': faCircleQuestion,
   'circle-stop': faCircleStop,
   'circle-user': faCircleUser,
   'circle-xmark': faCircleXmark,
-  clock: faClock,
   'clock-rotate-left': faClockRotateLeft,
   cloud: faCloud,
   'cloud-arrow-down': faCloudArrowDown,
@@ -188,7 +152,6 @@ const icons = {
   cube: faCube,
   database: faDatabase,
   'diagram-project': faDiagramProject,
-  download: faDownload,
   ellipsis: faEllipsis,
   eraser: faEraser,
   eye: faEye,
@@ -208,28 +171,20 @@ const icons = {
   globe: faGlobe,
   'graduation-cap': faGraduationCap,
   hashtag: faHashtag,
-  heart: faHeart,
   image: faImage,
   key: faKey,
-  'layer-group': faLayerGroup,
   lightbulb: faLightbulb,
   link: faLink,
   'list-check': faListCheck,
-  'list-ul': faListUl,
   'magnifying-glass': faMagnifyingGlass,
-  'magnifying-glass-chart': faMagnifyingGlassChart,
   microphone: faMicrophone,
-  minus: faMinus,
   'note-sticky': faNoteSticky,
   palette: faPalette,
-  'paper-plane': faPaperPlane,
   pencil: faPencil,
-  'picture-in-picture': faPictureInPicture,
   play: faPlay,
   plus: faPlus,
   'plus-minus': faPlusMinus,
   reply: faReply,
-  'right-from-bracket': faRightFromBracket,
   'right-to-bracket': faRightToBracket,
   robot: faRobot,
   rocket: faRocket,
@@ -238,18 +193,15 @@ const icons = {
   'screwdriver-wrench': faScrewdriverWrench,
   server: faServer,
   shield: faShield,
-  spinner: faSpinner,
   terminal: faTerminal,
   thumbtack: faThumbtack,
   'thumbtack-slash': faThumbtackSlash,
   trash: faTrash,
   'triangle-exclamation': faTriangleExclamation,
-  user: faUser,
   users: faUsers,
   video: faVideo,
   'volume-high': faVolumeHigh,
   'wand-magic-sparkles': faWandMagicSparkles,
-  'window-maximize': faWindowMaximize,
   wrench: faWrench,
   xmark: faXmark,
 };
@@ -263,34 +215,22 @@ const CODICON_ALIASES = {
   account: 'circle-user',
   add: 'plus',
   archive: 'box-archive',
-  'arrow-small-down': 'caret-down',
   beaker: 'flask',
-  'check-all': 'check-double',
-  checklist: 'list-check',
-  'circle-outline': 'circle',
   'circle-slash': 'circle-xmark',
   'clear-all': 'eraser',
   clippy: 'copy',
   close: 'xmark',
-  'close-all': 'eraser',
   'cloud-download': 'cloud-arrow-down',
   'cloud-upload': 'cloud-arrow-up',
   'comment-discussion': 'comments',
-  dash: 'minus',
   dashboard: 'gear',
   debug: 'play',
   'debug-alt': 'play',
-  'debug-continue': 'forward-step',
-  'debug-rerun': 'rotate-right',
-  'debug-start': 'play',
   'debug-stop': 'circle-stop',
-  'desktop-download': 'download',
   'device-camera-video': 'video',
   diff: 'code-compare',
-  'diff-added': 'plus',
   'diff-multiple': 'plus-minus',
   'diff-single': 'plus-minus',
-  discard: 'arrow-rotate-left',
   edit: 'pencil',
   error: 'circle-exclamation',
   'file-add': 'file-circle-plus',
@@ -299,54 +239,30 @@ const CODICON_ALIASES = {
   'file-symlink-file': 'file-export',
   'file-text': 'file-lines',
   files: 'copy',
-  fold: 'chevron-up',
-  'folder-library': 'folder-tree',
   'folder-opened': 'folder-open',
-  'folder-submodule': 'folder-tree',
   github: 'code-branch',
   'git-commit': 'circle-dot',
-  'git-merge': 'code-merge',
-  graph: 'chart-line',
-  'graph-line': 'chart-line',
   history: 'clock-rotate-left',
   info: 'circle-info',
-  inspect: 'magnifying-glass-chart',
-  'layout-sidebar-right': 'window-maximize',
-  'link-external': 'arrow-up-right-from-square',
   library: 'book',
-  'list-tree': 'list-ul',
-  'list-unordered': 'list-ul',
-  loading: 'spinner',
   merge: 'code-merge',
   mic: 'microphone',
   'mortar-board': 'graduation-cap',
   'new-file': 'file-circle-plus',
   note: 'note-sticky',
-  organization: 'building',
   output: 'terminal',
   package: 'box',
-  'pass-filled': 'circle-check',
-  'pie-chart': 'chart-pie',
   'play-circle': 'play',
   pulse: 'chart-line',
-  question: 'circle-question',
-  references: 'link',
   refresh: 'rotate-right',
   save: 'floppy-disk',
   search: 'magnifying-glass',
-  send: 'paper-plane',
-  'server-process': 'server',
   'settings-gear': 'gear',
   'sign-in': 'right-to-bracket',
-  'sign-out': 'right-from-bracket',
   'source-control': 'code-branch',
   sparkle: 'wand-magic-sparkles',
-  'stop-circle': 'circle-stop',
-  stylesheet: 'palette',
   'symbol-color': 'palette',
   'symbol-keyword': 'key',
-  'symbol-method': 'cube',
-  'symbol-number': 'hashtag',
   'symbol-numeric': 'hashtag',
   'symbol-operator': 'cube',
   'symbol-ruler': 'ruler',
@@ -354,15 +270,11 @@ const CODICON_ALIASES = {
   'symbol-variable': 'code',
   sync: 'arrows-rotate',
   target: 'bullseye',
-  tasklist: 'list-check',
   tools: 'screwdriver-wrench',
   'type-hierarchy': 'diagram-project',
   unmute: 'volume-high',
   wand: 'wand-magic-sparkles',
   warning: 'triangle-exclamation',
-  window: 'window-maximize',
-  x: 'xmark',
-  zap: 'bolt',
 };
 
 let isRegistered = false;

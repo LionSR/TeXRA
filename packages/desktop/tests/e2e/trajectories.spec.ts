@@ -11,8 +11,7 @@ import {
 } from './electronApp.js';
 
 /**
- * Standalone-trajectory audit suite — companion to
- * `docs/dev/audits/2026-05-08-standalone-trajectory-audit.md`.
+ * Standalone-trajectory audit suite.
  *
  * These tests don't replace `screenshots.spec.ts`; they walk through the
  * critical user journeys identified in issue #3643 (auth, workspace open,

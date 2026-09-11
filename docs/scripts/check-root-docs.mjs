@@ -8,10 +8,16 @@
 // check to PR time: a doc added without being classified as public or internal
 // fails the author's PR, loudly, before merge.
 //
+// With `--dist <dir>` it instead checks a finished build: the dist root may hold
+// only the public surface declared in publicDocs.js, the static assets under
+// public/, and VitePress's own fixed outputs. The deploy workflow runs that mode
+// after the build, so the publish boundary and the post-build allowlist read one
+// source and cannot drift apart.
+//
 // It is intentionally dependency-free (bare Node, only the local publicDocs.js
 // import) so it runs without installing the docs sub-project.
 
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -21,11 +27,72 @@ import {
 } from '../.vitepress/publicDocs.js';
 
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
+
+const distFlag = process.argv.indexOf('--dist');
+if (distFlag !== -1) {
+  const distDir = process.argv[distFlag + 1];
+  if (!distDir) {
+    console.error('Usage: check-root-docs.mjs --dist <build output dir>');
+    process.exit(2);
+  }
+  process.exit(checkDist(distDir));
+}
+
+/**
+ * Compare a finished build's root against the declared public surface.
+ * Returns the process exit code.
+ */
+function checkDist(distDir) {
+  // VitePress's fixed outputs, plus the two Pages files the deploy step adds.
+  const buildOutputs = [
+    'assets',
+    '404.html',
+    'hashmap.json',
+    'vp-icons.css',
+    '.nojekyll',
+    'CNAME',
+  ];
+  const publicPages = publicRootDocs.map((doc) =>
+    doc.replace(/\.md$/, '.html'),
+  );
+  const allowed = new Set([
+    ...buildOutputs,
+    ...publicPages,
+    ...publicRootDirs,
+    ...readdirSync(join(docsDir, 'public')),
+  ]);
+  const required = [
+    ...publicPages,
+    ...publicRootDirs.map((dir) => `${dir}/index.html`),
+  ];
+
+  const unexpected = readdirSync(distDir).filter((name) => !allowed.has(name));
+  const missing = required.filter((page) => !existsSync(join(distDir, page)));
+  for (const name of unexpected) {
+    console.error(`${ghError}Unexpected entry in build output: ${name}`);
+  }
+  for (const page of missing) {
+    console.error(`${ghError}Expected public page missing from build: ${page}`);
+  }
+  if (unexpected.length > 0) {
+    console.error(
+      `${ghError}Classify it in docs/.vitepress/publicDocs.js, or add a new VitePress output to buildOutputs in this script.`,
+    );
+  }
+  if (unexpected.length > 0 || missing.length > 0) return 1;
+  console.log(
+    `docs build output OK: ${allowed.size} allowed root entries, ` +
+      `${required.length} required pages present.`,
+  );
+  return 0;
+}
+
 const TIMESTAMP_PREFIX = /^\d{4}-\d{2}-\d{2}-/;
 const TRAILING_DATE_SUFFIX = /-20\d{2}(?:-\d{2}(?:-\d{2})?)?\.md$/;
 // The former prds/ and proposals/ trees moved to the repo-root .agents/docs/
 // note tree, which is outside docs/ and therefore outside this gate's scope.
-const TIMESTAMPED_DIRS = ['architecture', 'design', 'dev/audits'];
+const TIMESTAMPED_DIRS = ['architecture'];
 const INTERNAL_DOC_MARKER = /(?:^|[-_])(audit|prd|proposal)(?:[-_.]|$)/i;
 
 // Build/system entries that are never publishable content and need no
@@ -43,14 +110,11 @@ const publicDirs = new Set(publicRootDirs);
 // Root-level entries named directly in srcExclude, with any `/**` glob suffix
 // stripped so a directory matches its `name/**` exclusion.
 const excluded = new Set(srcExclude.map((e) => e.replace(/\/\*\*$/, '')));
-const missingInternalExclusions = TIMESTAMPED_DIRS.map((dir) =>
-  dir.split('/').at(0),
-)
-  .filter((dir, index, dirs) => dirs.indexOf(dir) === index)
-  .filter((dir) => !excluded.has(dir));
+const missingInternalExclusions = TIMESTAMPED_DIRS.filter(
+  (dir) => !excluded.has(dir),
+);
 
 if (missingInternalExclusions.length > 0) {
-  const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
   console.error(`${ghError}Internal docs directories missing from srcExclude:`);
   for (const dir of missingInternalExclusions) {
     console.error(`${ghError}  docs/${dir}/**`);
@@ -80,7 +144,6 @@ for (const entry of entries) {
 }
 
 if (unclassified.length > 0) {
-  const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
   console.error(
     `${ghError}Unclassified root-level docs entries (neither public nor internal):`,
   );
@@ -125,9 +188,8 @@ const invalidInternalDocs = [
 ].toSorted();
 
 if (invalidInternalDocs.length > 0) {
-  const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
   console.error(
-    `${ghError}Architecture, design, and audit Markdown files require a YYYY-MM-DD- prefix:`,
+    `${ghError}Architecture Markdown files require a YYYY-MM-DD- prefix:`,
   );
   for (const file of invalidInternalDocs) {
     console.error(`${ghError}  docs/${relative(docsDir, file)}`);
@@ -141,5 +203,5 @@ if (invalidInternalDocs.length > 0) {
 console.log(
   `docs boundary OK: every root-level entry is classified ` +
     `(${publicDocs.size} public docs, ${publicDirs.size} public dirs); ` +
-    `${TIMESTAMPED_DIRS.length} internal doc areas are excluded and timestamped.`,
+    `internal doc areas (${TIMESTAMPED_DIRS.join(', ')}) are excluded and timestamped.`,
 );

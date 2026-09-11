@@ -35,16 +35,8 @@ const configPath = resolve(rootDir, 'docs/supabase/remote-agents.config.json');
 // are the source of truth for description / tools / agentCategory; folder and
 // visibility live in docs/supabase/remote-agents.config.json so the generated
 // SQL stays aligned with production without editing every YAML.
-const { agents: AGENT_PLACEMENT, retired: RETIRED_AGENT_NAMES } =
-  loadPlacementConfig();
-
-function loadPlacementConfig() {
-  const raw = JSON.parse(readFileSync(configPath, 'utf8'));
-  return {
-    agents: raw.agents ?? {},
-    retired: Array.isArray(raw.retired) ? raw.retired : [],
-  };
-}
+const AGENT_PLACEMENT =
+  JSON.parse(readFileSync(configPath, 'utf8')).agents ?? {};
 
 function discoverYamlFiles(dir) {
   return walkFiles(dir, {
@@ -268,9 +260,6 @@ function buildSql(agents) {
     '-- Source of truth: prompts/agents/remote/**/*.yaml and',
     '-- docs/supabase/remote-agents.config.json.',
     '',
-    'ALTER TABLE remote_agents',
-    'ADD COLUMN IF NOT EXISTS tools TEXT[] DEFAULT NULL;',
-    '',
   ];
 
   const groups = new Map();
@@ -303,21 +292,6 @@ function buildSql(agents) {
       lines.push(buildInsert(agent));
       lines.push('');
     }
-  }
-
-  if (RETIRED_AGENT_NAMES.length > 0) {
-    lines.push(
-      '-- ---------------------------------------------------------------------------',
-    );
-    lines.push('-- Cleanup stale entries (renamed/removed agents)');
-    lines.push(
-      '-- ---------------------------------------------------------------------------',
-    );
-    lines.push('');
-    lines.push(
-      `DELETE FROM remote_agents WHERE name IN (${RETIRED_AGENT_NAMES.map(sqlString).join(', ')});`,
-    );
-    lines.push('');
   }
 
   lines.push('-- Verify');

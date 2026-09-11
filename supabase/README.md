@@ -1,8 +1,10 @@
 # Supabase source status
 
-The Supabase migrations, Edge Functions, configuration, and operational
-documentation in this repository remain the canonical TeXRA Cloud source until
-a maintainer selects and creates a private infrastructure repository.
+The canonical database migrations live in the private infrastructure
+repository (`supabase/migrations/` is untracked here since #9784). The Edge
+Functions under `supabase/functions/` and the operational documentation under
+`docs/supabase/` remain the canonical TeXRA Cloud source in this repository
+until they are moved the same way.
 
 Do not delete or untrack these files merely to prepare a public release. A move
 is complete only after:

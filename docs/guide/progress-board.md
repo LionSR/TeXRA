@@ -112,10 +112,10 @@ When a tool-use agent works on a multi-step task, it shows a **live checklist** 
 
 ### After a workflow run
 
-The ProgressBoard no longer starts a general-purpose chat from a finished
-workflow. Use **Copy run context** in the header toolbar to put the run's
-output paths and compile failures on the clipboard, then start a tool-use chat
-from the **New** view and paste that text into the instruction box.
+To follow up on a finished workflow in chat, use **Copy run context** in the
+header toolbar to put the run's output paths and compile failures on the
+clipboard, then start a tool-use chat from the **New** view and paste that text
+into the instruction box.
 
 When a run recorded a compile failure, **Run latexFixer** still appears under
 **Generated Files** and starts a repair chat from those logs.

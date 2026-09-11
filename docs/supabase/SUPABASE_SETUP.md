@@ -6,7 +6,7 @@ This guide walks you through setting up Supabase for TeXRA's authentication and 
 
 TeXRA uses Supabase for:
 
-- **User Authentication** - OAuth login (GitHub, Google, GitLab)
+- **User Authentication** - OAuth login (GitHub, Google)
 - **Remote Agents** - Secure storage and access control for agent configurations
 - **Permissions** - Flexible visibility-based access (users see agents matching their permissions)
 
@@ -44,54 +44,22 @@ Once your project is ready:
 1. Go to **Settings** → **API** (or **Settings** → **API Keys** for newer dashboard)
 2. **IMPORTANT**: Copy these values:
    - **Project URL**: `https://your-project-id.supabase.co`
-   - **Publishable key** (recommended): Starts with `sb_publishable_...`
-   - **OR anon key** (legacy): JWT starting with `eyJ...`
+   - **Publishable key**: Starts with `sb_publishable_...`
 
-**These will be hardcoded in the extension (see Part 6).**
+**These are compiled into the clients (see Part 6).**
 
 ---
 
 ## Understanding API Keys
 
-Supabase provides two types of public keys for client-side applications:
+The client ships a publishable key (`sb_publishable_...`,
+`src/auth/config.ts`). It is designed to be embedded in client code: it does
+**not** protect data by itself. Row Level Security (RLS) policies on the
+database tables control actual data access.
 
-### Publishable Key (Recommended)
-
-- **Format**: `sb_publishable_...`
-- **Advantages**:
-  - Easy rotation without downtime
-  - Shorter, simpler format
-  - Independent of JWT secret
-  - Browser-use detection for secret keys
-- **Use**: New projects should use publishable keys
-
-### Anon Key (Legacy)
-
-- **Format**: JWT starting with `eyJ...`
-- **Disadvantages**:
-  - Rotating requires JWT secret rotation (causes downtime)
-  - 10-year expiry embedded in token
-  - Large, complex format
-- **Use**: Still works, but consider migrating to publishable keys
-
-### Both Keys Are Safe for Client Code
-
-Both the publishable and anon keys are designed to be embedded in client-side code. They do **not** protect your data directly. Instead, Row Level Security (RLS) policies on your database tables control actual data access.
-
-**Important**:
-
-- Never expose `service_role` or secret keys (`sb_secret_...`) in client code
-- These elevated keys bypass RLS and should only be used in server-side code (Edge Functions)
-
-### Migrating from Anon to Publishable Key
-
-1. Go to **Settings** → **API Keys** in Supabase dashboard
-2. Create a new publishable key
-3. Replace the `publicKey` value in `src/auth/config.ts` with your publishable key
-4. Build and test the extension
-5. (Optional) Deactivate the old anon key once migration is complete
-
-The Supabase client initialization code remains identical - just swap the key value.
+Never expose `service_role` or secret keys (`sb_secret_...`) in client code.
+These elevated keys bypass RLS and belong only in server-side code (Edge
+Functions).
 
 ---
 
@@ -210,15 +178,10 @@ Go to **SQL Editor** in Supabase dashboard and run this SQL:
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Profiles table (user metadata)
--- tier: internal tier names for future API key access
---   'free' - default, no API key access
---   'Max' - research access program members (researchers, academics)
---   'Ultra' - special sponsors who engaged with TeXRA development
 -- permissions: array of visibility values user can access (e.g., 'researcher', 'math', 'cs')
 CREATE TABLE profiles (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
-  tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'Max', 'Ultra')),
   permissions TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -398,130 +361,14 @@ supabase login
 supabase link --project-ref your-project-id
 ```
 
-### 3. Create Edge Function
+### 3. The function source
 
-```bash
-supabase functions new get-agent-config
-```
+The function lives in this repository at
+`supabase/functions/get-agent-config/index.ts` (with its shared helpers under
+`supabase/functions/_shared/`). Deploy it from a checkout rather than copying
+it into a new function.
 
-### 4. Edit the Function
-
-Edit `supabase/functions/get-agent-config/index.ts`:
-
-```typescript
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-serve(async (req) => {
-  try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-    // User client: uses user's JWT for auth verification and RLS-protected queries
-    // This ensures RLS policies on remote_agents table are enforced
-    const userClient = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    // Admin client: uses only SERVICE_ROLE_KEY for storage operations
-    // This bypasses bucket policies (safe because we already verify access via RLS)
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
-    // Verify user with their JWT
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Get agent name from request
-    const { agentName } = await req.json();
-    if (!agentName) {
-      return new Response(JSON.stringify({ error: 'agentName required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Fetch agent metadata using userClient (RLS enforces access control)
-    // RLS policies check user permissions/whitelist - unauthorized users won't see the agent
-    const { data: agent, error: agentError } = await userClient
-      .from('remote_agents')
-      .select('id, name, description, storage_path, visibility, agent_category')
-      .eq('name', agentName)
-      .single();
-
-    if (agentError || !agent) {
-      return new Response(
-        JSON.stringify({
-          error: 'Agent not found or access denied',
-        }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // Fetch YAML from storage using adminClient (bypasses bucket policies)
-    // Safe because access was already verified via RLS on remote_agents table
-    const { data: fileData, error: storageError } = await adminClient.storage
-      .from('agent-configs')
-      .download(agent.storage_path);
-
-    if (storageError || !fileData) {
-      console.error('Storage error:', storageError);
-      return new Response(
-        JSON.stringify({
-          error: 'Failed to load agent configuration',
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // Read file content (in memory only, never persisted)
-    const yamlContent = await fileData.text();
-
-    return new Response(
-      JSON.stringify({
-        config: yamlContent,
-        name: agent.name,
-        description: agent.description,
-        visibility: agent.visibility, // string[] - array of groups
-        agentCategory: agent.agent_category, // 'workflow' or 'toolUse'
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-  } catch (err) {
-    console.error('Edge function error:', err);
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-});
-```
-
-### 5. Deploy Edge Function
+### 4. Deploy Edge Function
 
 ```bash
 supabase functions deploy get-agent-config --no-verify-jwt
@@ -531,7 +378,7 @@ Deploy with `--no-verify-jwt`: the function verifies the user's JWT internally,
 so the gateway check must stay off (it would otherwise reject the request before
 the function runs). All TeXRA edge functions are deployed this way.
 
-### 6. Get Edge Function URL
+### 5. Get Edge Function URL
 
 After deployment, your function will be available at:
 
@@ -541,30 +388,10 @@ https://your-project-id.supabase.co/functions/v1/get-agent-config
 
 ---
 
-## Part 6: Configure Extension Source Code
+## Part 6: Client configuration
 
-**This is for extension maintainers/developers**, not end users.
-
-### 1. Update Hardcoded Credentials
-
-Edit `src/auth/config.ts`:
-
-```typescript
-export const SUPABASE_CONFIG: SupabaseConfig = {
-  url: 'https://your-actual-project-id.supabase.co', // Replace with your project URL
-  publicKey: 'sb_publishable_...', // Replace with your publishable key (or anon JWT)
-  edgeFunctionUrl:
-    'https://your-actual-project-id.supabase.co/functions/v1/get-agent-config',
-};
-```
-
-### 2. Build Extension
-
-```bash
-npm run build:fast
-```
-
-The extension will now use the configured credentials. Users don't need to configure anything - they just sign in!
+The project URL, publishable key, and edge function URL are compiled into the
+clients from `src/auth/config.ts`. Users configure nothing; they just sign in.
 
 ---
 
@@ -647,13 +474,11 @@ VALUES ('agent-uuid-here', 'user-uuid-here');
 
 For end users, the process is simple:
 
-1. **No configuration needed** - credentials are hardcoded in the extension
+1. **No configuration needed** - the Supabase endpoints are compiled in
 2. **Sign in**: Run `TeXRA: Sign In` command
 3. **Authenticate** via browser (GitHub/Google)
-4. **View profile**: Run `TeXRA: View Profile` to browse remote agents
-5. **Use agents**: Click **Use** on any agent in the Remote Agents table
-
-That's it! No Supabase URLs, API keys, or other configuration.
+4. **Use agents**: remote agents the account can access appear in the agent
+   catalog; see the [Remote Agents guide](../guide/remote-agents.md)
 
 ---
 
@@ -661,7 +486,6 @@ That's it! No Supabase URLs, API keys, or other configuration.
 
 ### "Supabase authentication provider registered" doesn't appear in logs
 
-- Check that `texra.auth.enabled` is true in settings
 - Verify credentials in `src/auth/config.ts` are correct
 - Check browser console in VS Code Developer Tools
 
@@ -669,7 +493,7 @@ That's it! No Supabase URLs, API keys, or other configuration.
 
 - Verify agent exists in `remote_agents` table
 - Check that `storage_path` matches the actual file in storage
-- Ensure user has correct tier or is whitelisted
+- Ensure the user's `permissions` overlap the agent's `visibility`, or the user is whitelisted
 
 ### Edge Function Not Working
 
@@ -686,16 +510,6 @@ That's it! No Supabase URLs, API keys, or other configuration.
 3. **Rotate secrets regularly** - Periodically regenerate OAuth client secrets
 4. **Monitor usage** - Check usage logs for suspicious activity
 5. **Backup database** - Enable automatic backups in Supabase project settings
-
----
-
-## Next Steps
-
-- [ ] Set up automated backups in Supabase
-- [ ] Configure additional OAuth providers (Google, GitLab)
-- [ ] Create admin dashboard for managing users and agents
-- [ ] Implement usage quotas and rate limiting
-- [ ] Add email notifications for important events
 
 ---
 
