@@ -2,6 +2,7 @@ import { hint, type ModelConfig } from 'llm-zoo';
 
 import type { ModelOptionData } from '@shared/schemas';
 import {
+  DEFAULT_AGENT_MODEL,
   EXPENSIVE_MODEL_HINT,
   FAST_FIRST_RESPONSE_HINT,
   isExpensiveModel,
@@ -21,18 +22,15 @@ export function isRetiredModel(model: string): boolean {
 }
 
 /**
- * Curated pick of models that should be present in every user's model list --
- * a *preference*, not the source of truth for whether each pick is still
- * servable. `llm-zoo`'s `ModelConfig` has no "featured"/"default" capability
- * flag to derive this set from directly, so -- the same way
- * `setupModelDefaults.ts` curates one setup-probe model per provider -- this
- * table is hand-maintained. {@link DEFAULT_MODELS} drops picks that the live
- * registry has retired or deprecated.
+ * Curated models every user starts with enabled; the persisted selection is a
+ * delta over this list. `llm-zoo` has no "featured" flag to derive it from, so
+ * it is literal data — `ModelOptionsBasic.vitest.ts` fails an llm-zoo bump that
+ * retires or deprecates an entry, and the entry is replaced here.
  */
-export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
-  // First entry is the picker / new-chat default (`DEFAULT_AGENT_MODEL`).
-  // Do not lead with Gemini — GPT is the quality default.
-  'gpt56',
+export const DEFAULT_MODELS: readonly string[] = [
+  // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
+  // quality default.
+  DEFAULT_AGENT_MODEL,
   'gpt56-',
   'gpt56--',
   'sonnet5T',
@@ -52,34 +50,6 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'grok45',
   'musespark13',
 ];
-
-/**
- * Resolve a preferred model list against the live registry, dropping any pick
- * the registry marks retired or deprecated -- matching the stricter filter
- * `reconcileEnabledModels` (`modelListRefresh.ts`) already applies before
- * granting a default to an *existing* user, so a first-time user (or any
- * direct `DEFAULT_MODELS` consumer, e.g. `SettingsModelSelectionController`)
- * can't be handed a stale default an existing user would never receive.
- * Exported (separately from {@link DEFAULT_MODELS}) so tests can exercise the
- * resolution mechanism itself against known-retired/deprecated registry
- * entries, without depending on {@link PREFERRED_DEFAULT_MODELS} happening to
- * contain one today.
- */
-export function resolveDefaultModels(preferred: readonly string[]): string[] {
-  return preferred.filter(
-    (model) => !isRetiredModel(model) && !isDeprecatedModel(model),
-  );
-}
-
-/**
- * Models that should be present in every user's model list, resolved against
- * the live registry: a preferred pick the registry now marks retired or
- * deprecated is dropped rather than dangling in the default list with no way
- * back out.
- */
-export const DEFAULT_MODELS: readonly string[] = resolveDefaultModels(
-  PREFERRED_DEFAULT_MODELS,
-);
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
