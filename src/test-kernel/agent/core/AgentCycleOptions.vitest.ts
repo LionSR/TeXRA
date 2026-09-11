@@ -2,16 +2,11 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, expectTypeOf, it } from 'vitest';
+import { describe, it } from 'vitest';
 import { z } from 'zod';
 
 // Local imports
-import {
-  UserVariableChannelsSchema,
-  type BuiltUserVars,
-  type TemplateVars,
-  type UserVariableChannels,
-} from '@agent/core/definition/AgentCycleOptions';
+import { UserVariableChannelsSchema } from '@shared/schemas';
 
 describe('UserVariableChannelsSchema', () => {
   // The pre-collapse two-channel envelope is no longer merged: `input` and

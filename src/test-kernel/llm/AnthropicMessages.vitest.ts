@@ -3,13 +3,10 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
 import { Cause, Effect, Fiber, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import type {
-  AnthropicMessagesConfiguration,
-  TurnRequest,
-} from '@texra-ai/llm/turn';
+import { anthropicMessagesModel } from '@llm/anthropicMessages';
+import type { AnthropicMessagesConfiguration, TurnRequest } from '@llm/turn';
 
 const CONFIG: AnthropicMessagesConfiguration = {
   protocol: 'anthropic-messages',
@@ -578,14 +575,12 @@ describe('canonical Anthropic Messages protocol', () => {
             name: 'search',
             // The exact concatenation of both input_json_delta fragments.
             argumentsText: '{"q":"x"}',
-            arguments: { q: 'x' },
           },
           {
             kind: 'local-call',
             providerCallId: 'call_1',
             name: 'fetch',
             argumentsText: '{"q":"x"}',
-            arguments: { q: 'x' },
           },
         ]);
         expect(result.usage).toEqual({

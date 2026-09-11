@@ -4,17 +4,17 @@ import { once } from 'node:events';
 
 // Third-party imports
 import { it as effectIt } from '@effect/vitest';
-import { openaiChatModel } from '@texra-ai/llm/openai-chat';
-import {
-  openaiResponsesContinuation,
-  openaiResponsesModel,
-  openaiResponsesWebSocketModel,
-} from '@texra-ai/llm/openai-responses';
-import { ContinuationSchema, RemoteOperationSchema } from '@texra-ai/llm/turn';
 import { Cause, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { ContinuationSchema, RemoteOperationSchema } from '@llm/turn';
+import {
+  openaiResponsesContinuation,
+  openaiResponsesModel,
+  openaiResponsesWebSocketModel,
+} from '@llm/openaiResponses';
+import { openaiChatModel } from '@llm/openaiChat';
 import type {
   BackgroundEvent,
   ModelError,
@@ -22,7 +22,7 @@ import type {
   RemoteOperation,
   TurnEvent,
   TurnRequest,
-} from '@texra-ai/llm/turn';
+} from '@llm/turn';
 
 const CONFIG: OpenAIResponsesConfiguration = {
   protocol: 'openai-responses',
@@ -1975,14 +1975,14 @@ describe('native OpenAI Responses protocol', () => {
         {
           kind: 'local-call',
           providerCallId: 'call_1',
+          argumentsText: '{"path":"a"}',
           evidence: { itemId: 'fc_1' },
-          arguments: { path: 'a' },
         },
         {
           kind: 'local-call',
           providerCallId: 'call_2',
+          argumentsText: '{"path":"b"}',
           evidence: { itemId: 'fc_2' },
-          arguments: { path: 'b' },
         },
         {
           kind: 'reasoning',

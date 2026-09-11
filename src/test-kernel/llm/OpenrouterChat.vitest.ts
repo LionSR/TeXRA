@@ -2,17 +2,17 @@
 import assert from 'node:assert/strict';
 
 // Third-party imports
-import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
+import { it } from '@effect/vitest';
+import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
+import { describe, expect, vi } from 'vitest';
 import {
   ModelError,
   type Model,
   type OpenRouterConfiguration,
   type TurnEvent,
   type TurnRequest,
-} from '@texra-ai/llm/turn';
-import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
-import { describe, expect, vi } from 'vitest';
+} from '@llm/turn';
+import { openrouterChatModel } from '@llm/openrouterChat';
 
 const CONFIG = {
   protocol: 'openrouter-chat',

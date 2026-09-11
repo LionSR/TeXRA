@@ -3,6 +3,7 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
+import type { ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeClaimedRun } from '@agent/runtime/resumeRun';
 import type { RunId } from '@shared/schemas';
@@ -67,13 +68,10 @@ vi.mock('@agent/storage/runLease', async (importActual) => ({
 }));
 
 const RUN = 'aabbcc' as RunId;
-const completed = {
-  category: 'toolUse' as const,
+const completed: ToolUseFlowResult = {
   outcome: RUN_OUTCOME.COMPLETED,
   runId: RUN,
-  response: 'done',
-  files: [],
-  totalCostUsd: 0,
+  output: { category: 'toolUse', response: 'done', files: [] },
 };
 
 function snapshot() {

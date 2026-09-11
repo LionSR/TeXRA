@@ -6,25 +6,36 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { Result } from 'effect';
+
+import { ModelOriginSchema } from '@llm/turn';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   emptyRunEndOutput,
+  isDisplaySessionEvent,
+  listingTypeOf,
   MESSAGE_TYPES,
   isTranscriptEvent,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
+  RunIdSchema,
   runIdentityDisplayName,
+  SessionEventSchema,
   type CompileFailure,
   type FoldInput,
   type OutputFileInfo,
+  type SessionEvent,
+  type SessionEventDraft,
   type StreamLogEntry,
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
 
 import { projectTranscriptRow, type TranscriptRow } from '@shared/transcript';
+import { foldRunState } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
+import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
   emptySessionView,
   type SessionView,
@@ -637,7 +648,7 @@ describe('sessionFold', () => {
     // The cold listing read: start plus the newest usage row.
     const listing = foldAll([
       { _tag: 'event', read: 'listing', event: start },
-      { _tag: 'event', read: 'listing', event: rounds[2]! },
+      { _tag: 'event', read: 'listing', event: rounds[2] },
     ]);
     expect(runView(listing, CHILD).usage).toStrictEqual(total);
 
@@ -981,5 +992,580 @@ describe('sessionFold', () => {
     expect(childLogged.transcript.taskGroups).toBe(
       childAfter.transcript.taskGroups,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The run-state fold: the sibling of `fold` that produces what the loop
+// continues from. Rows are built through `SessionEventSchema`, the boundary
+// that runs in production; nothing here reaches an arm schema directly.
+//
+// Measured serialized size of the two snapshot drafts below (aggregate id
+// included, parsed defaults filled), so PR 2 has a number before it turns the
+// writes on: tool-use with `stateSlices: null` is 362 bytes; reflection with
+// an empty workspace and no round outputs is 741 bytes. Both grow with the
+// family state they carry, never with the conversation, which the rows carry.
+// ---------------------------------------------------------------------------
+
+const LEDGER_RUN = RunIdSchema.parse('ab12cd');
+const LEDGER_AGGREGATE = qualifyAggregateId('run', LEDGER_RUN);
+const ORIGIN = {
+  protocol: 'openai-chat',
+  requestedModel: 'gpt-test',
+  deployment: {
+    endpoint: 'https://api.example.test/v1',
+    credentialScope: 'openai',
+  },
+  codecVersion: 1,
+} as const;
+const INVOCATION = {
+  invocationId: '0f1e2d3c-4b5a-4a9b-8c7d-6e5f4a3b2c1d',
+  attempt: 1,
+} as const;
+const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
+const USER = (text: string) => ({
+  role: 'user',
+  content: [{ kind: 'text', text }],
+});
+const TURN = {
+  kind: 'http',
+  providerResponseId: 'resp-1',
+  requestedOrigin: ORIGIN,
+  returnedModel: null,
+  modelFingerprint: null,
+  content: [
+    { kind: 'message', content: [{ kind: 'text', text: 'running ls' }] },
+    {
+      kind: 'local-call',
+      providerCallId: 'call-a',
+      name: 'bash',
+      argumentsText: '{"command":"ls"}',
+    },
+    {
+      kind: 'local-call',
+      providerCallId: 'call-b',
+      name: 'bash',
+      argumentsText: '{"command":"ls"}',
+    },
+  ],
+  finishReason: 'tool-calls',
+  usage: {
+    inputTokens: 10,
+    outputTokens: 5,
+    totalTokens: 15,
+    cachedInputTokens: 4,
+    reasoningTokens: null,
+  },
+};
+const CALLS = [
+  {
+    callId: 'call-a',
+    toolName: 'bash',
+    ordinal: 0,
+    parallelSafe: false,
+    partition: 0,
+    duplicateOf: null,
+    logId: null,
+    stageId: null,
+  },
+  {
+    callId: 'call-b',
+    toolName: 'bash',
+    ordinal: 1,
+    parallelSafe: false,
+    partition: 0,
+    duplicateOf: 'call-a',
+    logId: null,
+    stageId: null,
+  },
+];
+/** What the writer stamps beside `calls`: the runtime's priced usage. */
+const TURN_USAGE = {
+  inputTokens: 10,
+  outputTokens: 5,
+  cost: 0.25,
+  responseTimeMs: 1200,
+  provider: 'openai',
+  cachedInputTokens: 4,
+  cacheMissInputTokens: 6,
+  serverToolRequests: 1,
+};
+const RUNTIME = {
+  phase: 'round.ready',
+  round: 0,
+  turn: 0,
+  continuationIndex: 0,
+  modelId: 'gpt-test',
+  modelHandlerCompatibilityKey: null,
+  lastError: null,
+  pendingRetry: null,
+};
+const toolUseSnapshot = (
+  references: Record<string, unknown> = {
+    pendingIntents: [],
+    pendingResponse: null,
+  },
+  runtime: Record<string, unknown> = {},
+) => ({
+  type: 'flow.snapshot',
+  payload: {
+    family: 'toolUse',
+    runtime: { ...RUNTIME, ...runtime },
+    references,
+    state: { shouldSkipCycle: false, stateSlices: null },
+  },
+});
+const reflectionSnapshot = {
+  type: 'flow.snapshot',
+  payload: {
+    family: 'reflection',
+    runtime: RUNTIME,
+    references: { pendingIntents: [], pendingResponse: null },
+    state: {
+      currentRound: 0,
+      totalRounds: 1,
+      workspaceSnapshot: {
+        assembly: {},
+        media: {},
+        reasoning: {},
+        interactions: {},
+        workPlan: {},
+      },
+      outputLocation: null,
+      runStateSnapshot: {},
+      roundOutputs: [],
+      continueRounds: true,
+      endTurn: false,
+    },
+  },
+};
+const message = (payload: Record<string, unknown>) => ({
+  type: 'model.message',
+  payload,
+});
+const settlement = (
+  callId: string,
+  overrides: Record<string, unknown> = {},
+) => ({
+  type: 'tool.result',
+  payload: {
+    responseId: RESPONSE_ID,
+    callId,
+    attempt: 1,
+    disposition: 'executed',
+    duplicateOf: null,
+    result: { status: 'executed', output: 'ok' },
+    attachments: [],
+    stateMutation: [],
+    ...overrides,
+  },
+});
+const TOOL_GROUP = {
+  role: 'tool',
+  results: [
+    {
+      callOrdinal: 0,
+      status: 'success',
+      content: [{ kind: 'text', text: 'ok' }],
+    },
+    {
+      callOrdinal: 1,
+      status: 'success',
+      content: [{ kind: 'text', text: 'ok' }],
+    },
+  ],
+};
+
+/** One committed row, parsed at the production boundary. */
+const ledgerRow = (
+  commit: number,
+  draft: Record<string, unknown>,
+): SessionEvent =>
+  SessionEventSchema.parse({
+    aggregateId: LEDGER_AGGREGATE,
+    ...draft,
+    seq: commit,
+    commit,
+    ownerId: null,
+    at: 0,
+  });
+
+/** The whole life of one tool-use turn, commit by commit. */
+const TURN_ROWS: readonly SessionEvent[] = [
+  message({
+    kind: 'append',
+    messages: [USER('list the files')],
+    sourceResponse: null,
+  }),
+  toolUseSnapshot(),
+  message({
+    kind: 'attempt',
+    invocation: INVOCATION,
+    origin: ORIGIN,
+    delivery: 'stream',
+  }),
+  message({
+    kind: 'identified',
+    invocation: INVOCATION,
+    providerResponseId: 'resp-1',
+    returnedModel: null,
+  }),
+  message({
+    kind: 'response',
+    responseId: RESPONSE_ID,
+    invocation: INVOCATION,
+    turn: TURN,
+    calls: CALLS,
+    usage: TURN_USAGE,
+  }),
+  {
+    type: 'tool.intent',
+    payload: { responseId: RESPONSE_ID, callIds: ['call-a'], attempt: 1 },
+  },
+  settlement('call-a', {
+    stateMutation: [{ op: 'add', path: ['usage', 'totalCost'], amount: 0.5 }],
+  }),
+  settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
+  message({
+    kind: 'append',
+    messages: [TOOL_GROUP],
+    sourceResponse: RESPONSE_ID,
+  }),
+  toolUseSnapshot(
+    { pendingIntents: [], pendingResponse: null },
+    { phase: 'results.ready' },
+  ),
+  {
+    type: 'flow.step',
+    payload: { family: 'toolUse', step: 'turn.end', turn: 1 },
+  },
+].map((draft, index) => ledgerRow(index + 1, draft));
+
+const through = (count: number, ...extra: Record<string, unknown>[]) =>
+  foldRunState(null, [
+    ...TURN_ROWS.slice(0, count),
+    ...extra.map((draft, index) => ledgerRow(count + index + 1, draft)),
+  ]);
+
+const stateOf = <A, E>(result: Result.Result<A, E>): A => {
+  if (Result.isFailure(result)) throw result.failure;
+  return result.success;
+};
+const reasonOf = <A>(result: Result.Result<A, { reason: string }>): string =>
+  Result.isFailure(result) ? result.failure.reason : 'success';
+
+describe('foldRunState', () => {
+  it.each([
+    [
+      'between tool.intent and the adapter call: outcome unknown, never fabricated',
+      () => {
+        const state = stateOf(through(6));
+        expect(state?.pendingIntents['call-a']).toEqual({
+          attempt: 1,
+          responseId: RESPONSE_ID,
+          approvalRequestId: null,
+        });
+        expect(state?.pendingResponse?.settled).toEqual({});
+      },
+    ],
+    [
+      'after a paid response, before the turn-end snapshot: process, never re-invoke',
+      () => {
+        const state = stateOf(through(5));
+        expect(state?.openAttempt).toBeNull();
+        expect(state?.pendingResponse?.responseId).toBe(RESPONSE_ID);
+        expect(state?.phase).toBe('model.submitted');
+        expect(state?.messages).toHaveLength(1);
+      },
+    ],
+    [
+      'during generation, before the response row: the invocation is attributable',
+      () => {
+        const state = stateOf(through(4));
+        expect(state?.openAttempt?.providerResponseId).toBe('resp-1');
+        expect(state?.pendingResponse).toBeNull();
+      },
+    ],
+    [
+      'approval requested, never resolved: the binding rides the snapshot',
+      () => {
+        const state = stateOf(
+          through(
+            6,
+            {
+              type: 'approval.requested',
+              requestId: 'req-1',
+              payload: {
+                kind: 'bash',
+                data: {
+                  requestId: 'req-1',
+                  command: 'ls',
+                  allowBypass: true,
+                  runId: LEDGER_RUN,
+                },
+              },
+            },
+            toolUseSnapshot({
+              pendingIntents: [
+                {
+                  callId: 'call-a',
+                  attempt: 1,
+                  responseId: RESPONSE_ID,
+                  approvalRequestId: 'req-1',
+                },
+              ],
+              pendingResponse: { responseId: RESPONSE_ID, settled: [] },
+            }),
+          ),
+        );
+        expect(state?.approvals['req-1']?.resolved).toBe(false);
+        expect(state?.pendingIntents['call-a']?.approvalRequestId).toBe(
+          'req-1',
+        );
+      },
+    ],
+    [
+      'compaction that replaced history mid-run: keepPrefix plus the row',
+      () => {
+        const state = stateOf(
+          through(11, {
+            type: 'model.compaction',
+            payload: {
+              keepPrefix: 1,
+              messages: [USER('summary')],
+              cause: 'context-limit',
+              continuation: null,
+              continuationDropped: null,
+            },
+          }),
+        );
+        expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
+      },
+    ],
+    [
+      'a completed run being continued: a snapshot exists, full stop',
+      () => {
+        const state = stateOf(
+          through(11, {
+            type: 'flow.step',
+            payload: {
+              family: 'toolUse',
+              step: 'halted',
+              outcome: 'completed',
+            },
+          }),
+        );
+        expect(state?.outcome).toBe('completed');
+        expect(state?.flow?.family).toBe('toolUse');
+        expect(state?.snapshotCommit).toBe(10);
+      },
+    ],
+    [
+      'a reflection snapshot: its family state restored, its usage derived',
+      () => {
+        const state = stateOf(
+          foldRunState(null, [
+            ledgerRow(
+              1,
+              message({
+                kind: 'append',
+                messages: [USER('draft the introduction')],
+                sourceResponse: null,
+              }),
+            ),
+            ledgerRow(2, reflectionSnapshot),
+          ]),
+        );
+        const flow = state?.flow;
+        expect(flow?.family).toBe('reflection');
+        // D12: no snapshot payload carries an accumulator; usage is derived.
+        expect(
+          flow?.family === 'reflection' ? flow.state.runStateSnapshot : null,
+        ).not.toHaveProperty('usageAccumulator');
+        expect(state?.snapshotCommit).toBe(2);
+      },
+    ],
+    [
+      'two priced responses and a settlement add: the run cost is the sum',
+      () => {
+        const second = {
+          invocationId: '7c6b5a49-3d2e-4f1a-8b9c-0d1e2f3a4b5c',
+          attempt: 1,
+        };
+        const state = stateOf(
+          through(
+            11,
+            message({
+              kind: 'attempt',
+              invocation: second,
+              origin: ORIGIN,
+              delivery: 'stream',
+            }),
+            message({
+              kind: 'response',
+              responseId: '1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081',
+              invocation: second,
+              turn: {
+                ...TURN,
+                providerResponseId: 'resp-2',
+                content: [
+                  {
+                    kind: 'message',
+                    content: [{ kind: 'text', text: 'done' }],
+                  },
+                ],
+                finishReason: 'stop',
+                // The package observes tokens and no price: the row's stamp
+                // is the only carrier of what the turn cost.
+                usage: null,
+              },
+              calls: [],
+              usage: {
+                ...TURN_USAGE,
+                cost: 0.25,
+                cacheMissInputTokens: 3,
+                serverToolRequests: 2,
+              },
+            }),
+          ),
+        );
+        // 0.25 stamped + 0.5 added by the settlement + 0.25 stamped.
+        expect(state?.usage.totalCost).toBe(1);
+        expect(state?.usage.totalCacheMissInputTokens).toBe(9);
+        expect(state?.usage.totalServerToolRequests).toBe(3);
+        expect(state?.usage.firstInputTokens).toBe(10);
+        expect(state?.usage.totalInputTokens).toBe(20);
+      },
+    ],
+    [
+      'a run recorded before the run ledger: null, distinct from corrupt',
+      () => {
+        expect(
+          stateOf(
+            foldRunState(null, [
+              ledgerRow(1, {
+                type: 'run.start',
+                identity: { kind: 'agent', agent: 'chat' },
+                userFollowUpSupport: 'unsupported',
+                category: AgentCategory.ToolUse,
+                isRemote: false,
+                parent: null,
+              }),
+              ledgerRow(2, {
+                type: 'status',
+                phase: RUN_PHASE.WAITING,
+                cause: 'wait',
+              }),
+            ]),
+          ),
+        ).toBeNull();
+      },
+    ],
+  ])('%s', (_name, check) => check());
+
+  it('delivers the paid assistant turn once and derives usage from the rows', () => {
+    const state = stateOf(through(11));
+    expect(state?.messages.map((m) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'tool',
+    ]);
+    expect(state?.pendingResponse).toBeNull();
+    expect(state?.pendingIntents).toEqual({});
+    expect(state?.usage.totalInputTokens).toBe(10);
+    expect(state?.usage.totalCacheReadInputTokens).toBe(4);
+    // The turn's stamped price plus the settlement's `add` operation.
+    expect(state?.usage.totalCost).toBe(0.75);
+    expect(state?.step).toBe('turn.end');
+    expect(state?.turn).toBe(1);
+    // Incremental and cold folds are the same computation.
+    const half = stateOf(foldRunState(null, TURN_ROWS.slice(0, 6)));
+    expect(stateOf(foldRunState(half, TURN_ROWS.slice(6)))).toEqual(state);
+  });
+
+  it.each([
+    ['out-of-order', () => foldRunState(null, [TURN_ROWS[1], TURN_ROWS[0]])],
+    [
+      'stale-snapshot',
+      () =>
+        through(
+          7,
+          toolUseSnapshot({
+            pendingIntents: [
+              {
+                callId: 'call-a',
+                attempt: 1,
+                responseId: RESPONSE_ID,
+                approvalRequestId: null,
+              },
+            ],
+            pendingResponse: { responseId: RESPONSE_ID, settled: ['call-a'] },
+          }),
+        ),
+    ],
+    ['orphan-settlement', () => through(2, settlement('call-a'))],
+    [
+      'dangling-binding',
+      () =>
+        through(
+          2,
+          toolUseSnapshot(undefined, {
+            pendingRetry: {
+              requestId: 'req-9',
+              invocation: INVOCATION,
+              failedModelId: 'gpt-test',
+              failedCompatibilityKey: null,
+              credentialScope: 'openai',
+              substate: 'waiting',
+            },
+          }),
+        ),
+    ],
+    [
+      'mismatched-delivery',
+      () =>
+        through(
+          7,
+          message({
+            kind: 'append',
+            messages: [TOOL_GROUP],
+            sourceResponse: RESPONSE_ID,
+          }),
+        ),
+    ],
+  ])('refuses loudly: %s', (reason, run) => {
+    expect(reasonOf(run())).toBe(reason);
+  });
+
+  it('keeps the six ledger types out of the listing and the five private ones off the transport', () => {
+    const ledgerTypes = [
+      'flow.step',
+      'model.message',
+      'model.compaction',
+      'tool.intent',
+      'tool.result',
+      'flow.snapshot',
+    ] as const;
+    for (const type of ledgerTypes) expect(listingTypeOf({ type })).toBeNull();
+    for (const row of TURN_ROWS) {
+      expect(isDisplaySessionEvent(row)).toBe(row.type === 'flow.step');
+    }
+    // `redactTraceDraft` is applied to every draft before storage; a ledger
+    // row passes through its `default` arm untouched.
+    const {
+      seq: _seq,
+      commit: _commit,
+      ownerId: _owner,
+      at: _at,
+      ...draft
+    } = TURN_ROWS[4];
+    const ledgerDraft: SessionEventDraft = draft;
+    expect(redactTraceDraft(ledgerDraft)).toBe(ledgerDraft);
+    // D7: the day a codec version 2 exists, persisted origins must accept a
+    // union of version literals while execution admits only the current one.
+    expect(ModelOriginSchema.safeParse(ORIGIN).success).toBe(true);
+    expect(
+      ModelOriginSchema.safeParse({ ...ORIGIN, codecVersion: 2 }).success,
+    ).toBe(false);
   });
 });

@@ -7,14 +7,16 @@ import { ToolUseDispatchNode } from '@agent/implementations/flows/tooluse/toolUs
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-import type { RunId } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas';
+import {
+  AgentRunStateSnapshotSchema,
+  type RunId,
+  type ToolResult,
+} from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { installPlatform } from '@test/support/setupPlatform';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';

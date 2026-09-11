@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
 import {
@@ -18,7 +17,12 @@ import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolU
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { MESSAGE_TYPES, RUN_PHASE, type RunId } from '@shared/schemas';
+import {
+  AgentRunStateSnapshotSchema,
+  MESSAGE_TYPES,
+  RUN_PHASE,
+  type RunId,
+} from '@shared/schemas';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   clearRunStatusForTest,

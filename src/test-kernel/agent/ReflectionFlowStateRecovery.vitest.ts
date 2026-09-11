@@ -10,7 +10,6 @@ import {
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
   PersistedFlowStateError,
@@ -25,6 +24,7 @@ import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflecti
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import {
+  AgentRunStateSnapshotSchema,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   type RunId,

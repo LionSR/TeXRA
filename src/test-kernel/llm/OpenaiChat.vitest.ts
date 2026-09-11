@@ -3,16 +3,16 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { openaiChatModel } from '@texra-ai/llm/openai-chat';
+import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
+import { openaiChatModel } from '@llm/openaiChat';
 import {
   ModelError,
   type ChatConfiguration,
   type Model,
   type TurnEvent,
   type TurnRequest,
-} from '@texra-ai/llm/turn';
-import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+} from '@llm/turn';
 
 const BASE_CONFIG = {
   protocol: 'openai-chat' as const,
@@ -305,7 +305,6 @@ describe('native OpenAI Chat protocol', () => {
             name: 'search',
             // The exact concatenation of both tool-call argument deltas.
             argumentsText: '{"query":"x"}',
-            arguments: { query: 'x' },
             evidence: { kind: 'minimax-function-call', index: 0 },
           },
         ]);
@@ -689,7 +688,6 @@ describe('native OpenAI Chat protocol', () => {
                 providerCallId: 'original-call',
                 name: 'search',
                 argumentsText: '{"query":"x"}',
-                arguments: { query: 'x' },
               },
             ],
           },
@@ -1855,14 +1853,12 @@ describe('native OpenAI Chat protocol', () => {
           providerCallId: 'call_0',
           name: 'search',
           argumentsText: '{"query":"a"}',
-          arguments: { query: 'a' },
         },
         {
           kind: 'local-call',
           providerCallId: 'call_1',
           name: 'fetch',
           argumentsText: '{"query":"b"}',
-          arguments: { query: 'b' },
         },
       ]);
       expect(result.usage).toEqual({
@@ -2279,13 +2275,11 @@ describe('native OpenAI Chat protocol', () => {
           kind: 'local-call',
           providerCallId: 'call_0',
           name: 'search',
-          arguments: { query: 'first' },
         },
         {
           kind: 'local-call',
           providerCallId: 'call_1',
           name: 'fetch',
-          arguments: { query: 'second' },
         },
       ],
     });
@@ -2483,7 +2477,6 @@ describe('native OpenAI Chat protocol', () => {
           providerCallId: 'call_0',
           name: 'search',
           argumentsText: '{}',
-          arguments: {},
         },
         ...(scenario === 'text after calls'
           ? [

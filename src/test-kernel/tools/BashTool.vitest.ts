@@ -22,7 +22,6 @@ import type {
   AgentPrompt,
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import {
   AgentWorkspaceState,
   FileInteractionState,
@@ -42,6 +41,7 @@ import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmen
 import {
   RUN_OUTCOME,
   aggregateId,
+  AgentRunStateSnapshotSchema,
   RUN_PHASE,
   type ExecResult,
   type RunId,

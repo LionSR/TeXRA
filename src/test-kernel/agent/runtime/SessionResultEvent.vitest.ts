@@ -4,13 +4,17 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
+import {
+  AgentRunStateSnapshotSchema,
+  RUN_OUTCOME,
+  RUN_PHASE,
+  type RunId,
+} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { clearRunStatusForTest } from '@test/support/runStatusTestUtils';

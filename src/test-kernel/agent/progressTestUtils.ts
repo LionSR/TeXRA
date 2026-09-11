@@ -2,7 +2,6 @@ import { Effect, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
 import type { AgentEvent, AgentTrace } from '@agent/trace';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
@@ -24,11 +23,12 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
 import { effectRuntime } from '@platform/processRuntime';
-import type {
-  ActiveChildInfo,
-  RunId,
-  ProgressPermissionKind,
-  DisplaySessionEvent,
+import {
+  AgentRunStateSnapshotSchema,
+  type ActiveChildInfo,
+  type RunId,
+  type ProgressPermissionKind,
+  type DisplaySessionEvent,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
