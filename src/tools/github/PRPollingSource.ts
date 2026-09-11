@@ -276,14 +276,8 @@ export class PRPollingSource extends PollingSourceBase<
   protected pollOne(
     key: string,
     state: PRSubscriptionState,
-  ): Effect.Effect<void, PollHookRejected> {
-    return this.pollPr(key, state).pipe(
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
-        ),
-      ),
-    );
+  ): Effect.Effect<void, unknown> {
+    return this.pollPr(key, state);
   }
 
   private readonly pollPr = Effect.fn('PRPollingSource.pollPr')(function* (

@@ -34,7 +34,7 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { Disposable } from '@platform/interfaces';
@@ -56,7 +56,6 @@ import {
   dedupeComments,
   type DedupedResource,
   type PollEventListener,
-  PollHookRejected,
   PollingSourceBase,
 } from './PollingSourceBase';
 import {
@@ -184,14 +183,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   protected pollOne(
     _key: RepoKey,
     state: SubscriptionState,
-  ): Effect.Effect<void, PollHookRejected> {
-    return this.pollRepo(state).pipe(
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
-        ),
-      ),
-    );
+  ): Effect.Effect<void, unknown> {
+    return this.pollRepo(state);
   }
 
   private readonly pollRepo = Effect.fn('RepoPollingSource.pollRepo')(

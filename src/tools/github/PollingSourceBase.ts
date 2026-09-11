@@ -230,11 +230,12 @@ export abstract class PollingSourceBase<
     this.logger = createChannelTrace(config.name);
   }
 
-  /** Subclass: poll the endpoints for one subscription and emit any new events. */
-  protected abstract pollOne(
-    key: K,
-    state: S,
-  ): Effect.Effect<void, PollHookRejected>;
+  /**
+   * Subclass: poll the endpoints for one subscription and emit any new
+   * events. The base wraps every hook failure in `PollHookRejected` before
+   * classifying it, so implementations may fail with the raw endpoint error.
+   */
+  protected abstract pollOne(key: K, state: S): Effect.Effect<void, unknown>;
 
   /** Optional subclass hook that runs after all subscription polls settle. */
   protected afterTick(
@@ -644,6 +645,11 @@ export abstract class PollingSourceBase<
     function* (this: PollingSourceBase<K, S>, key: K, state: S, now: number) {
       if (state.skipPollUntilMs > now) return;
       yield* this.pollOne(key, state).pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
+          ),
+        ),
         Effect.flatMap(() =>
           Effect.map(Clock.currentTimeMillis, (completedAt) => {
             state.lastSuccessAt = completedAt;
@@ -656,7 +662,12 @@ export abstract class PollingSourceBase<
             return Effect.failCause(cause);
           }
           return Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
-            this.handleFailure(key, state, reason.error.cause, failedAt),
+            this.handleFailure(
+              key,
+              state,
+              (reason.error as PollHookRejected).cause,
+              failedAt,
+            ),
           );
         }),
         Effect.catchCause((cause) => {
