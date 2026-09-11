@@ -4,16 +4,16 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  readWorkflowScriptCheckpoint,
-  runPersistedWorkflowScript,
-  type WorkflowScriptControl,
-} from '@agent/workflowScript';
-import {
   clearStoreCache,
   getRunStore,
   getRunRecords,
   type RunKVStore,
 } from '@agent/storage';
+import {
+  readWorkflowScriptCheckpoint,
+  runPersistedWorkflowScript,
+} from '@agent/workflowScript/persistence';
+import type { WorkflowScriptControl } from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
@@ -489,7 +489,7 @@ return await agent('run planned call', { id: 'planned-call' })`;
         // The attempt is skipped by the id it reports, and the control action
         // wins over the result this signal-ignoring runner still returns.
         runAgent: async (invocation) => {
-          invocation.report?.({
+          invocation.report({
             childRunId: 'skipskipskip' as RunId,
           });
           control('skipskipskip' as RunId, 'skip');
@@ -560,7 +560,7 @@ return await agent('run dynamic call', { id: 'dynamic-call' })`;
       const failed = await runWorkflowScript({
         script: resumeScript,
         runAgent: async (invocation) => {
-          invocation.report?.({
+          invocation.report({
             childRunId: 'bbbbbbbbbbbb' as RunId,
             model: 'prior-model',
             costUsd: 2.5,
@@ -615,7 +615,7 @@ return await agent('cache me', { id: 'cached-call' })`;
     const completed = await runWorkflowScript({
       script: originalScript,
       runAgent: async (invocation) => {
-        invocation.report?.({ agent: 'resolved-writer' });
+        invocation.report({ agent: 'resolved-writer' });
         return 'original result';
       },
     });
@@ -651,7 +651,7 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       const completed = await runWorkflowScript({
         script: originalScript,
         runAgent: async (invocation) => {
-          invocation.report?.({
+          invocation.report({
             childRunId: 'cccccccccccc' as RunId,
             model: 'prior-model',
             costUsd: 3.75,
@@ -675,7 +675,7 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       const runner = vi.fn(async (invocation) => {
         runnerStarted.resolve();
         await finishRunner.promise;
-        invocation.report?.({ model: 'replacement-model' });
+        invocation.report({ model: 'replacement-model' });
         throw new Error('replacement failed before reporting cost');
       });
       const resumedRun = runWorkflowScript({
@@ -757,11 +757,11 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
 return await agent('retry metadata')`,
       runAgent: async (invocation) => {
         attempt += 1;
-        invocation.report?.({
+        invocation.report({
           childRunId: `attempt-${attempt}` as RunId,
         });
         if (attempt === 1) {
-          invocation.report?.({ model: 'abandoned-model' });
+          invocation.report({ model: 'abandoned-model' });
           await new Promise<void>((_resolve, reject) =>
             invocation.signal.addEventListener(
               'abort',
@@ -1246,14 +1246,14 @@ return [a, b, c]`;
       script: originalScript,
       runAgent: async (invocation) => {
         const prompt = invocation.prompt as keyof typeof priorFacts;
-        invocation.report?.(priorFacts[prompt]);
+        invocation.report(priorFacts[prompt]);
         return `result:${prompt}`;
       },
     });
 
     const liveRunner = vi.fn(async (invocation) => {
       expect(invocation.prompt).toBe('N');
-      invocation.report?.({
+      invocation.report({
         agent: 'agent-n',
         model: 'model-n',
         childRunId: 'nnnnnnnnnnnn' as RunId,
@@ -1352,7 +1352,7 @@ return [a, b]`;
     const first = await runWorkflowScript({
       script: firstScript,
       runAgent: async (invocation) => {
-        invocation.report?.({
+        invocation.report({
           agent: `agent-${invocation.prompt.toLowerCase()}`,
           costUsd: invocation.prompt === 'A' ? 10 : 20,
         });
@@ -1364,7 +1364,7 @@ return [a, b]`;
       initialSnapshot: first.snapshot,
       journal: first.journal,
       runAgent: async (invocation) => {
-        invocation.report?.({ agent: 'agent-c', costUsd: 30 });
+        invocation.report({ agent: 'agent-c', costUsd: 30 });
         return `result:${invocation.prompt}`;
       },
     });
@@ -1413,7 +1413,7 @@ return await agent('proven result')`;
       const completed = await runWorkflowScript({
         script: laggingScript,
         runAgent: async (invocation) => {
-          invocation.report?.({
+          invocation.report({
             agent: 'proven-agent',
             model: 'proven-model',
             childRunId: 'pppppppppppp' as RunId,
@@ -1475,7 +1475,7 @@ return await agent('same position')`;
       const prior = await runWorkflowScript({
         script: implicitScript,
         runAgent: async (invocation) => {
-          invocation.report?.({
+          invocation.report({
             agent: 'stale-agent',
             model: 'stale-model',
             childRunId: 'ssssssssssss' as RunId,
@@ -1491,7 +1491,7 @@ return await agent('same position')`;
         initialSnapshot: prior.snapshot,
         journal: [],
         runAgent: async (invocation) => {
-          invocation.report?.({
+          invocation.report({
             agent: 'fresh-agent',
             model: 'fresh-model',
             childRunId: 'ffffffffffff' as RunId,

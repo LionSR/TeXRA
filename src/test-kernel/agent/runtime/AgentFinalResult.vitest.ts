@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  AgentFinalResultSchema,
-  buildAgentFinalResult,
-} from '@agent/runtime/AgentFinalResult';
+import { buildAgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type {
   ToolUseFlowResult,
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
+import { AgentFinalResultSchema } from '@shared/schemas';
 import type { RunId, RunOutcome, OutputFileSummary } from '@shared/schemas';
 
 const OUTPUT: OutputFileSummary = {

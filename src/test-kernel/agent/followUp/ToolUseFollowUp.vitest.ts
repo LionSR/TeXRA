@@ -247,7 +247,6 @@ describe('submitFollowUp', () => {
           {
             session,
             resumePort: { tryResumeRun },
-            mode: 'child_delivery',
           },
         ),
       ),
@@ -273,7 +272,6 @@ describe('submitFollowUp', () => {
           {
             session,
             resumePort: { tryResumeRun },
-            mode: 'child_delivery',
           },
         ),
       ),
@@ -296,7 +294,6 @@ describe('submitFollowUp', () => {
         submitFollowUp(runId, delivery, {
           session,
           resumePort: { tryResumeRun },
-          mode: 'child_delivery',
         }),
       ),
     ).resolves.toEqual({ status: 'queued' });
@@ -310,7 +307,6 @@ describe('submitFollowUp', () => {
           submitFollowUp(runId, delivery, {
             session,
             resumePort: { tryResumeRun },
-            mode: 'child_delivery',
           }),
         ),
       ).resolves.toEqual({ status: 'sent' });

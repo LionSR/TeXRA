@@ -11,8 +11,8 @@
  *
  * This module lives beside `runKvFiles` rather than under
  * `@agent/storage` on purpose: the predicate reaches into
- * `@agent/workflowScript` and `@tools/delegation`, and `src/tools` consumes
- * `agent/core`, not the reverse.
+ * `@agent/workflowScript/checkpointKey` and `@tools/delegation`, and
+ * `src/tools` consumes `agent/core`, not the reverse.
  */
 
 import * as path from 'node:path';

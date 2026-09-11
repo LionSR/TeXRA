@@ -1,8 +1,6 @@
-import {
-  buildAgentFinalResult,
-  type AgentFinalResult,
-} from '@agent/runtime/AgentFinalResult';
+import { buildAgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { AgentFinalResult } from '@shared/schemas';
 import type { RunOutcome } from '@shared/schemas';
 
 import type { ResultMeta } from '@shared/schemas';

@@ -256,11 +256,11 @@ export interface WorkflowAgentInvocation {
    */
   signal: AbortSignal;
   /**
-   * Optional host-side side channel: the runner reports whatever it has
+   * Host-side side channel: the runner reports whatever it has
    * resolved for the live attempt, in whatever combination it learns them.
    * Never journaled — none of it affects resume identity.
    */
-  report?: (facts: WorkflowAttemptFacts) => void;
+  report: (facts: WorkflowAttemptFacts) => void;
 }
 
 /**

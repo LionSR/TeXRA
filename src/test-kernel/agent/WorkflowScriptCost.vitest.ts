@@ -4,9 +4,11 @@ import { clearStoreCache, getRunStore } from '@agent/storage';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-  type WorkflowJournalEntry,
-  type WorkflowScriptControl,
-} from '@agent/workflowScript';
+} from '@agent/workflowScript/persistence';
+import type {
+  WorkflowJournalEntry,
+  WorkflowScriptControl,
+} from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -76,7 +78,7 @@ describe('workflow attempt cost', () => {
 return await agent('retry cost')`,
       runAgent: async (invocation) => {
         attempt += 1;
-        invocation.report?.({
+        invocation.report({
           costUsd: attempt === 1 ? 0.2 : 0.3,
           childRunId: `retry-cost-${attempt}` as RunId,
         });

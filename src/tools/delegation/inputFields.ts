@@ -13,10 +13,8 @@ import { z } from 'zod';
 
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage';
-import {
-  WorkflowRunAbortError,
-  type WorkflowAgentCallOptions,
-} from '@agent/workflowScript';
+import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
+import type { WorkflowAgentCallOptions } from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runInSession } from '@agent/runtime/RunContext';
 import { formatError } from '@common/errors';

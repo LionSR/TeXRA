@@ -14,7 +14,7 @@
  * strategy (`src/tools/delegation`), consumption in a host (the CLI child list).
  */
 
-import type { WorkflowScriptControl } from '@agent/workflowScript';
+import type { WorkflowScriptControl } from '@agent/workflowScript/types';
 import type { RunId, WorkflowControlAction } from '@shared/schemas';
 
 /** Session-owned set of the control handles of live workflow runs. */

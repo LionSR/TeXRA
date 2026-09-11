@@ -17,7 +17,7 @@ import { Cause, Effect, Exit, Fiber, Semaphore } from 'effect';
 
 // Local imports
 import { getRunStore, getRunRecords, type ResultMeta } from '@agent/storage';
-import { WorkflowRunAbortError } from '@agent/workflowScript';
+import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
@@ -26,10 +26,10 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
+import type { AgentFinalResult } from '@shared/schemas';
 import {
   RUN_OUTCOME,
   AgentCategory,

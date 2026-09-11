@@ -3,12 +3,14 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   runPersistedWorkflowScript,
   type PersistedWorkflowScriptRunOptions,
-  type WorkflowAgentInvocation,
-  type WorkflowJournalEntry,
-  type WorkflowScriptEvent,
-  type WorkflowScriptRunResult,
-} from '@agent/workflowScript';
-import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
+} from '@agent/workflowScript/persistence';
+import type {
+  WorkflowAgentInvocation,
+  WorkflowJournalEntry,
+  WorkflowScriptEvent,
+  WorkflowScriptRunResult,
+} from '@agent/workflowScript/types';
+import { AgentFinalResultSchema } from '@shared/schemas';
 import {
   isTerminalWorkflowCallProgress,
   isTerminalWorkflowCallStatus,

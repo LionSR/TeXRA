@@ -619,7 +619,7 @@ describe('BashTool', () => {
     // Regression: background bash delivery used a bespoke sendFollowUp call
     // with no wake step, so a parent suspended WAITING on the job never
     // resumed — every other child-run type routes through the shared
-    // wake-aware deliverChildRunFollowUp path. Prove the wake actually fires
+    // wake-aware submitFollowUp path. Prove the wake actually fires
     // by asserting the host resume port gets invoked once the run completes.
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(DONE_EXEC_RESULT);
 

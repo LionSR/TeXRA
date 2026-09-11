@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
+import type { AgentFinalResult } from '@shared/schemas';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import {
   formatChildRunDelivery,

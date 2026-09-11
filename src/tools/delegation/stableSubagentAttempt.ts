@@ -6,13 +6,13 @@ import { z } from 'zod';
 import { getRunStore, getRunRecords } from '@agent/storage';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import {
   RunLeaseLostError,
   runWithInactiveRunLease,
 } from '@agent/storage/runLease';
 import type { RunKVStore } from '@agent/storage/RunKVStore';
 import { createLog } from '@logger/logUtils';
+import type { AgentFinalResult } from '@shared/schemas';
 import { RunIdSchema, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';

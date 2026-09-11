@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
-import type { PersistedWorkflowScriptRunOptions } from '@agent/workflowScript';
+import type { PersistedWorkflowScriptRunOptions } from '@agent/workflowScript/persistence';
 import { WorkflowRunSnapshotSchema } from '@shared/schemas';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
@@ -9,8 +9,10 @@ const mocks = vi.hoisted(() => ({
   runPersistedWorkflowScript: vi.fn(),
 }));
 
-vi.mock('@agent/workflowScript', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/workflowScript')>()),
+vi.mock('@agent/workflowScript/persistence', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@agent/workflowScript/persistence')
+  >()),
   runPersistedWorkflowScript: mocks.runPersistedWorkflowScript,
 }));
 
