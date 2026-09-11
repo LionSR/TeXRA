@@ -25,6 +25,7 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
+  completedTurn,
 } from './turn.js';
 
 // SDK stream parsing does not validate the JSON values it returns.
@@ -635,9 +636,7 @@ export function googleInteractionsModel(
         parsed.data.thinking !== undefined ||
         parsed.data.effort !== undefined ||
         parsed.data.cache !== undefined ||
-        parsed.data.promptCacheKey !== undefined ||
         parsed.data.stopSequences !== undefined ||
-        parsed.data.inferenceGeo !== undefined ||
         (parsed.data.continuation !== undefined &&
           parsed.data.continuation.origin.protocol !== 'google-interactions')
       ) {
@@ -1088,21 +1087,8 @@ export function googleInteractionsModel(
       );
     });
 
-  const generateTurn: Model['generateTurn'] = Effect.fn(
-    'llm.google.generateTurn',
-  )(function* (turn) {
-    const result = yield* Stream.runFold(
-      streamTurn(turn),
-      () => null as TurnResult | null,
-      (result, event) => (event.kind === 'completed' ? event.result : result),
-    );
-    if (result === null)
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'Google produced no completed result.',
-      });
-    return result;
-  });
+  const generateTurn: Model['generateTurn'] = (turn) =>
+    completedTurn(streamTurn(turn));
   const boundOperation = Effect.fn('llm.google.boundOperation')(function* (
     input: RemoteOperation,
   ) {

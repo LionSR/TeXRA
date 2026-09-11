@@ -557,7 +557,6 @@ describe('native OpenRouter Chat', () => {
     ['parallel', { parallelToolCalls: false }],
     ['background', { mode: 'background' }],
     ['foreign thinking', { thinking: { mode: 'disabled' } }],
-    ['cache key', { promptCacheKey: 'key' }],
     ['unknown named tool', { toolChoice: { name: 'missing' } }],
   ] as const)(
     'rejects %s and does not issue an automatic request',

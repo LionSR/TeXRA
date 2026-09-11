@@ -12,11 +12,11 @@ import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import {
-  CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
   isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilities,
   resolveCodexSubscriptionProfile,
 } from '@model/providerCapabilities';
+import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const gpt55Config: ModelConfig = {
@@ -75,8 +75,9 @@ describe('provider capabilities', () => {
 
     expect(capabilities).toMatchObject({
       contextWindow:
-        CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + gpt55Config.maxOutputTokens,
-      inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+        CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue +
+        gpt55Config.maxOutputTokens,
+      inputTokenLimit: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
       inputPrice: 0,
       outputPrice: 0,
       usageRoute: 'chatgpt-subscription',
@@ -110,8 +111,9 @@ describe('provider capabilities', () => {
       expect(model.codexSubscription).toBe(true);
       expect(capabilities).toMatchObject({
         contextWindow:
-          CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + model.maxOutputTokens,
-        inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+          CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue +
+          model.maxOutputTokens,
+        inputTokenLimit: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
       });
     },
   );
@@ -146,7 +148,7 @@ describe('provider capabilities', () => {
           useOpenRouter: false,
         }),
       ).toMatchObject({
-        inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+        inputTokenLimit: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
       });
     });
   });

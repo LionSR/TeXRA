@@ -6,12 +6,14 @@ import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { CODEX_BACKEND_BASE_URL, resetCodexCoordinator } from '@auth/codex';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import { CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT } from '@model/providerCapabilities';
 import {
   setPreferCodexSubscription,
   isPreferCodexSubscription,
 } from '@model/codex/codexPreference';
-import { AgentCategory } from '@shared/schemas';
+import {
+  AgentCategory,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+} from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
@@ -57,7 +59,8 @@ const largeWindowConfig: ModelConfig = {
 };
 
 const LARGE_WINDOW_SUBSCRIPTION_CONTEXT =
-  CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + largeWindowConfig.maxOutputTokens;
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue +
+  largeWindowConfig.maxOutputTokens;
 
 const ONE_MILLION_INPUT_TOKENS = {
   input_tokens: 1_000_000,
@@ -181,7 +184,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
       const requestSpy = vi.fn();
       setCumulativeInputTokens(
         handler,
-        CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT - headroom,
+        CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue - headroom,
       );
 
       await expect(

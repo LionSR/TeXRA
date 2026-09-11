@@ -16,6 +16,7 @@ import {
   type TurnEvent,
   type TurnResult,
   type VscodeLanguageModelConfiguration,
+  completedTurn,
 } from '@texra-ai/llm/turn';
 import { Cause, Effect, Exit, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
@@ -572,19 +573,6 @@ export const acquireVscodeLanguageModel = Effect.fn(
       }),
     );
   const generateTurn: Model['generateTurn'] = (turn) =>
-    streamTurn(turn).pipe(
-      Stream.runFold(
-        () => undefined as TurnResult | undefined,
-        (result, event) => (event.kind === 'completed' ? event.result : result),
-      ),
-      Effect.flatMap((result) =>
-        result === undefined
-          ? new ModelError({
-              kind: 'malformed-output',
-              message: 'The editor stream ended without a completed response.',
-            })
-          : Effect.succeed(result),
-      ),
-    );
+    completedTurn(streamTurn(turn));
   return Object.freeze({ prepareTurn, streamTurn, generateTurn });
 });

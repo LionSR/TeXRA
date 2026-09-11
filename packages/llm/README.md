@@ -101,25 +101,21 @@ accept inline JPEG/PNG/GIF/WebP/BMP/HEIC/HEIF user images; selected GLM routes a
 JPEG/PNG. MIME spelling and base64 bytes are retained exactly, including empty
 encodings, with ordered text labels. Image detail, tool-result images, audio,
 video and documents remain unsupported in these Chat branches. Hosted execution,
-background, storage, cache-lifetime, stopping and geography controls are also
+background, storage, cache-lifetime and stopping controls are also
 unsupported.
 
-MiniMax uses the same Chat implementation with explicitly selected
-`outputMode: 'complete'` or `'incremental'`. Complete mode reads one ordinary
-JSON response and emits observed
-identity followed by the completed result; it does not invent incremental text
-or phase events. Selected model, endpoint, reasoning-split choice and the existing
+MiniMax uses the same Chat implementation and always streams SSE. Selected model, endpoint, reasoning-split choice and the existing
 `max_tokens` field are retained. Plain reasoning and ordered reasoning details
 remain separate, including reported empty values, as required for
 [reasoning replay](https://platform.minimax.io/docs/api-reference/text-openai-api).
-Original complete local calls retain their identities and order. Usage counts
+Local calls retain their original identities and order. Usage counts
 remain independently unknown when absent, and reported character counts are
 retained. Embedded nonzero provider status is a failure even under HTTP 200;
 sensitivity observations are retained without inventing a filtering outcome.
 The inherited stop, parallel-call and tool-choice controls preserve the selected
 old request behavior; the current
 [request schema](https://platform.minimax.io/docs/api-reference/text/api/openapi-chat-openai.json)
-does not independently document those controls. Incremental mode uses the same scoped HTTP reader and SSE parser as the other
+does not independently document those controls. MiniMax uses the same scoped HTTP reader and SSE parser as the other
 Chat protocols. It appends text and reasoning fragments exactly, including repeated
 fragments, assembles local calls by index and preserves their original identities.
 Reasoning detail indices must form a contiguous ordered list; a missing index uses
@@ -166,9 +162,7 @@ calls. Neither branch supports background work, hosted execution, uploads or
 tool-result media. Pricing and credential-route selection remain runtime-owned;
 no application caller has switched and neither old handler is deleted yet.
 
-Kimi preparation retains a caller-supplied `prompt_cache_key`; selected routes
-that require it reject missing keys. No session identity is invented. Application
-admission must not treat the old automatically assigned image detail as authored
+Application admission must not treat the old automatically assigned image detail as authored
 intent; those production consumers have not switched.
 
 Selected routes expose one optional `estimateInputTokens` operation when
@@ -197,8 +191,8 @@ Broader input fails explicitly; Kimi retains its existing wider coverage. Zero i
 a valid measurement, while missing or malformed counts fail. None of these
 receipts is total usage, a bill or a generation allowance. There is no automatic
 preflight, retry or budget adjustment. Application admission still owns context
-limits, output reduction and count-failure policy, and must supply the stable Kimi
-cache identity. Configured production helpers have not switched.
+limits, output reduction and count-failure policy. Configured production helpers
+have not switched.
 
 Streaming Chat reads one SDK HTTP response through the native Effect SSE parser. This retains
 Kimi's and xAI's required `[DONE]` terminator, which the SDK's parsed iterator suppresses;
@@ -371,7 +365,7 @@ text, inline JPEG/PNG/GIF/WebP images and PDF documents. Other image MIME types,
 image detail, audio, video and non-PDF documents fail explicitly. Prepared controls
 cover disabled/manual/adaptive thinking, independent nullable effort, selected
 temperature capability, output limit, parallel calls and supported named-tool choice,
-cache lifetime, stop sequences, service tier and geography. Thinking permits
+cache lifetime and stop sequences. Thinking permits
 temperature one or omission; manual thinking cannot force a named tool.
 Completion follows the semantic `message_stop` event, not connection closure.
 Hosted execution, beta APIs, compaction, uploads and `pause_turn` remain unsupported.

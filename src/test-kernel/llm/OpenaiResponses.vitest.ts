@@ -2122,7 +2122,6 @@ describe('native OpenAI Responses protocol', () => {
           anchor: { interactionId: 'int_1', coveredSteps: 1 },
         },
       },
-      { ...REQUEST, promptCacheKey: 'admitted-invocation' },
       ...(
         [
           {

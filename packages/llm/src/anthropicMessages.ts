@@ -22,6 +22,7 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
+  completedTurn,
 } from './turn.js';
 import type {
   ContentBlockParam,
@@ -374,11 +375,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     ...(controls.effort === null
       ? {}
       : { output_config: { effort: controls.effort } }),
-    ...(controls.inferenceGeo === null
-      ? {}
-      : { inference_geo: controls.inferenceGeo }),
-    service_tier:
-      controls.serviceTier === 'standard-only' ? 'standard_only' : 'auto',
     stop_sequences: [...controls.stopSequences],
     thinking: wireThinking,
     ...(controls.cache === 'disabled'
@@ -459,13 +455,11 @@ export function anthropicMessagesModel(
       input.mode === 'background' ||
       input.continuation !== undefined ||
       input.store !== undefined ||
-      input.promptCacheKey !== undefined ||
       input.reasoning !== undefined ||
       input.effort === 'none' ||
       input.effort === 'minimal' ||
       input.thinkingLevel !== undefined ||
-      input.serviceTier === 'fast' ||
-      input.serviceTier === null ||
+      input.serviceTier !== undefined ||
       (!config.supportsTemperature && input.temperature !== undefined)
     )
       return yield* new ModelError({
@@ -507,11 +501,6 @@ export function anthropicMessagesModel(
           input.effort === undefined ? config.defaults.effort : input.effort,
         cache: input.cache ?? config.defaults.cache,
         stopSequences: input.stopSequences ?? config.defaults.stopSequences,
-        serviceTier: input.serviceTier ?? config.defaults.serviceTier,
-        inferenceGeo:
-          input.inferenceGeo === undefined
-            ? config.defaults.inferenceGeo
-            : input.inferenceGeo,
       },
     });
     if (!prepared.success)
@@ -973,21 +962,8 @@ export function anthropicMessagesModel(
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const generateTurn: Model['generateTurn'] = Effect.fn(
-    'llm.anthropic.generateTurn',
-  )(function* (turn) {
-    const completed = yield* Stream.runFold(
-      streamTurn(turn),
-      () => null as TurnResult | null,
-      (result, event) => (event.kind === 'completed' ? event.result : result),
-    );
-    if (completed === null)
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'Anthropic produced no completed turn.',
-      });
-    return completed;
-  });
+  const generateTurn: Model['generateTurn'] = (turn) =>
+    completedTurn(streamTurn(turn));
   const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
     Effect.fn('llm.anthropic.estimateInputTokens')(function* (input) {
       const parsed = ResolvedTurnSchema.safeParse(input);

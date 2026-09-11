@@ -35,6 +35,7 @@ import {
   type BackgroundSubmission,
   type Continuation,
   type RemoteOperation,
+  completedTurn,
 } from './turn.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
@@ -903,22 +904,6 @@ function responseEvents(
   });
 }
 
-const completedTurn = Effect.fn('llm.responses.generateTurn')(function* (
-  events: Stream.Stream<TurnEvent, ModelError>,
-) {
-  const result = yield* Stream.runFold(
-    events,
-    () => null as TurnResult | null,
-    (current, event) => (event.kind === 'completed' ? event.result : current),
-  );
-  if (result === null)
-    return yield* new ModelError({
-      kind: 'malformed-output',
-      message: 'The model stream produced no completed result.',
-    });
-  return result;
-});
-
 /** Owns only the foreign iterator lifetime shared by create and retrieve. */
 const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (
   source: AsyncIterable<unknown> & { readonly controller: AbortController },
@@ -992,12 +977,9 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
     author.thinking !== undefined ||
     author.effort !== undefined ||
     author.cache !== undefined ||
-    author.inferenceGeo !== undefined ||
     author.stopSequences !== undefined ||
-    author.promptCacheKey !== undefined ||
     (author.continuation !== undefined &&
       author.continuation.origin.protocol !== 'openai-responses') ||
-    (author.serviceTier != null && author.serviceTier !== 'fast') ||
     (author.mode === 'background' &&
       (config.background !== 'supported' || transport.kind !== 'http')) ||
     (!config.supportsTemperature && author.temperature !== undefined) ||
