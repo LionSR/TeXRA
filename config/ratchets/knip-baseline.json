@@ -1268,12 +1268,6 @@
       "name": "ActiveSkillSummarySchema"
     },
     {
-      "file": "src/shared/schemas/roundIndexed.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "RoundKeyStringSchema"
-    },
-    {
       "file": "src/shared/schemas/settingsViewMessages.ts",
       "category": "production-dead",
       "kind": "exports",

@@ -49,8 +49,10 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
     const result = AgentModePresetSchema.safeParse(rawPreset);
     if (result.success) return [result.data];
 
+    const name = z.object({ name: z.string() }).safeParse(rawPreset).data?.name;
     console.warn(
-      `[agentPresets] Ignoring malformed custom agent team at index ${index}: ` +
+      `[agentPresets] Ignoring malformed custom agent team ` +
+        `${name == null ? `at index ${index}` : `"${name}" (index ${index})`}: ` +
         result.error.message,
     );
     return [];

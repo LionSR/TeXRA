@@ -38,11 +38,25 @@ export type ReadonlyRoundIndexed<T> = {
 };
 
 /**
- * Coerces a round number out of a string (a filename's `_r{n}` capture):
- * non-negative safe integers only. Rounds never go negative (round 0 is the
- * first).
+ * A round number's canonical string spelling, `String(round)`: decimal digits
+ * with no sign, whitespace, fraction, exponent, radix prefix or leading zero
+ * (except `"0"` itself), whose value is a safe integer. Canonical spelling
+ * makes key ↔ round a bijection, and the safe-integer bound keeps it one after
+ * `Number(key)`: beyond `Number.MAX_SAFE_INTEGER` distinct keys collapse onto
+ * one number, so one round would overwrite another.
  */
-export const RoundKeySchema = z.coerce.number().int().nonnegative();
+const RoundKeyStringSchema = z
+  .string()
+  .regex(/^(0|[1-9]\d*)$/, 'Round key must be a canonical round number')
+  .refine((key) => Number.isSafeInteger(Number(key)), {
+    message: 'Round key must be a safe integer',
+  });
+
+/**
+ * Parses a round number out of a string (a filename's `_r{n}` capture): the
+ * string must be a canonical round key (see {@link RoundKeyStringSchema}).
+ */
+export const RoundKeySchema = RoundKeyStringSchema.transform(Number);
 
 /**
  * Scalar round-number schema: the single definition shared by round-indexed
@@ -61,15 +75,13 @@ export const RoundNumberSchema = z.int().nonnegative();
 /**
  * Schema factory for the canonical record: `{ "0": T[], "1": T[], … }`.
  * Callers attach their own field policy (`.prefault({})`, `.optional()`).
- * Keys must be canonical round strings (`String(round)`: no sign, fraction,
- * exponent or leading zero), so a validated record enumerates in ascending
- * round order per the ES2015+ integer-key rule.
+ * Keys must be canonical round keys ({@link RoundKeyStringSchema}, the same
+ * definition {@link RoundKeySchema} parses), so a validated record enumerates
+ * in ascending round order per the ES2015+ integer-key rule and no two keys
+ * name the same round.
  */
 export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z.record(
-    z.string().regex(/^(0|[1-9]\d*)$/, 'Round key must be a round number'),
-    z.array(valueSchema),
-  );
+  return z.record(RoundKeyStringSchema, z.array(valueSchema));
 }
 
 /**

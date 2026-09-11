@@ -37,7 +37,9 @@ describe('round-key/round-number invariant: non-negative safe integers only', ()
     expect(schema.safeParse({ '0': ['a'], '5': ['b'] }).success).toBe(true);
   });
 
-  it.each(['-1', '1.5', 'run-1', '1e2', '01', ''])(
+  // '9007199254740993' is unsafe: Number() collapses it onto 2^53, so it
+  // would overwrite round 9007199254740992 in cloneRoundIndexed/mergeRounds.
+  it.each(['-1', '1.5', 'run-1', '1e2', '01', '', '9007199254740993'])(
     'roundIndexedRecord() rejects key %s',
     (key) => {
       const schema = roundIndexedRecord(StringItemSchema);
