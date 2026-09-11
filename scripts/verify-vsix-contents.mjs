@@ -6,14 +6,12 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
-  CATALOG_DERIVED_CONTRIBUTES,
   collectRelativeFiles,
-  EXCLUDED_TRACE_VIEWER_DIR,
   extensionManifestSnapshot,
   readJson,
+  REQUIRED_PACKAGED_PATHS,
   reportCheckFailures,
   requiredMonacoWorkers,
-  withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
@@ -21,14 +19,10 @@ const rootDir = path.resolve(
   '..',
 );
 const extensionDir = path.join(rootDir, 'packages', 'extension');
-const snapshotPath = path.join(
-  rootDir,
-  'scripts',
-  'extension-package-invariants.snapshot.json',
-);
+const sourceManifestPath = path.join(extensionDir, 'package.json');
 
 function defaultVsixPath() {
-  const packageJson = readJson(path.join(extensionDir, 'package.json'));
+  const packageJson = readJson(sourceManifestPath);
   return path.join(rootDir, 'releases', `texra-${packageJson.version}.vsix`);
 }
 
@@ -60,50 +54,22 @@ function assertEntryExists(entries, entryPath, failures) {
   assert(entries.has(entryPath), `VSIX is missing ${entryPath}`, failures);
 }
 
-function assertCatalogContributesShipped(manifest, failures) {
-  // Release guard: withoutCatalogDerivedContributes() below deletes the
-  // catalog-derived subtrees before comparison, so assert they shipped first.
-  const contributes = manifest.contributes;
-  for (const key of CATALOG_DERIVED_CONTRIBUTES) {
-    const value = contributes?.[key];
-    const nonEmpty = Array.isArray(value)
-      ? value.length > 0
-      : Boolean(value) &&
-        typeof value === 'object' &&
-        Object.keys(value).length > 0;
-    assert(
-      nonEmpty,
-      `VSIX extension/package.json is missing a non-empty contributes.${key}; the release would ship without it.`,
-      failures,
-    );
-  }
-}
-
-function verifyManifest(vsixPath, snapshot, failures) {
+function verifyManifest(vsixPath, failures) {
   const manifestBytes = readVsixEntry(vsixPath, 'extension/package.json');
-  const manifest = JSON.parse(manifestBytes.toString('utf8'));
-  assertCatalogContributesShipped(manifest, failures);
-  // The built VSIX ships the full contributes (catalog-derived subtrees
-  // included); the committed snapshot omits them, so trim the same subtrees
-  // here before comparing. This only affects the comparison, not the shipped
-  // package.json.
-  const manifestSnapshot = extensionManifestSnapshot(
-    withoutCatalogDerivedContributes(manifest),
-    Object.keys(snapshot.manifest),
+  const shipped = extensionManifestSnapshot(
+    JSON.parse(manifestBytes.toString('utf8')),
   );
-
-  const actualText = `${JSON.stringify(manifestSnapshot, null, 2)}\n`;
-  const expectedText = `${JSON.stringify(snapshot.manifest, null, 2)}\n`;
+  const source = extensionManifestSnapshot(readJson(sourceManifestPath));
   assert(
-    actualText === expectedText,
-    'VSIX extension/package.json no longer matches the extension manifest snapshot.',
+    JSON.stringify(shipped) === JSON.stringify(source),
+    'VSIX extension/package.json does not match packages/extension/package.json.',
     failures,
   );
 }
 
-function verifyRequiredPaths(entries, snapshot, failures) {
+function verifyRequiredPaths(entries, failures) {
   const entryList = [...entries];
-  for (const packagedPath of snapshot.requiredPackagedPaths) {
+  for (const packagedPath of REQUIRED_PACKAGED_PATHS) {
     const entryPrefix = `extension/${packagedPath}`;
     const exists =
       entries.has(entryPrefix) ||
@@ -116,15 +82,9 @@ function verifyRequiredPaths(entries, snapshot, failures) {
   }
 }
 
-// See packages/extension/.vscodeignore for why resources/traceViewerShared is
-// excluded from the packaged VSIX (~3.4MB of CLI-only dead weight).
-const RESOURCE_HASH_EXCLUDED_PREFIX = `${EXCLUDED_TRACE_VIEWER_DIR}/`;
-
 function verifyResourceHashes(vsixPath, entries, failures) {
   const resourcesDir = path.join(extensionDir, 'resources');
-  const sourceFiles = collectRelativeFiles(resourcesDir).filter(
-    (file) => !file.startsWith(RESOURCE_HASH_EXCLUDED_PREFIX),
-  );
+  const sourceFiles = collectRelativeFiles(resourcesDir);
   const sourceFileSet = new Set(sourceFiles);
 
   for (const sourceFile of sourceFiles) {
@@ -150,28 +110,6 @@ function verifyResourceHashes(vsixPath, entries, failures) {
       `VSIX contains resource without source counterpart: resources/${sourceFile}`,
       failures,
     );
-  }
-}
-
-function readSnapshot() {
-  if (!fs.existsSync(snapshotPath)) {
-    console.error(
-      'Missing scripts/extension-package-invariants.snapshot.json. Run npm run sync:extension-package-invariants first.',
-    );
-    process.exit(1);
-  }
-
-  try {
-    return readJson(snapshotPath);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(
-      `Could not read scripts/extension-package-invariants.snapshot.json: ${message}`,
-    );
-    console.error(
-      'Run npm run sync:extension-package-invariants and review the snapshot diff.',
-    );
-    process.exit(1);
   }
 }
 
@@ -217,7 +155,7 @@ function verifyNoMonacoWorkers(entries, failures) {
 }
 
 function verifyPackagedDocs(vsixPath, entries, failures) {
-  const manifest = readJson(path.join(extensionDir, 'package.json'));
+  const manifest = readJson(sourceManifestPath);
   const repositoryUrl = String(manifest.repository?.url ?? '').replace(
     /\.git$/,
     '',
@@ -259,12 +197,11 @@ if (!fs.existsSync(vsixPath)) {
   process.exit(1);
 }
 
-const snapshot = readSnapshot();
 const entries = listVsixEntries(vsixPath);
 const failures = [];
 
-verifyManifest(vsixPath, snapshot, failures);
-verifyRequiredPaths(entries, snapshot, failures);
+verifyManifest(vsixPath, failures);
+verifyRequiredPaths(entries, failures);
 verifyResourceHashes(vsixPath, entries, failures);
 verifyDistEntrypoints(entries, failures);
 verifyNoMonacoWorkers(entries, failures);

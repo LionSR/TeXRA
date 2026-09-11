@@ -109,7 +109,7 @@ async function runHistoryShow(
  * fonts all inlined, so `> out.html` opens correctly via `file://` with no
  * server). `--assets-dir <dir>` switches to
  * the shared-assets mode for a site publishing many traces: stages the
- * trace-viewer's multi-file bundle into `<dir>` (safe to repeat across many
+ * trace-viewer page into `<dir>` (safe to repeat across many
  * exports pointed at the same directory) and writes just the trace data to
  * stdout, to be redirected next to (or referenced by) that shared bundle's
  * `index.html?trace=<path>`.

@@ -22,36 +22,31 @@
 // `index.html` report for quick visual review in a browser or GitHub issue.
 //
 // Deps: node-pty (PTY; native) and @xterm/headless (pure JS). Missing deps fail
-// by default so validation cannot look green without exercising any frames.
-// Pass --skip-if-missing-deps only in environments that intentionally opt out.
+// validation so it cannot look green without exercising any frames.
 
 import {
-  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
   rmSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseCittyArgs } from 'citty';
-import PQueue from 'p-queue';
+
+import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
 
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
 const DC2 = String.fromCharCode(18); // Ctrl-R
 const DC4 = String.fromCharCode(20); // Ctrl-T
 const NAK = String.fromCharCode(21); // Ctrl-U
-const EM = String.fromCharCode(25); // Ctrl-Y
 const LF = String.fromCharCode(10); // Ctrl-J
 const KITTY_SHIFT_ENTER = ESC + '[13;2u';
 const UP = ESC + '[A';
@@ -82,13 +77,6 @@ const LONG_BASH_APPROVAL_COMMAND = [
   'print(solutions)',
   'EOF',
 ].join('\n');
-const LONG_EXTERNAL_INQUIRY_ANSWER =
-  'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples of the form (0,b,b), and the bounded search over integer pairs proves completeness.';
-const LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION = Array.from(
-  { length: 24 },
-  (_, index) =>
-    `Long verification note ${String(index + 1).padStart(2, '0')}: independent enumeration confirms the count and keeps the full answer recoverable by thread id.`,
-).join(' ');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
 const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
@@ -1991,122 +1979,6 @@ const SCENARIOS = [
     unexpect: ['Spawn review?'],
   },
   {
-    name: 'external-inquiry-long',
-    rows: 24,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
-    frame: 'viewport',
-    expect: [
-      'Agent asks:',
-      'more rows',
-      'PgUp/PgDn scroll',
-      'Ctrl-Y copy',
-      'Enter submit',
-      'Ctrl-R reject',
-      'Esc skip',
-      '1 question',
-    ],
-    unexpect: [
-      '└─Degenerate triples',
-      '/model models',
-      'Esc panel',
-      'Esc sk…',
-      '1 approval',
-    ],
-  },
-  {
-    name: 'external-inquiry-long-80-cols',
-    rows: 24,
-    cols: 80,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
-    frame: 'viewport',
-    expect: [
-      'Agent asks:',
-      'more rows',
-      'PgUp/PgDn scroll',
-      'Ctrl-Y copy',
-      'Enter submit',
-      'Ctrl-R reject',
-      'Esc skip',
-      '1 question',
-    ],
-    unexpect: [
-      '└─Degenerate triples',
-      '/model models',
-      'Esc panel',
-      'Esc sk…',
-      '1 approval',
-    ],
-  },
-  {
-    name: 'external-inquiry-copy-question',
-    rows: 24,
-    cols: 80,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [EM],
-    frame: 'viewport',
-    fakeClipboard: {
-      expectIncludes: [
-        'Problem: Find all integer triples',
-        'whose perimeter is at most 120',
-      ],
-    },
-    expect: ['Agent asks: copied to clipboard', 'Ctrl-Y copy', '1 question'],
-    unexpect: ['copy failed', '/model models', '1 approval'],
-  },
-  {
-    name: 'external-inquiry-submit-answer',
-    rows: 24,
-    cols: 120,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [LONG_EXTERNAL_INQUIRY_ANSWER, '\r'],
-    frame: 'viewport',
-    expect: [
-      '[inquiry] ei_123456abcdef answered.',
-      'A: Independent check agrees',
-      'Full thread: ei_123456abcdef',
-      'No other open inquiries on this stream.',
-      'Proceed using the new answer.',
-      '/status details',
-      '/model models',
-    ],
-    unexpect: [
-      'Agent asks:',
-      '1 question',
-      '1 approval',
-      "inquiry { command: 'read'",
-    ],
-  },
-  {
-    name: 'external-inquiry-submit-long-answer',
-    rows: 36,
-    cols: 120,
-    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: '· Ctrl-C ',
-    keys: [LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION, '\r'],
-    frame: 'viewport',
-    expect: [
-      '[inquiry] ei_123456abcdef answered.',
-      'A: Long verification note 01',
-      'full text',
-      'available in thread ei_123456abcdef',
-      'Full thread: ei_123456abcdef',
-      'No other open inquiries on this stream.',
-      'Proceed using the new answer.',
-    ],
-    unexpect: [
-      'Agent asks:',
-      '1 question',
-      '1 approval',
-      "inquiry { command: 'read'",
-    ],
-  },
-  {
     name: 'compact-user-question',
     rows: 12,
     cols: 80,
@@ -3121,12 +2993,11 @@ const SCENARIOS = [
 
 function formatUsage() {
   return [
-    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [--skip-if-missing-deps] [scenario ...]',
+    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [scenario ...]',
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
     `  --no-build          Use the existing ${DEFAULT_HARNESS_RELATIVE_PATH} instead of rebuilding it`,
-    '  --skip-if-missing-deps  Exit 0 instead of failing when PTY screenshot deps are unavailable',
     '  --list, --list-scenarios',
     '                      Print available scenario names and exit',
     '  --list-selected     Print selected scenario names in run order and exit',
@@ -3156,7 +3027,6 @@ const PARSE_ARGS_DEF = {
   // property instead). Modeling the positive form and negating it is the
   // only way citty's `--no-*` negation syntax can drive this flag.
   build: { type: 'boolean', default: true },
-  skipIfMissingDeps: { type: 'boolean' },
   snapshotDir: { type: 'string' },
 };
 const KNOWN_FLAG_TOKENS = new Set([
@@ -3166,7 +3036,6 @@ const KNOWN_FLAG_TOKENS = new Set([
   '--list-scenarios',
   '--list-selected',
   '--no-build',
-  '--skip-if-missing-deps',
   '--snapshot-dir',
 ]);
 
@@ -3231,7 +3100,6 @@ function parseArgs(argv) {
     snapshotDir,
     listSelected: Boolean(args.listSelected),
     noBuild: args.build === false,
-    skipIfMissingDeps: Boolean(args.skipIfMissingDeps),
   };
 }
 
@@ -3346,27 +3214,6 @@ if (useExistingHarness) {
   }
 }
 
-function ensureNodePtySpawnHelperExecutable() {
-  if (process.platform === 'win32') return;
-
-  try {
-    const require = createRequire(import.meta.url);
-    const packageRoot = path.dirname(require.resolve('node-pty/package.json'));
-    const helperPath = path.join(
-      packageRoot,
-      'prebuilds',
-      `${process.platform}-${process.arch}`,
-      'spawn-helper',
-    );
-    if (!existsSync(helperPath)) return;
-
-    const mode = statSync(helperPath).mode;
-    if ((mode & 0o111) === 0) chmodSync(helperPath, mode | 0o755);
-  } catch {
-    // node-pty will report the underlying PTY load/spawn failure below.
-  }
-}
-
 // --- optional deps (guarded) ---------------------------------------------
 let ptySpawn;
 let Terminal;
@@ -3381,11 +3228,11 @@ try {
   }
 } catch (err) {
   console.error(
-    `[validate-tui] ${args.skipIfMissingDeps ? 'skipped' : 'failed'} — install the TUI dev deps to run this validator:\n` +
+    '[validate-tui] failed — install the TUI dev deps to run this validator:\n' +
       '  pnpm --filter @texra-ai/cli add -D node-pty @xterm/headless\n' +
       `  (${err instanceof Error ? err.message : String(err)})`,
   );
-  process.exit(args.skipIfMissingDeps ? 0 : 1);
+  process.exit(1);
 }
 
 // --- harness bundle ------------------------------------------------------
@@ -3395,7 +3242,7 @@ if (!useExistingHarness) {
   console.error('[validate-tui] building tui-harness bundle…');
   const r = spawnSync(
     process.execPath,
-    [path.join(CLI_ROOT, 'scripts', 'build-harness.mjs')],
+    [path.join(CLI_ROOT, 'scripts', 'build-bundle.mjs'), '--harness'],
     { cwd: CLI_ROOT, stdio: 'inherit' },
   );
   if (r.status !== 0 || !existsSync(HARNESS)) {
@@ -3485,40 +3332,6 @@ function expectedFrameTextVisible(scenario, frame) {
 
 function collapseFrameText(frame) {
   return frame.replaceAll(/[│╭╮╰╯─]/g, ' ').replaceAll(/\s+/g, ' ');
-}
-
-const FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM = {
-  darwin: ['pbcopy'],
-  linux: ['wl-copy', 'xclip', 'xsel'],
-};
-
-function fakeClipboardCommandsForPlatform(platform = process.platform) {
-  return FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM[platform] ?? [];
-}
-
-function makeFakeClipboard(platform = process.platform) {
-  const commands = fakeClipboardCommandsForPlatform(platform);
-  if (commands.length === 0) return null;
-
-  const dir = mkdtempSync(path.join(tmpdir(), 'texra-tui-clipboard-'));
-  const binDir = path.join(dir, 'bin');
-  const textFile = path.join(dir, 'clipboard.txt');
-  mkdirSync(binDir, { recursive: true });
-  writeFileSync(textFile, '');
-
-  const script = [
-    '#!/usr/bin/env sh',
-    'set -eu',
-    'cat > "$TEXRA_FAKE_CLIPBOARD_FILE"',
-    '',
-  ].join('\n');
-  for (const command of commands) {
-    const commandPath = path.join(binDir, command);
-    writeFileSync(commandPath, script);
-    chmodSync(commandPath, 0o755);
-  }
-
-  return { binDir, dir, textFile };
 }
 
 function blankLinesBetween(frame, from, to) {
@@ -3797,33 +3610,6 @@ function createSkipResult(scenario, reason) {
   };
 }
 
-async function runScenario(scenario, index) {
-  if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
-    return createSkipResult(
-      scenario,
-      `scenario is only supported on ${scenario.platforms.join(', ')}`,
-    );
-  }
-
-  const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
-  if (scenario.fakeClipboard && !fakeClipboard) {
-    return createSkipResult(
-      scenario,
-      `fake clipboard is not supported on ${process.platform}`,
-    );
-  }
-  try {
-    return await runScenarioWithResources(scenario, fakeClipboard, index);
-  } finally {
-    cleanupFakeClipboard(fakeClipboard);
-  }
-}
-
-function cleanupFakeClipboard(fakeClipboard) {
-  if (!fakeClipboard) return;
-  rmSync(fakeClipboard.dir, { recursive: true, force: true });
-}
-
 function scenarioChildEnv(scenario, cols, rows) {
   const inheritedEnv = { ...process.env };
   // TUI scenarios should declare provider keys explicitly instead of inheriting
@@ -3844,7 +3630,6 @@ function gatherAssertionFailures({
   scenario,
   frame,
   rawOutput,
-  fakeClipboard,
   checkpointFailures,
   booted,
   exited,
@@ -3933,30 +3718,28 @@ function gatherAssertionFailures({
       );
     }
   }
-  if (fakeClipboard) {
-    const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
-    for (const text of scenario.fakeClipboard.expectIncludes ?? []) {
-      if (!copiedText.includes(text)) {
-        failures.push(
-          `fake clipboard missing expected text: ${JSON.stringify(text)}`,
-        );
-      }
-    }
-  }
 
   return failures;
 }
 
-async function runScenarioWithResources(scenario, fakeClipboard, index) {
+async function runScenario(scenario, index) {
+  if (scenario.platforms && !scenario.platforms.includes(process.platform)) {
+    return createSkipResult(
+      scenario,
+      `scenario is only supported on ${scenario.platforms.join(', ')}`,
+    );
+  }
+
   const term = makeTerm(scenario);
   const cols = scenarioCols(scenario);
   const rows = scenarioRows(scenario);
   let lastData = Date.now();
   let exited = null;
   let rawOutput = '';
-  const writeQueue = new PQueue({ concurrency: 1 });
+  // xterm applies writes in order, so an empty write's callback fires once
+  // every earlier chunk has landed in the buffer.
   const frameSnapshot = async () => {
-    await writeQueue.onIdle();
+    await new Promise((resolve) => term.write('', resolve));
     return renderFrame(term);
   };
   const childEnv = scenarioChildEnv(scenario, cols, rows);
@@ -3974,10 +3757,6 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     delete childEnv.NO_COLOR;
     childEnv.HARNESS_COLOR_ENABLED ??= '1';
   }
-  if (fakeClipboard) {
-    childEnv.PATH = `${fakeClipboard.binDir}${path.delimiter}${childEnv.PATH ?? ''}`;
-    childEnv.TEXRA_FAKE_CLIPBOARD_FILE = fakeClipboard.textFile;
-  }
   // The validator intentionally exercises an interactive TTY. Inherited CI
   // markers make Ink choose a non-interactive render mode and hide the live
   // input/status surface this script is meant to inspect.
@@ -3993,7 +3772,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   child.onData((d) => {
     lastData = Date.now();
     rawOutput += d;
-    writeQueue.add(() => new Promise((resolve) => term.write(d, resolve)));
+    term.write(d);
   });
 
   // boot: wait for the interactive input/status area to settle. Static
@@ -4072,7 +3851,6 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     scenario,
     frame,
     rawOutput,
-    fakeClipboard,
     checkpointFailures,
     booted,
     exited,

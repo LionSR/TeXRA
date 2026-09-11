@@ -8,15 +8,8 @@ const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const extensionDist = path.join(repoRoot, 'packages', 'extension', 'dist');
 
-const webviewOnly = process.argv.includes('--webviews-only');
-const targets = webviewOnly
-  ? ['progressView', 'settingsView', 'shared'].map((name) =>
-      path.join(extensionDist, name),
-    )
-  : [extensionDist];
-
-await Promise.all(
-  targets.map((target) => rm(target, { recursive: true, force: true })),
-);
+await rm(path.join(repoRoot, 'packages', 'extension', 'dist'), {
+  recursive: true,
+  force: true,
+});

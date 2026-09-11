@@ -13,8 +13,15 @@ const internalValidationModelStub = fileURLToPath(
   new URL('./internal-validation-model-stub.mjs', import.meta.url),
 );
 
+// `--harness` bundles the PTY validator's TUI harness (scripts/tui-harness.tsx)
+// through this same build graph, so validate-tui exercises the configuration
+// that ships. It stays unminified for readable failure traces.
+const harness = process.argv.includes('--harness');
 const configuredOutfile = process.env.TEXRA_CLI_BUNDLE_OUTFILE?.trim();
-const outfile = configuredOutfile || 'dist/bin/texra.js';
+const entryPoint = harness ? 'scripts/tui-harness.tsx' : 'src/bin/texra.ts';
+const outfile = harness
+  ? 'dist/bin/tui-harness.js'
+  : configuredOutfile || 'dist/bin/texra.js';
 const includeInternalValidationModel =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 
@@ -27,18 +34,12 @@ try {
     ]);
 
   await build({
-    entryPoints: ['src/bin/texra.ts'],
+    entryPoints: [entryPoint],
     bundle: true,
     platform: 'node',
     format: 'esm',
     target: 'node20',
-    // clipboardy's Linux/Windows backends resolve their bundled fallback
-    // binaries (xsel / clipboard_*.exe) relative to `import.meta.url`, which
-    // esbuild rewrites to point at the *bundled* outfile instead of
-    // clipboardy's own package directory. Keeping it external preserves
-    // those file-relative lookups against the real `node_modules/clipboardy`
-    // install that ships alongside `dist` as a declared dependency.
-    external: ['fsevents', 'clipboardy'],
+    external: ['fsevents'],
     loader: { '.wasm': 'binary' },
     define: {
       'process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL': JSON.stringify(
@@ -76,7 +77,7 @@ try {
         : {}),
     },
     outfile,
-    minify: true,
+    minify: !harness,
     // SDK error classification (src/common/errors/sdkError/) reads
     // `constructor.name` off the prototype chain, so minified class names
     // would silently misclassify provider errors in the published binary.
@@ -98,7 +99,7 @@ try {
   await chmod(outfile, 0o755);
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);
-  console.error('[build-bundle] failed to build CLI bundle.');
+  console.error(`[build-bundle] failed to build ${outfile}.`);
   console.error(
     '[build-bundle] If dependencies are missing, run `corepack pnpm install` from the repo root.',
   );

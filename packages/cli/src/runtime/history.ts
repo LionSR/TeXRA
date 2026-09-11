@@ -332,10 +332,8 @@ export async function readCliHistoryExportInput(
   return { status: 'incomplete' };
 }
 
-/** Single-file default export template (file://-safe, inlined assets). */
+/** Single-file trace-viewer bundle (file://-safe, inlined assets). */
 const TRACE_VIEWER_DIR_NAME = 'traceViewer';
-/** Multi-file shared-assets bundle for CLI `--assets-dir` site hosting. */
-const TRACE_VIEWER_SHARED_DIR_NAME = 'traceViewerShared';
 
 /**
  * Read the trace-viewer's single-file default bundle — one self-contained
@@ -375,14 +373,12 @@ export async function readCliHistoryStandaloneTemplate(
 }
 
 /**
- * Stage the trace-viewer's multi-file bundle (`index.html` + `assets/`) into
- * `destDir` for the shared-assets export mode (`--assets-dir`) — a site
- * hosting many traces points every trace's `?trace=` query param at one
- * shared bundle instead of duplicating it per trace. Unlike the default
- * single-file bundle, this one keeps external `assets/` references, which is
- * fine here: shared-assets mode targets pages served over http(s), which
- * never hits the `file://` module-script CORS restriction the default
- * bundle exists to avoid (see `packages/trace-viewer/vite.standalone.config.ts`).
+ * Stage the trace-viewer's single-file `index.html` into `destDir` for the
+ * shared-assets export mode (`--assets-dir`) — a site hosting many traces
+ * points every trace's `?trace=` query param at one shared copy instead of
+ * duplicating it per trace. Without an injected trace the page fetches the
+ * `?trace=` file itself, which works whenever the directory is served over
+ * http(s).
  *
  * `fs.cp`'s recursive copy merges into an existing `destDir` rather than
  * nesting under it, so staging is safe to repeat across multiple exports
@@ -398,10 +394,7 @@ export async function stageCliHistoryTraceViewerAssets(params: {
   readonly resourcesPath: string;
   readonly destDir: string;
 }): Promise<'staged' | 'missing'> {
-  const assetsSrc = path.join(
-    params.resourcesPath,
-    TRACE_VIEWER_SHARED_DIR_NAME,
-  );
+  const assetsSrc = path.join(params.resourcesPath, TRACE_VIEWER_DIR_NAME);
   return effectRuntime().runPromise(
     Effect.gen(function* () {
       const sourceExists = yield* Effect.tryPromise({

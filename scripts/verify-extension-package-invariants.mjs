@@ -4,11 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 import {
   collectRelativeFiles,
-  EXCLUDED_TRACE_VIEWER_DIR,
   extensionManifestSnapshot,
   readJson,
+  REQUIRED_PACKAGED_PATHS,
   reportCheckFailures,
-  withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
@@ -16,48 +15,9 @@ const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const snapshotPath = path.join(
-  rootDir,
-  'scripts',
-  'extension-package-invariants.snapshot.json',
-);
 const packagePath = path.join(rootDir, 'packages', 'extension', 'package.json');
 const packageDir = path.dirname(packagePath);
 const vscodeIgnorePath = path.join(packageDir, '.vscodeignore');
-
-const MANIFEST_KEYS = [
-  'name',
-  'displayName',
-  'description',
-  'publisher',
-  'engines',
-  'categories',
-  'activationEvents',
-  'main',
-  'capabilities',
-  'contributes',
-  'icon',
-];
-
-const REQUIRED_PACKAGED_PATHS = [
-  'LICENSE.txt',
-  'NOTICE.txt',
-  'changelog.md',
-  'readme.md',
-  'resources/agents',
-  'resources/docs/agent-creation',
-  'resources/examples',
-  'resources/logo-128x128.svg',
-  'resources/logo-512x512.png',
-  'resources/shared/latex_style_rules.txt',
-  'resources/skills',
-  'resources/templates',
-  'resources/tool_use_agents',
-  'resources/walkthroughs',
-  'src/common/styles/common.css',
-  'src/progressView/index.html',
-  'src/settingsView/index.html',
-];
 
 // Paths produced by the build from canonical repo-root sources. They do not
 // need to exist in the extension source tree, but verify-vsix-contents.mjs
@@ -68,22 +28,12 @@ const BUILD_TIME_PACKAGED_PATHS = new Set([
   'resources/skills',
 ]);
 
-// See packages/extension/.vscodeignore for why resources/traceViewerShared is
-// excluded (and why there is deliberately no blanket `!resources/**` line).
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
-  `resources/${EXCLUDED_TRACE_VIEWER_DIR}/**`,
   '!src/common/styles/*.css',
   '!src/progressView/*.html',
   '!src/settingsView/*.html',
 ];
-
-// A blanket `!resources/**` (or an equivalent whitespace variant) would
-// silently re-include resources/traceViewerShared no matter where the required
-// line above sits in .vscodeignore, since vsce applies every `!`-negated
-// line after all plain ignore lines regardless of file position. Guard
-// against a future PR reintroducing it for an unrelated reason.
-const FORBIDDEN_VSCODEIGNORE_PATTERNS = [/^!\s*resources\/\*\*$/];
 
 function collectStringValues(value, results = []) {
   if (typeof value === 'string') {
@@ -105,7 +55,7 @@ function collectStringValues(value, results = []) {
 }
 
 function manifestAssetReferences(packageJson) {
-  const manifest = extensionManifestSnapshot(packageJson, MANIFEST_KEYS);
+  const manifest = extensionManifestSnapshot(packageJson);
   return [
     ...new Set(
       collectStringValues(manifest).filter(
@@ -143,45 +93,8 @@ function hasFiles(relativeDir) {
   return walkFiles(absoluteDir, { limit: 1 }).length > 0;
 }
 
-function buildSnapshot() {
-  const packageJson = readJson(packagePath);
-  return {
-    // Asset references scan the full manifest; the manifest snapshot omits the
-    // catalog-derived contributes (guarded by the catalog codegen instead).
-    manifest: extensionManifestSnapshot(
-      withoutCatalogDerivedContributes(packageJson),
-      MANIFEST_KEYS,
-    ),
-    manifestAssetReferences: manifestAssetReferences(packageJson),
-    requiredPackagedPaths: REQUIRED_PACKAGED_PATHS,
-    requiredVscodeIgnoreLines: REQUIRED_VSCODEIGNORE_LINES,
-  };
-}
-
-function verifySnapshot(actualSnapshot, failures) {
-  if (!fs.existsSync(snapshotPath)) {
-    failures.push(
-      'Missing scripts/extension-package-invariants.snapshot.json. Run npm run sync:extension-package-invariants.',
-    );
-    return;
-  }
-
-  const expectedSnapshot = readJson(snapshotPath);
-  const actualText = `${JSON.stringify(actualSnapshot, null, 2)}\n`;
-  const expectedText = `${JSON.stringify(expectedSnapshot, null, 2)}\n`;
-
-  assert(
-    actualText === expectedText,
-    [
-      'Extension package invariants are out of sync.',
-      'Run npm run sync:extension-package-invariants and review the manifest/resource changes.',
-    ].join(' '),
-    failures,
-  );
-}
-
-function verifyAssets(snapshot, failures) {
-  for (const assetPath of snapshot.manifestAssetReferences) {
+function verifyAssets(packageJson, failures) {
+  for (const assetPath of manifestAssetReferences(packageJson)) {
     if (isBuildTimePackagedPath(assetPath)) continue;
     assert(
       relativeExists(assetPath),
@@ -190,7 +103,7 @@ function verifyAssets(snapshot, failures) {
     );
   }
 
-  for (const packagedPath of snapshot.requiredPackagedPaths) {
+  for (const packagedPath of REQUIRED_PACKAGED_PATHS) {
     if (isBuildTimePackagedPath(packagedPath)) continue;
     const absolutePath = path.join(packageDir, packagedPath);
     const exists = fs.existsSync(absolutePath);
@@ -209,14 +122,13 @@ function verifyAssets(snapshot, failures) {
   }
 }
 
-function verifyBundledSkills(failures) {
+function verifyBundledSkills(packageJson, failures) {
   const sourceDir = path.join(rootDir, 'skills');
   const sourceExists = fs.existsSync(sourceDir);
   assert(sourceExists, 'Canonical skills directory is missing.', failures);
   if (!sourceExists) return;
 
   const sourceFiles = collectRelativeFiles(sourceDir);
-  const packageJson = readJson(packagePath);
   const chatSkills = packageJson.contributes?.chatSkills ?? [];
   const expectedNames = sourceFiles
     .filter((relativePath) => /^[^/]+\/SKILL\.md$/.test(relativePath))
@@ -238,11 +150,9 @@ function verifyBundledSkills(failures) {
   }
 }
 
-function verifyVscodeIgnore(snapshot, failures) {
+function verifyVscodeIgnore(failures) {
   if (!fs.existsSync(vscodeIgnorePath)) {
-    failures.push(
-      `Missing ${path.relative(rootDir, vscodeIgnorePath)}. Add package ignore rules before moving the extension package.`,
-    );
+    failures.push(`Missing ${path.relative(rootDir, vscodeIgnorePath)}.`);
     return;
   }
 
@@ -251,39 +161,21 @@ function verifyVscodeIgnore(snapshot, failures) {
     .split(/\r?\n/)
     .map((line) => line.trim());
 
-  for (const line of snapshot.requiredVscodeIgnoreLines) {
+  for (const line of REQUIRED_VSCODEIGNORE_LINES) {
     assert(
       lines.includes(line),
-      `.vscodeignore must include ${line} so extension resources stay packaged after the workspace split.`,
-      failures,
-    );
-  }
-
-  for (const pattern of FORBIDDEN_VSCODEIGNORE_PATTERNS) {
-    const offendingLine = lines.find((line) => pattern.test(line));
-    assert(
-      !offendingLine,
-      `.vscodeignore must not include "${offendingLine}": a blanket resources/** unignore silently re-packages resources/${EXCLUDED_TRACE_VIEWER_DIR} regardless of where the exclusion line for it sits in the file.`,
+      `.vscodeignore must include ${line} so the VSIX ships the webview entry points and no TypeScript sources.`,
       failures,
     );
   }
 }
 
-const update = process.argv.includes('--update');
-const snapshot = buildSnapshot();
-
-if (update) {
-  fs.writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`);
-  console.log('Updated extension package invariant snapshot');
-  process.exit(0);
-}
-
+const packageJson = readJson(packagePath);
 const failures = [];
-verifySnapshot(snapshot, failures);
-verifyAssets(snapshot, failures);
-verifyBundledSkills(failures);
-verifyVscodeIgnore(snapshot, failures);
+verifyAssets(packageJson, failures);
+verifyBundledSkills(packageJson, failures);
+verifyVscodeIgnore(failures);
 
 reportCheckFailures('Extension package invariant check', failures);
 
-console.log('Extension package invariants are in sync');
+console.log('Extension package invariants hold');

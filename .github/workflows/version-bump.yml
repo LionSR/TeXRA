@@ -12,9 +12,9 @@ jobs:
   bump-version:
     runs-on: ubuntu-latest
     # Releases are cut in pairs off the same commit: `vX.Y.Z` for the extension
-    # and `cli-vX.Y.Z` for the CLI (plus legacy `vX.Y.Z-frontend` tags). Bump
-    # only once, off the canonical extension tag — otherwise the `cli-` tag fires
-    # a second, redundant run and races the first on the same PR branch.
+    # and `cli-vX.Y.Z` for the CLI. Bump only once, off the canonical extension
+    # tag — otherwise the `cli-` tag fires a second, redundant run and races the
+    # first on the same PR branch.
     if: ${{ startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
     steps:
       - name: Checkout code
@@ -23,18 +23,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: main
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
 
       - name: Configure Git
         run: |

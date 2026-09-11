@@ -61,7 +61,6 @@ import {
   TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
-  type InquiryThreadId,
   type NormalizedToolUse,
   type PlanApprovalPermission,
   type RetryPermission,
@@ -92,7 +91,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
-import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
 import { platformSettingsStores } from '@utils/config/platformSettings';
@@ -194,7 +192,6 @@ const SHOW_REPEATED_BASH_APPROVAL =
 const SHOW_RETRY_APPROVAL = process.env.HARNESS_RETRY_APPROVAL === '1';
 const RETRY_APPROVAL_CHATGPT =
   process.env.HARNESS_RETRY_APPROVAL_CHATGPT === '1';
-const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
@@ -224,8 +221,6 @@ const WIDE_TRANSCRIPT_SUFFIX =
   ' hidden-middle wide-column-A wide-column-B wide-column-C wide-column-D wide-column-E wide-column-F';
 const SHOW_REJECTED_BASH_TOOL = process.env.HARNESS_REJECTED_BASH_TOOL === '1';
 const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
-const SHOW_WIDE_FIRST_CHILD_LINE =
-  process.env.HARNESS_WIDE_FIRST_CHILD_LINE === '1';
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
 const SHOW_ORCHESTRATION_STATUS_LINES =
   process.env.HARNESS_ORCHESTRATION_STATUS_LINES !== '0';
@@ -241,46 +236,27 @@ const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
   process.env.HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS === '1';
-const EXTERNAL_INQUIRY_QUESTION =
-  process.env.HARNESS_EXTERNAL_INQUIRY_QUESTION ??
-  [
-    'I need an independent verification of an enumeration of Pythagorean triples.',
-    '',
-    'Problem: Find all integer triples (a,b,c) with 0 <= a <= b <= c <= 60 and a^2 + b^2 = c^2, whose perimeter is at most 120.',
-    '',
-    'Please enumerate them independently and verify these results:',
-    '',
-    'Non-degenerate triples: (3,4,5), (5,12,13), (6,8,10), (7,24,25), (8,15,17), (9,12,15), (9,40,41), (10,24,26), (12,16,20), (12,35,37), (14,48,50), (15,20,25), (15,36,39), (16,30,34), (18,24,30), (20,21,29), (20,48,52), (21,28,35), (24,32,40), (24,45,51), (27,36,45), (30,40,50).',
-    '',
-    'Degenerate triples: (0,b,b) for 0 <= b <= 60.',
-  ].join('\n');
-const EXTERNAL_INQUIRY_THREAD_ID = 'ei_123456abcdef' as InquiryThreadId;
-const USER_QUESTION_CONTEXT =
-  process.env.HARNESS_USER_QUESTION_CONTEXT ??
-  [
-    'The agent is asking for direction before continuing a math workflow.',
-    'We need a choice that keeps the proof useful while avoiding a long detour.',
-    'Context detail: the candidate proof has a finite enumeration, a symbolic recurrence, and one unresolved edge case around degenerate triples.',
-    'Please answer the questions below so the agent can continue without guessing.',
-  ].join('\n');
-const AGENT_PROPOSAL_INSTRUCTION =
-  process.env.HARNESS_AGENT_PROPOSAL_INSTRUCTION ??
-  [
-    'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
-    '',
-    '1. Check the reduction to the Pell equation and every hidden parity assumption.',
-    '2. Verify that the recurrence generates every positive solution below the bound.',
-    '3. Recompute every square triangular number and the mod 5 filter.',
-    '4. Inspect edge cases such as n=0, negative x, and duplicate Pell representatives.',
-    '5. Write a structured report with any gaps or a confirmation of correctness.',
-    '6. Include a short independent enumeration so the orchestrator can compare results.',
-  ].join('\n');
+const USER_QUESTION_CONTEXT = [
+  'The agent is asking for direction before continuing a math workflow.',
+  'We need a choice that keeps the proof useful while avoiding a long detour.',
+  'Context detail: the candidate proof has a finite enumeration, a symbolic recurrence, and one unresolved edge case around degenerate triples.',
+  'Please answer the questions below so the agent can continue without guessing.',
+].join('\n');
+const AGENT_PROPOSAL_INSTRUCTION = [
+  'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
+  '',
+  '1. Check the reduction to the Pell equation and every hidden parity assumption.',
+  '2. Verify that the recurrence generates every positive solution below the bound.',
+  '3. Recompute every square triangular number and the mod 5 filter.',
+  '4. Inspect edge cases such as n=0, negative x, and duplicate Pell representatives.',
+  '5. Write a structured report with any gaps or a confirmation of correctness.',
+  '6. Include a short independent enumeration so the orchestrator can compare results.',
+].join('\n');
 const CAN_SELECT_MODEL = process.env.HARNESS_CAN_SELECT_MODEL === '1';
 const DISABLED_MODEL_SWITCHES = new Set(
   parseList(process.env.HARNESS_DISABLED_MODEL_SWITCHES),
 );
 const DISABLED_MODEL_SWITCH_REASON =
-  process.env.HARNESS_DISABLED_MODEL_SWITCH_REASON ??
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
@@ -290,12 +266,6 @@ const SHOW_COMPLETED_TODOS_ONLY = process.env.HARNESS_TODOS_COMPLETED === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
-const HARNESS_INITIAL_APPROVAL_POLICY: TexraApprovalPolicy =
-  parseTexraApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ??
-  TEXRA_APPROVAL_POLICY_DEFAULT;
-const EDIT_APPROVAL_DELAY_MS = Number(
-  process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
-);
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
 const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
@@ -304,7 +274,7 @@ const HARNESS_CWD =
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
 const HARNESS_CLI_CONTEXT: CliContext = {
-  approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
+  approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
   cliConfig: {},
   commandName: 'texra',
   configWarnings: [],
@@ -325,7 +295,7 @@ const HARNESS_STDOUT = tuiOutputStreamForColor(
   process.stdout,
   HARNESS_COLOR_ENABLED,
 );
-if (!HARNESS_CWD_INPUT && process.env.HARNESS_KEEP_CWD !== '1') {
+if (!HARNESS_CWD_INPUT) {
   process.once('exit', () => {
     rmSync(HARNESS_CWD, { recursive: true, force: true });
   });
@@ -415,7 +385,7 @@ const harnessRuntimeSession = initializeDefaultSession({
     agentResponseTextConnector,
   ),
 });
-harnessRuntimeSession.setApprovalPolicy(HARNESS_INITIAL_APPROVAL_POLICY);
+harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
 const harnessFollowUpLease = defaultSession().followUps.claimLive(
   HARNESS_RUN_ID,
   'flow',
@@ -1014,10 +984,10 @@ function makeChildEntries(
 ): StreamLogAppendInput[] {
   const assistantText =
     SHOW_LONG_CHILD_OUTPUT && agent === 'strategy'
-      ? Array.from({ length: 18 }, (_, index) =>
-          index === 0 && SHOW_WIDE_FIRST_CHILD_LINE
-            ? `strategy detail line 01 ${'wide output wraps '.repeat(10)}`
-            : `strategy detail line ${String(index + 1).padStart(2, '0')}${index === 17 ? ' final contradiction found' : ''}`,
+      ? Array.from(
+          { length: 18 },
+          (_, index) =>
+            `strategy detail line ${String(index + 1).padStart(2, '0')}${index === 17 ? ' final contradiction found' : ''}`,
         ).join('\n')
       : `${agent} is checking the ${action} details and preparing a concise result.`;
   return [
@@ -1214,22 +1184,6 @@ function requestHarnessApproval<T>(
   });
 }
 
-function appendHarnessExternalInquiryContinuation(
-  status: 'answered' | 'dropped',
-  answer?: string,
-): void {
-  appendHarnessTranscript(
-    'user',
-    buildContinuationText({
-      event: status,
-      threadId: EXTERNAL_INQUIRY_THREAD_ID,
-      question: EXTERNAL_INQUIRY_QUESTION,
-      ...(answer ? { answer } : {}),
-      stillOpen: [],
-    }),
-  );
-}
-
 function appendHarnessRetryResult(
   result: RetryResult,
   credentialSelection: 'configured' | 'personal' | undefined,
@@ -1282,7 +1236,7 @@ sessionMeta.set({
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
-  approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
+  approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
 });
@@ -1553,11 +1507,7 @@ if (SHOW_EDIT_APPROVAL) {
     );
   };
 
-  if (EDIT_APPROVAL_DELAY_MS > 0) {
-    globalThis.setTimeout(showApproval, EDIT_APPROVAL_DELAY_MS);
-  } else {
-    showApproval();
-  }
+  showApproval();
 }
 
 // The running workflow exists before its agent asks below: a request names
@@ -1623,42 +1573,6 @@ if (SHOW_RETRY_APPROVAL) {
         },
       }),
     (result) => appendHarnessRetryResult(result, credentialSelection),
-  );
-}
-if (SHOW_EXTERNAL_INQUIRY) {
-  // The tool opens the thread with the host, then publishes its listing
-  // fact; the continuation the agent would receive is mirrored here once
-  // the thread settles in the fold.
-  void session().interactions.openExternalInquiry({
-    requestId: 'harness-external-inquiry',
-    question: EXTERNAL_INQUIRY_QUESTION,
-    threadId: EXTERNAL_INQUIRY_THREAD_ID,
-    allowBypass: false,
-    runId: HARNESS_RUN_ID,
-    sessionLinks: null,
-    transcript: null,
-  });
-  publish({
-    type: 'inquiryThreadUpdated',
-    aggregateId: qualifyAggregateId('inquiry', EXTERNAL_INQUIRY_THREAD_ID),
-    threadId: EXTERNAL_INQUIRY_THREAD_ID,
-    parentRunId: HARNESS_RUN_ID,
-    status: 'open',
-    lastQuestionPreview: EXTERNAL_INQUIRY_QUESTION.slice(0, 80),
-    lastActivityIso: new Date().toISOString(),
-    turnCount: 1,
-  });
-  let reported = false;
-  HARNESS_DISPOSERS.push(
-    subscribeToSignalChanges([sessionView()], () => {
-      if (reported) return;
-      const thread = currentView().inquiries.find(
-        (entry) => entry.threadId === EXTERNAL_INQUIRY_THREAD_ID,
-      );
-      if (!thread || thread.status === 'open') return;
-      reported = true;
-      appendHarnessExternalInquiryContinuation(thread.status);
-    }),
   );
 }
 if (SHOW_USER_QUESTION) {

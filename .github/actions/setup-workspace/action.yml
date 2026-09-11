@@ -8,6 +8,9 @@ inputs:
   ignore-scripts:
     description: Pass --ignore-scripts to pnpm install ('true' or 'false').
     default: 'false'
+  registry-url:
+    description: npm registry to write into .npmrc for a later publish step (setup-node's registry-url).
+    default: ''
 
 runs:
   using: composite
@@ -23,6 +26,7 @@ runs:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
         cache-dependency-path: pnpm-lock.yaml
+        registry-url: ${{ inputs.registry-url }}
 
     - name: Install dependencies
       shell: bash

@@ -28,8 +28,10 @@ export default defineConfig(({ mode }) => {
     // Use relative paths for assets (required for VS Code webviews)
     base: './',
     build: {
-      outDir: 'dist',
-      emptyOutDir: false, // Don't clear dist (extension.js lives there)
+      // One directory per webview, emptied by its own build; extension.js
+      // sits beside them in dist/ untouched.
+      outDir: `dist/${webviewName}`,
+      emptyOutDir: true,
       sourcemap: isDev ? 'inline' : false,
       minify: isDev ? false : 'esbuild',
       target: 'es2022',
@@ -47,8 +49,8 @@ export default defineConfig(({ mode }) => {
         ),
         output: {
           // Single self-contained bundle per webview
-          entryFileNames: `${webviewName}/bundle.js`,
-          assetFileNames: `${webviewName}/[name][extname]`,
+          entryFileNames: 'bundle.js',
+          assetFileNames: '[name][extname]',
           // Inline all imports - required for nonce-only CSP
           codeSplitting: false,
         },

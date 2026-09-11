@@ -1,26 +1,24 @@
 #!/usr/bin/env node
 
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { parseArgs as parseCittyArgs } from 'citty';
+
+import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
 
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
-const require = createRequire(import.meta.url);
 const defaultValidationRoot = path.join(cliRoot, '.texra-validate-run');
 const defaultValidationBinaryPath = path.join(
   defaultValidationRoot,
@@ -374,9 +372,7 @@ function validateToolsCommand() {
     assertSuccess(initial, 'texra tools list JSON');
     const records = parseJson(initial.stdout, 'tools list JSON');
     assert(Array.isArray(records), 'tools list JSON should be an array');
-    const target = records.find(
-      (record) => record.toggleable === true && record.comingSoon !== true,
-    );
+    const target = records.find((record) => record.toggleable === true);
     assert(
       target,
       `tools list should include a toggleable integration\nstdout:\n${initial.stdout}`,
@@ -480,26 +476,6 @@ function validateFileFlagMissingValues() {
     'texra multi-agent run missing --input value',
     'Missing value for --input',
   );
-}
-
-function ensureNodePtySpawnHelperExecutable() {
-  if (process.platform === 'win32') return;
-
-  try {
-    const packageRoot = path.dirname(require.resolve('node-pty/package.json'));
-    const helperPath = path.join(
-      packageRoot,
-      'prebuilds',
-      `${process.platform}-${process.arch}`,
-      'spawn-helper',
-    );
-    if (!existsSync(helperPath)) return;
-
-    const mode = statSync(helperPath).mode;
-    if ((mode & 0o111) === 0) chmodSync(helperPath, mode | 0o755);
-  } catch {
-    // node-pty will report the underlying PTY load/spawn failure below.
-  }
 }
 
 function createInteractivePtyEnv(overrides = {}) {
