@@ -145,7 +145,8 @@
         "./packages/desktop/src/*",
         "./packages/desktop/src/*.ts",
         "./packages/desktop/src/*/index.ts"
-      ]
+      ],
+      "@llm/*": ["./packages/llm/src/*"]
     },
     "moduleResolution": "nodenext",
     "strict": true,

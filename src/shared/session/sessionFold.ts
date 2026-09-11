@@ -1492,6 +1492,10 @@ function applyOwnArm(
     case 'updateQueuedFollowUps':
     case 'run.removed':
       return run;
+    case 'flow.step':
+      // Inert in PR 1: `listingTypeOf` returns null, so `foldDurable`
+      // returns before this switch. PR 3 gives it real handling.
+      return run;
   }
 }
 

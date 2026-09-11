@@ -87,6 +87,7 @@ export * from './subscriptionUsage';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './runState';
+export * from './runLedgerEvent';
 export * from './sessionEvent';
 export * from './traceEvent';
 

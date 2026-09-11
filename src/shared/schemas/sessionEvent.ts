@@ -46,6 +46,14 @@ import { PlanSchema } from './plan';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RunIdentitySchema } from './runIdentity';
 import {
+  FlowSnapshotPayloadSchema,
+  FlowStepPayloadSchema,
+  ModelCompactionPayloadSchema,
+  ModelMessagePayloadSchema,
+  ToolIntentPayloadSchema,
+  ToolResultPayloadSchema,
+} from './runLedgerEvent';
+import {
   RunPhaseSchema,
   RunSubstateSchema,
   UserFollowUpSupportSchema,
@@ -364,6 +372,12 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('approval.resolved', { requestId: z.string() }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
+   * The loop's position: family, step, and the coordinates it carries. The
+   * one run-ledger row renderers read (the CLI's waiting-on row and the
+   * progress board fold it); its five siblings below are ledger-private.
+   */
+  durable('flow.step', { payload: FlowStepPayloadSchema }),
+  /**
    * One transcript row, in the recorder's persisted row format: the only
    * transcript-tier arm before the cutover. The trace's flow rows replace it
    * when the event table lands (`2026-09-04-agent-runtime-on-effect.md`,
@@ -396,6 +410,20 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
   durable('run.workflow', { workflow: WorkflowRunSnapshotSchema }),
 ]);
+/**
+ * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
+ * the byte-exact conversation and the loop's durable state, on the run's
+ * aggregate beside its display rows, read only by `foldRunState` through
+ * `RunLedger`. Never redacted, never on a renderer's transport
+ * (`isDisplaySessionEvent`), never in the cold listing (`listingTypeOf`).
+ */
+const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
+  durable('model.message', { payload: ModelMessagePayloadSchema }),
+  durable('model.compaction', { payload: ModelCompactionPayloadSchema }),
+  durable('tool.intent', { payload: ToolIntentPayloadSchema }),
+  durable('tool.result', { payload: ToolResultPayloadSchema }),
+  durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }),
+]);
 const DesktopProjectsDraftSchema = durable(
   'desktop.projects.changed',
   { roots: z.array(z.string().min(1)) },
@@ -414,6 +442,7 @@ const UpdateCheckDraftSchema = durable(
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
+  ...RunLedgerEventDraftSchema.options,
   DesktopProjectsDraftSchema,
   GlobalInquiryDraftSchema,
   UpdateCheckDraftSchema,
@@ -441,6 +470,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),
+  ...RunLedgerEventDraftSchema.options.map((schema) => schema.extend(envelope)),
   DesktopProjectsDraftSchema.extend(envelope),
   GlobalInquiryDraftSchema.extend(envelope),
   UpdateCheckDraftSchema.extend(envelope),
@@ -493,6 +523,16 @@ export function listingTypeOf(
     case 'stream.end':
     case 'response.finalized':
     case 'domain':
+    case 'flow.step':
+    case 'model.message':
+    case 'model.compaction':
+    case 'tool.intent':
+    case 'tool.result':
+    case 'flow.snapshot':
+      // The run ledger's rows stay out of the listing: a cold hydrate must
+      // never pull a run's latest `flow.snapshot` into every renderer. Not
+      // compiler-enforced (the switch ends in `default`); the fold suite pins
+      // it.
       return null;
     case 'approval.requested':
     case 'approval.resolved':

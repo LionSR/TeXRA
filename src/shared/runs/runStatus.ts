@@ -1,4 +1,4 @@
-/** Stream status constants shared across agent runtime and UI layers. */
+/** Run status constants shared across agent runtime and UI layers. */
 import {
   CLI_RUN_STATUS,
   RUN_OUTCOME,
@@ -16,8 +16,7 @@ import {
 // `RunOutcome` is the canonical terminal fact, decided once at the run
 // lifecycle boundary. The derivation rule and persisted run-status
 // projection below are the only production mappings — flows and hosts must
-// not hand-roll their own. Legacy transcript/stream values are accepted and
-// normalized only at their parse-side compatibility boundaries.
+// not hand-roll their own.
 
 /**
  * The single facts → outcome derivation rule, shared by every flow exit.

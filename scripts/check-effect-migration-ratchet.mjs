@@ -141,8 +141,8 @@ const importRow = (pkg) => `import:${pkg}`;
  * flow-checkpoint callers the ledger rewires or deletes one by one:
  * `runReflectionFlow`, `ToolUseRoundFlow`, `AgentLaunchContext`,
  * `SessionResumeRetrieval`, `persistedCompileRejection`, `resumeRun`,
- * `executionLifecycle`, `resumability`, `executionKvFiles` and
- * `executionLiveness`. Over `src/agent/modelHandlers/` the difference is
+ * `runLifecycle`, `resumability`, `RunKVStore` and
+ * `leaseOwnerLiveness`. Over `src/agent/modelHandlers/` the difference is
  * total: every class extending the handler superclass lives inside the
  * directory, so a heritage row would report zero consumers of a
  * 21,000-line subsystem while `ModelFactory.ts` alone reaches into it 18
