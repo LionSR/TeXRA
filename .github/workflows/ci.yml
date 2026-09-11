@@ -226,10 +226,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # setup-node@v5 caches the package manager named by package.json's
+      # `packageManager` (pnpm) by default and fails when pnpm is absent;
+      # this job installs nothing, so opt out.
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
