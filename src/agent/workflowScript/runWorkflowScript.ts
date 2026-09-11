@@ -295,6 +295,7 @@ export async function runWorkflowScript(
 ): Promise<WorkflowScriptRunResult> {
   const {
     runAgent,
+    toScriptValue,
     fingerprintAgentDependencies,
     onEvent,
     onJournalEntry,
@@ -637,21 +638,27 @@ export async function runWorkflowScript(
     };
 
     // Serialize (and round-trip deserialize) a result value for the journal,
-    // failing the call if it isn't bridge-safe. Shared by the cached-replay
-    // and live-call paths below, which differ only in the source value — a
-    // cached replay's call is still PLANNED here, which is exactly the case
-    // `failCall` keeps `finish()` from reclassifying as not-reached.
+    // failing the call if it or its script-facing projection isn't
+    // bridge-safe. Shared by the cached-replay and live-call paths below,
+    // which differ only in the source value — a cached replay's call is still
+    // PLANNED here, which is exactly the case `failCall` keeps `finish()`
+    // from reclassifying as not-reached.
     const journalValue = (
       value: unknown,
       valueLabel: string,
     ): { payload: string | undefined; normalizedResult: unknown } => {
       try {
-        const payload = serializeBridgeValue(value, valueLabel);
-        return {
-          payload,
-          normalizedResult:
-            payload === undefined ? undefined : JSON.parse(payload),
-        };
+        const journalPayload = serializeBridgeValue(value, valueLabel);
+        const normalizedResult =
+          journalPayload === undefined ? undefined : JSON.parse(journalPayload);
+        // The journal keeps the runner's result; the script sees the host's
+        // projection of that same normalized value, so a replay resolves
+        // exactly like the live call it caches.
+        const payload =
+          toScriptValue === undefined
+            ? journalPayload
+            : serializeBridgeValue(toScriptValue(normalizedResult), valueLabel);
+        return { payload, normalizedResult };
       } catch (error) {
         const fault = failRun(
           error instanceof WorkflowRunAbortError
