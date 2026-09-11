@@ -168,10 +168,6 @@ const UserVariableChannelRecordSchema = z
   .looseObject(UserVariableValueSchemas)
   .partial();
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /**
  * User variables for template rendering: one mutable record.
  *

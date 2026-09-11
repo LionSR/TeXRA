@@ -24,7 +24,7 @@ describe('CLI state stores', () => {
         id: 'custom-paper',
         name: 'Paper Team',
         description: 'For this paper',
-        icon: 'codicon-bookmark',
+        icon: 'bookmark',
         agents: { workflow: ['polish'], toolUse: ['review'] },
       };
 
