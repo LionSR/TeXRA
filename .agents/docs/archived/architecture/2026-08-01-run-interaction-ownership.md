@@ -1,5 +1,7 @@
 # Interaction Ownership on the Run Registry
 
+Archived: 2026-09-11
+
 Status: superseded by #12273. The index this note describes, and the
 registry's registration-listener channel, are deleted. The CLI chat controller
 (`packages/cli/src/chat/chatSessionController.ts`) now attaches one
