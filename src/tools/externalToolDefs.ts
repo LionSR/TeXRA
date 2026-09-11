@@ -104,14 +104,10 @@ export interface ExternalToolDef {
   readonly configNotes?: string;
   /** When true, the tool is checked for availability but not shown in the Tools tab dashboard. */
   readonly hideFromDashboard?: boolean;
-  /** Explicit CLI visibility for tool-less integrations; tool-backed rows derive it from the registry. */
-  readonly hideFromCli?: boolean;
   /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
   readonly authNote?: string;
   /** When true, the dashboard shows an enable/disable toggle for this tool group. */
   readonly toggleable?: boolean;
-  /** When true, detect setup but show the integration as not yet enabled. */
-  readonly comingSoon?: boolean;
 }
 
 // ============================================================
@@ -170,12 +166,6 @@ function resolveGitHubPRPrerequisites(
     ? getGitHubPRPrerequisites()
     : Effect.succeed(probeResult as GitHubPRPrerequisites);
 }
-
-const probeTexraCli = Effect.fn('probeTexraCli')(function* () {
-  if (platform().toolAvailability.isTexraCliEntrypoint()) return true;
-  if (yield* hostPort(() => checkToolInstalled('texra', false))) return true;
-  return yield* hostPort(() => checkToolInstalled('texra-local', false));
-});
 
 interface Lean4Prerequisites {
   extensionAvailable: boolean;
@@ -567,42 +557,6 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     authNote: 'Uses your premium chat subscription',
     toggleable: true,
     check: () => Effect.succeed(true),
-  },
-
-  {
-    id: 'texra-cli',
-    tools: [],
-    name: 'TeXRA CLI',
-    category: 'ai-agents',
-    description:
-      'Local TeXRA command-line app integration. Detection is shown now; activation is coming soon.',
-    installGuide:
-      'Run the same agents on your .tex projects without an editor. This works well for scripts, CI, and remote machines.\n\n' +
-      `Install globally from npm (requires Node.js ${TEXRA_CLI_SUPPORTED_NODE_RANGE}):\n` +
-      '  npm install -g @texra-ai/cli\n\n' +
-      'The CLI also ships with the TeXRA package. Make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
-      'Check from a terminal:\n' +
-      '  texra --version',
-    installUrl: 'https://www.npmjs.com/package/@texra-ai/cli',
-    installCommand: 'npm install -g @texra-ai/cli',
-    configNotes:
-      'Coming soon. This entry only checks whether the local CLI is visible.',
-    comingSoon: true,
-    hideFromCli: true,
-    ...prerequisitesChecks<boolean | undefined>({
-      probe: probeTexraCli,
-      resolve: (probeResult) =>
-        Effect.succeed(
-          typeof probeResult === 'boolean' ? probeResult : undefined,
-        ),
-      check: (detected) => detected ?? false,
-      statusLabel: (detected) =>
-        detected ? 'Detected; integration coming soon' : undefined,
-      detailCheck: (detected) =>
-        detected
-          ? 'TeXRA CLI detected on PATH. This integration is not enabled for agent runs yet.'
-          : 'TeXRA CLI not detected on PATH. This integration is not enabled for agent runs yet.',
-    }),
   },
 
   {

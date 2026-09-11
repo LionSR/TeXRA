@@ -237,7 +237,6 @@ export class ToolCard extends LitElement {
     available: 'check',
     'not-found': 'triangle-exclamation',
     unknown: 'circle-question',
-    'coming-soon': 'clock',
   };
 
   private renderAvailableStatusIcon(): TemplateResult {

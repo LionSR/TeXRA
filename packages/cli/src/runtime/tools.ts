@@ -18,7 +18,6 @@ export interface CliToolStatusRecord {
   readonly statusLabel?: string;
   readonly statusDetail?: string;
   readonly toggleable: boolean;
-  readonly comingSoon: boolean;
   readonly installCommand?: string;
   readonly authCommand?: string;
   readonly note?: string;
@@ -35,7 +34,6 @@ function getCliToolDefs(): ExternalToolDef[] {
   return EXTERNAL_TOOL_DEFS.filter(
     (def) =>
       !def.hideFromDashboard &&
-      !def.hideFromCli &&
       !(
         def.tools.length > 0 &&
         def.tools.every((name) => isDefaultToolUnavailableOnHost(name, 'cli'))
@@ -66,10 +64,9 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
   return getCliToolDefs().map((def) => {
     // `runProbes` maps over the same EXTERNAL_TOOL_DEFS this filters, so the
     // lookup always hits; the `??` arms are shape-level defaults, not reachable
-    // states. The probe already decides coming-soon (`status`) and the raw
-    // dependency outcome (`detected`), so neither is re-derived here.
+    // states. The probe already decides `status` and the raw dependency
+    // outcome (`detected`), so neither is re-derived here.
     const check = checks.get(def.id);
-    const comingSoon = def.comingSoon === true;
     const toggleable = def.toggleable === true;
     const status = check?.status ?? 'unknown';
     const detected = check?.detected ?? null;
@@ -83,7 +80,6 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
       statusLabel: check?.statusLabel,
       statusDetail: check?.statusDetail,
       toggleable,
-      comingSoon,
       installCommand: def.installCommand,
       authCommand: def.authCommand,
       note: noteForTool(def, detected, check?.statusLabel),

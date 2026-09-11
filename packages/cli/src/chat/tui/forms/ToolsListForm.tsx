@@ -35,9 +35,6 @@ function formatToolDetectionForTui(
 }
 
 function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
-  // "Coming soon" already says the tool is off and cannot run, so the
-  // enablement and status parts would only repeat it.
-  if (tool.comingSoon) return 'coming soon';
   return [
     formatToolEnablementForTui(tool),
     formatToolDetectionForTui(tool.detected),
@@ -59,7 +56,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
           value: tool.id,
           label: tool.name,
           description: formatToolDescriptionForTui(tool),
-          disabled: !tool.toggleable || tool.comingSoon,
+          disabled: !tool.toggleable,
         }))
       }
       availableRows={props.availableRows}

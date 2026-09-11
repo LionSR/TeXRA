@@ -100,7 +100,7 @@ const CASES: Array<{
   },
   {
     name: 'does not ask the handler to open a terminal without a command',
-    input: { toolId: 'texra-cli', commandKind: 'auth' },
+    input: { toolId: 'wolfram', commandKind: 'auth' },
     expected: { kind: 'none', reason: 'missingCommand' },
   },
   {

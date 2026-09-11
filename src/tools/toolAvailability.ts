@@ -42,8 +42,8 @@ export interface ExternalToolCheckResult {
   readonly id: string;
   readonly tools: readonly RegisteredToolName[];
   readonly name: string;
-  readonly status: 'available' | 'not-found' | 'unknown' | 'coming-soon';
-  /** Raw external dependency probe result, independent of presentation-only statuses. */
+  readonly status: 'available' | 'not-found' | 'unknown';
+  /** Raw external dependency probe result; null when the probe failed. */
   readonly detected: boolean | null;
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
@@ -171,7 +171,6 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
   check,
   statusLabel: getStatusLabel,
   detailCheck,
-  comingSoon,
 }: ExternalToolDef): Effect.fn.Return<ExternalToolCheckResult, never> {
   // Run check/status/detail from one shared probe result. Some groups
   // (Codex, Zotero, GitHub PR) touch async local state, so running the
@@ -189,7 +188,7 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
     ),
   );
   const detectedStatus = probed.available ? 'available' : 'not-found';
-  const probedStatus: 'available' | 'not-found' | 'unknown' = probed.failure
+  const status: ExternalToolCheckResult['status'] = probed.failure
     ? 'unknown'
     : detectedStatus;
   const statusDetail = probed.failure
@@ -212,8 +211,8 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* ({
     id,
     tools,
     name,
-    status: comingSoon ? 'coming-soon' : probedStatus,
-    detected: probedStatus === 'unknown' ? null : probedStatus === 'available',
+    status,
+    detected: status === 'unknown' ? null : status === 'available',
     statusLabel,
     statusDetail,
   };
