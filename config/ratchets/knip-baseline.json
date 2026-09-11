@@ -200,30 +200,6 @@
       "name": "editApprovalDiffRowsBudget"
     },
     {
-      "file": "packages/cli/src/chat/tui/modals/ExternalInquiry.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "boundedExternalInquiryQuestionLines"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/ExternalInquiry.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "externalInquiryAnswerRowsBudget"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/ExternalInquiry.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "externalInquiryKeyHintsForWidth"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/ExternalInquiry.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "externalInquiryQuestionRowsBudget"
-    },
-    {
       "file": "packages/cli/src/chat/tui/modals/PlanApproval.tsx",
       "category": "production-dead",
       "kind": "exports",
@@ -251,13 +227,7 @@
       "file": "packages/cli/src/chat/tui/modals/ScrollableModalText.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "boundedModalTextLines"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/ScrollableModalText.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "modalTextMaxScrollOffset"
+      "name": "modalTextDisplayLines"
     },
     {
       "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",

@@ -117,7 +117,8 @@ type PendingApprovalFact = SessionView['approvals'][number] & {
 /**
  * The fold's pending approvals under {@link PendingApprovalKind}. The
  * narrowing holds by the construction that type names; a fact outside it
- * fails loudly at the exhaustive kind switches that read these.
+ * reaches the `assertNever` payload switches, but not every reader (the row
+ * label lookup would render an undefined label).
  */
 function pendingApprovalFacts(
   view: SessionView,
