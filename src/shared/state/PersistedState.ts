@@ -45,9 +45,9 @@ export function createWebviewStorage(hostBridge: {
  * `createWebviewStorage(hostBridge)`, and the desktop shell's collapsed-group
  * set over localStorage.
  *
- * Every schema field must carry a `.prefault()` — the constructor resolves
- * defaults with `schema.parse({})` and throws when they are incomplete. Never
- * `.catch()`, which would swallow invalid stored data before the loud
+ * The schema must parse `{}` into complete state (e.g. `.prefault()` on each
+ * required field): the constructor resolves defaults with `schema.parse({})`
+ * and throws otherwise. Never `.catch()`, which would swallow invalid stored data before the loud
  * warn-and-reset path can see it.
  *
  * @example
