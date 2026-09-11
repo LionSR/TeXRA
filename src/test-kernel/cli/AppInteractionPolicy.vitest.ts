@@ -3,13 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - TUI interaction policy
 import {
-  appDraftDiscardActive,
   approvalVisibleForSelection,
-  digitFromMetaShortcut,
   foregroundEscapeAction,
   foregroundMaxRowsForKind,
   foregroundSurfaceKind,
-  shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
   type AppCtrlCState,
   type ForegroundSurfaceKind,
@@ -23,14 +20,6 @@ type ForegroundSurfaceInput = Parameters<typeof foregroundSurfaceKind>[0];
 type ForegroundEscapeInput = Parameters<typeof foregroundEscapeAction>[0];
 type ForegroundRowsInput = Parameters<typeof foregroundMaxRowsForKind>[0];
 type ApprovalKind = NonNullable<ForegroundRowsInput['approvalKind']>;
-type MetaChordState = Parameters<
-  typeof shouldDeferEscapeInterruptForMetaChord
->[0];
-
-const escChordHidden = {
-  shortcutModifierLabel: 'Esc',
-  runFocusAvailable: false,
-} satisfies MetaChordState;
 
 function ctrlCFixture({ draft }: { readonly draft: string }): {
   readonly events: string[];
@@ -110,56 +99,6 @@ describe('app interaction policy', () => {
     triggerAppCtrlC(fixture.state);
     triggerAppCtrlC(fixture.state);
     expect(fixture.events).toEqual(['clear', 'delegate']);
-  });
-
-  it('does not let a background draft consume Ctrl+C', () => {
-    const cases = [
-      {
-        inputDisabled: true,
-        reverseSearchOpen: false,
-        childListFocused: false,
-      },
-      {
-        inputDisabled: false,
-        reverseSearchOpen: true,
-        childListFocused: false,
-      },
-      {
-        inputDisabled: false,
-        reverseSearchOpen: false,
-        childListFocused: true,
-      },
-    ];
-
-    for (const state of cases) {
-      expect(appDraftDiscardActive(state)).toBe(false);
-    }
-    expect(
-      appDraftDiscardActive({
-        inputDisabled: false,
-        reverseSearchOpen: false,
-        childListFocused: false,
-      }),
-    ).toBe(true);
-  });
-
-  it('defers Escape interrupt whenever an Esc chord binding is visible', () => {
-    const cases = [
-      [{ ...escChordHidden, runFocusAvailable: true }, true],
-      [
-        {
-          ...escChordHidden,
-          shortcutModifierLabel: 'Alt',
-          runFocusAvailable: true,
-        },
-        false,
-      ],
-      [escChordHidden, false],
-    ] satisfies readonly (readonly [MetaChordState, boolean])[];
-
-    for (const [state, expected] of cases) {
-      expect(shouldDeferEscapeInterruptForMetaChord(state)).toBe(expected);
-    }
   });
 
   it('lets approvals preempt only a busy form', () => {

@@ -175,13 +175,16 @@ export function noticesFor(
  * The run's folded rows with its notices inserted after the last row
  * whose seq is at or below their `afterSeq`, in notice order; a notice
  * takes that row's settlement key so the pane's settlement ordering keeps it
- * in place.
+ * in place. The merged `settledRows` is the folded prefix plus every notice
+ * anchored inside it (a notice is immutable the moment it is written).
  */
 export function mergeLocalNotices(
   rows: readonly TranscriptRow[],
+  settledRows: number,
   runNotices: readonly LocalNotice[],
-): readonly TranscriptRow[] {
-  if (runNotices.length === 0) return rows;
+): { readonly rows: readonly TranscriptRow[]; readonly settledRows: number } {
+  if (runNotices.length === 0) return { rows, settledRows };
+  const settledSeq = settledRows === 0 ? 0 : rowSeq(rows[settledRows - 1]);
   const out: TranscriptRow[] = [];
   let next = 0;
   const flushThrough = (seq: number): void => {
@@ -201,21 +204,12 @@ export function mergeLocalNotices(
     );
   }
   for (; next < rows.length; next += 1) out.push(rows[next]!);
-  return out;
-}
-
-/** How many merged rows are settled: the folded prefix plus every notice
- *  anchored inside it (a notice is immutable the moment it is written). */
-export function mergedSettledRows(
-  rows: readonly TranscriptRow[],
-  settledRows: number,
-  runNotices: readonly LocalNotice[],
-): number {
-  const settledSeq = settledRows === 0 ? 0 : rowSeq(rows[settledRows - 1]);
-  return (
-    settledRows +
-    runNotices.filter((notice) => notice.afterSeq <= settledSeq).length
-  );
+  return {
+    rows: out,
+    settledRows:
+      settledRows +
+      runNotices.filter((notice) => notice.afterSeq <= settledSeq).length,
+  };
 }
 
 /** The refusal a request error reads as, for the local transcript. */

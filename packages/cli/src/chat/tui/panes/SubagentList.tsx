@@ -25,7 +25,11 @@ import {
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
 import { expandedRuns, type SessionListRow } from '../state/cliState';
-import type { PendingApprovalKind } from '../state/approvalQueue';
+import {
+  pendingApprovalKindsByRun,
+  type PendingApprovalKind,
+} from '../state/approvalQueue';
+import { useSignal } from '../state/useSignal';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
@@ -185,10 +189,6 @@ export interface SubagentListProps {
   readonly onFocusRun?: (runId: RunId) => void;
   readonly onKillRun?: (runId: RunId) => void;
   readonly onSelectionChange?: (value: RunId) => void;
-  readonly pendingApprovals?: ReadonlyMap<
-    string,
-    readonly PendingApprovalKind[]
-  >;
   readonly selectedValue?: RunId;
   readonly rows: readonly SessionListRow[];
 }
@@ -197,6 +197,7 @@ export function SubagentList(
   props: SubagentListProps,
 ): React.JSX.Element | null {
   const rows = props.rows;
+  const pendingApprovals = useSignal(pendingApprovalKindsByRun);
   const items = useMemo<SelectItem<SessionListRow>[]>(
     () =>
       rows.map((row) => ({
@@ -287,7 +288,7 @@ export function SubagentList(
               }
               metadataColumn={metadataColumn}
               nowMs={nowMs}
-              pendingKinds={props.pendingApprovals?.get(row.run.id)}
+              pendingKinds={pendingApprovals.get(row.run.id)}
               run={row.run}
             />
           )

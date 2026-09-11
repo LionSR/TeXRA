@@ -8,7 +8,6 @@ import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
 import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
 import {
   mergeLocalNotices,
-  mergedSettledRows,
   notices as noticesSignal,
   noticesFor,
 } from '../state/transcript';
@@ -121,15 +120,14 @@ export function ConversationPane(
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
   const stream = runViewOf(view, activeRunId);
-  const runNotices = noticesFor(allNotices, activeRunId);
-  const entries = mergeLocalNotices(stream?.transcript.rows ?? [], runNotices);
+  const merged = mergeLocalNotices(
+    stream?.transcript.rows ?? [],
+    stream?.transcript.settledRows ?? 0,
+    noticesFor(allNotices, activeRunId),
+  );
   const displayEntries = pendingTranscriptEntries(
-    entries,
-    mergedSettledRows(
-      stream?.transcript.rows ?? [],
-      stream?.transcript.settledRows ?? 0,
-      runNotices,
-    ),
+    merged.rows,
+    merged.settledRows,
     runPhaseOf(stream),
   );
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;

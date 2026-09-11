@@ -11,13 +11,12 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import { Effect, SubscriptionRef } from 'effect';
+import { SubscriptionRef } from 'effect';
 import { currentSession } from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
   hasUsableApiKey: vi.fn(),
-  handleExternalInquiryAction: vi.fn(),
   invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
   preferKimiCode: false,
@@ -30,10 +29,6 @@ const mocks = vi.hoisted(() => ({
   setCliCodingPlanSubscription: vi.fn(),
   setGLMCodingPlan: vi.fn(),
   updateGlobalState: vi.fn(),
-}));
-
-vi.mock('@tools/inquiry/inquiryActions', () => ({
-  handleExternalInquiryAction: mocks.handleExternalInquiryAction,
 }));
 
 // Injection point for a pre-modal preparation failure: the retry copy is read
@@ -171,33 +166,11 @@ function port(): SessionHostInteractions {
         const first = args[0] as { runId?: string | null } | undefined;
         if (
           (typeof key === 'string' && key.startsWith('request')) ||
-          key === 'askUserQuestion' ||
-          key === 'openExternalInquiry'
+          key === 'askUserQuestion'
         ) {
           ensureRun(first?.runId);
         }
-        const result = (value as (...a: unknown[]) => unknown).apply(
-          target,
-          args,
-        );
-        if (key === 'openExternalInquiry') {
-          // The tool publishes the thread's listing fact once the host has
-          // taken the question (ExternalInquiryTool); the fold lists it open.
-          const inquiry = first as { threadId: string; question: string };
-          session.publish([
-            {
-              type: 'inquiryThreadUpdated',
-              aggregateId: qualifyAggregateId('inquiry', inquiry.threadId),
-              threadId: inquiry.threadId,
-              parentRunId: (first?.runId ?? null) as RunId | null,
-              status: 'open',
-              lastQuestionPreview: inquiry.question,
-              lastActivityIso: new Date(0).toISOString(),
-              turnCount: 1,
-            },
-          ]);
-        }
-        return result;
+        return (value as (...a: unknown[]) => unknown).apply(target, args);
       };
     },
   }) as SessionHostInteractions;
@@ -425,7 +398,6 @@ async function approveOrdinaryRetryOnOldRoute(
 }
 
 beforeEach(() => {
-  mocks.handleExternalInquiryAction.mockReturnValue(Effect.succeed(true));
   mocks.preferSubscription = true;
   mocks.openRouter = false;
   mocks.apiKeyExistsUncached.mockResolvedValue(true);
@@ -467,9 +439,6 @@ afterEach(() => {
   mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();
   mocks.hasUsableApiKey.mockReset();
-  mocks.handleExternalInquiryAction
-    .mockReset()
-    .mockReturnValue(Effect.succeed(true));
   mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
   mocks.setCliSubscriptionPreference.mockReset();
@@ -479,65 +448,6 @@ afterEach(() => {
 });
 
 describe('TUI retry approvals', () => {
-  it('preserves the lifecycle cause when an external inquiry is interrupted', async () => {
-    const { interactions } = tui();
-    await port().openExternalInquiry({
-      requestId: 'inquiry-interrupted',
-      allowBypass: false,
-      runId: runIdFor('inquiry'),
-      question: 'Which external fact should be checked?',
-      threadId: 'ei_aabbccddeeff',
-      sessionLinks: null,
-      transcript: null,
-    });
-    await waitForApproval('externalInquiry', {
-      threadId: 'ei_aabbccddeeff',
-    });
-
-    defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
-
-    await vi.waitFor(() =>
-      expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith(
-        {
-          action: 'drop',
-          threadId: 'ei_aabbccddeeff',
-          turnIndex: 1,
-          cause: 'Session interrupted.',
-        },
-        { session: defaultSession() },
-      ),
-    );
-  });
-
-  it('drops a note-free external inquiry without synthesized feedback', async () => {
-    const { interactions } = tui();
-    await port().openExternalInquiry({
-      requestId: 'inquiry-note-free',
-      allowBypass: false,
-      runId: runIdFor('inquiry'),
-      question: 'Which external fact should be checked?',
-      threadId: 'ei_112233445566',
-      sessionLinks: null,
-      transcript: null,
-    });
-    await waitForApproval('externalInquiry', {
-      threadId: 'ei_112233445566',
-    });
-
-    currentApproval.get()?.decide({ accepted: false });
-
-    await vi.waitFor(() =>
-      expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith(
-        {
-          action: 'drop',
-          threadId: 'ei_112233445566',
-          turnIndex: 1,
-        },
-        { session: defaultSession() },
-      ),
-    );
-  });
-
   it('reports an automatic yolo retry rejection as a policy denial', async () => {
     const { interactions } = tui(host(), {
       approvalPolicy: 'yolo',

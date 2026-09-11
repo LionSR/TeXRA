@@ -96,7 +96,6 @@ async function renderPopup(
       onOpenTranscript: vi.fn(),
       onViewChange,
       onWorkflowControl: vi.fn(),
-      pendingApprovals: new Map(),
       runId: ROOT,
       view: VIEW,
     }),

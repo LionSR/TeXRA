@@ -17,7 +17,6 @@ import {
   type ApprovalDecision,
   type UserQuestionAnswers,
 } from '@shared/schemas';
-import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import { type ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -291,20 +290,6 @@ export function createHeadlessCliHostInteractions(
     askUserQuestion(request) {
       return effectRuntime().runPromise(
         askHeadlessUserQuestion(request, context, hooks),
-      );
-    },
-    async openExternalInquiry(request) {
-      await effectRuntime().runPromise(
-        handleExternalInquiryAction(
-          {
-            action: 'drop',
-            threadId: request.threadId,
-            turnIndex: request.transcript?.at(-1)?.turnIndex ?? 1,
-            cause:
-              'External inquiry is not available in non-TUI CLI runs: inquiry answers are delivered as asynchronous continuations, and this process cannot resume them after the run finalizes. Use texra chat for the inquiry panel, or ask_user_question for synchronous CLI input.',
-          },
-          { session: defaultSession() },
-        ),
       );
     },
     // Headless requests decide inline (policy or prompt hooks) — there is no

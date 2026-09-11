@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  boundedModalTextLines,
   modalTextDisplayLines,
-  modalTextMaxScrollOffset,
   scrollableModalTextRowsBudget,
 } from '@cli/chat/tui/modals/ScrollableModalText';
+import {
+  boundedScrollableLines,
+  compactAwareMaxScrollOffset,
+} from '@cli/chat/tui/render/scrollBounds';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 const HEREDOC_COMMAND = [
@@ -70,9 +72,9 @@ describe('CLI scrollable modal text section', () => {
     expect(budget).toBe(8);
     expect(allRows.length).toBeGreaterThan(budget);
 
-    const visible = boundedModalTextLines({
+    const visible = boundedScrollableLines({
       lines: allRows,
-      maxRows: budget,
+      maxDisplayLines: budget,
       width: 76,
     });
 
@@ -87,13 +89,13 @@ describe('CLI scrollable modal text section', () => {
   it('lets users scroll to the hidden body tail', () => {
     const budget = 8;
     const allRows = bashLines();
-    const offset = modalTextMaxScrollOffset({
-      maxRows: budget,
+    const offset = compactAwareMaxScrollOffset({
+      maxDisplayLines: budget,
       totalLines: allRows.length,
     });
-    const visible = boundedModalTextLines({
+    const visible = boundedScrollableLines({
       lines: allRows,
-      maxRows: budget,
+      maxDisplayLines: budget,
       scrollOffset: offset,
       width: 76,
     });
@@ -109,13 +111,13 @@ describe('CLI scrollable modal text section', () => {
   it('lets users scroll compact previews', () => {
     const budget = 3;
     const allRows = bashLines();
-    const offset = modalTextMaxScrollOffset({
-      maxRows: budget,
+    const offset = compactAwareMaxScrollOffset({
+      maxDisplayLines: budget,
       totalLines: allRows.length,
     });
-    const visible = boundedModalTextLines({
+    const visible = boundedScrollableLines({
       lines: allRows,
-      maxRows: budget,
+      maxDisplayLines: budget,
       scrollOffset: 3,
       width: 76,
     });
@@ -130,23 +132,25 @@ describe('CLI scrollable modal text section', () => {
   });
 
   it('lets users scroll one-row compact previews', () => {
-    const visible = boundedModalTextLines({
+    const visible = boundedScrollableLines({
       lines: bashLines(),
-      maxRows: 1,
+      maxDisplayLines: 1,
       scrollOffset: 2,
       width: 76,
     });
 
-    expect(modalTextMaxScrollOffset({ maxRows: 1, totalLines: 13 })).toBe(12);
+    expect(
+      compactAwareMaxScrollOffset({ maxDisplayLines: 1, totalLines: 13 }),
+    ).toBe(12);
     expect(visible).toHaveLength(1);
     expect(visible[0]?.text).toContain('for y in range(1, 100):');
     expect(visible[0]?.text).toContain('rows hidden');
   });
 
   it('keeps one-row compact previews within their row budget', () => {
-    const visible = boundedModalTextLines({
+    const visible = boundedScrollableLines({
       lines: bashLines(),
-      maxRows: 1,
+      maxDisplayLines: 1,
       width: 76,
     });
 
@@ -157,13 +161,13 @@ describe('CLI scrollable modal text section', () => {
   });
 
   it('clips one-row compact previews by terminal column width', () => {
-    const visible = boundedModalTextLines({
+    const visible = boundedScrollableLines({
       lines: modalTextDisplayLines({
         ...BASH_PREFIXES,
         text: `echo ${'界'.repeat(20)}`,
         width: 24,
       }),
-      maxRows: 1,
+      maxDisplayLines: 1,
       width: 24,
     });
 

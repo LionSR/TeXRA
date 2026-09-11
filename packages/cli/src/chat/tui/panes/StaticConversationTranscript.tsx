@@ -32,7 +32,6 @@ import {
 import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
 import {
   mergeLocalNotices,
-  mergedSettledRows,
   notices as noticesSignal,
   noticesFor,
 } from '../state/transcript';
@@ -1086,17 +1085,17 @@ export function StaticConversationTranscript({
   const source = useMemo((): StaticScrollbackSource => {
     const stream = runViewOf(view, scrollbackRunId);
     const runNotices = noticesFor(allNotices, scrollbackRunId);
-    const entries =
-      stream === undefined && runNotices.length === 0
-        ? undefined
-        : mergeLocalNotices(stream?.transcript.rows ?? [], runNotices);
+    const merged = mergeLocalNotices(
+      stream?.transcript.rows ?? [],
+      stream?.transcript.settledRows ?? 0,
+      runNotices,
+    );
     return {
-      entries,
-      settledRows: mergedSettledRows(
-        stream?.transcript.rows ?? [],
-        stream?.transcript.settledRows ?? 0,
-        runNotices,
-      ),
+      entries:
+        stream === undefined && runNotices.length === 0
+          ? undefined
+          : merged.rows,
+      settledRows: merged.settledRows,
       status: runPhaseOf(stream),
       waitingForChildIdentity:
         stream !== undefined &&

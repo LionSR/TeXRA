@@ -112,7 +112,7 @@ The `research` agent can call `wolfram` to run Wolfram Language code and check s
 
 ### <wa-icon library="texra" name="comment-discussion"></wa-icon> External inquiry
 
-The `inquiry` tool lets a TeXRA agent ask one question in an external chat (ChatGPT, Claude, Gemini) through a copy/paste flow, then resume with the answer. Dispatch is non-blocking: the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key is required; it uses your existing subscription. In the CLI, the same flow appears as a terminal modal: paste the prepared question into your chat subscription, then paste the answer back into TeXRA.
+The `inquiry` tool lets a TeXRA agent ask one question in an external chat (ChatGPT, Claude, Gemini) through a copy/paste flow, then resume with the answer. Dispatch is non-blocking: the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key is required; it uses your existing subscription. The inquiry tool is not available in the CLI; there, agents use `ask_user_question` for synchronous terminal input.
 
 <InquiryFlowHero />
 

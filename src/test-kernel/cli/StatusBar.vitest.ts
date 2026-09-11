@@ -865,9 +865,7 @@ describe('CLI StatusBar display model', () => {
 
   // `statusBarRunTarget` resolves three coupled outputs from one input: the
   // Ctrl-C action, which slice the footer renders, and whether that displayed
-  // slice belongs to a child stream. Every case asserts all three, and asserts
-  // `displaySlice` by identity so the live-ancestor fallback stays
-  // distinguishable from a structurally equal slice.
+  // slice belongs to a child stream. Every case asserts all three.
   describe('statusBarRunTarget', () => {
     // Lifecycle phase is the fold's: a fixture states each stream's status
     // and the target reads the view it is given.

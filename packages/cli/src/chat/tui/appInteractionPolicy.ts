@@ -3,7 +3,7 @@
 // Local imports - shared schemas and utilities
 import { type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
-import { assertNever, groupBy } from '@utils/core';
+import { assertNever } from '@utils/core';
 
 // Local imports - TUI state
 
@@ -27,20 +27,6 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // commit to interrupting.
 export const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
 
-// Bare Esc must give a numbered stream-focus chord a chance to resolve while
-// that binding is on screen. `Alt`-chord platforms are unaffected: their
-// Esc+key sequences arrive as one burst, resolved synchronously by
-// `metaChordInput`.
-export function shouldDeferEscapeInterruptForMetaChord({
-  shortcutModifierLabel,
-  runFocusAvailable,
-}: {
-  readonly shortcutModifierLabel: string;
-  readonly runFocusAvailable: boolean;
-}): boolean {
-  return shortcutModifierLabel === 'Esc' && runFocusAvailable;
-}
-
 export interface EscapeInterruptState {
   /** The committed render's focus-shortcut gate: no foreground surface, child
    *  list, reverse search, or slash palette owns the keyboard. Bare Escape's
@@ -55,28 +41,12 @@ export interface AppCtrlCState {
   readonly onCtrlC: () => void;
 }
 
-export function appDraftDiscardActive({
-  inputDisabled,
-  reverseSearchOpen,
-  childListFocused,
-}: {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly childListFocused: boolean;
-}): boolean {
-  return !inputDisabled && !reverseSearchOpen && !childListFocused;
-}
-
 /** Apply the root TUI's complete Ctrl+C policy from the latest composer state:
  *  the first Ctrl+C discards a draft, and anything past that is the host's
  *  SIGINT policy. */
 export function triggerAppCtrlC(state: AppCtrlCState): void {
   if (state.discardDraft()) return;
   state.onCtrlC();
-}
-
-export function digitFromMetaShortcut(value: string): number | undefined {
-  return /^[1-9]$/.test(value) ? Number.parseInt(value, 10) : undefined;
 }
 
 export type ForegroundSurfaceKind =
@@ -160,12 +130,7 @@ export function foregroundEscapeAction({
       return 'close';
     case 'approval':
       // Esc rejects (confirmCardKeyAction); label the consequence, not "cancel".
-      if (
-        approvalKind === 'externalInquiry' ||
-        approvalKind === 'userQuestion'
-      ) {
-        return 'skip';
-      }
+      if (approvalKind === 'userQuestion') return 'skip';
       return approvalKind === 'retry' ? 'give up' : 'reject';
   }
 }
@@ -179,7 +144,6 @@ function approvalForegroundMaxRows(
     case 'bash':
     case 'toolEdit':
     case 'proposal':
-    case 'externalInquiry':
       return APPROVAL_FOREGROUND_MAX_ROWS;
     case 'planApproval':
     case 'retry':
@@ -212,20 +176,4 @@ export function foregroundMaxRowsForKind({
     case undefined:
       return undefined;
   }
-}
-
-// Group the flat FIFO summaries per row, folding stream-less (session-wide)
-// approvals onto the root of the visible surface: normally the main row, or
-// the workflow-dashboard heading while that surface replaces the session
-// list. Grouping from the flat list keeps each row's first shown kind the
-// first-to-present even when bound and stream-less items interleave globally.
-/** The pending approvals of the view, grouped by the list row they badge. */
-export function groupPendingApprovalsByRow(
-  approvals: SessionView['approvals'],
-): Map<string, PendingApprovalKind[]> {
-  return groupBy(
-    approvals,
-    (approval) => approval.runId,
-    (approval) => approval.payload.kind,
-  );
 }

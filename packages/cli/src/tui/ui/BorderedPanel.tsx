@@ -1,6 +1,6 @@
 // Shared bordered-panel scaffold used by FormFrame (transient list-form
-// states), ConfirmCard (y/n approval modals), ExternalInquiry and
-// UserQuestion's QuestionShell: a bordered box with a colored bold title, a
+// states), ConfirmCard (y/n approval modals), and UserQuestion's
+// QuestionShell: a bordered box with a colored bold title, a
 // body slot, and an optional footer row.
 
 import { Box, Text, type BoxProps } from 'ink';

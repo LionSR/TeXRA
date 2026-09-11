@@ -34,7 +34,6 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
   planApproval: 'plan',
   proposal: 'proposal',
   retry: 'retry',
-  externalInquiry: 'inquiry',
   userQuestion: 'question',
 };
 

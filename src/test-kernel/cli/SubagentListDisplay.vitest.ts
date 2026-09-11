@@ -26,10 +26,6 @@ describe('CLI child list display model', () => {
       label: 'bash',
       overflow: undefined,
     });
-    expect(pendingApprovalRowDisplay(['externalInquiry'])).toEqual({
-      label: 'inquiry',
-      overflow: undefined,
-    });
     expect(
       pendingApprovalRowDisplay(['toolEdit', 'bash', 'userQuestion']),
     ).toEqual({ label: 'edit', overflow: '+2' });

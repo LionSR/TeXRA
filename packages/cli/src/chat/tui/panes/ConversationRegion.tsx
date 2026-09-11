@@ -30,35 +30,30 @@ import {
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
-import { inputBarContentRows } from '../state/cliState';
+import {
+  inputBarContentRows,
+  reverseSearchOpen as reverseSearchOpenSignal,
+  rootRunId as rootRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
+  sessionListRows,
+  slashPaletteOpen as slashPaletteOpenSignal,
+} from '../state/cliState';
 import { sessionView, runViewOf } from '../state/sessionView';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import { useSignal } from '../state/useSignal';
-import type { SessionListRow } from '../state/cliState';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
-import type { PendingApprovalKind } from '../state/approvalQueue';
 
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation, even though they now render below the input bar.
 const BOTTOM_PANEL_MAX_ROWS = 10;
+/** The App-owned facts: its layout decisions and the child list's reducer
+ *  state. Everything else the region reads from its signals. */
 interface ConversationRegionSnapshot {
-  readonly activeRunId: RunId | undefined;
   readonly foregroundMaxRows: number | undefined;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
-  /** The active stream's parent, when it is a child. */
-  readonly parentId: RunId | undefined;
-  readonly reverseSearchOpen: boolean;
-  readonly rootRunId: RunId | undefined;
-  readonly slashPaletteOpen: boolean;
   readonly selectedChildValue: RunId | undefined;
   readonly childListFocused: boolean;
-  /** The visible stream tree and its section headings. */
-  readonly sessionRows: readonly SessionListRow[];
   readonly subagentRunLabels: RunLabels;
-  readonly pendingApprovals: ReadonlyMap<
-    string,
-    readonly PendingApprovalKind[]
-  >;
 }
 
 interface ConversationRegionProps {
@@ -91,28 +86,33 @@ export function ConversationRegion({
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
   const foregroundOpen = snapshot.foregroundKind !== undefined;
+  const activeRunId = useSignal(selectedRunIdSignal);
+  const rootRunId = useSignal(rootRunIdSignal);
+  const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
+  const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
+  const sessionRows = useSignal(sessionListRows);
+  const view = useSignal(sessionView());
+  const activeRun = runViewOf(view, activeRunId);
   // Which scrollback the transcript paints: the root's history, or a focused
   // child's own history while that child owns the scrollback.
   const scopedTranscript =
-    snapshot.activeRunId !== undefined && snapshot.parentId !== undefined;
+    activeRunId !== undefined && activeRun?.parentId != null;
   const scrollbackTarget = staticScrollbackTarget({
-    activeRunId: snapshot.activeRunId,
-    rootRunId: snapshot.rootRunId,
+    activeRunId,
+    rootRunId,
     scopedTranscript,
   });
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
   const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
-  const view = useSignal(sessionView());
-  const activeRun = runViewOf(view, snapshot.activeRunId);
   const activeTodos =
     activeRun?.category === AgentCategory.ToolUse ? activeRun.todos : [];
   const activePlan =
     activeRun?.category === AgentCategory.ToolUse ? activeRun.plan : null;
   const queuedFollowUpMessages =
-    snapshot.activeRunId === undefined
+    activeRunId === undefined
       ? []
-      : (view.queuedFollowUps.get(snapshot.activeRunId) ?? []);
+      : (view.queuedFollowUps.get(activeRunId) ?? []);
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
   // Round-border chrome is the default input height minus its single content
@@ -150,9 +150,9 @@ export function ConversationRegion({
     inputVisible: inputBarVisible,
     inputRows,
     queuedFollowUpPanelRows,
-    reverseSearchOpen: snapshot.reverseSearchOpen,
+    reverseSearchOpen,
     rows,
-    slashPaletteOpen: snapshot.slashPaletteOpen,
+    slashPaletteOpen,
     staticTranscriptRows: staticTranscriptRows ?? 0,
   });
   // One bottom panel at a time in the same vertical column: the child list
@@ -162,7 +162,7 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeRun
       ? todosPlanPanelRowCount(activeTodos, activePlan)
       : 0;
-  const sessionPanelItemCount = snapshot.sessionRows.length;
+  const sessionPanelItemCount = sessionRows.length;
   const minimumSessionPanelRows = 2;
   const {
     bottomPanelRows: bottomPanelBudget,
@@ -246,10 +246,9 @@ export function ConversationRegion({
               onFocusRun={onFocusSession}
               onKillRun={onKillRun}
               onSelectionChange={onChildSelectionChange}
-              pendingApprovals={snapshot.pendingApprovals}
               selectedValue={snapshot.selectedChildValue}
-              rows={snapshot.sessionRows}
-              activeRunId={snapshot.activeRunId}
+              rows={sessionRows}
+              activeRunId={activeRunId}
             />
             <TodosPlanPanel
               maxRows={todosPlanRows}

@@ -1,13 +1,12 @@
 // The TUI's approval Surface (PRD one-fold-three-renderers, 9 and 10.1).
 //
 // Which requests are pending is a fold fact: `view.approvals` holds every
-// `approval.requested` the runtime has not resolved, and `view.inquiries`
-// every inquiry thread with its status. This module owns only what the fold
-// cannot: the presentation payload a host hook hands over beside the fact (a
-// tool edit's before and after text, a retry's personal-key lookup, an
-// inquiry's full question), the settle latch of the three kinds the host
-// still answers through its hook (tool edit, retry, external inquiry), the
-// "decided here, not yet resolved there" gap, and the jump-to-waiting order.
+// `approval.requested` the runtime has not resolved. This module owns only
+// what the fold cannot: the presentation payload a host hook hands over
+// beside the fact (a tool edit's before and after text, a retry's
+// personal-key lookup), the settle latch of the two kinds the host still
+// answers through its hook (tool edit, retry), the "decided here, not yet
+// resolved there" gap, and the jump-to-waiting order.
 // Every other decision is a `decision.*` runtime request; the runtime settles
 // its pending set and publishes `approval.resolved`, which the fold drops.
 
@@ -35,7 +34,7 @@ import {
 } from '@shared/session/approvalDecision';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
-import { assertNever } from '@utils/core';
+import { assertNever, groupBy } from '@utils/core';
 
 import { registerCliStateResetHook } from './cliState';
 import { sessionView } from './sessionView';
@@ -53,6 +52,18 @@ interface TuiApprovalAdornments {
 }
 
 /**
+ * The kinds this surface presents: the wire vocabulary without the external
+ * inquiry. The CLI does not offer the async inquiry flow (the inquiry tool
+ * declares `unavailableHosts: ['cli']`), and an inquiry is a durable thread,
+ * never an `approval.requested` fact: only a `SettledInteractionKind` request
+ * publishes one, and that union has no `externalInquiry`.
+ */
+export type PendingApprovalKind = Exclude<
+  ProgressPermissionKind,
+  'externalInquiry'
+>;
+
+/**
  * The presented payload IS the wire {@link PermissionPayload}, with the
  * TUI-only adornments above carried beside its `data`. Derivation is the
  * point: a kind added to the wire union appears here without an edit, so
@@ -60,11 +71,11 @@ interface TuiApprovalAdornments {
  * TUI handles it.
  */
 export type ApprovalPayload = {
-  [K in ProgressPermissionKind]: Extract<PermissionPayload, { kind: K }> &
+  [K in PendingApprovalKind]: Extract<PermissionPayload, { kind: K }> &
     (K extends keyof TuiApprovalAdornments
       ? { readonly tui: TuiApprovalAdornments[K] }
       : { readonly tui?: never });
-}[ProgressPermissionKind];
+}[PendingApprovalKind];
 
 /** The two arms modals read adornments from. */
 export type ToolEditApprovalPayload = Extract<
@@ -98,9 +109,32 @@ export interface PendingApproval {
   readonly decide: (decision: ApprovalDecision) => void;
 }
 
-/** Derived from the wire contract, so every kind-keyed record here stays
- *  exhaustive against it. */
-export type PendingApprovalKind = ProgressPermissionKind;
+/** A pending `approval.requested` fact, typed to {@link PendingApprovalKind}. */
+type PendingApprovalFact = SessionView['approvals'][number] & {
+  readonly payload: Extract<PermissionPayload, { kind: PendingApprovalKind }>;
+};
+
+/**
+ * The fold's pending approvals under {@link PendingApprovalKind}. The
+ * narrowing holds by the construction that type names; a fact outside it
+ * reaches the `assertNever` payload switches, but not every reader (the row
+ * label lookup would render an undefined label).
+ */
+function pendingApprovalFacts(
+  view: SessionView,
+): readonly PendingApprovalFact[] {
+  return view.approvals as readonly PendingApprovalFact[];
+}
+
+/** Each run's pending approval kinds in commit order: the badge the session
+ *  list and the workflow popup paint on its row. */
+export const pendingApprovalKindsByRun = computed(() =>
+  groupBy(
+    pendingApprovalFacts(sessionView().get()),
+    (approval) => approval.runId,
+    (approval) => approval.payload.kind,
+  ),
+);
 
 /** One request the user's attention is on: a fold fact, read once. */
 interface AttentionRequest {
@@ -108,7 +142,7 @@ interface AttentionRequest {
   readonly runId: RunId;
   readonly kind: PendingApprovalKind;
   /** The fact's payload; the host payload replaces it when presented. */
-  readonly payload: PermissionPayload;
+  readonly payload: PendingApprovalFact['payload'];
 }
 
 /**
@@ -151,50 +185,24 @@ export function approvalPayloadRunId(
   return payload.data.runId || undefined;
 }
 
-function inquiryHostRequest(
-  host: ReadonlyMap<string, HostRequest>,
-  threadId: string,
-): [string, HostRequest] | undefined {
-  for (const entry of host) {
-    const payload = entry[1].payload;
-    if (
-      payload.kind === 'externalInquiry' &&
-      payload.data.threadId === threadId
-    )
-      return entry;
-  }
-  return undefined;
-}
-
 /**
  * Every request awaiting the user, from the fold: the outstanding approvals
- * in commit order, then the open inquiry threads. The promoted stream's
- * requests lead; nothing is settled, resolved, or re-notified by a
- * promotion. The status bar, the title, and the modal all read this one
- * list.
+ * in commit order. The promoted stream's requests lead; nothing is settled,
+ * resolved, or re-notified by a promotion. The status bar, the title, and
+ * the modal all read this one list.
  */
 export function attentionRequests(
   view: SessionView,
-  host: ReadonlyMap<string, HostRequest> = hostRequests.get(),
   lead = promoted.get(),
 ): readonly AttentionRequest[] {
-  const requests: AttentionRequest[] = view.approvals.map((approval) => ({
-    requestId: approval.requestId,
-    runId: approval.runId,
-    kind: approval.payload.kind,
-    payload: approval.payload,
-  }));
-  for (const thread of view.inquiries) {
-    if (thread.status !== 'open') continue;
-    const entry = inquiryHostRequest(host, thread.threadId);
-    if (!entry) continue;
-    requests.push({
-      requestId: entry[0],
-      runId: entry[1].payload.data.runId as RunId,
-      kind: 'externalInquiry',
-      payload: entry[1].payload,
-    });
-  }
+  const requests = pendingApprovalFacts(view).map(
+    (approval): AttentionRequest => ({
+      requestId: approval.requestId,
+      runId: approval.runId,
+      kind: approval.payload.kind,
+      payload: approval.payload,
+    }),
+  );
   if (!lead) return requests;
   const leads = (request: AttentionRequest): boolean =>
     request.runId === lead.runId || lead.includeRunIds.has(request.runId);
@@ -214,7 +222,6 @@ function presentedPayload(
     case 'planApproval':
     case 'proposal':
     case 'userQuestion':
-    case 'externalInquiry':
       return payload;
     case 'toolEdit':
     case 'retry':
@@ -241,7 +248,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
     readonly payload: ApprovalPayload;
     readonly rank: number;
   }> = [];
-  attentionRequests(view, host, promoted.get()).forEach((request, rank) => {
+  attentionRequests(view).forEach((request, rank) => {
     if (done.has(request.requestId)) return;
     const payload = presentedPayload(request, host);
     if (!payload) return;
@@ -290,9 +297,7 @@ export function promoteApprovalsForRun(
 function markDecided(requestId: string): void {
   const view = sessionView().get();
   const live = new Set(
-    attentionRequests(view, hostRequests.get(), undefined).map(
-      (request) => request.requestId,
-    ),
+    attentionRequests(view).map((request) => request.requestId),
   );
   const next = new Set([...decided.get()].filter((id) => live.has(id)));
   next.add(requestId);
@@ -432,7 +437,6 @@ function decideRequest(
   switch (payload.kind) {
     case 'toolEdit':
     case 'retry':
-    case 'externalInquiry':
       if (decision.accepted && decision.bypass === 'toolEdit') {
         issue(runId, sessionBypassRequest(runId, 'toolEdit'));
       }
@@ -494,8 +498,8 @@ export interface HostReservation {
 }
 
 /**
- * Take a host entry for a request the runtime has published (or, for an
- * inquiry, opened) and this host's hook will settle.
+ * Take a host entry for a request the runtime has published and this host's
+ * hook will settle.
  */
 export function reserveHostRequest(
   payload: ApprovalPayload,
@@ -570,7 +574,7 @@ function approveQueuedDelegatedWorkForRun(runId: RunId): void {
   const view = sessionView().get();
   const host = hostRequests.get();
   const done = decided.get();
-  for (const request of attentionRequests(view, host, undefined)) {
+  for (const request of attentionRequests(view)) {
     if (request.runId !== runId || done.has(request.requestId)) continue;
     if (
       request.kind !== 'proposal' &&

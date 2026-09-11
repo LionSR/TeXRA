@@ -10,8 +10,8 @@ import { clamp } from '@utils/core';
 /**
  * Below this many content rows, a scrollable region degrades to a single
  * status/overflow row instead of scrolling (a compact layout). The single
- * threshold every scroll-bounds function applies: the modal text body, the
- * external-inquiry question, and the approval diff all share this one concept.
+ * threshold every scroll-bounds function applies: the modal text body and the
+ * approval diff share this one concept.
  */
 export const COMPACT_SCROLLABLE_CONTENT_ROWS = 3;
 

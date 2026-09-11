@@ -69,7 +69,10 @@ import { useSignal } from '../state/useSignal';
 import { ApprovalSegments, RowSegment } from './SubagentList';
 import { pendingApprovalRowDisplay } from './SubagentListDisplay';
 import { WORKFLOW_TASK_STATUS_COLOR } from './transcriptEntryLayout';
-import type { PendingApprovalKind } from '../state/approvalQueue';
+import {
+  pendingApprovalKindsByRun,
+  type PendingApprovalKind,
+} from '../state/approvalQueue';
 
 /** Rows of chrome inside the panel beyond what the shared budget already
  *  counts: the tab strip and the per-call status strip. The filter line adds
@@ -226,10 +229,6 @@ interface WorkflowPopupProps {
   readonly runId: RunId;
   readonly model: WorkflowRunModel;
   readonly view: WorkflowPopupView;
-  readonly pendingApprovals: ReadonlyMap<
-    string,
-    readonly PendingApprovalKind[]
-  >;
   readonly onClose: () => void;
   readonly onFocusRun: (runId: RunId) => void;
   readonly onKillRun: (runId: RunId) => void;
@@ -250,12 +249,12 @@ export function WorkflowPopup({
   onOpenTranscript,
   onViewChange,
   onWorkflowControl,
-  pendingApprovals,
   runId,
   view,
 }: WorkflowPopupProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const sessionState = useSignal(sessionView());
+  const pendingApprovals = useSignal(pendingApprovalKindsByRun);
   const stream = runViewOf(sessionState, runId);
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;

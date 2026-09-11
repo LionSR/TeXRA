@@ -7,12 +7,13 @@
 // nothing (or has no method at all) and the runtime parks the request while
 // the surface answers through a `decision.*` runtime request, which settles
 // the runtime's pending set.
-// Three kinds still settle through their hook, because the runtime has no
+// Two kinds still settle through their hook, because the runtime has no
 // request arm for them yet or their answer is host work: a tool edit (no
-// `decision.toolEdit` arm), a retry (its credential switch and
-// `prepareRetry` run on this host), and an external inquiry (a durable
-// thread, not a pending request). Each takes a host reservation the modal
-// reads its presentation payload from.
+// `decision.toolEdit` arm) and a retry (its credential switch and
+// `prepareRetry` run on this host). Each takes a host reservation the modal
+// reads its presentation payload from. The TUI has no external-inquiry hook:
+// the CLI does not offer the async inquiry flow, so the inquiry tool is
+// unavailable on this host.
 //
 // Policy is honored at the shared tool boundary before a request reaches
 // this port for bash and edits; plans, proposals, retries, and human-input
@@ -21,7 +22,6 @@
 import PQueue from 'p-queue';
 
 import {
-  currentSession,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
   type HostInteractions,
@@ -41,7 +41,6 @@ import {
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
-  denyExternalInquiryIfNoHumanInput,
   settleExecutable,
   settleHumanInputDenial,
   settleRetry,
@@ -62,14 +61,11 @@ import {
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
 import { platform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   isCodingPlanQuotaRoute,
   type QuotaFallbackRouteId,
 } from '@shared/quotaFallbackRoutes';
-import { type ExternalInquiryPermission } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -180,9 +176,6 @@ export function createTuiHostInteractions(
         action: 'reject',
         reason: denial.reason,
       });
-    },
-    async openExternalInquiry(request) {
-      handleExternalInquiry(request, context, interactionOwner);
     },
     // The badge reads the fold's policy snapshot; the host only mirrors the
     // change onto its NDJSON wire.
@@ -718,69 +711,4 @@ async function switchRetryToPersonalCredentials(
       signal,
     );
   }
-}
-
-/**
- * An external inquiry is a durable thread, not a runtime pending request:
- * the fold lists it in `view.inquiries` while open, and this host holds its
- * full question for the modal. The decision writes the thread through the
- * inquiry action, whose `inquiryThreadUpdated` fact closes it in the fold.
- */
-function handleExternalInquiry(
-  payload: ExternalInquiryPermission,
-  context: CliContext,
-  owner: object,
-): void {
-  const threadId = payload.threadId;
-  if (!threadId) return;
-
-  const turnIndex = payload.transcript?.at(-1)?.turnIndex ?? 1;
-  if (denyExternalInquiryIfNoHumanInput(threadId, turnIndex, context)) return;
-  const reservation = reserveHostRequest(
-    { kind: 'externalInquiry', data: payload },
-    { owner, presentable: true },
-  );
-  void reservation.decided.then((decision) => {
-    reservation.release();
-    // User-accept with text submits an answer; empty text, reject, and
-    // modal-cancel all drop the durable inquiry thread.
-    let action: Parameters<typeof handleExternalInquiryAction>[0];
-    if (decision.accepted && decision.userMessage) {
-      action = {
-        action: 'submit',
-        threadId,
-        turnIndex,
-        answer: decision.userMessage,
-      };
-    } else if (decision.rejectionCause !== undefined) {
-      action = {
-        action: 'drop',
-        threadId,
-        turnIndex,
-        cause: decision.rejectionCause,
-      };
-    } else if (decision.userMessage) {
-      action = {
-        action: 'drop',
-        threadId,
-        turnIndex,
-        feedback: decision.userMessage,
-      };
-    } else {
-      action = { action: 'drop', threadId, turnIndex };
-    }
-    // Persisting the action writes the inquiry thread; nothing else owns
-    // this promise, so its rejection is logged here instead of surfacing as
-    // an unhandled rejection.
-    effectRuntime()
-      .runPromise(
-        handleExternalInquiryAction(action, { session: currentSession() }),
-      )
-      .catch((error: unknown) => {
-        logWarning(
-          'cli.tui',
-          `External inquiry ${threadId} ${action.action} failed: ${toErrorMessage(error)}`,
-        );
-      });
-  });
 }

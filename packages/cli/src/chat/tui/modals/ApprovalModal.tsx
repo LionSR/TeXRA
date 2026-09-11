@@ -8,7 +8,6 @@ import { assertNever } from '@utils/core';
 import { AgentProposal } from './AgentProposal';
 import { BashApproval } from './BashApproval';
 import { EditApproval } from './EditApproval';
-import { ExternalInquiry } from './ExternalInquiry';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
 import { UserQuestion } from './UserQuestion';
@@ -65,14 +64,6 @@ export function ApprovalModal(
         <RetryRequest
           availableRows={availableRows}
           payload={payload}
-          onDecide={decide}
-        />
-      );
-    case 'externalInquiry':
-      return (
-        <ExternalInquiry
-          availableRows={availableRows}
-          payload={payload.data}
           onDecide={decide}
         />
       );

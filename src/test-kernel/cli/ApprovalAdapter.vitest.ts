@@ -6,13 +6,8 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
 const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
 let detachHostInteractions = (): void => {};
-
-vi.mock('@tools/inquiry/inquiryActions', () => ({
-  handleExternalInquiryAction: handleExternalInquiryActionMock,
-}));
 
 vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
   const actual =
@@ -44,16 +39,12 @@ import {
   isCliApiSwitchableRetry,
   type CliApprovalPromptHooks,
 } from '@cli/runtime/approval/approvalPrompts';
-import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/settleApprovals';
 import {
   buildAgentProposalApprovalContent,
   buildToolEditApprovalContent,
   formatRetryRequestMessage,
 } from '@cli/runtime/approval/approvalSummaries';
-import {
-  decideRetryApproval,
-  texraApprovalDenialMessage,
-} from '@shared/approvalPolicy';
+import { decideRetryApproval } from '@shared/approvalPolicy';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -168,7 +159,6 @@ const credentialExhaustedRetry: RetryPermission = {
 };
 
 beforeEach(async () => {
-  handleExternalInquiryActionMock.mockReturnValue(Effect.succeed(true));
   const { initPlatform: init } = await import('@platform/platform');
   const { createFakePlatform } = await import('@test/support/FakePlatform');
   init(createFakePlatform());
@@ -183,9 +173,6 @@ beforeEach(async () => {
 afterEach(() => {
   detachHostInteractions();
   detachHostInteractions = () => {};
-  handleExternalInquiryActionMock
-    .mockReset()
-    .mockReturnValue(Effect.succeed(true));
   formatRetryRequestMessageMock.mockReset();
   vi.restoreAllMocks();
 });
@@ -209,20 +196,6 @@ describe('shared retry and human-input decisions', () => {
 });
 
 describe('human input approval policy', () => {
-  it('denies external inquiry under never', () => {
-    const ctx = context({ approvalPolicy: 'never' });
-    expect(denyExternalInquiryIfNoHumanInput('ei_test', 1, ctx)).toBe(true);
-    expect(handleExternalInquiryActionMock).toHaveBeenCalledWith(
-      {
-        action: 'drop',
-        threadId: 'ei_test',
-        turnIndex: 1,
-        reason: texraApprovalDenialMessage('deny-policy'),
-      },
-      { session: defaultSession() },
-    );
-  });
-
   it.effect(
     'reports a shared edit-policy denial through the run-context hook',
     () =>
@@ -307,38 +280,6 @@ describe('approval prompt hooks', () => {
           reason: 'Denied by TeXRA approval policy.',
         });
       }),
-  );
-
-  it.effect('does not prompt for external inquiry in non-TUI CLI runs', () =>
-    Effect.gen(function* () {
-      const tracker = trackPromptEvents();
-
-      yield* Effect.promise(async () =>
-        createHeadlessCliHostInteractions(
-          context({ approvalPrompt: tracker.answerWith('yes') }),
-          tracker.hooks,
-        ).openExternalInquiry?.({
-          requestId: 'ei_aabbccdd0011',
-          threadId: 'ei_aabbccdd0011',
-          question: 'May I ask an external model to verify this proof?',
-          allowBypass: false,
-          runId: ROOT_RUN,
-          sessionLinks: null,
-          transcript: null,
-        }),
-      );
-
-      expect(tracker.events).toEqual([]);
-      expect(handleExternalInquiryActionMock).toHaveBeenCalledWith(
-        {
-          action: 'drop',
-          threadId: 'ei_aabbccdd0011',
-          turnIndex: 1,
-          cause: expect.stringContaining('non-TUI CLI runs'),
-        },
-        { session: defaultSession() },
-      );
-    }),
   );
 });
 

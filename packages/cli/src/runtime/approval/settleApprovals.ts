@@ -8,8 +8,6 @@
  */
 
 import { defaultSession } from '@agent/runtime';
-import { warn as logWarning } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -26,15 +24,10 @@ import {
   type ApprovalDecision,
   type RetryPermission,
 } from '@shared/schemas';
-import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { type CliContext } from '../cliContext';
 
 import { warnApprovalDenied } from './approvalPrompts';
-
-const EXTERNAL_INQUIRY_YOLO_MESSAGE =
-  'External inquiry requires human input; yolo mode cannot synthesize an external answer.';
 
 function livePolicy(): TexraApprovalPolicy {
   return defaultSession().approvalPolicy;
@@ -125,7 +118,6 @@ export function settleRetry(
  */
 export function settleHumanInputDenial(
   context: CliContext,
-  yoloMessage?: string,
 ): { readonly reason: string } | undefined {
   const decision = decideHumanInputRequest({
     policy: livePolicy(),
@@ -136,45 +128,6 @@ export function settleHumanInputDenial(
     warnApprovalDenied(context, 'Human-input request');
   }
   return {
-    reason: texraHumanInputDenialMessage(decision.deny, yoloMessage),
+    reason: texraHumanInputDenialMessage(decision.deny),
   };
-}
-
-/**
- * "No human input available" guard for external-inquiry requests, used by the
- * TUI approval queue (`subscribeApprovals.ts`). Drops the durable inquiry
- * thread with a denial reason and returns `true` when denied; returns `false`
- * when a prompt is allowed and the caller should proceed with its own
- * handling. Non-TUI runs never reach here — the headless interaction port
- * drops the thread itself (`approvalAdapter.openExternalInquiry`).
- */
-export function denyExternalInquiryIfNoHumanInput(
-  threadId: string,
-  turnIndex: number,
-  context: CliContext,
-): boolean {
-  const denial = settleHumanInputDenial(context, EXTERNAL_INQUIRY_YOLO_MESSAGE);
-  if (denial == null) return false;
-  // Persisting the drop writes the inquiry thread; nothing else owns this
-  // promise, so its rejection is logged here instead of surfacing as an
-  // unhandled rejection.
-  effectRuntime()
-    .runPromise(
-      handleExternalInquiryAction(
-        {
-          action: 'drop',
-          threadId,
-          turnIndex,
-          reason: denial.reason,
-        },
-        { session: defaultSession() },
-      ),
-    )
-    .catch((error: unknown) => {
-      logWarning(
-        'cli.approval',
-        `External inquiry ${threadId} drop failed: ${toErrorMessage(error)}`,
-      );
-    });
-  return true;
 }
