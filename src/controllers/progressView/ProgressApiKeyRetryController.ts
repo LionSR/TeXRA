@@ -11,13 +11,13 @@ import {
   quotaFallbackRuntimes,
   type QuotaFallbackRuntime,
 } from '@model/quotaFallbackRoutes';
+import { AppState } from '@platform/interfaces';
 import type { ExhaustionReason, RunId } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
   isKimiCodeSubscriptionRetryBlocked,
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
-import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('ProgressApiKeyRetryController');
@@ -183,7 +183,7 @@ export class ProgressApiKeyRetryController {
   private commitOwnApiKeyRouting(
     request: ProgressApiKeyRetryRequest,
     action: () => Effect.Effect<boolean, unknown>,
-  ): Effect.Effect<boolean, unknown> {
+  ): Effect.Effect<boolean, unknown, AppState> {
     return this.routingLane.withPermit(
       Effect.scoped(this.routingTransaction(request, action)),
     );
@@ -199,6 +199,10 @@ export class ProgressApiKeyRetryController {
     if (!this.deps.isRetryPending(request.stream, request.requestId)) {
       return false;
     }
+    // The rollback below writes a captured preference back to the process
+    // global state, so the store is read once here, where the transaction
+    // starts, rather than from inside a finalizer.
+    const globalState = yield* AppState;
     const before = new Map(
       this.fallbackRuntimes.map(
         (runtime) =>
@@ -231,7 +235,7 @@ export class ProgressApiKeyRetryController {
         Exit.isSuccess(exit) && exit.value === true
           ? Effect.void
           : hostPort(() =>
-              runtime.restoreEnabled(before.get(reason) ?? false),
+              runtime.restoreEnabled(before.get(reason) ?? false, globalState),
             ).pipe(
               Effect.tapError((error) =>
                 Effect.sync(() => {
@@ -307,7 +311,7 @@ export class ProgressApiKeyRetryController {
     start: (
       copilotRouteOverride: CopilotRouteOverride,
     ) => Effect.Effect<boolean, unknown>,
-  ): Effect.Effect<boolean, unknown> {
+  ): Effect.Effect<boolean, unknown, AppState> {
     // The user chose "use own API key" for this retry. The direct-route
     // override travels only with the replacement launch; the standing
     // preference remains visible to concurrent and future runs.

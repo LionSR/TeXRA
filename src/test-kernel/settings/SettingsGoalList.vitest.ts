@@ -8,7 +8,7 @@ import { workspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { RunId } from '@shared/schemas';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installedHost, setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
 // The shared vscode stub predates workspace-folder listeners; the handler's
@@ -29,13 +29,20 @@ const GOAL_KEY = `goals:byRun:${RUN_ID}`;
 
 /**
  * The real constructor wires channel/viewName and the history watcher from
- * the extension context; the fake context only needs the subscriptions sink.
+ * the extension context; the fake context needs the subscriptions sink and
+ * the global state the handler reads, and the secret store arrives beside it
+ * exactly as the extension root passes it.
  */
 function createHandler(): SettingsViewMessageHandler {
-  return new SettingsViewMessageHandler({
-    subscriptions: [],
-    extensionPath: '/ext',
-  } as unknown as vscode.ExtensionContext);
+  const { globalState, secrets } = installedHost().platform;
+  return new SettingsViewMessageHandler(
+    {
+      subscriptions: [],
+      extensionPath: '/ext',
+      globalState,
+    } as unknown as vscode.ExtensionContext,
+    secrets,
+  );
 }
 
 function createWebview(): vscode.Webview {
@@ -77,7 +84,6 @@ describe('settings goal list', () => {
   });
 
   it('reports a malformed goal without posting a fallback list', async () => {
-    const { platform } = await import('@platform/platform');
     const malformed = { goalId: 'not-valid' };
     await workspaceRoots().workspaceState.update('goals:index', [RUN_ID]);
     await workspaceRoots().workspaceState.update(GOAL_KEY, malformed);

@@ -6,9 +6,12 @@ import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { runInSession, type LaunchRunContext } from '@agent/runtime/RunContext';
+import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
+import type { AppState } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import { AgentCategory } from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
@@ -30,7 +33,7 @@ const log = createLog('workflowScriptAgentRunner');
 function workflowScriptModelSelection(
   invocation: Pick<WorkflowAgentInvocation, 'options'>,
   parent: LaunchRunContext,
-): Effect.Effect<string, Error> {
+): Effect.Effect<string, Error, Secrets | AppState> {
   const requestedModel = invocation.options.model;
   return selectAvailableDelegationModel({
     ...(requestedModel !== undefined && { requestedModel }),
@@ -77,7 +80,8 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
     runId: RunId,
   ): Effect.fn.Return<
     { configPayload: AgentConfigPayload; agentName: string },
-    Error
+    Error,
+    Secrets | AppState
   > {
     const { runScope } = parent;
     const sharedConfigFields = {
@@ -188,13 +192,15 @@ export function createWorkflowScriptAgentRunner(
       costUsd: number | undefined,
     ) => void;
   },
-): (invocation: WorkflowAgentInvocation) => Effect.Effect<RunEnd, Error> {
+): (
+  invocation: WorkflowAgentInvocation,
+) => Effect.Effect<RunEnd, Error, AgentRunServices> {
   const { runScope } = parent;
 
   return Effect.fn('workflowScriptAgent')(
     function* (
       invocation: WorkflowAgentInvocation,
-    ): Effect.fn.Return<RunEnd, Error> {
+    ): Effect.fn.Return<RunEnd, Error, AgentRunServices> {
       const logicalRunId = deriveRunId({
         checkpointId,
         key: invocation.key,

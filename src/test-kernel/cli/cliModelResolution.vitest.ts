@@ -11,6 +11,7 @@ import {
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { fakeStores } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   selectCliRunnableModel: vi.fn(),
@@ -44,6 +45,9 @@ function makeContext(partial: Partial<CliContext> = {}): CliContext {
 
 const runConfig = (model: string): CliConfigValues => ({ run: { model } });
 
+/** The stores each command hands to `selectCliRunModel`; model access is mocked. */
+const STORES = fakeStores();
+
 describe('selectCliRunModel precedence', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -61,7 +65,7 @@ describe('selectCliRunModel precedence', () => {
       cliConfig: runConfig('deepseekR'),
     });
 
-    await selectCliRunModel(context, KNOWN_MODEL, 'run');
+    await selectCliRunModel(context, KNOWN_MODEL, 'run', STORES);
 
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       [
@@ -70,7 +74,7 @@ describe('selectCliRunModel precedence', () => {
         { model: 'deepseekR', reason: 'command-config' },
         { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
       ],
-      {},
+      { stores: STORES },
     );
   });
 
@@ -83,14 +87,14 @@ describe('selectCliRunModel precedence', () => {
       notice: 'Using deepseekT instead.',
     });
 
-    await expect(selectCliRunModel(context, undefined, 'run')).resolves.toBe(
-      'deepseekT',
-    );
+    await expect(
+      selectCliRunModel(context, undefined, 'run', STORES),
+    ).resolves.toBe('deepseekT');
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([
         { model: 'staleConfiguredModel', reason: 'command-config' },
       ]),
-      {},
+      { stores: STORES },
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'Using deepseekT instead.',
@@ -107,14 +111,14 @@ describe('selectCliRunModel precedence', () => {
       ),
     );
 
-    await expect(selectCliRunModel(context, 'opus48T', 'run')).rejects.toThrow(
-      CliUsageError,
-    );
+    await expect(
+      selectCliRunModel(context, 'opus48T', 'run', STORES),
+    ).rejects.toThrow(CliUsageError);
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([
         { model: 'opus48T', reason: 'explicit-override' },
       ]),
-      {},
+      { stores: STORES },
     );
   });
 });

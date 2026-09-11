@@ -1,6 +1,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import { hostPort } from '@common/hostPort';
+import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsMessageFor, SETTINGS_VIEW_CMD } from '@shared/schemas';
 import type {
@@ -31,6 +32,12 @@ type SetReasoningLevelInput = Omit<
 >;
 interface SettingsViewHostOptions {
   readonly state: SettingsStatePorts;
+  /**
+   * Provider credentials behind the model picker's availability decoration.
+   * `SettingsStatePorts` carries only the two state stores, so the secret
+   * store rides on the host options and is threaded from each host's root.
+   */
+  readonly secrets: PlatformSecrets;
   readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
   readonly controllers?: {
@@ -68,6 +75,7 @@ export class SettingsViewHost {
       options.controllers?.modelSelection ??
       new SettingsModelSelectionController({
         globalState: options.state.globalState,
+        secrets: options.secrets,
       });
   }
 

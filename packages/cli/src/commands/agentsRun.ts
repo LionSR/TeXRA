@@ -28,7 +28,10 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
-import { executeCliToolUseConfig } from '../runtime/executeCli';
+import {
+  type CliRunServices,
+  executeCliToolUseConfig,
+} from '../runtime/executeCli';
 import { toolUseResultText } from '../runtime/terminalStatus';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
@@ -45,7 +48,7 @@ interface ToolUseAgentRunInit {
 export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   context: CliContext,
   init: ToolUseAgentRunInit,
-): Effect.fn.Return<number, Error> {
+): Effect.fn.Return<number, Error, CliRunServices> {
   const instruction = yield* Effect.tryPromise({
     try: () => resolveFileBackedInstruction(init, context.cwd),
     catch: ensureError,
@@ -54,7 +57,7 @@ export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     throw new CliUsageError('Provide --instruction or --instruction-file.');
   }
 
-  yield* Effect.tryPromise({
+  const services = yield* Effect.tryPromise({
     try: () => initLocalCliPlatform(context),
     catch: ensureError,
   });
@@ -64,7 +67,7 @@ export const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   });
 
   const model = yield* Effect.tryPromise({
-    try: () => selectCliRunModel(context, init.model, 'chat'),
+    try: () => selectCliRunModel(context, init.model, 'chat', services),
     catch: ensureError,
   });
   const runContext = buildHeadlessRunContext(context);

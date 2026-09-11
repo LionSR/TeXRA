@@ -5,7 +5,7 @@ import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { installPlatform } from '@test/support/setupPlatform';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
@@ -34,6 +34,7 @@ describe('tool-use tool resolution', () => {
       registry: getDefaultToolRegistry(),
       logger,
       toolInjections,
+      stores: hostStores(),
       ...options,
     });
     return tools.map((tool) => tool.name);
@@ -49,6 +50,7 @@ describe('tool-use tool resolution', () => {
       registry,
       logger,
       toolInjections,
+      stores: hostStores(),
       runtimeUnavailableTools,
       approvalPromptsUnavailable: false,
     });

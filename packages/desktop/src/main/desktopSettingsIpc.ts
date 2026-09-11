@@ -141,6 +141,7 @@ export function createDesktopSettingsIpc(
   };
   const settingsHost = new SettingsViewHost({
     state: { workspaceState, globalState },
+    secrets: options.secrets,
     respond: options.postToRenderer,
     controllers: {
       modelSelection:

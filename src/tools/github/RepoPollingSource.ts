@@ -38,6 +38,7 @@ import { Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { Disposable } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatRepoIssueComment,
@@ -171,7 +172,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   subscribe(
     input: RepoSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     const key = repoKeyToString(input);
     return this.register(key, () => createInitialState(input), onEvent);
   }
@@ -183,7 +184,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   protected pollOne(
     _key: RepoKey,
     state: SubscriptionState,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, unknown, Secrets> {
     return this.pollRepo(state);
   }
 

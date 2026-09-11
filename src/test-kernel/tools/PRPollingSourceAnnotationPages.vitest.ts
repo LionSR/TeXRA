@@ -9,13 +9,19 @@ import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
 
+// Local imports - platform
+import { Secrets } from '@platform/secrets';
+
+// Local imports - test support
+import { FakeSecrets } from '@test/support/FakePlatform';
+
 // Local imports - tools
 import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 import type { PollHookRejected } from '@tools/github/PollingSourceBase';
 import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
 
-// Local imports - test support
+// Local imports - test fixtures
 import { mockGitHubClient } from '../support/githubClientMock';
 import {
   createPRCurrentShaState,
@@ -49,7 +55,14 @@ type AnnotationFetchFn = (
   logger: AgentTrace,
   budget: AnnotationFetchBudget,
   now?: number,
-) => Effect.Effect<GhCheckAnnotation[], unknown>;
+) => Effect.Effect<GhCheckAnnotation[], unknown, Secrets>;
+
+/**
+ * The process secret store behind the GitHub client. The client itself is
+ * mocked here, so no member is called; the layer satisfies the requirement
+ * the host root provides in production.
+ */
+const secretsLayer = Secrets.layer(() => new FakeSecrets());
 
 /** Minimal logger for driving the infrastructure `fetchAnnotations` directly. */
 function testLogger(): AgentTrace {
@@ -150,7 +163,7 @@ describe('PRPollingSource annotation pagination', () => {
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=1',
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=2',
       ]);
-    }),
+    }).pipe(Effect.provide(secretsLayer)),
   );
 
   it.effect('caps annotation pagination for malformed full pages', () =>
@@ -175,7 +188,7 @@ describe('PRPollingSource annotation pagination', () => {
       expect(ghGet.mock.calls.at(-1)?.[0]).toBe(
         '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=50',
       );
-    }),
+    }).pipe(Effect.provide(secretsLayer)),
   );
 
   it.effect('counts annotation budget by endpoint page', () =>
@@ -201,7 +214,7 @@ describe('PRPollingSource annotation pagination', () => {
         message: expect.stringContaining('Annotation fetch budget exhausted'),
       });
       expect(ghGet).toHaveBeenCalledTimes(1);
-    }),
+    }).pipe(Effect.provide(secretsLayer)),
   );
 
   it.effect(

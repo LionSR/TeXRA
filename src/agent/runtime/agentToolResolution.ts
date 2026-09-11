@@ -8,7 +8,8 @@
  *      (e.g. a subagent running without an interactive approval channel).
  *   3. Strip user-disabled tools (settings dashboard toggle).
  *   4. Strip tools whose external dependency is unavailable (probed at startup).
- *   5. Auto-inject conditional tools (memory, goal, etc.) registered at startup;
+ *   5. Auto-inject the process's conditional tools (memory, goal, etc.), which
+ *      the caller reads from the `ToolInjections` service and passes in;
  *      injected tools are subject to the approval gate but bypass the
  *      disabled/unavailable filters (they are runtime infrastructure, not
  *      user-selectable tools).
@@ -26,7 +27,10 @@
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  computeModelOptionsData,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import type { ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -39,10 +43,7 @@ import {
   availableModelNamesFromOptions,
 } from '@tools/delegation/delegationAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  SharedToolInjectionRegistry,
-  type ToolInjectionRegistry,
-} from './toolInjection';
+import type { ToolInjections } from './toolInjection';
 
 const log = createLog('AgentToolResolution');
 
@@ -55,8 +56,17 @@ interface ResolveAgentToolsInput {
   approvalPromptsUnavailable?: boolean;
   /** Tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
-  /** Conditional runtime tool injections. Defaults to the shared registry. */
-  toolInjections?: ToolInjectionRegistry;
+  /**
+   * Conditional runtime tool injections: the process's `ToolInjections`
+   * service, or a caller-owned list for a flow that injects its own.
+   */
+  toolInjections: ToolInjections['Service'];
+  /**
+   * The process secret store and global state (`Secrets` / `AppState`): the
+   * user's disabled-tool set, and the provider keys behind the delegation
+   * roster's model availability.
+   */
+  stores: ModelOptionStores;
 }
 
 /**
@@ -69,13 +79,14 @@ interface ResolveAgentToolsInput {
  */
 async function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
+  stores: ModelOptionStores,
 ): Promise<readonly string[] | null | undefined> {
   if (!hasDelegationTool(tools.map((tool) => tool.name))) {
     return undefined;
   }
 
   try {
-    const models = await computeModelOptionsData();
+    const models = await computeModelOptionsData(stores);
     return availableModelNamesFromOptions(models);
   } catch (err) {
     // Couldn't load model options — skip the delegation annotation rather than
@@ -102,10 +113,11 @@ export async function resolveAgentTools({
   logger,
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
-  toolInjections = SharedToolInjectionRegistry,
+  toolInjections,
+  stores,
 }: ResolveAgentToolsInput): Promise<ToolDefinition[]> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
-  const disabled = getDisabledToolNames();
+  const disabled = getDisabledToolNames(stores.globalState);
   const unavailable = getUnavailableToolNamesCached();
   const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
 
@@ -155,8 +167,10 @@ export async function resolveAgentTools({
     }
   }
 
-  const availableModelNames =
-    await availableDelegationModelNamesForTools(resolved);
+  const availableModelNames = await availableDelegationModelNamesForTools(
+    resolved,
+    stores,
+  );
   return resolved.map((tool) =>
     annotateDelegationAvailability(tool, availableModelNames),
   );

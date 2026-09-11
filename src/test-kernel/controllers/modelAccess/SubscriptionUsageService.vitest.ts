@@ -25,6 +25,7 @@ import {
   type SubscriptionUsageCredentials,
 } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { SubscriptionUsageSnapshotSchema } from '@shared/schemas';
+import { FakeSecrets } from '@test/support/FakePlatform';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -406,9 +407,10 @@ describe('SubscriptionUsageService', () => {
     } as never);
     const http = vi.fn<SubscriptionUsageHttp>();
 
-    const snapshot = await new SubscriptionUsageService({ http }).getUsage(
-      'chatgpt',
-    );
+    const snapshot = await new SubscriptionUsageService({
+      http,
+      secrets: new FakeSecrets(),
+    }).getUsage('chatgpt');
 
     expect(snapshot).toMatchObject({
       state: 'unavailable',

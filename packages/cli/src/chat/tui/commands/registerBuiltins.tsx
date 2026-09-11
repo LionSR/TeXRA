@@ -9,6 +9,8 @@ import {
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import type { ApiProvider } from '@model/apiProviders';
+import type { StateStore } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
@@ -260,7 +262,14 @@ function formSelectionHandler<T>({
   };
 }
 
-export function registerBuiltinSlashCommands(options?: {
+export function registerBuiltinSlashCommands(options: {
+  /**
+   * The process secret store and global state the built-in forms and handlers
+   * read: every one of them runs outside Effect, so the stores arrive from the
+   * surface that registers the commands.
+   */
+  secrets: PlatformSecrets;
+  state: StateStore;
   onAgentSelect?: SelectHandler<string>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => TexraApprovalPolicy;
@@ -278,24 +287,27 @@ export function registerBuiltinSlashCommands(options?: {
   getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
+  const { secrets, state } = options;
+  const modelStores = { secrets, globalState: state };
   const onAgentSelect: SelectHandler<string> =
-    options?.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
+    options.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
   const onModelSelect: SelectHandler<string> =
-    options?.onModelSelect ?? setCliSessionModelOverride;
+    options.onModelSelect ?? setCliSessionModelOverride;
   const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
-    options?.onModelAccessSelect ??
+    options.onModelAccessSelect ??
     ((selection, output) =>
       applyCliModelAccessSelection(selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
-    options?.onApiKeySave ?? applyCliProviderApiKey;
+    options.onApiKeySave ??
+    ((provider, key) => applyCliProviderApiKey(secrets, provider, key));
   const onLoginSelect: FormActionHandler<LoginFormValue> =
-    options?.onLoginSelect ??
+    options.onLoginSelect ??
     ((value, output) => loginFromChat(value, undefined, output));
   const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
-    options?.onLogoutSelect ??
-    ((value, output) => logoutFromChat(value, output));
-  const canSelectAgent = options?.canSelectAgent ?? (() => true);
-  const canSelectModel = options?.canSelectModel ?? (() => true);
+    options.onLogoutSelect ??
+    ((value, output) => logoutFromChat(value, secrets, output));
+  const canSelectAgent = options.canSelectAgent ?? (() => true);
+  const canSelectModel = options.canSelectModel ?? (() => true);
 
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = sessionMeta.get().agent;
@@ -317,7 +329,7 @@ export function registerBuiltinSlashCommands(options?: {
                   openCliSlashCommandForm('model', '');
                 }
               : props.onDone,
-          onError: options?.onError,
+          onError: options.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
@@ -329,6 +341,7 @@ export function registerBuiltinSlashCommands(options?: {
   function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
       <AccountAccessForm
+        secrets={secrets}
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<AccountAccessFormValue>({
           action: (value, output) => {
@@ -342,7 +355,7 @@ export function registerBuiltinSlashCommands(options?: {
             }
           },
           onDone: props.onDone,
-          onError: options?.onError,
+          onError: options.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
           completion: 'busy',
@@ -375,15 +388,15 @@ export function registerBuiltinSlashCommands(options?: {
   }
 
   function ApprovalPolicyFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = options?.getApprovalPolicy?.() ?? 'ask';
+    const current = options.getApprovalPolicy?.() ?? 'ask';
     return (
       <ApprovalPolicyForm
         availableRows={props.availableRows}
         currentPolicy={current}
         onSelect={formSelectionHandler<TexraApprovalPolicy>({
-          action: (value) => options?.onApprovalPolicySelect?.(value),
+          action: (value) => options.onApprovalPolicySelect?.(value),
           onDone: props.onDone,
-          onError: options?.onError,
+          onError: options.onError,
           completion: 'beforeAction',
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
@@ -433,13 +446,14 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <ModelListForm
         currentModel={current}
+        stores={modelStores}
         availableRows={props.availableRows}
         selectable={selectable}
-        getModelSwitchDisabledReason={options?.getModelSwitchDisabledReason}
+        getModelSwitchDisabledReason={options.getModelSwitchDisabledReason}
         onSelect={formSelectionHandler<string>({
           action: onModelSelect,
           onDone: props.onDone,
-          onError: options?.onError,
+          onError: options.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
@@ -451,6 +465,7 @@ export function registerBuiltinSlashCommands(options?: {
   function ToolsListFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
       <ToolsListForm
+        state={state}
         availableRows={props.availableRows}
         onClose={() => props.onDone(undefined)}
       />
@@ -474,7 +489,7 @@ export function registerBuiltinSlashCommands(options?: {
         onSelect={formSelectionHandler<T>({
           action,
           onDone: props.onDone,
-          onError: options?.onError,
+          onError: options.onError,
           completion: 'beforeAction',
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
@@ -486,15 +501,17 @@ export function registerBuiltinSlashCommands(options?: {
 
   const MemoryListFormAdapter = makeSelectFormAdapter(
     MemoryListForm,
-    (value: string) => options?.onMemorySelect?.(value),
+    (value: string) => options.onMemorySelect?.(value),
   );
-  const ResumeListFormAdapter = makeSelectFormAdapter(
-    ResumeListForm,
-    (id: RunId) => options?.onResumeSelect?.(id),
+  // `/resume` reads history through the process stores; bind them here so the
+  // command still uses the one plain-picker adapter.
+  const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
+    (formProps) => <ResumeListForm stores={modelStores} {...formProps} />,
+    (id: RunId) => options.onResumeSelect?.(id),
   );
   const SkillsListFormAdapter = makeSelectFormAdapter(
     SkillsListForm,
-    (value: SkillActivation) => options?.onSkillSelect?.(value),
+    (value: SkillActivation) => options.onSkillSelect?.(value),
   );
 
   registerSlashCommand({
@@ -532,6 +549,7 @@ export function registerBuiltinSlashCommands(options?: {
     props: SlashFormProps,
   ): React.JSX.Element => (
     <EnabledModelsForm
+      state={state}
       availableRows={props.availableRows}
       onClose={() => props.onDone(undefined)}
     />
@@ -576,7 +594,7 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Show signed-in accounts and active model access',
     category: 'account',
     echo: 'ifPersists',
-    handler: showCliAuthStatus,
+    handler: () => showCliAuthStatus(secrets),
   });
   registerSlashCommand({
     name: 'login',
@@ -597,7 +615,7 @@ export function registerBuiltinSlashCommands(options?: {
     // Same merged-form mismatch as /login: the typed command does not
     // describe what the form actually did.
     echo: 'never',
-    handler: (remainder) => logoutFromChat(remainder),
+    handler: (remainder) => logoutFromChat(remainder, secrets),
     formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
@@ -681,24 +699,25 @@ export function registerBuiltinSlashCommands(options?: {
   });
   // Only offer /config when the host wired the stores it reads/writes — a
   // command that can't reach a store would render an inert panel.
-  const getConfigStores = options?.getConfigStores;
+  const getConfigStores = options.getConfigStores;
   if (getConfigStores) {
     const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
       const stores = getConfigStores();
       return (
         <CliConfigForm
           stores={stores}
+          secrets={secrets}
           availableRows={props.availableRows}
           // Same hook `/approval` drives, so the approval-policy row updates the
           // live session and the status bar from whichever surface set it —
           // including its "Approval mode: …" transcript line, which is the
           // confirmation that the change reached the running session and not
           // just the config file.
-          onApprovalPolicyChanged={options?.onApprovalPolicySelect}
+          onApprovalPolicyChanged={options.onApprovalPolicySelect}
           onClose={() => props.onDone(undefined)}
           onError={async (error) => {
             props.onPersist?.();
-            await options?.onError?.(error);
+            await options.onError?.(error);
           }}
         />
       );

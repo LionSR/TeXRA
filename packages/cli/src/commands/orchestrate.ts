@@ -10,6 +10,7 @@ import {
   teamTexraHostedMissingNames,
 } from '@common/teams/TeamPlan';
 import { createLog } from '@logger/logUtils';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
@@ -87,6 +88,7 @@ const canLaunchWithDefaultModel = Effect.fn(function* (
   context: CliContext,
   models: readonly CliModelAccess[],
   session: SessionHandle,
+  stores: ModelOptionStores,
 ): Effect.fn.Return<boolean, Error> {
   if (models.length === 0) return true;
 
@@ -102,6 +104,7 @@ const canLaunchWithDefaultModel = Effect.fn(function* (
   return yield* Effect.tryPromise({
     try: () =>
       selectCliRunnableModel(defaults.model, {
+        stores,
         fallbackReason: defaults.modelSource,
         accessList: models,
       }),
@@ -146,7 +149,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
     ...context,
     quietLogs: true,
   });
-  const session = await initializeCliTranscriptSession();
+  // Every model-availability read below goes through the stores this entry
+  // point already wired, rather than looking a host up again.
+  const session = await initializeCliTranscriptSession(services);
   // First-run gate: a credential-less interactive user picks sign-in or a key
   // here instead of landing on a launcher full of "login required" models. On
   // success the models read below re-reads the freshly-set credentials
@@ -188,13 +193,13 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // launcher, which is the same outcome the navigation kinds used to spell
   // out.
   launcher: while (true) {
-    const history = await listCliHistoryEntries();
+    const history = await listCliHistoryEntries(services);
     const presets = readCliMultiAgentPresets();
     const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
     const presetLaunchBlockReason =
       context.approvalPolicy === 'never' ? 'delegation-denied' : undefined;
     const [modelAccess, authProfile] = await Promise.all([
-      readCliModelAccessStatus(),
+      readCliModelAccessStatus(services.secrets),
       getCliAuthProfile(),
     ]);
     const toolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
@@ -218,16 +223,16 @@ async function runOrchestration(context: CliContext): Promise<number> {
     const [models, statusLines] = await Promise.all([
       effectRuntime().runPromise(
         Effect.tryPromise({
-          try: () => getCliModelAccessList(),
+          try: () => getCliModelAccessList({ stores: services }),
           catch: ensureError,
         }).pipe(
           Effect.catch(() => Effect.succeed([] as readonly CliModelAccess[])),
         ),
       ),
-      loadCliApiStatus(authProfile),
+      loadCliApiStatus(services.secrets, authProfile),
     ]);
     const allowDefaultModelLaunch = await effectRuntime().runPromise(
-      canLaunchWithDefaultModel(context, models, session),
+      canLaunchWithDefaultModel(context, models, session, services),
     );
     const { runOrchestrationTui } =
       await import('../orchestration/runOrchestrationTui');
@@ -344,6 +349,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       case 'configure-settings': {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({
+          secrets: services.secrets,
           colorEnabled: context.stdoutColorEnabled,
           onError: writeErrorStderr,
         });

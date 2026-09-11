@@ -51,8 +51,9 @@ import { hostPort } from '@common/hostPort';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
-import type { RecoveryContinuation } from '@platform/interfaces';
+import type { RecoveryContinuation, StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -235,6 +236,13 @@ export interface ChatSessionControllerInit {
   readonly initialModelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly getSlashCommandContext: () => SlashCommandContext;
+  /**
+   * The process stores a retry's credential work reads, threaded from the
+   * `CliPlatformServices` the chat entry point already holds rather than
+   * looked up again here.
+   */
+  readonly secrets: PlatformSecrets;
+  readonly state: StateStore;
 }
 
 interface PreparedChatInstruction {
@@ -294,6 +302,8 @@ export function createChatSessionController(
     initialModelSource,
     cwd,
     getSlashCommandContext,
+    secrets,
+    state,
   } = init;
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
@@ -481,7 +491,10 @@ export function createChatSessionController(
   disposables.add(() => void presentationHost.close());
   disposables.add(
     runtimeSession.interactions.use(
-      createTuiHostInteractions(presentationHost, sessionContext),
+      createTuiHostInteractions(presentationHost, sessionContext, {
+        secrets,
+        state,
+      }),
     ),
   );
 
@@ -1009,6 +1022,7 @@ export function createChatSessionController(
           const currentModel = meta.model || initialModel;
           const selection = yield* hostPort(() =>
             selectCliRunnableModel(currentModel, {
+              stores: { secrets, globalState: state },
               fallbackReason: meta.model
                 ? meta.modelSource
                 : initialModelSource,

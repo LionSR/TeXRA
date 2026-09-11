@@ -27,9 +27,11 @@ const CHANNEL = 'ApiKeyCommands';
  * confirmation prompts or messaging (see SettingsProfileKeyController).
  */
 function createProfileKeyController(
+  secrets: PlatformSecrets,
   refreshAfterKeyChange: (provider: string) => Promise<void>,
 ): SettingsProfileKeyController {
   return new SettingsProfileKeyController({
+    secrets,
     prompt: new VscodePromptHost(),
     externalOpener: new VscodeExternalOpener(),
     getProviderDisplayName: (provider) =>
@@ -115,10 +117,10 @@ export async function setApiKey(
   const apiKey = await promptForApiKey(target);
   if (!apiKey) return;
 
-  await createProfileKeyController(refreshAfterKeyChange).commitProviderKey(
-    target,
-    apiKey,
-  );
+  await createProfileKeyController(
+    secrets,
+    refreshAfterKeyChange,
+  ).commitProviderKey(target, apiKey);
 }
 
 /**
@@ -139,7 +141,8 @@ export async function removeApiKey(
     return;
   }
 
-  await createProfileKeyController(refreshAfterKeyChange).removeProviderKey(
-    provider,
-  );
+  await createProfileKeyController(
+    secrets,
+    refreshAfterKeyChange,
+  ).removeProviderKey(provider);
 }

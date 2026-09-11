@@ -139,10 +139,7 @@ import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from './desktopWindowTitle.js';
-import {
-  initializeDesktopSetupAuth,
-  registerDesktopSetupSignIn,
-} from './desktopSetupAuth.js';
+import { registerDesktopSetupSignIn } from './desktopSetupAuth.js';
 import {
   checkForDesktopUpdate,
   DESKTOP_RELEASES_PAGE_URL,
@@ -622,7 +619,6 @@ function createWindow(options: {
       teamSignInPending = false;
     }
   };
-  initializeDesktopSetupAuth();
   windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
   const folderPickerDefaultPath = () =>
     activeProject().root ?? app.getPath('home');
@@ -809,6 +805,7 @@ function createWindow(options: {
     const snapshot = createHostSnapshotSource({
       project: projectDisplayOf(project.key, project.root),
       globalState: options.globalState,
+      secrets: options.secrets,
       fileOptions: () => files.fileOptions(),
       readRecentCommits: () => recentCommitsOf(project.root),
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
@@ -831,6 +828,8 @@ function createWindow(options: {
     });
     const hostRequests = createDesktopHostRequests({
       session: project.session,
+      secrets: options.secrets,
+      globalState: options.globalState,
       draftRequests: hostDraftRequests,
       host: {
         ...agentRunHost,
@@ -925,7 +924,9 @@ function createWindow(options: {
       ),
     );
   };
-  const subscriptionUsage = new SubscriptionUsageService();
+  const subscriptionUsage = new SubscriptionUsageService({
+    secrets: options.secrets,
+  });
   const settingsUi: DesktopSettingsUiHost = {
     showInfoMessage,
     showErrorMessage,
@@ -1264,7 +1265,9 @@ function createWindow(options: {
               }
               const { buildDesktopSetupExecuteMessage } =
                 await import('@controllers/onboarding/setupLaunch');
-              const message = await buildDesktopSetupExecuteMessage();
+              const message = await buildDesktopSetupExecuteMessage(
+                options.secrets,
+              );
               if (!message) {
                 throw new Error(
                   'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
@@ -1660,6 +1663,10 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               globalConfigStore: platformInit.globalConfigStore,
               records: projectRecords,
               warn,
+              stores: {
+                secrets: platformInit.secrets,
+                globalState: platformInit.globalState,
+              },
             }),
           );
           processResources.add(() => projects.dispose());

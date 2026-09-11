@@ -35,6 +35,8 @@ import type { AgentEntry } from '@agent/index/agentEntry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
+import { AppState } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import type {
   AgentCategory,
   AgentDelegationScope,
@@ -230,11 +232,15 @@ export const selectAvailableDelegationModel = Effect.fn(
   readonly withScope?: <T>(read: () => T) => T;
 }) {
   const { withScope } = input;
+  const stores = {
+    secrets: yield* Secrets,
+    globalState: yield* AppState,
+  };
   const models = yield* Effect.tryPromise({
     try: () =>
       withScope
-        ? withScope(() => computeModelOptionsData())
-        : computeModelOptionsData(),
+        ? withScope(() => computeModelOptionsData(stores))
+        : computeModelOptionsData(stores),
     catch: ensureError,
   });
   const availableModels = unique(

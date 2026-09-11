@@ -32,7 +32,11 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createProcessSession } from '@test/support/sessionTestUtils';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import {
+  hostStores,
+  installPlatform,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { testModelCell } from './modelCellTestUtils';
@@ -90,6 +94,7 @@ async function runPersistedReflectionFlow(
         prompt: PROMPT,
         logger,
         parentStage: logger.openStage('Reflection flow recovery test'),
+        stores: hostStores(),
         userVarChannels: { MODEL: CONFIG.model },
         modelCell,
         toolPolicy: createToolPolicy(),

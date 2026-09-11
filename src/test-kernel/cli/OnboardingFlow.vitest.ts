@@ -92,8 +92,9 @@ describe('provider-key onboarding flow', () => {
         const { runCliOnboarding } = yield* Effect.promise(
           () => import('@cli/onboarding/runOnboarding'),
         );
+        const platform = createFakePlatform();
         const result = yield* Effect.forkChild(
-          runCliOnboarding(createFakePlatform(), false),
+          runCliOnboarding(platform, false),
         );
 
         // Ink attaches its input stream before the active Select handler has
@@ -120,7 +121,11 @@ describe('provider-key onboarding flow', () => {
           configured: true,
           declined: false,
         });
+        // The secret store is threaded in, so the onboarding flow writes
+        // through the exact store this test handed it rather than an
+        // ambient platform lookup.
         expect(mocks.saveProviderApiKey).toHaveBeenCalledWith(
+          platform.secrets,
           'anthropic',
           providerKey,
         );

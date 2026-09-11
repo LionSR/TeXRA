@@ -9,6 +9,7 @@ import {
 import * as logger from '@logger/logUtils';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { fakeStores } from '@test/support/FakePlatform';
 import {
   createTestSession,
   publishTestRunStart,
@@ -20,6 +21,12 @@ import { recordSessionEvents } from '../progressTestUtils';
 const mocks = vi.hoisted(() => ({
   createHelperModelKit: vi.fn(),
 }));
+
+/**
+ * The launching run's stores. `createHelperModelKit` is the only reader and it
+ * is mocked here, so empty stores carry the description path.
+ */
+const STORES = fakeStores();
 
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
@@ -42,6 +49,7 @@ function runDescription(
     }),
     agentDescription,
     session,
+    STORES,
   );
 }
 

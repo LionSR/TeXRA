@@ -27,6 +27,7 @@ import {
 import type { RunId } from '@shared/schemas';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeStableSubagentInBand as executeStableSubagentInBandEffect } from '@tools/delegation/inBandSubagentRun';
 import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
@@ -37,7 +38,12 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 function executeStableSubagentInBand(
   options: Parameters<typeof executeStableSubagentInBandEffect>[0],
 ) {
-  return Effect.runPromise(executeStableSubagentInBandEffect(options));
+  return Effect.runPromise(
+    Effect.provide(
+      executeStableSubagentInBandEffect(options),
+      fakeProcessServices(),
+    ),
+  );
 }
 
 const mocks = vi.hoisted(() => ({
@@ -549,13 +555,16 @@ describe('headless delegation', () => {
         });
         const { signal, ...prepared } = options;
         const run = () =>
-          executeStableSubagentInBandEffect({
-            runId: IN_BAND_LOGICAL_RUN_ID,
-            parentRunId: prepared.parentRunId,
-            session: prepared.session,
-            signal,
-            prepare: () => Effect.succeed(prepared),
-          });
+          Effect.provide(
+            executeStableSubagentInBandEffect({
+              runId: IN_BAND_LOGICAL_RUN_ID,
+              parentRunId: prepared.parentRunId,
+              session: prepared.session,
+              signal,
+              prepare: () => Effect.succeed(prepared),
+            }),
+            fakeProcessServices(),
+          );
         expect(yield* Effect.flip(run())).toMatchObject({
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining('pass options.inputFiles'),

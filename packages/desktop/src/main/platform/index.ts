@@ -49,6 +49,7 @@ import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
 
 // Local file imports
+import { desktopSetupPlatform } from '../desktopSetupAuth.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
@@ -116,11 +117,17 @@ export async function initializeElectronPlatform(
   // installing: an opener that uses the synchronous `open` would otherwise
   // face an asynchronous layer build.
   const processStart = await nodeProcesses.selfIdentity();
-  installProcessRuntime(
+  // The secrets and global state stores below open on this runtime, so the
+  // process services bind them through thunks over this root's own locals,
+  // resolved at first use — after this function has assigned them.
+  installProcessRuntime({
     processStart,
-    () => storage.getGlobalStoragePath(),
-    () => resolveGlobalStoragePath(userDataPath),
-  );
+    globalStorage: () => storage.getGlobalStoragePath(),
+    updateCheckStorage: () => resolveGlobalStoragePath(userDataPath),
+    secrets: () => secrets,
+    appState: () => globalStateStore,
+    setup: desktopSetupPlatform,
+  });
   const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
     await effectRuntime().runPromise(
       Effect.gen(function* () {

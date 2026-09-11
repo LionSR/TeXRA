@@ -19,6 +19,7 @@ import {
   getEnabledModels,
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { FileOptions, SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FILE_SELECT_CONFIGS } from '@shared/launcher/fileSelectConfigs';
@@ -32,6 +33,10 @@ type Banners = HostSnapshot['banners'];
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
   globalState: StateStore;
+  /** The process secret store, read by the model catalog's availability
+   *  answers. The host root that owns it threads it in beside
+   *  {@link HostSnapshotSourceOptions.globalState}. */
+  secrets: PlatformSecrets;
   /** The launcher's single-slot catalogs: base and edited candidates. */
   fileOptions(): Promise<FileOptions>;
   readRecentCommits(): Promise<{ commits: string[]; isGitRepo: boolean }>;
@@ -150,7 +155,10 @@ export function createHostSnapshotSource(
     catalogs = {
       ...catalogs,
       modelOptions: yield* hostPort(() =>
-        computeModelOptionsData(getEnabledModels(options.globalState)),
+        computeModelOptionsData(
+          { secrets: options.secrets, globalState: options.globalState },
+          getEnabledModels(options.globalState),
+        ),
       ),
     };
   });

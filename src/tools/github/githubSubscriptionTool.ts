@@ -26,6 +26,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { hostPort } from '@common/hostPort';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireLiveRun } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -179,18 +180,18 @@ function foldToolExit(exit: Exit.Exit<ToolResult, unknown>): ToolResult {
   return exit.value;
 }
 
-const requireToken = (): Effect.Effect<void, unknown> =>
-  Effect.flatMap(
-    hostPort(() => getGitHubToken()),
-    (token) =>
-      token
-        ? Effect.void
-        : Effect.fail(
-            new ToolError(
-              'No GitHub token configured. In the CLI, open /config → GitHub token. In VS Code, use TeXRA settings → Git tab → "Set token". Or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
-            ),
-          ),
-  );
+const requireToken = (): Effect.Effect<void, unknown, Secrets> =>
+  Effect.gen(function* () {
+    const secrets = yield* Secrets;
+    const token = yield* hostPort(() => getGitHubToken(secrets));
+    if (!token) {
+      return yield* Effect.fail(
+        new ToolError(
+          'No GitHub token configured. In the CLI, open /config → GitHub token. In VS Code, use TeXRA settings → Git tab → "Set token". Or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
+        ),
+      );
+    }
+  });
 
 /** `owner/repo` for any parsed target. */
 function slugOf(target: { owner: string; repo: string }): string {
@@ -318,7 +319,7 @@ const resolveIssueIsPR = (
   owner: string,
   repo: string,
   number: number,
-): Effect.Effect<boolean, unknown> =>
+): Effect.Effect<boolean, unknown, Secrets> =>
   Effect.flatMap(
     ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`),
     (res) =>
@@ -418,7 +419,7 @@ interface OpenPullSummary {
 const getDefaultBranch = (
   owner: string,
   repo: string,
-): Effect.Effect<string, unknown> =>
+): Effect.Effect<string, unknown, Secrets> =>
   Effect.flatMap(
     ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
     (res) =>
@@ -447,7 +448,7 @@ const getLocalDefaultBranchHint = (
 const listOpenPullSuggestions = (
   owner: string,
   repo: string,
-): Effect.Effect<string, unknown> =>
+): Effect.Effect<string, unknown, Secrets> =>
   Effect.map(
     ghGet<OpenPullSummary[]>(
       `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
@@ -470,7 +471,11 @@ const getFindCurrentFallbackInfo = (
   owner: string,
   repo: string,
   cwd: string,
-): Effect.Effect<{ defaultBranch?: string; suggestions: string }> =>
+): Effect.Effect<
+  { defaultBranch?: string; suggestions: string },
+  never,
+  Secrets
+> =>
   Effect.zip(
     getDefaultBranch(owner, repo).pipe(
       Effect.catch(() => getLocalDefaultBranchHint(cwd)),

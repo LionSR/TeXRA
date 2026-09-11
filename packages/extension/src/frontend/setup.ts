@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
+import type { StateStore } from '@platform/interfaces';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
@@ -89,7 +90,9 @@ export async function refreshCustomAgentRoot(): Promise<void> {
 }
 
 /** Prepare the host environment and recommend LaTeX Workshop when useful. */
-export async function initializeLatexSupport(): Promise<void> {
+export async function initializeLatexSupport(
+  globalState: StateStore,
+): Promise<void> {
   // Extend process.env.PATH with common TeX installation directories so that
   // child processes spawned by other extensions (e.g., LaTeX Workshop) can
   // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
@@ -116,7 +119,7 @@ export async function initializeLatexSupport(): Promise<void> {
       // prompted to install a TeX extension they don't need. They'll still
       // discover it via the LaTeX settings tab or compile errors later.
       log.info('LaTeX Workshop extension not found, prompting installation');
-      await promptExtensionInstall({
+      await promptExtensionInstall(globalState, {
         suppressKey: 'latex-workshop-install',
         message:
           'LaTeX Workshop extension is recommended for full TeXRA functionality (LaTeX compilation, PDF preview, and IntelliSense). Install now?',

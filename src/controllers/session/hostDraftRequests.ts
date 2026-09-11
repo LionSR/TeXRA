@@ -5,6 +5,8 @@ import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { hostPort } from '@common/hostPort';
+import { AppState } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
@@ -71,10 +73,18 @@ export class HostDraftRequests {
     session: SessionHandle,
     request: DraftRequest,
     port: string,
-  ): Effect.fn.Return<HostOutcome, unknown> {
+  ): Effect.fn.Return<HostOutcome, unknown, AppState | Secrets> {
     switch (request.kind) {
       case 'polish': {
-        const result = yield* hostPort(() => polishTextWithAI(request.text));
+        // The helper model behind the polish is resolved against the process
+        // stores; a host port takes no services, so they are read here.
+        const stores = {
+          secrets: yield* Secrets,
+          globalState: yield* AppState,
+        };
+        const result = yield* hostPort(() =>
+          polishTextWithAI(request.text, stores),
+        );
         if (!result.success) {
           return yield* new Rejected({
             reason: result.error ?? 'Polishing failed.',

@@ -48,8 +48,10 @@ interface CliToolGuideResult {
 }
 
 async function listTools(context: CliContext): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
-  const records = await readCliToolStatuses();
+  // The init call hands back the state store it just wired, so the status read
+  // and any follow-up toggle hit the same store.
+  const services = await initCliPlatform({ ...context, quietLogs: true });
+  const records = await readCliToolStatuses(services.globalState);
 
   emitCliResult(context, {
     json: records,
@@ -60,8 +62,8 @@ async function listTools(context: CliContext): Promise<number> {
 }
 
 async function showTool(context: CliContext, id: string): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
-  const record = await readCliToolStatus(id);
+  const services = await initCliPlatform({ ...context, quietLogs: true });
+  const record = await readCliToolStatus(services.globalState, id);
   if (!record) {
     writeTextStderr(formatCliToolNotFoundMessage(id));
     return CliExitCode.Usage;
@@ -80,8 +82,8 @@ async function toggleTool(
   id: string,
   enabled: boolean,
 ): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
-  const ok = await setCliToolEnabled(id, enabled);
+  const services = await initCliPlatform({ ...context, quietLogs: true });
+  const ok = await setCliToolEnabled(services.globalState, id, enabled);
   if (!ok) {
     writeTextStderr(formatCliToolNotToggleableMessage(id));
     return CliExitCode.Usage;

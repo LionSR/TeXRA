@@ -28,7 +28,6 @@ import {
   writeTextStderr,
   writeTextStdout,
 } from './logSinks';
-import { getCliModelAccessList } from './modelAccess';
 import { createCliStyle } from './style';
 import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 import type { CliContext } from './cliContext';
@@ -57,6 +56,12 @@ interface DirectoryStat {
 interface DoctorDependencies {
   readonly nodeVersion?: string;
   readonly authProfile?: () => Promise<CliAuthProfile>;
+  /**
+   * Model availability needs the process stores, which only the CLI root
+   * holds, so this is the one probe the caller supplies rather than one this
+   * module defaults to. It is absent exactly when platform init failed, and
+   * `initError` then skips the model check that would read it.
+   */
   readonly modelAccessList?: () => Promise<readonly CliModelAccess[]>;
   readonly latexToolchain?: () => Promise<LatexToolchainProbe>;
   readonly pathStat?: (filePath: string) => Promise<DirectoryStat>;
@@ -379,6 +384,18 @@ function checkTelemetry(deps: ResolvedDoctorDependencies): DoctorCheck {
   );
 }
 
+/**
+ * Stand-in for the one probe this module cannot build for itself. Unreachable:
+ * the caller omits `modelAccessList` only when platform init failed, and that
+ * sets `initError`, which skips the model check before it is ever called.
+ */
+const missingModelAccessProbe = (): Promise<never> =>
+  Promise.reject(
+    new Error(
+      'Model availability needs the platform stores the CLI root holds; doctor was given neither a model probe nor a platform init error.',
+    ),
+  );
+
 export async function buildDoctorReport(
   context: CliContext,
   deps: DoctorDependencies = {},
@@ -387,7 +404,7 @@ export async function buildDoctorReport(
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
     authProfile: deps.authProfile ?? getCliAuthProfile,
-    modelAccessList: deps.modelAccessList ?? getCliModelAccessList,
+    modelAccessList: deps.modelAccessList ?? missingModelAccessProbe,
     latexToolchain: deps.latexToolchain ?? probeLatexToolchain,
     pathStat: deps.pathStat ?? stat,
     pathAccess: deps.pathAccess ?? access,

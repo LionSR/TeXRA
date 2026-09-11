@@ -8,6 +8,7 @@ import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   isEmptyUsage,
   type SubscriptionUsageProvider,
@@ -52,6 +53,11 @@ const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
 interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
+  /**
+   * The secret store the subscription quota and route probes read, threaded
+   * from the chat surface that opened it — this component runs no Effect.
+   */
+  readonly secrets: PlatformSecrets;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
   readonly childListSelectionResumable?: boolean;
@@ -65,7 +71,10 @@ interface StatusBarProps {
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
-  const subscriptionUsage = useMemo(() => new SubscriptionUsageService(), []);
+  const subscriptionUsage = useMemo(
+    () => new SubscriptionUsageService({ secrets: props.secrets }),
+    [props.secrets],
+  );
   const { write: writeStderr } = useStderr();
   const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
@@ -163,7 +172,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       if (subscriptionInFlightKeyRef.current === readKey) return;
       subscriptionInFlightKeyRef.current = readKey;
       const requestGeneration = ++subscriptionRequestGenerationRef.current;
-      void activeSubscriptionUsageRoute(accessModel)
+      void activeSubscriptionUsageRoute(accessModel, props.secrets)
         .then((route) => {
           if (
             subscriptionDesiredKeyRef.current !== readKey ||

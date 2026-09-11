@@ -6,22 +6,26 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { hostPort } from '@common/hostPort';
+import { createLog } from '@logger/logUtils';
+import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { executed } from '@tools/core/result';
+import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
 import { defineTool } from '../core/define';
-import {
-  getChatGptSubscriptionStatus,
-  getSetupPlatform,
-  setupSecrets,
-} from './platform';
+import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
+
+const credentialLog = createLog('Setup Credentials');
 
 const ProbeEnvironmentInputSchema = z
   .strictObject({})
@@ -34,7 +38,8 @@ type ProbeInput = z.infer<typeof ProbeEnvironmentInputSchema>;
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
 
 const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
-  const platform = getSetupPlatform();
+  const platform = yield* SetupPlatform;
+  const secrets = yield* Secrets;
 
   // `os.homedir()` can throw UV_ENOENT in container/remote environments
   // where the home directory is not resolvable; fall back to a string
@@ -58,23 +63,25 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         { concurrency: 'unbounded' },
       ),
       Effect.all(
-        setupSecrets.providers.map((provider) =>
-          setupSecrets.apiKeyOrigin(provider).pipe(
+        API_PROVIDERS.map((provider) =>
+          hostPort(() => lookupApiKeyOrigin(secrets, provider)).pipe(
             Effect.catch(() => Effect.succeed('unknown' as const)),
             Effect.map((origin) => ({ provider, origin })),
           ),
         ),
         { concurrency: 'unbounded' },
       ),
-      setupSecrets.anyUsableCredentialExists().pipe(
+      hostPort(() =>
+        hasUsableSetupCredential(secrets, credentialLog.warn),
+      ).pipe(
         Effect.map((available) => ({ available, status: 'known' as const })),
         Effect.catch(() =>
           Effect.succeed({ available: false, status: 'unknown' as const }),
         ),
       ),
-      setupSecrets
-        .gitHubTokenExists()
-        .pipe(Effect.catch(() => Effect.succeed('none' as const))),
+      hostPort(() => resolveGitHubTokenSource(secrets)).pipe(
+        Effect.catch(() => Effect.succeed('none' as const)),
+      ),
       getChatGptSubscriptionStatus().pipe(
         Effect.catch(() => Effect.succeed({ signedIn: false, enabled: false })),
       ),

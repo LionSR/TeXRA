@@ -14,6 +14,7 @@
 import { Cause, Clock, Effect } from 'effect';
 
 import type { Disposable } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -220,7 +221,7 @@ export class PRPollingSource extends PollingSourceBase<
   subscribe(
     input: PRSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     const key = prKeyToString(input);
     return this.register(key, () => createInitialState(input), onEvent).pipe(
       Effect.map((disposable) => {
@@ -269,14 +270,14 @@ export class PRPollingSource extends PollingSourceBase<
   protected override afterTick(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now: number,
-  ): Effect.Effect<void, PollHookRejected> {
+  ): Effect.Effect<void, PollHookRejected, Secrets> {
     return this.drainAnnotationQueues(entries, now);
   }
 
   protected pollOne(
     key: string,
     state: PRSubscriptionState,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, unknown, Secrets> {
     return this.pollPr(key, state);
   }
 

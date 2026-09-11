@@ -45,6 +45,7 @@ import {
   type CurrentToolContexts,
 } from '@agent/followUp/ToolFileInteractionContext';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
@@ -555,7 +556,7 @@ export class ClaudeAgentTool extends defineTool({
     session: SessionHandle,
     contexts: CurrentToolContexts | undefined,
     requestApproval: typeof requestBashApproval,
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, Secrets> {
     const config = yield* agentCliCall(() =>
       runInSession(session, getClaudeAgentConfig),
     );
@@ -610,7 +611,7 @@ const launchClaudeAgentSession = Effect.fn(
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
   session: SessionHandle,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure, Secrets> {
   const config = yield* agentCliCall(() =>
     runInSession(session, getClaudeAgentConfig),
   );
@@ -624,8 +625,8 @@ const launchClaudeAgentSession = Effect.fn(
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(workingDir);
   // No session frame here, unlike the module read above: the env block reads
-  // only the process environment and `platform().secrets`, neither of which is
-  // workspace-scoped, so it needs no `runInSession` scope of its own.
+  // only the process environment and the `Secrets` service, neither of which
+  // is workspace-scoped, so it needs no `runInSession` scope of its own.
   const env = yield* config.buildClaudeAgentEnv();
   const pathToClaudeCodeExecutable = yield* agentCliCall(() =>
     findClaudeBinaryPath(),

@@ -17,6 +17,7 @@ import { hostPort } from '@common/hostPort';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
+import type { StateStore } from '@platform/interfaces';
 import {
   LEAN4_EXTENSION_ID,
   type FetchDiagnosticsResult,
@@ -195,6 +196,7 @@ function getDiagnostics(filePath: string): LeanDiagnostic[] {
 }
 
 function executeFileCommand(
+  globalState: StateStore,
   command: LeanFileCommand,
   filePath: string,
 ): Effect.Effect<boolean> {
@@ -205,7 +207,7 @@ function executeFileCommand(
       );
       await vscode.window.showTextDocument(document, { preserveFocus: true });
     });
-    if (!(yield* getClientProvider())) return false;
+    if (!(yield* getClientProvider(globalState))) return false;
     yield* hostPort(() =>
       vscode.commands.executeCommand(FILE_COMMAND_VSCODE_IDS[command]),
     );
@@ -218,15 +220,14 @@ function executeFileCommand(
  * Yields null if the extension is not installed or not ready.
  * Prompts user to install the extension if not found.
  */
-function getClientProvider(): Effect.Effect<
-  LeanClientProvider | null,
-  unknown
-> {
+function getClientProvider(
+  globalState: StateStore,
+): Effect.Effect<LeanClientProvider | null, unknown> {
   return hostPort(async () => {
     const lean4Ext =
       vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
     if (!lean4Ext) {
-      await promptExtensionInstall({
+      await promptExtensionInstall(globalState, {
         suppressKey: 'lean4-install-tool',
         message:
           'Lean 4 extension is required for this operation. Install now?',
@@ -249,6 +250,7 @@ function getClientProvider(): Effect.Effect<
  * the error text; nothing here throws.
  */
 function sendPositionRequest<T>(
+  globalState: StateStore,
   filePath: string,
   line: number,
   column: number,
@@ -259,7 +261,7 @@ function sendPositionRequest<T>(
     const uri = vscode.Uri.file(absolutePath);
     const leanUri = createLeanFileUri(absolutePath);
 
-    const clientProvider = yield* getClientProvider().pipe(
+    const clientProvider = yield* getClientProvider(globalState).pipe(
       Effect.catch(() => Effect.succeed(null)),
     );
     if (!clientProvider) {
@@ -330,11 +332,13 @@ function sendPositionRequest<T>(
  * @param column - 0-indexed column number
  */
 function getGoalState(
+  globalState: StateStore,
   filePath: string,
   line: number,
   column: number,
 ): Effect.Effect<LspResult<PlainGoal>> {
   return sendPositionRequest<PlainGoal>(
+    globalState,
     filePath,
     line,
     column,
@@ -348,11 +352,13 @@ function getGoalState(
  * @param column - 0-indexed column number
  */
 function getTermGoal(
+  globalState: StateStore,
   filePath: string,
   line: number,
   column: number,
 ): Effect.Effect<LspResult<PlainTermGoal>> {
   return sendPositionRequest<PlainTermGoal>(
+    globalState,
     filePath,
     line,
     column,
@@ -366,11 +372,13 @@ function getTermGoal(
  * @param column - 0-indexed column number
  */
 function getHoverInfo(
+  globalState: StateStore,
   filePath: string,
   line: number,
   column: number,
 ): Effect.Effect<LspResult<LspHover>> {
   return sendPositionRequest<LspHover>(
+    globalState,
     filePath,
     line,
     column,
@@ -427,6 +435,7 @@ function navigateToFirstError(
 }
 
 function executeProjectCommand(
+  globalState: StateStore,
   command: LeanProjectCommand,
 ): Effect.Effect<void, unknown> {
   return Effect.gen(function* () {
@@ -434,7 +443,7 @@ function executeProjectCommand(
       // vscode-lean4 registers these commands in activateLean4Features(), not
       // during its initial extension activation. Awaiting the exported feature
       // promise prevents a race with command registration after a Lean file opens.
-      if (!(yield* getClientProvider())) {
+      if (!(yield* getClientProvider(globalState))) {
         return yield* Effect.fail(
           new Error(
             'The Lean 4 extension is not ready. Open a Lean file in the project, then try again.',
@@ -449,19 +458,29 @@ function executeProjectCommand(
 }
 
 /**
- * The VS Code-mediated `LeanLanguageServices` adapter, installed by
+ * Build the VS Code-mediated `LeanLanguageServices` adapter, installed by
  * `extension.ts` via `setLeanLanguageServices`. The single exported surface
  * of this module's language operations: the implementing functions above are
  * module-private so the export list states exactly what the host consumes.
- * Frozen because the object is a shared module-level singleton handed across
- * a package boundary — no consumer may reassign a member.
+ * The adapter closes over the extension's own global-state store, which the
+ * install prompt's suppression keys are read from and written to; the module
+ * never looks a store up for itself.
  */
-export const vscodeLeanLanguageServices = Object.freeze({
-  executeFileCommand,
-  getGoalState,
-  getTermGoal,
-  getHoverInfo,
-  fetchDiagnosticsForFile,
-  navigateToFirstError,
-  executeProjectCommand,
-} satisfies LeanLanguageServices);
+export function createVscodeLeanLanguageServices(
+  globalState: StateStore,
+): LeanLanguageServices {
+  return Object.freeze({
+    executeFileCommand: (command, filePath) =>
+      executeFileCommand(globalState, command, filePath),
+    getGoalState: (filePath, line, column) =>
+      getGoalState(globalState, filePath, line, column),
+    getTermGoal: (filePath, line, column) =>
+      getTermGoal(globalState, filePath, line, column),
+    getHoverInfo: (filePath, line, column) =>
+      getHoverInfo(globalState, filePath, line, column),
+    fetchDiagnosticsForFile,
+    navigateToFirstError,
+    executeProjectCommand: (command) =>
+      executeProjectCommand(globalState, command),
+  } satisfies LeanLanguageServices);
+}

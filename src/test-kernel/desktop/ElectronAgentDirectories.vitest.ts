@@ -10,7 +10,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 
 // Local imports
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
+import { AppState, NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type {
   AgentDirectoriesPort,
@@ -27,6 +27,7 @@ import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -108,6 +109,7 @@ describe('desktop agent directory bootstrap', () => {
             Layer.mergeAll(
               testHttpClientLayer,
               Layer.mock(UpdateCheckRecords, {}),
+              fakeProcessServices(),
               inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
                 Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
               ),
@@ -147,12 +149,16 @@ describe('desktop agent directory bootstrap', () => {
       });
 
       return {
-        // The desktop entry runs this program on the process runtime; the
-        // harness hands the Effect to the test, which runs it on its own
-        // @effect/vitest runtime instead.
+        // The desktop entry runs this program on the process runtime, whose
+        // `AppState` is the store the entry opened; the harness hands the
+        // Effect to the test, which runs it on its own @effect/vitest runtime
+        // instead, so the harness provides its own store the same way.
         bootstrapNodeAgentDirectories: (
           options: NodeAgentDirectoryBootstrapOptions,
-        ) => bootstrapEffect(options),
+        ) =>
+          bootstrapEffect(options).pipe(
+            Effect.provide(AppState.layer(() => globalStateStore)),
+          ),
         agentDirectories: platform().agentDirectories,
         globalStateStore,
         resourcesPath,

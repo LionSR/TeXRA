@@ -13,21 +13,32 @@
  */
 import { afterEach, beforeEach } from 'vitest';
 
+import type { ToolInjections } from '@agent/runtime/toolInjection';
+import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { AppState } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
+import type { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
+import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
   type FakeHostOverrides,
   type FakePlatformOptions,
 } from './FakePlatform';
+import type { Layer } from 'effect';
 
-/** A process platform and the workspace roots installed beside it. */
+/**
+ * A process platform and the workspace roots installed beside it, plus the
+ * setup platform a setup-tool suite provides (absent on every other host:
+ * a setup-tool call there is a test error).
+ */
 export interface FakeHost {
   readonly platform: Platform;
   readonly roots: WorkspaceRoots;
+  readonly setup?: SetupPlatformShape;
 }
 
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
@@ -37,11 +48,90 @@ export function createFakeHost(
   options: FakePlatformOptions = {},
   overrides: FakeHostOverrides = {},
 ): FakeHost {
-  const { config, workspaceState, ...platformOverrides } = overrides;
+  const { config, workspaceState, setup, ...platformOverrides } = overrides;
   return {
     platform: createFakePlatform(options, platformOverrides),
     roots: createFakeWorkspaceRoots(options, { config, workspaceState }),
+    ...(setup ? { setup } : {}),
   };
+}
+
+/**
+ * The host most recently installed. The process runtime below is built once
+ * per module instance while hosts are swapped per test, so its process
+ * services resolve against this binding on every call, exactly as the
+ * production roots' thunks resolve against their own locals.
+ */
+let current: FakeHost | undefined;
+
+export function installedHost(): FakeHost {
+  if (!current) throw new Error('No fake host is installed.');
+  return current;
+}
+
+/**
+ * The installed fake host's two process stores, as the model-option and CLI
+ * history readers take them. Read per call, not captured: a suite that
+ * reinstalls its host mid-test sees the new one.
+ */
+export function hostStores(): ModelOptionStores {
+  const { secrets, globalState } = installedHost().platform;
+  return { secrets, globalState };
+}
+
+function installedSetup(): SetupPlatformShape {
+  const { setup } = installedHost();
+  if (!setup) {
+    throw new Error(
+      'The installed fake host has no setup platform: pass `setup` in the host overrides.',
+    );
+  }
+  return setup;
+}
+
+/**
+ * The `SetupPlatform` service of every test runtime: each member reads the
+ * installed host's `setup` when called, so a suite that swaps hosts per test
+ * swaps setup platforms with them.
+ */
+export const fakeSetupPlatform: SetupPlatformShape = {
+  get host() {
+    return installedSetup().host;
+  },
+  signIn: () => installedSetup().signIn(),
+  get commands() {
+    return installedSetup().commands;
+  },
+  get extensions() {
+    return installedSetup().extensions;
+  },
+  get terminal() {
+    return installedSetup().terminal;
+  },
+};
+
+/** The four process services a fake host provides to a program. */
+export type FakeProcessServices =
+  Secrets | AppState | SetupPlatform | ToolInjections;
+
+type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
+
+let processServices: FakeProcessServicesLayer | undefined;
+
+/**
+ * The four process services over the installed fake host, as
+ * `installFakeHost` builds them for the bare runtime: for a suite that builds
+ * a process runtime of its own, or runs a program that requires them under
+ * `it.effect`. Available once the first fake host is installed, which the
+ * kernel's setup file does before every test.
+ */
+export function fakeProcessServices(): FakeProcessServicesLayer {
+  if (!processServices) {
+    throw new Error(
+      'No fake host is installed: the process services are built with the first install.',
+    );
+  }
+  return processServices;
 }
 
 /**
@@ -62,6 +152,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { installAuthProgramEdge },
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
+    { Secrets },
+    { AppState },
+    { SetupPlatform },
+    { ToolInjections },
   ] = await Promise.all([
     import('@platform/platform'),
     import('@platform/workspaceRoots'),
@@ -69,7 +163,25 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@auth/authProgram'),
     import('effect'),
     import('@test/support/fetchTestUtils'),
+    import('@platform/secrets'),
+    import('@platform/interfaces'),
+    import('@tools/setup/platform'),
+    import('@agent/runtime/toolInjection'),
   ]);
+  current = host;
+  // The process services, over whichever host is installed when a member is
+  // called: hosts change per test, the runtime does not. These four imports
+  // stay eager: the process runtime is built synchronously by
+  // `effectRuntime().runSync` callers, so a lazily imported (asynchronous)
+  // layer here fails every one of them.
+  processServices ??= Layer.mergeAll(
+    Secrets.layer(() => installedHost().platform.secrets),
+    AppState.layer(() => installedHost().platform.globalState),
+    SetupPlatform.layer(fakeSetupPlatform),
+    // No conditional injections on the bare fake host: a suite that
+    // exercises them passes its own list to `resolveAgentTools`.
+    ToolInjections.layer([]),
+  );
   initPlatform(host.platform);
   initProcessWorkspaceRoots(host.roots);
   // A bare process runtime for the Promise-facing boundaries that run
@@ -89,6 +201,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           // Suites using inquiries install the real service with their session
           // graph. Any inquiry call on this bare fake host is a test error.
           Layer.mock(InquiryRecords, {}),
+          processServices,
         ),
       ),
     );

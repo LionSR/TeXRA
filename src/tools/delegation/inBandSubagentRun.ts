@@ -28,6 +28,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
@@ -86,7 +87,8 @@ interface StableInBandSubagentRunOptions {
   /** Resolve mutable launch prerequisites only when no result can be recovered. */
   readonly prepare: () => Effect.Effect<
     Omit<InBandSubagentRunBaseOptions, 'signal'>,
-    Error
+    Error,
+    AgentRunServices
   >;
   /**
    * Fires once, just before a live attempt runs, with the run id that
@@ -165,7 +167,7 @@ const executeInBand = Effect.fn('executeInBand')(
     mode: PersistenceMode,
     runId: RunId,
     stableAttempt?: StableSubagentAttempt,
-  ): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
+  ): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
@@ -441,7 +443,7 @@ export const executeStableSubagentInBand = Effect.fn(
 )(
   function* (
     options: StableInBandSubagentRunOptions,
-  ): Effect.fn.Return<InBandSubagentRunResult, Error> {
+  ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const reservation = yield* Effect.acquireRelease(
@@ -513,7 +515,7 @@ export const executeSubagentForDeliveryInBand = Effect.fn(
   'executeSubagentForDeliveryInBand',
 )(function* (
   options: InBandSubagentDeliveryOptions,
-): Effect.fn.Return<InBandSubagentDeliveryResult, Error> {
+): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
   const definition = yield* prepareInBandDefinition(options);
   return yield* executeInBand(
     options,

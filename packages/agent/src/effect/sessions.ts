@@ -52,6 +52,11 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 // `scripts/validate-artifacts.mjs`.
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
+// The process services the launches this package runs are given: the
+// stores come from the composed process (`AgentRuntime['services']`),
+// and the layer over them is built here, in a function body, so its
+// provider-bearing types never reach this subpath's declarations.
+import { processServicesLayer } from '@controllers/session/sessionLayer';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -317,6 +322,7 @@ function admitInput(
  */
 function start(
   session: RuntimeSessionHandle,
+  services: ReturnType<typeof processServicesLayer>,
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
@@ -399,6 +405,18 @@ function start(
               tools: input.tools,
             },
           ).pipe(
+            // The launch runs on the embedder's runtime; the process
+            // services it reads are the composed process's, given here so
+            // the public `Sessions` types carry none of them. This is the
+            // package's one departure from "one provide per process": the
+            // embedder owns the runtime these programs run on, so the
+            // process's own provide is not on their path. The layer wraps
+            // the composed process's own stores (`AgentRuntime['services']`)
+            // and holds nothing of its own, so what a launch reads here and
+            // what the process runtime holds are the same objects. It is the
+            // embedder boundary, not a pattern to copy: inside TeXRA's own
+            // hosts the process provide is the only one.
+            Effect.provide(services),
             Effect.mapError(
               (cause) =>
                 new RunFailure({ cause, message: toErrorMessage(cause) }),
@@ -491,10 +509,13 @@ let readerPorts = 0;
 
 /** The session as this package works on it: a pure function of the owner's
  *  handle, holding nothing the owner already holds. */
-function sessionOf(handle: RuntimeSessionHandle): Session {
+function sessionOf(
+  handle: RuntimeSessionHandle,
+  services: ReturnType<typeof processServicesLayer>,
+): Session {
   return {
     roots: handle.roots,
-    start: (input) => start(handle, input),
+    start: (input) => start(handle, services, input),
     request: (request) => handle.requests.request(request),
     view: { changes: handle.viewChanges },
     subscribe: (interests) =>
@@ -513,6 +534,7 @@ function sessionOf(handle: RuntimeSessionHandle): Session {
 export function makeSessions(
   runtime: AgentRuntime,
 ): Context.Service.Shape<typeof Sessions> {
+  const services = processServicesLayer(runtime.services);
   return {
     open: (roots?: WorkspaceRoots) =>
       Effect.map(
@@ -524,10 +546,12 @@ export function makeSessions(
           },
           interactions: HEADLESS_HOST,
         }),
-        sessionOf,
+        (handle) => sessionOf(handle, services),
       ),
     close: (roots?: WorkspaceRoots, signal?: AbortSignal) =>
       closeOwnedSession((roots ?? runtime.roots).storage, signal),
-    list: Effect.map(listOwnedSessions(), (handles) => handles.map(sessionOf)),
+    list: Effect.map(listOwnedSessions(), (handles) =>
+      handles.map((handle) => sessionOf(handle, services)),
+    ),
   };
 }

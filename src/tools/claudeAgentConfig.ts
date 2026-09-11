@@ -15,7 +15,7 @@ import {
 import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
-import { platform } from '@platform/platform';
+import { Secrets } from '@platform/secrets';
 import type {
   ClaudeAgentEffort,
   ClaudeAgentModel,
@@ -212,7 +212,7 @@ function claudeKeychainCredentialProbes(configDir: string): string[][] {
  */
 export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   options: { platform?: NodeJS.Platform } = {},
-): Effect.fn.Return<NodeJS.ProcessEnv, never> {
+): Effect.fn.Return<NodeJS.ProcessEnv, never, Secrets> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
@@ -240,8 +240,9 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   // 3. Fall back to the Settings-managed secret. An unreadable secret store
   //    leaves the subprocess with no credential at all, so say so rather than
   //    letting it surface as an opaque "Invalid API key" from Claude Code.
+  const secrets = yield* Secrets;
   const managed = yield* hostPort(() =>
-    lookupApiKey(platform().secrets, 'anthropic'),
+    lookupApiKey(secrets, 'anthropic'),
   ).pipe(
     Effect.catch((error: unknown) => {
       log.warn(

@@ -40,6 +40,7 @@ import {
 } from '@agent/runtime/SessionResumeRetrieval';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type {
@@ -88,7 +89,7 @@ export interface AgentEngine {
   readonly resumeToolUseTurn: (
     resume: ToolUseResumeData,
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-  ) => Effect.Effect<AgentRuntimeFlowResult, Error>;
+  ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>;
 }
 
 let agentEngine: AgentEngine | undefined;
@@ -195,7 +196,7 @@ function bindAbortSignals(
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): ChildRunStrategy<AgentRuntimeFlowResult> {
+): ChildRunStrategy<AgentRuntimeFlowResult, AgentRunServices> {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
   // `executeAgent`/`resumeToolUseTurn` never reject for a
@@ -218,7 +219,7 @@ export function createNativeSubagentStrategy(
     signal: AbortSignal,
     call: (
       onRun: (handle: AgentRunHandle) => void,
-    ) => Effect.Effect<AgentRuntimeFlowResult, Error>,
+    ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>,
   ) {
     lastErr = undefined;
     lastResult = undefined;

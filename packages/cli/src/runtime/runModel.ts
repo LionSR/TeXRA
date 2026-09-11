@@ -1,3 +1,4 @@
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { RunModelCandidate } from '@model/runModelDecision';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -43,15 +44,21 @@ function cliRunModelCandidates(
   ];
 }
 
+/**
+ * `stores` is the secret store and global state availability is computed from,
+ * handed over by the command's own `initCliPlatform` result rather than looked
+ * up again here.
+ */
 export async function selectCliRunModel(
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
+  stores: ModelOptionStores,
 ): Promise<string> {
   try {
     const resolution = await selectCliRunnableModel(
       cliRunModelCandidates(context, modelOverride, role),
-      {},
+      { stores },
     );
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);

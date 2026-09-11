@@ -3,8 +3,10 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { apiKeySecretName } from '@model/apiProviders';
+import { hostPort } from '@common/hostPort';
+import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import { type ToolResult } from '@shared/schemas';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { executed } from '@tools/core/result';
@@ -12,7 +14,6 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/define';
-import { setupSecrets } from './platform';
 
 const ListApiKeysInputSchema = z
   .strictObject({})
@@ -23,7 +24,8 @@ const ListApiKeysInputSchema = z
 type ListApiKeysInput = z.infer<typeof ListApiKeysInputSchema>;
 
 const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
-  const storedKeys = yield* setupSecrets.listStoredKeys();
+  const secrets = yield* Secrets;
+  const storedKeys = yield* hostPort(() => secrets.listStoredKeys());
 
   if (storedKeys.length === 0) {
     return executed(
@@ -32,9 +34,8 @@ const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
     );
   }
 
-  const { providers } = setupSecrets;
   const knownProviderKeyMap = new Map(
-    providers.map((p) => [apiKeySecretName(p), p] as const),
+    API_PROVIDERS.map((p) => [apiKeySecretName(p), p] as const),
   );
 
   const providerKeys: string[] = [];
@@ -55,7 +56,9 @@ const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
     }
   }
 
-  const missingProviders = providers.filter((p) => !providerKeys.includes(p));
+  const missingProviders = API_PROVIDERS.filter(
+    (p) => !providerKeys.includes(p),
+  );
 
   const lines: string[] = [`Stored secrets (${storedKeys.length} total):`];
 
@@ -96,7 +99,7 @@ const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
   const providerSummary =
     providerKeys.length === 0
       ? 'no persisted provider API keys'
-      : `${providerKeys.length}/${providers.length} persisted provider API keys`;
+      : `${providerKeys.length}/${API_PROVIDERS.length} persisted provider API keys`;
 
   return executed(
     lines.join('\n'),

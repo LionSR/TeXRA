@@ -9,6 +9,7 @@ import {
   setCliModelEnabled,
   type CliEnabledModelRow,
 } from '@cli/runtime/enabledModels';
+import type { StateStore } from '@platform/interfaces';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTransientNotice } from '../state/cliState';
@@ -16,6 +17,12 @@ import { AsyncListForm } from './_shared/ListForm';
 
 interface EnabledModelsFormProps {
   readonly availableRows?: number;
+  /**
+   * The global state the enabled-model list reads and each toggle writes. Ink
+   * components run no Effect, so the process store arrives as a prop from the
+   * surface that opened the form.
+   */
+  readonly state: StateStore;
   readonly onClose: () => void;
 }
 
@@ -36,7 +43,7 @@ export function EnabledModelsForm(
       title="/models"
       compactTitle="/models · Enable models that appear in pickers."
       loadingLabel="Loading models..."
-      load={async () => listCliEnabledModelCatalog()}
+      load={async () => listCliEnabledModelCatalog(props.state)}
       items={(models) =>
         models.map((model) => ({
           value: model.id,
@@ -56,7 +63,7 @@ export function EnabledModelsForm(
       onSelect={(id, { data: models, reload }) => {
         const row = models.find((candidate) => candidate.id === id);
         if (!row) return;
-        void setCliModelEnabled(id, !row.enabled)
+        void setCliModelEnabled(props.state, id, !row.enabled)
           .then(reload)
           .catch((error: unknown) => {
             // e.g. disabling the last remaining model — keep the catalog as-is.

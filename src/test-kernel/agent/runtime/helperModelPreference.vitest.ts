@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { fakeStores } from '@test/support/FakePlatform';
 
 const getHelperModelName = vi.hoisted(() => vi.fn());
 const getModelUnavailableReason = vi.hoisted(() => vi.fn());
@@ -11,6 +12,13 @@ const resolveRuntimeModelConfig = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/helperModelName', () => ({ getHelperModelName }));
 vi.mock('@model/computeModelOptions', () => ({ getModelUnavailableReason }));
 vi.mock('@model/runtimeModelRegistry', () => ({ resolveRuntimeModelConfig }));
+
+/**
+ * The launching run's stores. Both readers that would touch them
+ * (`getHelperModelName`, `getModelUnavailableReason`) are mocked here, so the
+ * bag only has to be the one the preference forwards.
+ */
+const STORES = fakeStores();
 
 const MODEL_CONFIGS = {
   deepseek: { capabilities: { supportsFunctionCalling: true } },
@@ -43,7 +51,7 @@ describe('applyHelperModelPreference', () => {
   async function resolve(config: AgentConfig): Promise<AgentConfig> {
     const { applyHelperModelPreference } =
       await import('@agent/runtime/helperModelPreference');
-    return applyHelperModelPreference(config);
+    return applyHelperModelPreference(config, STORES);
   }
 
   it.each([
@@ -80,7 +88,7 @@ describe('applyHelperModelPreference', () => {
     const result = await resolve(configFor('opus', 'workflow'));
 
     expect(result.model).toBe('chatonly');
-    expect(getModelUnavailableReason).toHaveBeenCalledWith('chatonly');
+    expect(getModelUnavailableReason).toHaveBeenCalledWith('chatonly', STORES);
   });
 
   it('falls back to the selected model when the helper model is unavailable', async () => {

@@ -22,7 +22,7 @@ import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import {
   getRuntimeModelConfig,
@@ -98,8 +98,8 @@ interface RunToolUseFlowInput extends BaseFlowContextInit {
    * otherwise keep naming the model the run started with.
    */
   onModelChanged: (model: string) => void;
-  /** Runtime feature registry for auto-injected tools. */
-  toolInjections?: ToolInjectionRegistry;
+  /** The process's conditional tool injections (`ToolInjections`). */
+  toolInjections: ToolInjections['Service'];
   /** Caller-supplied tools available only to this run. */
   tools?: readonly ITool[];
   /** Reports whether terminal finalization should retain the resume record. */
@@ -189,6 +189,7 @@ export async function runToolUseFlow(
     approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
     runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
+    stores: input.stores,
   });
   const overlayTools: ITool[] = [];
   const overlayNames = new Set<string>();
@@ -291,7 +292,10 @@ export async function runToolUseFlow(
       // check. Keep the UI permissive rather than guessing their format here.
       return undefined;
     }
-    const nextKey = resolveModelHandlerCompatibilityKey(nextConfig);
+    const nextKey = resolveModelHandlerCompatibilityKey(
+      nextConfig,
+      input.stores.globalState,
+    );
     if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
     return activeKey === nextKey
       ? undefined
@@ -316,6 +320,7 @@ export async function runToolUseFlow(
 
     const nextHandler = (await createModelHandler(
       nextConfig,
+      input.stores,
       services.runScope.session.responseTextProcessing,
     )) as RunModelHandler;
     if (

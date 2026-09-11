@@ -19,8 +19,9 @@ import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { AppState, SHUTDOWN_PHASE } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import {
   RUN_OUTCOME,
   type RunEndOutput,
@@ -55,6 +56,12 @@ import type { CliContext } from './cliContext';
 type RunAgentWorkflowOutput = NonNullable<
   RunAgentOptions['openWorkflowOutput']
 >;
+
+/**
+ * The process services a headless run requires (the ones `runAgent` reads),
+ * derived rather than named so the host imports no agent-internal module.
+ */
+export type CliRunServices = Effect.Services<ReturnType<typeof runAgent>>;
 type CliWorkflowOutputHandler = (
   result: Parameters<RunAgentWorkflowOutput>[0],
   tryCommitPublication: () => boolean,
@@ -125,7 +132,7 @@ export function executeCliConfig<
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliConfigExecuteOptions<C> = {},
-): Effect.Effect<CliConfigExecuteResult<C>, Error> {
+): Effect.Effect<CliConfigExecuteResult<C>, Error, CliRunServices> {
   return Effect.gen(function* () {
     const {
       expectedCategory,
@@ -252,13 +259,15 @@ export function executeCliRequest(
       result: ExecuteAgentResult;
     }
   | { ok: false; exitCode: CliExitCode },
-  Error
+  Error,
+  CliRunServices
 > {
   return Effect.gen(function* () {
     // Transcript persistence is a launch prerequisite for every headless run.
     // This executes before runtime-host construction and before runAgent.
+    const stores = { secrets: yield* Secrets, globalState: yield* AppState };
     const session = yield* Effect.tryPromise({
-      try: initializeCliTranscriptSession,
+      try: () => initializeCliTranscriptSession(stores),
       catch: ensureError,
     });
     session.setApprovalPolicy(runContext.approvalPolicy);
@@ -505,7 +514,7 @@ export function executeCliRequest(
       },
     );
     const openWorkflowOutput = options.openWorkflowOutput;
-    const invoke = (): Effect.Effect<ExecuteAgentResult, Error> =>
+    const invoke = (): ReturnType<typeof runAgent> =>
       runAgent(request, {
         session,
         enforceCategory: options.enforceCategory,

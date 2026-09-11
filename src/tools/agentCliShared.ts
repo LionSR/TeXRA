@@ -200,7 +200,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
  */
 const resumeOrLaunchAgentCliSession = Effect.fn(
   'agentCliShared.resumeOrLaunchAgentCliSession',
-)(function* (
+)(function* <R>(
   store: AgentCliSessionRegistry,
   params: {
     session: SessionHandle;
@@ -210,9 +210,9 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
     labels: AgentCliResumeLabels;
     launch: (
       releaseClaim?: () => void,
-    ) => Effect.Effect<ToolResult, AgentCliToolFailure>;
+    ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
   },
-): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure, R> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -370,15 +370,15 @@ export const launchAgentCliSession = Effect.fn(
  * prompting for approval rather than launching work nobody collects.
  */
 const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
-  function* (
+  function* <R>(
     toolName: string,
     approvalLabel: string,
     contexts: CurrentToolContexts | undefined,
     requestApproval: typeof requestBashApproval,
     run: (
       runContext: RunContext | undefined,
-    ) => Effect.Effect<ToolResult, AgentCliToolFailure>,
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+    ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, R> {
     if (contexts?.runContext?.stopAfterCycle) {
       return yield* Effect.fail(
         new ToolError(
@@ -423,7 +423,7 @@ interface AgentCliLaunchContext {
  * The returned Effect is the tool's whole dispatch: the tool's `execute()`
  * runs it at its own edge with {@link reraiseAgentCliCallFailure} piped in.
  */
-export function dispatchAgentCliTool(params: {
+export function dispatchAgentCliTool<R = never>(params: {
   session: SessionHandle;
   contexts: CurrentToolContexts | undefined;
   /** Bound at the tool entry so approval retains the parent run's policy. */
@@ -438,8 +438,8 @@ export function dispatchAgentCliTool(params: {
   labels: AgentCliResumeLabels;
   launch: (
     context: AgentCliLaunchContext,
-  ) => Effect.Effect<ToolResult, AgentCliToolFailure>;
-}): Effect.Effect<ToolResult, AgentCliToolFailure> {
+  ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
+}): Effect.Effect<ToolResult, AgentCliToolFailure, R> {
   const {
     agentName,
     approvalLabel,

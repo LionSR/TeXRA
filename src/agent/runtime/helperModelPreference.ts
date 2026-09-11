@@ -10,7 +10,10 @@
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
-import { getModelUnavailableReason } from '@model/computeModelOptions';
+import {
+  getModelUnavailableReason,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
 import { AgentCategory } from '@shared/schemas';
@@ -22,11 +25,16 @@ const log = createLog('helperModelPreference');
  * Swap `config`'s model for the configured helper model, or return it unchanged
  * when the helper model already equals it, a tool-use agent's helper model can't
  * call functions, or the helper model is unavailable.
+ *
+ * `stores` are the process secret store and global state the launching run
+ * already holds (the `Secrets` / `AppState` services), so the preference and
+ * the availability answer are read from the same stores as the run itself.
  */
 export async function applyHelperModelPreference(
   config: AgentConfig,
+  stores: ModelOptionStores,
 ): Promise<AgentConfig> {
-  const helperModel = getHelperModelName();
+  const helperModel = getHelperModelName(stores.globalState);
   if (helperModel === config.model) return config;
 
   const helperModelConfig = await resolveRuntimeModelConfig(helperModel);
@@ -44,7 +52,7 @@ export async function applyHelperModelPreference(
     return config;
   }
 
-  const unavailable = await getModelUnavailableReason(helperModel);
+  const unavailable = await getModelUnavailableReason(helperModel, stores);
   if (unavailable) {
     log.warn(
       `Keeping ${config.model} for ${config.agent}: helper model ${helperModel} is unavailable. ${unavailable}`,

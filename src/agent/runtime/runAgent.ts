@@ -7,6 +7,8 @@ import {
 } from '@agent/storage/runLifecycle';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AppState } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -22,6 +24,7 @@ import { RunHandle } from './RunHandle';
 import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
+import type { AgentRunServices } from './toolInjection';
 
 /**
  * Options for `runAgent`. Fields shared with the lower-level `executeAgent`
@@ -94,7 +97,7 @@ export type RunAgentRequest =
 export const runAgent = Effect.fn('runAgent')(function* (
   request: RunAgentRequest,
   options: RunAgentOptions,
-): Effect.fn.Return<AgentFlowResult, Error> {
+): Effect.fn.Return<AgentFlowResult, Error, AgentRunServices> {
   const {
     beforeLeaseRelease,
     onRunLeaseAcquired,
@@ -137,12 +140,18 @@ export const runAgent = Effect.fn('runAgent')(function* (
     return yield* runSession.runs.launchRun(
       runId,
       Effect.gen(function* () {
-        // Resolve the selected model before registering the run.
+        // Resolve the selected model before registering the run. The helper
+        // model swap reads the enabled-model list and the provider keys, so
+        // both process stores come from this run's context.
+        const modelStores = {
+          globalState: yield* AppState,
+          secrets: yield* Secrets,
+        };
         const requestedConfig = preferHelperModel
           ? yield* Effect.tryPromise({
               try: async () =>
                 runInSession(runSession, () =>
-                  applyHelperModelPreference(request.config),
+                  applyHelperModelPreference(request.config, modelStores),
                 ),
               catch: ensureError,
             })

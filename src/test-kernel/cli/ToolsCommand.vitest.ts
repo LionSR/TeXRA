@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
@@ -38,13 +39,16 @@ function runToolsCli(args: readonly string[]): ReturnType<typeof runCli> {
 describe('CLI tools command', () => {
   let stdout = '';
   let stderr = '';
+  /** The state store the mocked init hands the command to toggle through. */
+  let globalState: FakeStateStore;
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     stdout = '';
     stderr = '';
-    mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
+    globalState = new FakeStateStore();
+    mocks.initCliPlatform.mockReset().mockResolvedValue({ globalState });
     mocks.readCliToolGuide.mockReset().mockReturnValue({
       text: 'Install help',
       command: 'echo install',
@@ -74,7 +78,11 @@ describe('CLI tools command', () => {
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
-    expect(mocks.setCliToolEnabled).toHaveBeenCalledWith('codex', false);
+    expect(mocks.setCliToolEnabled).toHaveBeenCalledWith(
+      globalState,
+      'codex',
+      false,
+    );
     expect(JSON.parse(stdout)).toEqual({
       id: 'codex',
       enabled: false,

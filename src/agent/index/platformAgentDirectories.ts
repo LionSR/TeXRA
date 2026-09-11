@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
+import { AppState } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
@@ -164,7 +165,7 @@ const hasRecentExternalSync = Effect.fn(
 
 const reconcileUnlocked = Effect.fn('platformAgentDirectories.reconcile')(
   function* (options: BundledAgentReconcileOptions, log: Log) {
-    const globalState = platform().globalState;
+    const globalState = yield* AppState;
     // `StateStore` mirrors `vscode.Memento`, so its writes stay Promises;
     // this is the single wrap of that port, not a Promise lane of its own.
     const recordVersion = Effect.tryPromise({

@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FakeSecrets } from '@test/support/FakePlatform';
+
 const mocks = vi.hoisted(() => ({
   getCliAuthProfile: vi.fn(),
   readCliModelAccessStatus: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
   getSubscriptionUsage: vi.fn(),
-  secrets: {},
 }));
 
 vi.mock(
@@ -48,15 +49,13 @@ vi.mock('@model/apiProviders', () => ({
   },
 }));
 
-vi.mock('@platform/platform', () => ({
-  platform: () => ({ secrets: mocks.secrets }),
-}));
-
 const {
   loadCliApiStatus,
   loadCliDetailedAccountStatusLines,
   loadCliModelAccessOverview,
 } = await import('@cli/runtime/apiStatus');
+
+const secrets = new FakeSecrets();
 
 function lineFor(lines: readonly string[], route: string): string {
   const matches = lines.filter((line) => line.startsWith(`${route}:`));
@@ -84,7 +83,7 @@ function codingPlans(
 }
 
 function accountStatusLines(): Promise<string[]> {
-  return loadCliDetailedAccountStatusLines();
+  return loadCliDetailedAccountStatusLines(secrets);
 }
 
 function launcherStatus(
@@ -94,7 +93,7 @@ function launcherStatus(
     note?: string;
   } = { authenticated: false },
 ): Promise<readonly string[]> {
-  return loadCliApiStatus(profile);
+  return loadCliApiStatus(secrets, profile);
 }
 
 function renderPreferenceRoute(
@@ -261,7 +260,7 @@ describe('loadCliApiStatus', () => {
       };
     });
 
-    const lines = await loadCliDetailedAccountStatusLines({
+    const lines = await loadCliDetailedAccountStatusLines(secrets, {
       now: 1_800_000_000_000,
     });
 
@@ -384,7 +383,7 @@ describe('loadCliApiStatus', () => {
     });
     mocks.lookupApiKeyOrigin.mockRejectedValue(new Error('keychain offline'));
 
-    await expect(loadCliModelAccessOverview()).resolves.toEqual({
+    await expect(loadCliModelAccessOverview(secrets)).resolves.toEqual({
       access: {
         preferences: {
           chatGpt: 'on',

@@ -19,6 +19,7 @@ import {
   metaChordInput,
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
+import type { PlatformSecrets } from '@platform/secrets';
 import { type RunId, type WorkflowControlAction } from '@shared/schemas';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 import type { SessionView } from '@shared/session/sessionView';
@@ -116,6 +117,11 @@ function runLabelsOf(view: SessionView): RunLabels {
 }
 
 export interface AppProps {
+  /**
+   * The secret store the status bar's subscription probes read, threaded from
+   * the chat surface that opened it — this component runs no Effect.
+   */
+  readonly secrets: PlatformSecrets;
   readonly onSubmit: (
     line: string,
     mediaFiles?: readonly string[],
@@ -630,6 +636,7 @@ export function App(props: AppProps): React.JSX.Element {
               keyboardActive={!childListFocused}
             />
             <StatusBar
+              secrets={props.secrets}
               chatInputAvailable={
                 !childInputHidden && unavailableDetail === undefined
               }

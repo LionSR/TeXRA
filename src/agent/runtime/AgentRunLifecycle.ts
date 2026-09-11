@@ -18,7 +18,7 @@ import {
   attachProviderError,
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
-import { platform } from '@platform/platform';
+import { AppState } from '@platform/interfaces';
 import type {
   RetryErrorInfo,
   RunEndOutput,
@@ -457,7 +457,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       lifecycle: FlowLifecycleControl,
     ) => Promise<AgentRuntimeFlowResult>,
     options?: RunFlowLifecycleOptions,
-  ): Effect.fn.Return<AgentRuntimeFlowResult, Error> {
+  ): Effect.fn.Return<AgentRuntimeFlowResult, Error, AppState> {
     const { runId, session } = ctx.runScope;
     const agentIdentifier = ctx.config.agent;
     const isSubagent = options?.parentRunId !== undefined;
@@ -757,9 +757,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         resolvedOutcome === RUN_OUTCOME.COMPLETED &&
         baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
       ) {
+        const globalState = yield* AppState;
         yield* Effect.tryPromise({
           try: async () => {
-            const { globalState } = platform();
             if (!getFirstRunDone(globalState)) {
               await setFirstRunDone(globalState, true);
             }

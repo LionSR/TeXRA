@@ -1,12 +1,15 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Layer } from 'effect';
 import pDefer from 'p-defer';
 import { expect, vi } from 'vitest';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
+import { AppState } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
 const audio = vi.hoisted(() => ({
   startRecording: vi.fn(),
@@ -21,6 +24,14 @@ vi.mock('@agent/runtime/RunContext', () => ({
 vi.mock('@agent/runtime/textEnhancement', () => ({
   polishTextWithAI: vi.fn(),
 }));
+
+// The process stores `handle` resolves its polish model against. This suite
+// records and transcribes, so no member is ever called; the layers exist to
+// satisfy the requirement the host root provides in production.
+const processStores = Layer.mergeAll(
+  Secrets.layer(() => new FakeSecrets()),
+  AppState.layer(() => new FakeStateStore()),
+);
 
 it.effect(
   'returns transcription to Start when another paper stops the process recorder',
@@ -113,5 +124,5 @@ it.effect(
       expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
       expect(snapshot).toHaveBeenLastCalledWith(null);
       unsubscribe();
-    }),
+    }).pipe(Effect.provide(processStores)),
 );

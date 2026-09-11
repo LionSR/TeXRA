@@ -14,6 +14,7 @@ import {
 import { AgentError } from '@common/errors';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { reasoningEffortOverrides } from '@model/reasoningLevel';
 import {
   copilotRouteUnavailableReason,
@@ -35,11 +36,13 @@ import {
   copilotRouteForModel,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
+import type { StateStore } from '@platform/interfaces';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelHandlerCompatibilityKey } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
@@ -158,12 +161,13 @@ const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
  * (configurable effort, or DeepSeek-style reasoning without a granular effort flag)
  * and the user has set an override.
  */
-function withReasoningOverride<T extends ModelHandler>(handler: T): T {
+function withReasoningOverride<T extends ModelHandler>(
+  handler: T,
+  globalState: StateStore,
+): T {
   if (!handler.supportsReasoningLevelOverride) return handler;
 
-  const effort = reasoningEffortOverrides(platform().globalState)[
-    handler.config.name
-  ];
+  const effort = reasoningEffortOverrides(globalState)[handler.config.name];
   if (effort === undefined) return handler;
 
   log.debug(
@@ -204,8 +208,8 @@ export function shouldUseResponsesAPI(
  * (no caching) so a mid-session settings change is honored on the next handler
  * creation, matching the other `globalState` reads in this module.
  */
-function getPreferShortModelNames(): boolean {
-  return platform().globalState.get<boolean>(
+function getPreferShortModelNames(globalState: StateStore): boolean {
+  return globalState.get<boolean>(
     GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
     false,
   );
@@ -227,6 +231,7 @@ function applyShortModelNamePreference(
 /** Returns the conversation-history format used by the handler for this model. */
 export function resolveModelHandlerCompatibilityKey(
   originalConfig: ModelConfig,
+  globalState: StateStore,
   useOpenRouter = getUseOpenRouter(),
   copilotRouteOverride?: CopilotRouteOverride,
 ): ModelHandlerCompatibilityKey | undefined {
@@ -242,10 +247,11 @@ export function resolveModelHandlerCompatibilityKey(
   // silently consuming a provider key or subscription (#9635).
   if (
     copilotRouteOverride !== 'direct' &&
-    prefersCopilotRoute(originalConfig.name)
+    prefersCopilotRoute(originalConfig.name, globalState)
   ) {
     const unavailableReason = copilotRouteUnavailableReason(
       originalConfig.name,
+      globalState,
     );
     if (unavailableReason) throw new AgentError(unavailableReason);
     return 'ModelHandlerVscodeLm';
@@ -258,7 +264,7 @@ export function resolveModelHandlerCompatibilityKey(
   // `createModelHandler` path can hand this its own resolved config.
   const config = applyShortModelNamePreference(
     originalConfig,
-    getPreferShortModelNames(),
+    getPreferShortModelNames(globalState),
   );
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     return 'ModelHandlerOpenAIResponse';
@@ -328,9 +334,10 @@ function withModelHandlerCompatibilityKey<T extends ModelHandler>(
 function finalizeModelHandler<T extends ModelHandler>(
   handler: T,
   compatibilityKey: ModelHandlerCompatibilityKey,
+  globalState: StateStore,
 ): T {
   return withModelHandlerCompatibilityKey(
-    withReasoningOverride(handler),
+    withReasoningOverride(handler, globalState),
     compatibilityKey,
   );
 }
@@ -341,10 +348,13 @@ function finalizeModelHandler<T extends ModelHandler>(
  * date-pinned fullName (e.g. "gpt-5.5-2026-04-15"). Useful for proxies/gateways
  * that only accept unpinned model identifiers.
  */
-function withShortModelName(config: ModelConfig): ModelConfig {
+function withShortModelName(
+  config: ModelConfig,
+  globalState: StateStore,
+): ModelConfig {
   const resolved = applyShortModelNamePreference(
     config,
-    getPreferShortModelNames(),
+    getPreferShortModelNames(globalState),
   );
   if (resolved === config) return config;
 
@@ -378,13 +388,15 @@ function withCompatibilityRoutingMode(
  */
 export async function createModelHandler(
   originalConfig: ModelConfig,
+  stores: ModelOptionStores,
   responseTextProcessing?: ResponseTextProcessing,
   copilotRouteOverride?: CopilotRouteOverride,
 ): Promise<ModelHandler> {
-  const config = withShortModelName(originalConfig);
+  const config = withShortModelName(originalConfig, stores.globalState);
   const useOpenRouter = getUseOpenRouter();
   const compatibilityKey = resolveModelHandlerCompatibilityKey(
     config,
+    stores.globalState,
     useOpenRouter,
     copilotRouteOverride,
   );
@@ -393,6 +405,7 @@ export async function createModelHandler(
     compatibilityKey,
     useOpenRouter,
     { allowCodexSubscriptionOverride: true },
+    stores,
     responseTextProcessing,
   );
 }
@@ -405,10 +418,11 @@ export async function createModelHandler(
 export async function createModelHandlerForCompatibilityKey(
   originalConfig: ModelConfig,
   compatibilityKey: ModelHandlerCompatibilityKey,
+  stores: ModelOptionStores,
   responseTextProcessing?: ResponseTextProcessing,
 ): Promise<ModelHandler> {
   const routedConfig = withCompatibilityRoutingMode(
-    withShortModelName(originalConfig),
+    withShortModelName(originalConfig, stores.globalState),
     compatibilityKey,
   );
   const useOpenRouter = compatibilityKey === 'ModelHandlerOpenRouterNative';
@@ -420,6 +434,7 @@ export async function createModelHandlerForCompatibilityKey(
       allowCodexSubscriptionOverride:
         compatibilityKey === 'ModelHandlerOpenAIResponse',
     },
+    stores,
     responseTextProcessing,
   );
 }
@@ -443,6 +458,7 @@ export async function createModelHandlerForCompatibilityKey(
 export async function createKimiCodeFallbackHandler(
   currentConfig: KimiSubscriptionModelFields,
   modelId: string,
+  stores: ModelOptionStores,
   responseTextProcessing?: ResponseTextProcessing,
 ): Promise<ModelHandler | undefined> {
   if (
@@ -465,6 +481,7 @@ export async function createKimiCodeFallbackHandler(
   return createModelHandlerForCompatibilityKey(
     registryConfig,
     'ModelHandlerKimi',
+    stores,
     responseTextProcessing,
   );
 }
@@ -484,6 +501,7 @@ async function tryCodexSubscriptionRoute(
   compatibilityKey: ModelHandlerCompatibilityKey | undefined,
   useOpenRouter: boolean,
   allowCodexSubscriptionOverride: boolean,
+  globalState: StateStore,
   responseTextProcessing?: ResponseTextProcessing,
 ): Promise<ModelHandler | undefined> {
   const codexSubscriptionEligible =
@@ -516,6 +534,7 @@ async function tryCodexSubscriptionRoute(
   return finalizeModelHandler(
     new ModelHandlerCodex(config, responseTextProcessing),
     'ModelHandlerOpenAIResponse',
+    globalState,
   );
 }
 
@@ -546,6 +565,7 @@ async function applyKimiCodeRoute(
   config: ModelConfig,
   compatibilityKey: ModelHandlerCompatibilityKey | undefined,
   useOpenRouter: boolean,
+  secrets: PlatformSecrets,
 ): Promise<ModelConfig> {
   if (
     compatibilityKey !== 'ModelHandlerKimi' ||
@@ -555,7 +575,7 @@ async function applyKimiCodeRoute(
   }
   return kimiCodeEffectiveConfig(
     config,
-    await resolveKimiCodeRoutingFacts(useOpenRouter),
+    await resolveKimiCodeRoutingFacts(secrets, useOpenRouter),
   );
 }
 
@@ -566,6 +586,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
   options: {
     allowCodexSubscriptionOverride: boolean;
   },
+  stores: ModelOptionStores,
   responseTextProcessing?: ResponseTextProcessing,
 ): Promise<ModelHandler> {
   if (
@@ -585,12 +606,18 @@ async function createModelHandlerForResolvedCompatibilityKey(
     compatibilityKey,
     useOpenRouter,
     options.allowCodexSubscriptionOverride,
+    stores.globalState,
     responseTextProcessing,
   );
   if (codexHandler) {
     return codexHandler;
   }
-  config = await applyKimiCodeRoute(config, compatibilityKey, useOpenRouter);
+  config = await applyKimiCodeRoute(
+    config,
+    compatibilityKey,
+    useOpenRouter,
+    stores.secrets,
+  );
 
   if (
     compatibilityKey === 'ModelHandlerVscodeLm' &&
@@ -625,6 +652,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       return finalizeModelHandler(
         new ModelHandlerOpenAIResponse(config, responseTextProcessing),
         'ModelHandlerOpenAIResponse',
+        stores.globalState,
       );
     }
 
@@ -639,6 +667,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
           responseTextProcessing,
         ),
         'ModelHandlerOpenRouterNative',
+        stores.globalState,
       );
     }
 
@@ -656,6 +685,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       return finalizeModelHandler(
         new ModelHandlerVscodeLm(routedConfig, responseTextProcessing),
         'ModelHandlerVscodeLm',
+        stores.globalState,
       );
     }
 
@@ -670,6 +700,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       return finalizeModelHandler(
         new HandlerClass(config, responseTextProcessing),
         route.compatibilityKey,
+        stores.globalState,
       );
     }
   }

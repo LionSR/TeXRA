@@ -38,7 +38,9 @@ import {
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   cloneRoundIndexed,
   type FileOpResult,
@@ -79,6 +81,10 @@ import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 interface DesktopHostRequestsOptions {
   session: SessionHandle;
+  /** The process stores the desktop root holds: the model catalog reads both,
+   *  and the merge run reads the helper model from the state store. */
+  secrets: PlatformSecrets;
+  globalState: StateStore;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
@@ -128,6 +134,9 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, run, logger } = options;
+  // The window's handle on the process runtime, taken once here rather than
+  // re-fetched at each of the request arms below.
+  const runtime = effectRuntime();
   // Shared controllers propagate request failures to the dispatcher.
   const rejectRequest = async (reason: string): Promise<never> => {
     throw new Rejected({ reason });
@@ -144,22 +153,28 @@ export function createDesktopHostRequests(
     }
   };
 
-  const runActions = createHostRunActions({
-    session,
-    runAgentRequest: run.runAgentRequest,
-    loadModelOptions: () => computeModelOptionsData(),
-    // Only the "ask the user for a key" step is host-specific: on the
-    // desktop that means opening the Models tab rather than a modal prompt.
-    // The controller re-reads the secret store after this returns.
-    promptForApiKey: async () => {
-      postDesktopSettingsView(options.postToRenderer, 'models');
-      await host.showInfoMessage(
-        'Add a provider API key in Models, then use "Retry" on the request.',
-      );
-    },
-    showInfo: (message) => host.showInfoMessage(message),
-    showWarning: (message) => host.showWarningMessage(message),
-  });
+  const runActions = runtime.runSync(
+    createHostRunActions({
+      session,
+      runAgentRequest: run.runAgentRequest,
+      loadModelOptions: () =>
+        computeModelOptionsData({
+          secrets: options.secrets,
+          globalState: options.globalState,
+        }),
+      // Only the "ask the user for a key" step is host-specific: on the
+      // desktop that means opening the Models tab rather than a modal prompt.
+      // The controller re-reads the secret store after this returns.
+      promptForApiKey: async () => {
+        postDesktopSettingsView(options.postToRenderer, 'models');
+        await host.showInfoMessage(
+          'Add a provider API key in Models, then use "Retry" on the request.',
+        );
+      },
+      showInfo: (message) => host.showInfoMessage(message),
+      showWarning: (message) => host.showWarningMessage(message),
+    }),
+  );
   const { runOutputs } = runActions;
 
   const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
@@ -176,10 +191,11 @@ export function createDesktopHostRequests(
     { ...host, showErrorMessage: rejectRequest },
     {
       session,
+      globalState: options.globalState,
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
       startRun: (request) => {
-        effectRuntime().runFork(
+        runtime.runFork(
           Effect.tryPromise({
             try: () => run.runValidated(request),
             catch: (error) => error,
@@ -233,9 +249,7 @@ export function createDesktopHostRequests(
     runId: RunId,
     editedFile: string,
   ): Promise<DesktopLatexdiffRunContext | undefined> {
-    const config = await effectRuntime().runPromise(
-      runActions.readConfig(runId),
-    );
+    const config = await runtime.runPromise(runActions.readConfig(runId));
     const outputsByRound = cloneRoundIndexed(runOutputs.getOutputFiles(runId));
     const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
       ? {
@@ -281,7 +295,7 @@ export function createDesktopHostRequests(
         logger.error(message, { data: toLogData(error) }),
     },
     sendFollowUp: (runId, text) =>
-      effectRuntime().runPromise(runActions.sendFollowUp(runId, text)),
+      runtime.runPromise(runActions.sendFollowUp(runId, text)),
   });
 
   async function runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {
@@ -340,7 +354,7 @@ export function createDesktopHostRequests(
     if (!runId) {
       throw new Rejected({ reason: `Missing run identity for ${verb}.` });
     }
-    const ran = await effectRuntime().runPromiseExit(
+    const ran = await runtime.runPromiseExit(
       Effect.tryPromise({
         try: () =>
           operation === 'pack'
@@ -369,7 +383,7 @@ export function createDesktopHostRequests(
 
   let chatExportControllerLoad: Promise<ChatExportController> | undefined;
   function getChatExportController(): Promise<ChatExportController> {
-    chatExportControllerLoad ??= effectRuntime()
+    chatExportControllerLoad ??= runtime
       .runPromiseExit(
         Effect.tryPromise({
           try: async () => {
@@ -401,7 +415,7 @@ export function createDesktopHostRequests(
 
   async function exportTranscript(runId: RunId): Promise<void> {
     requireOpenRun(runId);
-    await effectRuntime().runPromise(
+    await runtime.runPromise(
       exportRunTranscript(runId, {
         pickFormat: () => host.pickTranscriptExportFormat(),
         openPath: (filePath) => host.openPath(filePath),
@@ -443,7 +457,7 @@ export function createDesktopHostRequests(
     }
     const base = pathToLocation(baseFile);
     if (action === 'latexdiffvc') {
-      const result = await effectRuntime().runPromise(
+      const result = await runtime.runPromise(
         new LaTeXdiffService(LATEXDIFF_CHANNEL).runDiffVc(base, commit),
       );
       if (!result.success) throw new Rejected({ reason: result.message });
@@ -577,27 +591,23 @@ export function createDesktopHostRequests(
         return done;
       case 'restoreIntoLauncher':
         restoreIntoLauncher(
-          await effectRuntime().runPromise(
-            runActions.restoreState(request.runId),
-          ),
+          await runtime.runPromise(runActions.restoreState(request.runId)),
         );
         return done;
       case 'resume':
-        await effectRuntime().runPromise(runActions.resume(request.runId));
+        await runtime.runPromise(runActions.resume(request.runId));
         return done;
       case 'runNew':
-        await effectRuntime().runPromise(runActions.runNew(request.runId));
+        await runtime.runPromise(runActions.runNew(request.runId));
         return done;
       case 'runCompileFixer':
-        await effectRuntime().runPromise(
-          runActions.runCompileFixer(request.runId),
-        );
+        await runtime.runPromise(runActions.runCompileFixer(request.runId));
         return done;
       case 'useOwnApiKey':
-        await effectRuntime().runPromise(runActions.useOwnApiKey(request));
+        await runtime.runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff': {
-        const config = await effectRuntime().runPromise(
+        const config = await runtime.runPromise(
           runActions.readConfig(request.runId),
         );
         await workflowRunActions.diffStream(request.runId, config);
@@ -605,7 +615,7 @@ export function createDesktopHostRequests(
       }
       case 'pack':
       case 'clean': {
-        const config = await effectRuntime().runPromise(
+        const config = await runtime.runPromise(
           runActions.readConfig(request.runId),
         );
         await workflowRunActions.runFileOperation(
@@ -621,7 +631,7 @@ export function createDesktopHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return effectRuntime().runPromise(draftRequests.handle(request, port));
+        return runtime.runPromise(draftRequests.handle(request, port));
       case 'popOut':
       case 'popBack':
         throw notOnDesktop('Pop-out to editor');
@@ -629,10 +639,10 @@ export function createDesktopHostRequests(
         postDesktopSettingsView(options.postToRenderer);
         return done;
       case 'refreshCommits':
-        await effectRuntime().runPromise(options.snapshot.refreshCommits);
+        await runtime.runPromise(options.snapshot.refreshCommits);
         return done;
       case 'refreshFiles':
-        await effectRuntime().runPromise(options.snapshot.refreshFiles);
+        await runtime.runPromise(options.snapshot.refreshFiles);
         return done;
       case 'openSettings':
         postDesktopSettingsView(
@@ -662,7 +672,7 @@ export function createDesktopHostRequests(
         };
       case 'launch':
         await run.runValidated(
-          await effectRuntime().runPromise(prepareSurfaceLaunch(request, host)),
+          await runtime.runPromise(prepareSurfaceLaunch(request, host)),
         );
         return done;
       case 'compileInputPdf':
@@ -677,7 +687,7 @@ export function createDesktopHostRequests(
         });
         return done;
       case 'fileAction': {
-        const config = await effectRuntime().runPromise(
+        const config = await runtime.runPromise(
           runActions.readConfig(request.runId),
         );
         await workflowFileActions.handle(request, config);
@@ -730,7 +740,7 @@ export function createDesktopHostRequests(
 
   return {
     async handle(request, port) {
-      const exit = await effectRuntime().runPromiseExit(
+      const exit = await runtime.runPromiseExit(
         Effect.tryPromise({
           try: () => dispatch(request, port),
           catch: (error) => error,

@@ -55,8 +55,8 @@ async function runHistoryList(
   context: CliContext,
   options: { limit?: number },
 ): Promise<number> {
-  await initLocalCliPlatform(context);
-  const entries = await listCliHistoryEntries();
+  const stores = await initLocalCliPlatform(context);
+  const entries = await listCliHistoryEntries(stores);
   const visibleEntries =
     options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
@@ -79,8 +79,8 @@ async function runHistoryShow(
   id: RunId,
   options: { full?: boolean },
 ): Promise<number> {
-  await initLocalCliPlatform(context);
-  const details = await readCliHistoryDetails(id, {
+  const stores = await initLocalCliPlatform(context);
+  const details = await readCliHistoryDetails(stores, id, {
     includeFullConversation: options.full === true,
   });
   if (!details) {
@@ -120,10 +120,10 @@ export async function runHistoryExport(
   format: 'html' | 'md',
   options: { assetsDir?: string },
 ): Promise<number> {
-  await initLocalCliPlatform(context);
+  const stores = await initLocalCliPlatform(context);
 
   if (format === 'md') {
-    const exportResult = await readCliHistoryExportInput(id);
+    const exportResult = await readCliHistoryExportInput(stores, id);
     if (exportResult.status === 'not_found') {
       writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
       return CliExitCode.Usage;
@@ -210,7 +210,7 @@ async function runHistoryDelete(
   context: CliContext,
   options: { id?: RunId; all: boolean; yes: boolean },
 ): Promise<number> {
-  await initLocalCliPlatform(context);
+  const stores = await initLocalCliPlatform(context);
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
@@ -219,7 +219,7 @@ async function runHistoryDelete(
     // stored run, including `isUserVisibleRun`-hidden
     // process-bookkeeping entries and agent-spawned child runs — don't add the
     // visibility filter here.
-    const session = await initializeCliTranscriptSession();
+    const session = await initializeCliTranscriptSession(stores);
     const count = (await effectRuntime().runPromise(listRuns(session))).length;
     writeTextStderr(
       `Refusing to delete ${formatResultCount(count, 'stored run')}. Re-run with --yes to confirm.`,
@@ -229,7 +229,7 @@ async function runHistoryDelete(
 
   let result: CliHistoryDeleteResult;
   try {
-    const session = await initializeCliTranscriptSession();
+    const session = await initializeCliTranscriptSession(stores);
     result = await effectRuntime().runPromise(
       deleteCliHistory(session, options),
     );

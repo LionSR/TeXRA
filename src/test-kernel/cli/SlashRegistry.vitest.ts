@@ -38,6 +38,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
   createDeferred,
@@ -71,6 +72,24 @@ const CHATGPT_PREFERENCE_FORM_VALUE: AccountAccessFormValue = {
   kind: 'access',
   selection: CHATGPT_PREFERENCE_SELECTION,
 };
+
+/**
+ * Register the built-ins with the process stores the chat surface threads in.
+ * These suites drive the form handlers, never the stores, so one fake pair
+ * serves the whole file.
+ */
+function registerBuiltins(
+  options: Omit<
+    Parameters<typeof registerBuiltinSlashCommands>[0],
+    'secrets' | 'state'
+  > = {},
+): void {
+  registerBuiltinSlashCommands({
+    secrets: new FakeSecrets(),
+    state: new FakeStateStore(),
+    ...options,
+  });
+}
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -134,7 +153,7 @@ describe('slashRegistry', () => {
     openForm: (onEcho: () => void) => unknown,
   ): Promise<void> {
     const events: string[] = [];
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onModelSelect: () => {
         events.push('outcome');
       },
@@ -152,7 +171,7 @@ describe('slashRegistry', () => {
   }
 
   it('shares one account & access form across /api, /login, and /logout', () => {
-    registerBuiltinSlashCommands();
+    registerBuiltins();
 
     const api = requireSlashCommand('api');
     expect(api.formComponent).toBeTypeOf('function');
@@ -163,7 +182,7 @@ describe('slashRegistry', () => {
   });
 
   it('opens structured forms by registered command name or alias', () => {
-    registerBuiltinSlashCommands();
+    registerBuiltins();
 
     expect(openCliSlashCommandForm('TOOLS', '')).toBe(true);
     expect(activeForm.get()?.commandName).toBe('tools');
@@ -174,7 +193,7 @@ describe('slashRegistry', () => {
 
   it('chains selectable agent picks into the model picker', async () => {
     resetCliState(CHAT_SESSION);
-    registerBuiltinSlashCommands();
+    registerBuiltins();
     const agentNode = openSlashForm<{
       onSelect?: (value: string) => void;
     }>('agent');
@@ -194,7 +213,7 @@ describe('slashRegistry', () => {
 
   it('does not advance agent picks into the model form when model selection is unavailable', async () => {
     resetCliState(CHAT_SESSION);
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       canSelectModel: () => false,
     });
     const agentNode = openSlashForm<{
@@ -210,7 +229,7 @@ describe('slashRegistry', () => {
 
   it('marks the agent picker read-only when root selection is closed', () => {
     resetCliState(CHAT_SESSION);
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       canSelectAgent: () => false,
       canSelectModel: () => true,
     });
@@ -224,7 +243,7 @@ describe('slashRegistry', () => {
 
   it('keeps the model picker selectable after root agent selection is closed', () => {
     resetCliState(CHAT_SESSION);
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       canSelectAgent: () => false,
       canSelectModel: () => true,
     });
@@ -243,7 +262,7 @@ describe('slashRegistry', () => {
 
   it('passes live model-switch disabled reasons into the model picker', () => {
     resetCliState(OVERRIDDEN_MODEL_CHAT_SESSION);
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       canSelectModel: () => true,
       getModelSwitchDisabledReason: (model) =>
         model === 'sonnet46T'
@@ -264,7 +283,7 @@ describe('slashRegistry', () => {
 
   it('keeps the model picker open until model selection commits', async () => {
     const selection = createDeferred<void>();
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onModelSelect: () => selection.promise,
     });
     const modelNode = openSlashForm<{
@@ -289,7 +308,7 @@ describe('slashRegistry', () => {
 
   it('routes model picker selection failures to the shared error handler', async () => {
     const errors: string[] = [];
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onModelSelect: async () => {
         throw new Error('model failed');
       },
@@ -310,7 +329,7 @@ describe('slashRegistry', () => {
   it('routes API picker selection failures to the shared error handler', async () => {
     resetCliState(CHAT_SESSION);
     const errors: string[] = [];
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onModelAccessSelect: async () => {
         throw new Error('api mode failed');
       },
@@ -330,7 +349,7 @@ describe('slashRegistry', () => {
   it('keeps model-access selection in a busy form until it settles', async () => {
     resetCliState(CHAT_SESSION);
     const selection = createDeferred<void>();
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onModelAccessSelect: () => selection.promise,
     });
     const apiNode = openSlashForm<{
@@ -352,7 +371,7 @@ describe('slashRegistry', () => {
   it('keeps provider API keys inside the masked local form', async () => {
     resetCliState(CHAT_SESSION);
     const saves: Array<{ provider: string; key: string }> = [];
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onApiKeySave: async (provider, key) => {
         saves.push({ provider, key });
       },
@@ -379,7 +398,7 @@ describe('slashRegistry', () => {
   it('closes the login form after the selected login path settles', async () => {
     const selected: string[] = [];
     let sawClosedBeforeLogin = false;
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onLoginSelect: (value) => {
         sawClosedBeforeLogin = loginNode.isClosed();
         selected.push(value);
@@ -397,7 +416,7 @@ describe('slashRegistry', () => {
   });
 
   it('holds a copyable login frame until the user dismisses it', async () => {
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onLoginSelect: (_value, output) => {
         output.writeProgress('Open https://example.test/device', {
           copyable: true,
@@ -425,7 +444,7 @@ describe('slashRegistry', () => {
   it('moves a login instruction to scrollback when its frame cannot fit', async () => {
     const instruction =
       'Open https://example.test/device and enter verification code ABCD-EFGH';
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onLoginSelect: (_value, output) => {
         output.writeProgress(instruction, { copyable: true });
       },
@@ -466,7 +485,7 @@ describe('slashRegistry', () => {
 
   it('detaches a busy login and ignores its late completion', async () => {
     const selection = createDeferred<void>();
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onLoginSelect: (_value, output) => {
         output.writeProgress('Open https://example.test/device', {
           copyable: true,
@@ -492,7 +511,7 @@ describe('slashRegistry', () => {
 
   it('keeps a failed login URL in its one persistent error', async () => {
     const errors: string[] = [];
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onLoginSelect: (_value, output) => {
         output.writeProgress('Open https://example.test/manual', {
           copyable: true,
@@ -523,7 +542,7 @@ describe('slashRegistry', () => {
   it('drops a busy form completion after CLI state reset', async () => {
     const selection = createDeferred<void>();
     const outcomes: string[] = [];
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onModelAccessSelect: async (_value, output) => {
         await selection.promise;
         output.appendOutcome('late outcome');
@@ -553,7 +572,7 @@ describe('slashRegistry', () => {
     completion.abort = () => {
       aborted = true;
     };
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onLogoutSelect: () => completion,
     });
 
@@ -569,7 +588,7 @@ describe('slashRegistry', () => {
 
   it('closes the approval policy picker before applying the new policy', async () => {
     let sawClosedBeforePolicySelect = false;
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onApprovalPolicySelect: () => {
         sawClosedBeforePolicySelect = approvalNode.isClosed();
       },
@@ -586,7 +605,7 @@ describe('slashRegistry', () => {
 
   it('closes the resume picker before running the resume action', async () => {
     let sawClosedBeforeResume = false;
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onResumeSelect: async () => {
         sawClosedBeforeResume = resumeNode.isClosed();
       },
@@ -604,7 +623,7 @@ describe('slashRegistry', () => {
   it('routes skill picker selections through the shared handler', async () => {
     const selected: string[] = [];
     let sawClosedBeforeSkillSelect = false;
-    registerBuiltinSlashCommands({
+    registerBuiltins({
       onSkillSelect: (value) => {
         sawClosedBeforeSkillSelect = skillsNode.isClosed();
         selected.push(value.activationPrompt);
@@ -696,7 +715,7 @@ describe('slashRegistry', () => {
   });
 
   it('suggests the closest command for a typo within the shared threshold', () => {
-    registerBuiltinSlashCommands();
+    registerBuiltins();
 
     expect(suggestSlashCommand('modl')?.name).toBe('model');
     expect(suggestSlashCommand('aprooval')?.name).toBe('approval');
@@ -714,7 +733,7 @@ describe('slashRegistry', () => {
   });
 
   it('returns no suggestion for input far from every command', () => {
-    registerBuiltinSlashCommands();
+    registerBuiltins();
 
     expect(suggestSlashCommand('frobnicate')).toBeUndefined();
   });

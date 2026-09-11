@@ -47,6 +47,8 @@ const baselinePath = join(
 );
 const PRD =
   '.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md';
+const INJECTION_PLAN =
+  '.agents/docs/proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md';
 /** This script, for the message that tells a reader where to retire a row. */
 const SCRIPT_REL = 'scripts/check-effect-migration-ratchet.mjs';
 
@@ -60,6 +62,57 @@ const SUPERSEDED_PACKAGES = [
 ];
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
+const PROCESS_RUNTIME_MODULE = '@platform/processRuntime';
+const PROCESS_RUNTIME_MODULE_PATH = 'src/platform/processRuntime';
+/**
+ * The AsyncLocalStorage carriers (injection plan
+ * .agents/docs/proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md
+ * §5 rows 5, 6, 8, 9) and the reader exports through which production code
+ * consumes them. The row counts CALLS of these readers in files that import
+ * them, for the same reason the directory rows count consumers rather than
+ * declarations: a carrier's own module is deleted with the carrier, while
+ * every reader call is a site a cohort has to convert. `TraceEmitter`'s
+ * per-instance storage (row 7) has no reader export and is not counted.
+ */
+const AMBIENT_CARRIERS = [
+  {
+    alias: '@platform/workspaceRoots',
+    path: 'src/platform/workspaceRoots',
+    readers: [
+      'workspaceRoots',
+      'tryWorkspaceRoots',
+      'processWorkspaceRoots',
+      'tryProcessWorkspaceRoots',
+      'runWithWorkspaceRoots',
+    ],
+  },
+  {
+    alias: '@agent/runtime/RunContext',
+    path: 'src/agent/runtime/RunContext',
+    readers: [
+      'runInSession',
+      'withRunContext',
+      'tryUseRunContext',
+      'getRunContextRunId',
+      'getRunContextWorkingDirectory',
+      'getRunContextSession',
+      'getRunContextInteractions',
+    ],
+  },
+  {
+    alias: '@agent/followUp/ToolFileInteractionContext',
+    path: 'src/agent/followUp/ToolFileInteractionContext',
+    readers: ['getCurrentToolCallContext', 'getCurrentToolContexts'],
+  },
+  {
+    alias: '@agent/storage/runLease',
+    path: 'src/agent/storage/runLease',
+    readers: ['ownsRunLease', 'assertOwnedRunLease'],
+  },
+];
+const AMBIENT_READERS_TEXT = AMBIENT_CARRIERS.map(
+  (carrier) => `${carrier.alias} {${carrier.readers.join(', ')}}`,
+).join('; ');
 const RUN_BOUNDARY_NAMES = new Set([
   'runPromise',
   'runPromiseExit',
@@ -121,6 +174,8 @@ const TOOL_DEFINE_MODULES = new Set([
 ]);
 
 const ROW_PLATFORM = 'platform()';
+const ROW_EFFECT_RUNTIME = 'effectRuntime()';
+const ROW_AMBIENT = 'ambient:asyncLocalStorage';
 const ROW_SET_SERVICES = 'setServices()';
 const ROW_ABORT_CONTROLLER = 'new AbortController()';
 const ROW_RUN_BOUNDARY = 'Effect.run*';
@@ -169,6 +224,14 @@ const ROWS = [
     rule: `${PRD} goal 3 / R2: the global platform() reader is being retired; new code receives its services as inputs instead of reading the ambient locator`,
   },
   {
+    id: ROW_EFFECT_RUNTIME,
+    rule: `${INJECTION_PLAN} §5 row 11 and §6 step 1: the process runtime global is being retired — each host entry holds its ManagedRuntime in a local, and code below the entries runs as an Effect program that is already on the runtime rather than fetching it through effectRuntime()`,
+  },
+  {
+    id: ROW_AMBIENT,
+    rule: `${INJECTION_PLAN} §3.2 and §6 steps 6, 7, 10, 11: the AsyncLocalStorage carriers (workspace roots, run context, tool call context, run lease ownership) become Context services and Context.Reference values on the fiber; a new call of one of their readers is a new dependency on the carrier being deleted`,
+  },
+  {
     id: ROW_SET_SERVICES,
     rule: `${PRD} Phase 2 / §11: zero production setServices() calls; run services are supplied once at the flow boundary, not copied into nodes`,
   },
@@ -202,7 +265,10 @@ const SEMANTICS =
   'Per-file counts of the mechanisms the Effect 4 migration retires (.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. ' +
   'Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
-  "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
+  "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; " +
+  "'effectRuntime()' counts, the same binding-scoped way, calls of the effectRuntime export of @platform/processRuntime (src/platform/processRuntime): tryProcessRuntime, initProcessRuntime and any other module's effectRuntime excluded; " +
+  `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the four AsyncLocalStorage carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
+  "'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
   "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
@@ -401,16 +467,17 @@ function isTypeOnly(node) {
 }
 
 /**
- * Whether a specifier names the platform locator module: the `@platform`
- * alias, or a relative path that resolves to src/platform/platform.
+ * Whether a specifier names the module at `modulePath`: its path alias, or a
+ * relative path that resolves to it. The platform locator, the process
+ * runtime, and each ambient carrier are matched this way.
  */
-function isPlatformModule(specifier, fileName) {
-  if (specifier === PLATFORM_MODULE) return true;
+function isModuleAt(specifier, fileName, alias, modulePath) {
+  if (specifier === alias) return true;
   if (!specifier.startsWith('.')) return false;
   const resolved = posix.normalize(
     posix.join(posix.dirname(fileName), specifier),
   );
-  return resolved.replace(/\.(ts|js)$/, '') === PLATFORM_MODULE_PATH;
+  return resolved.replace(/\.(ts|js)$/, '') === modulePath;
 }
 
 /**
@@ -436,18 +503,23 @@ function reachesDirectory(specifier, fileName, alias, root) {
 }
 
 /**
- * Local names a file binds the platform locator to: `locals` are bindings of
- * the `platform` export itself (aliased or not); `namespaces` are namespace
- * imports whose `.platform` member is the locator. Import declarations are
- * top-level statements, so no tree walk is needed.
+ * Local names a file binds the given exports of one module to: `locals` are
+ * bindings of the named exports themselves (aliased or not); `namespaces` are
+ * namespace imports whose members of those names are the exports. Import
+ * declarations are top-level statements, so no tree walk is needed. Used for
+ * the platform locator (`platform`), the process runtime (`effectRuntime`),
+ * and each ambient carrier's readers.
  */
-function platformBindings(sourceFile, fileName) {
+function exportBindings(sourceFile, fileName, alias, modulePath, exports) {
   const locals = new Set();
   const namespaces = new Set();
   for (const statement of sourceFile.statements) {
     if (ts.isImportEqualsDeclaration(statement)) {
       const specifier = moduleSpecifier(statement);
-      if (specifier != null && isPlatformModule(specifier, fileName)) {
+      if (
+        specifier != null &&
+        isModuleAt(specifier, fileName, alias, modulePath)
+      ) {
         namespaces.add(statement.name.text);
       }
       continue;
@@ -458,7 +530,7 @@ function platformBindings(sourceFile, fileName) {
     if (
       specifier == null ||
       bindings == null ||
-      !isPlatformModule(specifier, fileName)
+      !isModuleAt(specifier, fileName, alias, modulePath)
     ) {
       continue;
     }
@@ -467,13 +539,27 @@ function platformBindings(sourceFile, fileName) {
       continue;
     }
     for (const element of bindings.elements) {
-      if ((element.propertyName ?? element.name).text === 'platform') {
+      if (exports.has((element.propertyName ?? element.name).text)) {
         locals.add(element.name.text);
       }
     }
   }
   return { locals, namespaces };
 }
+
+/** Whether a call's callee is one of the bound exports: `local()` or `NS.name()`. */
+function callsBoundExport(callee, { locals, namespaces }, exports) {
+  return (
+    (ts.isIdentifier(callee) && locals.has(callee.text)) ||
+    (ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      namespaces.has(callee.expression.text) &&
+      exports.has(callee.name.text))
+  );
+}
+
+const PLATFORM_EXPORTS = new Set(['platform']);
+const PROCESS_RUNTIME_EXPORTS = new Set(['effectRuntime']);
 
 /**
  * Local names a file binds Effect's `Effect` module to, so `Effect.catch`
@@ -523,13 +609,41 @@ function surveySource(text, fileName) {
   );
   const counts = new Map();
   const bump = (row) => counts.set(row, (counts.get(row) ?? 0) + 1);
-  const { locals, namespaces } = platformBindings(sourceFile, fileName);
+  const platform = exportBindings(
+    sourceFile,
+    fileName,
+    PLATFORM_MODULE,
+    PLATFORM_MODULE_PATH,
+    PLATFORM_EXPORTS,
+  );
   const isPlatformRead = (callee) =>
-    (ts.isIdentifier(callee) && locals.has(callee.text)) ||
-    (ts.isPropertyAccessExpression(callee) &&
-      ts.isIdentifier(callee.expression) &&
-      namespaces.has(callee.expression.text) &&
-      callee.name.text === 'platform');
+    callsBoundExport(callee, platform, PLATFORM_EXPORTS);
+  const processRuntime = exportBindings(
+    sourceFile,
+    fileName,
+    PROCESS_RUNTIME_MODULE,
+    PROCESS_RUNTIME_MODULE_PATH,
+    PROCESS_RUNTIME_EXPORTS,
+  );
+  const isRuntimeRead = (callee) =>
+    callsBoundExport(callee, processRuntime, PROCESS_RUNTIME_EXPORTS);
+  const ambient = AMBIENT_CARRIERS.map((carrier) => {
+    const readers = new Set(carrier.readers);
+    return {
+      readers,
+      bindings: exportBindings(
+        sourceFile,
+        fileName,
+        carrier.alias,
+        carrier.path,
+        readers,
+      ),
+    };
+  });
+  const isAmbientRead = (callee) =>
+    ambient.some(({ bindings, readers }) =>
+      callsBoundExport(callee, bindings, readers),
+    );
   const effect = effectBindings(sourceFile);
   const toolFactory = definedToolFactory(sourceFile);
   const generatedBases = generatedToolBases(sourceFile, toolFactory);
@@ -561,6 +675,8 @@ function surveySource(text, fileName) {
       const callee = node.expression;
       const name = calleeName(node);
       if (isPlatformRead(callee)) bump(ROW_PLATFORM);
+      if (isRuntimeRead(callee)) bump(ROW_EFFECT_RUNTIME);
+      if (isAmbientRead(callee)) bump(ROW_AMBIENT);
       if (name === 'setServices') bump(ROW_SET_SERVICES);
       if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
         bump(ROW_RUN_BOUNDARY);
@@ -727,6 +843,41 @@ function selfTestSurvey() {
       text: "import { platform } from './platform';\nplatform();\n",
       fileName: 'src/platform/probe.ts',
       expected: { [ROW_PLATFORM]: 1 },
+    },
+    {
+      // The runtime global under its own name and aliased, through a
+      // namespace, and the near-misses: the non-throwing read, another
+      // module's export of the same name, and a member call on some host.
+      text: "import { effectRuntime, tryProcessRuntime } from '@platform/processRuntime';\nimport * as PR from '@platform/processRuntime';\nimport { effectRuntime as other } from './runtimeShim';\neffectRuntime();\nawait effectRuntime().runPromise(p);\nPR.effectRuntime();\nPR.tryProcessRuntime();\ntryProcessRuntime();\nother();\nhost.effectRuntime();\n",
+      expected: { [ROW_EFFECT_RUNTIME]: 3, [ROW_RUN_BOUNDARY]: 1 },
+    },
+    {
+      text: "import { effectRuntime as rt } from './processRuntime';\nrt();\n",
+      fileName: 'src/platform/probe.ts',
+      expected: { [ROW_EFFECT_RUNTIME]: 1 },
+    },
+    {
+      // Readers of three carriers under their own names, an alias, a
+      // namespace member, and a relative import of a fourth; the bare
+      // reference passed as a value and the namespace's non-reader member
+      // do not count.
+      text: "import { workspaceRoots, tryWorkspaceRoots as tryRoots } from '@platform/workspaceRoots';\nimport * as RC from '@agent/runtime/RunContext';\nimport { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';\nimport { ownsRunLease } from './runLease';\nworkspaceRoots().config;\ntryRoots();\nRC.runInSession(s, f);\nRC.isRunContext(x);\ngetCurrentToolCallContext();\nownsRunLease(id);\nuse(workspaceRoots);\n",
+      fileName: 'src/agent/storage/probe.ts',
+      expected: { [ROW_AMBIENT]: 5 },
+    },
+    {
+      // A carrier's own module calling its own reader is the declaration
+      // site, not a consumer; a reader of ANOTHER carrier imported there
+      // still counts (RunContext nests the roots storage).
+      text: "import { workspaceRoots } from '@platform/workspaceRoots';\nexport function tryUseRunContext() { return storage.getStore(); }\nexport function getRunContextRunId() { return tryUseRunContext()?.runId; }\nworkspaceRoots();\n",
+      fileName: 'src/agent/runtime/RunContext.ts',
+      expected: { [ROW_AMBIENT]: 1 },
+    },
+    {
+      // Same names from unrelated modules: a similarly prefixed alias and
+      // a relative path that does not resolve to the carrier.
+      text: "import { workspaceRoots } from '@platform/workspaceRootsView';\nimport { runInSession } from './RunContext';\nworkspaceRoots();\nrunInSession(s, f);\n",
+      expected: {},
     },
     {
       // The `await import(...)` is the only case exercising the

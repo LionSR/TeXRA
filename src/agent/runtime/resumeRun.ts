@@ -51,6 +51,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { defaultSession, type SessionHandle } from './SessionHandle';
+import type { AgentRunServices } from './toolInjection';
 
 /**
  * `started` once the resumed generation has settled (a tool-use turn parked
@@ -136,7 +137,7 @@ export interface ResumeRunOptions extends Pick<
 export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeRunResult, Error> {
+): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const session = options.session ?? defaultSession();
   if (
     options.isCancellationRequested?.() === true ||
@@ -200,7 +201,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   runId: RunId,
   options: ResumeRunOptions,
   recoveryIsProvisional: boolean,
-): Effect.fn.Return<ResumeRunResult, Error> {
+): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const session = options.session ?? defaultSession();
   const cancelled = () => options.isCancellationRequested?.() === true;
   const suppliedRecovery = options.recovery
@@ -379,7 +380,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   resume: ToolUseResumeData,
   queueLease: FollowUpRecoveryLease,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeRunResult, Error> {
+): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const runId = resume.runId;
   const runStatus = session.status;
   const followUpsQueue = session.followUps;

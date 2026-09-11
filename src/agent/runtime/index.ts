@@ -108,7 +108,7 @@ export {
 export { getHelperModelName } from './helperModelName';
 
 // textConnection
-export { agentResponseTextConnector } from './textConnection';
+export { createAgentResponseTextConnector } from './textConnection';
 
 // RunHandle
 export type { AgentRunHandle } from './RunHandle';

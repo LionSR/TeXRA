@@ -8,6 +8,7 @@ import {
   initCliPlatform,
   setCliAgentResumeHandler,
 } from '@cli/runtime/initPlatform';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -16,7 +17,7 @@ import {
   claudeAgentSessionsFor,
   codexThreadsFor,
 } from '@tools/agentCliSessionStores';
-import { getSetupPlatform } from '@tools/setup/platform';
+import { SetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
 type SignalRegistration = {
@@ -116,7 +117,6 @@ vi.mock('@logger/logUtils', () => ({
 vi.mock('@platform/platform', () => ({
   initPlatform: vi.fn(),
   tryPlatform: mocks.tryPlatform,
-  tryGlobalState: () => mocks.tryPlatform()?.globalState,
   platform: () => ({
     config: { get: (_key: string, def: unknown) => def },
     globalState: mocks.cliGlobalState,
@@ -352,8 +352,11 @@ describe('CLI platform init', () => {
 
     await initCliPlatform(cliContext());
 
-    expect(getSetupPlatform().host).toBe('cli');
-    await expect(getSetupPlatform().signIn()).resolves.toBe(true);
+    const setup = await effectRuntime().runPromise(
+      Effect.service(SetupPlatform),
+    );
+    expect(setup.host).toBe('cli');
+    await expect(setup.signIn()).resolves.toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
     expect(mocks.signInCliSupabase).toHaveBeenCalledWith({ openBrowser: true });
   });

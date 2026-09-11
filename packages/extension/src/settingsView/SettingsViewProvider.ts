@@ -13,6 +13,7 @@ import {
   runAfterAgentCatalogAuthRefresh,
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { DisposableStore } from '@platform/disposable';
+import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 
@@ -26,13 +27,16 @@ export class SettingsViewProvider {
   private readonly contentProvider: BundledViewContentProvider;
   private readonly messageHandler: SettingsViewMessageHandler;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    secrets: PlatformSecrets,
+  ) {
     this.contentProvider = new BundledViewContentProvider(
       context,
       'SettingsView',
       'settingsView',
     );
-    this.messageHandler = new SettingsViewMessageHandler(context);
+    this.messageHandler = new SettingsViewMessageHandler(context, secrets);
 
     // Listen for auth state changes to refresh all data
     onTexraAuthSessionsChanged(context, () => {

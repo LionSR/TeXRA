@@ -354,7 +354,7 @@ export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
  * removes the temporary stdin file whether expansion, run, or output
  * handling fails.
  */
-export function withExpandedRunInputs<T, E>(
+export function withExpandedRunInputs<T, E, R = never>(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
@@ -363,8 +363,8 @@ export function withExpandedRunInputs<T, E>(
     readonly allowEmptyInput?: boolean;
     readonly requireWorkspaceFiles?: boolean;
   },
-  run: (inputs: ExpandedRunInputs) => Effect.Effect<T, E>,
-): Effect.Effect<T, E | Error> {
+  run: (inputs: ExpandedRunInputs) => Effect.Effect<T, E, R>,
+): Effect.Effect<T, E | Error, R> {
   return Effect.scoped(
     Effect.gen(function* () {
       const inputs = yield* expandRunInputs(

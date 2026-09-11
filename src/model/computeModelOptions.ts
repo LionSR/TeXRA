@@ -6,7 +6,7 @@ import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
-import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   REASONING_LEVEL_LABELS,
   type ModelAvailabilityKind,
@@ -63,6 +63,18 @@ import {
   getRuntimeModelConfig,
   copilotRouteForModel,
 } from './runtimeModelRegistry';
+
+/**
+ * The two process stores every availability answer here reads: the secret
+ * store behind the provider-key checks and the global state behind the
+ * picker's persisted choices. Callers hold them (the `Secrets` / `AppState`
+ * services, or the stores a host root threaded down) and pass them in, so
+ * this module never looks a host up.
+ */
+export interface ModelOptionStores {
+  readonly secrets: PlatformSecrets;
+  readonly globalState: StateStore;
+}
 
 /**
  * Module-private refinement of an unavailable {@link ModelAvailabilityKind},
@@ -171,15 +183,20 @@ interface UnavailableReasonContext {
   readonly model: string;
   readonly config: ModelConfig;
   readonly reason: UnavailableReason | undefined;
+  /** The process global state the Copilot preference is read from. */
+  readonly globalState: Pick<StateStore, 'get'>;
 }
 
 /**
  * Unavailable reason for both Copilot kinds; see the comment at its use sites
  * in {@link UNAVAILABLE_REASON_BUILDERS}.
  */
-function copilotUnavailableReason({ model }: UnavailableReasonContext): string {
+function copilotUnavailableReason({
+  model,
+  globalState,
+}: UnavailableReasonContext): string {
   return (
-    copilotRouteUnavailableReason(model) ??
+    copilotRouteUnavailableReason(model, globalState) ??
     `Model "${model}" is currently unavailable through Copilot in VS Code.`
   );
 }
@@ -255,6 +272,8 @@ interface ModelAvailabilityContext {
    * ModelFactory's dispatch uses instead of a hand-renamed copy.
    */
   kimiRouting: KimiCodeRoutingFacts;
+  /** The process global state the picker's persisted choices come from. */
+  globalState: StateStore;
 }
 
 /** Determine how a model can be used in the current access mode. */
@@ -270,7 +289,7 @@ async function resolveModelAvailability(
   // An explicit Copilot route preference reports the discovered route's own
   // state — consent and temporary unavailability are route states on the one
   // canonical model row, never a reason to fall back to another transport.
-  if (prefersCopilotRoute(model)) {
+  if (prefersCopilotRoute(model, ctx.globalState)) {
     const access = copilotRouteForModel(model)?.access;
     switch (access) {
       case 'allowed':
@@ -346,8 +365,10 @@ async function resolveModelAvailability(
   return availabilityStatus('missing-key');
 }
 
-async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
-  const { secrets, globalState } = platform();
+async function buildAvailabilityContext(
+  stores: ModelOptionStores,
+): Promise<ModelAvailabilityContext> {
+  const { secrets, globalState } = stores;
   const useOpenRouter = getUseOpenRouter();
   // One key check per provider per context: `apiProviders` coalesces the
   // secret read, but a rejection reaches every awaiting model, and the picker
@@ -376,6 +397,7 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
       hasApiKey('kimiCode'),
     ]);
   return {
+    globalState,
     reasoningLevels: reasoningEffortOverrides(globalState),
     hasUsableApiKey: hasApiKey,
     hasOpenRouter,
@@ -452,7 +474,7 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
  * `GlobalStateKey.MODEL_SELECTION` for every host.
  */
 export function getEnabledModels(
-  state: Pick<StateStore, 'get'> = platform().globalState,
+  state: Pick<StateStore, 'get'>,
 ): readonly string[] {
   return enabledOrDefaults(readModelSelection(state));
 }
@@ -467,9 +489,9 @@ export function getEnabledModels(
 export async function setModelEnabled(input: {
   readonly model: string;
   readonly enabled: boolean;
-  readonly state?: StateStore;
+  readonly state: StateStore;
 }): Promise<readonly string[]> {
-  const state = input.state ?? platform().globalState;
+  const state = input.state;
   if (input.enabled && isRetiredModel(input.model)) {
     throw new Error(`Model "${input.model}" is retired and cannot be enabled.`);
   }
@@ -520,12 +542,13 @@ export async function setModelEnabled(input: {
 /** Returns a human-readable reason why a model is unavailable, or `null` if available. */
 export async function getModelUnavailableReason(
   model: string,
+  stores: ModelOptionStores,
 ): Promise<string | null> {
   await discoveredCopilotRoutes();
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) return `Model "${model}" is not recognized.`;
 
-  const ctx = await buildAvailabilityContext();
+  const ctx = await buildAvailabilityContext(stores);
   const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;
@@ -539,6 +562,7 @@ export async function getModelUnavailableReason(
     model,
     config,
     reason: availability.reason,
+    globalState: ctx.globalState,
   });
 }
 
@@ -627,12 +651,17 @@ async function buildModelOptionData(
  * cache to keep fresh here.
  */
 export async function computeModelOptionsData(
+  stores: ModelOptionStores,
   models?: readonly string[],
 ): Promise<ModelOptionData[]> {
   await discoveredCopilotRoutes();
-  const availabilityCtx = await buildAvailabilityContext();
+  const availabilityCtx = await buildAvailabilityContext(stores);
   const visible =
-    models ?? visibleModelsForAccess(getEnabledModels(), availabilityCtx);
+    models ??
+    visibleModelsForAccess(
+      getEnabledModels(stores.globalState),
+      availabilityCtx,
+    );
 
   return Promise.all(
     visible.map((model) => buildModelOptionData(model, availabilityCtx)),

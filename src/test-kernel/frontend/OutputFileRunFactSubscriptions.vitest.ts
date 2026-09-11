@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -148,6 +149,15 @@ function latestDiagnostics(absolutePath: string): unknown[] | undefined {
   return mocks.diagnosticCollections.at(-1)?.items.get(absolutePath);
 }
 
+/**
+ * The slice of the extension context these two features use: the disposable
+ * list, and the memento the inline-criticism toggle is stored in (the feature
+ * reads and writes the toggle through the context it was registered with).
+ */
+function fakeExtensionContext() {
+  return { subscriptions: [], globalState: new FakeStateStore() };
+}
+
 function disposeContext(context: {
   subscriptions: Array<{ dispose(): unknown }>;
 }) {
@@ -175,7 +185,7 @@ describe('output-file run fact frontend subscriptions', () => {
   it('badges run-fact output files and app-scoped workspace writes', async () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    const context = { subscriptions: [] };
+    const context = fakeExtensionContext();
     registerFileDecorations(
       context as unknown as VSCode.ExtensionContext,
       session,
@@ -216,7 +226,7 @@ describe('output-file run fact frontend subscriptions', () => {
 
     const session = createTestSession();
     publishTestRunStart(session, runId);
-    const context = { subscriptions: [] };
+    const context = fakeExtensionContext();
     registerInlineCriticism(
       context as unknown as VSCode.ExtensionContext,
       session,

@@ -11,7 +11,7 @@ import {
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 
-import { getSetupAuthStatus, type SetupPlatform } from './platform';
+import { getSetupAuthStatus, type SetupPlatformShape } from './platform';
 
 /** Installation status of one probed tool, with its path when discoverable. */
 interface ToolStatus {
@@ -71,7 +71,7 @@ function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
  * tool.
  */
 export const collectCoreSetupStatus = Effect.fn('collectCoreSetupStatus')(
-  function* (platform: SetupPlatform) {
+  function* (platform: SetupPlatformShape) {
     const auth = yield* getSetupAuthStatus();
     const coreTools = yield* Effect.all(
       PROBED_CORE_TOOLS.map((name) => locateTool(name)),

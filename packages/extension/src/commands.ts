@@ -27,7 +27,7 @@ export function registerCommands(
   registerGitCommands(context);
   registerAgentReviewCommands(context);
   registerMergeCommands(context);
-  const settingsViewProvider = new SettingsViewProvider(context);
+  const settingsViewProvider = new SettingsViewProvider(context, secrets);
   registerOpenFileCommands(context);
   registerMainViewCommands(context, progressViewProvider);
 

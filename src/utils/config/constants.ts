@@ -1,6 +1,5 @@
 // Local imports
 import type { StateStore } from '@platform/interfaces';
-import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Time constants
@@ -19,18 +18,12 @@ export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 /**
  * Get the set of tool group IDs disabled by the user.
  *
- * Omitting `store` reads the ambient platform global state; hosts that own an
- * explicit global-state port (the desktop settings controllers) pass it so the
- * read and the matching write hit the same store.
- *
- * The parameter deliberately excludes `null`: a default parameter fires only
- * on `undefined`, so allowing both spellings of "absent" would make
- * `f(id, on, undefined)` write to the ambient store while `f(id, on, null)`
- * silently dropped the write.
+ * `store` is the process global state the caller holds (the `AppState`
+ * service, or the store a host root threaded down), so the read and the
+ * matching write hit the same store.
  */
-export function getDisabledToolIds(store?: StateStore): ReadonlySet<string> {
-  const resolved = store ?? platform().globalState;
-  const raw = resolved.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []);
+export function getDisabledToolIds(store: StateStore): ReadonlySet<string> {
+  const raw = store.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []);
   return new Set(raw);
 }
 
@@ -38,14 +31,13 @@ export function getDisabledToolIds(store?: StateStore): ReadonlySet<string> {
 export async function setToolEnabled(
   toolId: string,
   enabled: boolean,
-  store?: StateStore,
+  store: StateStore,
 ): Promise<void> {
-  const resolved = store ?? platform().globalState;
-  const set = new Set(getDisabledToolIds(resolved));
+  const set = new Set(getDisabledToolIds(store));
   if (enabled) {
     set.delete(toolId);
   } else {
     set.add(toolId);
   }
-  await resolved.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
+  await store.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
 }

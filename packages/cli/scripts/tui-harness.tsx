@@ -25,7 +25,7 @@ import {
   getVisibleAgents,
   loadAgents,
 } from '@agent/index';
-import { agentResponseTextConnector } from '@agent/runtime';
+import { createAgentResponseTextConnector } from '@agent/runtime';
 import type {
   PlanApprovalResult,
   RetryResult,
@@ -354,7 +354,7 @@ if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
 }
 
-await initLocalCliPlatform({
+const HARNESS_PLATFORM_SERVICES = await initLocalCliPlatform({
   cwd: HARNESS_CWD,
   installSignalHandlers: false,
   resourcesPath: HARNESS_RESOURCES_PATH,
@@ -363,7 +363,11 @@ await initLocalCliPlatform({
   version: '0.0.0-harness',
 });
 if (RESET_WORKFLOW_SCRIPT_DISABLED) {
-  await setCliToolEnabled('workflow-script', false);
+  await setCliToolEnabled(
+    HARNESS_PLATFORM_SERVICES.globalState,
+    'workflow-script',
+    false,
+  );
 }
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
 // get descending mtimes in list order, so the first name is the newest row
@@ -382,7 +386,10 @@ if (HARNESS_MEMORY_FILES.length > 0) {
 const harnessRuntimeSession = initializeDefaultSession({
   transcriptMode: { kind: 'persistent' },
   responseTextProcessing: createTexraResponseTextProcessing(
-    agentResponseTextConnector,
+    createAgentResponseTextConnector({
+      secrets: HARNESS_PLATFORM_SERVICES.secrets,
+      globalState: HARNESS_PLATFORM_SERVICES.globalState,
+    }),
   ),
 });
 harnessRuntimeSession.setApprovalPolicy(TEXRA_APPROVAL_POLICY_DEFAULT);
@@ -630,7 +637,10 @@ const harnessRuntimeHost: CliRuntimeHost =
   createCliRuntimeHost(HARNESS_CLI_CONTEXT);
 HARNESS_DISPOSERS.push(
   session().interactions.use(
-    createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT),
+    createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
+      secrets: HARNESS_PLATFORM_SERVICES.secrets,
+      state: HARNESS_PLATFORM_SERVICES.globalState,
+    }),
   ),
 );
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
@@ -1563,7 +1573,11 @@ if (SHOW_BASH_APPROVAL) {
 }
 
 if (SHOW_RETRY_APPROVAL) {
-  await saveProviderApiKey('openai', 'sk-harness-openai-key');
+  await saveProviderApiKey(
+    HARNESS_PLATFORM_SERVICES.secrets,
+    'openai',
+    'sk-harness-openai-key',
+  );
   let credentialSelection: 'configured' | 'personal' | undefined;
   requestHarnessApproval(
     () =>
@@ -1817,6 +1831,8 @@ function handleHarnessSlashCommand(line: string): boolean {
 }
 
 registerBuiltinSlashCommands({
+  secrets: HARNESS_PLATFORM_SERVICES.secrets,
+  state: HARNESS_PLATFORM_SERVICES.globalState,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending, the same fact the status bar's `/agent` hint derives from.
   canSelectAgent: () => !rootRunPending.get(),
@@ -1889,6 +1905,7 @@ function handleHarnessCtrlC(): void {
 function renderHarnessApp(): React.JSX.Element {
   return (
     <App
+      secrets={HARNESS_PLATFORM_SERVICES.secrets}
       onSubmit={handleHarnessSubmit}
       onKillRun={markHarnessRunStopped}
       onWorkflowControl={() => undefined}

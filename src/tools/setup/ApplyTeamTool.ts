@@ -40,7 +40,7 @@ import {
 
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { getSetupAuthStatus, getSetupPlatform } from './platform';
+import { getSetupAuthStatus, SetupPlatform } from './platform';
 
 /**
  * Built from the actual preset list (plus the hidden starter team) so the
@@ -77,7 +77,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
 ) {
   const state = { getAgents: getAgentsByCategory };
   const roster = createWorkspaceAgentRosterController();
-  const { signIn } = getSetupPlatform();
+  const { signIn } = yield* SetupPlatform;
   const authStatus = yield* getSetupAuthStatus();
 
   // Applying the roster and recording it as the default team both go

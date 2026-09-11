@@ -37,6 +37,10 @@ import { FetchHttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { runInSession } from '@agent/runtime/RunContext';
+import {
+  AGENT_TOOL_INJECTIONS,
+  ToolInjections,
+} from '@agent/runtime/toolInjection';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
@@ -53,8 +57,10 @@ import {
   initProcessRuntime,
   tryProcessRuntime,
 } from '@platform/processRuntime';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { AppState, type StateStore } from '@platform/interfaces';
+import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -71,6 +77,7 @@ import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
 
 import { Database } from '@shared/session/database';
+import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
@@ -740,12 +747,54 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * inside the scheduler's yield budget (`Scheduler.MaxOpsBeforeYield` steps
  * per yield) or the open reads as asynchronous and throws; an opener whose
  * identity is still pending opens through the Effect face.
+ *
+ * The process services (injection plan §3.1, the one process provide point)
+ * are merged here from what the root hands over: `Secrets` and `AppState`
+ * over thunks of the root's own stores, which in the desktop and CLI roots
+ * open on this very runtime after it is installed (the layer is built at the
+ * runtime's first run, so a value could not be threaded there; the thunk
+ * closes over the root's local, never over `platform()`); `SetupPlatform`
+ * over the root's host-varying setup capabilities; and `ToolInjections` over
+ * `AGENT_TOOL_INJECTIONS`, the same list for every host.
  */
-export function installProcessRuntime(
-  processStart: string | undefined | Promise<string | undefined>,
-  globalStorage: () => string,
-  updateCheckStorage: () => string,
-): void {
+export interface ProcessRuntimeOptions {
+  readonly processStart: string | undefined | Promise<string | undefined>;
+  readonly globalStorage: () => string;
+  readonly updateCheckStorage: () => string;
+  readonly secrets: () => PlatformSecrets;
+  readonly appState: () => StateStore;
+  readonly setup: SetupPlatformShape;
+}
+
+/**
+ * The four cohort-A process services over a root's own stores and setup
+ * platform: what {@link installProcessRuntime} merges into the process
+ * runtime, and what the agent package provides around the launches it runs
+ * on an embedder's runtime (its `Sessions` API keeps them off its types).
+ */
+export function processServicesLayer({
+  secrets,
+  appState,
+  setup,
+}: Pick<ProcessRuntimeOptions, 'secrets' | 'appState' | 'setup'>): Layer.Layer<
+  Secrets | AppState | SetupPlatform | ToolInjections
+> {
+  return Layer.mergeAll(
+    Secrets.layer(secrets),
+    AppState.layer(appState),
+    SetupPlatform.layer(setup),
+    ToolInjections.layer(AGENT_TOOL_INJECTIONS),
+  );
+}
+
+export function installProcessRuntime({
+  processStart,
+  globalStorage,
+  updateCheckStorage,
+  secrets,
+  appState,
+  setup,
+}: ProcessRuntimeOptions): void {
   const identity =
     processStart instanceof Promise
       ? Layer.effect(
@@ -759,9 +808,10 @@ export function installProcessRuntime(
           ),
         )
       : ProcessIdentity.layer(processOwnerId(processStart));
-  const services = Layer.merge(
+  const services = Layer.mergeAll(
     inquiryRecordsLayer(globalStorage),
     updateCheckRecordsLayer(updateCheckStorage),
+    processServicesLayer({ secrets, appState, setup }),
   ).pipe(Layer.provideMerge(identity));
   const release = (key: SessionKey): void => {
     runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));

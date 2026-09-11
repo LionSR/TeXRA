@@ -77,6 +77,7 @@ import {
 import { AgentError } from '@common/errors/agentErrors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const EXECUTION_ID = 'run-agent-owner' as RunId;
@@ -126,9 +127,18 @@ type RunOptions = Omit<Parameters<typeof runAgent>[1], 'session'> & {
   readonly kind?: 'fresh' | 'resume';
 };
 
+/**
+ * `runAgent` over the fake host's process services: the suite runs it on the
+ * default runtime rather than a process runtime, so the services it requires
+ * are provided here.
+ */
+function launchRun(...args: Parameters<typeof runAgent>) {
+  return Effect.provide(runAgent(...args), fakeProcessServices());
+}
+
 function launch({ kind = 'resume', ...options }: RunOptions = {}) {
   return Effect.runPromise(
-    runAgent(
+    launchRun(
       { kind, config: CONFIG, runId: EXECUTION_ID },
       { session: SESSION, ...options },
     ),
@@ -187,7 +197,7 @@ describe('runAgent run ownership', () => {
         mocks.runExists.mockReturnValueOnce(false);
         expect(
           yield* Effect.flip(
-            runAgent(
+            launchRun(
               { kind: 'resume', config: CONFIG, runId: EXECUTION_ID },
               { session: SESSION, launchSignal: signal },
             ),
@@ -253,7 +263,7 @@ describe('runAgent run ownership', () => {
         const definition = { config: { ...CONFIG, agentCategory: 'workflow' } };
         mocks.prepareAgentDefinition.mockReturnValueOnce(definition);
 
-        yield* runAgent(
+        yield* launchRun(
           { kind: 'fresh', config: CONFIG, runId: EXECUTION_ID },
           { session: SESSION },
         );

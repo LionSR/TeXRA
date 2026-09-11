@@ -4,20 +4,18 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
 // Local imports
+import { apiKeyEnvName, invalidateApiKeyCache } from '@model/apiProviders';
+import * as apiProviders from '@model/apiProviders';
+import * as setupCredentialAccess from '@model/setupCredentialAccess';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from '@tools/setup/VerifySetupTool';
 import * as setupPlatformModule from '@tools/setup/platform';
-import { setSetupPlatform } from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
 
 const mocks = vi.hoisted(() => ({
-  apiKeyOrigin:
-    vi.fn<
-      () => Effect.Effect<'secret' | 'env' | 'none' | 'unknown', unknown>
-    >(),
-  anyUsableCredentialExists: vi.fn<() => Effect.Effect<boolean, unknown>>(),
   locateTool:
     vi.fn<
       (
@@ -34,36 +32,31 @@ vi.mock('@tools/setup/toolProbing', async (importOriginal) => ({
   locateTool: mocks.locateTool,
 }));
 
-vi.mock('@tools/setup/platform', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tools/setup/platform')>();
-  return {
-    ...actual,
-    setupSecrets: {
-      ...actual.setupSecrets,
-      providers: ['deepseek'],
-      apiKeyOrigin: mocks.apiKeyOrigin,
-      anyUsableCredentialExists: mocks.anyUsableCredentialExists,
-    },
-  };
-});
-
 function outputOf(result: { output?: string }): string {
   return result.output ?? '';
 }
 
+/**
+ * No provider key anywhere, but the aggregate readiness probe reports a
+ * usable credential: the ChatGPT-subscription-only shape.
+ */
 function installChatGptOnlySetupPlatform(): void {
-  mocks.anyUsableCredentialExists.mockReturnValue(Effect.succeed(true));
+  vi.spyOn(setupCredentialAccess, 'hasUsableSetupCredential').mockResolvedValue(
+    true,
+  );
   vi.spyOn(setupPlatformModule, 'getChatGptSubscriptionStatus').mockReturnValue(
     Effect.succeed({ signedIn: true, enabled: true }),
   );
 }
 
+setupPlatform({}, { setup: createFakeSetupPlatform() });
+
 beforeEach(() => {
-  setSetupPlatform(createFakeSetupPlatform());
-  mocks.apiKeyOrigin.mockReset().mockReturnValue(Effect.succeed('none'));
-  mocks.anyUsableCredentialExists
-    .mockReset()
-    .mockReturnValue(Effect.succeed(false));
+  // The `Secrets` service is one stable object over whichever fake host is
+  // installed, so the API-key lookup cache it keys on outlives a host swap.
+  invalidateApiKeyCache();
+  // The default fake host has no credentials at all, so the aggregate probe
+  // answers false without any stubbing; each test seeds what it needs.
   mocks.locateTool.mockReset().mockImplementation((name) =>
     Effect.succeed({
       name,
@@ -79,7 +72,10 @@ afterEach(() => {
 
 describe('setup credential reporting', () => {
   it('reports the active host and provider-key origin without secret values', async () => {
-    mocks.apiKeyOrigin.mockReturnValue(Effect.succeed('env'));
+    await installPlatform(
+      { secretsEnv: { [apiKeyEnvName('deepseek')]: 'private-test-value' } },
+      { setup: createFakeSetupPlatform() },
+    );
 
     const result = await new ProbeEnvironmentTool().call({});
 
@@ -109,12 +105,13 @@ describe('setup credential reporting', () => {
   });
 
   it('keeps probing when one provider key origin is unavailable', async () => {
-    mocks.apiKeyOrigin.mockReturnValue(
-      Effect.fail(new Error('Keychain unavailable')),
+    vi.spyOn(apiProviders, 'lookupApiKeyOrigin').mockRejectedValue(
+      new Error('Keychain unavailable'),
     );
-    mocks.anyUsableCredentialExists.mockReturnValue(
-      Effect.fail(new Error('Credential scan unavailable')),
-    );
+    vi.spyOn(
+      setupCredentialAccess,
+      'hasUsableSetupCredential',
+    ).mockRejectedValue(new Error('Credential scan unavailable'));
 
     const result = await new ProbeEnvironmentTool().call({});
 
@@ -126,9 +123,10 @@ describe('setup credential reporting', () => {
   });
 
   it('reports when aggregate credential readiness is unavailable', async () => {
-    mocks.anyUsableCredentialExists.mockReturnValue(
-      Effect.fail(new Error('Credential scan unavailable')),
-    );
+    vi.spyOn(
+      setupCredentialAccess,
+      'hasUsableSetupCredential',
+    ).mockRejectedValue(new Error('Credential scan unavailable'));
 
     const result = await new ProbeEnvironmentTool().call({});
 

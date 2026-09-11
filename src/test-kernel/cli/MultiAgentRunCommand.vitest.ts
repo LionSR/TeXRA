@@ -20,6 +20,11 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import {
+  fakeProcessServices,
+  type FakeProcessServices,
+  installedHost,
+} from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => ({
@@ -90,7 +95,11 @@ vi.mock('@cli/runtime/executeCli', () => ({
 vi.mock('@cli/runtime/workflowInputs', () => ({
   withExpandedRunInputs: (
     ...args: Parameters<
-      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs
+      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs<
+        unknown,
+        unknown,
+        FakeProcessServices
+      >
     >
   ) =>
     Effect.tryPromise({
@@ -98,7 +107,9 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
         mocks.withExpandedRunInputs(
           ...args.slice(0, 4),
           (inputs: Parameters<(typeof args)[4]>[0]) =>
-            Effect.runPromise(args[4](inputs)),
+            Effect.runPromise(
+              Effect.provide(args[4](inputs), fakeProcessServices()),
+            ),
         ),
       catch: ensureError,
     }),
@@ -109,7 +120,7 @@ const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
 const { runMultiAgentPreset: nativeRun } =
   await import('@cli/commands/multiAgent');
 const runMultiAgentPreset = (...args: Parameters<typeof nativeRun>) =>
-  Effect.runPromise(nativeRun(...args));
+  Effect.runPromise(Effect.provide(nativeRun(...args), fakeProcessServices()));
 const { loadCliMultiAgentPresetPlanSet, loadCliMultiAgentRunPlan } =
   await import('@cli/runtime/multiAgentRunPlan');
 
@@ -237,8 +248,11 @@ describe('CLI multi-agent run command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(undefined);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(undefined);
+    // The CLI init hands its caller the platform's stores; the commands
+    // under test read `secrets`/`globalState` off what it returns.
+    const { platform } = installedHost();
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mockExpandedRunInputs({
       inputFiles: ['problem.tex'],
       contextFiles: [],

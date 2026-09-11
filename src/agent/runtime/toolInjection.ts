@@ -1,3 +1,7 @@
+import { Context, Layer } from 'effect';
+
+import type { AppState } from '@platform/interfaces';
+import type { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 // Deliberately not the `@tools/goal` barrel: it also loads goalStore, whose
@@ -10,14 +14,19 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
  * tool list when `shouldInject()` returns true. Used to keep agents from
  * having to opt into shared infrastructure (memory, goal) in YAML.
  *
- * Core flow code iterates the registry — it doesn't know which features are
- * registered.
+ * The process's list is {@link AGENT_TOOL_INJECTIONS}, provided as
+ * {@link ToolInjections}; core flow code iterates what it is handed and does
+ * not know which features exist.
  */
-interface ConditionalToolInjection {
+export interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
   shouldInject(): boolean;
 }
 
+/**
+ * A caller-owned list for a flow or suite that resolves tools with its own
+ * injections instead of the process's (the reflection flow injects none).
+ */
 export class ToolInjectionRegistry {
   private readonly injections: ConditionalToolInjection[] = [];
 
@@ -36,27 +45,51 @@ export class ToolInjectionRegistry {
 }
 
 /**
- * The process-wide injections every host shares. Each predicate reads its
- * setting when a run resolves its tools, so `initPlatform()` and the process
+ * The fixed injections every host ships. Each predicate reads its setting
+ * when a run resolves its tools, so `initPlatform()` and the process
  * workspace roots must be initialized by then.
  */
-export const SharedToolInjectionRegistry = new ToolInjectionRegistry();
+export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
+  {
+    toolName: 'memory',
+    shouldInject: () =>
+      readPlatformSetting<boolean>(GlobalStateKey.MEMORY_ENABLED),
+  },
+  // The unified `plan` tool owns both planning and goal lifecycle commands
+  // (update / pause / complete), so it is auto-injected whenever goal is
+  // enabled: any tool-use agent can drive the autonomous loop without opting
+  // into the tool in YAML.
+  //
+  // The goal continuation itself is not registered here: `ToolUseWaitNode`
+  // calls `maybeBuildGoalContinuation` directly at the pre-wait point. There
+  // is no idle-continuation registry — goal was its only consumer.
+  {
+    toolName: 'plan',
+    shouldInject: () => isGoalEnabled(),
+  },
+];
 
-SharedToolInjectionRegistry.register({
-  toolName: 'memory',
-  shouldInject: () =>
-    readPlatformSetting<boolean>(GlobalStateKey.MEMORY_ENABLED),
-});
+/**
+ * The process's conditional tool injections as an Effect service
+ * (`@texra/agent/ToolInjections`, injection plan §5 row 14): the resolved
+ * list, provided once by `installProcessRuntime`. Replaces the module-level
+ * registry the roots used to register into at startup.
+ */
+export class ToolInjections extends Context.Service<
+  ToolInjections,
+  { readonly list: () => readonly ConditionalToolInjection[] }
+>()('@texra/agent/ToolInjections') {
+  static layer(
+    injections: readonly ConditionalToolInjection[],
+  ): Layer.Layer<ToolInjections> {
+    return Layer.succeed(ToolInjections)({ list: () => injections });
+  }
+}
 
-// The unified `plan` tool owns both planning and goal lifecycle commands
-// (update / pause / complete), so it is auto-injected whenever goal is
-// enabled: any tool-use agent can drive the autonomous loop without opting
-// into the tool in YAML.
-//
-// The goal continuation itself is not registered here: `ToolUseWaitNode`
-// calls `maybeBuildGoalContinuation` directly at the pre-wait point. There
-// is no idle-continuation registry — goal was its only consumer.
-SharedToolInjectionRegistry.register({
-  toolName: 'plan',
-  shouldInject: () => isGoalEnabled(),
-});
+/**
+ * The process services every step of an agent run reads on the way down: the
+ * conditional tool injections, the global state store and the secret store.
+ * Named once here because the launch, resume and delegation signatures all
+ * carry exactly these three tags in their `R` channel.
+ */
+export type AgentRunServices = ToolInjections | AppState | Secrets;

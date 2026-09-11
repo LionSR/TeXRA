@@ -79,6 +79,7 @@ import {
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { emptySessionView } from '@shared/session/sessionView';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -127,7 +128,10 @@ function resumeToolUseFromResumeData(
   options: ResumeToolUseFromResumeDataOptions = {},
 ) {
   return Effect.runPromise(
-    resumeOnLane(resume, { session: LANE_SESSION, ...options }),
+    Effect.provide(
+      resumeOnLane(resume, { session: LANE_SESSION, ...options }),
+      fakeProcessServices(),
+    ),
   );
 }
 

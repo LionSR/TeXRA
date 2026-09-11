@@ -109,7 +109,10 @@ describe('desktop preview host', () => {
         await import('@desktop/main/desktopHostRequests');
       const { createFakeHost, installFakeHost } =
         await import('@test/support/setupPlatform');
-      await installFakeHost(createFakeHost());
+      const fakeHost = createFakeHost();
+      await installFakeHost(fakeHost);
+      const secrets = fakeHost.platform.secrets;
+      const globalState = new FakeStateStore();
       const { createTestSession } =
         await import('@test/support/sessionTestUtils');
       const { createHostSnapshotSource } =
@@ -146,6 +149,8 @@ describe('desktop preview host', () => {
         }),
         run: {} as Parameters<typeof createDesktopHostRequests>[0]['run'],
         files,
+        secrets,
+        globalState,
         snapshot: createHostSnapshotSource({
           project: {
             key: 'paper',
@@ -153,7 +158,8 @@ describe('desktop preview host', () => {
             initials: 'P',
             subtitle: '/paper',
           },
-          globalState: new FakeStateStore(),
+          secrets,
+          globalState,
           fileOptions: () => files.fileOptions(),
           readRecentCommits: async () => ({ commits: [], isGitRepo: false }),
           isAuthenticated: async () => false,

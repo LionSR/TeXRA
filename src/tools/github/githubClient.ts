@@ -12,6 +12,7 @@ import { RequestError } from '@octokit/request-error';
 import { Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { hostPort } from '@common/hostPort';
+import { Secrets } from '@platform/secrets';
 import { isNonEmptyString } from '@utils/core';
 
 import { getGitHubToken } from './githubAuth';
@@ -83,8 +84,9 @@ function escapeOctokitLegacyTemplate(path: string): string {
 export const ghGet = Effect.fn('ghGet')(function* <T>(
   path: string,
   etag?: string,
-): Effect.fn.Return<ConditionalResponse<T>, unknown> {
-  const token = yield* hostPort(() => getGitHubToken());
+): Effect.fn.Return<ConditionalResponse<T>, unknown, Secrets> {
+  const secrets = yield* Secrets;
+  const token = yield* hostPort(() => getGitHubToken(secrets));
   const headers: Record<string, string> = {
     'X-GitHub-Api-Version': API_VERSION,
     'user-agent': 'TeXRA-Extension',

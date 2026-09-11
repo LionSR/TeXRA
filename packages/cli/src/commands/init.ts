@@ -1,4 +1,5 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
@@ -33,7 +34,7 @@ interface InitAgentOption {
   readonly name: string;
 }
 
-async function gatherOptions(): Promise<{
+async function gatherOptions(stores: ModelOptionStores): Promise<{
   agents: readonly InitAgentOption[];
   models: CliModelAccess[];
 }> {
@@ -41,7 +42,7 @@ async function gatherOptions(): Promise<{
   const agents = implicitDefaultToolUseAgents(
     getVisibleAgents(AgentCategory.ToolUse),
   );
-  const models = await getCliModelAccessList();
+  const models = await getCliModelAccessList({ stores });
   return { agents, models };
 }
 
@@ -159,7 +160,9 @@ async function runInit(
     gitignore: boolean | undefined;
   },
 ): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
+  // The init call hands back the stores it just wired, so the model list is
+  // computed from the same pair the rest of this command writes through.
+  const services = await initCliPlatform({ ...context, quietLogs: true });
 
   const filePath = workspaceTexraConfigPath(context.cwd);
   if (!opts.force && (await pathExists(filePath))) {
@@ -169,7 +172,7 @@ async function runInit(
     return CliExitCode.Usage;
   }
 
-  const { agents, models } = await gatherOptions();
+  const { agents, models } = await gatherOptions(services);
 
   const interactive =
     !opts.yes &&

@@ -14,6 +14,7 @@ import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { AgentCategory } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
@@ -176,10 +177,14 @@ function buildVSCodeUI(): AgentCreatorUI {
 export async function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
   category: AgentCategory,
+  secrets: PlatformSecrets,
 ): Promise<void> {
   try {
     const config = await loadCreatorConfig(context);
-    await runAgentCreator(config, category, buildVSCodeUI());
+    await runAgentCreator(config, category, buildVSCodeUI(), {
+      secrets,
+      globalState: context.globalState,
+    });
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to create agent', err);
   }

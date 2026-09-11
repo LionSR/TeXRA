@@ -3,6 +3,22 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import { Secrets, type PlatformSecrets } from '@platform/secrets';
+
+/** The mocked tool defs read no secrets, so any call here is a test error. */
+const unreadSecret = (): never => {
+  throw new Error('The mocked external tool defs must not read secrets.');
+};
+
+const secretsLayer = Secrets.layer((): PlatformSecrets => ({
+  get: unreadSecret,
+  getStored: unreadSecret,
+  set: unreadSecret,
+  delete: unreadSecret,
+  listStoredKeys: unreadSecret,
+  getEnv: unreadSecret,
+}));
+
 afterEach(() => {
   vi.doUnmock('@tools/externalToolDefs');
   vi.resetModules();
@@ -40,7 +56,7 @@ describe('tool availability app signals', () => {
       } finally {
         dispose();
       }
-    }),
+    }).pipe(Effect.provide(secretsLayer)),
   );
 
   it.effect(
@@ -77,7 +93,7 @@ describe('tool availability app signals', () => {
         // external dependencies only — so there is nothing to rebuild after a
         // toggle, which is why the availability answer is derived on read.
         expect([...getUnavailableToolNamesCached()]).toEqual(['missing']);
-      }),
+      }).pipe(Effect.provide(secretsLayer)),
   );
 
   it.effect(
@@ -129,6 +145,6 @@ describe('tool availability app signals', () => {
             statusDetail: undefined,
           }),
         ]);
-      }),
+      }).pipe(Effect.provide(secretsLayer)),
   );
 });

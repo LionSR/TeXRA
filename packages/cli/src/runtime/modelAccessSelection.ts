@@ -10,7 +10,8 @@ import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
-import { platform } from '@platform/platform';
+import { AppState } from '@platform/interfaces';
+import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import {
@@ -31,8 +32,9 @@ interface CliModelAccessSelectionResult {
   readonly message: string;
 }
 
-export async function readCliModelAccessStatus(): Promise<CliModelAccessStatus> {
-  const secrets = platform().secrets;
+export async function readCliModelAccessStatus(
+  secrets: PlatformSecrets,
+): Promise<CliModelAccessStatus> {
   const [chatGpt, grok, codingPlanEntries] = await Promise.all([
     subscriptionProvider('chatgpt').getStatus(),
     subscriptionProvider('grok').getStatus(),
@@ -124,9 +126,8 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   }
 
   const update = yield* hostPort(() => provider.setPreferSubscription(true));
-  yield* hostPort(() =>
-    platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false),
-  );
+  const appState = yield* AppState;
+  yield* hostPort(() => appState.update(GlobalStateKey.USE_OPENROUTER, false));
   return {
     message: update.effective
       ? `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`
@@ -135,30 +136,36 @@ const updateSubscriptionCliModelAccess = Effect.fn(
 });
 
 /** Toggle a key-credential subscription preference (Kimi Code/GLM). */
-async function updateKeyedCliModelAccess(
+const updateKeyedCliModelAccess = Effect.fn(
+  'modelAccessSelection.updateKeyedCliModelAccess',
+)(function* (
   selection: CliModelAccessSelection,
   runtime: CodingPlanSubscriptionRuntime,
-): Promise<CliModelAccessSelectionResult> {
+) {
   const plan = runtime.descriptor;
   if (selection.state === 'off') {
-    await runtime.setEnabled(false);
+    yield* hostPort(() => runtime.setEnabled(false));
     return {
       message: `${plan.preferenceLabel} disabled for ${plan.modelFamily}.`,
-    };
+    } satisfies CliModelAccessSelectionResult;
   }
 
   // The provider API key is the subscription credential — there is no
   // separate sign-in flow.
-  if (!(await hasUsableApiKey(platform().secrets, plan.apiProvider))) {
+  const secrets = yield* Secrets;
+  const keySet = yield* hostPort(() =>
+    hasUsableApiKey(secrets, plan.apiProvider),
+  );
+  if (!keySet) {
     return {
       message: `No ${plan.credentialName} API key configured — add one with /key or /config → API keys (get one at ${plan.credentialSetupUrl}).`,
-    };
+    } satisfies CliModelAccessSelectionResult;
   }
-  await runtime.setEnabled(true);
+  yield* hostPort(() => runtime.setEnabled(true));
   return {
     message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('api-key')}.`,
-  };
-}
+  } satisfies CliModelAccessSelectionResult;
+});
 
 /**
  * Apply one declarative preference transition. A program: the command action
@@ -176,9 +183,7 @@ export const updateCliModelAccess = Effect.fn(
     (runtime) => runtime.descriptor.cliProvider === selection.provider,
   );
   if (codingPlan) {
-    return yield* hostPort(() =>
-      updateKeyedCliModelAccess(selection, codingPlan),
-    );
+    return yield* updateKeyedCliModelAccess(selection, codingPlan);
   }
   if (selection.provider === 'grok' || selection.provider === 'chatgpt') {
     return yield* updateSubscriptionCliModelAccess(

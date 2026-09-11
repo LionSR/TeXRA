@@ -36,6 +36,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
+import { installedHost } from '@test/support/setupPlatform';
 import {
   bashApprovalRequest,
   toolEditApprovalRequest,
@@ -96,8 +97,14 @@ function port(): SessionHostInteractions {
 }
 
 function tuiInteractions(): SessionHostInteractions {
+  // The approval pipeline takes the two credential stores directly; the fake
+  // host installed for this test owns them.
+  const { secrets, globalState } = installedHost().platform;
   const detach = defaultSession().interactions.use(
-    createTuiHostInteractions(host(), createTuiCliContext()),
+    createTuiHostInteractions(host(), createTuiCliContext(), {
+      secrets,
+      state: globalState,
+    }),
   );
   onTestFinished(detach);
   return port();

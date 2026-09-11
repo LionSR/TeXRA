@@ -16,6 +16,7 @@ import { runInSession } from '@agent/runtime/RunContext';
 import * as modelAvailability from '@model/computeModelOptions';
 import * as modelRegistry from '@model/runtimeModelRegistry';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { installedHost } from '@test/support/setupPlatform';
 
 function createKit(createResponse: ReturnType<typeof vi.fn>): HelperModelKit {
   return {
@@ -70,7 +71,11 @@ describe('helper model completion', () => {
 
     try {
       await runInSession(session, async () => {
-        const result = await createHelperModelKit();
+        const { platform } = installedHost();
+        const result = await createHelperModelKit({
+          secrets: platform.secrets,
+          globalState: platform.globalState,
+        });
         if (!result.kit) throw new Error(result.reason);
         await expect(
           runHelperModelCompletion(result.kit, { userPrompt: 'Generate YAML' }),

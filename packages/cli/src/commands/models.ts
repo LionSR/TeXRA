@@ -1,6 +1,9 @@
 import { defineCommand } from 'citty';
 
-import { getEnabledModels } from '@model/computeModelOptions';
+import {
+  getEnabledModels,
+  type ModelOptionStores,
+} from '@model/computeModelOptions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { knownCliModelIds } from '../runtime/cliConfig';
@@ -9,7 +12,10 @@ import {
   setCliModelEnabled,
 } from '../runtime/enabledModels';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import {
+  initCliPlatform,
+  type CliPlatformServices,
+} from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   cliModelRecord,
@@ -34,15 +40,20 @@ import type { CliContext } from '../runtime/cliContext';
 async function loadModelAccessList(
   context: CliContext,
   options: CliModelListOptions = {},
-): Promise<{ models: CliModelAccess[] } | { error: string }> {
+): Promise<
+  { models: CliModelAccess[]; stores: ModelOptionStores } | { error: string }
+> {
   try {
     return await suppressCliFetchStackLogs(async () => {
-      await initCliPlatform({ ...context, quietLogs: true });
+      // The init call hands back the stores it just wired, so the follow-up
+      // `show` lookup reads the same pair the list was computed from.
+      const services = await initCliPlatform({ ...context, quietLogs: true });
       const models = await getCliModelAccessList({
+        stores: services,
         models:
           options.includeUnavailable === true ? knownCliModelIds() : undefined,
       });
-      return { models };
+      return { models, stores: services };
     });
   } catch (error) {
     return { error: formatCliModelListError(error) };
@@ -89,6 +100,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   try {
     entry = await suppressCliFetchStackLogs(() =>
       loadCliModelAccessEntry(id, {
+        stores: result.stores,
         accessList: result.models,
       }),
     );
@@ -137,24 +149,26 @@ const modelsShowCommand = defineCliCommand({
   run: (context, ctx) => showModel(context, ctx.args.id),
 });
 
-/** Shared by `enabled`/`enable`/`disable`: init the platform or report the error. */
+/**
+ * Shared by `enabled`/`enable`/`disable`: init the platform and hand back the
+ * services it wired, or report the error as an exit code.
+ */
 async function initCliPlatformOrReport(
   context: CliContext,
-): Promise<number | undefined> {
+): Promise<CliPlatformServices | { readonly exitCode: number }> {
   try {
-    await initCliPlatform({ ...context, quietLogs: true });
-    return undefined;
+    return await initCliPlatform({ ...context, quietLogs: true });
   } catch (error) {
     writeTextStderr(formatCliModelListError(error));
-    return CliExitCode.ModelOrNetworkError;
+    return { exitCode: CliExitCode.ModelOrNetworkError };
   }
 }
 
 async function listEnabledModels(context: CliContext): Promise<number> {
-  const initError = await initCliPlatformOrReport(context);
-  if (initError !== undefined) return initError;
-  const catalog = listCliEnabledModelCatalog();
-  const enabled = getEnabledModels();
+  const services = await initCliPlatformOrReport(context);
+  if ('exitCode' in services) return services.exitCode;
+  const catalog = listCliEnabledModelCatalog(services.globalState);
+  const enabled = getEnabledModels(services.globalState);
   emitCliResult(
     context,
     {
@@ -180,10 +194,10 @@ async function setModelEnabled(
   id: string,
   enabled: boolean,
 ): Promise<number> {
-  const initError = await initCliPlatformOrReport(context);
-  if (initError !== undefined) return initError;
+  const services = await initCliPlatformOrReport(context);
+  if ('exitCode' in services) return services.exitCode;
   try {
-    const result = await setCliModelEnabled(id, enabled);
+    const result = await setCliModelEnabled(services.globalState, id, enabled);
     emitCliResult(context, {
       json: result,
       ndjson: {

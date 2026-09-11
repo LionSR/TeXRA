@@ -85,25 +85,6 @@ vi.mock('@agent/runtime/terminalResultToast', () => ({
   attachTerminalResultToast: mocks.attachTerminalResultToast,
 }));
 
-vi.mock('@platform/platform', () => ({
-  platform: () => ({
-    workspaceState: {
-      get: mocks.workspaceGet,
-    },
-    globalState: {
-      get: mocks.globalGet,
-    },
-  }),
-  tryPlatform: () => ({
-    workspaceState: {
-      get: mocks.workspaceGet,
-    },
-    globalState: {
-      get: mocks.globalGet,
-    },
-  }),
-}));
-
 vi.mock('@cli/runtime/initPlatform', () => ({
   setCliHelperModel: mocks.setCliHelperModel,
 }));
@@ -170,9 +151,11 @@ import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   bindTestSessionView,
@@ -181,6 +164,19 @@ import {
   viewWith,
 } from './fixtures/sessionViewFixture';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
+
+// The state stores the controller's setting reads land on, as ports of the
+// installed fake host rather than a module mock of `platform()`: the setting
+// path (`detachSubagentsOnStop` -> `readPlatformSetting`) resolves its stores
+// through the host, and the kernel's setup file installs a host before this
+// file's mocks are registered.
+setupPlatform(
+  {},
+  {
+    globalState: { get: mocks.globalGet, update: async () => {} },
+    workspaceState: { get: mocks.workspaceGet, update: async () => {} },
+  },
+);
 
 /**
  * Session fixture in the states the controller is exercised from. The
@@ -256,6 +252,8 @@ function makeInit(
     getSlashCommandContext: () => {
       throw new Error('slash commands are not exercised here');
     },
+    secrets: new FakeSecrets(),
+    state: new FakeStateStore(),
     ...overrides,
   };
 }

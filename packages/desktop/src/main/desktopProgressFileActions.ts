@@ -22,6 +22,7 @@ import type {
   DiffProgressReporter,
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
+import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
@@ -53,6 +54,9 @@ type DesktopProgressFileActionUi = Pick<
  */
 interface DesktopProgressFileActionHost {
   readonly session: SessionHandle;
+  /** The process global state the window root holds; the merge run reads the
+   *  helper model from it. */
+  readonly globalState: StateStore;
   startRun(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
@@ -89,7 +93,7 @@ export class DesktopProgressFileActions {
     const validation = validateRunRequest({
       config: {
         agent: 'merge',
-        model: getHelperModelName(),
+        model: getHelperModelName(this.host.globalState),
         inputFiles: [baseFile],
         editedFile,
       },

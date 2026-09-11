@@ -15,7 +15,10 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeProcessServices,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
 import { createTestLaunchContext } from './launchContextTestUtils';
@@ -30,6 +33,15 @@ vi.mock('@agent/storage', () => ({
 }));
 
 const plan: Plan = { objective: 'Finish the run.' };
+
+/**
+ * The lifecycle program over the fake host's process services. The suite runs
+ * it on the default runtime rather than a process runtime, so the services it
+ * requires are provided here.
+ */
+function runFlow(...args: Parameters<typeof runFlowWithLifecycle>) {
+  return Effect.provide(runFlowWithLifecycle(...args), fakeProcessServices());
+}
 
 function lifecycleCase(): {
   session: SessionHandle;
@@ -95,9 +107,7 @@ describe('run lifecycle host-interaction cancel', () => {
     const pending = requestApproval(session, 'approval:completed-run', runId);
 
     await Effect.runPromise(
-      runFlowWithLifecycle(ctx, async () =>
-        toolUseRun(runId, RUN_OUTCOME.COMPLETED),
-      ),
+      runFlow(ctx, async () => toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
     );
 
     await expectRunEndedRejection(pending);
@@ -111,7 +121,7 @@ describe('run lifecycle host-interaction cancel', () => {
     const released = createDeferred();
     const stopped = createDeferred();
     const fiber = Effect.runFork(
-      runFlowWithLifecycle(ctx, async () => {
+      runFlow(ctx, async () => {
         started.resolve();
         ctx.runScope.signal.addEventListener('abort', () => aborted.resolve(), {
           once: true,
@@ -143,7 +153,7 @@ describe('run lifecycle host-interaction cancel', () => {
 
     await expect(
       Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+        runFlow(ctx, async () => {
           throw new Error('flow exploded');
         }),
       ),
@@ -158,9 +168,7 @@ describe('run lifecycle host-interaction cancel', () => {
     const pending = requestApproval(session, 'approval:waiting-run', runId);
 
     const result = await Effect.runPromise(
-      runFlowWithLifecycle(ctx, async () =>
-        toolUseRun(runId, RUN_PHASE.WAITING),
-      ),
+      runFlow(ctx, async () => toolUseRun(runId, RUN_PHASE.WAITING)),
     );
 
     expect(result.outcome).toBe(RUN_PHASE.WAITING);
@@ -182,9 +190,7 @@ describe('run lifecycle host-interaction cancel', () => {
     });
 
     await Effect.runPromise(
-      runFlowWithLifecycle(ctx, async () =>
-        toolUseRun(runId, RUN_OUTCOME.COMPLETED),
-      ),
+      runFlow(ctx, async () => toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
     );
     await Promise.resolve();
 
@@ -204,7 +210,7 @@ describe('run lifecycle host-interaction cancel', () => {
 
     try {
       await Effect.runPromise(
-        runFlowWithLifecycle(ctx, async () => {
+        runFlow(ctx, async () => {
           try {
             return toolUseRun(runId, RUN_OUTCOME.COMPLETED);
           } finally {
@@ -229,7 +235,7 @@ describe('run lifecycle host-interaction cancel', () => {
     const pending = requestApproval(session, 'approval:interrupted-run', runId);
 
     const result = await Effect.runPromise(
-      runFlowWithLifecycle(ctx, async () => {
+      runFlow(ctx, async () => {
         // What `flowContext.interrupt` does while the flow is still live.
         session.interactions.cancel({ runId, cause: 'Run interrupted.' });
         return toolUseRun(runId, RUN_OUTCOME.CANCELLED);
@@ -257,9 +263,7 @@ describe('run lifecycle host-interaction cancel', () => {
     try {
       await expect(
         Effect.runPromise(
-          runFlowWithLifecycle(ctx, async () =>
-            toolUseRun(runId, RUN_OUTCOME.COMPLETED),
-          ),
+          runFlow(ctx, async () => toolUseRun(runId, RUN_OUTCOME.COMPLETED)),
         ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       expect(session.status.get(runId)).toBe(RUN_PHASE.COMPLETED);

@@ -11,6 +11,7 @@ import {
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
 import type { ApiKeyStatus, ApiProvider } from '@model/apiProviders';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { CLI_STATE_SETTINGS, type SurfacedSettingEntry } from '@shared/schemas';
 import {
@@ -40,6 +41,12 @@ import { SkillsSettingsForm } from './SkillsSettingsForm';
 export interface CliConfigFormProps {
   readonly availableRows?: number;
   readonly stores?: SettingsStores;
+  /**
+   * The secret store the API-key and GitHub-token rows read and write. Ink
+   * components run no Effect, so the process store arrives as a prop from the
+   * surface that opened this form.
+   */
+  readonly secrets: PlatformSecrets;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   /**
@@ -134,6 +141,15 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const [stores] = useState(() => props.stores ?? platformSettingsStores());
   const onError = useRef(props.onError);
   onError.current = props.onError;
+  const { secrets } = props;
+  const loadApiKeyStatuses = useCallback(
+    () => loadProviderApiKeyStatuses(secrets),
+    [secrets],
+  );
+  const loadGitHubToken = useCallback(
+    () => loadGitHubTokenStatus(secrets),
+    [secrets],
+  );
 
   const {
     view: apiKeyStatusView,
@@ -141,7 +157,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     mark: markApiKey,
   } = useAsyncStatusView({
     initial: INITIAL_STATUS_VIEW as ProviderApiKeyStatusView,
-    load: loadProviderApiKeyStatuses,
+    load: loadApiKeyStatuses,
     buildView: buildApiKeyStatusView,
     onErrorRef: onError,
   });
@@ -152,7 +168,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     mark: markGitHubToken,
   } = useAsyncStatusView({
     initial: INITIAL_STATUS_VIEW as GitHubTokenStatusView,
-    load: loadGitHubTokenStatus,
+    load: loadGitHubToken,
     buildView: buildGitHubTokenStatusView,
     onErrorRef: onError,
   });
@@ -235,7 +251,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             availableRows={props.availableRows}
             statusView={apiKeyStatusView}
             onSave={async (provider, key) => {
-              await saveProviderApiKey(provider, key);
+              await saveProviderApiKey(secrets, provider, key);
               markApiKey((current) => ({
                 statuses: { ...current.statuses, [provider]: 'set' },
               }));
@@ -250,12 +266,12 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             availableRows={props.availableRows}
             statusView={githubTokenStatusView}
             onSave={async (token) => {
-              await saveGitHubToken(token);
+              await saveGitHubToken(secrets, token);
               markGitHubToken(() => ({ status: 'secret' }));
               await refreshGitHubTokenStatus();
             }}
             onRemove={async () => {
-              await removeGitHubToken();
+              await removeGitHubToken(secrets);
               await refreshGitHubTokenStatus();
             }}
             onDone={onBack}
@@ -263,7 +279,11 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           />
         ),
         tools: (onBack) => (
-          <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
+          <ToolsListForm
+            availableRows={props.availableRows}
+            state={stores.globalState}
+            onClose={onBack}
+          />
         ),
         skills: (onBack) => (
           <SkillsSettingsForm

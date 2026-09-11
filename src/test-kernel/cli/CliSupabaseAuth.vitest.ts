@@ -5,7 +5,15 @@ import { beforeEach, describe, expect, type Mock, vi } from 'vitest';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 
 // Local imports
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+
+/**
+ * The secret store the CLI composition root owns. Every load below
+ * initializes the auth coordinator with it, exactly as `initCliPlatform`
+ * does, so the coordinator is keyed on one store for the whole suite.
+ */
+const cliSecrets = new FakeSecrets();
 
 const mocks = vi.hoisted(() => {
   const authCoordinator = {
@@ -89,6 +97,13 @@ async function loadSupabaseAuth() {
       import('@shared/session/sessionEvents'),
       import('@platform/defaults/nodeProcesses'),
     ]);
+  const [{ Secrets }, { AppState }, { SetupPlatform }, { ToolInjections }] =
+    await Promise.all([
+      import('@platform/secrets'),
+      import('@platform/interfaces'),
+      import('@tools/setup/platform'),
+      import('@agent/runtime/toolInjection'),
+    ]);
   const { createFakePlatform } = await import('@test/support/FakePlatform');
   const storage = createFakePlatform().storage;
   initProcessRuntime(
@@ -99,10 +114,21 @@ async function loadSupabaseAuth() {
         inquiryRecordsLayer(() => storage.getGlobalStoragePath()).pipe(
           Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
         ),
+        // The process services over this suite's platform mock: the auth run
+        // edge reads none of them, so a member call is a test error that
+        // surfaces through the mock.
+        Secrets.layer(() => mocks.platform().secrets),
+        AppState.layer(() => mocks.platform().globalState),
+        SetupPlatform.layer({ host: 'cli', signIn: async () => false }),
+        ToolInjections.layer([]),
       ),
     ),
   );
-  return import('@cli/runtime/supabaseAuth');
+  const supabaseAuth = await import('@cli/runtime/supabaseAuth');
+  // The root's init is what builds the coordinator and installs the auth run
+  // edge; nothing below it builds one on demand.
+  supabaseAuth.initializeCliSupabaseAuth(cliSecrets);
+  return supabaseAuth;
 }
 
 /** The device authorization every device-code path replays. */
@@ -185,17 +211,15 @@ describe('CLI Supabase auth', () => {
     mocks.invalidateRemoteAgentsAfterSignOut.mockReturnValue(Effect.void);
   });
 
-  it('uses platform-owned secrets after CLI platform init', async () => {
-    const platformSecrets = { kind: 'platform-secrets' };
-    mocks.platform.mockReturnValue({ secrets: platformSecrets });
+  it('builds one coordinator for the root secret store', async () => {
     const { initializeCliSupabaseAuth } = await loadSupabaseAuth();
 
-    initializeCliSupabaseAuth();
-    initializeCliSupabaseAuth();
+    initializeCliSupabaseAuth(cliSecrets);
+    initializeCliSupabaseAuth(cliSecrets);
 
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledTimes(1);
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledWith(
-      expect.objectContaining({ secrets: platformSecrets }),
+      expect.objectContaining({ secrets: cliSecrets }),
     );
   });
 
@@ -383,7 +407,7 @@ describe('CLI Supabase auth', () => {
     const warn = vi.fn();
     const { initializeCliSupabaseAuth, signOutCliSupabase } =
       await loadSupabaseAuth();
-    initializeCliSupabaseAuth({
+    initializeCliSupabaseAuth(cliSecrets, {
       debug: vi.fn(),
       info: vi.fn(),
       warn,

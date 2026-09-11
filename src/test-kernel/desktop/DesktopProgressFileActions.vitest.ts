@@ -8,6 +8,7 @@ import type { SessionHandle } from '@agent/runtime';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { OutputFileInfo } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
@@ -142,6 +143,7 @@ async function loadFileActions(options: {
       startRun: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),
       session: { snapshots: { read: vi.fn() } } as unknown as SessionHandle,
+      globalState: new FakeStateStore(),
     },
   );
 

@@ -10,16 +10,38 @@ import {
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
   AgentCategory,
   type RunId,
   type ToolDefinition,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { testModelCell } from './modelCellTestUtils';
+
+/**
+ * Workflow (reflection) runs resolve tools with no process injections: the
+ * flow hands `resolveAgentTools` its own empty registry. Capture the argument
+ * at the real seam so the invariant stays asserted.
+ */
+const observed = vi.hoisted(() => ({ injectedToolNames: [] as string[][] }));
+
+vi.mock('@agent/runtime/agentToolResolution', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/runtime/agentToolResolution')>();
+  return {
+    ...actual,
+    resolveAgentTools: (
+      input: Parameters<typeof actual.resolveAgentTools>[0],
+    ) => {
+      observed.injectedToolNames.push(
+        input.toolInjections.list().map((injection) => injection.toolName),
+      );
+      return actual.resolveAgentTools(input);
+    },
+  };
+});
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'workflow-tool-resolution',
@@ -86,6 +108,7 @@ async function observeWorkflowTools({
     signal: new AbortController().signal,
   });
   const observedTools: ToolDefinition[][] = [];
+  observed.injectedToolNames.length = 0;
   const modelCell = testModelCell(
     stopAfterToolObservationHandler(observedTools, supportsFunctionCalling),
     CONFIG.model,
@@ -103,6 +126,7 @@ async function observeWorkflowTools({
           prompt: PROMPT,
           logger,
           parentStage: noopTrace.openStage('Workflow tool resolution test'),
+          stores: hostStores(),
           userVarChannels: { MODEL: CONFIG.model },
           modelCell,
           toolPolicy: createToolPolicy({
@@ -113,6 +137,7 @@ async function observeWorkflowTools({
         }),
     );
 
+    expect(observed.injectedToolNames).toEqual([[]]);
     expect(result.outcome).toBe('failed');
     expect(result.error?.message).toContain('Tool list observed');
     return observedTools;
@@ -124,10 +149,6 @@ async function observeWorkflowTools({
 describe('workflow tool resolution', () => {
   it('passes canonical filtered registry contracts to the reflection handler', async () => {
     const warn = vi.fn<typeof noopTrace.warn>();
-    const sharedInjections = vi.spyOn(SharedToolInjectionRegistry, 'list');
-    sharedInjections.mockReturnValue([
-      { toolName: 'plan', shouldInject: () => true },
-    ]);
     const setting = AgentWorkflowSettingSchema.parse({
       rounds: 1,
       tools: [
@@ -152,7 +173,6 @@ describe('workflow tool resolution', () => {
     expect(warn).toHaveBeenCalledWith(
       'Declared tool not found in registry: missing_workflow_tool',
     );
-    expect(sharedInjections).not.toHaveBeenCalled();
   });
 
   it('passes no tools to a model without function calling', async () => {

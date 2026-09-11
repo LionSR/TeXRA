@@ -9,7 +9,7 @@ import PQueue from 'p-queue';
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import {
-  agentResponseTextConnector,
+  createAgentResponseTextConnector,
   defaultSession,
   initializeBundledPrompts,
   initializeDefaultSession,
@@ -54,7 +54,7 @@ import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTo
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import {
   clearVscodeLeanServerEntries,
-  vscodeLeanLanguageServices,
+  createVscodeLeanLanguageServices,
 } from '@frontend/lean/VscodeIntegration';
 import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
@@ -100,11 +100,11 @@ import type { CommandId } from '@shared/commands/catalog';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { setSetupPlatform } from '@tools/setup';
 import {
   refreshToolAvailability,
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -121,6 +121,39 @@ import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
 const log = createLog('extension');
+
+// Shared by the `Platform` tool-availability port and the setup platform's
+// extensions port, which both answer the same question.
+const isVscodeExtensionInstalled = (id: string) =>
+  vscode.extensions.getExtension(id) !== undefined;
+
+/**
+ * The extension's setup capabilities, provided as the `SetupPlatform` service
+ * by `initVscodePlatform`. Every member is a closure over VS Code's own APIs,
+ * so the value exists before any activation state does.
+ */
+const vscodeSetupPlatform: SetupPlatformShape = {
+  host: 'extension',
+  signIn: async () =>
+    (await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN)) ===
+    true,
+  commands: {
+    invoke: (cmd, ...args) =>
+      Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
+  },
+  extensions: {
+    isInstalled: isVscodeExtensionInstalled,
+    install: async (id) => {
+      await vscode.commands.executeCommand(
+        'workbench.extensions.installExtension',
+        id,
+      );
+    },
+  },
+  terminal: {
+    runCommand: (args) => runTerminalCommand(args),
+  },
+};
 const authLog = createLog('SupabaseAuthProvider');
 
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -154,11 +187,17 @@ async function initVscodePlatform(
   // The process identity is read before installing: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous layer build.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
-  installProcessRuntime(
-    await nodeProcesses.selfIdentity(),
-    () => storage.getGlobalStoragePath(),
-    () => storage.getGlobalStoragePath(),
-  );
+  // Both process stores exist before the runtime here: VS Code hands the
+  // extension its SecretStorage and Memento at activation.
+  const secrets = new VscodeSecrets(context);
+  installProcessRuntime({
+    processStart: await nodeProcesses.selfIdentity(),
+    globalStorage: () => storage.getGlobalStoragePath(),
+    updateCheckStorage: () => storage.getGlobalStoragePath(),
+    secrets: () => secrets,
+    appState: () => context.globalState,
+    setup: vscodeSetupPlatform,
+  });
   // VS Code restarts the extension host when the first workspace folder
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
@@ -168,7 +207,6 @@ async function initVscodePlatform(
       ),
     ),
   );
-  const secrets = new VscodeSecrets(context);
   initPlatform(
     createNodePlatform({
       globalState: context.globalState,
@@ -243,7 +281,7 @@ function installUnhandledRejectionSurface(
   });
 }
 
-async function refreshApiKeyStatus() {
+async function refreshApiKeyStatus(secrets: PlatformSecrets) {
   if (!apiKeyStatusBarItem) {
     return;
   }
@@ -252,7 +290,7 @@ async function refreshApiKeyStatus() {
   // funnel, so ChatGPT subscription and direct API keys agree about whether the
   // first-run CTA should remain visible. Account sign-in is deliberately not in
   // that set: it serves the remote-agent catalog, not model access.
-  const exists = await hasAnyUsableSetupCredential();
+  const exists = await hasAnyUsableSetupCredential(secrets);
   if (!exists) {
     statusBarItem?.hide();
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
@@ -486,10 +524,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   lifecycleHost = lifecycle;
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
   const languageModel = createLanguageModelPort(context);
-  // Shared by the `Platform` tool-availability port and the setup platform's
-  // extensions port, which both answer the same question.
-  const isVscodeExtensionInstalled = (id: string) =>
-    vscode.extensions.getExtension(id) !== undefined;
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
   const secrets = await initVscodePlatform(
@@ -526,7 +560,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   );
   const runtimeSession = initializeDefaultSession({
     responseTextProcessing: createTexraResponseTextProcessing(
-      agentResponseTextConnector,
+      createAgentResponseTextConnector({
+        secrets,
+        globalState: context.globalState,
+      }),
     ),
   });
   // `disposeStatusListener` and `statusBarItem` are owned solely by
@@ -617,7 +654,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
   }
 
-  const progressViewProvider = new ProgressViewProvider(context);
+  const progressViewProvider = new ProgressViewProvider(context, secrets);
   await progressViewProvider.initialize();
 
   log.info('TeXRA extension activated');
@@ -626,34 +663,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // synchronous glob probes of TeX install directories, which would
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
-  setTimeout(() => void initializeLatexSupport(), 0);
+  setTimeout(() => void initializeLatexSupport(context.globalState), 0);
   registerCommands(context, progressViewProvider, secrets);
   registerWalkthroughWorkspaceAction(context, true);
   registerFileDecorations(context);
 
-  setLeanLanguageServices(vscodeLeanLanguageServices);
-  setSetupPlatform({
-    host: 'extension',
-    signIn: async () =>
-      (await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN)) ===
-      true,
-    commands: {
-      invoke: (cmd, ...args) =>
-        Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
-    },
-    extensions: {
-      isInstalled: isVscodeExtensionInstalled,
-      install: async (id) => {
-        await vscode.commands.executeCommand(
-          'workbench.extensions.installExtension',
-          id,
-        );
-      },
-    },
-    terminal: {
-      runCommand: (args) => runTerminalCommand(args),
-    },
-  });
+  setLeanLanguageServices(
+    createVscodeLeanLanguageServices(context.globalState),
+  );
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this helper to log rejections
   // instead of letting them become unhandled promise rejections.
@@ -732,7 +749,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `T | void` to cover abort via signal/timeout; we pass neither, so the
   // task always runs and resolves with `void`.
   const queueApiKeyStatusRefresh = (): Promise<void> =>
-    apiKeyStatusRefreshQueue.add(refreshApiKeyStatus) as Promise<void>;
+    apiKeyStatusRefreshQueue.add(() =>
+      refreshApiKeyStatus(secrets),
+    ) as Promise<void>;
   const safeRefreshApiKeyStatus = () =>
     queueApiKeyStatusRefresh().catch((err) =>
       log.error(`API key status refresh failed: ${toErrorMessage(err)}`),

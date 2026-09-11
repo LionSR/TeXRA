@@ -12,8 +12,9 @@ import {
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { agentName } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -39,8 +40,10 @@ interface LaunchModelResolution {
  * last resort (`ensureRoutingConfigured` already prompted the user, so the
  * fallback's flag flip is expected, unlike desktop's silent-launch path).
  */
-async function selectLaunchModel(): Promise<LaunchModelResolution | null> {
-  const resolution = await resolveSetupLaunchModel(platform().secrets, true);
+async function selectLaunchModel(
+  secrets: PlatformSecrets,
+): Promise<LaunchModelResolution | null> {
+  const resolution = await resolveSetupLaunchModel(secrets, true);
   if (!resolution) return null;
   return {
     model: resolution.model,
@@ -54,8 +57,10 @@ async function selectLaunchModel(): Promise<LaunchModelResolution | null> {
  * Temporarily flip `useOpenRouter` on for the OR-only launch path and always
  * restore it, including failures before `executeAgent` starts.
  */
-async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
-  const globalState = platform().globalState;
+async function withOpenRouterFlagOn<T>(
+  globalState: StateStore,
+  fn: () => Promise<T>,
+): Promise<T> {
   const prior =
     globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
   if (prior) return fn();
@@ -80,12 +85,16 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
  * and then fail later as "No model is available"). Host-specific setup launch
  * routing belongs to `resolveSetupLaunchModel`.
  */
-export async function hasAnyUsableSetupCredential(): Promise<boolean> {
-  return hasUsableSetupCredential(platform().secrets, credentialLog.warn);
+export async function hasAnyUsableSetupCredential(
+  secrets: PlatformSecrets,
+): Promise<boolean> {
+  return hasUsableSetupCredential(secrets, credentialLog.warn);
 }
 
-async function ensureCredentialOrPrompt(): Promise<boolean> {
-  if (await hasAnyUsableSetupCredential()) return true;
+async function ensureCredentialOrPrompt(
+  secrets: PlatformSecrets,
+): Promise<boolean> {
+  if (await hasAnyUsableSetupCredential(secrets)) return true;
 
   const picks = [
     {
@@ -131,15 +140,15 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
       return false;
   }
 
-  return hasAnyUsableSetupCredential();
+  return hasAnyUsableSetupCredential(secrets);
 }
 
 // Routing is fine when the current configuration resolves any setup model.
 // A managed direct route can remain runnable even when global OpenRouter is
 // enabled without an OpenRouter key.
-async function isRoutingConfigured(): Promise<boolean> {
+async function isRoutingConfigured(secrets: PlatformSecrets): Promise<boolean> {
   if (!getUseOpenRouter()) return true;
-  return (await resolveSetupLaunchModel(platform().secrets, false)) !== null;
+  return (await resolveSetupLaunchModel(secrets, false)) !== null;
 }
 
 /**
@@ -148,8 +157,10 @@ async function isRoutingConfigured(): Promise<boolean> {
  * resolve the misconfiguration explicitly rather than flipping the global
  * flag, because concurrent OpenRouter-routed agents may rely on it.
  */
-async function ensureRoutingConfigured(): Promise<boolean> {
-  if (await isRoutingConfigured()) return true;
+async function ensureRoutingConfigured(
+  secrets: PlatformSecrets,
+): Promise<boolean> {
+  if (await isRoutingConfigured(secrets)) return true;
 
   const choice = await vscode.window.showWarningMessage(
     '"Use OpenRouter" is on, but there is no OpenRouter key and no other provider TeXRA can reach. Add an OpenRouter key, or turn off "Use OpenRouter" in the Models tab, then try again.',
@@ -167,12 +178,13 @@ async function ensureRoutingConfigured(): Promise<boolean> {
   // Re-check: the user may have resolved the misconfiguration (added an
   // OR key, or disabled Use OpenRouter in the Models tab), in which case
   // we can proceed without forcing them to re-invoke the command.
-  return isRoutingConfigured();
+  return isRoutingConfigured(secrets);
 }
 
-export async function launchSetupAssistant(): Promise<
-  'launched' | 'already-running' | 'not-started'
-> {
+export async function launchSetupAssistant(
+  secrets: PlatformSecrets,
+  globalState: StateStore,
+): Promise<'launched' | 'already-running' | 'not-started'> {
   try {
     // Every setup entry point funnels through here (command, status pill,
     // walkthrough, onboarding setup card), so one guard covers them all:
@@ -196,14 +208,14 @@ export async function launchSetupAssistant(): Promise<
     // key would otherwise fall into the credential prompt first because
     // isCodexSubscriptionActive returns false because
     // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
-    if (!(await ensureRoutingConfigured())) {
+    if (!(await ensureRoutingConfigured(secrets))) {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
       );
       return 'not-started';
     }
 
-    const proceed = await ensureCredentialOrPrompt();
+    const proceed = await ensureCredentialOrPrompt(secrets);
     if (!proceed) {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',
@@ -211,7 +223,7 @@ export async function launchSetupAssistant(): Promise<
       return 'not-started';
     }
 
-    const resolution = await selectLaunchModel();
+    const resolution = await selectLaunchModel(secrets);
     if (!resolution) {
       // Edge case: no setup-model candidate is usable with the current
       // credentials. Refuse launch rather than pick a model that crashes at
@@ -256,7 +268,7 @@ export async function launchSetupAssistant(): Promise<
       );
 
     if (resolution.requiresOpenRouter) {
-      await withOpenRouterFlagOn(launch);
+      await withOpenRouterFlagOn(globalState, launch);
     } else {
       await launch();
     }

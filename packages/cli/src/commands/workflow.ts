@@ -11,9 +11,11 @@ import {
   isTerminalPersistedCompileRejection,
   type AgentConfigPayload,
 } from '@agent/runtime';
+import { AppState } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
+import { Secrets } from '@platform/secrets';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 
 import {
@@ -27,7 +29,7 @@ import {
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import { writeErrorStderr } from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -51,6 +53,7 @@ import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,
   type CliConfigExecuteOptions,
+  type CliRunServices,
 } from '../runtime/executeCli';
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
 import {
@@ -93,7 +96,7 @@ interface WorkflowRunInit {
 export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
   context: CliContext,
   init: WorkflowRunInit,
-): Effect.fn.Return<number, Error> {
+): Effect.fn.Return<number, Error, CliRunServices> {
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
   }
@@ -115,7 +118,7 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
     catch: ensureError,
   });
 
-  yield* Effect.tryPromise({
+  const services = yield* Effect.tryPromise({
     try: () => initLocalCliPlatform(context),
     catch: ensureError,
   });
@@ -141,7 +144,7 @@ export const runWorkflowAgent = Effect.fn('runWorkflowAgent')(function* (
         }
 
         const model = yield* Effect.tryPromise({
-          try: () => selectCliRunModel(context, init.model, 'run'),
+          try: () => selectCliRunModel(context, init.model, 'run', services),
           catch: ensureError,
         });
         const runContext = buildHeadlessRunContext(context);
@@ -206,9 +209,10 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       readonly runId?: RunId;
       readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
     },
-  ): Effect.fn.Return<number, Error> {
+  ): Effect.fn.Return<number, Error, CliRunServices> {
+    const stores = { secrets: yield* Secrets, globalState: yield* AppState };
     const session = yield* Effect.tryPromise({
-      try: initializeCliTranscriptSession,
+      try: () => initializeCliTranscriptSession(stores),
       catch: ensureError,
     });
     let workflowResult: CliWorkflowRunResult | undefined;

@@ -116,6 +116,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import type { ApiProvider } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -195,9 +196,14 @@ function tui(
 } {
   const cliContext = createTuiCliContext(contextOverrides);
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
+  // The suite's own fake host, mocked above: the pipeline now takes the two
+  // stores directly, and the key-check expectations are written against
+  // exactly these objects.
+  const { secrets, globalState } = platform();
   const hostInteractions = createTuiHostInteractions(
     presentationHost,
     cliContext,
+    { secrets, state: globalState },
   );
   const prepareRetry = vi.fn(async () => undefined);
   const interactions: HostInteractions = {

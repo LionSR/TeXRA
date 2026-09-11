@@ -52,6 +52,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { fakeProcessServices } from '@test/support/setupPlatform';
 import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
@@ -67,6 +68,7 @@ const buildAgentLaunchContext = (
       Effect.flatMap((definition) =>
         buildAgentLaunchContextEffect({ ...input, definition }),
       ),
+      Effect.provide(fakeProcessServices()),
     ),
   );
 
@@ -477,7 +479,9 @@ describe('AgentLaunchContext', () => {
       expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
         delegationAgentScope,
       });
-      expect(mocks.createHandler.mock.calls.at(-1)?.at(2)).toBe(
+      // `createModelHandlerForCompatibilityKey(config, key, stores, …)`:
+      // the session's response-text processing follows the process stores.
+      expect(mocks.createHandler.mock.calls.at(-1)?.at(3)).toBe(
         responseTextProcessing,
       );
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);

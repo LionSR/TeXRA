@@ -254,9 +254,10 @@ const configEditCommand = defineCliCommand({
         'Interactive configuration requires a terminal. Use `texra config show` or `texra config agents` in scripts.',
       );
     }
-    await initLocalCliPlatform(context);
+    const services = await initLocalCliPlatform(context);
     const { runConfigTui } = await import('../config/runConfigTui');
     await runConfigTui({
+      secrets: services.secrets,
       colorEnabled: context.stdoutColorEnabled,
       onError: writeErrorStderr,
     });

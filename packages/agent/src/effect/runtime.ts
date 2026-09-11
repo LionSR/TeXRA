@@ -30,13 +30,16 @@ import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
+import type { StateStore } from '@platform/interfaces';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 
 import { PlatformConflict } from './errors.js';
 import { makeSessions, Sessions } from './sessions.js';
@@ -54,7 +57,53 @@ export interface AgentPlatform extends Platform {
 export interface AgentRuntime {
   readonly platform: AgentPlatform;
   readonly roots: WorkspaceRoots;
+  /**
+   * What the process services over this platform are built from, as the
+   * process runtime holds them. The package's `Sessions` programs run on the
+   * embedder's runtime, so a launch there is given those services explicitly
+   * rather than carrying them on the public API's types.
+   *
+   * The stores rather than the layer over them: a `Layer` here would name
+   * `ToolInjections`, whose declarations reach the tool registry and through
+   * it every provider SDK's types, and the package publishes no provider
+   * type. `processServicesLayer` builds the layer where it is used.
+   */
+  readonly services: {
+    readonly secrets: () => PlatformSecrets;
+    readonly appState: () => StateStore;
+    readonly setup: SetupPlatformShape;
+  };
 }
+
+/**
+ * What the package answers a setup tool with: nothing, loudly. It is
+ * embedded in someone else's process, so it is none of the three product
+ * hosts `ToolHost` names and it has no sign-in flow of its own to start.
+ * Claiming to be the CLI would make `collectCoreSetupStatus` and the probe
+ * tools branch on a surface that is not there, and answering `signIn` with
+ * `false` would report a sign-in that can never happen as one that merely
+ * did not complete. Each member says so instead, on read, the way the test
+ * kernel's fake does — the same loud failure this package had before it
+ * provided `SetupPlatform` at all.
+ */
+const NO_SETUP_PLATFORM =
+  'The agent package has no setup platform: run the setup agent from the texra CLI, the desktop app, or the VS Code extension.';
+
+const PACKAGE_SETUP: SetupPlatformShape = {
+  get host(): never {
+    throw new Error(NO_SETUP_PLATFORM);
+  },
+  signIn: () => Promise.reject(new Error(NO_SETUP_PLATFORM)),
+  get commands(): never {
+    throw new Error(NO_SETUP_PLATFORM);
+  },
+  get extensions(): never {
+    throw new Error(NO_SETUP_PLATFORM);
+  },
+  get terminal(): never {
+    throw new Error(NO_SETUP_PLATFORM);
+  },
+};
 
 /** One composition's hold on the composed process: what it reads, and the
  *  end of its claim on what it found or installed. */
@@ -123,6 +172,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
         'The agent package is already using another platform in this process.',
     });
   }
+  const processServices = {
+    secrets: () => platform.secrets,
+    appState: () => platform.globalState,
+    setup: PACKAGE_SETUP,
+  };
   if (!sessionOwnerInstalled()) {
     // The process-wide installations, once for the life of the process.
     if (!active) {
@@ -136,11 +190,12 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // pending read: the owner's map builds synchronously over it, so an
     // open registers its root before the opener's first await and only the
     // entry's build waits.
-    installProcessRuntime(
-      nodeProcesses.selfIdentity(),
-      () => platform.storage.getGlobalStoragePath(),
-      () => platform.storage.getGlobalStoragePath(),
-    );
+    installProcessRuntime({
+      processStart: nodeProcesses.selfIdentity(),
+      globalStorage: () => platform.storage.getGlobalStoragePath(),
+      updateCheckStorage: () => platform.storage.getGlobalStoragePath(),
+      ...processServices,
+    });
     if (!active) {
       initNodeAgentRuntime(platform.lifecycle);
     }
@@ -149,7 +204,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   holds += 1;
   let held = true;
   return {
-    runtime: { platform, roots: platform.roots },
+    runtime: {
+      platform,
+      roots: platform.roots,
+      services: processServices,
+    },
     release: Effect.suspend(() => {
       if (!held) return Effect.void;
       held = false;

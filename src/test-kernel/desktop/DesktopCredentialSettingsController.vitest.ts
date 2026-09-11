@@ -8,6 +8,7 @@ import type { SubscriptionDeviceCodePrompt } from '@controllers/modelAccess/subs
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import * as logger from '@logger/logUtils';
 import { apiKeySecretName } from '@model/apiProviders';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -44,8 +45,9 @@ const codexMocks = vi.hoisted(() => ({
 }));
 
 const modelMocks = vi.hoisted(() => ({
-  compute: vi.fn(async (models: readonly string[] = []) =>
-    models.map((model) => ({ value: model, label: model })),
+  compute: vi.fn(
+    async (_stores: ModelOptionStores, models: readonly string[] = []) =>
+      models.map((model) => ({ value: model, label: model })),
   ),
 }));
 

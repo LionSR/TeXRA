@@ -12,7 +12,7 @@ import type { CommandId } from '@shared/commands/catalog';
 // Local file imports
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import { SetupPlatform } from './platform';
 
 /**
  * Allowlist of VS Code commands the setup agent may invoke.
@@ -61,7 +61,7 @@ type InvokeCommandInput = z.infer<typeof InvokeCommandInputSchema>;
 const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
   input: InvokeCommandInput,
 ) {
-  const platform = getSetupPlatform();
+  const platform = yield* SetupPlatform;
   const commandId = input.command.trim();
 
   if (!ALLOWED_COMMANDS.has(commandId)) {

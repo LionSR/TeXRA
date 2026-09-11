@@ -64,9 +64,12 @@ export async function runResumeCommand(
   context: CliContext,
   id: RunId,
 ): Promise<number> {
-  await initInteractiveCliPlatform({ ...context, quietLogs: true });
+  const stores = await initInteractiveCliPlatform({
+    ...context,
+    quietLogs: true,
+  });
 
-  const session = await initializeCliTranscriptSession();
+  const session = await initializeCliTranscriptSession(stores);
   return effectRuntime().runPromise(
     Effect.gen(function* () {
       const store = getRunRecords(session, id);

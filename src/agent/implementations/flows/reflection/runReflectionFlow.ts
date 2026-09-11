@@ -19,6 +19,7 @@ import {
 } from '@agent/node/persistedFlow';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   type AgentFileLocation,
   AgentRunStateSnapshotSchema,
@@ -74,6 +75,7 @@ async function resolveWorkflowSettingTools(
   toolPolicy: ToolPolicy,
   logger: { warn: (msg: string) => void },
   supportsFunctionCalling: boolean,
+  stores: ModelOptionStores,
 ): Promise<AgentWorkflowSetting> {
   const tools = await resolveAgentTools({
     tools: setting.tools,
@@ -82,6 +84,7 @@ async function resolveWorkflowSettingTools(
     runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
     // Workflow agents do not use the tool-use flow's conditional infrastructure.
     toolInjections: new ToolInjectionRegistry(),
+    stores,
   });
   return { ...setting, tools: supportsFunctionCalling ? tools : [] };
 }
@@ -138,6 +141,7 @@ export async function runReflectionFlow(
     input.toolPolicy,
     logger,
     modelCell.handler.capabilities?.supportsFunctionCalling === true,
+    input.stores,
   );
 
   let shared: ReflectionFlowShared | undefined;

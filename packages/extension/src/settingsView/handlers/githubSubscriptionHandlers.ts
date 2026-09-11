@@ -13,9 +13,8 @@ import {
   noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
-import { SecretManager } from '@frontend/secretManager';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   getProgressRunLabel,
   revealProgressRun,
@@ -28,6 +27,7 @@ import {
   GITHUB_TOKEN_REMOVED_MESSAGE,
   GITHUB_TOKEN_SAVED_MESSAGE,
   GITHUB_TOKEN_STORAGE_KEY,
+  resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
 import {
   withHandlerErrorHandling,
@@ -36,10 +36,13 @@ import {
 
 /** GitHub token and subscription handler delegate. */
 export class GitHubSubscriptionHandlers {
-  constructor(private readonly ctx: SettingsHandlerContext) {}
+  constructor(
+    private readonly ctx: SettingsHandlerContext,
+    private readonly secrets: PlatformSecrets,
+  ) {}
 
   async sendGitHubTokenStatus(webview: vscode.Webview): Promise<void> {
-    const status = await SecretManager.gitHubTokenExists();
+    const status = await resolveGitHubTokenSource(this.secrets);
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
       status,
@@ -58,7 +61,7 @@ export class GitHubSubscriptionHandlers {
       this.ctx,
       'Failed to save GitHub token',
       async () => {
-        await storeCredential(platform().secrets, {
+        await storeCredential(this.secrets, {
           secretName: GITHUB_TOKEN_STORAGE_KEY,
           value: token,
           kind: 'github',
@@ -74,7 +77,7 @@ export class GitHubSubscriptionHandlers {
       this.ctx,
       'Failed to remove GitHub token',
       async () => {
-        await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+        await this.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
         void vscode.window.showInformationMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },

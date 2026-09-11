@@ -11,8 +11,9 @@ import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
+import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentCategory, type RunId } from '@shared/schemas';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { testModelCell } from './modelCellTestUtils';
 
@@ -104,6 +105,8 @@ describe('run-scoped tool overlay', () => {
             modelCell,
             toolPolicy: createToolPolicy(),
             onModelChanged: () => {},
+            stores: hostStores(),
+            toolInjections: new ToolInjectionRegistry(),
             interrupt: () => {},
             onRoundFinalized: () => {},
             parentRunId: 'parent0' as RunId,
@@ -175,6 +178,8 @@ describe('run-scoped tool overlay', () => {
             runtimeUnavailableTools: ['inquiry'],
           }),
           onModelChanged: () => {},
+          stores: hostStores(),
+          toolInjections: new ToolInjectionRegistry(),
           interrupt: () => {},
           onRoundFinalized: () => {},
           parentRunId: 'parent0' as RunId,

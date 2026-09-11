@@ -181,10 +181,16 @@ vi.mock('@agent/runtime', async () => {
   };
 });
 
-vi.mock('@controllers/session/sessionLayer', () => ({
-  disposeProcessRuntime: mocks.disposeRuntime,
-  installProcessRuntime: mocks.installRuntime,
-}));
+vi.mock('@controllers/session/sessionLayer', async () => {
+  const { Layer } = await import('effect');
+  return {
+    disposeProcessRuntime: mocks.disposeRuntime,
+    installProcessRuntime: mocks.installRuntime,
+    // The launches these services would reach are the `@agent/runtime` mock's
+    // above, so the package needs them to be a layer and nothing more.
+    processServicesLayer: () => Layer.empty,
+  };
+});
 
 vi.mock('@tools/agentCliSessionStores', () => ({
   registerRuntimeShutdownHandlers: (

@@ -6,6 +6,7 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type { RunScope } from '@agent/runtime/RunScope';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type {
   AgentRunStateSnapshot,
   UserVariableChannels,
@@ -56,6 +57,12 @@ export interface AgentCore {
   readonly modelCell: ModelCell;
   /** Immutable per-run tool policy; read by cycle flows instead of the ambient RunContext. */
   readonly toolPolicy: ToolPolicy;
+  /**
+   * The process secret store and global state (`Secrets` / `AppState`) the run
+   * was launched with; model-handler rebuilds and availability answers read
+   * them.
+   */
+  readonly stores: ModelOptionStores;
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;

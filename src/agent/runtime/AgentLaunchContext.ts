@@ -36,8 +36,11 @@ import {
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { AppState } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import {
   aggregateId as qualifyAggregateId,
   type AgentSource,
@@ -376,7 +379,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     input: AgentLaunchInput & { session: SessionHandle },
     runId: RunId,
     resources: Array<() => void | Promise<void>>,
-  ): Effect.fn.Return<AgentLaunchContext, Error> {
+  ): Effect.fn.Return<AgentLaunchContext, Error, Secrets | AppState> {
     yield* failIfAborted(input.signal);
     const { config, setting, prompt, resolution, modelConfig } =
       input.definition;
@@ -389,6 +392,13 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       input.modelHandlerCompatibilityKey ??
       (yield* inferLaunchModelHandlerCompatibilityKey(runId, session));
     yield* failIfAborted(input.signal);
+    // The run's model handler is built from the process stores the launch
+    // already has in scope, so routing and key availability read the same
+    // secret store and global state the rest of the run does.
+    const stores: ModelOptionStores = {
+      secrets: yield* Secrets,
+      globalState: yield* AppState,
+    };
     const modelHandler = yield* Effect.tryPromise({
       try: async () =>
         runInSession(session, () =>
@@ -396,10 +406,12 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
             ? createModelHandlerForCompatibilityKey(
                 modelConfig,
                 modelHandlerCompatibilityKey,
+                stores,
                 session.responseTextProcessing,
               )
             : createModelHandler(
                 modelConfig,
+                stores,
                 session.responseTextProcessing,
                 input.copilotRouteOverride,
               ),
@@ -554,6 +566,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       prompt,
       modelCell,
       toolPolicy: createToolPolicy(input.toolPolicy),
+      stores,
       logger: agentLogger,
       parentStage,
       userVarChannels,

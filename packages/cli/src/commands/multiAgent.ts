@@ -47,7 +47,10 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliToolUseConfig } from '../runtime/executeCli';
+import {
+  type CliRunServices,
+  executeCliToolUseConfig,
+} from '../runtime/executeCli';
 import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
@@ -117,7 +120,7 @@ async function runMultiAgentShow(
 export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   context: CliContext,
   init: MultiAgentRunInit,
-): Effect.fn.Return<number, Error> {
+): Effect.fn.Return<number, Error, CliRunServices> {
   const instruction = yield* Effect.tryPromise({
     try: () => resolveFileBackedInstruction(init, context.cwd),
     catch: ensureError,
@@ -126,7 +129,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   if (init.inputFiles.length === 0 && !hasInstruction) {
     throw new CliUsageError(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
   }
-  yield* Effect.tryPromise({
+  const services = yield* Effect.tryPromise({
     try: () => initCliPlatform({ ...context, quietLogs: true }),
     catch: ensureError,
   });
@@ -180,7 +183,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
   const model = yield* Effect.tryPromise({
-    try: () => selectCliRunModel(context, init.model, 'chat'),
+    try: () => selectCliRunModel(context, init.model, 'chat', services),
     catch: ensureError,
   });
   const runContext = buildHeadlessRunContext(context);

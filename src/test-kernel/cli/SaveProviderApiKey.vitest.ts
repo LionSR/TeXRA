@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  set: vi.fn(),
-  invalidateApiKeyCache: vi.fn(),
-}));
+import { FakeSecrets } from '@test/support/FakePlatform';
 
-vi.mock('@platform/platform', () => ({
-  platform: () => ({ secrets: { set: mocks.set } }),
+const mocks = vi.hoisted(() => ({
+  invalidateApiKeyCache: vi.fn(),
 }));
 
 vi.mock('@model/apiProviders', async (importOriginal) => {
@@ -17,23 +14,26 @@ vi.mock('@model/apiProviders', async (importOriginal) => {
 const { saveProviderApiKey } = await import('@cli/runtime/providerApiKey');
 const { saveGitHubToken } = await import('@cli/runtime/githubToken');
 
+const secrets = new FakeSecrets();
+const set = vi.spyOn(secrets, 'set');
+
 describe('saveProviderApiKey', () => {
   beforeEach(() => {
-    mocks.set.mockReset().mockResolvedValue(undefined);
+    set.mockReset().mockResolvedValue(undefined);
     mocks.invalidateApiKeyCache.mockReset();
   });
 
   it('stores the trimmed key and drops the key cache', async () => {
-    await saveProviderApiKey('anthropic', '  sk-ant-secret  ');
-    expect(mocks.set).toHaveBeenCalledWith('apiKey.anthropic', 'sk-ant-secret');
+    await saveProviderApiKey(secrets, 'anthropic', '  sk-ant-secret  ');
+    expect(set).toHaveBeenCalledWith('apiKey.anthropic', 'sk-ant-secret');
     expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
   });
 
   it('rejects an empty key without writing a secret or changing mode', async () => {
-    await expect(saveProviderApiKey('anthropic', '   ')).rejects.toThrow(
-      'empty',
-    );
-    expect(mocks.set).not.toHaveBeenCalled();
+    await expect(
+      saveProviderApiKey(secrets, 'anthropic', '   '),
+    ).rejects.toThrow('empty');
+    expect(set).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -51,9 +51,9 @@ describe('saveProviderApiKey', () => {
     'rejects the placeholder %s without changing credentials',
     async (placeholder) => {
       await expect(
-        saveProviderApiKey('anthropic', placeholder),
+        saveProviderApiKey(secrets, 'anthropic', placeholder),
       ).rejects.toThrow('placeholder');
-      expect(mocks.set).not.toHaveBeenCalled();
+      expect(set).not.toHaveBeenCalled();
     },
   );
 
@@ -62,14 +62,14 @@ describe('saveProviderApiKey', () => {
     // the key cache is dropped, or a concurrent read could repopulate a stale
     // "no key" entry for the 5s TTL.
     const order: string[] = [];
-    mocks.set.mockImplementation(async () => {
+    set.mockImplementation(async () => {
       order.push('set');
     });
     mocks.invalidateApiKeyCache.mockImplementation(() => {
       order.push('invalidateApiKeyCache');
     });
 
-    await saveProviderApiKey('anthropic', 'sk-ant-secret');
+    await saveProviderApiKey(secrets, 'anthropic', 'sk-ant-secret');
 
     expect(order).toEqual(['set', 'invalidateApiKeyCache']);
   });
@@ -77,7 +77,7 @@ describe('saveProviderApiKey', () => {
 
 describe('saveGitHubToken', () => {
   beforeEach(() => {
-    mocks.set.mockReset().mockResolvedValue(undefined);
+    set.mockReset().mockResolvedValue(undefined);
   });
 
   it.each([
@@ -86,7 +86,9 @@ describe('saveGitHubToken', () => {
     'github_pat_***-not-a-real-token',
     '[REDACTED_GITHUB_TOKEN]',
   ])('rejects the GitHub placeholder %s', async (placeholder) => {
-    await expect(saveGitHubToken(placeholder)).rejects.toThrow('placeholder');
-    expect(mocks.set).not.toHaveBeenCalled();
+    await expect(saveGitHubToken(secrets, placeholder)).rejects.toThrow(
+      'placeholder',
+    );
+    expect(set).not.toHaveBeenCalled();
   });
 });

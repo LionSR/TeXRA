@@ -25,6 +25,11 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import { durableFinalizationResult } from '@test/support/agentStorageFixtures';
+import {
+  fakeProcessServices,
+  type FakeProcessServices,
+  installedHost,
+} from '@test/support/setupPlatform';
 import { withTempDir } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => {
@@ -99,7 +104,11 @@ vi.mock('@cli/runtime/executeCli', () => ({
 vi.mock('@cli/runtime/workflowInputs', () => ({
   withExpandedRunInputs: (
     ...args: Parameters<
-      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs
+      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs<
+        unknown,
+        unknown,
+        FakeProcessServices
+      >
     >
   ) =>
     Effect.tryPromise({
@@ -107,7 +116,9 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
         mocks.withExpandedRunInputs(
           ...args.slice(0, 4),
           (inputs: Parameters<(typeof args)[4]>[0]) =>
-            Effect.runPromise(args[4](inputs)),
+            Effect.runPromise(
+              Effect.provide(args[4](inputs), fakeProcessServices()),
+            ),
         ),
       catch: ensureError,
     }),
@@ -156,13 +167,16 @@ async function runWorkflow(
 ): Promise<number> {
   const { runWorkflowAgent: run } = await import('@cli/commands/workflow');
   return Effect.runPromise(
-    run(context, {
-      agent: 'polish',
-      inputFiles: ['paper.tex'],
-      contextFiles: [],
-      instruction: '',
-      ...init,
-    }),
+    Effect.provide(
+      run(context, {
+        agent: 'polish',
+        inputFiles: ['paper.tex'],
+        contextFiles: [],
+        instruction: '',
+        ...init,
+      }),
+      fakeProcessServices(),
+    ),
   );
 }
 
@@ -319,8 +333,11 @@ function expectNoModelOrInputWork(): void {
 describe('CLI workflow run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(undefined);
-    cliInitPlatformMock.initCliPlatform.mockResolvedValue(undefined);
+    // The CLI init hands its caller the platform's stores; the commands
+    // under test read `secrets`/`globalState` off what it returns.
+    const { platform } = installedHost();
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(platform);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(platform);
     mocks.writeResultMeta.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue(durableFinalizationResult());
     mocks.resolveCliLaunchAgent.mockResolvedValue({
@@ -1107,7 +1124,10 @@ describe('CLI workflow run command', () => {
       await import('@cli/commands/workflow');
     const executeCliWorkflowConfig = (
       ...args: Parameters<typeof nativeExecute>
-    ) => Effect.runPromise(nativeExecute(...args));
+    ) =>
+      Effect.runPromise(
+        Effect.provide(nativeExecute(...args), fakeProcessServices()),
+      );
 
     const exitCode = await executeCliWorkflowConfig(
       {
@@ -1143,7 +1163,10 @@ describe('CLI workflow run command', () => {
       await import('@cli/commands/workflow');
     const executeCliWorkflowConfig = (
       ...args: Parameters<typeof nativeExecute>
-    ) => Effect.runPromise(nativeExecute(...args));
+    ) =>
+      Effect.runPromise(
+        Effect.provide(nativeExecute(...args), fakeProcessServices()),
+      );
 
     const result = executeCliWorkflowConfig(
       {

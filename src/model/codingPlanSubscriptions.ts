@@ -9,7 +9,8 @@ import {
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { oauthSubscriptionUsageRoute } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
@@ -29,11 +30,21 @@ export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
   readonly getEnabled: () => boolean;
   readonly setEnabled: (enabled: boolean) => Promise<void>;
-  /** Restore a captured preference without changing a newer competing route. */
-  readonly restoreEnabled: (enabled: boolean) => Promise<void>;
+  /**
+   * Restore a captured preference without changing a newer competing route.
+   * `state` is the process global state the caller holds, for the plans that
+   * write the preference straight to it.
+   */
+  readonly restoreEnabled: (
+    enabled: boolean,
+    state: StateStore,
+  ) => Promise<void>;
 }
 
-async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
+async function isGlmCodingPlanActive(
+  modelId: string,
+  secrets: PlatformSecrets,
+): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (config?.provider !== ModelProvider.GLM) return false;
 
@@ -45,8 +56,7 @@ async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
     ),
   });
   return (
-    route.route === 'official-coding-plan' &&
-    hasUsableApiKey(platform().secrets, 'glm')
+    route.route === 'official-coding-plan' && hasUsableApiKey(secrets, 'glm')
   );
 }
 
@@ -56,12 +66,15 @@ async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
  * Mirrors ModelFactory's dispatch facts: registry eligibility, the OpenRouter
  * toggle, a stored key, and the "Prefer Kimi Code" switch.
  */
-async function isKimiCodeSubscriptionActive(modelId: string): Promise<boolean> {
+async function isKimiCodeSubscriptionActive(
+  modelId: string,
+  secrets: PlatformSecrets,
+): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (!config || !isKimiSubscriptionEligible(config)) return false;
   return isKimiCodeRoute(
     config,
-    await resolveKimiCodeRoutingFacts(getUseOpenRouter()),
+    await resolveKimiCodeRoutingFacts(secrets, getUseOpenRouter()),
   );
 }
 
@@ -79,11 +92,8 @@ const RUNTIME_BY_ID = {
     // Restore writes the stored value directly: the catalog row's OpenRouter
     // exclusion is a *user intent* rule, and re-applying it here would clear a
     // newer competing route the user chose after the capture.
-    restoreEnabled: async (enabled) => {
-      await platform().globalState.update(
-        GlobalStateKey.KIMI_CODE_PREFER,
-        enabled,
-      );
+    restoreEnabled: async (enabled, state) => {
+      await state.update(GlobalStateKey.KIMI_CODE_PREFER, enabled);
     },
     isActiveForModel: isKimiCodeSubscriptionActive,
   },
@@ -98,7 +108,10 @@ const RUNTIME_BY_ID = {
      * {@link activeSubscriptionUsageRoute} owns as the single public answer to
      * "which subscription serves this model next".
      */
-    readonly isActiveForModel: (modelId: string) => Promise<boolean>;
+    readonly isActiveForModel: (
+      modelId: string,
+      secrets: PlatformSecrets,
+    ) => Promise<boolean>;
   }
 >;
 
@@ -119,11 +132,12 @@ export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRunt
 /** Resolve the coding plan currently serving a model, if any. */
 async function activeCodingPlanForModel(
   modelId: string,
+  secrets: PlatformSecrets,
 ): Promise<CodingPlanSubscriptionRuntime | undefined> {
   const active = await Promise.all(
     RUNTIMES.map(async (runtime) => ({
       runtime,
-      active: await runtime.isActiveForModel(modelId),
+      active: await runtime.isActiveForModel(modelId, secrets),
     })),
   );
   return active.find((candidate) => candidate.active)?.runtime;
@@ -145,9 +159,10 @@ async function activeCodingPlanForModel(
  */
 export async function activeSubscriptionUsageRoute(
   modelId: string,
+  secrets: PlatformSecrets,
 ): Promise<UsageRoute | undefined> {
   return (
     (await oauthSubscriptionUsageRoute(modelId)) ??
-    (await activeCodingPlanForModel(modelId))?.descriptor.usageRoute
+    (await activeCodingPlanForModel(modelId, secrets))?.descriptor.usageRoute
   );
 }

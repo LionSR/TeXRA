@@ -29,7 +29,6 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import type { ChildRun } from './childRun';
@@ -60,9 +59,9 @@ export const registerChildRun = Effect.fn('registerChildRun')(function* (
 });
 
 /** The strategy wiring a launch site supplies inside the guard. */
-interface DetachedChildRunLaunch<TTurn> {
+interface DetachedChildRunLaunch<TTurn, R> {
   /** Provider-specific run strategy for the child loop. */
-  readonly strategy: ChildRunStrategy<TTurn>;
+  readonly strategy: ChildRunStrategy<TTurn, R>;
   /**
    * Attach a completion error trace so a late loop failure is diagnosed. Omit
    * when the caller awaits completion in-band (no unhandled rejection).
@@ -81,7 +80,10 @@ type DetachedChildRunInputBase = Omit<
   'strategy' | 'childRun'
 >;
 
-export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
+export type DetachedChildRunInput<
+  TTurn,
+  R = never,
+> = DetachedChildRunInputBase &
   (
     | {
         /** Create the stream inside the lease guard, before any stream-dependent setup. */
@@ -89,7 +91,7 @@ export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
         /** Build attempt-scoped setup around the stream retained by the launch guard. */
         readonly buildLaunch: (
           childRun: ChildRun,
-        ) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error>;
+        ) => Effect.Effect<DetachedChildRunLaunch<TTurn, R>, Error>;
       }
     | {
         /** Native strategies let `executeAgent` own handle creation for every turn. */
@@ -99,7 +101,7 @@ export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
          * guard so a throw releases the owned-run lease.
          */
         readonly buildLaunch: () => Effect.Effect<
-          DetachedChildRunLaunch<TTurn>,
+          DetachedChildRunLaunch<TTurn, R>,
           Error
         >;
       }
@@ -111,14 +113,15 @@ export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
  * loop, then attach the completion error trace. Returns the launched loop's
  * stream id and completion so in-band callers can await it.
  */
-export function startDetachedChildRunLoop<TTurn>(
-  input: DetachedChildRunInput<TTurn>,
+export function startDetachedChildRunLoop<TTurn, R = never>(
+  input: DetachedChildRunInput<TTurn, R>,
 ): Effect.Effect<
   {
     childRunId: RunId;
     completion: Fiber.Fiber<void, Error>;
   },
-  Error
+  Error,
+  R
 > {
   return runWithOwnedRunLeaseLaunchGuard(
     input.session,
@@ -128,7 +131,7 @@ export function startDetachedChildRunLoop<TTurn>(
       let autoCloseOnLaunchFailure = false;
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
-          let launch: DetachedChildRunLaunch<TTurn>;
+          let launch: DetachedChildRunLaunch<TTurn, R>;
           if (input.createChildRun) {
             childRun = yield* input.createChildRun();
             launch = yield* input.buildLaunch(childRun);

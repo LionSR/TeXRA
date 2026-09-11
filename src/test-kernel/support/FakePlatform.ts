@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { createFsFromVolume, Volume, type IFs } from 'memfs';
 
 // Local imports
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   NO_TOOL_AVAILABILITY_HOST,
   type FileStat,
@@ -28,6 +29,7 @@ import {
   type FileTypeProbe,
 } from '@platform/defaults/fsEntryTypeBits';
 import { getCoreSettingDefault } from '@shared/schemas';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 function fakeFsError(code: string, message: string): Error {
@@ -507,6 +509,14 @@ export class FakeSecrets implements PlatformSecrets {
   }
 }
 
+/**
+ * A detached pair of process stores, for a suite whose readers are all mocked
+ * and only pass the bag through.
+ */
+export function fakeStores(): ModelOptionStores {
+  return { secrets: new FakeSecrets(), globalState: new FakeStateStore() };
+}
+
 export interface FakePlatformOptions {
   config?: Record<string, unknown>;
   globalState?: Record<string, unknown>;
@@ -521,13 +531,15 @@ export interface FakePlatformOptions {
 }
 
 /**
- * Overrides for one fake host: the process platform's ports plus the two
+ * Overrides for one fake host: the process platform's ports, the two
  * workspace-root ports a suite substitutes (a scoped config provider, a
- * hand-built state store). The workspace and storage paths come from
- * `FakePlatformOptions`.
+ * hand-built state store), and the setup platform a setup-tool suite
+ * provides. The workspace and storage paths come from `FakePlatformOptions`.
  */
 export type FakeHostOverrides = Partial<Platform> &
-  Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState'>>;
+  Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState'>> & {
+    readonly setup?: SetupPlatformShape;
+  };
 
 /** The workspace roots a fake host installs beside its platform. */
 export function createFakeWorkspaceRoots(

@@ -4,6 +4,7 @@
  * Abstracts API key storage/retrieval. VS Code uses context.secrets +
  * process.env fallback. CLI/Electron uses process.env + config file.
  */
+import { Context, Layer } from 'effect';
 
 /**
  * Provider for secure secret storage (API keys, tokens).
@@ -55,4 +56,33 @@ export async function secretsGet(
 ): Promise<string | undefined> {
   const envValue = secrets.getEnv(key);
   return envValue !== undefined ? envValue : secrets.getStored(key);
+}
+
+/**
+ * The process's secret store as an Effect service (`@texra/platform/Secrets`,
+ * injection plan §5 row 1), provided once by the composition root through
+ * `installProcessRuntime`. The shape is the port itself: a reader that is
+ * already an Effect wraps one call in `hostPort` where it did before, and
+ * Effect-typing the port is a later step.
+ *
+ * `layer` takes the store as a thunk because a `ManagedRuntime` builds its
+ * whole layer at its first run, and in the desktop and CLI roots that first
+ * run is the program that opens this very store. The service resolves the
+ * thunk on each member call, by which time every root has finished wiring;
+ * the thunk closes over the root's own local, never over `platform()`, and a
+ * call before the store exists throws on the calling fiber, never a default.
+ */
+export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
+  '@texra/platform/Secrets',
+) {
+  static layer(secrets: () => PlatformSecrets): Layer.Layer<Secrets> {
+    return Layer.succeed(Secrets)({
+      get: (key) => secrets().get(key),
+      getStored: (key) => secrets().getStored(key),
+      set: (key, value) => secrets().set(key, value),
+      delete: (key) => secrets().delete(key),
+      listStoredKeys: () => secrets().listStoredKeys(),
+      getEnv: (name) => secrets().getEnv(name),
+    });
+  }
 }

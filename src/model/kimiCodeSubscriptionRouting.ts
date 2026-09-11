@@ -20,7 +20,7 @@
 
 import { type ModelConfig } from 'llm-zoo';
 
-import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -83,13 +83,17 @@ export function isKimiCodeRoute(
  * dispatch path derives it from the persisted compatibility key while the
  * availability/subscription paths read the live toggle — the two sites that
  * used to duplicate this assembly inline.
+ *
+ * `secrets` is the process secret store the caller holds (the `Secrets`
+ * service, or the store a host root threaded down).
  */
 export async function resolveKimiCodeRoutingFacts(
+  secrets: PlatformSecrets,
   useOpenRouter: boolean,
 ): Promise<KimiCodeRoutingFacts> {
   return {
     useOpenRouter,
-    keySet: await hasUsableApiKey(platform().secrets, 'kimiCode'),
+    keySet: await hasUsableApiKey(secrets, 'kimiCode'),
     preferKimiCode: getPreferKimiCode(),
   };
 }

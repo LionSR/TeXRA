@@ -1,41 +1,39 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as codexAuth from '@auth/codex';
 import * as providerCapabilities from '@model/providerCapabilities';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import { setupPlatform } from '@test/support/setupPlatform';
 import {
-  __resetSetupPlatformForTests,
+  fakeProcessServices,
+  setupPlatform,
+} from '@test/support/setupPlatform';
+import {
   getChatGptSubscriptionStatus,
   getSetupAuthStatus,
-  getSetupPlatform,
-  setSetupPlatform,
-  setupSecrets,
   texraScopedConfig,
 } from '@tools/setup/platform';
 
-setupPlatform({
-  config: { 'texra.bib.defaultPath': 'references.bib' },
-  secrets: { 'apiKey.openai': 'sk-stored-key' },
-  secretsEnv: { GITHUB_TOKEN: 'github-env-token' },
-});
+setupPlatform(
+  {
+    config: { 'texra.bib.defaultPath': 'references.bib' },
+    secrets: { 'apiKey.openai': 'sk-stored-key' },
+    secretsEnv: { GITHUB_TOKEN: 'github-env-token' },
+  },
+  { setup: { host: 'extension', signIn: async () => false } },
+);
 
 afterEach(() => {
   vi.restoreAllMocks();
   SupabaseClient.resetForTests();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-});
-
-beforeEach(() => {
-  __resetSetupPlatformForTests();
-  setSetupPlatform({ host: 'extension', signIn: async () => false });
 });
 
 describe('shared setup capabilities', () => {
@@ -45,24 +43,17 @@ describe('shared setup capabilities', () => {
     );
   });
 
-  it.effect('recognizes a stored key even when its value cannot be read', () =>
-    Effect.gen(function* () {
-      vi.spyOn(platform().secrets, 'getStored').mockResolvedValue(undefined);
-      vi.spyOn(platform().secrets, 'listStoredKeys').mockResolvedValue([
-        'apiKey.openai',
-      ]);
-
-      expect(yield* setupSecrets.storedApiKeyExists('openai')).toBe(true);
-    }),
-  );
-
   it.effect('keeps API-key-only setup usable without reporting sign-in', () =>
     Effect.gen(function* () {
-      expect(yield* setupSecrets.anyUsableCredentialExists()).toBe(true);
+      expect(
+        yield* Effect.promise(() =>
+          hasUsableSetupCredential(platform().secrets, () => {}),
+        ),
+      ).toBe(true);
       expect(yield* getSetupAuthStatus()).toEqual({
         authenticated: false,
       });
-    }),
+    }).pipe(Effect.provide(fakeProcessServices())),
   );
 
   it.effect(

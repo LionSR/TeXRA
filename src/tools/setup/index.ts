@@ -17,8 +17,9 @@
  * on top of shell would be a second, weaker approval surface that every
  * reviewer keeps finding bypasses for.
  *
- * Common platform coupling is derived from `platform()` ports. The extension
- * adds its VS Code-only setup capabilities via `setSetupPlatform()`.
+ * Credentials come from the `Secrets` service and the host-varying
+ * capabilities from the `SetupPlatform` service, both provided by the host's
+ * composition root through `installProcessRuntime`.
  */
 export { ProbeEnvironmentTool } from './ProbeEnvironmentTool';
 export { VerifySetupTool } from './VerifySetupTool';
@@ -29,4 +30,3 @@ export { InstallVscodeExtensionTool } from './InstallVscodeExtensionTool';
 export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';
 export { SendToTerminalTool } from './SendToTerminalTool';
 export { ApplyTeamTool } from './ApplyTeamTool';
-export { setSetupPlatform } from './platform';

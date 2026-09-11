@@ -21,6 +21,7 @@ import {
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   CHATGPT_AUTH,
   DEVICE_CODE_DESCRIPTION,
@@ -36,6 +37,11 @@ export type AccountAccessFormValue =
 
 interface AccountAccessFormProps {
   readonly availableRows?: number;
+  /**
+   * The secret store the access overview reads. Ink components run no Effect,
+   * so the process store arrives as a prop from the surface that opened it.
+   */
+  readonly secrets: PlatformSecrets;
   readonly onSelect: (value: AccountAccessFormValue) => void;
   readonly onCancel: () => void;
 }
@@ -179,21 +185,24 @@ export function AccountAccessForm(
 ): React.JSX.Element {
   const [status, setStatus] = useState<AccountAccessFormStatus | null>(null);
 
-  useCancellableEffect((isCancelled) => {
-    setStatus(null);
-    void loadCliModelAccessOverview()
-      .then((overview) => {
-        if (!isCancelled()) setStatus({ state: 'loaded', overview });
-      })
-      .catch((error: unknown) => {
-        if (!isCancelled()) {
-          setStatus({
-            state: 'failed',
-            message: String(error),
-          });
-        }
-      });
-  }, []);
+  useCancellableEffect(
+    (isCancelled) => {
+      setStatus(null);
+      void loadCliModelAccessOverview(props.secrets)
+        .then((overview) => {
+          if (!isCancelled()) setStatus({ state: 'loaded', overview });
+        })
+        .catch((error: unknown) => {
+          if (!isCancelled()) {
+            setStatus({
+              state: 'failed',
+              message: String(error),
+            });
+          }
+        });
+    },
+    [props.secrets],
+  );
 
   const items = buildAccountAccessFormItems(
     status?.state === 'loaded'

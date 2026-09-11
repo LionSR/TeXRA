@@ -32,7 +32,7 @@ import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalog
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -67,10 +67,11 @@ export class AgentHandlers {
       selectedToolUseAgent?: string,
       agentCatalogAlreadyFresh?: boolean,
     ) => Promise<void>,
+    globalState: StateStore,
   ) {
     const controllers = createSettingsAgentControllers({
       workspaceState: workspaceRoots().workspaceState,
-      globalState: platform().globalState,
+      globalState,
       getCustomAgentDirectory: () => agentDirectories.custom(),
       getSourceDirectory: (source) => agentDirectories.getDirectory(source),
     });
