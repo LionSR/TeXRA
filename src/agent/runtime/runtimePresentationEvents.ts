@@ -28,6 +28,12 @@ export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 export interface AgentRuntimeEmitOptions {
   /** Retain a presentation event until a temporarily detached UI returns. */
   readonly replayWhenAttached?: boolean;
+  /**
+   * Shown through `requestShowError` on the same host when presenting this
+   * event throws, live or on replay: for a notice that is a failure's only
+   * surface.
+   */
+  readonly fallbackMessage?: string;
 }
 
 /**

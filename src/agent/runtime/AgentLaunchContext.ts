@@ -164,9 +164,9 @@ export function withLaunchRunContext<T>(
 /**
  * Present a launch error through its targeted host notice (replayed if no
  * host is attached yet) and throw it claimed: the notice is its one surface,
- * so the launch catch adds no generic toast. A live host that throws (a
- * renderer torn down mid-post, #10466) leaves it unclaimed: no run exists
- * yet, so the launch catch's generic toast is then its only surface.
+ * so the launch catch adds no generic toast. No run exists yet, so a host
+ * that throws on the notice, live or on replay (a renderer torn down
+ * mid-post, #10398/#10466), shows the generic toast in its place.
  */
 function presentLaunchError<K extends RuntimePresentationEvent>(
   interactions: Pick<SessionHostInteractions, 'emit'>,
@@ -174,8 +174,11 @@ function presentLaunchError<K extends RuntimePresentationEvent>(
   event: K,
   payload: RuntimePresentationEventPayloads[K],
 ): never {
-  if (interactions.emit(event, payload, { replayWhenAttached: true }) !== false)
-    attachErrorPresentationClaimed(err);
+  interactions.emit(event, payload, {
+    replayWhenAttached: true,
+    fallbackMessage: toErrorMessage(err),
+  });
+  attachErrorPresentationClaimed(err);
   throw err;
 }
 

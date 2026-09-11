@@ -509,30 +509,38 @@ export class SessionHostInteractions implements HostInteractions {
     };
   }
 
-  /**
-   * Present `event` through the active host, or queue it for the next one
-   * when `replayWhenAttached` is set. Returns `false` when the live host
-   * threw, so a caller whose notice is a failure's only surface can fall back.
-   */
   emit<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
     options: AgentRuntimeEmitOptions = {},
   ): unknown {
+    // Live or replayed, a host that throws on a notice carrying a fallback
+    // shows the generic error toast on the same host instead.
+    const present = (interactions: HostInteractions) => {
+      try {
+        return interactions.emit?.(event, payload);
+      } catch (error) {
+        if (options.fallbackMessage === undefined) throw error;
+        logger.warn('Presentation emit failed; showing the generic error', {
+          data: error,
+        });
+        return interactions.emit?.('requestShowError', {
+          message: options.fallbackMessage,
+        });
+      }
+    };
     const active = this.activeAttachment;
     if (active) {
       try {
-        return active.interactions.emit?.(event, payload);
+        return present(active.interactions);
       } catch (error) {
         logger.warn('Live presentation emit failed', { data: error });
-        return false;
+        return undefined;
       }
     }
     // The replay loop warn-logs a replay that throws or rejects.
     if (options.replayWhenAttached && !this.disposed) {
-      this.queuePresentationReplay((interactions) =>
-        interactions.emit?.(event, payload),
-      );
+      this.queuePresentationReplay(present);
     }
     return undefined;
   }

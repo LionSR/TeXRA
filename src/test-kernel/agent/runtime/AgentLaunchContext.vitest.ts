@@ -186,6 +186,29 @@ describe('AgentLaunchContext', () => {
     );
   });
 
+  it('emits the generic fallback when a queued banner replay throws synchronously', async () => {
+    // The banner was queued (no host attached) and claimed; a host whose
+    // replayed post throws must still surface the failure once (#10398).
+    const events: string[] = [];
+    const session = await triggerQueuedMissingAgentFailure(createTestSession());
+    session.interactions.use({
+      emit: (event) => {
+        if (event === 'showAgentConfigBanner') {
+          throw new Error('renderer torn down mid-post');
+        }
+        events.push(event);
+      },
+      cancel: () => {},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(events.filter((event) => event === 'requestShowError')).toHaveLength(
+      1,
+    );
+    session.dispose();
+  });
+
   it('does not double-surface a model-not-recognized failure via the generic error toast', async () => {
     const recording = createRecordingHost();
     const session = createTestSession();
