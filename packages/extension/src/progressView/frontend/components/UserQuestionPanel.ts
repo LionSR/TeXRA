@@ -44,8 +44,11 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
     userQuestionPanelStyles,
   ];
 
-  @state() private selections: Record<string, string[]> = {};
-  @state() private freeText: Record<string, string> = {};
+  // Indexed by question position (not `question.question`): two questions
+  // with identical wording would otherwise collide on a text key, both in
+  // Lit's `repeat` reconciliation and in these state maps.
+  @state() private selections: string[][] = [];
+  @state() private freeText: string[] = [];
 
   override render(): TemplateResult {
     const data = this.permission.data;
@@ -63,8 +66,8 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         <div class="user-question-request__questions">
           ${repeat(
             data.questions,
-            (question) => question.question,
-            (question) => this.renderQuestion(question),
+            (_question, index) => index,
+            (question, index) => this.renderQuestion(question, index),
           )}
         </div>
         <div class="user-question-request__actions">
@@ -100,8 +103,11 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
     return true;
   }
 
-  private renderQuestion(question: UserQuestionPrompt): TemplateResult {
-    const current = this.selections[question.question] ?? [];
+  private renderQuestion(
+    question: UserQuestionPrompt,
+    index: number,
+  ): TemplateResult {
+    const current = this.selections[index] ?? [];
 
     return html`
       <fieldset class="user-question-request__question">
@@ -123,19 +129,16 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
               ? repeat(
                   question.options,
                   (option) => option.label,
-                  (option) =>
-                    this.renderCheckboxOption(question, option, current),
+                  (option) => this.renderCheckboxOption(index, option, current),
                 )
               : html`
                   <wa-radio-group
                     label="Choose one answer"
                     .value=${
-                      this.freeText[question.question]?.trim()
-                        ? ''
-                        : (current[0] ?? '')
+                      this.freeText[index]?.trim() ? '' : (current[0] ?? '')
                     }
                     @change=${(event: Event) =>
-                      this.updateSingleSelection(question, event)}
+                      this.updateSingleSelection(index, event)}
                   >
                     ${repeat(
                       question.options,
@@ -160,8 +163,8 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
                 resize="vertical"
                 autocomplete="off"
                 spellcheck
-                .value=${this.freeText[question.question] ?? ''}
-                @input=${(event: Event) => this.updateFreeText(question, event)}
+                .value=${this.freeText[index] ?? ''}
+                @input=${(event: Event) => this.updateFreeText(index, event)}
               ></wa-textarea>`
             : nothing
         }
@@ -183,7 +186,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   }
 
   private renderCheckboxOption(
-    question: UserQuestionPrompt,
+    index: number,
     option: UserQuestionPrompt['options'][number],
     current: string[],
   ): TemplateResult {
@@ -192,7 +195,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         class="user-question-request__option"
         ?checked=${current.includes(option.label)}
         @change=${(event: Event) =>
-          this.updateSelection(question, option.label, event)}
+          this.updateSelection(index, option.label, event)}
       >
         ${this.renderOptionLabel(option)}
       </wa-checkbox>
@@ -209,39 +212,37 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
     `;
   }
 
-  private updateSelection(
-    question: UserQuestionPrompt,
-    label: string,
-    event: Event,
-  ): void {
+  private updateSelection(index: number, label: string, event: Event): void {
     const checked = (event.target as HTMLElement & { checked?: boolean })
       .checked;
-    const current = this.selections[question.question] ?? [];
+    const current = this.selections[index] ?? [];
     const next = checked
       ? [...current, label]
       : current.filter((item) => item !== label);
-    this.selections = { ...this.selections, [question.question]: next };
+    const nextSelections = [...this.selections];
+    nextSelections[index] = next;
+    this.selections = nextSelections;
   }
 
-  private updateSingleSelection(
-    question: UserQuestionPrompt,
-    event: Event,
-  ): void {
+  private updateSingleSelection(index: number, event: Event): void {
     const value =
       (event.target as HTMLElement & { value?: string }).value ?? '';
-    this.selections = {
-      ...this.selections,
-      [question.question]: value ? [value] : [],
-    };
-    if (value && this.freeText[question.question]) {
-      this.freeText = { ...this.freeText, [question.question]: '' };
+    const nextSelections = [...this.selections];
+    nextSelections[index] = value ? [value] : [];
+    this.selections = nextSelections;
+    if (value && this.freeText[index]) {
+      const nextFreeText = [...this.freeText];
+      nextFreeText[index] = '';
+      this.freeText = nextFreeText;
     }
   }
 
-  private updateFreeText(question: UserQuestionPrompt, event: Event): void {
+  private updateFreeText(index: number, event: Event): void {
     const value =
       (event.currentTarget as HTMLElement & { value?: string }).value ?? '';
-    this.freeText = { ...this.freeText, [question.question]: value };
+    const nextFreeText = [...this.freeText];
+    nextFreeText[index] = value;
+    this.freeText = nextFreeText;
   }
 
   private submitAnswers(): void {
@@ -253,11 +254,16 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         ?.focus();
       return;
     }
+    // Submission itself still collapses onto `UserQuestionAnswersSchema`'s
+    // question-text keys (the AskUserQuestion wire vocabulary has no other
+    // id): two identically-worded questions answered independently above
+    // will silently collapse into one entry here. Pre-existing limitation,
+    // not introduced by the position-indexed state above.
     const answers: UserQuestionAnswers = {};
 
-    for (const question of data.questions) {
-      const custom = this.freeText[question.question]?.trim();
-      const selected = this.selections[question.question] ?? [];
+    for (const [index, question] of data.questions.entries()) {
+      const custom = this.freeText[index]?.trim();
+      const selected = this.selections[index] ?? [];
       if (question.multiSelect) {
         // The box is labelled "Another answer", so on a multi-select
         // question it adds to the checked options instead of replacing them.
@@ -281,9 +287,9 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   }
 
   private hasAnyAnswer(data: UserQuestionPermission): boolean {
-    return data.questions.some((question) => {
-      if (this.freeText[question.question]?.trim()) return true;
-      return (this.selections[question.question] ?? []).length > 0;
+    return data.questions.some((_question, index) => {
+      if (this.freeText[index]?.trim()) return true;
+      return (this.selections[index] ?? []).length > 0;
     });
   }
 }

@@ -73,6 +73,26 @@ export function extractionShorthandToolConfig(
 }
 
 /**
+ * Parse `data` against `schema`, warning and returning `null` on failure
+ * instead of throwing. Shared by both delegation-tool branches below so a
+ * reconstruction failure is reported identically regardless of category.
+ */
+function parseOrWarn<T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  toolName: string,
+): T | null {
+  const result = schema.safeParse(data);
+  if (result.success) return result.data;
+  console.warn(
+    `[proposalInput] Could not reconstruct a proposal for delegation tool ` +
+      `"${toolName}"; the "Restore setup" link will be unavailable for this ` +
+      `logged call: ${result.error.message}`,
+  );
+  return null;
+}
+
+/**
  * Parse raw delegation/proposal tool input into a canonical {@link AgentProposal},
  * or `null` when the tool is not proposal-bearing or the input fails validation.
  */
@@ -88,19 +108,20 @@ export function parseDelegationToolInput(
   const spread = isObject(input) ? input : {};
 
   if (category === AgentCategory.ToolUse) {
-    return LenientToolUseProposalSchema.nullable()
-      .catch(null)
-      .parse({
-        agentCategory: AgentCategory.ToolUse,
-        ...spread,
-      });
+    return parseOrWarn(
+      LenientToolUseProposalSchema,
+      { agentCategory: AgentCategory.ToolUse, ...spread },
+      toolName,
+    );
   }
 
-  return LenientWorkflowProposalSchema.nullable()
-    .catch(null)
-    .parse({
+  return parseOrWarn(
+    LenientWorkflowProposalSchema,
+    {
       agentCategory: AgentCategory.Workflow,
       ...spread,
       toolConfig: extractionShorthandToolConfig(spread),
-    });
+    },
+    toolName,
+  );
 }

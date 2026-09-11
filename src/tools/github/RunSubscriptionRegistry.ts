@@ -70,6 +70,14 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   private readonly logger: Pick<AgentTrace, 'info' | 'warn'>;
   private readonly perRun = new Map<RunId, Map<K, BoundSubscription>>();
   private readonly releaseHooks = new Map<SessionHandle, () => void>();
+  /**
+   * Live binding count per session, kept in lockstep with every place a
+   * `BoundSubscription.owner` is set or cleared (new binding, rebind-reassign,
+   * unbind, unbindAll, source-key prune, session release). Lets
+   * {@link detachReleaseHookIfUnused} answer "does this session still own
+   * anything" in O(1) instead of scanning every run's every binding.
+   */
+  private readonly bindingCountBySession = new Map<SessionHandle, number>();
 
   constructor(private readonly opts: RunSubscriptionRegistryOptions<K, Input>) {
     this.logger = opts.logger ?? createLog(opts.name);
@@ -102,6 +110,8 @@ export class RunSubscriptionRegistry<K extends string, Input> {
         const previousOwner = existing.owner;
         existing.owner = session;
         if (previousOwner !== session) {
+          this.decrementSessionRefCount(previousOwner);
+          this.incrementSessionRefCount(session);
           this.detachReleaseHookIfUnused(previousOwner);
         }
         this.opts.source.updateSubscription?.(input, existing.onEvent);
@@ -154,6 +164,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
           };
           bound.set(key, subscription);
           this.perRun.set(runId, bound);
+          this.incrementSessionRefCount(session);
           this.ensureReleaseHook(session);
           this.logger.info(`Bound subscription ${key} → run ${runId}`);
           this.emitBindingsChanged();
@@ -167,9 +178,8 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   unbind(runId: RunId, input: Input): boolean {
     const key = this.opts.keyOf(input);
     const bound = this.perRun.get(runId);
-    const binding = bound?.get(key);
+    const binding = bound && this.deleteBoundKey(runId, bound, key);
     if (!bound || !binding) return false;
-    this.removeBoundKey(runId, bound, key);
     this.detachReleaseHookIfUnused(binding.owner);
     binding.disposable.dispose();
     this.emitBindingsChanged();
@@ -186,11 +196,10 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     const removedBindings: BoundSubscription[] = [];
     const owners = new Set<SessionHandle>();
     for (const [runId, bound] of [...this.perRun]) {
-      const binding = bound.get(canonicalKey);
+      const binding = this.deleteBoundKey(runId, bound, canonicalKey);
       if (!binding) continue;
       removedBindings.push(binding);
       owners.add(binding.owner);
-      this.removeBoundKey(runId, bound, canonicalKey);
     }
     if (removedBindings.length > 0) {
       for (const owner of owners) this.detachReleaseHookIfUnused(owner);
@@ -224,27 +233,24 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     const detach = session.followUps.onRelease((runId) => {
       const bound = this.perRun.get(runId);
       if (!bound) return;
-      const owned = [...bound].filter(
-        ([, binding]) => binding.owner === session,
-      );
+      const owned = [...bound]
+        .filter(([, binding]) => binding.owner === session)
+        .map(([key]) => key);
       if (owned.length === 0) return;
-      for (const [key] of owned) bound.delete(key);
-      if (bound.size === 0) this.perRun.delete(runId);
+      const removed = owned
+        .map((key) => this.deleteBoundKey(runId, bound, key))
+        .filter(
+          (binding): binding is BoundSubscription => binding !== undefined,
+        );
       this.detachReleaseHookIfUnused(session);
-      for (const [, binding] of owned) {
-        binding.disposable.dispose();
-      }
+      for (const binding of removed) binding.disposable.dispose();
       this.emitBindingsChanged();
     });
     this.releaseHooks.set(session, detach);
   }
 
   private detachReleaseHookIfUnused(session: SessionHandle): void {
-    for (const bound of this.perRun.values()) {
-      for (const binding of bound.values()) {
-        if (binding.owner === session) return;
-      }
-    }
+    if ((this.bindingCountBySession.get(session) ?? 0) > 0) return;
     this.releaseHooks.get(session)?.();
     this.releaseHooks.delete(session);
   }
@@ -254,26 +260,48 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     const removedOwners = new Set<SessionHandle>();
     let removed = false;
     for (const [runId, bound] of [...this.perRun]) {
-      for (const [key, binding] of [...bound]) {
-        if (!active.has(key)) {
-          removedOwners.add(binding.owner);
-          bound.delete(key);
-          removed = true;
-        }
+      for (const key of [...bound.keys()]) {
+        if (active.has(key)) continue;
+        const binding = this.deleteBoundKey(runId, bound, key);
+        if (!binding) continue;
+        removedOwners.add(binding.owner);
+        removed = true;
       }
-      if (bound.size === 0) this.perRun.delete(runId);
     }
     for (const owner of removedOwners) this.detachReleaseHookIfUnused(owner);
     if (removed) this.emitBindingsChanged();
   }
 
-  private removeBoundKey(
+  /**
+   * Remove one binding, decrementing its owner's ref count and pruning the
+   * run's map (and, once empty, `perRun` itself) in the same step. The
+   * single place every unbind path shrinks the (runId, key) → binding maps —
+   * callers still own disposing the returned binding's `disposable`.
+   */
+  private deleteBoundKey(
     runId: RunId,
     bound: Map<K, BoundSubscription>,
     key: K,
-  ): void {
+  ): BoundSubscription | undefined {
+    const binding = bound.get(key);
+    if (!binding) return undefined;
     bound.delete(key);
     if (bound.size === 0) this.perRun.delete(runId);
+    this.decrementSessionRefCount(binding.owner);
+    return binding;
+  }
+
+  private incrementSessionRefCount(session: SessionHandle): void {
+    this.bindingCountBySession.set(
+      session,
+      (this.bindingCountBySession.get(session) ?? 0) + 1,
+    );
+  }
+
+  private decrementSessionRefCount(session: SessionHandle): void {
+    const count = this.bindingCountBySession.get(session) ?? 0;
+    if (count <= 1) this.bindingCountBySession.delete(session);
+    else this.bindingCountBySession.set(session, count - 1);
   }
 
   private emitBindingsChanged(): void {
