@@ -262,7 +262,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       settlementSeqNo: 3,
       data: {
         status: 'failed',
-        error: 'The stream ended before this tool completed.',
+        error: 'The run ended before this tool completed.',
       },
     });
     expect(row('task:planned')).not.toHaveProperty('settlementSeqNo');
@@ -289,7 +289,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       settlementSeqNo: 3,
       data: {
         status: 'failed',
-        error: 'The stream ended before this tool completed.',
+        error: 'The run ended before this tool completed.',
       },
     });
 
