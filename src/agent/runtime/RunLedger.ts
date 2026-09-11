@@ -17,6 +17,7 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   type RunId,
+  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import {
@@ -34,11 +35,16 @@ import {
 import { SessionEvents } from '@shared/session/sessionEvents';
 import type { z } from 'zod';
 
-/** Rows that may follow a `flow.snapshot` in its batch. */
+/**
+ * Rows that may follow a `flow.snapshot` in its batch. `approval.requested` is
+ * deliberately absent: the snapshot is the request's recovery binding and the
+ * fold resolves that binding against the approvals folded below it, so a
+ * request committed after the snapshot that binds it is `dangling-binding`.
+ * The batch is `[approval.requested, flow.snapshot]`, one order, checked here.
+ */
 const AFTER_SNAPSHOT = new Set<RunLedgerDraft['type']>([
   'flow.step',
   'tool.end',
-  'approval.requested',
   'approval.resolved',
 ]);
 
@@ -182,16 +188,46 @@ function rowOrigins(row: RunLedgerDraft): readonly ModelOrigin[] {
  * these at parse time; this is the loud restatement at the one boundary
  * where a row becomes permanent, never a `?? null`. A value that is not a URL
  * at all is refused the same way rather than thrown out of the generator.
+ *
+ * Returns what the refusal may say, never the rejected endpoint: the part
+ * this check exists to keep out of durable state is exactly the part a
+ * refusal would otherwise carry into logs and error reports. Scheme, host and
+ * path — the components the constraint permits — plus the names of the
+ * components that violated it.
  */
 function unsafeEndpoint(origin: ModelOrigin): string | null {
   if (origin.protocol === 'vscode-lm') return null;
   const { endpoint } = origin.deployment;
-  if (!URL.canParse(endpoint)) return endpoint;
+  if (!URL.canParse(endpoint)) return 'the endpoint is not a URL';
   const url = new URL(endpoint);
-  return url.username !== '' || url.password !== '' || /[?#]/.test(endpoint)
-    ? endpoint
-    : null;
+  const violations = [
+    url.username !== '' || url.password !== '' ? 'userinfo' : null,
+    endpoint.includes('?') ? 'a query string' : null,
+    endpoint.includes('#') ? 'a fragment' : null,
+  ].filter((part): part is string => part !== null);
+  return violations.length === 0
+    ? null
+    : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
 }
+
+/**
+ * The batch as it would be committed, at provisional commits above the
+ * state's. The fold reads a `commit` only to require strict increase and to
+ * carry it into the state it returns, so folding these answers "does this
+ * batch fold?" exactly as the published rows will, before anything is
+ * written.
+ */
+const candidates = (
+  state: RunState | null,
+  rows: readonly RunLedgerDraft[],
+): readonly SessionEvent[] =>
+  rows.map((row, index) => ({
+    ...row,
+    seq: index + 1,
+    commit: (state === null ? 0 : state.commit) + index + 1,
+    ownerId: null,
+    at: 0,
+  }));
 
 const unprepared = (
   runId: RunId,
@@ -283,45 +319,66 @@ export const runLedgerLayer: Layer.Layer<
       }
       for (const row of rows) {
         for (const origin of rowOrigins(row)) {
-          const endpoint = unsafeEndpoint(origin);
-          if (endpoint !== null) {
+          const unsafe = unsafeEndpoint(origin);
+          if (unsafe !== null) {
             return yield* new RunLedgerRefused({
               reason: 'unsafe-endpoint',
               runId: run,
-              detail: `endpoint ${endpoint} is not a scheme, host and path alone`,
+              detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
             });
           }
         }
-        if (row.type === 'model.compaction') {
-          // A compaction is the first message-bearing row of its batch, so the
-          // pre-batch history is the base `keepPrefix` indexes into. An empty
-          // result goes unchecked, exactly as `load` leaves one unchecked.
-          const kept = state === null ? [] : state.messages;
-          const history = [
-            ...kept.slice(0, row.payload.keepPrefix),
-            ...row.payload.messages,
-          ];
-          if (history.length > 0) {
-            const refusal = unprepared(run, history);
-            if (refusal !== null) return yield* refusal;
-          }
-        }
       }
-      const drafts: readonly SessionEventDraft[] = rows;
-      const committed = yield* events.publish(drafts);
-      const folded = foldRunState(state, committed);
-      if (Result.isFailure(folded)) {
+      // Fold the batch before publishing it. `load` folds the same rows, so a
+      // batch that fails an invariant after the transaction has committed
+      // leaves a run nothing can read again; the refusal has to arrive while
+      // it still means "this batch was not written".
+      const candidate = foldRunState(state, candidates(state, rows));
+      if (Result.isFailure(candidate)) {
         return yield* new RunLedgerRefused({
           reason: 'inconsistent',
           runId: run,
-          detail: folded.failure.detail,
-          cause: folded.failure,
+          detail: candidate.failure.detail,
+          cause: candidate.failure,
         });
       }
-      if (folded.success === null) {
+      if (candidate.success === null) {
         return yield* Effect.die(
           new Error(
             'RunLedger.appendBatch contract: a batch on a fresh run appends a ledger row',
+          ),
+        );
+      }
+      // D11: the history this batch assembles is the history `load` runs
+      // through `PreparedHistorySchema`, so every batch that appends to or
+      // rewrites it is checked here, where the refusal is still actionable —
+      // a compaction whose `keepPrefix` cuts a group, and equally an append
+      // that adds an orphan tool group or a call without its results. An
+      // empty history goes unchecked, exactly as `load` leaves one unchecked.
+      if (
+        rows.some(isMessageBearing) &&
+        candidate.success.messages.length > 0
+      ) {
+        const refusal = unprepared(run, candidate.success.messages);
+        if (refusal !== null) return yield* refusal;
+      }
+      const drafts: readonly SessionEventDraft[] = rows;
+      const committed = yield* events.publish(drafts);
+      // The same fold over the same rows, at the commits the publisher
+      // actually assigned: that is the state the loop continues from. It
+      // differs from the candidate fold only in those ordinals, so a failure
+      // here is a defect in this module, not an outcome a caller can act on —
+      // and by now the rows are durable, which is what the fold above exists
+      // to prevent.
+      const folded = foldRunState(state, committed);
+      if (Result.isFailure(folded) || folded.success === null) {
+        return yield* Effect.die(
+          new Error(
+            `RunLedger.appendBatch published a batch its own fold rejects: ${
+              Result.isFailure(folded)
+                ? folded.failure.detail
+                : 'no ledger row folded'
+            }`,
           ),
         );
       }

@@ -1934,7 +1934,16 @@ describe('RunLedger', () => {
       stageId: null,
     },
   ] as const;
-  const snapshot = (phase: string): RunLedgerDraft => ({
+  const snapshot = (
+    phase: string,
+    references: Extract<
+      RunLedgerDraft,
+      { type: 'flow.snapshot' }
+    >['payload']['references'] = {
+      pendingIntents: [],
+      pendingResponse: null,
+    },
+  ): RunLedgerDraft => ({
     type: 'flow.snapshot',
     aggregateId: AGGREGATE,
     payload: {
@@ -1949,9 +1958,37 @@ describe('RunLedger', () => {
         lastError: null,
         pendingRetry: null,
       },
-      references: { pendingIntents: [], pendingResponse: null },
+      references,
       state: { shouldSkipCycle: false, stateSlices: null },
     },
+  });
+  const refusalOf = (error: unknown): RunLedgerRefused | null =>
+    error instanceof RunLedgerRefused ? error : null;
+  /** The approval a barrier call waits on, and the snapshot that binds it. */
+  const approvalRequested: RunLedgerDraft = {
+    type: 'approval.requested',
+    aggregateId: AGGREGATE,
+    requestId: 'req-1',
+    payload: {
+      kind: 'bash',
+      data: {
+        requestId: 'req-1',
+        command: 'ls',
+        allowBypass: true,
+        runId: RUN,
+      },
+    },
+  };
+  const bindingSnapshot = snapshot('results.ready', {
+    pendingIntents: [
+      {
+        callId: 'call-a',
+        attempt: 1,
+        responseId: RESPONSE_ID,
+        approvalRequestId: 'req-1',
+      },
+    ],
+    pendingResponse: { responseId: RESPONSE_ID, settled: [] },
   });
   const toolEnd = (callId: string): RunLedgerDraft => ({
     type: 'tool.end',
@@ -2146,6 +2183,7 @@ describe('RunLedger', () => {
       Effect.gen(function* () {
         const events = yield* SessionEvents;
         const run = yield* RunLedger;
+        const log = yield* Database;
         yield* events.publish([runStart]);
         let state = yield* openTurn(run);
         // Delivering before the settlements committed is a caller defect.
@@ -2153,6 +2191,55 @@ describe('RunLedger', () => {
           .appendBatch(RUN, state, [group])
           .pipe(Effect.exit);
         expect(Exit.isFailure(early) && Cause.hasDies(early.cause)).toBe(true);
+        // A batch the fold rejects commits nothing: the refusal has to mean
+        // "not written", or every later `load` meets the orphan row.
+        const written = (yield* log.readAggregate(AGGREGATE, 1)).length;
+        const orphan = yield* run
+          .appendBatch(RUN, state, [settled('call-z'), toolEnd('call-z')])
+          .pipe(Effect.flip);
+        expect(refusalOf(orphan)?.reason).toBe('inconsistent');
+        expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
+        expect(yield* run.load(RUN)).toEqual(state);
+        // Same rule for the history the batch assembles: an append that leaves
+        // a tool group with no calling assistant is refused before publishing,
+        // not discovered on the next cold load.
+        const orphanGroup = yield* run
+          .appendBatch(RUN, state, [
+            {
+              type: 'model.message',
+              aggregateId: AGGREGATE,
+              payload: {
+                kind: 'append',
+                sourceResponse: null,
+                messages: [
+                  {
+                    role: 'tool',
+                    results: [
+                      {
+                        callOrdinal: 0,
+                        status: 'success',
+                        content: [{ kind: 'text', text: 'ok' }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ])
+          .pipe(Effect.flip);
+        expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
+        expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
+        // An approval precedes the snapshot that binds it. The other order is
+        // a caller defect, not a refusal the loop could act on.
+        const late = yield* run
+          .appendBatch(RUN, state, [bindingSnapshot, approvalRequested])
+          .pipe(Effect.exit);
+        expect(Exit.isFailure(late) && Cause.hasDies(late.cause)).toBe(true);
+        state = yield* run.appendBatch(RUN, state, [
+          approvalRequested,
+          bindingSnapshot,
+        ]);
+        expect(state.approvals['req-1']?.resolved).toBe(false);
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [
@@ -2180,7 +2267,9 @@ describe('RunLedger', () => {
           mimeType: 'image/png',
           sourceTool: 'bash',
         });
-        // A credential-bearing endpoint is refused before anything is written.
+        // A credential-bearing endpoint is refused before anything is written,
+        // and the refusal carries the permitted components only: the rejected
+        // query string is the credential this check exists to keep out.
         const unsafe = yield* run
           .appendBatch(RUN, state, [
             {
@@ -2193,7 +2282,7 @@ describe('RunLedger', () => {
                   ...ORIGIN,
                   deployment: {
                     ...ORIGIN.deployment,
-                    endpoint: 'https://api.example.test/v1?api-key=x',
+                    endpoint: `https://api.example.test/v1?api-key=${SECRET}`,
                   },
                 },
                 delivery: 'stream',
@@ -2202,8 +2291,10 @@ describe('RunLedger', () => {
           ])
           .pipe(Effect.flip);
         expect(unsafe).toBeInstanceOf(RunLedgerRefused);
-        expect(unsafe instanceof RunLedgerRefused ? unsafe.reason : null).toBe(
-          'unsafe-endpoint',
+        expect(refusalOf(unsafe)?.reason).toBe('unsafe-endpoint');
+        expect(refusalOf(unsafe)?.detail).not.toContain(SECRET);
+        expect(refusalOf(unsafe)?.detail).toContain(
+          'https://api.example.test/v1',
         );
       }).pipe(Effect.provide(ledger())),
   );

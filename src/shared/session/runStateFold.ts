@@ -239,6 +239,20 @@ const IGNORED_ROW_TYPES: Readonly<
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 
+/**
+ * A record keyed by an id the state carries: call ids come from the provider,
+ * so the key `__proto__` is reachable from outside. On a plain object it would
+ * hit the inherited setter instead of creating an own entry, and an intent
+ * that is absent from `Object.keys` is an outcome-unknown barrier the resume
+ * rule never sees. Null-prototype, therefore, for every id-keyed record here:
+ * one rule, no per-key reasoning about which ids a provider can choose.
+ */
+function byId<T>(entries: Iterable<readonly [string, T]>): Record<string, T> {
+  const record = Object.create(null) as Record<string, T>;
+  for (const [key, value] of entries) record[key] = value;
+  return record;
+}
+
 const fresh = (commit: CommitOrdinal): RunState => ({
   commit,
   snapshotCommit: null,
@@ -258,8 +272,8 @@ const fresh = (commit: CommitOrdinal): RunState => ({
   continuation: null,
   openAttempt: null,
   pendingResponse: null,
-  pendingIntents: {},
-  approvals: {},
+  pendingIntents: byId([]),
+  approvals: byId([]),
   usage: RunUsageTotalsSchema.parse({}),
   flow: null,
 });
@@ -465,7 +479,19 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       }
       const { pendingIntents: intents, pendingResponse: response } =
         p.references;
-      let pendingIntents: Record<string, PendingIntent>;
+      // The snapshot's own intents, restored or checked against the folded
+      // ones below; either way it is the snapshot that carries the approval
+      // binding, so these entries are what the next state holds.
+      const pendingIntents = byId(
+        intents.map((intent) => [
+          intent.callId,
+          {
+            attempt: intent.attempt,
+            responseId: intent.responseId,
+            approvalRequestId: intent.approvalRequestId,
+          },
+        ]),
+      );
       let pendingResponse: PendingResponse | null;
       if (state.rowsBeforeSnapshot === 0) {
         // Nothing folded before it: the snapshot restores its references.
@@ -480,16 +506,6 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           );
         }
         pendingResponse = null;
-        pendingIntents = Object.fromEntries(
-          intents.map((intent) => [
-            intent.callId,
-            {
-              attempt: intent.attempt,
-              responseId: intent.responseId,
-              approvalRequestId: intent.approvalRequestId,
-            },
-          ]),
-        );
       } else {
         // Rows were folded before it: the snapshot is checked against them
         // and contributes only the approval bindings, its one carrier.
@@ -512,16 +528,6 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             commit,
           );
         }
-        pendingIntents = Object.fromEntries(
-          intents.map((intent) => [
-            intent.callId,
-            {
-              attempt: intent.attempt,
-              responseId: intent.responseId,
-              approvalRequestId: intent.approvalRequestId,
-            },
-          ]),
-        );
         const pending = state.pendingResponse;
         const responseStale = (() => {
           if (pending === null || response === null) {
@@ -730,7 +736,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
               ...p.messages,
             ],
             pendingResponse: null,
-            pendingIntents: Object.fromEntries(
+            pendingIntents: byId(
               Object.entries(state.pendingIntents).filter(
                 ([, intent]) => intent.responseId !== pending.responseId,
               ),
@@ -776,7 +782,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           commit,
         );
       }
-      const pendingIntents = { ...current.pendingIntents };
+      const pendingIntents = byId(Object.entries(current.pendingIntents));
       for (const callId of p.callIds) {
         const call = pending.calls.find((fact) => fact.callId === callId);
         if (call === undefined || call.parallelSafe) {
@@ -846,15 +852,27 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           commit,
         );
       }
+      // A pending intent is this call's outcome-unknown barrier, and only the
+      // attempt it admitted can close it. Accepting another attempt's
+      // settlement leaves the intent standing until the delivering append
+      // drops every intent of the response, which retires the uncertainty
+      // with no re-run decision anywhere in the rows.
       const intent = current.pendingIntents[p.callId];
+      if (intent !== undefined && intent.attempt !== p.attempt) {
+        return refuse(
+          'out-of-order',
+          `${p.callId} settles attempt ${p.attempt} while its intent admitted attempt ${intent.attempt}`,
+          commit,
+        );
+      }
       const pendingIntents =
-        intent !== undefined && intent.attempt === p.attempt
-          ? Object.fromEntries(
+        intent === undefined
+          ? current.pendingIntents
+          : byId(
               Object.entries(current.pendingIntents).filter(
                 ([callId]) => callId !== p.callId,
               ),
-            )
-          : current.pendingIntents;
+            );
       return applyMutations(
         {
           ...current,
@@ -862,16 +880,19 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
           pendingResponse: {
             ...pending,
-            settled: {
-              ...pending.settled,
-              [p.callId]: {
-                attempt: p.attempt,
-                disposition: p.disposition,
-                duplicateOf: p.duplicateOf,
-                result: p.result,
-                attachments: p.attachments,
-              },
-            },
+            settled: byId([
+              ...Object.entries(pending.settled),
+              [
+                p.callId,
+                {
+                  attempt: p.attempt,
+                  disposition: p.disposition,
+                  duplicateOf: p.duplicateOf,
+                  result: p.result,
+                  attachments: p.attachments,
+                },
+              ],
+            ]),
           },
           pendingIntents,
         },
@@ -894,10 +915,10 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return Result.succeed({
         ...current,
         commit,
-        approvals: {
-          ...current.approvals,
-          [row.requestId]: { payload: row.payload, resolved: false },
-        },
+        approvals: byId([
+          ...Object.entries(current.approvals),
+          [row.requestId, { payload: row.payload, resolved: false }],
+        ]),
       });
     }
     case 'approval.resolved': {
@@ -913,10 +934,10 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return Result.succeed({
         ...current,
         commit,
-        approvals: {
-          ...current.approvals,
-          [row.requestId]: { ...approval, resolved: true },
-        },
+        approvals: byId([
+          ...Object.entries(current.approvals),
+          [row.requestId, { ...approval, resolved: true }],
+        ]),
       });
     }
     default:

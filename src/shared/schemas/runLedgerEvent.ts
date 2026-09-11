@@ -230,15 +230,19 @@ export const ModelMessagePayloadSchema = z
     // call naming itself, which can never settle.
     const earlierPrimaries = new Set<string>();
     p.calls.forEach((call, index) => {
+      // Order, identity and tool: a fact that names another tool than the
+      // part it stands for is the one the resume rule would dispatch, so the
+      // provider's requested tool is bound here, not only its call id.
       if (
         call.ordinal !== index ||
-        call.callId !== local[index]?.providerCallId
+        call.callId !== local[index]?.providerCallId ||
+        call.toolName !== local[index]?.name
       ) {
         ctx.addIssue({
           code: 'custom',
           path: ['calls', index],
           message:
-            'Dispatch facts follow the response call order and identity.',
+            'Dispatch facts follow the response call order, identity and tool.',
         });
       }
       if (call.duplicateOf != null && !earlierPrimaries.has(call.duplicateOf)) {
@@ -331,11 +335,24 @@ const SettledAttachmentSchema = z.strictObject({
  * has an attachment. That same looseness is why the two binary fields go
  * through a transform rather than `.omit()`: on a loose object an omitted key
  * is only undeclared, so `base64Data` and the `Uint8Array` in `bytes` would
- * pass through as unknown keys and land in the row anyway.
+ * pass through as unknown keys and land in the row anyway. What the transform
+ * leaves is then validated as JSON, exactly as `diagnostics` is: the loose
+ * keys a tool attached are `unknown`, and a third byte buffer or a cyclic
+ * object among them is the same `JSON.stringify` throw, on a row that is
+ * already committed. The check runs after the transform rather than as a
+ * `.pipe`, so the accepted input stays the real attachment a tool produced.
  */
+const SettledFileMetadataSchema = ToolFileAttachmentSchema.omit({
+  base64Data: true,
+  bytes: true,
+}).catchall(JsonValueSchema);
 const SettledFileSchema = ToolFileAttachmentSchema.transform(
   ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
-);
+).superRefine((file, ctx) => {
+  const metadata = SettledFileMetadataSchema.safeParse(file);
+  if (metadata.success) return;
+  for (const issue of metadata.error.issues) ctx.addIssue({ ...issue });
+});
 const SettledToolResultSchema = z.discriminatedUnion('status', [
   ExecutedToolResultSchema.omit({ files: true }).extend({
     files: z.array(SettledFileSchema).optional(),
@@ -350,28 +367,40 @@ const SettledToolResultSchema = z.discriminatedUnion('status', [
  * generality: `recordSubagentCost` adds raw USD into the run's usage totals
  * from inside a tool call, and an enumerated slice list cannot express it.
  * Folding a result applies its mutation exactly once.
+ *
+ * Under `usage`, `add` is the ONLY operation. The run's accounting is derived
+ * from the priced usage of every response row plus additive tool costs (D12);
+ * a `set` rewriting `totalCost`, an `append`, or a `delete` whose total the
+ * next parse prefaults back to zero would each make a resumed run's cost a
+ * number no row accounts for, and `applyMutations` cannot tell the difference
+ * because the rewritten totals still parse.
  */
-const StateOperationSchema = z.discriminatedUnion('op', [
-  z.strictObject({
-    op: z.literal('set'),
-    path: z.array(z.string().min(1)).min(1),
-    value: JsonValueSchema,
-  }),
-  z.strictObject({
-    op: z.literal('delete'),
-    path: z.array(z.string().min(1)).min(1),
-  }),
-  z.strictObject({
-    op: z.literal('append'),
-    path: z.array(z.string().min(1)).min(1),
-    items: z.array(JsonValueSchema).min(1),
-  }),
-  z.strictObject({
-    op: z.literal('add'),
-    path: z.array(z.string().min(1)).min(1),
-    amount: z.number().finite(),
-  }),
-]);
+const StateOperationSchema = z
+  .discriminatedUnion('op', [
+    z.strictObject({
+      op: z.literal('set'),
+      path: z.array(z.string().min(1)).min(1),
+      value: JsonValueSchema,
+    }),
+    z.strictObject({
+      op: z.literal('delete'),
+      path: z.array(z.string().min(1)).min(1),
+    }),
+    z.strictObject({
+      op: z.literal('append'),
+      path: z.array(z.string().min(1)).min(1),
+      items: z.array(JsonValueSchema).min(1),
+    }),
+    z.strictObject({
+      op: z.literal('add'),
+      path: z.array(z.string().min(1)).min(1),
+      amount: z.number().finite(),
+    }),
+  ])
+  .refine(
+    (op) => op.op === 'add' || op.path[0] !== 'usage',
+    'The run usage totals are derived: a tool result only adds to them.',
+  );
 export type StateOperation = z.infer<typeof StateOperationSchema>;
 
 export const ToolResultPayloadSchema = z
@@ -402,11 +431,20 @@ export const ToolResultPayloadSchema = z
           'A duplicate settlement names its primary, and only a duplicate does.',
       });
     }
-    if (p.disposition === 'executed' && p.result.status !== 'executed') {
+    // Both directions. The provider-facing status of the delivered tool group
+    // is derived from `result.status` alone, so a call the run recorded as
+    // failed, cancelled or skipped carrying an executed result is delivered to
+    // the model as a success. A duplicate is the one disposition that copies
+    // its primary's status, whichever that was.
+    if (
+      p.disposition !== 'duplicate' &&
+      (p.disposition === 'executed') !== (p.result.status === 'executed')
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['result'],
-        message: 'An executed disposition requires an executed result.',
+        message:
+          'An executed disposition requires an executed result, and every other non-duplicate disposition an error result.',
       });
     }
     if (

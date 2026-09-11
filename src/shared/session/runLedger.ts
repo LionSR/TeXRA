@@ -38,9 +38,13 @@ import type {
  *   never reaches this union (F3).
  * - `unsafe-endpoint`: a pre-publish assertion over every durable origin,
  *   the loud restatement of the package's endpoint constraint (D1).
- * - `unprepared-history`: `PreparedHistorySchema` over the assembled history,
- *   at the write boundary of a compaction and on cold load (D11).
- * - `inconsistent`: the rows do not fold; `cause` says why.
+ * - `unprepared-history`: `PreparedHistorySchema` over the history the batch
+ *   assembles, at the write boundary of every batch that appends to or
+ *   rewrites it, and on cold load (D11).
+ * - `inconsistent`: the rows do not fold; `cause` says why. From `load`, and
+ *   from `appendBatch` before it publishes: a batch is folded first and
+ *   refused with nothing committed, because a published row the fold rejects
+ *   is a run no later `load` can read.
  * A violated `appendBatch` precondition is a caller defect (`Effect.die`),
  * not an arm: the loop must not handle it.
  */
@@ -88,7 +92,10 @@ export class RunLedger extends Context.Service<
      *
      * Preconditions, checked before publish; a violation is a defect:
      * - a `flow.snapshot` is the last ledger row of its batch, except when a
-     *   `flow.step` (or a companion `tool.end` / approval row) follows it;
+     *   `flow.step`, a companion `tool.end` or an `approval.resolved` follows
+     *   it. An `approval.requested` PRECEDES the snapshot that binds it: the
+     *   snapshot is its recovery binding and the fold resolves that binding
+     *   against the approvals already folded;
      * - a `model.compaction` immediately precedes the `model.message`
      *   `response` row that used it, when both are present;
      * - a `model.message` `response` row carries the dispatch facts and the

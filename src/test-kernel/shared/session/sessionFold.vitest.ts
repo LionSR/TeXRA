@@ -1190,6 +1190,17 @@ const ledgerRow = (
     at: 0,
   });
 
+/** The same boundary, asked whether it accepts the draft at all. */
+const rowAccepted = (draft: Record<string, unknown>): boolean =>
+  SessionEventSchema.safeParse({
+    aggregateId: LEDGER_AGGREGATE,
+    ...draft,
+    seq: 1,
+    commit: 1,
+    ownerId: null,
+    at: 0,
+  }).success;
+
 /** The whole life of one tool-use turn, commit by commit. */
 const TURN_ROWS: readonly SessionEvent[] = [
   message({
@@ -1438,6 +1449,46 @@ describe('foldRunState', () => {
       },
     ],
     [
+      'a provider call id of __proto__: an own entry, never a prototype setter',
+      () => {
+        const state = stateOf(
+          through(
+            3,
+            message({
+              kind: 'response',
+              responseId: RESPONSE_ID,
+              invocation: INVOCATION,
+              turn: {
+                ...TURN,
+                content: [
+                  {
+                    kind: 'local-call',
+                    providerCallId: '__proto__',
+                    name: 'bash',
+                    argumentsText: '{"command":"ls"}',
+                  },
+                ],
+              },
+              calls: [{ ...CALLS[0], callId: '__proto__' }],
+              usage: null,
+            }),
+            {
+              type: 'tool.intent',
+              payload: {
+                responseId: RESPONSE_ID,
+                callIds: ['__proto__'],
+                attempt: 1,
+              },
+            },
+          ),
+        );
+        // On a plain object the assignment would call the inherited setter and
+        // the barrier would vanish from the state the resume rule reads.
+        expect(Object.keys(state?.pendingIntents ?? {})).toEqual(['__proto__']);
+        expect(state?.pendingIntents['__proto__']?.attempt).toBe(1);
+      },
+    ],
+    [
       'a run recorded before the run ledger: null, distinct from corrupt',
       () => {
         expect(
@@ -1505,6 +1556,12 @@ describe('foldRunState', () => {
     ],
     ['orphan-settlement', () => through(2, settlement('call-a'))],
     [
+      // The intent admitted attempt 1; attempt 2 is another dispatch, and
+      // accepting it here would retire attempt 1's uncertainty silently.
+      'out-of-order',
+      () => through(6, settlement('call-a', { attempt: 2 })),
+    ],
+    [
       'dangling-binding',
       () =>
         through(
@@ -1567,5 +1624,77 @@ describe('foldRunState', () => {
     expect(
       ModelOriginSchema.safeParse({ ...ORIGIN, codecVersion: 2 }).success,
     ).toBe(false);
+  });
+
+  it('binds every row to the turn it describes', () => {
+    const response = (calls: unknown) =>
+      message({
+        kind: 'response',
+        responseId: RESPONSE_ID,
+        invocation: INVOCATION,
+        turn: TURN,
+        calls,
+        usage: null,
+      });
+    // A dispatch fact stands for one local call: its order, its id, and the
+    // tool the provider asked for. Recovery dispatches what the fact names.
+    expect(rowAccepted(response(CALLS))).toBe(true);
+    expect(
+      rowAccepted(response([{ ...CALLS[0], toolName: 'rm' }, CALLS[1]])),
+    ).toBe(false);
+    // The run's usage totals are derived from priced responses and additive
+    // tool costs (D12): a settlement adds to them and never rewrites them.
+    expect(
+      rowAccepted(
+        settlement('call-a', {
+          stateMutation: [
+            { op: 'add', path: ['usage', 'totalCost'], amount: 1 },
+          ],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      rowAccepted(
+        settlement('call-a', {
+          stateMutation: [
+            { op: 'set', path: ['usage', 'totalCost'], value: 0 },
+          ],
+        }),
+      ),
+    ).toBe(false);
+    // The delivered tool group takes its provider-facing status from the
+    // result, so a call the run recorded as failed carries an error result.
+    expect(rowAccepted(settlement('call-a', { disposition: 'failed' }))).toBe(
+      false,
+    );
+    expect(
+      rowAccepted(
+        settlement('call-a', {
+          disposition: 'failed',
+          result: { status: 'error', error: 'exit 1' },
+        }),
+      ),
+    ).toBe(true);
+    // Attachment metadata is JSON. The two binary fields are dropped; a third
+    // one under a loose key would be a `JSON.stringify` throw on a live run.
+    const attachment = (extra: Record<string, unknown>) =>
+      settlement('call-a', {
+        result: {
+          status: 'executed',
+          output: 'ok',
+          files: [
+            {
+              path: 'out/plot.png',
+              mimeType: 'image/png',
+              bytes: new Uint8Array([1, 2]),
+              ...extra,
+            },
+          ],
+        },
+      });
+    expect(rowAccepted(attachment({ sourceTool: 'bash' }))).toBe(true);
+    expect(rowAccepted(attachment({ thumbnail: new Uint8Array([3]) }))).toBe(
+      false,
+    );
   });
 });
