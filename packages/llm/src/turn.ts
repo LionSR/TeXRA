@@ -1010,10 +1010,6 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     .readonly(),
 ]);
 export type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;
-export type OpenAIChatConfiguration = Extract<
-  ModelConfiguration,
-  { protocol: 'openai-chat' }
->;
 export type ChatConfiguration = Extract<
   ModelConfiguration,
   {

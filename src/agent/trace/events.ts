@@ -72,7 +72,7 @@ interface LogEvent extends StageStamp {
 }
 
 /** Stage opened (parent of subsequent events until matching stage.end). */
-export interface StageStartEvent extends StageStamp {
+interface StageStartEvent extends StageStamp {
   readonly type: 'stage.start';
   readonly id: string;
   readonly label: string;

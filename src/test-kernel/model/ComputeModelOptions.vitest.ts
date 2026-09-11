@@ -13,12 +13,12 @@ import {
   resolveDirectModelApiKeyProvider,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
-import {
-  CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
-  isCodexSubscriptionEligible,
-} from '@model/providerCapabilities';
+import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import type { ModelOptionData } from '@shared/schemas';
+import {
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  type ModelOptionData,
+} from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -318,7 +318,7 @@ describe('computeModelOptionsData availability', () => {
     expect(model.availability).toBe('subscription-access');
     expect(model.context).toBe(
       `${Math.round(
-        (CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT +
+        (CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue +
           MODEL_CONFIGS.gpt55.maxOutputTokens) /
           1000,
       )}K`,

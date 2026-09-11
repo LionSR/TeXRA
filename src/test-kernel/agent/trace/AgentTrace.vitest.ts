@@ -4,7 +4,6 @@ import {
   type AgentTrace,
   emitToolUseCard,
   logFileCategory,
-  type StageStartEvent,
   TraceEmitter,
 } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -30,7 +29,8 @@ describe('TraceEmitter stage metadata', () => {
         total: 3,
       }).id;
     }).filter(
-      (event): event is StageStartEvent => event.type === 'stage.start',
+      (event): event is Extract<AgentEvent, { type: 'stage.start' }> =>
+        event.type === 'stage.start',
     );
 
     expect(starts).toEqual([

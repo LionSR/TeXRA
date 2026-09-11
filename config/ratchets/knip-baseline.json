@@ -1004,22 +1004,10 @@
       "name": "ExecutionLeaseSchema"
     },
     {
-      "file": "src/agent/trace/events.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StageStartEvent"
-    },
-    {
       "file": "src/agent/trace/index.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "noopTrace"
-    },
-    {
-      "file": "src/agent/trace/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StageStartEvent"
     },
     {
       "file": "src/agent/types/StopReasonTypes.ts",
@@ -1320,12 +1308,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "resolveDefaultModels"
-    },
-    {
-      "file": "src/model/providerCapabilities.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT"
     },
     {
       "file": "src/platform/defaults/workspaceStorage.ts",
