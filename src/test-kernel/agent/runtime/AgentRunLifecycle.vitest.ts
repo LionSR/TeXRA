@@ -12,7 +12,10 @@ import {
 } from '@agent/storage/runLease';
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import { RunHandle, type AgentRunHandle } from '@agent/runtime/RunHandle';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
   runFlowWithLifecycle,
@@ -1127,28 +1130,39 @@ describe('runFlowWithLifecycle', () => {
   });
 });
 
-/** The handle, status machine, and untrack spy every finalize test drives. */
+/** The session fake, handle, status machine, and spies every finalize test drives. */
 function finalizeFixture(): {
   runId: RunId;
+  session: SessionHandle;
   runStatus: RunStatusMachine;
   handle: ReturnType<typeof testRunHandle>;
   untrack: Mock<(runId: RunId) => void>;
+  flushArtifacts: Mock<() => Promise<void>>;
 } {
   const runId =
     `f${(finalizeFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
+  const runStatus = new RunStatusMachine(
+    () => {},
+    () => {},
+  );
+  const untrack = vi.fn<(runId: RunId) => void>();
+  const flushArtifacts = vi.fn(async () => {});
   return {
     runId,
-    runStatus: new RunStatusMachine(
-      () => {},
-      () => {},
-    ),
+    session: {
+      runs: { untrack },
+      status: runStatus,
+      flushArtifacts,
+    } as unknown as SessionHandle,
+    runStatus,
+    untrack,
+    flushArtifacts,
     handle: testRunHandle({
       runId,
       parent: PARENT_RUN_ID,
       agent: 'test-agent',
       trace: noopTrace,
     }),
-    untrack: vi.fn<(runId: RunId) => void>(),
   };
 }
 
@@ -1161,7 +1175,7 @@ describe('finalizeRunTerminal', () => {
   // handle) would otherwise both pass the check before the first settles and
   // double-publish persist/emit/settle/untrack.
   it('finalizes exactly once when two callers race across the persist await', async () => {
-    const { runId, runStatus, handle, untrack } = finalizeFixture();
+    const { runId, session, runStatus, handle, untrack } = finalizeFixture();
     // Park the first caller at its persist await so the second caller arrives
     // while the first has not yet emitted or settled anything.
     const parked = parkNextFinalize();
@@ -1171,10 +1185,8 @@ describe('finalizeRunTerminal', () => {
         phase: RUN_PHASE.RUNNING,
       });
       const params = {
-        session: defaultSession(),
+        session,
         handle,
-        runs: { untrack },
-        runStatus,
         outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'delete',
       } as const;
@@ -1209,9 +1221,10 @@ describe('finalizeRunTerminal', () => {
   });
 
   it('flushes display artifacts before publishing and untracking', async () => {
-    const { runId, runStatus, handle, untrack } = finalizeFixture();
+    const { runId, session, runStatus, handle, untrack, flushArtifacts } =
+      finalizeFixture();
     let releaseFlush: (() => void) | undefined;
-    const flushArtifacts = vi.fn(
+    flushArtifacts.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
           releaseFlush = resolve;
@@ -1228,13 +1241,10 @@ describe('finalizeRunTerminal', () => {
       });
       const finalization = Effect.runPromise(
         finalizeRunTerminal({
-          session: defaultSession(),
+          session,
           handle,
-          runs: { untrack },
-          runStatus,
           outcome: RUN_OUTCOME.COMPLETED,
           flowRecord: 'preserve',
-          flushArtifacts,
         }),
       );
 
@@ -1254,7 +1264,7 @@ describe('finalizeRunTerminal', () => {
   });
 
   it('settles and untracks once while reporting terminal metadata failure', async () => {
-    const { runId, runStatus, handle, untrack } = finalizeFixture();
+    const { runId, session, runStatus, handle, untrack } = finalizeFixture();
     const durabilityError = new Error('metadata disk write failed');
     storageMocks.finalizeRun.mockReturnValueOnce(
       Effect.succeed({
@@ -1271,10 +1281,8 @@ describe('finalizeRunTerminal', () => {
 
       const event = await Effect.runPromise(
         finalizeRunTerminal({
-          session: defaultSession(),
+          session,
           handle,
-          runs: { untrack },
-          runStatus,
           outcome: RUN_OUTCOME.FAILED,
           flowRecord: 'preserve',
         }),
@@ -1313,7 +1321,7 @@ describe('finalizeRunTerminal', () => {
   // killed then reports its own non-zero exit as a failure — so the phase, not
   // the report, has to decide, and no caller may cross-check it for itself.
   it('resolves the terminal outcome from an already-cancelled stream phase', async () => {
-    const { runId, runStatus, handle, untrack } = finalizeFixture();
+    const { runId, session, runStatus, handle } = finalizeFixture();
     const stage = { end: vi.fn() };
 
     try {
@@ -1323,10 +1331,8 @@ describe('finalizeRunTerminal', () => {
 
       const finalized = await Effect.runPromise(
         finalizeRunTerminal({
-          session: defaultSession(),
+          session,
           handle,
-          runs: { untrack },
-          runStatus,
           outcome: RUN_OUTCOME.FAILED,
           error: { kind: 'unexpected', message: 'exited with code 143' },
           stage,
@@ -1347,7 +1353,7 @@ describe('finalizeRunTerminal', () => {
       );
       expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-        defaultSession(),
+        session,
         expect.objectContaining({
           outcome: RUN_OUTCOME.CANCELLED,
         }),
@@ -1365,7 +1371,7 @@ describe('finalizeRunTerminal', () => {
   // published FAILED is a terminal fact a later stop cannot rewrite, so a
   // caller reporting `cancelled` does not get to relabel it.
   it('keeps an already-failed stream phase over a later cancelled report', async () => {
-    const { runId, runStatus, handle, untrack } = finalizeFixture();
+    const { runId, session, runStatus, handle } = finalizeFixture();
 
     try {
       seedRunStatusForTest(runStatus, runId, {
@@ -1374,10 +1380,8 @@ describe('finalizeRunTerminal', () => {
 
       const finalized = await Effect.runPromise(
         finalizeRunTerminal({
-          session: defaultSession(),
+          session,
           handle,
-          runs: { untrack },
-          runStatus,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'preserve',
         }),

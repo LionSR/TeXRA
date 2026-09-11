@@ -50,9 +50,7 @@ import {
   type AgentFlowResult,
 } from './AgentFlowResult';
 import type { SessionHandle } from './SessionHandle';
-import type { RunRegistry } from './runRegistry';
 import type { AgentLaunchContext } from './AgentLaunchContext';
-import type { RunStatusMachine } from './RunStatusService';
 
 const logger = createChannelTrace('agentRunLifecycle');
 
@@ -103,13 +101,16 @@ export interface FlowLifecycleControl {
 }
 
 interface FinalizeRunTerminalParams {
+  /**
+   * Owns the registry tracking the handle (untracked after the delivery
+   * hook), the status machine holding this run's in-memory phase
+   * (terminalized last), and the display sidecars drained before the
+   * `run.end` row is written — so a waiter that opens the completed-run
+   * archive does not race the final transcript or work-plan write.
+   */
   readonly session: SessionHandle;
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
   readonly handle: RunHandle;
-  /** Registry tracking the handle; untracked after the delivery hook runs. */
-  readonly runs: Pick<RunRegistry, 'untrack'>;
-  /** Status machine owning this run's in-memory phase; terminalized last. */
-  readonly runStatus: RunStatusMachine;
   /**
    * The exiting run's own report. The `run.end` row is the run's terminal
    * fact; the in-memory run phase only supplies stop precedence, so this
@@ -135,13 +136,6 @@ interface FinalizeRunTerminalParams {
   readonly stage?: Pick<StageHandle, 'end'>;
   /** The flow-record policy the storage finalizer applies beside the row. */
   readonly flowRecord: FlowRecordRetention;
-  /**
-   * Drain display sidecars before the `run.end` row is written. This keeps
-   * a waiter that immediately opens the completed-run archive from racing the
-   * final transcript or work-plan write. Failures are logged here and retried
-   * by the run-ownership release boundary.
-   */
-  readonly flushArtifacts?: () => Promise<void>;
   /**
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the
@@ -173,7 +167,7 @@ interface FinalizeRunTerminalResult {
 export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   params: FinalizeRunTerminalParams,
 ): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error> {
-  const { handle } = params;
+  const { session, handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
   // The `run.end` row written below is the run's terminal fact; the
   // in-memory run phase supplies the stop precedence read here, so
@@ -183,7 +177,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   // arrived after it. Resolving once here is what lets every projection below
   // (stage end, the `run.end` row, terminal phase) read one value, so no
   // caller has to cross-check the phase for itself.
-  const observedPhase = params.runStatus.get(handle.runId);
+  const observedPhase = session.status.get(handle.runId);
   const outcome = isTerminalOutcomePhase(observedPhase)
     ? observedPhase
     : params.outcome;
@@ -206,20 +200,20 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       ),
     );
   }
-  if (params.flushArtifacts) {
-    yield* Effect.tryPromise({
-      try: params.flushArtifacts,
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((artifactError) =>
-        Effect.sync(() => {
-          logger.warn('Failed to persist pre-terminal display artifacts', {
-            data: { runId: handle.runId, error: artifactError },
-          });
-        }),
-      ),
-    );
-  }
+  // A drain failure is logged here and retried by the run-ownership release
+  // boundary.
+  yield* Effect.tryPromise({
+    try: () => session.flushArtifacts(),
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((artifactError) =>
+      Effect.sync(() => {
+        logger.warn('Failed to persist pre-terminal display artifacts', {
+          data: { runId: handle.runId, error: artifactError },
+        });
+      }),
+    ),
+  );
   // Write the terminal row BEFORE untrack so the registry's terminal listener
   // event never precedes it, and settle the handle's `result` promise with
   // the same fact (F-2: per-run control handle). The row carries the
@@ -234,7 +228,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     output,
   };
   const { flowRecord } = params;
-  const finalization = yield* finalizeRun(params.session, {
+  const finalization = yield* finalizeRun(session, {
     runId: handle.runId,
     outcome,
     error,
@@ -274,13 +268,13 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   // escape past an already-settled result.
   yield* Effect.try({
     try: () => {
-      params.runs.untrack(handle.runId);
+      session.runs.untrack(handle.runId);
       // Refused only when the phase turned terminal after the resolution above,
       // i.e. a stop that landed across this function's own awaits. The phase
       // keeps its own value; the divergence from the written row is real and
       // must stay loud.
       if (
-        !params.runStatus.transitionToTerminal(
+        !session.status.transitionToTerminal(
           handle.runId,
           outcome,
           RUN_TRANSITION_CAUSE.LIFECYCLE,
@@ -537,11 +531,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       finalizeRunTerminal({
         session,
         handle,
-        runs: session.runs,
-        runStatus: session.status,
         usage: ctx.usageMonitor.lastTotals(),
         stage: ctx.parentStage,
-        flushArtifacts: () => session.flushArtifacts(),
         // Tool-use flows report the exact recovery decision through the
         // private lifecycle control. Other flows retain the historical
         // policy, read against the outcome finalization resolves rather

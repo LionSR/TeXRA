@@ -796,12 +796,15 @@ describe('runRegistry', () => {
         cleanup: teardown,
       });
 
+      const session = {
+        runs: registry,
+        status: runStatus,
+        flushArtifacts: async () => {},
+      } as unknown as SessionHandle;
       const finalized = Effect.runPromise(
         finalizeRunTerminal({
-          session: defaultSession(),
+          session,
           handle,
-          runs: registry,
-          runStatus,
           outcome: RUN_OUTCOME.COMPLETED,
           flowRecord: 'delete',
         }),
@@ -817,7 +820,7 @@ describe('runRegistry', () => {
         outcome: RUN_OUTCOME.COMPLETED,
       });
       expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
-        defaultSession(),
+        session,
         expect.objectContaining({
           runId,
           outcome: RUN_OUTCOME.COMPLETED,
