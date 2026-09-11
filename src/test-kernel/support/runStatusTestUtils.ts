@@ -26,10 +26,6 @@ export function clearRunStatusForTest(
   machine.clearRun(runId);
 }
 
-export function clearAllRunStatusesForTest(machine: RunStatusMachine): void {
-  machine.clearAll();
-}
-
 export function seedRunStatusForTest(
   machine: RunStatusMachine,
   runId: RunId,

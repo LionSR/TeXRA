@@ -11,7 +11,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { RUN_PHASE, RUN_SUBSTATE, type RunId } from '@shared/schemas';
 import {
-  clearAllRunStatusesForTest,
+  clearRunStatusForTest,
   seedRunStatusForTest,
 } from '@test/support/runStatusTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -57,7 +57,7 @@ describe('tool-use follow-up progress events', () => {
       session.dispose();
     }
     sessions.clear();
-    clearAllRunStatusesForTest(defaultSession().status);
+    clearRunStatusForTest(defaultSession().status, runId);
   });
 
   function trackSession(): SessionHandle {
@@ -194,6 +194,7 @@ describe('tool-use follow-up progress events', () => {
       ]);
     } finally {
       defaultSession().followUps.terminalize(resumingRunId);
+      clearRunStatusForTest(defaultSession().status, resumingRunId);
     }
   });
 });
