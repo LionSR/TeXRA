@@ -445,17 +445,17 @@ export async function runPersistedWorkflowScriptWithProgress(
           hydratedBaseline.delete(call.id);
         }
         // A declared card exists only under an open phase: a plan entry
-        // behind a stage the run has not entered waits for its phase to open,
-        // and a phase the run never reaches has its entries swept to
-        // not-reached — emitted under the header the stage loop above opens
-        // for them. A card whose group does not exist yet is thereby
-        // unrepresentable.
+        // behind a stage the run has never entered waits for its phase to
+        // open (still waiting, or bypassed by a `phase()` jump that flipped
+        // it straight to skipped), and a phase the run never reaches has its
+        // entries swept to not-reached — emitted under the header the stage
+        // loop above opens for them. A card whose group does not exist yet is
+        // thereby unrepresentable.
         if (
           status === WORKFLOW_CALL_STATUS.DECLARED &&
           snapshot.stages.some(
             (stage) =>
-              stage.id === call.stageId &&
-              stage.lifecycle === WORKFLOW_RUN_LIFECYCLE.WAITING,
+              stage.id === call.stageId && stage.startedAt === undefined,
           )
         ) {
           continue;

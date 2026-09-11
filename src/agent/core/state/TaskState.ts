@@ -1,10 +1,8 @@
 /**
- * Legacy run-config wrapper. `AgentConfig` is the live run-config vocabulary;
- * this shape survives at exactly one boundary and has no other callers: the
- * frozen CLI NDJSON `setTaskState` event payload, whose wire shape may not
- * change (projected from `AgentConfig` by `agentConfigToTaskState`). The
- * `meta.taskState` disk-read shim that once shared it was retired with the
- * run-classification consolidation.
+ * The `setTaskState` NDJSON payload shape, projected from `AgentConfig` by
+ * `agentConfigToTaskState`. `AgentConfig` is the live run-config vocabulary;
+ * this shape exists only for that one frozen wire boundary, whose payload may
+ * not change, and is deleted with the S5 version-2 envelope.
  */
 import { z } from 'zod';
 

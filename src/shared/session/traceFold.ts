@@ -440,7 +440,7 @@ export function createTranscriptFold(
         data: {
           ...data,
           status: TOOL_CALL_STATUS.FAILED,
-          error: 'The stream ended before this tool completed.',
+          error: 'The run ended before this tool completed.',
         } satisfies ToolUseLog,
       });
     }

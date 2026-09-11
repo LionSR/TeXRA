@@ -62,12 +62,12 @@ export const chatCommand = withUsageSections(
         ['/login, /logout', RESEARCHER_ACCESS_AUTH.chatLoginDescription],
         [
           'Ctrl-T',
-          "open the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
+          "open the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
         ],
         ['Tab', 'select a visible child session or process'],
         [
           focusShortcut,
-          `focus a visible stream by number (${alternateFocusShortcut} when configured)`,
+          `focus a visible run by number (${alternateFocusShortcut} when configured)`,
         ],
         ['approvals', 'answer tool prompts when --approval-policy=ask'],
         ['Ctrl-C', 'stop the running task or exit from the TUI'],

@@ -191,8 +191,16 @@ function buildCodexLiveToolLog(
     case 'command_execution':
       return buildCodexCommandToolLog(item);
     case 'file_change': {
+      // The builder owns the outcome, like the command and MCP builders: a
+      // failed patch stays `failed` even though `item.completed` asks for
+      // `completed`. Only the live pass may hold it at `in_progress`.
       const fileLog = buildCodexFileChangeToolLog(item);
-      return fileLog ? { ...fileLog, status } : null;
+      return fileLog
+        ? {
+            ...fileLog,
+            status: fileLog.status === 'failed' ? 'failed' : status,
+          }
+        : null;
     }
     case 'mcp_tool_call':
       return buildCodexMcpToolLog(item);

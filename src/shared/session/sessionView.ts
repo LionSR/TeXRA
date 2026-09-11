@@ -47,7 +47,7 @@ import type { WorkflowRunModel } from '@shared/runs/workflowRunModel';
 const SessionKeySchema = z.string().min(1);
 
 /**
- * A stream's transcript slice: what hosts paint, and nothing else. The fold
+ * A run's transcript slice: what hosts paint, and nothing else. The fold
  * keeps its incremental indexes (row and group positions, the compaction
  * projection's working state, the measured live text per streaming row, the
  * newest plan marker) beside the value in a module-private map, so a host
@@ -75,32 +75,32 @@ const TranscriptViewSchema = z.object({
 export type TranscriptView = z.infer<typeof TranscriptViewSchema>;
 
 const RunGroupSchema = z.enum(['running', 'waiting', 'interrupted', 'recent']);
-/** The section a stream sorts into. Its labels and section order are one
+/** The section a run sorts into. Its labels and section order are one
  *  table in `@shared/runs/runStatusDisplay`, not a per-host switch. */
 export type RunGroup = z.infer<typeof RunGroupSchema>;
 
 const RunViewCommonSchema = z.object({
   /** The run id: the aggregate's logical id, minted once at launch. */
   id: RunIdSchema,
-  /** From `run.start`; every stream has one. */
+  /** From `run.start`; every run has one. */
   identity: RunIdentitySchema,
   // Launch facts from the `run.start` payload, never derived (5.2).
   isRemote: z.boolean(),
   /** Current sequence-row owner; null when unclaimed. */
   ownerId: OwnerIdSchema.nullable(),
-  /** Agent name, or the id-prefix fallback for an identity-less stream. */
+  /** Agent name, or the id-prefix fallback for an identity-less run. */
   label: z.string(),
   /** The AI one-liner; title when present. */
   description: z.string().nullable(),
   model: z.string().nullable(),
   modelLabel: z.string().nullable(),
-  /** Full, untruncated command that spawned a process stream. */
+  /** Full, untruncated command that spawned a process run. */
   command: z.string().nullable(),
   /** The run's input files, from `run.config`. */
   inputFiles: z.array(z.string()),
   worktree: WorktreeInfoSchema.nullable(),
   /** The durable phase, or `ready` before the first `status` folds. An
-   *  interrupted stream keeps it and reads as interrupted through the copy;
+   *  interrupted run keeps it and reads as interrupted through the copy;
    *  unavailability is `readOnly`, never a status (5.2). */
   status: z.union([RunPhaseSchema, z.literal(RUN_LIFECYCLE_READY)]),
   substate: RunSubstateSchema.nullable(),
@@ -110,7 +110,7 @@ const RunViewCommonSchema = z.object({
    * CANCELLED while the flow still writes its closing rows); for any other
    * run, the terminal status itself. Null while anything can still move.
    * What licenses a host to paint an open group as interrupted and the
-   * session to release the stream's sidecar record.
+   * session to release the run's sidecar record.
    */
   durableOutcome: RunOutcomeSchema.nullable(),
   /** Banner copy beside the label: the local unreadable detail, else the
@@ -120,7 +120,7 @@ const RunViewCommonSchema = z.object({
   // and substate or the interrupted reading.
   statusLabel: z.string(),
   tone: z.enum(RUN_STATUS_TONE),
-  /** Immutable: the commit ordinal of this stream's `run.start`; the
+  /** Immutable: the commit ordinal of this run's `run.start`; the
    *  ordering key. */
   createdAt: CommitOrdinalSchema,
   runStartedAt: z.int().positive().nullable(),
@@ -148,7 +148,7 @@ const RunViewCommonSchema = z.object({
   approval: z.enum(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable (5.2). */
   readOnly: z.boolean(),
-  /** This stream or a descendant needs the user; outranks the surface's
+  /** This run or a descendant needs the user; outranks the surface's
    *  collapsed choice. */
   forceExpanded: z.boolean(),
   group: RunGroupSchema,
@@ -157,7 +157,7 @@ const RunViewCommonSchema = z.object({
   thinkingActive: z.boolean(),
   /** A context compaction is in progress. */
   compactingActive: z.boolean(),
-  /** The stream's latest line: a workflow run's newest operational summary,
+  /** The run's latest line: a workflow run's newest operational summary,
    *  any other run's newest user instruction or settled model reply. */
   latestLine: z.string().nullable(),
   transcript: TranscriptViewSchema,
@@ -171,7 +171,7 @@ const ToolUseRunViewSchema = RunViewCommonSchema.extend({
   category: z.literal(AgentCategory.ToolUse),
   todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
-  /** Per stream: concurrent runs hold independent goals. */
+  /** Per run: concurrent runs hold independent goals. */
   goal: GoalStateSchema,
   outputs: RoundKeyedOutputSidecarValueSchemas.outputFiles,
 });
@@ -187,7 +187,7 @@ const RunViewSchema = z.discriminatedUnion('category', [
 ]);
 export type RunView = z.infer<typeof RunViewSchema>;
 
-/** A pending approval: which stream is asking, and the request the UI shows.
+/** A pending approval: which run is asking, and the request the UI shows.
  *  The list is a set keyed by `requestId` (5.2). */
 const ApprovalRequestSchema = z.object({
   runId: RunIdSchema,
@@ -252,7 +252,7 @@ type RunTopology = {
 };
 
 /**
- * Every stream under `rootRunId`, parents first: the topology `childIds`
+ * Every run under `rootRunId`, parents first: the topology `childIds`
  * (root to leaf) and `ancestors` (leaf to root) already state on every row,
  * so a host walks the fold's own facts instead of re-deriving them.
  */

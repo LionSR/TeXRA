@@ -188,9 +188,10 @@ function malformedPrimitiveReason(data: unknown): string {
  * becomes a visible failed tool row instead of being dropped (CLI) or falling
  * through to the default log template (webview).
  *
- * The fallback keeps the row live unless the source itself carries a valid
- * terminal `status`, so a temporarily malformed in-progress row can still be
- * replaced by a later corrected payload in the append-only transcript. It
+ * The fallback keeps the row live only while the source itself says the call
+ * is still in progress, so a temporarily malformed in-progress row can still
+ * be replaced by a later corrected payload in the append-only transcript;
+ * anything else renders as failed rather than as a quiet success. It
  * preserves only independently usable fields (`toolName` when a string,
  * `input` from `data.input`) and keeps the bounded diagnostic out of the
  * normal tool input/output sections. Unknown tool names and unstructured
@@ -203,7 +204,7 @@ export function normalizeToolUseForRender(data: unknown): NormalizedToolUse {
 
 function malformedToolUseFallback(data: unknown): NormalizedToolUse {
   const diagnostic = malformedToolUseDiagnostic(data);
-  const status = validSourceToolCallStatus(data);
+  const sourceStatus = validSourceToolCallStatus(data);
   return {
     toolName:
       isObject(data) && typeof data.toolName === 'string' ? data.toolName : '',
@@ -213,7 +214,13 @@ function malformedToolUseFallback(data: unknown): NormalizedToolUse {
     input: isObject(data) && 'input' in data ? data.input : undefined,
     isUserFeedback: false,
     headerSummary: diagnostic,
-    ...(status !== undefined ? { status } : {}),
+    // A payload that failed to parse is a failure, said in the one status
+    // vocabulary the row model reads: only an in-flight source status
+    // survives, so a corrected payload can still replace the row.
+    status:
+      sourceStatus === TOOL_CALL_STATUS.IN_PROGRESS
+        ? TOOL_CALL_STATUS.IN_PROGRESS
+        : TOOL_CALL_STATUS.FAILED,
   };
 }
 

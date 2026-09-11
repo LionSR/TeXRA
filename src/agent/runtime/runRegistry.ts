@@ -65,7 +65,7 @@ interface RunStopOptions {
  * synchronous start of the loop, across every turn handle it tracks and
  * untracks, until its final result has been delivered to the parent. The
  * parent counts it as an active child throughout, so the parent's continuation
- * stays recoverable until the last delivery has landed. Child-stream loops use
+ * stays recoverable until the last delivery has landed. Child-run loops use
  * their persistent run handle for lineage instead.
  */
 export interface ChildRunActivation {
@@ -77,7 +77,7 @@ export interface ChildRunActivation {
 }
 
 /**
- * Where a follow-up for a stream goes: a live flow context, the stream's
+ * Where a follow-up for a run goes: a live flow context, the run's
  * retained queue (a WAITING or resuming cursor, or a parent whose children
  * are still active), or nowhere in this process.
  */
@@ -129,7 +129,7 @@ interface RunRegistryInit {
 }
 
 /**
- * Session-owned registry of active executions and their change listeners.
+ * Session-owned registry of active runs and their change listeners.
  *
  * One instance belongs to each {@link SessionHandle}, which binds it to that
  * session's event hub, approvals, and lease-release boundary.
@@ -182,7 +182,7 @@ export class RunRegistry {
   }
 
   /**
-   * The live child roster of a parent stream, as this registry holds it:
+   * The live child roster of a parent run, as this registry holds it:
    * live-only presentation state (never a plane row, contract C3), told to
    * the renderers that still draw a roster until the fold's `childIds` and
    * `rollup` replace it (PRD 5.1). Called on every roster change: a child
@@ -200,7 +200,7 @@ export class RunRegistry {
   /**
    * One canonical `status` fact, from the session's `publishStatus` in
    * publish order and before any renderer wakes: notify waiters and refresh
-   * the child roster when a stream's status changes (e.g. RUNNING to WAITING).
+   * the child roster when a run's status changes (e.g. RUNNING to WAITING).
    */
   handleStatus(runId: RunId): void {
     if (this.disposed) return;
@@ -296,7 +296,7 @@ export class RunRegistry {
 
   /**
    * Register an agent run and, when requested, publish its initial
-   * stream status through the registry-owned status store.
+   * run status through the registry-owned status store.
    */
   trackAgentRun(
     handle: RunHandle,
@@ -315,7 +315,7 @@ export class RunRegistry {
 
   /**
    * Refuse every run registered from here on: the session is closing
-   * (`Sessions.close`). The executions already tracked keep their handles,
+   * (`Sessions.close`). The runs already tracked keep their handles,
    * waiters, and status until they settle, and a native child loop keeps
    * its activation until its final delivery, which is what the close waits
    * for ({@link getActiveIds}); only new admissions are turned away.
@@ -432,14 +432,14 @@ export class RunRegistry {
 
   /**
    * Decide how a tool-use follow-up should be admitted from one registry-owned
-   * snapshot of stream status, active flow context, and child executions.
+   * snapshot of run status, active flow context, and child runs.
    */
   getToolUseFollowUpTarget(runId: RunId): ToolUseFollowUpTarget {
     const status = this.runStatus.get(runId);
 
     if (status !== undefined && !isInFlightPhase(status)) {
       // Only a native child's explicit delivery reservation can retain a
-      // terminal parent's continuation. A child-stream handle is lifecycle
+      // terminal parent's continuation. A child-run handle is lifecycle
       // ownership, not authority to revive a parent that already finished.
       for (const activation of this.activeChildActivations(runId)) {
         return { kind: 'queue' };
@@ -513,7 +513,7 @@ export class RunRegistry {
 
   /**
    * Kill only background OS processes (bash, codex) without touching agent
-   * stream status. Agent executions are left in RUNNING: whether one is
+   * run status. Agent runs are left in RUNNING: whether one is
    * resumable afterwards is decided from its durable facts (a flow record on
    * disk, and no live owner), never from a phase some later pass rewrites.
    *
@@ -530,7 +530,7 @@ export class RunRegistry {
   }
 
   /**
-   * Wait for any of the given executions to change — see {@link addListener}
+   * Wait for any of the given runs to change — see {@link addListener}
    * for the full wake set — and succeed with the run id that changed
    * first.
    *
@@ -573,7 +573,7 @@ export class RunRegistry {
     }
   }
 
-  /** Interrupt all active subagents of a parent stream, including descendants. */
+  /** Interrupt all active subagents of a parent run, including descendants. */
   private interruptActiveChildren(
     parentRunId: RunId,
     visited: Set<string>,
@@ -642,10 +642,10 @@ export class RunRegistry {
   }
 
   /**
-   * Stop a visible agent stream and apply the caller's declared child policy.
+   * Stop a visible agent run and apply the caller's declared child policy.
    *
    * Hosts should call this instead of reconstructing stop behavior from
-   * child-interrupts, root interrupts, and stream-status writes.
+   * child-interrupts, root interrupts, and run-status writes.
    */
   stopAgentRun(
     runId: RunId,
@@ -690,7 +690,7 @@ export class RunRegistry {
    *
    * The full wake set, which is what an `executions wait` observes:
    *
-   * - a status transition on this run's child stream;
+   * - a status transition on this run;
    * - {@link track}, including a *replacement* handle for the same id (a
    *   resumed generation taking over from its predecessor) — a `track` that
    *   skipped this would strand a waiter across a resume;

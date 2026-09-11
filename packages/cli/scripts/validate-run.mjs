@@ -830,7 +830,7 @@ function validateRunCommand() {
     assert(
       jsonResult.runDirectory ===
         path.dirname(path.dirname(finalOutput.absolutePath)),
-      'JSON run output should report the execution run directory',
+      'JSON run output should report the run directory',
     );
     assert(
       jsonResult.copiedOutput === copiedOutputPath,
