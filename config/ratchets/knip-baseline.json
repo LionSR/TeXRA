@@ -998,12 +998,6 @@
       "name": "shouldUseResponsesAPI"
     },
     {
-      "file": "src/agent/storage/conversationFormat.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatConversationContent"
-    },
-    {
       "file": "src/agent/storage/runLease.ts",
       "category": "production-dead",
       "kind": "exports",
