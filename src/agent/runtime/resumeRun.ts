@@ -285,7 +285,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
           catch: ensureError,
         }).pipe(Effect.onError(() => Effect.sync(releaseQueue)))
       : undefined;
-  session.status.clearHold(runId, { discardRetainedPhase: true });
+  session.status.clearHold(runId);
   if (lease?.status === 'held') {
     releaseQueue();
     session.status.markUnavailable(runId, runHeldMessage(lease.owner.pid));

@@ -154,9 +154,8 @@ interface FinalizeRunTerminalResult {
  * The single owner of terminal run choreography, shared by the run lifecycle
  * arms below, the agent-CLI session loop, and child runs
  * (`finalizeChildRun`): transcript stage end, the artifact drain, the
- * `run.end` row (through `finalizeRun`, its one writer), the in-memory
- * result settle, the delivery hook, then registry untrack + terminal run
- * phase — in that order. Exactly-once
+ * `run.end` row (through `finalizeRun`, its one writer), the delivery hook,
+ * then registry untrack + terminal run phase — in that order. Exactly-once
  * per handle: the claim below flips synchronously in the same tick as the
  * check, so a second call (e.g. the lifecycle catch arm after the success arm
  * already finalized, or a concurrent finalize racing across this function's
@@ -215,10 +214,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     ),
   );
   // Write the terminal row BEFORE untrack so the registry's terminal listener
-  // event never precedes it, and settle the handle's `result` promise with
-  // the same fact (F-2: per-run control handle). The row carries the
-  // classified error `kind` (when any), the run usage totals (present once a
-  // round recorded usage, including on failures), and the flow's output.
+  // event never precedes it. The row carries the classified error `kind`
+  // (when any), the run usage totals (present once a round recorded usage,
+  // including on failures), and the flow's output.
   const event: ResultEvent = {
     type: 'run.end',
     outcome,
@@ -247,7 +245,6 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       },
     });
   }
-  handle.settleResult(event);
   if (params.deliver) {
     const deliver = params.deliver;
     yield* Effect.tryPromise({
@@ -504,8 +501,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     if (options?.onRun) {
       const onRun = options.onRun;
       // Start observation at the same time as invocation. The callback may
-      // run handle.result to completion, so its observer must not hold up
-      // the flow that settles it.
+      // run as long as the run does, so its observer must not hold up the
+      // flow.
       yield* Effect.tryPromise({
         try: async () => onRun(handle),
         catch: ensureError,

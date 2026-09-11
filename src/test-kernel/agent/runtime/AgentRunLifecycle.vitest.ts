@@ -11,7 +11,7 @@ import {
   releaseOwnedRunLease,
 } from '@agent/storage/runLease';
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
-import { RunHandle, type AgentRunHandle } from '@agent/runtime/RunHandle';
+import { RunHandle } from '@agent/runtime/RunHandle';
 import {
   defaultSession,
   type SessionHandle,
@@ -579,7 +579,6 @@ describe('runFlowWithLifecycle', () => {
   // its own verdict and drop its abort facts.
   it('does not adopt a previous run terminal phase when a stop lands before start', async () => {
     const { runId, runStatus, ctx } = lifecycleFixture();
-    let terminalResult: AgentRunHandle['result'] | undefined;
 
     try {
       seedRunStatusForTest(runStatus, runId, {
@@ -594,8 +593,7 @@ describe('runFlowWithLifecycle', () => {
             throw new DOMException('Request aborted', 'AbortError');
           },
           {
-            onRun: async (handle) => {
-              terminalResult = handle.result;
+            onRun: async () => {
               const stop = defaultSession().runs.kill(runId);
               expect(stop.accepted).toBe(true);
               await Effect.runPromise(stop.settlement);
@@ -610,13 +608,10 @@ describe('runFlowWithLifecycle', () => {
         defaultSession(),
         expect.objectContaining({
           outcome: RUN_OUTCOME.CANCELLED,
+          error: expect.objectContaining({ kind: 'abort' }),
           flowRecord: 'preserve',
         }),
       );
-      await expect(Effect.runPromise(terminalResult!)).resolves.toMatchObject({
-        outcome: RUN_OUTCOME.CANCELLED,
-        error: { kind: 'abort' },
-      });
     } finally {
       clearRunStatusForTest(runStatus, runId);
     }
@@ -762,7 +757,7 @@ describe('runFlowWithLifecycle', () => {
       expect(followUpsTerminalize).not.toHaveBeenCalled();
       expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
 
-      const waitingHandle = takeWaitingHandle(runId);
+      takeWaitingHandle(runId);
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // preserves the follow-up queue for WAITING — it does not dispose the
@@ -775,20 +770,12 @@ describe('runFlowWithLifecycle', () => {
       expect(stop.accepted).toBe(true);
       await Effect.runPromise(stop.settlement);
 
-      // The bypassed runFlowWithLifecycle can't settle the terminal row, so
-      // terminateWaitingHandle must — a waiter on the handle would otherwise
-      // miss the stop entirely.
-      await expect(
-        Effect.runPromise(waitingHandle.result),
-      ).resolves.toMatchObject({
-        type: 'run.end',
-        outcome: RUN_OUTCOME.CANCELLED,
-        runId,
-      });
-
       expect(defaultSession().runs.getHandle(runId)).toBeUndefined();
       expect(defaultSession().status.get(runId)).toBe(RUN_PHASE.CANCELLED);
       expect(followUpsTerminalize).toHaveBeenCalledWith(runId);
+      // The bypassed runFlowWithLifecycle can't write the terminal row, so
+      // terminateWaitingHandle must — session subscribers would otherwise
+      // miss the stop entirely.
       await vi.waitFor(() =>
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
           defaultSession(),
@@ -833,14 +820,13 @@ describe('runFlowWithLifecycle', () => {
         }),
       );
       expect(result.outcome).toBe(RUN_PHASE.WAITING);
-      const waitingHandle = takeWaitingHandle(runId);
+      takeWaitingHandle(runId);
 
       const stop = defaultSession().runs.kill(runId);
 
       expect(stop.accepted).toBe(true);
 
       await Effect.runPromise(stop.settlement);
-      await Effect.runPromise(waitingHandle.result);
 
       expect(stopSessionsForRun).toHaveBeenCalledWith(runId);
     } finally {
@@ -1211,9 +1197,6 @@ describe('finalizeRunTerminal', () => {
       // writer, so writing it once is what "exactly once" means here.
       expect(storageMocks.finalizeRun).toHaveBeenCalledTimes(1);
       expect(untrack).toHaveBeenCalledTimes(1);
-      await expect(Effect.runPromise(handle.result)).resolves.toBe(
-        event?.event,
-      );
       expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
     } finally {
       clearRunStatusForTest(runStatus, runId);
@@ -1230,11 +1213,6 @@ describe('finalizeRunTerminal', () => {
           releaseFlush = resolve;
         }),
     );
-    let resultSettled = false;
-    void Effect.runPromise(handle.result).then(() => {
-      resultSettled = true;
-    });
-
     try {
       seedRunStatusForTest(runStatus, runId, {
         phase: RUN_PHASE.RUNNING,
@@ -1249,13 +1227,13 @@ describe('finalizeRunTerminal', () => {
       );
 
       await vi.waitFor(() => expect(flushArtifacts).toHaveBeenCalledOnce());
-      expect(resultSettled).toBe(false);
+      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(untrack).not.toHaveBeenCalled();
 
       releaseFlush?.();
       await finalization;
 
-      expect(resultSettled).toBe(true);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
       expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.COMPLETED);
     } finally {
@@ -1295,9 +1273,6 @@ describe('finalizeRunTerminal', () => {
           runId,
         },
       });
-      await expect(Effect.runPromise(handle.result)).resolves.toBe(
-        event?.event,
-      );
       expect(untrack).toHaveBeenCalledExactlyOnceWith(runId);
       expect(runStatus.get(runId)).toBe(RUN_PHASE.FAILED);
       expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
@@ -1348,9 +1323,6 @@ describe('finalizeRunTerminal', () => {
       // Error facts classified for a failure that the phase says never
       // happened must not ride the cancelled result.
       expect(finalized?.event.error).toBeUndefined();
-      await expect(Effect.runPromise(handle.result)).resolves.toBe(
-        finalized?.event,
-      );
       expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
         session,

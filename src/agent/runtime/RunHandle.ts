@@ -6,9 +6,7 @@
  * terminal settlement. Termination policy lives with the owning registry.
  */
 
-import { Deferred, Effect } from 'effect';
-
-import type { AgentTrace, ResultEvent } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type {
   AgentCategory,
@@ -17,6 +15,7 @@ import type {
   RunPhase,
 } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 export interface RunStatusInfo {
   status: RunPhase | 'unknown';
@@ -65,17 +64,6 @@ export interface RunInterruptHandler {
 type RunSuspension =
   | { readonly state: 'parked'; readonly teardown: Effect.Effect<void, Error> }
   | { readonly state: 'terminating' };
-
-/**
- * How far the run's exactly-once terminal outcome has progressed.
- *
- * `claimed` is the window between a caller winning {@link
- * RunHandle.claimTerminalFinalize} and the result actually
- * settling; `settled` is reachable directly for the non-lifecycle child runs
- * that settle without claiming. Both refuse a further claim, which is why
- * this is one ordered state rather than two independent flags.
- */
-type TerminalState = 'open' | 'claimed' | 'settled';
 
 /**
  * The projection of the flow's {@link ToolUseFlowContext} that a run handle
@@ -144,25 +132,13 @@ export class RunHandle<
    */
   workflowPhase?: string;
 
-  /**
-   * The run's terminal outcome, settled exactly once (by the run lifecycle, or
-   * by `finalizeChildRun` for non-lifecycle child runs) BEFORE the run is
-   * untracked. It always succeeds — it has no error channel — so a failed run
-   * reports through the `ResultEvent`'s own outcome rather than through a
-   * rejection nobody is required to observe, and a consumer that never awaits
-   * it costs nothing. Awaiting it is a fiber parked on the `Deferred`, so an
-   * interrupted consumer detaches with its fiber. SDK consumers awaiting a
-   * specific run's outcome use this; the host-wide stream is
-   * `session.onResult`.
-   */
-  private readonly _terminal = Deferred.makeUnsafe<ResultEvent>();
-  readonly result: Effect.Effect<ResultEvent> = Deferred.await(this._terminal);
-  private terminalState: TerminalState = 'open';
+  /** Whether a caller has claimed the run's exactly-once terminal outcome. */
+  private terminalClaimed = false;
 
   constructor(
     /**
      * The run's birth facts, the same object its `run.start` published and its
-     * terminal `result` reports. Held whole rather than copied field by field,
+     * `run.end` row closes. Held whole rather than copied field by field,
      * so the handle and the event plane cannot describe the run differently.
      */
     readonly run: RunFacts,
@@ -191,12 +167,6 @@ export class RunHandle<
     return this.run.category;
   }
 
-  /** Settle {@link result} with the terminal outcome (idempotent). */
-  settleResult(event: ResultEvent): void {
-    this.terminalState = 'settled';
-    Deferred.doneUnsafe(this._terminal, Effect.succeed(event));
-  }
-
   /**
    * Atomically claim the exactly-once terminal finalization of this handle.
    * Returns true for exactly one caller — the flag flips synchronously in the
@@ -207,8 +177,8 @@ export class RunHandle<
    * registry cannot both publish a terminal outcome for one run.
    */
   claimTerminalFinalize(): boolean {
-    if (this.terminalState !== 'open') return false;
-    this.terminalState = 'claimed';
+    if (this.terminalClaimed) return false;
+    this.terminalClaimed = true;
     return true;
   }
 
@@ -345,7 +315,6 @@ export type AgentRunHandle = Pick<
   | 'agentName'
   | 'startedAt'
   | 'trace'
-  | 'result'
   | 'deliveryTarget'
   | 'interrupt'
 >;

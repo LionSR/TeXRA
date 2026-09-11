@@ -237,29 +237,19 @@ export class RunStatusMachine {
   }
 
   /**
-   * Drop a hold, restoring the phase it retained. The callers that open a run
-   * for write call this when they finish without writing a phase — a resume
-   * that reattaches, and a follow-up the session refuses; a `transition` that
-   * does write replaces the hold with the phase it lands on.
+   * Drop a hold together with the phase it retained. The callers that open a
+   * run for write call this when they finish without writing a phase — a
+   * resume that reattaches, and a follow-up the session refuses; a
+   * `transition` that does write replaces the hold with the phase it lands on.
    *
-   * `discardRetainedPhase` drops that retained phase with the hold. A hold
-   * written after a failed tool-use resume carries the WAITING its rollback
-   * left, and a caller that has just re-read the run and found it finished or
-   * merely resumable has disproved that phase: restoring it would show a live
-   * run this process does not have. A caller that learned nothing new about
-   * the phase keeps the default.
+   * A hold written after a failed tool-use resume carries the WAITING its
+   * rollback left, and every caller has just re-read the run and found it
+   * finished or merely resumable, which disproves that phase: restoring it
+   * would show a live run this process does not have.
    */
-  clearHold(
-    runId: RunId,
-    options: { discardRetainedPhase?: boolean } = {},
-  ): void {
-    const entry = this.runs.get(runId);
-    if (entry?.kind !== 'hold') return;
-    if (entry.state && !options.discardRetainedPhase) {
-      this.runs.set(runId, { kind: 'phase', state: entry.state });
-    } else {
-      this.runs.delete(runId);
-    }
+  clearHold(runId: RunId): void {
+    if (this.runs.get(runId)?.kind !== 'hold') return;
+    this.runs.delete(runId);
     this.publishHoldChanged(runId);
   }
 

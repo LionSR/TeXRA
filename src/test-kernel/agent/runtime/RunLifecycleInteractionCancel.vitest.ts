@@ -4,7 +4,6 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
@@ -107,13 +106,13 @@ describe('run lifecycle host-interaction cancel', () => {
 
   it('settles and untracks the run after native interruption joins the active flow', async () => {
     const { session, ctx, runId } = lifecycleCase();
-    const started = createDeferred<RunHandle>();
+    const started = createDeferred();
     const aborted = createDeferred();
     const released = createDeferred();
     const stopped = createDeferred();
     const fiber = Effect.runFork(
-      runFlowWithLifecycle(ctx, async (handle) => {
-        started.resolve(handle);
+      runFlowWithLifecycle(ctx, async () => {
+        started.resolve();
         ctx.runScope.signal.addEventListener('abort', () => aborted.resolve(), {
           once: true,
         });
@@ -123,7 +122,7 @@ describe('run lifecycle host-interaction cancel', () => {
         return toolUseRun(runId, RUN_OUTCOME.CANCELLED);
       }),
     );
-    const handle = await started.promise;
+    await started.promise;
     const interrupted = Effect.runPromise(Fiber.interrupt(fiber));
     await aborted.promise;
     expect(ctx.disposeTrace).not.toHaveBeenCalled();
@@ -133,9 +132,7 @@ describe('run lifecycle host-interaction cancel', () => {
     expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(true);
     await stopped.promise;
     expect(session.runs.getHandle(runId)).toBeUndefined();
-    await expect(Effect.runPromise(handle.result)).resolves.toMatchObject({
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
+    expect(session.status.get(runId)).toBe(RUN_PHASE.CANCELLED);
     expect(ctx.disposeTrace).toHaveBeenCalledOnce();
     session.dispose();
   });

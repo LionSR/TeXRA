@@ -2,13 +2,13 @@
  * Termination cascade for suspended runs.
  *
  * Tears down an `RunHandle` parked at WAITING with no live
- * interrupt context: writes the `run.end` row, settles `handle.result`, and
- * releases the run lease, all on behalf of `RunRegistry.terminate`.
+ * interrupt context: writes the `run.end` row and releases the run lease,
+ * both on behalf of `RunRegistry.terminate`.
  */
 
 import { Cause, Effect, Exit } from 'effect';
 
-import { createChannelTrace, type ResultEvent } from '@agent/trace';
+import { createChannelTrace } from '@agent/trace';
 import { RunLeaseLostError } from '@agent/storage/runLease';
 import {
   type FinalizeRunInput,
@@ -63,43 +63,27 @@ export class WaitingTermination {
    *
    * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
    * flow never resumes to produce one), so it writes the `run.end` row through
-   * `finalizeRun` and settles `handle.result` itself — otherwise session
-   * subscribers would miss the stop, a consumer awaiting `handle.result` (F-2)
-   * would hang forever, and the run's history would keep a non-terminal
-   * status. Unlike `finalizeRunTerminal`, no usage totals ride the row: the
-   * flow is suspended, so there is no live usage monitor to read.
+   * `finalizeRun` itself — otherwise session subscribers would miss the stop
+   * and the run's history would keep a non-terminal status. Unlike
+   * `finalizeRunTerminal`, no usage totals ride the row: the flow is
+   * suspended, so there is no live usage monitor to read.
    */
   terminateWaitingHandle(handle: RunHandle): Effect.Effect<void> | undefined {
     const teardown = handle.beginSuspendedTermination();
     if (!teardown) return undefined;
-    const cancelledResult: ResultEvent = {
-      type: 'run.end',
-      outcome: RUN_OUTCOME.CANCELLED,
-      runId: handle.runId,
-      output: emptyRunEndOutput(handle.category),
-    };
     return this.context.lanes.holdLive(
       handle.runId,
-      this.finishWaitingTermination(handle, teardown, cancelledResult).pipe(
+      this.finishWaitingTermination(handle, teardown).pipe(
         Effect.catchCause((cause) =>
           Effect.gen({ self: this }, function* () {
             const error = Cause.squash(cause);
             // Durable finalization never ran, so recovery only settles what this
             // generation privately owns. Each step is guarded on its own: a failure
-            // in one must not cost the others. A former generation owns only its
-            // private result, it must not mark, release, untrack, or cancel a
-            // locally reacquired successor, which is what `untrackIfCurrent` gates.
+            // in one must not cost the others. A former generation must not mark,
+            // release, untrack, or cancel a locally reacquired successor, which
+            // is what `untrackIfCurrent` gates.
             const recoveryFailures: unknown[] = [error];
             let untracked = false;
-            const settled = yield* Effect.exit(
-              Effect.try({
-                try: () => handle.settleResult(cancelledResult),
-                catch: ensureError,
-              }),
-            );
-            if (Exit.isFailure(settled)) {
-              recoveryFailures.push(Cause.squash(settled.cause));
-            }
             const untracking = yield* Effect.exit(
               Effect.try({
                 try: () => {
@@ -146,7 +130,6 @@ export class WaitingTermination {
     this: WaitingTermination,
     handle: RunHandle,
     teardown: Effect.Effect<void, Error>,
-    cancelledResult: ResultEvent,
   ) {
     yield* teardown.pipe(
       Effect.catchCause((cause) =>
@@ -164,21 +147,19 @@ export class WaitingTermination {
 
     if (this.context.getHandle(handle.runId) !== handle) {
       // `track` transfers the pending stop to a resumed successor. The old
-      // handle still needs its private result settled, but it no longer owns
-      // the shared stream, run metadata, or lease.
-      handle.settleResult(cancelledResult);
+      // handle no longer owns the shared stream, run metadata, or lease.
       return;
     }
 
     // Cleanup closes the suspended run's transcript group. Write the terminal
     // row only after that owned artifact is settled so every host observes
     // one coherent cancellation boundary, and in one fixed order: write the
-    // row, settle the envelope, drop the handle, cancel the stream.
+    // row, drop the handle, cancel the stream.
     const finalize = Effect.gen({ self: this }, function* () {
       const finalization = yield* this.context.finalizeRun({
         runId: handle.runId,
         outcome: RUN_OUTCOME.CANCELLED,
-        output: cancelledResult.output,
+        output: emptyRunEndOutput(handle.category),
         // A stopped WAITING run is exactly what a user resumes. Deleting its
         // checkpoint here was the #11304 invariant's first violation (#11315).
         flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.CANCELLED),
@@ -192,7 +173,6 @@ export class WaitingTermination {
           },
         });
       }
-      handle.settleResult(cancelledResult);
       this.context.untrackHandle(handle);
       this.context.cancelRunStatus(handle.runId);
     });

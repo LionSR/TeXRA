@@ -508,7 +508,6 @@ describe('child run progress events', () => {
         const recorded = recordSessionEvents(session);
         let childRun: ChildRun | undefined;
         let childRunId: RunId | undefined;
-        let handle: ReturnType<typeof session.runs.getHandle>;
 
         try {
           // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
@@ -525,7 +524,6 @@ describe('child run progress events', () => {
                 startLoop: (context) => {
                   childRun = context.childRun;
                   childRunId = context.runId;
-                  handle = session.runs.getHandle(context.childRun.childRunId);
                   throw setupError;
                 },
                 summary: 'unreachable',
@@ -538,21 +536,16 @@ describe('child run progress events', () => {
 
           expect(childRun).toBeDefined();
           expect(childRunId).toBeDefined();
-          expect(handle).toBeDefined();
-          if (!childRun || !childRunId || !handle) {
+          if (!childRun || !childRunId) {
             throw new Error('expected the failed child launch to be captured');
           }
           expect(session.runs.getHandle(childRunId)).toBeUndefined();
           expect(session.status.get(childRun.childRunId)).toBe(
             RUN_PHASE.FAILED,
           );
-          const failedHandle = handle;
-          const result = yield* failedHandle.result;
-          expect(result).toMatchObject({
-            type: 'run.end',
-            outcome: 'failed',
-            runId: childRunId,
-          });
+          expect(
+            yield* getRunRecords(session, childRunId).readRunEnd(),
+          ).toMatchObject({ outcome: 'failed' });
         } finally {
           if (childRun) {
             clearRunStatusForTest(session.status, childRun.childRunId);
@@ -566,8 +559,7 @@ describe('child run progress events', () => {
       loopRunId,
       'Run a long-lived Codex child loop',
     );
-    const handle = defaultSession().runs.getHandle(loopRunId);
-    expect(handle).toBeDefined();
+    expect(defaultSession().runs.getHandle(loopRunId)).toBeDefined();
     // From here on: the launch's own facts are not the loop's.
     const recorded = recordSessionEvents(defaultSession());
     const rosters = recordChildRosters(defaultSession().runs);
@@ -589,8 +581,11 @@ describe('child run progress events', () => {
       parentRunId,
       items: [],
     });
-    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-      type: 'run.end',
+    await expect(
+      Effect.runPromise(
+        getRunRecords(defaultSession(), loopRunId).readRunEnd(),
+      ),
+    ).resolves.toMatchObject({
       outcome: 'failed',
       error: {
         kind: 'unexpected',
@@ -608,8 +603,7 @@ describe('child run progress events', () => {
       stoppedRunId,
       'Run a stopped Codex child loop',
     );
-    const handle = defaultSession().runs.getHandle(stoppedRunId);
-    expect(handle).toBeDefined();
+    expect(defaultSession().runs.getHandle(stoppedRunId)).toBeDefined();
     seedRunStatusForTest(defaultSession().status, stoppedRunId, {
       phase: RUN_PHASE.CANCELLED,
     });
@@ -628,11 +622,11 @@ describe('child run progress events', () => {
           event.aggregateId === qualifyAggregateId('run', stoppedRunId),
       ),
     ).toHaveLength(0);
-    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-      type: 'run.end',
-      outcome: 'cancelled',
-      runId: stoppedRunId,
-    });
+    await expect(
+      Effect.runPromise(
+        getRunRecords(defaultSession(), stoppedRunId).readRunEnd(),
+      ),
+    ).resolves.toMatchObject({ outcome: 'cancelled' });
   });
 
   it('settles failed child handle results with error details', async () => {
@@ -640,8 +634,7 @@ describe('child run progress events', () => {
       failedRunId,
       'Run a failing Codex child loop',
     );
-    const handle = defaultSession().runs.getHandle(failedRunId);
-    expect(handle).toBeDefined();
+    expect(defaultSession().runs.getHandle(failedRunId)).toBeDefined();
 
     await Effect.runPromise(
       childRun.finalize({
@@ -651,10 +644,12 @@ describe('child run progress events', () => {
     );
 
     expect(defaultSession().status.get(failedRunId)).toBe(RUN_PHASE.FAILED);
-    await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-      type: 'run.end',
+    await expect(
+      Effect.runPromise(
+        getRunRecords(defaultSession(), failedRunId).readRunEnd(),
+      ),
+    ).resolves.toMatchObject({
       outcome: 'failed',
-      runId: failedRunId,
       error: {
         kind: 'unexpected',
         message: 'child process exited 1',

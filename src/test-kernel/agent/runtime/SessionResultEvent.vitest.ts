@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import { RunStatusMachine } from '@agent/runtime/RunStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
@@ -164,34 +163,6 @@ describe('terminal result event', () => {
       ).rejects.toThrow('model exploded');
 
       expectSingleResult(results, ctx, { outcome: 'failed' });
-    } finally {
-      clearRunStatusForTest(runStatus, ctx.runScope.runId);
-    }
-  });
-
-  it('settles handle.result as failed on a thrown run (always resolves)', async () => {
-    const { ctx, runStatus } = setupResultCase();
-    let handle: AgentRunHandle | undefined;
-    try {
-      await expect(
-        Effect.runPromise(
-          runFlowWithLifecycle(
-            ctx,
-            async () => {
-              throw new Error('boom');
-            },
-            {
-              onRun: (h) => {
-                handle = h;
-              },
-            },
-          ),
-        ),
-      ).rejects.toThrow('boom');
-      await expect(Effect.runPromise(handle!.result)).resolves.toMatchObject({
-        type: 'run.end',
-        outcome: 'failed',
-      });
     } finally {
       clearRunStatusForTest(runStatus, ctx.runScope.runId);
     }

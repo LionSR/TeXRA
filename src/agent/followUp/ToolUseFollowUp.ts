@@ -240,10 +240,10 @@ export function recordRunRefusal(
       );
       return 'not_resumable';
     case 'finished':
-      session.status.clearHold(runId, { discardRetainedPhase: true });
+      session.status.clearHold(runId);
       return 'finished';
     case 'resumable':
-      session.status.clearHold(runId, { discardRetainedPhase: true });
+      session.status.clearHold(runId);
       return 'not_resumable';
     case 'unclassified':
       return 'not_resumable';
