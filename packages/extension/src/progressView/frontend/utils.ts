@@ -1,6 +1,7 @@
 // Shared utility functions for the progress view frontend.
 
 import type { RunId } from '@shared/schemas';
+import { isOwnDetailsToggle } from '@shared/litControllers/detailsToggle';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 
 /**
@@ -34,7 +35,7 @@ export function dispatchGroupToggle(
   runId: RunId | null,
   key: string,
 ): void {
-  if (event.target !== event.currentTarget || runId === null) return;
+  if (!isOwnDetailsToggle(event) || runId === null) return;
   host.dispatchEvent(
     SessionUiEvents.surface({
       kind: 'group',
