@@ -1,12 +1,9 @@
 appId: ai.texra.desktop
 productName: TeXRA
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
-publish:
-  provider: github
-  owner: texra-ai
-  repo: texra-desktop-releases
-  private: false
-  releaseType: release
+# No update feed: the app only reads the release repo's latest tag
+# (src/main/desktopUpdateChecker.ts), so emit no latest*.yml or app-update.yml.
+publish: null
 protocols:
   - name: TeXRA
     schemes:

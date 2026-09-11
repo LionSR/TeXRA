@@ -1,7 +1,7 @@
 /**
  * Embeds a {@link TraceDocument} directly into the trace-viewer's
- * single-file standalone bundle (`packages/trace-viewer`'s
- * `vite.standalone.config.ts` build) so the exported page needs no `fetch()`
+ * single-file bundle (`packages/trace-viewer`'s `vite.config.ts` build) so
+ * the exported page needs no `fetch()`
  * of a sidecar `trace.json` — `fetch()` of a local file fails entirely under
  * `file://`, same as an external `<script src>` (see that config's header
  * comment). `main.ts`'s `loadTrace()` reads this global if present, before

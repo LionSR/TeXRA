@@ -14,6 +14,43 @@ export const requiredMonacoWorkers = [
   'ts.worker',
 ];
 
+/** Paths (files or non-empty directories) the extension VSIX must ship. */
+export const REQUIRED_PACKAGED_PATHS = [
+  'LICENSE.txt',
+  'NOTICE.txt',
+  'changelog.md',
+  'readme.md',
+  'resources/agents',
+  'resources/docs/agent-creation',
+  'resources/examples',
+  'resources/logo-128x128.svg',
+  'resources/logo-512x512.png',
+  'resources/shared/latex_style_rules.txt',
+  'resources/skills',
+  'resources/templates',
+  'resources/tool_use_agents',
+  'resources/walkthroughs',
+  'src/common/styles/common.css',
+  'src/progressView/index.html',
+  'src/settingsView/index.html',
+];
+
+// The manifest keys VS Code reads; the built VSIX must ship them exactly as
+// packages/extension/package.json declares them.
+const MANIFEST_KEYS = [
+  'name',
+  'displayName',
+  'description',
+  'publisher',
+  'engines',
+  'categories',
+  'activationEvents',
+  'main',
+  'capabilities',
+  'contributes',
+  'icon',
+];
+
 export function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
@@ -44,39 +81,9 @@ function stable(value) {
   );
 }
 
-export function extensionManifestSnapshot(packageJson, manifestKeys) {
+/** The manifest keys of `packageJson`, key-sorted for a stable comparison. */
+export function extensionManifestSnapshot(packageJson) {
   return Object.fromEntries(
-    manifestKeys.map((key) => [key, stable(packageJson[key])]),
+    MANIFEST_KEYS.map((key) => [key, stable(packageJson[key])]),
   );
 }
-
-// Catalog-derived `contributes` subtrees: code-generated from the command
-// catalog by scripts/sync-package-contributes.mjs and diff-checked by the
-// catalog vitest suites, so snapshotting them would just duplicate that guard
-// with ~35 KB of committed generated JSON. They are omitted from the manifest
-// snapshot (verify-extension-package-invariants.mjs) and from the built-VSIX
-// manifest comparison (verify-vsix-contents.mjs), which instead asserts each
-// one ships non-empty; the remaining non-catalog contributes (menus, views,
-// walkthroughs, …) and manifest keys stay guarded. `configuration` is absent
-// by design — settings are native, and sync-package-contributes.mjs throws
-// outright if the manifest contributes it.
-export const CATALOG_DERIVED_CONTRIBUTES = ['commands', 'keybindings'];
-
-export function withoutCatalogDerivedContributes(packageJson) {
-  const { contributes } = packageJson;
-  if (!contributes || typeof contributes !== 'object') return packageJson;
-  const trimmedContributes = { ...contributes };
-  for (const key of CATALOG_DERIVED_CONTRIBUTES) delete trimmedContributes[key];
-  return { ...packageJson, contributes: trimmedContributes };
-}
-
-// packages/extension/resources/traceViewerShared is the multi-file,
-// external-assets trace-viewer build (shared-assets/site-hosting export
-// mode) — CLI-only (packages/cli/src/runtime/history.ts), never referenced by
-// the extension host, so packages/extension/.vscodeignore deliberately
-// excludes it from the packaged VSIX. resources/traceViewer is the
-// single-file default template and is packaged. One source of truth for the
-// directory name so verify-extension-package-invariants.mjs's required
-// .vscodeignore line and verify-vsix-contents.mjs's resource-hash exclusion
-// can't drift apart.
-export const EXCLUDED_TRACE_VIEWER_DIR = 'traceViewerShared';

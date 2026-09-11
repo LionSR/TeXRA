@@ -5,30 +5,6 @@ const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
 
 /**
- * Plugin to log build progress
- */
-const progressPlugin = {
-  name: 'progress',
-  setup(build) {
-    let startTime;
-    build.onStart(() => {
-      startTime = Date.now();
-      console.log('[esbuild] Building extension...');
-    });
-    build.onEnd((result) => {
-      const duration = Date.now() - startTime;
-      if (result.errors.length > 0) {
-        console.error(
-          `[esbuild] Build failed with ${result.errors.length} errors`,
-        );
-      } else {
-        console.log(`[esbuild] Extension built in ${duration}ms`);
-      }
-    });
-  },
-};
-
-/**
  * Extension host build configuration
  */
 const extensionConfig = {
@@ -42,19 +18,13 @@ const extensionConfig = {
   minify: production,
   // sdkErrorUtils relies on SDK error class/prototype names after bundling.
   keepNames: production,
-  treeShaking: true,
   tsconfig: './tsconfig.json',
-  // Let esbuild resolve .ts files
-  resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
   external: [
     'vscode', // VS Code API - provided at runtime
     'fsevents', // macOS native module
-    'bufferutil', // Optional native module
-    'utf-8-validate', // Optional native module
   ],
   loader: { '.tex': 'text', '.wasm': 'binary' },
-  plugins: [progressPlugin],
-  logLevel: 'warning',
+  logLevel: 'info',
   // Polyfill import.meta.url for ESM-only dependencies (e.g. @openai/codex-sdk)
   // bundled into CJS. Without this, esbuild replaces import.meta with {} and
   // calls like createRequire(import.meta.url) throw at runtime.

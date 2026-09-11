@@ -1,5 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename, join, relative } from 'node:path';
+import { readdir, stat } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -9,57 +9,37 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopPackageRoot =
   process.env.TEXRA_DESKTOP_INSTALLER_ROOT ??
   join(repoRoot, 'packages', 'desktop', 'dist-packaged');
-const electronBuilderConfigPath = join(
-  repoRoot,
-  'packages',
-  'desktop',
-  'electron-builder.yml',
-);
-const expectedReleaseOwner = 'texra-ai';
-const expectedReleaseRepo = 'texra-desktop-releases';
 
-const platformAlias = {
-  all: 'all',
-  darwin: 'mac',
-  mac: 'mac',
-  macos: 'mac',
-  win: 'win',
-  win32: 'win',
-  windows: 'win',
-  linux: 'linux',
-};
-
+// Keyed by process.platform. TEXRA_DESKTOP_INSTALLER_PLATFORM=all checks every
+// platform at once (the publish job's merged download).
 const platformRequirements = {
-  mac: {
+  darwin: {
     label: 'macOS',
     extensions: ['.dmg', '.zip'],
-    updateMetadata: 'latest-mac.yml',
-    updateExtensions: ['.zip'],
     iconPath: join(repoRoot, 'packages', 'desktop', 'build', 'icon.icns'),
   },
-  win: {
+  win32: {
     label: 'Windows',
     extensions: ['.exe'],
-    updateMetadata: 'latest.yml',
-    updateExtensions: ['.exe'],
     iconPath: join(repoRoot, 'packages', 'desktop', 'build', 'icon.ico'),
   },
   linux: {
     label: 'Linux',
     extensions: ['.AppImage', '.deb'],
-    updateMetadata: 'latest-linux.yml',
-    updateExtensions: ['.AppImage'],
     iconPath: join(repoRoot, 'packages', 'desktop', 'build', 'icon.png'),
   },
 };
 
 const requestedPlatform =
   process.env.TEXRA_DESKTOP_INSTALLER_PLATFORM ?? process.platform;
-const platformKey = platformAlias[requestedPlatform.toLowerCase()];
+const platformKeys =
+  requestedPlatform === 'all'
+    ? Object.keys(platformRequirements)
+    : [requestedPlatform];
 
-if (!platformKey) {
+if (!platformKeys.every((key) => Object.hasOwn(platformRequirements, key))) {
   console.error(
-    `Unsupported desktop installer platform: ${requestedPlatform}. Expected mac, win, linux, or all.`,
+    `Unsupported desktop installer platform: ${requestedPlatform}. Expected darwin, win32, linux, or all.`,
   );
   process.exit(1);
 }
@@ -75,10 +55,6 @@ async function collectTopLevelFiles(dir) {
   return files.sort();
 }
 
-function isInstallerArtifact(filePath, extension) {
-  return filePath.endsWith(extension) && !filePath.endsWith('.blockmap');
-}
-
 const failures = [];
 let files = [];
 
@@ -92,62 +68,6 @@ try {
   } else {
     throw error;
   }
-}
-
-function getTopLevelYamlBlock(source, key) {
-  const lines = source.split(/\r?\n/);
-  const startIndex = lines.findIndex((line) => line.startsWith(`${key}:`));
-  if (startIndex === -1) return '';
-
-  const block = [];
-  for (const line of lines.slice(startIndex + 1)) {
-    if (/^\S/.test(line)) break;
-    block.push(line);
-  }
-  return block.join('\n');
-}
-
-function requireYamlValue(block, key, expectedValue) {
-  const valuePattern = expectedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (!new RegExp(`^\\s+${key}:\\s+${valuePattern}\\s*$`, 'm').test(block)) {
-    failures.push(
-      `Desktop release publish target must set ${key}: ${expectedValue} in ${relative(repoRoot, electronBuilderConfigPath)}`,
-    );
-  }
-}
-
-async function verifyPublishTarget() {
-  let configText;
-  try {
-    configText = await readFile(electronBuilderConfigPath, 'utf8');
-  } catch (error) {
-    if (error?.code === 'ENOENT') {
-      failures.push(
-        `Missing desktop electron-builder config: ${relative(repoRoot, electronBuilderConfigPath)}`,
-      );
-      return;
-    }
-    throw error;
-  }
-
-  const publishBlock = getTopLevelYamlBlock(configText, 'publish');
-  if (publishBlock.length === 0) {
-    failures.push(
-      `Missing desktop release publish target in ${relative(repoRoot, electronBuilderConfigPath)}`,
-    );
-    return;
-  }
-
-  requireYamlValue(publishBlock, 'provider', 'github');
-  requireYamlValue(publishBlock, 'owner', expectedReleaseOwner);
-  requireYamlValue(publishBlock, 'repo', expectedReleaseRepo);
-  requireYamlValue(publishBlock, 'private', 'false');
-}
-
-function getPlatformKeys() {
-  return platformKey === 'all'
-    ? Object.keys(platformRequirements)
-    : [platformKey];
 }
 
 async function verifyIcon(requirement) {
@@ -169,63 +89,13 @@ async function verifyIcon(requirement) {
   }
 }
 
-async function verifyUpdateMetadata(requirement, matchedArtifacts) {
-  const metadataPath = join(desktopPackageRoot, requirement.updateMetadata);
-  let metadata = '';
-  try {
-    metadata = await readFile(metadataPath, 'utf8');
-  } catch (error) {
-    if (error?.code === 'ENOENT') {
-      failures.push(
-        `Missing ${requirement.label} update metadata: ${relative(repoRoot, metadataPath)}`,
-      );
-      return;
-    }
-    throw error;
-  }
-
-  if (metadata.trim().length === 0) {
-    failures.push(
-      `${requirement.label} update metadata is empty: ${relative(repoRoot, metadataPath)}`,
-    );
-    return;
-  }
-
-  for (const marker of ['sha512:', 'releaseDate:']) {
-    if (!metadata.includes(marker)) {
-      failures.push(
-        `${requirement.label} update metadata is missing ${marker} in ${relative(repoRoot, metadataPath)}`,
-      );
-    }
-  }
-
-  const updateArtifacts = requirement.updateExtensions.flatMap(
-    (extension) => matchedArtifacts.get(extension) ?? [],
-  );
-  if (updateArtifacts.length === 0) {
-    failures.push(
-      `${requirement.label} update metadata has no matching update-capable installer artifact`,
-    );
-    return;
-  }
-
-  const referencesUpdateArtifact = updateArtifacts.some((artifact) =>
-    metadata.includes(basename(artifact)),
-  );
-  if (!referencesUpdateArtifact) {
-    failures.push(
-      `${requirement.label} update metadata does not reference a generated update artifact`,
-    );
-  }
-}
-
 async function verifyPlatformArtifacts(platform) {
   const requirement = platformRequirements[platform];
   const matchedArtifacts = new Map();
   for (const extension of requirement.extensions) {
     matchedArtifacts.set(
       extension,
-      files.filter((filePath) => isInstallerArtifact(filePath, extension)),
+      files.filter((filePath) => filePath.endsWith(extension)),
     );
   }
 
@@ -249,15 +119,11 @@ async function verifyPlatformArtifacts(platform) {
     }
   }
 
-  await verifyUpdateMetadata(requirement, matchedArtifacts);
-
   return { requirement, matchedArtifacts };
 }
 
-await verifyPublishTarget();
-
 const verifiedPlatforms = [];
-for (const platform of getPlatformKeys()) {
+for (const platform of platformKeys) {
   verifiedPlatforms.push(await verifyPlatformArtifacts(platform));
 }
 
@@ -265,13 +131,7 @@ reportCheckFailures('Desktop installer artifact check', failures);
 
 for (const { requirement, matchedArtifacts } of verifiedPlatforms) {
   console.log(`${requirement.label} desktop installer artifact check passed:`);
-  console.log(
-    `- release target: ${expectedReleaseOwner}/${expectedReleaseRepo}`,
-  );
   console.log(`- ${relative(repoRoot, requirement.iconPath)}`);
-  console.log(
-    `- ${relative(repoRoot, join(desktopPackageRoot, requirement.updateMetadata))}`,
-  );
   for (const artifacts of matchedArtifacts.values()) {
     for (const artifact of artifacts) {
       console.log(`- ${relative(repoRoot, artifact)}`);

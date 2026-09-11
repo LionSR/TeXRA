@@ -12,8 +12,8 @@ state in desktop app storage.
 
 ## Availability
 
-The desktop app is in beta development. Public signed installers and automatic
-updates are not enabled until the Phase 6 release pipeline is complete.
+The desktop app is in beta development. Public signed installers are not
+published until the Phase 6 release pipeline is complete.
 
 Supported packaging targets:
 
@@ -24,9 +24,9 @@ Supported packaging targets:
 | Linux    | x64 AppImage and `.deb`  | Manual install and manual updates |
 
 When public distribution is ready, this page will link to the desktop release
-repository that contains only installer artifacts and update manifests. The
-desktop client must not require a `GH_TOKEN` or any other GitHub credential to
-check for updates.
+repository that holds the installers. The app checks that repository's latest
+release for a newer version and points you to it; it does not download or
+install updates itself, and it needs no `GH_TOKEN` or other GitHub credential.
 
 ## Installation
 

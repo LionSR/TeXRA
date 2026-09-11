@@ -10,11 +10,7 @@
 # during extension compile/package builds. The source of truth lives at the repo root.
 resources/skills/
 
-# Built by packages/trace-viewer's vite configs during `pnpm run package:fast`
+# Built by packages/trace-viewer during `pnpm run package:fast`
 # (prepare:trace-viewer-assets) — the single-file, fully self-contained
-# bundle (default export mode, opens via file:// with no server) used by the
-# `--export html` CLI export and the Settings view's "Export as HTML" button,
-# and the multi-file bundle (shared-assets / --assets-dir export mode, served
-# over http/https).
+# bundle behind every HTML trace export (opens via file:// with no server).
 resources/traceViewer/
-resources/traceViewerShared/

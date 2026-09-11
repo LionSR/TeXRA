@@ -1,11 +1,10 @@
 name: Release
 
 # Fires once a GitHub Release is published. Tags are cut in pairs off the same
-# commit: `vX.Y.Z` for the extension, `cli-vX.Y.Z` for the CLI (plus legacy
-# `vX.Y.Z-frontend` tags, excluded below). Creating the tag/release itself
-# stays a manual step (gh release create) so a human still curates the
-# changelog body and decides when to go public; this workflow only handles
-# the build + publish that follows.
+# commit: `vX.Y.Z` for the extension, `cli-vX.Y.Z` for the CLI. Creating the
+# tag/release itself stays a manual step (gh release create) so a human still
+# curates the changelog body and decides when to go public; this workflow only
+# handles the build + publish that follows.
 
 on:
   release:
@@ -151,9 +150,4 @@ jobs:
 
       - name: Publish @texra-ai/cli
         working-directory: packages/cli
-        # Provenance attestation requires a public source repository; this repo
-        # is private, so trusted-publishing auth still works but provenance
-        # generation must be disabled or npm rejects the publish with a 422.
-        env:
-          NPM_CONFIG_PROVENANCE: 'false'
         run: npm publish

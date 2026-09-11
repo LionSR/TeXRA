@@ -31,8 +31,8 @@ cd packages/desktop && pnpm exec playwright test
 
 # CLI TUI frame validator — drives the Ink TUI through a PTY and checks the
 # visible terminal frame for chat, slash commands, approvals, subagents, and
-# compact layouts. If the optional native node-pty dependency is unavailable,
-# the validator prints a skip notice instead of failing the install.
+# compact layouts. It fails when the native node-pty dependency is unavailable,
+# so a green run always means frames were exercised.
 corepack pnpm --filter @texra-ai/cli validate:tui
 
 # CLI TUI snapshot report — use this when a PR or issue needs terminal

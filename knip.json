@@ -39,9 +39,6 @@
         "design-harness/**/*.{ts,mjs}!"
       ],
       "project": ["src/**/*.{ts,tsx,mts}!"]
-    },
-    "packages/trace-viewer": {
-      "entry": ["vite.standalone.config.ts"]
     }
   }
 }

@@ -19,7 +19,7 @@ const runtimeResourceEntries = ['agents', 'goal', 'shared', 'tool_use_agents'];
 // too as a defensive fallback for anyone invoking copy-resources.mjs in
 // isolation, so a missing prerequisite build warns instead of failing the
 // whole resource copy.
-const optionalRuntimeResourceEntries = ['traceViewer', 'traceViewerShared'];
+const optionalRuntimeResourceEntries = ['traceViewer'];
 
 async function copyEntry(entry, { optional = false } = {}) {
   try {

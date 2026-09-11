@@ -22,8 +22,7 @@
 // `index.html` report for quick visual review in a browser or GitHub issue.
 //
 // Deps: node-pty (PTY; native) and @xterm/headless (pure JS). Missing deps fail
-// by default so validation cannot look green without exercising any frames.
-// Pass --skip-if-missing-deps only in environments that intentionally opt out.
+// validation so it cannot look green without exercising any frames.
 
 import {
   chmodSync,
@@ -33,18 +32,17 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseCittyArgs } from 'citty';
-import PQueue from 'p-queue';
+
+import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
 
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
@@ -3121,12 +3119,11 @@ const SCENARIOS = [
 
 function formatUsage() {
   return [
-    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [--skip-if-missing-deps] [scenario ...]',
+    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [scenario ...]',
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
     `  --no-build          Use the existing ${DEFAULT_HARNESS_RELATIVE_PATH} instead of rebuilding it`,
-    '  --skip-if-missing-deps  Exit 0 instead of failing when PTY screenshot deps are unavailable',
     '  --list, --list-scenarios',
     '                      Print available scenario names and exit',
     '  --list-selected     Print selected scenario names in run order and exit',
@@ -3156,7 +3153,6 @@ const PARSE_ARGS_DEF = {
   // property instead). Modeling the positive form and negating it is the
   // only way citty's `--no-*` negation syntax can drive this flag.
   build: { type: 'boolean', default: true },
-  skipIfMissingDeps: { type: 'boolean' },
   snapshotDir: { type: 'string' },
 };
 const KNOWN_FLAG_TOKENS = new Set([
@@ -3166,7 +3162,6 @@ const KNOWN_FLAG_TOKENS = new Set([
   '--list-scenarios',
   '--list-selected',
   '--no-build',
-  '--skip-if-missing-deps',
   '--snapshot-dir',
 ]);
 
@@ -3231,7 +3226,6 @@ function parseArgs(argv) {
     snapshotDir,
     listSelected: Boolean(args.listSelected),
     noBuild: args.build === false,
-    skipIfMissingDeps: Boolean(args.skipIfMissingDeps),
   };
 }
 
@@ -3346,27 +3340,6 @@ if (useExistingHarness) {
   }
 }
 
-function ensureNodePtySpawnHelperExecutable() {
-  if (process.platform === 'win32') return;
-
-  try {
-    const require = createRequire(import.meta.url);
-    const packageRoot = path.dirname(require.resolve('node-pty/package.json'));
-    const helperPath = path.join(
-      packageRoot,
-      'prebuilds',
-      `${process.platform}-${process.arch}`,
-      'spawn-helper',
-    );
-    if (!existsSync(helperPath)) return;
-
-    const mode = statSync(helperPath).mode;
-    if ((mode & 0o111) === 0) chmodSync(helperPath, mode | 0o755);
-  } catch {
-    // node-pty will report the underlying PTY load/spawn failure below.
-  }
-}
-
 // --- optional deps (guarded) ---------------------------------------------
 let ptySpawn;
 let Terminal;
@@ -3381,11 +3354,11 @@ try {
   }
 } catch (err) {
   console.error(
-    `[validate-tui] ${args.skipIfMissingDeps ? 'skipped' : 'failed'} — install the TUI dev deps to run this validator:\n` +
+    '[validate-tui] failed — install the TUI dev deps to run this validator:\n' +
       '  pnpm --filter @texra-ai/cli add -D node-pty @xterm/headless\n' +
       `  (${err instanceof Error ? err.message : String(err)})`,
   );
-  process.exit(args.skipIfMissingDeps ? 0 : 1);
+  process.exit(1);
 }
 
 // --- harness bundle ------------------------------------------------------
@@ -3395,7 +3368,7 @@ if (!useExistingHarness) {
   console.error('[validate-tui] building tui-harness bundle…');
   const r = spawnSync(
     process.execPath,
-    [path.join(CLI_ROOT, 'scripts', 'build-harness.mjs')],
+    [path.join(CLI_ROOT, 'scripts', 'build-bundle.mjs'), '--harness'],
     { cwd: CLI_ROOT, stdio: 'inherit' },
   );
   if (r.status !== 0 || !existsSync(HARNESS)) {
@@ -3954,9 +3927,10 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   let lastData = Date.now();
   let exited = null;
   let rawOutput = '';
-  const writeQueue = new PQueue({ concurrency: 1 });
+  // xterm applies writes in order, so an empty write's callback fires once
+  // every earlier chunk has landed in the buffer.
   const frameSnapshot = async () => {
-    await writeQueue.onIdle();
+    await new Promise((resolve) => term.write('', resolve));
     return renderFrame(term);
   };
   const childEnv = scenarioChildEnv(scenario, cols, rows);
@@ -3993,7 +3967,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   child.onData((d) => {
     lastData = Date.now();
     rawOutput += d;
-    writeQueue.add(() => new Promise((resolve) => term.write(d, resolve)));
+    term.write(d);
   });
 
   // boot: wait for the interactive input/status area to settle. Static

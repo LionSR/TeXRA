@@ -4,9 +4,8 @@ pnpm-lock.yaml
 # CLI validation-only bundle and copied resources
 packages/cli/.texra-validate-run/
 
-# Trace-viewer bundles copied into the extension at build time (git-ignored)
+# Trace-viewer bundle built into the extension at build time (git-ignored)
 packages/extension/resources/traceViewer/
-packages/extension/resources/traceViewerShared/
 
 # YAML templates with {{ }} placeholders - Prettier rewrites these as { { } }
 packages/extension/resources/templates/

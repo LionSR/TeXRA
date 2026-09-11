@@ -253,10 +253,11 @@ async function makeAssetsDestDir(prefix: string): Promise<string> {
   return path.join(cwd, 'shared-assets');
 }
 
-// The minimal bundled shared trace-viewer bundle: just an index.html.
-async function writeSharedViewerBundle(sharedDir: string): Promise<void> {
-  await mkdir(sharedDir, { recursive: true });
-  await writeFile(path.join(sharedDir, 'index.html'), '<html></html>');
+// The minimal bundled trace-viewer: just an index.html.
+async function writeViewerBundle(resourcesPath: string): Promise<void> {
+  const viewerDir = path.join(resourcesPath, 'traceViewer');
+  await mkdir(viewerDir, { recursive: true });
+  await writeFile(path.join(viewerDir, 'index.html'), '<html></html>');
 }
 
 describe('CLI history runtime', () => {
@@ -1019,14 +1020,12 @@ describe('CLI history runtime', () => {
       ).resolves.toBeNull();
     });
 
-    it('stages the bundled trace-viewer shared bundle into the destination directory', async () => {
+    it('stages the bundled trace-viewer page into the destination directory', async () => {
       const resourcesPath = await makeTempDir(
         'texra-history-export-src-',
         tempDirs,
       );
-      await writeSharedViewerBundle(
-        path.join(resourcesPath, 'traceViewerShared'),
-      );
+      await writeViewerBundle(resourcesPath);
       const destDir = await makeAssetsDestDir('texra-history-export-dest-');
 
       const result = await stageCliHistoryTraceViewerAssets({
@@ -1052,45 +1051,6 @@ describe('CLI history runtime', () => {
       });
 
       expect(result).toBe('missing');
-    });
-
-    it('merges into a pre-existing destination directory instead of nesting under it', async () => {
-      // A repeat export pointed at the same --assets-dir must not turn
-      // `<dir>/assets/index-xxx.js` into
-      // `<dir>/traceViewerShared/assets/index-xxx.js`.
-      const resourcesPath = await makeTempDir(
-        'texra-history-export-src-',
-        tempDirs,
-      );
-      const sharedDir = path.join(resourcesPath, 'traceViewerShared');
-      await writeSharedViewerBundle(sharedDir);
-      await mkdir(path.join(sharedDir, 'assets'), { recursive: true });
-      await writeFile(path.join(sharedDir, 'assets', 'index.js'), 'js-bytes');
-
-      const destDir = await makeAssetsDestDir('texra-history-export-dest-');
-      await mkdir(destDir, { recursive: true });
-      await writeFile(
-        path.join(destDir, 'trace.json'),
-        'pre-existing trace data',
-      );
-
-      await stageCliHistoryTraceViewerAssets({ resourcesPath, destDir });
-      // Stage again — the common "many exports, one shared dir" case.
-      const result = await stageCliHistoryTraceViewerAssets({
-        resourcesPath,
-        destDir,
-      });
-
-      expect(result).toBe('staged');
-      expect(await readFile(path.join(destDir, 'index.html'), 'utf8')).toBe(
-        '<html></html>',
-      );
-      expect(
-        await readFile(path.join(destDir, 'assets', 'index.js'), 'utf8'),
-      ).toBe('js-bytes');
-      expect(await readFile(path.join(destDir, 'trace.json'), 'utf8')).toBe(
-        'pre-existing trace data',
-      );
     });
 
     it('reads the bundled trace-viewer default template', async () => {
@@ -1168,12 +1128,10 @@ describe('CLI history runtime', () => {
         stderrSpy.mockRestore();
       });
 
-      /** Temp resources dir holding the bundled shared trace-viewer assets. */
+      /** Temp resources dir holding the bundled trace viewer. */
       async function makeStagedResources(prefix: string): Promise<string> {
         const resourcesPath = await makeTempDir(prefix, tempDirs);
-        await writeSharedViewerBundle(
-          path.join(resourcesPath, 'traceViewerShared'),
-        );
+        await writeViewerBundle(resourcesPath);
         return resourcesPath;
       }
 

@@ -17,12 +17,7 @@
 import { readFile } from 'node:fs/promises';
 import { normalize } from 'node:path';
 
-const TUI_PATH_SEGMENTS = [
-  normalize('packages/cli/src/chat/tui/'),
-  normalize('packages/cli/src/tui/'),
-  normalize('src/chat/tui/'),
-  normalize('src/tui/'),
-];
+const TUI_PATH_SEGMENTS = [normalize('src/chat/tui/'), normalize('src/tui/')];
 
 let babelPromise;
 async function getBabel() {
