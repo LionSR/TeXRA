@@ -30,3 +30,9 @@ patchedDependencies:
 # until they aged out, forcing a per-package allowlist. Disable it repo-wide so
 # reviewed bumps land immediately.
 minimumReleaseAge: 0
+
+# Keep the transitive platform-node-shared in the same Effect family as the
+# workspace pins; its rc.114 peer-requires an effect rc.114 that npm does not
+# have yet. Drop this override when the whole family moves to rc.114.
+overrides:
+  "@effect/platform-node-shared": 4.0.0-rc.113
