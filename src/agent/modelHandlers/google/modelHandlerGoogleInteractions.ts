@@ -25,7 +25,6 @@ import {
   type MediaAttachmentContext,
 } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { parseToolInputAsObject } from '@agent/core/flows/toolCallParsing';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
 import {
   GOOGLE_FINISH,
@@ -59,6 +58,7 @@ import { longRunningGoogleInteractionsFetch } from '@platform/defaults/longRunni
 import {
   type FileLocation,
   type MediaAttachmentKind,
+  type NormalizedUsage,
   type ToolDefinition,
   type ToolFileAttachment,
   type ToolResult,

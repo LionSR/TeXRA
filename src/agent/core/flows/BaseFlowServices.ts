@@ -4,10 +4,12 @@ import type {
   AgentPrompt,
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
-import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type { RunScope } from '@agent/runtime/RunScope';
+import type {
+  AgentRunStateSnapshot,
+  UserVariableChannels,
+} from '@shared/schemas';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (

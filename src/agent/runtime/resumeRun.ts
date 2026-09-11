@@ -30,6 +30,7 @@ import {
   AgentCategory,
   RUN_PHASE,
   RUN_SUBSTATE,
+  type ModelHandlerCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
@@ -50,7 +51,6 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { defaultSession, type SessionHandle } from './SessionHandle';
-import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 /**
  * `started` once the resumed generation has settled (a tool-use turn parked

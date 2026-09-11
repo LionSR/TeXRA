@@ -10,12 +10,12 @@
 
 import path from 'node:path';
 
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import {
   runStorageFilePath,
+  type AttachedMemoryMiss,
   type OutputFileSummary,
   type ResultDiffSummary,
   type ResultMeta,

@@ -22,6 +22,7 @@ import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   aggregateId as qualifyAggregateId,
+  type ModelHandlerCompatibilityKey,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type RunOutcome,
@@ -65,7 +66,6 @@ import {
 import { runInSession } from './RunContext';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
-import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const logger = createLog('executeAgent');
 

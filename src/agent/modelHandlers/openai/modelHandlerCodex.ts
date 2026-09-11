@@ -29,7 +29,6 @@ import type {
   ModelCredentialRoute,
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   CODEX_ACCOUNT_ID_HEADER,
   CODEX_BACKEND_BASE_URL,
@@ -48,6 +47,7 @@ import {
   type ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import type { NormalizedUsage } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { SDK_RETRIES_DISABLED } from '../support/auxiliaryRetry';

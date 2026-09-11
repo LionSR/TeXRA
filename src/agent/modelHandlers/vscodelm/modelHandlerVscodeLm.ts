@@ -3,7 +3,6 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 // Local imports
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -40,6 +39,7 @@ import {
 import type {
   FileLocation,
   MediaAttachmentKind,
+  NormalizedUsage,
   ToolDefinition,
   ToolFileAttachment,
   ToolResult,

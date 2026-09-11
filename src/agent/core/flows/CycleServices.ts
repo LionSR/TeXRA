@@ -1,14 +1,12 @@
 /** Service interfaces for cycle flows. */
 
-import type {
-  AgentRunStateSnapshot,
-  ConversationRoundStateSnapshot,
-} from '@agent/core/state/AgentState';
+import type { ConversationRoundStateSnapshot } from '@agent/core/state/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
+import type { AgentRunStateSnapshot } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 /**

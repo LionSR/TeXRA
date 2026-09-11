@@ -1,6 +1,5 @@
 // Local imports - agent
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 
 // Local imports - tools and utils
@@ -15,6 +14,7 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import type {
   FileLocation,
   MediaAttachmentKind,
+  NormalizedUsage,
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';

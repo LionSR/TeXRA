@@ -5,13 +5,14 @@ import {
   recordCycleMetrics,
 } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type {
-  AgentRunStateSnapshot,
-  ConversationRoundStateSnapshot,
-} from '@agent/core/state/AgentState';
+import type { ConversationRoundStateSnapshot } from '@agent/core/state/AgentState';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { buildFailedRetryInfo } from '@common/errors/sdkError/providerErrorFormat';
-import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
+import type {
+  AgentFileLocation,
+  AgentRunStateSnapshot,
+  RetryErrorInfo,
+} from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import {

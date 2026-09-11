@@ -11,16 +11,12 @@ import {
 
 // Local imports
 import { startCompactionActivity } from '@agent/trace';
-import type {
-  AgentWorkspaceState,
-  ThinkingBlock,
-} from '@agent/core/state/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   ModelHandler,
   type AssistantTextAppendOptions,
 } from '@agent/modelHandlers/ModelHandler';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import {
   ANTHROPIC_STOP,
@@ -50,7 +46,9 @@ import type {
   CompactionActivityOutcome,
   FileLocation,
   MediaAttachmentKind,
+  NormalizedUsage,
   StreamDiagnostics,
+  ThinkingBlock,
 } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/schemas';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';

@@ -12,7 +12,6 @@ import { addOutputText } from 'openai/lib/ResponsesParser';
 import { logProgressStatus, logWebSearch } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
@@ -46,6 +45,7 @@ import type {
 import {
   type FileLocation,
   type MediaAttachmentKind,
+  type NormalizedUsage,
   type ToolFileAttachment,
   type ToolResult,
 } from '@shared/schemas';

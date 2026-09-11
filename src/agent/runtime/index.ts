@@ -104,9 +104,6 @@ export {
   isTerminalPersistedCompileRejection,
 } from './persistedCompileRejection';
 
-// modelHandlerCompatibilityKey
-export { ModelHandlerCompatibilityKeySchema } from './modelHandlerCompatibilityKey';
-
 // helperModelName
 export { getHelperModelName } from './helperModelName';
 

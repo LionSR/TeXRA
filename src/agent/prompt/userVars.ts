@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
   AgentSetting,
   AgentPrompt,
@@ -10,10 +9,14 @@ import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import {
   USER_VAR_RUNTIME_TOKENS,
   type BuiltUserVars,
-  type UserVars,
 } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentDelegationScope, FileListEntry } from '@shared/schemas';
+import type {
+  AgentDelegationScope,
+  AttachedMemoryMiss,
+  FileListEntry,
+  UserVars,
+} from '@shared/schemas';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AgentCategory,

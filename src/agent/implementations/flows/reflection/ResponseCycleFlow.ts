@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { BaseNode, Flow } from '@agent/node';
 import { getSystemPromptWithRules } from '@agent/prompt/PromptBuilder';
 import { recordCycleMetrics } from '@agent/core/state/AgentState';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   type BaseCycleFields,
   defaultPostCompactionContext,
@@ -27,6 +26,7 @@ import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import {
   type AgentFileLocation,
   MESSAGE_TYPES,
+  type NormalizedUsage,
   OUTPUT_END_TAG,
   SCRATCHPAD_TAG,
 } from '@shared/schemas';

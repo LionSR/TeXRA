@@ -24,9 +24,8 @@ import {
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import { createLog } from '@logger/logUtils';
-import type { RunId } from '@shared/schemas';
+import type { ModelHandlerCompatibilityKey, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const logger = createLog('SessionResumeRetrieval');
 

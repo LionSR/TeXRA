@@ -1,10 +1,10 @@
 /** Google Interactions usage accounting and pricing. */
 
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   computeStandardPrice,
   type StandardPricingConfig,
 } from '@agent/modelHandlers/support/priceUtils';
+import type { NormalizedUsage } from '@shared/schemas';
 
 import { normalizeUsage } from '../support/UsageNormalizer';
 

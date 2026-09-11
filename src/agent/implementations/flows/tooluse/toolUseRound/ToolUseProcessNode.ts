@@ -9,11 +9,10 @@ import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { classifyProviderMessageBlockType } from '@agent/types/ConversationBlockTypes';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, type NormalizedUsage } from '@shared/schemas';
 import { isNonEmptyString, isObject } from '@utils/core';
 import { formatContent } from '@utils/text/xmlConversion';
 

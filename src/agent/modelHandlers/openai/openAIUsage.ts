@@ -8,11 +8,11 @@
  */
 
 import type { ExtendedCompletionUsage } from '@agent/types/ProviderUsage';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   computeStandardPrice,
   type StandardPricingConfig,
 } from '@agent/modelHandlers/support/priceUtils';
+import type { NormalizedUsage } from '@shared/schemas';
 
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ResponseUsage } from 'openai/resources/responses/responses';

@@ -1,66 +1,27 @@
 import { z } from 'zod';
 
-import {
-  AgentRunStateSnapshotSchema,
-  type AgentRunStateSnapshot,
-} from '@agent/core/state/AgentState';
-import {
-  AgentWorkspaceStateSnapshotSchema,
-  type AgentWorkspaceState,
-} from '@agent/core/state/AgentWorkspaceState';
-import {
-  UserVariableChannelsSchema,
-  type UserVariableChannels,
-} from '@agent/core/definition/AgentCycleOptions';
+import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   ProviderMessageArraySchema,
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
-import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { JsonValueSchema, RetryErrorInfoSchema } from '@shared/schemas';
-
-const StateSlicesSchema = z.object({
-  runStateSnapshot: AgentRunStateSnapshotSchema,
-  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-  userChannels: UserVariableChannelsSchema,
-});
-
-export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
+import {
+  ToolUseSnapshotStateSchema,
+  type AgentRunStateSnapshot,
+  type StateSlicesSnapshot,
+  type UserVariableChannels,
+} from '@shared/schemas';
 
 /**
- * Full persisted and live shared state for one tool-use flow.
- *
- * Default `z.object` semantics by decision (#10641), matching reflection's
- * shared schema: unknown top-level keys in a persisted record are accepted
- * but stripped at this parse boundary, and the resumed flow's first
- * persisted step then rewrites the stripped record. The strip is
- * one-directional: an upgrade → resume-on-older-build →
- * upgrade cycle permanently erases the newer build's unknown keys, so a
- * future load-bearing top-level field must be added with that erasure in
- * mind. Deliberately not `z.strictObject` — a record written by a newer
- * build carrying keys this build does not know must still resume — and no
- * `.catch`: malformed known fields must keep failing loudly.
+ * Full persisted and live shared state for one tool-use flow: the
+ * message-free core (`ToolUseSnapshotStateSchema`, the shape a
+ * `flow.snapshot` row carries) plus the provider messages, which only the
+ * agent layer may name. Parse semantics are the core's (#10641): unknown
+ * top-level keys are stripped, malformed known fields fail loudly.
  */
-export const ToolUseRunSharedSchema = z.object({
+export const ToolUseRunSharedSchema = ToolUseSnapshotStateSchema.extend({
   messages: ProviderMessageArraySchema,
-  /**
-   * The model the run is on, mirroring the live `ModelCell`. This is the
-   * resume SSOT for model identity.
-   */
-  modelId: z.string().optional(),
-  /** Provider-message format of the persisted messages. Absent for an
-   *  untagged handler (see `modelHandlersShareConversationFormat`). */
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.optional(),
-  shouldSkipCycle: z.boolean(),
-  stateSlices: StateSlicesSchema.nullable(),
-  /** Per-call system text for providers that do not embed it in messages. */
-  systemPrompt: z.string().optional(),
-  userCancelledRetry: z.boolean().optional(),
-  /** Distinguishes failure from cancellation during resume. */
-  lastError: RetryErrorInfoSchema.optional(),
-  /** Validated terminal-tool result retained across interrupt and resume. */
-  structured: JsonValueSchema.optional(),
 });
 
 export type ToolUseRunShared = z.output<typeof ToolUseRunSharedSchema>;

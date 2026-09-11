@@ -40,6 +40,7 @@ import {
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
+import type { ModelHandlerCompatibilityKey } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -49,7 +50,6 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
-import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const log = createLog('ModelFactory');
 

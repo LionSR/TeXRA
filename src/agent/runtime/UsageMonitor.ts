@@ -1,8 +1,8 @@
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type {
+  AgentRunStateSnapshot,
   RunId,
   ExtendedTokenUsageStats,
   UsageRoute,
