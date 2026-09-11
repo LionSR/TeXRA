@@ -1,5 +1,5 @@
 {
-  "$schema": "Placement and visibility for agents in prompts/agents/remote/. Seeded from production remote_agents on 2026-04-15. Update this file (not YAML) when an agent's storage folder or visibility tags change. The sync script only upserts names discovered under prompts/agents/remote/; any other remote_agents rows are left alone.",
+  "description": "Placement and visibility for the agents in this directory. Seeded from production remote_agents on 2026-04-15. Update this file (not YAML) when an agent's storage folder or visibility tags change. The sync script only upserts names discovered in this directory; any other remote_agents rows are left alone.",
   "agents": {
     "apply": { "folder": "researcher", "visibility": ["public"] },
     "criticize": {

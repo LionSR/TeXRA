@@ -9,6 +9,9 @@ by a specific package.
   may deliver remotely for whole-document transformations.
 - `agents/remote/tool_use/` contains canonical tool-use agents and specialists
   (including Lean 4 agents under `agents/remote/tool_use/Lean4/`).
+- `agents/remote/catalog.json` gives each remote agent its storage folder and
+  visibility; `npm run sync:remote-agents` turns it and the YAML into the
+  hosted catalog SQL.
 - `.github/prompts/` contains the public prompts used by the repository's
   AI-powered GitHub workflows. They stay next to the workflow configuration
   rather than being duplicated here.

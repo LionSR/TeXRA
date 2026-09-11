@@ -400,7 +400,7 @@ clients from `src/auth/config.ts`. Users configure nothing; they just sign in.
 Keeping generated SQL in the repo drifts from the YAML. The catalog is only:
 
 - `prompts/agents/remote/**/*.yaml` — prompt, tools, category
-- `docs/supabase/remote-agents.config.json` — storage folder and visibility
+- `prompts/agents/remote/catalog.json` — storage folder and visibility
 
 Preview the generated SQL (stdout only; nothing is written):
 
@@ -423,7 +423,7 @@ Before writing any metadata, `--apply` verifies that every catalog `storage_path
 ```bash
 # <source> is the YAML path under prompts/agents/remote/, including any
 # subdirectory (for example "workflow/apply.yaml" or "tool_use/Lean4/lean.yaml").
-# <folder> must match the agent's "folder" in docs/supabase/remote-agents.config.json.
+# <folder> must match the agent's "folder" in prompts/agents/remote/catalog.json.
 supabase storage cp "prompts/agents/remote/<source>" "ss:///agent-configs/<folder>/<agent>.yaml" --project-ref <PROJECT-REF>
 ```
 

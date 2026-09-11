@@ -73,9 +73,8 @@ function createFixtureCheckout(linkedRef?: string) {
   const root = mkdtempSync(join(tmpdir(), 'texra-remote-agents-test-'));
   mkdirSync(join(root, 'prompts/agents/remote'), { recursive: true });
   writeFileSync(join(root, 'prompts/agents/remote/apply.yaml'), AGENT_YAML);
-  mkdirSync(join(root, 'docs/supabase'), { recursive: true });
   writeFileSync(
-    join(root, 'docs/supabase/remote-agents.config.json'),
+    join(root, 'prompts/agents/remote/catalog.json'),
     PLACEMENT_CONFIG,
   );
   if (linkedRef !== undefined) {

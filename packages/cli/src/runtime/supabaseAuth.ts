@@ -224,7 +224,7 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
   const authorization = yield* requestDeviceAuthorization();
   options.onDeviceCode?.(authorization);
   const exchange = yield* pollForDeviceSession(authorization);
-  // The token endpoint mints a native GoTrue session (auth-github shape), so
+  // The token endpoint mints a native GoTrue session, so
   // standard Supabase refresh applies — no custom refresh flag.
   const session: SupabaseSession = toStorableSupabaseSession(exchange);
   yield* completeDeviceSession(() =>

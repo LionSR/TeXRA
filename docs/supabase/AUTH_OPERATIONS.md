@@ -75,9 +75,6 @@ After changing SMTP or hook settings, verify all of the following:
 4. The Before User Created hook is enabled and its logs show a normal allow or
    deny response.
 5. Existing OAuth sign-in still works.
-6. GitHub sign-up through `supabase/functions/auth-github/index.ts` still works.
-   That path uses `admin.createUser({ email_confirm: true })`, so it is not a
-   substitute for testing the email mailer path.
 
 Clean up disposable canary users after the test if they are not meant to remain
 in the project.

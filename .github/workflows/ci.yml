@@ -33,7 +33,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.detect.outputs.code }}
-      remote_agent_docs: ${{ steps.detect.outputs.remote_agent_docs }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -50,37 +49,21 @@ jobs:
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "Event '${{ github.event_name }}' -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
-            echo "remote_agent_docs=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           base='${{ github.event.pull_request.base.sha }}'
           head='${{ github.event.pull_request.head.sha }}'
           files="$(git diff --name-only "$base...$head")"
           # --name-status keeps a rename's source path on the R### line, so a
-          # rename of the drift-gate file is still detected as touching it.
+          # rename out of code into docs/ still counts as a code change.
           name_status="$(git diff --name-status "$base...$head")"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
-          # Catalog placement lives in remote-agents.config.json. Generated SQL
-          # is no longer committed.
-          #
-          # Parse --name-status fields explicitly. GNU grep's -E mode does not
-          # treat \t as a tab escape, so matching real tab separators through
-          # awk avoids a silent always-false drift gate. Field 1 is the status
-          # letter; every later field is a path (renames carry src and dst).
-          drift_gate_match() {
-            awk -F '\t' '{
-              for (i = 2; i <= NF; i++) {
-                if ($i == "docs/supabase/remote-agents.config.json") {
-                  found = 1
-                }
-              }
-            }
-            END { exit !found }'
-          }
-          # A file counts as "code" unless every changed path lives under docs/
-          # or is a *.md file. Remote-agent docs keep this classification: the
-          # drift check runs as a step of the docs build, not full validation.
+          # Parse --name-status fields explicitly with awk on real tab
+          # separators (GNU grep -E does not treat \t as a tab escape). Field 1
+          # is the status letter; every later field is a path (renames carry
+          # src and dst). A file counts as "code" unless every changed path
+          # lives under docs/ or is a *.md file.
           code_change_match() {
             awk -F '\t' '{
               for (i = 2; i <= NF; i++) {
@@ -90,23 +73,11 @@ jobs:
             END { exit !found }'
           }
 
-          # Self-test the classifiers before trusting them on real input, so a
+          # Self-test the classifier before trusting it on real input, so a
           # shell/awk regression fails CI instead of silently misrouting it.
           # Keep each positive case in its own invocation so `found` cannot
           # leak across records. The rename dest-only case is the one that
           # fails a field-2-only (or rename-skipping) matcher.
-          if ! printf 'M\tdocs/supabase/remote-agents.config.json\n' | drift_gate_match; then
-            echo 'drift-gate classifier self-test failed (modified gate file)' >&2
-            exit 1
-          fi
-          if ! printf 'R100\tdocs/supabase/remote-agents.config.json.old\tdocs/supabase/remote-agents.config.json\n' | drift_gate_match; then
-            echo 'drift-gate classifier self-test failed (rename dest only)' >&2
-            exit 1
-          fi
-          if printf 'M\tdocs/guide.md\n' | drift_gate_match; then
-            echo 'drift-gate classifier self-test failed (must not match non-gate docs)' >&2
-            exit 1
-          fi
           if ! printf 'M\tdocs/guide.md\nR100\tsrc/foo.ts\tdocs/foo.ts\n' | code_change_match; then
             echo 'code-change classifier self-test failed (rename into docs)' >&2
             exit 1
@@ -124,11 +95,6 @@ jobs:
             exit 1
           fi
 
-          if printf '%s\n' "$name_status" | drift_gate_match; then
-            echo "remote_agent_docs=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "remote_agent_docs=false" >> "$GITHUB_OUTPUT"
-          fi
           if printf '%s\n' "$name_status" | code_change_match; then
             echo "Non-docs changes detected -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
@@ -440,12 +406,6 @@ jobs:
       - name: Build docs site
         working-directory: docs
         run: npm run docs:build
-
-      # Runs even when an earlier step failed so a docs-only PR still gets the
-      # formatting, docs-build and catalog verdicts in one round trip.
-      - name: Check remote-agents catalog generates
-        if: ${{ !cancelled() && needs.changes.outputs.remote_agent_docs == 'true' }}
-        run: npm run sync:remote-agents
 
   validate-status:
     name: validate
