@@ -47,7 +47,7 @@ Against that, seven genuine gaps remain, and they are this document's content:
 | 3   | **`Context.Reference` is never proposed anywhere in the tree.** It is the exact native replacement for "ambient value with a default", and Effect 4 has no `FiberRef` at all.                                                | §3.2                      |
 | 4   | **`platform()` retirement has no per-domain order.** PRD Phase 7 says "by domain" and names no domain; the baseline holds 51 files.                                                                                          | §6 steps 3–5, 8–9         |
 | 5   | **The `Effect.provide` topology is specified three incompatible ways** across three docs and never reconciled. This is the core ambiguity of the injection half of the ask.                                                  | §3.1, §9 Q2               |
-| 6   | **The filesystem direction is unruled**, and it gates the context half: the audit's W6 (ALS retirement) is blocked on W1 (filesystem).                                                                                       | §9 Q1                     |
+| 6   | **The filesystem direction — RULED 2026-09-11: do not adopt `@effect/platform-node`'s `FileSystem`/`Path` for now.** Steps 9-10 are deferred, so W6 (ALS retirement) stays blocked and carrier 5 stays.                      | §9 Q1                     |
 | 7   | **`Stream` composition is unowned.** The pipeline half is specified for retry/scope/concurrency but no doc owns end-to-end streaming.                                                                                        | §3.3                      |
 
 One correction to the record, because it changes what "unmeasured" means: the largest
@@ -277,20 +277,20 @@ Every step names what it retires. Steps marked _seals_ add measurement only and 
 justified exception to "no preparation-only step" — without them a 100-file migration can
 grow its two largest injectors unnoticed while it is in flight.
 
-| #   | Step                                                                                                                                                                                                                                                              | Retires                                                                                                     | Rows                                                            | Alone?                | Cohort |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------- | ------ |
-| 1   | _Seals._ Seed two ratchet rows: `ambient:asyncLocalStorage` (~94 files / ~199 sites, counting **consumer** call sites per the script's own `DIRECTORY_ROWS` rationale) and `effectRuntime()` (~105 / ~330, `platformBindings()` re-pointed at a different module) | the ability to grow either injector                                                                         | seeds 2 rows                                                    | yes                   | —      |
-| 2   | Host root layers: each of the five composition roots builds one `Layer` and holds its `ManagedRuntime` in a local; CLI gets a single root, replacing the first-arrival latch                                                                                      | `installProcessRuntime`'s three positional callbacks; CLI `let pending`                                     | —                                                               | yes                   | —      |
-| 3   | **Credentials** → `Secrets` tag                                                                                                                                                                                                                                   | `Platform.secrets` + 36 sites                                                                               | `platform()` −39 sites, ~11 file rows vanish                    | yes                   | A      |
-| 4   | **Host capability singletons** → `SetupPlatform`, `ToolInjections`, `LogSink`                                                                                                                                                                                     | 3 module globals + the test-reset export                                                                    | `platform()` −10                                                | yes                   | A      |
-| 5   | **AppState** → `GlobalState` tag; `StateStore` becomes Effect-typed                                                                                                                                                                                               | `Platform.globalState`, `tryGlobalState()`                                                                  | `platform()` −24, `Effect.run*` −1                              | yes                   | —      |
-| 6   | **Run lifetime**: `Layer.effect(AgentRun, …)` in `executeAgent`; flip the `runner` seam at `AgentRunLifecycle.ts:479-482` from `Promise` to `Effect`                                                                                                              | `RunContext` ALS as the run's authority; both `AsyncLocalStorage.bind` sites; the launch-cancellation graph | `ambient` −(15–20), `AbortController` −3                        | yes                   | B      |
-| 7   | **Call lifetime**: `ToolCall` service; trace stage `Reference`                                                                                                                                                                                                    | `ToolFileInteractionContext` ALS (carrier 8), `TraceEmitter.stageScope` (carrier 7)                         | `ambient` −(43+14+3); carriers 5 → 3                            | no (needs 6)          | B      |
-| 8   | **Delete the flow engine**: both flow families become `Effect.fn` programs; `BaseNode`/`Flow`/`PersistedFlow` deleted                                                                                                                                             | `setServices()`, `_services`, `clone()`, the successor table, the graph-path cursor                         | `setServices()` → 0 (**row deleted**), `dep:@agent/node` −large | no (atomic)           | C      |
-| 9   | **Rooted filesystem I**: `BaseFS`/`AbsoluteFS`/`RelativeFS` become Effect functions over `FileSystem`+`Path`                                                                                                                                                      | `FileSystemProvider`, `nodeFilesystem.ts`                                                                   | `platform()` −30                                                | yes (**gated on Q1**) | D      |
-| 10  | **Rooted filesystem II**: `StorageFS`/`WorkspaceFS` take their root from context                                                                                                                                                                                  | `workspaceRoots.ts` **in full** (carrier 5)                                                                 | `ambient` −~79                                                  | no (needs 9)          | D      |
-| 11  | **Leases and per-key concurrency**                                                                                                                                                                                                                                | carrier 9 — the last ALS; `ownedLeases`; `unleasedWriteQueues`                                              | `ambient` → 0 (**row deleted**), `p-queue` 13 → ~5              | no                    | —      |
-| 12  | **Close-out**: delete `platform()`, `processRuntime.ts`, `SessionOwner`, and every emptied row                                                                                                                                                                    | the last three globals                                                                                      | `platform()` → 0, `effectRuntime()` → 0 (**rows deleted**)      | yes                   | —      |
+| #   | Step                                                                                                                                                                                                                                                              | Retires                                                                                                     | Rows                                                            | Alone?         | Cohort |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------- | ------ |
+| 1   | _Seals._ Seed two ratchet rows: `ambient:asyncLocalStorage` (~94 files / ~199 sites, counting **consumer** call sites per the script's own `DIRECTORY_ROWS` rationale) and `effectRuntime()` (~105 / ~330, `platformBindings()` re-pointed at a different module) | the ability to grow either injector                                                                         | seeds 2 rows                                                    | yes            | —      |
+| 2   | Host root layers: each of the five composition roots builds one `Layer` and holds its `ManagedRuntime` in a local; CLI gets a single root, replacing the first-arrival latch                                                                                      | `installProcessRuntime`'s three positional callbacks; CLI `let pending`                                     | —                                                               | yes            | —      |
+| 3   | **Credentials** → `Secrets` tag                                                                                                                                                                                                                                   | `Platform.secrets` + 36 sites                                                                               | `platform()` −39 sites, ~11 file rows vanish                    | yes            | A      |
+| 4   | **Host capability singletons** → `SetupPlatform`, `ToolInjections`, `LogSink`                                                                                                                                                                                     | 3 module globals + the test-reset export                                                                    | `platform()` −10                                                | yes            | A      |
+| 5   | **AppState** → `GlobalState` tag; `StateStore` becomes Effect-typed                                                                                                                                                                                               | `Platform.globalState`, `tryGlobalState()`                                                                  | `platform()` −24, `Effect.run*` −1                              | yes            | —      |
+| 6   | **Run lifetime**: `Layer.effect(AgentRun, …)` in `executeAgent`; flip the `runner` seam at `AgentRunLifecycle.ts:479-482` from `Promise` to `Effect`                                                                                                              | `RunContext` ALS as the run's authority; both `AsyncLocalStorage.bind` sites; the launch-cancellation graph | `ambient` −(15–20), `AbortController` −3                        | yes            | B      |
+| 7   | **Call lifetime**: `ToolCall` service; trace stage `Reference`                                                                                                                                                                                                    | `ToolFileInteractionContext` ALS (carrier 8), `TraceEmitter.stageScope` (carrier 7)                         | `ambient` −(43+14+3); carriers 5 → 3                            | no (needs 6)   | B      |
+| 8   | **Delete the flow engine**: both flow families become `Effect.fn` programs; `BaseNode`/`Flow`/`PersistedFlow` deleted                                                                                                                                             | `setServices()`, `_services`, `clone()`, the successor table, the graph-path cursor                         | `setServices()` → 0 (**row deleted**), `dep:@agent/node` −large | no (atomic)    | C      |
+| 9   | ~~**Rooted filesystem I**: `BaseFS`/`AbsoluteFS`/`RelativeFS` become Effect functions over `FileSystem`+`Path`~~ **DEFERRED (Q1 ruled 2026-09-11)**                                                                                                               | `FileSystemProvider`, `nodeFilesystem.ts`                                                                   | ~~`platform()` −30~~ (−14 real)                                 | not proceeding | D      |
+| 10  | ~~**Rooted filesystem II**: `StorageFS`/`WorkspaceFS` take their root from context~~ **DEFERRED (gated on 9)**                                                                                                                                                    | `workspaceRoots.ts` **in full** (carrier 5)                                                                 | ~~`ambient` −~79~~                                              | not proceeding | D      |
+| 11  | **Leases and per-key concurrency**                                                                                                                                                                                                                                | carrier 9 — the last ALS; `ownedLeases`; `unleasedWriteQueues`                                              | `ambient` → **not 0** while 10 is deferred, `p-queue` 13 → ~5   | no             | —      |
+| 12  | **Close-out**: delete `platform()`, `processRuntime.ts`, `SessionOwner`, and every emptied row                                                                                                                                                                    | the last three globals                                                                                      | `platform()` → 0, `effectRuntime()` → 0 (**rows deleted**)      | yes            | —      |
 
 Sequencing constraints that are not negotiable:
 
@@ -353,13 +353,53 @@ npm run check:dead-code-ratchet          # exports need consumers in the same PR
 
 ## 9. Open questions requiring an owner ruling
 
-**Q1 (highest leverage — gates steps 9–10 and the whole context half).** Adopt Effect's
-`FileSystem`/`Path` from `@effect/platform-node` (already a root production dependency,
-already used at `src/platform/defaults/jsonStore.ts:5`), or Effect-type TeXRA's own
-`BaseFS`/`RelativeFS`/`WorkspaceFS`? W6 is blocked on whichever is chosen, and W1 is one
-atomic PR turning ~25 non-Effect files into Effect programs. **Recommendation: adopt
-Effect's**, keeping TeXRA's separately justified atomic-publication, symlink and
-workspace-URI behavior as thin Effect functions over it.
+**Q1 — RULED 2026-09-11 (owner): do not adopt `@effect/platform-node`'s `FileSystem`/`Path`
+for now.** The question was whether to adopt Effect's own (already a root production
+dependency, already used at `src/platform/defaults/jsonStore.ts:5`) or to Effect-type
+TeXRA's `BaseFS`/`RelativeFS`/`WorkspaceFS`. This document recommended adopting Effect's;
+the owner ruled against it, provisionally ("so far" — revisitable, not settled forever).
+
+The measured evidence supports the ruling, and it postdates the recommendation above. A
+executed-then-reverted conversion of `listWorkspaceFiles` lives on
+`origin/claude/effect-ts-tracking-issues-usoj7h` as
+`2026-09-08-r1-filesystem-surface-experiment.md` (never merged to main). It was green on
+typecheck, lint, both ratchets and 8,884 tests, and still measured:
+
+- **7.1–9.7× slower (median 8.7×)** on a 3,096-file / 302-directory workspace — 3,913 extra
+  `stat` syscalls, because `FileSystem.readDirectory` returns `Array<string>` where TeXRA's
+  port returns `[name, typeBits][]` off `withFileTypes`.
+- **No `lstat`**, so the port's `isSymlink` is inexpressible, and `copy` cannot dereference —
+  which breaks `runPackRunDir`'s self-contained History snapshot.
+- Core `effect` ships **no working `FileSystem` layer**: `layerNoop`'s `exists()` returns
+  `succeed(false)` and seven methods fail `NotFound` for paths that exist — a
+  silent-degradation defect generator under CLAUDE.md's loud-failure rule.
+
+**Consequences, which are the point of recording this here.** Steps 9 and 10 are
+**deferred, not redirected** — the ruling does not select the "own" alternative as the way
+forward, it declines the adoption. So:
+
+- Step 9 (`BaseFS`/`AbsoluteFS`/`RelativeFS` → Effect functions) does not proceed.
+- Step 10 is gated on 9 and therefore also does not proceed, so **carrier 5
+  (`workspaceRoots.ts`: the ALS + process fallback + getter proxy) stays**, and the
+  promise-boundary audit's W6 (ALS retirement) remains blocked, as it has been.
+- The §6 arithmetic attributed to these steps does not land: `platform() −30` (really −14
+  guaranteed; see below) and `ambient −~79` are both off the table for now.
+- **The `ambient:asyncLocalStorage` row therefore cannot reach zero**, since step 10 was
+  the step that retired its largest contributor.
+
+Two corrections to this section's own framing, from re-derivation at HEAD: W1 is not "~25
+non-Effect files" — at `444439be76` it was **57 non-Effect direct callers (114 in the
+closure)** across **240 files / 81k LOC**, with 30 of 92 already using `Effect.fn`/`Effect.gen`.
+And step 9's promised `platform() −30` is only **−14 guaranteed** (`baseFS.ts` 13 +
+`storageFS.ts` 1); reaching −30 needs six files the step never names.
+
+**If this is revisited**, the experiment's own recommendation is the shape to start from,
+and it is neither of the two options as posed: split by capability. Keep `isSymlink`, a
+typed `readDirectory`, `writeFileAtomic`, `publishFile` and a dereferencing `copy` as
+TeXRA's, and move only plain read/write/copy/remove. That doc also records a hazard worth
+carrying regardless: **Promise → Effect conversions can pass typecheck at spread sites** —
+`...(await listWorkspaceFilesOfType(...))` compiled unchanged because `Effect` implements
+`Symbol.iterator`.
 
 **Q2.** Does §15 decision 8's "one `provide` at the process entry" permit the per-session
 `LayerMap` and the per-run `Layer.effect` this plan uses? §3.1 assumes yes and treats the
