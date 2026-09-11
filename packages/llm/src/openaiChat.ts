@@ -22,6 +22,7 @@ import {
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
+  completedTurn,
 } from './turn.js';
 
 type ChatTurn = Extract<
@@ -1960,22 +1961,8 @@ export function openaiChatModel(
       );
     });
 
-  const generateTurn: Model['generateTurn'] = Effect.fn('llm.generateTurn')(
-    function* (turn) {
-      const completed = yield* Stream.runFold(
-        streamTurn(turn),
-        () => null as TurnResult | null,
-        (result, event) => (event.kind === 'completed' ? event.result : result),
-      );
-      if (completed === null) {
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'The model stream produced no completed result.',
-        });
-      }
-      return completed;
-    },
-  );
+  const generateTurn: Model['generateTurn'] = (turn) =>
+    completedTurn(streamTurn(turn));
   const estimateInputTokens =
     config.protocol === 'kimi-chat' && config.supportsInputTokenEstimation
       ? Effect.fn('llm.estimateInputTokens')(function* (

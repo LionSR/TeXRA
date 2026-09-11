@@ -20,6 +20,7 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
+  completedTurn,
 } from './turn.js';
 
 type OpenRouterTurn = Extract<ResolvedTurn, { protocol: 'openrouter-chat' }>;
@@ -1273,20 +1274,7 @@ export function openrouterChatModel(
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const generateTurn: Model['generateTurn'] = Effect.fn('llm.generateTurn')(
-    function* (turn) {
-      const completed = yield* Stream.runFold(
-        streamTurn(turn),
-        () => null as TurnResult | null,
-        (result, event) => (event.kind === 'completed' ? event.result : result),
-      );
-      if (completed === null)
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'OpenRouter produced no completed result.',
-        });
-      return completed;
-    },
-  );
+  const generateTurn: Model['generateTurn'] = (turn) =>
+    completedTurn(streamTurn(turn));
   return { prepareTurn, streamTurn, generateTurn };
 }

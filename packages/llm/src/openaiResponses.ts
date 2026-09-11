@@ -35,6 +35,7 @@ import {
   type BackgroundSubmission,
   type Continuation,
   type RemoteOperation,
+  completedTurn,
 } from './turn.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
@@ -902,22 +903,6 @@ function responseEvents(
     return Stream.concat(progress, completion).pipe(Stream.mapError(enrich));
   });
 }
-
-const completedTurn = Effect.fn('llm.responses.generateTurn')(function* (
-  events: Stream.Stream<TurnEvent, ModelError>,
-) {
-  const result = yield* Stream.runFold(
-    events,
-    () => null as TurnResult | null,
-    (current, event) => (event.kind === 'completed' ? event.result : current),
-  );
-  if (result === null)
-    return yield* new ModelError({
-      kind: 'malformed-output',
-      message: 'The model stream produced no completed result.',
-    });
-  return result;
-});
 
 /** Owns only the foreign iterator lifetime shared by create and retrieve. */
 const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (

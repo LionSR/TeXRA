@@ -22,6 +22,7 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
+  completedTurn,
 } from './turn.js';
 import type {
   ContentBlockParam,
@@ -973,21 +974,8 @@ export function anthropicMessagesModel(
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const generateTurn: Model['generateTurn'] = Effect.fn(
-    'llm.anthropic.generateTurn',
-  )(function* (turn) {
-    const completed = yield* Stream.runFold(
-      streamTurn(turn),
-      () => null as TurnResult | null,
-      (result, event) => (event.kind === 'completed' ? event.result : result),
-    );
-    if (completed === null)
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'Anthropic produced no completed turn.',
-      });
-    return completed;
-  });
+  const generateTurn: Model['generateTurn'] = (turn) =>
+    completedTurn(streamTurn(turn));
   const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
     Effect.fn('llm.anthropic.estimateInputTokens')(function* (input) {
       const parsed = ResolvedTurnSchema.safeParse(input);
