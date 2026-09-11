@@ -75,8 +75,12 @@ return await parallel(
   not-reached. Hosts must not present plan entries as resolved calls, nor
   infer parallelism or dependencies from shared phase membership — the run
   snapshot's `queued`/`running` calls are the only source of real concurrency.
-- `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
-  typed result, `null` on failure, or the truthy
+- `agent(prompt, opts?)` — one subagent run; resolves to the host's
+  script-facing envelope (the host's `toScriptValue` over the runner's typed
+  result: in production the child's output plus `outcome` and `cost`, so a
+  workflow call reads `{ category, outcome, outputs, diffs, compileFailures,
+cost }` and a tool-use call `{ category, outcome, response, files,
+structured, cost }`), `null` on failure, or the truthy
   `'__WORKFLOW_SKIPPED__'` sentinel when an interactive user skips it. Exclude
   both non-results before synthesis.
   Set `opts.model` to an available model short name when a call needs a
@@ -103,7 +107,9 @@ return await parallel(
   `runAgent` callback. The production adapter in
   `src/tools/delegation/workflowScriptAgentRunner.ts` uses the in-band
   subagent execution path, so the engine consumes the run's `RunEnd`
-  (`run.end` payload) — never the XML follow-up delivery string. It
+  (`run.end` payload) — never the XML follow-up delivery string. The journal
+  records that `RunEnd`; the strategy's `toScriptValue` flattens it into the
+  documented `agent()` envelope at the one script-facing boundary. It
   also verifies task-run inputs against persisted child lineage and result
   manifests before passing them to a later workflow step.
 - **Restart-safe checkpoints**: one strict, versioned execution-KV record per

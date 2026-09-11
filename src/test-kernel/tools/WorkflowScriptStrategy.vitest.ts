@@ -143,6 +143,53 @@ describe('createWorkflowScriptStrategy', () => {
     );
   });
 
+  it('resolves a structured tool-use agent() call to the documented envelope', async () => {
+    // Regression: #12246 moved the child's result under `RunEnd.output`, and
+    // agent() handed scripts the RunEnd itself, so `.structured` read undefined.
+    const structuredEnd: RunEnd = {
+      outcome: 'completed',
+      usage: RunUsageTotalsSchema.parse({ totalCost: 0.1 }),
+      output: {
+        category: 'toolUse',
+        response: 'Solved.',
+        files: [],
+        structured: { answer: '(±23,±22)' },
+      },
+    };
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'structured-envelope',
+        script: `export const meta = {
+  name: 'structured-envelope',
+  description: 'reads the structured envelope',
+}
+return await agent('Solve.', {
+  agentName: 'prover',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['answer'],
+    properties: { answer: { type: 'string' } },
+  },
+})`,
+        createRunAgent: () => async () => structuredEnd,
+      }),
+    );
+
+    const turn = await Effect.runPromise(
+      strategy.launch(fakePorts(), new AbortController().signal),
+    );
+
+    expect(turn.result).toEqual({
+      category: 'toolUse',
+      outcome: 'completed',
+      response: 'Solved.',
+      files: [],
+      structured: { answer: '(±23,±22)' },
+      cost: 0.1,
+    });
+  });
+
   it('settles zero for a pure checkpoint replay', async () => {
     await runPersistedWorkflowScript({
       store: getRunStore(runId),
@@ -397,7 +444,7 @@ throw new Error('current revision failed')`,
     expect(errText).toContain('"taskTotal":0');
   });
 
-  it('retains live spend when the completed journal result is malformed', async () => {
+  it('retains live spend when the agent() result is malformed', async () => {
     const malformedScript = `export const meta = {
   name: 'malformed-cost',
   description: 'tests malformed journal cost settlement',
@@ -417,8 +464,10 @@ return await agent('saved call')`;
 
     await expect(
       Effect.runPromise(strategy.launch(ports, new AbortController().signal)),
-    ).rejects.toThrow('Workflow journal entry 0 is not a run result.');
-    expect(ports.recordCost.mock.calls).toEqual([[0.2]]);
+    ).rejects.toThrow('Workflow agent() result is not a run result');
+    // The live candidate, then the failure path's settlement of that same
+    // retained spend: the malformed result never reached the journal.
+    expect(ports.recordCost.mock.calls).toEqual([[0.2], [0.2]]);
   });
 });
 
@@ -567,8 +616,9 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     const turn = await launch;
     // The second attempt settles with the real result, and the call ran twice.
     expect(turn.result).toMatchObject({
-      output: { category: 'workflow' },
-      usage: { totalCost: 0.42 },
+      category: 'workflow',
+      outcome: 'completed',
+      cost: 0.42,
     });
     expect(fake.attempts()).toBe(2);
     expect(completedTaskCosts).toHaveLength(1);

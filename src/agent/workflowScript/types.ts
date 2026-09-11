@@ -293,8 +293,9 @@ export interface WorkflowAttemptFacts {
 /**
  * Host-provided executor for one `agent()` call. Tests use a fake; a
  * production host wires this to the in-band subagent run path so the
- * engine receives the typed `RunEnd` envelope, never the XML
- * follow-up delivery string.
+ * engine receives the typed `RunEnd`, never the XML follow-up delivery
+ * string. The journal records that result; the script sees
+ * {@link WorkflowScriptRunOptions.toScriptValue} of it.
  */
 export type WorkflowAgentRunner = (
   invocation: WorkflowAgentInvocation,
@@ -359,6 +360,14 @@ export interface WorkflowScriptRunOptions {
   /** Exposed to the script as the immutable global `files` object. */
   files?: WorkflowScriptFiles;
   runAgent: WorkflowAgentRunner;
+  /**
+   * Host projection from a runner result (live, or replayed from the journal)
+   * to the value `agent()` resolves to in the script. The journal keeps the
+   * runner's own result, so resume and cost accounting read one shape while
+   * the script sees the host's documented envelope. Omitted: the script sees
+   * the runner result unchanged.
+   */
+  toScriptValue?: (result: unknown) => unknown;
   /**
    * Host-owned fingerprint for external file dependencies referenced by one
    * agent() call. Required when the call carries file options: the engine

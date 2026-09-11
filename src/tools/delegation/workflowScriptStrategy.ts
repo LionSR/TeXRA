@@ -301,6 +301,20 @@ export function createWorkflowScriptStrategy(
                   // once": the engine's own default is a library fallback only.
                   concurrency: resolveChildRunConcurrencyBudget(),
                   runAgent,
+                  // The one place a child's terminal fact becomes the documented
+                  // agent() envelope: its output, flattened, beside the outcome and
+                  // cost. The journal keeps the `RunEnd` itself.
+                  toScriptValue: (value) => {
+                    const parsed = RunEndSchema.safeParse(value);
+                    if (!parsed.success) {
+                      throw new Error(
+                        `Workflow agent() result is not a run result: ${toErrorMessage(parsed.error)}`,
+                        { cause: parsed.error },
+                      );
+                    }
+                    const { outcome, usage, output } = parsed.data;
+                    return { ...output, outcome, cost: usage?.totalCost ?? 0 };
+                  },
                   fingerprintAgentDependencies:
                     params.fingerprintAgentDependencies,
                   onActivity: runLog.add,
