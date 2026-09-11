@@ -46,7 +46,7 @@ import type {
   TodoItem,
   ToolResult,
   ToolUseLog,
-  ToolUseStatus,
+  ToolCallStatus,
 } from '@shared/schemas';
 import {
   CodexSandboxModeSchema,
@@ -185,14 +185,22 @@ function logCodexItem(item: ThreadItem, logger: AgentTrace): void {
 
 function buildCodexLiveToolLog(
   item: ThreadItem,
-  status: ToolUseStatus,
+  status: ToolCallStatus,
 ): ToolUseLog | null {
   switch (item.type) {
     case 'command_execution':
       return buildCodexCommandToolLog(item);
     case 'file_change': {
+      // The builder owns the outcome, like the command and MCP builders: a
+      // failed patch stays `failed` even though `item.completed` asks for
+      // `completed`. Only the live pass may hold it at `in_progress`.
       const fileLog = buildCodexFileChangeToolLog(item);
-      return fileLog ? { ...fileLog, status } : null;
+      return fileLog
+        ? {
+            ...fileLog,
+            status: fileLog.status === 'failed' ? 'failed' : status,
+          }
+        : null;
     }
     case 'mcp_tool_call':
       return buildCodexMcpToolLog(item);
@@ -221,7 +229,7 @@ function updateCodexLiveToolLog(
 
 function publishCodexItemProgress(params: {
   item: ThreadItem;
-  status: ToolUseStatus;
+  status: ToolCallStatus;
   childRunId: RunId;
   logger: AgentTrace;
   refs: Map<string, ToolUseCardRef>;

@@ -13,9 +13,15 @@ export const WORKFLOW_RUN_LIFECYCLE = {
 const WorkflowRunLifecycleSchema = z.enum(WORKFLOW_RUN_LIFECYCLE);
 type WorkflowRunLifecycle = z.infer<typeof WorkflowRunLifecycleSchema>;
 
+/**
+ * The one status vocabulary of a workflow-script call, shared by the
+ * persisted row and the `workflow.call` progress card. `declared` is a
+ * `meta.tasks` plan label the script has not issued as a call, whatever
+ * stage gate it sits behind; every other status is an issued call.
+ */
 export const WORKFLOW_CALL_STATUS = {
+  DECLARED: 'declared',
   PLANNED: 'planned',
-  STAGE_BLOCKED: 'stageBlocked',
   QUEUED: 'queued',
   RUNNING: 'running',
   COMPLETED: 'completed',
@@ -24,8 +30,8 @@ export const WORKFLOW_CALL_STATUS = {
   SKIPPED: 'skipped',
   CACHED: 'cached',
 } as const;
-const WorkflowRunCallStatusSchema = z.enum(WORKFLOW_CALL_STATUS);
-type WorkflowRunCallStatus = z.infer<typeof WorkflowRunCallStatusSchema>;
+const WorkflowCallStatusSchema = z.enum(WORKFLOW_CALL_STATUS);
+export type WorkflowCallStatus = z.infer<typeof WorkflowCallStatusSchema>;
 
 /**
  * What an interactive control request does to the workflow-script `agent()`
@@ -88,7 +94,6 @@ const WorkflowRunCallBaseSchema = z.strictObject({
   files: WorkflowCallFilesSchema,
   attempts: z.array(WorkflowRunAttemptSchema),
   costUsd: z.number().nonnegative().optional(),
-  issued: z.never().optional(),
   kind: z.never().optional(),
   agent: z.never().optional(),
   model: z.never().optional(),
@@ -97,51 +102,27 @@ const WorkflowRunCallBaseSchema = z.strictObject({
   error: z.never().optional(),
 });
 
+/** Facts of the actual `agent()` invocation; every non-declared call has them. */
 const WorkflowRunIssuedCallSchema = WorkflowRunCallBaseSchema.extend({
-  /** Set at issue time; older persisted issued calls predate this marker. */
-  issued: z.literal(true).optional(),
-  kind: WorkflowCallKindSchema.optional(),
+  kind: WorkflowCallKindSchema,
   agent: z.string().optional(),
   /** Declared by the script at issue time, then the host-resolved model. */
   model: z.string().optional(),
   childRunId: RunIdSchema.optional(),
 });
 
-type MaybeIssuedCall = Pick<
-  z.infer<typeof WorkflowRunIssuedCallSchema>,
-  'issued' | 'kind'
->;
-
-function requireKindWhenExplicitlyIssued(
-  call: MaybeIssuedCall,
-  context: z.RefinementCtx,
-): void {
-  if (call.issued === true && call.kind === undefined) {
-    context.addIssue({
-      code: 'custom',
-      path: ['kind'],
-      message: 'An issued workflow call requires kind.',
-    });
-  }
-}
-
-function issuedCallVariant<Shape extends z.ZodRawShape>(shape: Shape) {
-  return WorkflowRunIssuedCallSchema.extend(shape).superRefine(
-    requireKindWhenExplicitlyIssued,
-  );
-}
-
-const WorkflowRunPlannedCallSchema = issuedCallVariant({
-  status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
-  timestamps: WorkflowRunLiveTimestampsSchema,
-});
-
-const WorkflowRunSkippedCallSchema = issuedCallVariant({
+/**
+ * A skipped call is the one status both a declared plan label and an issued
+ * call can end in: the settle sweep skips whatever the run never reached,
+ * and a user skips an issued call. Only the latter carries `kind`.
+ */
+const WorkflowRunSkippedCallSchema = WorkflowRunIssuedCallSchema.extend({
   status: z.literal(WORKFLOW_CALL_STATUS.SKIPPED),
+  kind: WorkflowCallKindSchema.optional(),
   settledBySweep: z.literal(true).optional(),
   timestamps: WorkflowRunTerminalTimestampsSchema,
 }).superRefine((call, context) => {
-  if (call.issued === undefined && call.settledBySweep !== true) {
+  if (call.kind === undefined && call.settledBySweep !== true) {
     context.addIssue({
       code: 'custom',
       path: ['settledBySweep'],
@@ -152,41 +133,43 @@ const WorkflowRunSkippedCallSchema = issuedCallVariant({
 
 /**
  * Canonical persisted state of one workflow-script call. Status owns the
- * lifecycle metadata it admits; issued invocation facts are a nested variant
- * only where one status can represent both a declared and an issued call.
+ * lifecycle metadata it admits.
  */
 const WorkflowRunCallSchema = z
   .discriminatedUnion('status', [
-    WorkflowRunPlannedCallSchema,
     WorkflowRunCallBaseSchema.extend({
-      status: z.literal(WORKFLOW_CALL_STATUS.STAGE_BLOCKED),
+      status: z.literal(WORKFLOW_CALL_STATUS.DECLARED),
       timestamps: WorkflowRunLiveTimestampsSchema,
     }),
-    issuedCallVariant({
+    WorkflowRunIssuedCallSchema.extend({
+      status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
+      timestamps: WorkflowRunLiveTimestampsSchema,
+    }),
+    WorkflowRunIssuedCallSchema.extend({
       status: z.literal(WORKFLOW_CALL_STATUS.QUEUED),
       timestamps: WorkflowRunLiveTimestampsSchema,
     }),
-    issuedCallVariant({
+    WorkflowRunIssuedCallSchema.extend({
       status: z.literal(WORKFLOW_CALL_STATUS.RUNNING),
       timestamps: WorkflowRunLiveTimestampsSchema,
     }),
-    issuedCallVariant({
+    WorkflowRunIssuedCallSchema.extend({
       status: z.literal(WORKFLOW_CALL_STATUS.COMPLETED),
       timestamps: WorkflowRunTerminalTimestampsSchema,
     }),
-    issuedCallVariant({
+    WorkflowRunIssuedCallSchema.extend({
       status: z.literal(WORKFLOW_CALL_STATUS.FAILED),
       settledBySweep: z.literal(true).optional(),
       error: z.string(),
       timestamps: WorkflowRunTerminalTimestampsSchema,
     }),
-    issuedCallVariant({
+    WorkflowRunIssuedCallSchema.extend({
       status: z.literal(WORKFLOW_CALL_STATUS.CANCELLED),
       settledBySweep: z.literal(true).optional(),
       timestamps: WorkflowRunTerminalTimestampsSchema,
     }),
     WorkflowRunSkippedCallSchema,
-    issuedCallVariant({
+    WorkflowRunIssuedCallSchema.extend({
       status: z.literal(WORKFLOW_CALL_STATUS.CACHED),
       timestamps: WorkflowRunTerminalTimestampsSchema,
     }),
@@ -218,7 +201,7 @@ const WorkflowRunCallSchema = z
   });
 export type WorkflowRunCall = z.infer<typeof WorkflowRunCallSchema>;
 
-type WorkflowRunCounts = Record<WorkflowRunCallStatus, number> & {
+type WorkflowRunCounts = Record<WorkflowCallStatus, number> & {
   readonly total: number;
   readonly waiting: number;
 };
@@ -227,18 +210,18 @@ type WorkflowRunCounts = Record<WorkflowRunCallStatus, number> & {
  * The one owner of "how many calls are in each state". Derived from the calls
  * themselves at the read boundary rather than stored beside them, so a tally
  * can never disagree with the array it summarizes. `waiting` is the composite
- * every consumer asks for: planned plus stage-blocked.
+ * every consumer asks for: every call not yet queued, declared plus planned.
  */
 export function deriveWorkflowCounts(
   calls: readonly Pick<WorkflowRunCall, 'status'>[],
 ): WorkflowRunCounts {
   const byStatus = Object.fromEntries(
     Object.values(WORKFLOW_CALL_STATUS).map((status) => [status, 0]),
-  ) as Record<WorkflowRunCallStatus, number>;
+  ) as Record<WorkflowCallStatus, number>;
   for (const call of calls) byStatus[call.status] += 1;
   return {
     total: calls.length,
-    waiting: byStatus.planned + byStatus.stageBlocked,
+    waiting: byStatus.declared + byStatus.planned,
     ...byStatus,
   };
 }
@@ -255,7 +238,7 @@ export function stageTitleFor(
   return snapshot.stages.find((stage) => stage.id === call.stageId)?.title;
 }
 
-export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowRunCallStatus> =
+export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowCallStatus> =
   new Set([
     WORKFLOW_CALL_STATUS.COMPLETED,
     WORKFLOW_CALL_STATUS.FAILED,

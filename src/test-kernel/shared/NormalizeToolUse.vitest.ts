@@ -21,7 +21,6 @@ describe('normalizeToolUseData', () => {
     expect(normalized?.input).toEqual({ command: 'ls' });
     expect(normalized?.outputText).toBe('foo\nbar');
     expect(normalized?.status).toBe('completed');
-    expect(normalized?.isError).toBe(false);
   });
 
   // Regression: a previous inline refactor of `formatOutputText` dropped
@@ -54,7 +53,6 @@ describe('normalizeToolUseData', () => {
       output: {
         output: 'stdout content',
         summary: 'ran 1 command',
-        isError: false,
       },
       status: 'completed',
     });
@@ -90,9 +88,8 @@ describe('normalizeToolUseData', () => {
       toolName: 'Bash',
       output: {
         summary: 'Background bash failed with exit code 2.',
-        isError: true,
       },
-      status: 'completed',
+      status: 'failed',
     });
 
     expect(fromError?.exitCode).toBe(7);
@@ -118,29 +115,25 @@ describe('normalizeToolUseData', () => {
     expect(normalized?.exitCode).toBeUndefined();
   });
 
-  it('reports errors via isError and errorText', () => {
+  it('reports errors via status and errorText', () => {
     const normalized = normalizeToolUseData({
       toolName: 'Bash',
-      output: { error: 'no such file', isError: true },
-      status: 'completed',
+      output: { error: 'no such file' },
+      status: 'failed',
     });
-    expect(normalized?.isError).toBe(true);
     expect(normalized?.status).toBe('failed');
     expect(normalized?.errorText).toBe('no such file');
     // headerSummary falls back to errorText when there's no summary
     expect(normalized?.headerSummary).toBe('no such file');
   });
 
-  it('treats a status-only runtime failure as an error', () => {
+  it('keeps a status-only runtime failure failed', () => {
     const normalized = normalizeToolUseData({
       toolName: 'Bash',
       status: 'failed',
     });
 
-    expect(normalized).toMatchObject({
-      isError: true,
-      status: 'failed',
-    });
+    expect(normalized).toMatchObject({ status: 'failed', errorText: '' });
   });
 
   it('treats userInstruction as a feedback marker', () => {

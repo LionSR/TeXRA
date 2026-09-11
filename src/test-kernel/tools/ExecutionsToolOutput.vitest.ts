@@ -486,6 +486,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             id: longCallId,
             label: '   ',
             stageId: longStageId,
+            kind: 'document',
             agent: 'writer',
             files: { input: longFiles, context: [], media: [] },
             childRunId: 'abcdef123456' as RunId,
@@ -534,7 +535,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.equal(result.status, 'executed');
     assert.ok(output.includes('"currentPhase"'));
     assert.ok(output.includes('"calls"'));
-    assert.ok(output.includes('"stageBlocked": 0'));
+    assert.ok(output.includes('"declared": 0'));
     assert.ok(output.includes('"childRunId": "abcdef123456"'));
     assert.ok(output.includes('"number": 3'));
     assert.ok(output.includes('"id": "222222222222"'));
@@ -569,7 +570,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           {
             id: 'cancelled-call',
             label: 'Cancelled call',
-            issued: true,
             kind: 'document',
             files: { input: [], context: [], media: [] },
             attempts: [],
@@ -610,6 +610,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         id: `completed-${index}`,
         label: `Completed ${index}`,
         stageId: 'stage-2',
+        kind: 'document' as const,
         files: { input: [], context: [], media: [] },
         attempts: [],
         status: 'completed' as const,
@@ -647,6 +648,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             id: 'older-failed',
             label: 'Older failed',
             stageId: 'stage-1',
+            kind: 'document',
             files: { input: [], context: [], media: [] },
             attempts: [
               {
@@ -688,6 +690,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       id: `current-terminal-${index}`,
       label: `Current terminal ${index}`,
       stageId: 'stage-2',
+      kind: 'document' as const,
       files: { input: [], context: [], media: [] },
       attempts: [],
       status: 'completed' as const,
@@ -724,6 +727,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             id: 'earlier-live',
             label: 'Earlier live',
             stageId: 'stage-1',
+            kind: 'document',
             files: { input: [], context: [], media: [] },
             attempts: [{ number: 1, startedAt: timestamp }],
             status: 'running',

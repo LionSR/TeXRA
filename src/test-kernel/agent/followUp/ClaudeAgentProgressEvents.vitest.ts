@@ -191,8 +191,7 @@ describe('claude agent progress events', () => {
           summary: 'Read missing.tex',
           input: { file_path: 'missing.tex' },
           error: 'File not found',
-          isError: true,
-          status: 'completed',
+          status: 'failed',
         }),
       ]);
     });

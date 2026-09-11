@@ -195,7 +195,7 @@ describe('codex progress events', () => {
       toolName: CODEX_TURN_TOOL,
       input: { state: 'failed' },
       error: 'boom',
-      isError: true,
+      status: 'failed',
     });
   });
 
@@ -207,12 +207,12 @@ describe('codex progress events', () => {
     await runStreamedTurn(thread, 'Do the thing', runId, logger);
 
     const turnEntry = findTurnEntry(store);
-    // Even without an error message the card is marked as an error so the
-    // progress view renders failure chrome instead of a success check.
+    // Even without an error message the card is failed so the progress view
+    // renders failure chrome instead of a success check.
     expect(turnEntry).toMatchObject({
       toolName: CODEX_TURN_TOOL,
       input: { state: 'failed' },
-      isError: true,
+      status: 'failed',
     });
     expect(turnEntry).not.toHaveProperty('error');
   });

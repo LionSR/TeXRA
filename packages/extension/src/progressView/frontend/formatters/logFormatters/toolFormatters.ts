@@ -17,7 +17,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
 import type { ToolRow } from '@shared/transcript';
-import { parseDelegationToolInput, TOOL_USE_STATUS } from '@shared/schemas';
+import { parseDelegationToolInput, TOOL_CALL_STATUS } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
@@ -129,7 +129,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
   if (
     model.outputSuppression === 'empty' &&
     !model.isError &&
-    model.status === TOOL_USE_STATUS.COMPLETED &&
+    model.status === TOOL_CALL_STATUS.COMPLETED &&
     (displayKind === 'bash' || isMcpToolName(toolName))
   ) {
     // prettier-ignore

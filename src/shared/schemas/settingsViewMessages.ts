@@ -401,14 +401,14 @@ export type UpdateAgentModePresetsMessage = z.infer<
 // Tool dashboard data schemas
 // ============================================================
 
-/** Status of a tool dependency */
-const ToolStatusSchema = z.enum([
+/** Availability of a tool dependency (not a tool call's `ToolCallStatus`). */
+const ToolDependencyStatusSchema = z.enum([
   'available',
   'not-found',
   'unknown',
   'coming-soon',
 ]);
-export type ToolStatus = z.infer<typeof ToolStatusSchema>;
+export type ToolDependencyStatus = z.infer<typeof ToolDependencyStatusSchema>;
 
 /** Category for grouping tools in the dashboard */
 const ToolCategorySchema = z.enum([
@@ -450,7 +450,7 @@ const ToolDashboardItemSchema = z.strictObject({
   category: ToolCategorySchema,
   description: z.string(),
   tools: z.array(ToolInfoSchema),
-  status: ToolStatusSchema,
+  status: ToolDependencyStatusSchema,
   requiresSetup: z.boolean(),
   statusLabel: z.string().optional(),
   installActions: z.array(ToolInstallActionSchema),

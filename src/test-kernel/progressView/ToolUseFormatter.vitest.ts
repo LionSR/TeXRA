@@ -228,7 +228,7 @@ return { papers, question: args.question };`;
       toolName: 'bash',
       input: { command: 'lake build' },
       error: `Foreground command timed out after 600s. <stdout>${stdout}`,
-      isError: true,
+      status: 'failed',
     });
 
     const container = renderTemplate(formatToolUseTemplate(row));

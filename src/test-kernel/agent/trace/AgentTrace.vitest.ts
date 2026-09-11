@@ -98,7 +98,6 @@ describe('emitToolUseCard', () => {
         toolName: 'todo_write',
         input: { items: [] },
         output: 'ok',
-        isError: false,
         status: 'completed',
       },
     },
@@ -107,7 +106,6 @@ describe('emitToolUseCard', () => {
       card: {
         toolName: 'bash',
         input: { command: 'false' },
-        isError: true,
         status: 'failed',
       },
     },

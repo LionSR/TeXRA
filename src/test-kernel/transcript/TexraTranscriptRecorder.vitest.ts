@@ -6,7 +6,7 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
-  TOOL_USE_STATUS,
+  TOOL_CALL_STATUS,
   ToolUseLogSchema,
   type StreamLogEntry,
   type RunId,
@@ -262,8 +262,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       settlementSeqNo: 3,
       data: {
         status: 'failed',
-        error: 'The stream ended before this tool completed.',
-        isError: true,
+        error: 'The run ended before this tool completed.',
       },
     });
     expect(row('task:planned')).not.toHaveProperty('settlementSeqNo');
@@ -278,7 +277,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
     });
     trace.toolEnd({
       logId: 'tool:pending',
-      status: TOOL_USE_STATUS.COMPLETED,
+      status: TOOL_CALL_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'late result' },
     });
     expect(row(response.id)).toMatchObject({
@@ -290,7 +289,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
       settlementSeqNo: 3,
       data: {
         status: 'failed',
-        error: 'The stream ended before this tool completed.',
+        error: 'The run ended before this tool completed.',
       },
     });
 
@@ -383,7 +382,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
     });
     trace.toolEnd({
       logId: 'tool:resumed',
-      status: TOOL_USE_STATUS.COMPLETED,
+      status: TOOL_CALL_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'done' },
     });
 

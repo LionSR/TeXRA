@@ -75,10 +75,7 @@ export class WorkflowRunState {
           }),
           files: { input: [], context: [], media: [] },
           attempts: [],
-          status:
-            task.phase === undefined
-              ? WORKFLOW_CALL_STATUS.PLANNED
-              : WORKFLOW_CALL_STATUS.STAGE_BLOCKED,
+          status: WORKFLOW_CALL_STATUS.DECLARED,
           timestamps: { createdAt: timestamp, updatedAt: timestamp },
         };
       }),
@@ -145,18 +142,6 @@ export class WorkflowRunState {
     active.completedAt = undefined;
     this.#snapshot.currentStageId = active.id;
     this.#snapshot.lifecycle = WORKFLOW_RUN_LIFECYCLE.ACTIVE;
-    for (const [index, call] of this.#snapshot.calls.entries()) {
-      if (
-        call.stageId === active.id &&
-        call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
-      ) {
-        this.#snapshot.calls[index] = {
-          ...call,
-          status: WORKFLOW_CALL_STATUS.PLANNED,
-          timestamps: { ...call.timestamps, updatedAt: transitionAt },
-        };
-      }
-    }
     this.#emit();
   }
 
@@ -199,7 +184,6 @@ export class WorkflowRunState {
     const canonical = {
       label: definition.label,
       stageId: stageIndex < 0 ? undefined : stageIdFor(stageIndex),
-      issued: true as const,
       kind: definition.kind,
       files: definition.files,
       ...(definition.agent !== undefined && { agent: definition.agent }),
@@ -401,8 +385,8 @@ export class WorkflowRunState {
         completedAt,
       };
       if (
-        call.status === WORKFLOW_CALL_STATUS.PLANNED ||
-        call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
+        call.status === WORKFLOW_CALL_STATUS.DECLARED ||
+        call.status === WORKFLOW_CALL_STATUS.PLANNED
       ) {
         if (call.stageId) sweepSettledStageIds.add(call.stageId);
         this.#snapshot.calls[index] = {
@@ -577,8 +561,8 @@ function recoverCall(
     };
   }
   if (
-    fresh.status !== WORKFLOW_CALL_STATUS.PLANNED &&
-    fresh.status !== WORKFLOW_CALL_STATUS.STAGE_BLOCKED
+    fresh.status !== WORKFLOW_CALL_STATUS.DECLARED &&
+    fresh.status !== WORKFLOW_CALL_STATUS.PLANNED
   ) {
     throw new Error(`Fresh workflow call ${fresh.id} is not a plan stub.`);
   }
@@ -624,7 +608,7 @@ function hydrate(
       files: prior.files,
       attempts,
       costUsd: totalAttemptCost(attempts),
-      status: WORKFLOW_CALL_STATUS.PLANNED,
+      status: WORKFLOW_CALL_STATUS.DECLARED,
       timestamps: {
         createdAt: prior.timestamps.createdAt,
         updatedAt: recoveryAt,

@@ -42,7 +42,7 @@ function recordingSnapshots(): {
 }
 
 describe('workflow run observability', () => {
-  it('keeps later tasks stage-blocked, advances stages monotonically, and skips unreached work', async () => {
+  it('keeps later tasks declared, advances stages monotonically, and skips unreached work', async () => {
     const { snapshots, onSnapshot } = recordingSnapshots();
     const result = await runWorkflowScript({
       script: `${META}phase('Draft')
@@ -52,13 +52,23 @@ return 'done'`,
       onSnapshot,
     });
 
+    // Stage gating: the later-phase call is declared in some snapshot, and
+    // wherever it is declared its own stage is still unreached (waiting, or
+    // skipped by the settle sweep), never a stage the run has entered.
+    const declaredReviewStages = snapshots.flatMap((snapshot) => {
+      const review = snapshot.calls.find((call) => call.id === 'review');
+      if (review?.status !== 'declared') return [];
+      const stage = snapshot.stages.find(
+        (entry) => entry.id === review.stageId,
+      );
+      return [stage?.lifecycle ?? 'unstaged'];
+    });
+    expect(declaredReviewStages.length).toBeGreaterThan(0);
     expect(
-      snapshots.some(
-        (snapshot) =>
-          snapshot.calls.find((call) => call.id === 'review')?.status ===
-          'stageBlocked',
+      declaredReviewStages.filter(
+        (lifecycle) => lifecycle !== 'waiting' && lifecycle !== 'skipped',
       ),
-    ).toBe(true);
+    ).toEqual([]);
     // Drain-time cloning: every delivered snapshot is its own isolated copy.
     expect(new Set(snapshots).size).toBe(snapshots.length);
     expect(result.snapshot.stages.map((stage) => stage.lifecycle)).toEqual([

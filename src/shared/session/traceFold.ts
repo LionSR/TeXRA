@@ -11,7 +11,7 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
-  TOOL_USE_STATUS,
+  TOOL_CALL_STATUS,
   isTerminalWorkflowCallProgress,
   type LogLevel,
   type MessageType,
@@ -167,7 +167,7 @@ export function createTranscriptFold(
         const data = {
           toolName: event.toolName,
           input: event.input,
-          status: TOOL_USE_STATUS.IN_PROGRESS,
+          status: TOOL_CALL_STATUS.IN_PROGRESS,
         } satisfies ToolUseLog;
         writer.append({
           id: event.logId,
@@ -196,7 +196,7 @@ export function createTranscriptFold(
             status: event.status,
           } as ToolUseLog,
         } satisfies StreamLogUpdatePatch;
-        if (event.status === TOOL_USE_STATUS.IN_PROGRESS) {
+        if (event.status === TOOL_CALL_STATUS.IN_PROGRESS) {
           writer.update(event.logId, patch);
           activeToolEntries.set(event.logId, patch.data);
         } else {
@@ -439,9 +439,8 @@ export function createTranscriptFold(
       writer.settle(id, {
         data: {
           ...data,
-          status: TOOL_USE_STATUS.FAILED,
-          error: 'The stream ended before this tool completed.',
-          isError: true,
+          status: TOOL_CALL_STATUS.FAILED,
+          error: 'The run ended before this tool completed.',
         } satisfies ToolUseLog,
       });
     }

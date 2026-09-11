@@ -66,14 +66,15 @@ return await parallel(
   place.
   Scripts whose call set is data-dependent may omit the plan.
   A plan entry is a **label, not a call**: it carries no agent, model, files,
-  or result contract, and nothing guarantees the script reaches it. The
-  execution snapshot keeps the two apart — a call is stamped `issued` (with
-  its `kind`, declared `model`, agent, and file basenames) only when the
-  script actually issues `agent()`; an unissued plan entry projects as a
-  `declared` card and settles as not-reached. Hosts must not present plan
-  entries as resolved calls, nor infer parallelism or dependencies from
-  shared phase membership — the snapshot's `queued`/`running` calls are the
-  only source of real concurrency.
+  or result contract, and nothing guarantees the script reaches it. Status is
+  what keeps the two apart in `WorkflowRunSnapshot` — a `declared` call is a
+  plan label the script has not issued, and every other status is an issued
+  call, carrying the invocation facts (`kind`, plus the declared `model`,
+  agent, and file basenames) the script supplied when it called `agent()`. A
+  plan entry the run never reaches stays `declared` and settles as
+  not-reached. Hosts must not present plan entries as resolved calls, nor
+  infer parallelism or dependencies from shared phase membership — the run
+  snapshot's `queued`/`running` calls are the only source of real concurrency.
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
   typed result, `null` on failure, or the truthy
   `'__WORKFLOW_SKIPPED__'` sentinel when an interactive user skips it. Exclude

@@ -17,7 +17,7 @@
  *    never reaches into the model registry (which is not browser-safe).
  */
 import {
-  TOOL_USE_STATUS,
+  TOOL_CALL_STATUS,
   isTerminalWorkflowCallProgress,
   type ContextManagementData,
   type DiffResultDisplay,
@@ -332,8 +332,8 @@ export function isSettledRow(
       return !row.streaming && hasLaterRow;
     case 'tool':
       return (
-        row.toolUse.status === TOOL_USE_STATUS.COMPLETED ||
-        row.toolUse.status === TOOL_USE_STATUS.FAILED
+        row.toolUse.status === TOOL_CALL_STATUS.COMPLETED ||
+        row.toolUse.status === TOOL_CALL_STATUS.FAILED
       );
     case 'workflowTask':
       return isTerminalWorkflowCallProgress(row.call);

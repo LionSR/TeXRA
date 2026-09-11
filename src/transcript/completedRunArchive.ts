@@ -8,6 +8,7 @@ import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  TOOL_CALL_STATUS,
   ToolResultSchema,
   type RunId,
   type StreamLogEntry,
@@ -60,7 +61,7 @@ function toolResultText(tool: ToolUseLog): string | undefined {
   if (isObject(tool.output)) {
     const result = ToolResultSchema.safeParse({
       ...tool.output,
-      status: tool.isError ? 'error' : 'executed',
+      status: tool.status === TOOL_CALL_STATUS.FAILED ? 'error' : 'executed',
     });
     if (result.success) return formatToolResultAsText(result.data);
   }

@@ -229,9 +229,8 @@ function durable<T extends string, S extends z.ZodRawShape>(
  * launching run; `startCommit` is that run's creation commit, stamped by the
  * database inside the child's creation transaction so a logical id a
  * workflow-script retry reuses can never redirect the child to a later
- * incarnation of its parent. Everything else that used to spell the edge
- * (`parentStreamId`, `parentExecutionId`, `isSubagent`,
- * `background`) is `parent !== null`, computed from the fold or the handle.
+ * incarnation of its parent. Any other spelling of the edge is
+ * `parent !== null`, computed from the fold or the handle.
  */
 const RunParentSchema = z.object({
   id: RunIdSchema,

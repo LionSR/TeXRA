@@ -49,7 +49,7 @@ export function cliRunResultPayload<R extends { readonly runId: string }>(
 export function toolUseResultText(result: CliToolUseRunResult): string {
   return (
     result.output.response.trim() ||
-    `${runOutcomeToCliRunStatus(result.outcome)}\nExecution: ${result.runId}`
+    `${runOutcomeToCliRunStatus(result.outcome)}\nRun: ${result.runId}`
   );
 }
 

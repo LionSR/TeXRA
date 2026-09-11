@@ -63,8 +63,7 @@ describe('buildCodexFileChangeToolLog', () => {
         patchStatus: 'failed',
       },
       error: 'Patch apply failed',
-      isError: true,
-      status: 'completed',
+      status: 'failed',
     });
   });
 });
@@ -107,8 +106,7 @@ describe('buildCodexCommandToolLog', () => {
       },
       output: '(exit 1)',
       error: 'Command failed (exit 1)',
-      isError: true,
-      status: 'completed',
+      status: 'failed',
     });
   });
 
@@ -126,8 +124,7 @@ describe('buildCodexCommandToolLog', () => {
       input: { command: 'lake build' },
       output: 'sandbox denied',
       error: 'Command failed (exit 0)',
-      isError: true,
-      status: 'completed',
+      status: 'failed',
     });
   });
 });

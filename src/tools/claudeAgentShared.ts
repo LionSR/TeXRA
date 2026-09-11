@@ -5,7 +5,7 @@ import type {
   ClaudeAgentEffort,
   TokenUsageStats,
   ToolUseLog,
-  ToolUseStatus,
+  ToolCallStatus,
 } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -137,7 +137,7 @@ function toToolInputRecord(
 export function buildClaudeToolUseLog(params: {
   toolName: string;
   input: unknown;
-  status: ToolUseStatus;
+  status: ToolCallStatus;
 }): ToolUseLog {
   const summarySource = describeToolInput(params.toolName, params.input);
   return {

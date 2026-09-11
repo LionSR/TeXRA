@@ -9,10 +9,10 @@
 import yaml from 'yaml';
 
 import {
-  TOOL_USE_STATUS,
+  TOOL_CALL_STATUS,
   ToolUseLogSchema,
   type NormalizedToolUse,
-  type ToolUseStatus,
+  type ToolCallStatus,
 } from '@shared/schemas';
 import { clamp, isObject } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -33,7 +33,6 @@ function extractOutputContent(candidate: unknown): unknown {
     output,
     summary: _summary,
     error: _error,
-    isError: _isError,
     diagnostics: _diagnostics,
     userInstruction: _userInstruction,
     ...rest
@@ -104,12 +103,6 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
 
   const toolName = trimmedOrNull(validated.toolName) ?? '';
   const isUserFeedback = userInstructionText.length > 0;
-  const isError = Boolean(
-    validated.status === TOOL_USE_STATUS.FAILED ||
-    validated.isError ||
-    nested.isError ||
-    errorText,
-  );
 
   const headerSummary = summaryText || (isUserFeedback ? '' : errorText);
   const exitCode = normalizedExitCode(
@@ -125,13 +118,9 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     ...(exitCode !== undefined ? { exitCode } : {}),
     userInstructionText,
     input: validated.input,
-    isError,
     isUserFeedback,
     headerSummary,
-    status:
-      isError && validated.status === TOOL_USE_STATUS.COMPLETED
-        ? TOOL_USE_STATUS.FAILED
-        : validated.status,
+    status: validated.status,
   };
 }
 
@@ -142,14 +131,16 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
  */
 const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
 
-const TOOL_USE_STATUS_VALUES = new Set<string>(Object.values(TOOL_USE_STATUS));
+const TOOL_CALL_STATUS_VALUES = new Set<string>(
+  Object.values(TOOL_CALL_STATUS),
+);
 
 /** Recover a source-owned status without accepting an invalid enum member. */
-function validSourceToolUseStatus(data: unknown): ToolUseStatus | undefined {
+function validSourceToolCallStatus(data: unknown): ToolCallStatus | undefined {
   if (!isObject(data)) return undefined;
   const status = data.status;
-  return typeof status === 'string' && TOOL_USE_STATUS_VALUES.has(status)
-    ? (status as ToolUseStatus)
+  return typeof status === 'string' && TOOL_CALL_STATUS_VALUES.has(status)
+    ? (status as ToolCallStatus)
     : undefined;
 }
 
@@ -197,9 +188,10 @@ function malformedPrimitiveReason(data: unknown): string {
  * becomes a visible failed tool row instead of being dropped (CLI) or falling
  * through to the default log template (webview).
  *
- * The fallback keeps the row live unless the source itself carries a valid
- * terminal `status`, so a temporarily malformed in-progress row can still be
- * replaced by a later corrected payload in the append-only transcript. It
+ * The fallback keeps the row live only while the source itself says the call
+ * is still in progress, so a temporarily malformed in-progress row can still
+ * be replaced by a later corrected payload in the append-only transcript;
+ * anything else renders as failed rather than as a quiet success. It
  * preserves only independently usable fields (`toolName` when a string,
  * `input` from `data.input`) and keeps the bounded diagnostic out of the
  * normal tool input/output sections. Unknown tool names and unstructured
@@ -212,7 +204,7 @@ export function normalizeToolUseForRender(data: unknown): NormalizedToolUse {
 
 function malformedToolUseFallback(data: unknown): NormalizedToolUse {
   const diagnostic = malformedToolUseDiagnostic(data);
-  const status = validSourceToolUseStatus(data);
+  const sourceStatus = validSourceToolCallStatus(data);
   return {
     toolName:
       isObject(data) && typeof data.toolName === 'string' ? data.toolName : '',
@@ -220,10 +212,15 @@ function malformedToolUseFallback(data: unknown): NormalizedToolUse {
     outputText: '',
     userInstructionText: '',
     input: isObject(data) && 'input' in data ? data.input : undefined,
-    isError: true,
     isUserFeedback: false,
     headerSummary: diagnostic,
-    ...(status !== undefined ? { status } : {}),
+    // A payload that failed to parse is a failure, said in the one status
+    // vocabulary the row model reads: only an in-flight source status
+    // survives, so a corrected payload can still replace the row.
+    status:
+      sourceStatus === TOOL_CALL_STATUS.IN_PROGRESS
+        ? TOOL_CALL_STATUS.IN_PROGRESS
+        : TOOL_CALL_STATUS.FAILED,
   };
 }
 
