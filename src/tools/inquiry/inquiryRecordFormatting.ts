@@ -1,24 +1,6 @@
 /** Formatting of canonical inquiry records for tools and the inquiry panel. */
-import type {
-  InquiryThreadRecord,
-  InquiryTranscriptTurn,
-} from '@shared/schemas';
+import type { InquiryThreadRecord } from '@shared/schemas';
 import { unique } from '@utils/core';
-
-export function inquiryRecordToTranscript(
-  manifest: InquiryThreadRecord,
-): InquiryTranscriptTurn[] {
-  return manifest.turns.map((turn) => ({
-    turnIndex: turn.turnIndex,
-    timestamp: turn.timestamp,
-    question: turn.question,
-    context: turn.context ?? undefined,
-    answer: turn.kind === 'answered' ? turn.answer : undefined,
-    answeredAt: turn.kind === 'answered' ? turn.answeredAt : undefined,
-    sessionLinks:
-      turn.kind === 'answered' ? (turn.sessionLinks ?? undefined) : undefined,
-  }));
-}
 
 /**
  * Collect distinct external session links (most-recent-first) across all

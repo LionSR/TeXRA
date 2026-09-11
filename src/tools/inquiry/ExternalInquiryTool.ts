@@ -48,10 +48,7 @@ import { executed } from '@tools/core/result';
 import { ensureError } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import {
-  collectKnownSessionLinks,
-  inquiryRecordToTranscript,
-} from './inquiryRecordFormatting';
+import { collectKnownSessionLinks } from './inquiryRecordFormatting';
 
 const logger = createLog('InquiryTool');
 
@@ -299,7 +296,7 @@ export class ExternalInquiryTool extends defineTool({
         allowBypass: false,
         runId,
         sessionLinks: collectKnownSessionLinks(manifest),
-        transcript: inquiryRecordToTranscript(manifest),
+        transcript: manifest.turns,
       };
       const interaction = session.interactions.openExternalInquiry(permission);
       if (!interaction) {

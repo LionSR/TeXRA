@@ -14,7 +14,6 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { inquiryRecordToTranscript } from '@tools/inquiry/inquiryRecordFormatting';
 
 const RUN_A = RunIdSchema.parse('1a1a1a1a1a1a');
 const RUN_B = RunIdSchema.parse('1b1b1b1b1b1b');

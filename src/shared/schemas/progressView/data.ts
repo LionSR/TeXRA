@@ -7,7 +7,6 @@ import { z } from 'zod';
 
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
@@ -34,8 +33,8 @@ export const MissingOutputsPayloadSchema = z.object({
 
 /**
  * Coarse media-attachment classification: `image` vs everything else. Matches
- * the split `normalizeConversationForExport` already renders attachment
- * markers for (`[image attachment]` / `[document attachment]`).
+ * the `image-attachment` / `document-attachment` split that
+ * `normalizeConversationForExport` turns into export attachment parts.
  */
 const MediaAttachmentKindSchema = z.enum(['image', 'document']);
 export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
@@ -136,14 +135,6 @@ export const WebFetchPayloadSchema = z.object({
   content: z.string().optional(),
 });
 
-const PermissionKindSchema = z.enum(PERMISSION_KIND);
-/**
- * The one approval/prompt kind vocabulary. The `approval.requested` fact,
- * the runtime host-interaction kinds, and the CLI approval queue all key
- * off this union, so a spelling that drifts fails to compile.
- */
-export type ProgressPermissionKind = z.infer<typeof PermissionKindSchema>;
-
 /** What a pending approval shows (diff, command, question), never host
  *  handles: the payload of `approval.requested`. */
 export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
@@ -170,3 +161,9 @@ export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
+/**
+ * The one approval/prompt kind vocabulary, read off the payload union. The
+ * `approval.requested` fact, the runtime host-interaction kinds, and the CLI
+ * approval queue all key off it, so a spelling that drifts fails to compile.
+ */
+export type ProgressPermissionKind = PermissionPayload['kind'];

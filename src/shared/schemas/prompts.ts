@@ -4,7 +4,7 @@ import { AgentCategory } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
 import { RunSelectionSchema, RunIdSchema } from './identifiers';
 import {
-  InquiryTranscriptTurnSchema,
+  ExternalInquiryTurnRecordSchema,
   InquirySessionLinksSchema,
   InquiryThreadIdSchema,
 } from './inquiry';
@@ -117,7 +117,7 @@ const CommonExternalInquiryFieldsSchema = z.object({
 
 const ExternalInquiryHydrationFieldsSchema = z.object({
   sessionLinks: InquirySessionLinksSchema.nullish(),
-  transcript: z.array(InquiryTranscriptTurnSchema).nullish(),
+  transcript: z.array(ExternalInquiryTurnRecordSchema).nullish(),
 });
 
 /**

@@ -26,10 +26,11 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 import type {
+  AnsweredInquiryTurn,
   ExternalInquiryPermission,
   InquiryDraft,
+  InquiryThreadRecord,
   PermissionPayload,
-  InquiryTranscriptTurn,
 } from '@shared/schemas';
 import {
   commonViewStyles,
@@ -40,7 +41,6 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -53,7 +53,7 @@ import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 
 type ExternalInquiryPermissionState = Extract<
   PermissionPayload,
-  { kind: typeof PERMISSION_KIND.EXTERNAL_INQUIRY }
+  { kind: 'externalInquiry' }
 >;
 
 // ── Draft persistence ──
@@ -235,9 +235,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   private renderTranscript(
-    transcript: InquiryTranscriptTurn[],
+    transcript: InquiryThreadRecord['turns'],
   ): TemplateResult | typeof nothing {
-    const answeredTurns = transcript.filter((turn) => turn.answer);
+    const answeredTurns = transcript.filter(
+      (turn): turn is AnsweredInquiryTurn => turn.kind === 'answered',
+    );
     if (answeredTurns.length === 0) return nothing;
 
     return html`
@@ -263,7 +265,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     `;
   }
 
-  private renderTranscriptTurn(turn: InquiryTranscriptTurn): TemplateResult {
+  private renderTranscriptTurn(turn: AnsweredInquiryTurn): TemplateResult {
     return html`
       <section class="external-inquiry-request__transcript-turn">
         <div class="external-inquiry-request__transcript-turn-header">

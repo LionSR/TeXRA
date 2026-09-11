@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
 import { RunIdSchema } from '@shared/schemas';
 import type { UserQuestionPrompt } from '@shared/schemas';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   mountComponent,
   useLitComponentTestDom,
@@ -24,7 +23,7 @@ function createPermission(
   ],
 ): UserQuestionPanel['permission'] {
   return {
-    kind: PERMISSION_KIND.USER_QUESTION,
+    kind: 'userQuestion',
     data: {
       requestId: 'question-1',
       allowBypass: false,
