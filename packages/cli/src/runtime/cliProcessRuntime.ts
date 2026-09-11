@@ -20,8 +20,7 @@
  * install itself, so a second caller joins the first rather than racing it to
  * build a second runtime, and it is cleared once that install settles.
  *
- * The identity is the Node default `createNodePlatform` wires as
- * `platform().processes`, read before installing: the CLI's default session
+ * The process identity is read before installing: the CLI's default session
  * opens through the synchronous `open`, which a pending identity would turn
  * into an asynchronous layer build.
  */

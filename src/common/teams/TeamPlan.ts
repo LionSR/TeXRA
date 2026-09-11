@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { hostPort } from '@common/hostPort';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
@@ -25,7 +26,7 @@ import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
 } from './TeamAvailabilityPreflight';
-import { teamHostedNamesForPreflight } from './TeamRoster';
+import { resolvePresetAgents, teamHostedNamesForPreflight } from './TeamRoster';
 
 type TeamPresetSource = 'built-in' | 'custom';
 
@@ -391,10 +392,7 @@ export function refreshRemoteCatalogForGaps<T>(
     // `hasGaps` first, as in the Promise original: a gapless plan must not
     // even probe remote access.
     if (hasGaps(value)) {
-      const canAccess = yield* Effect.tryPromise({
-        try: () => ports.canAccessRemoteCatalog(),
-        catch: (error) => error,
-      });
+      const canAccess = yield* hostPort(() => ports.canAccessRemoteCatalog());
       if (canAccess) {
         yield* ports.refreshRemote();
         return { value: replan(), remoteCatalogRefreshAttempted: true };
@@ -487,20 +485,6 @@ function currentCatalogOptions<T extends TeamCatalogAgent>(
 /** Missing workflow and tool-use member names, in preset-declaration order. */
 function missingMemberNames(plan: TeamRunPlan): string[] {
   return AGENT_CATEGORIES.flatMap((category) => plan.missingAgents[category]);
-}
-
-function resolvePresetAgents<T extends TeamCatalogAgent>(
-  names: readonly string[],
-  agents: readonly T[],
-): { resolved: T[]; missing: string[] } {
-  const resolved: T[] = [];
-  const missing: string[] = [];
-  for (const name of names) {
-    const entry = agents.find((agent) => agentMatchesIdentifier(agent, name));
-    if (entry) resolved.push(entry);
-    else missing.push(name);
-  }
-  return { resolved, missing };
 }
 
 function resolveAgentOverride<T extends TeamCatalogAgent>(

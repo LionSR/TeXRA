@@ -36,6 +36,7 @@ import {
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 
 import { PlatformConflict } from './errors.js';
 import { makeSessions, Sessions } from './sessions.js';
@@ -136,7 +137,7 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // open registers its root before the opener's first await and only the
     // entry's build waits.
     installProcessRuntime(
-      platform.processes.selfIdentity(),
+      nodeProcesses.selfIdentity(),
       () => platform.storage.getGlobalStoragePath(),
       () => platform.storage.getGlobalStoragePath(),
     );

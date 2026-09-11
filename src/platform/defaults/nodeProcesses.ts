@@ -15,8 +15,6 @@ import { promisify } from 'node:util';
 import { createLog } from '@logger/logUtils';
 import type { OwnerId } from '@shared/schemas';
 
-import type { ProcessesPort } from '../interfaces';
-
 /** This process's complete owner identity (contract C5). */
 export function processOwnerId(processStart: string | undefined): OwnerId {
   return JSON.stringify([
@@ -117,7 +115,16 @@ async function readIdentity(pid: number): Promise<string | undefined> {
 /** Memoized only once read successfully, so a transient failure is retried. */
 let selfIdentity: string | undefined;
 
-export const nodeProcesses: ProcessesPort = {
+/**
+ * Kernel facts about processes, used to prove whether the owner recorded in
+ * an execution lease is still the same process. An identity is an opaque
+ * string that cannot change while a process runs and that no later process
+ * with the same pid can repeat: two equal strings name one process, two
+ * different strings name two. Callers only compare it verbatim. Neither
+ * method rejects: an unreadable identity is undefined, and `selfIdentity` is
+ * memoized once read, retried until then.
+ */
+export const nodeProcesses = {
   identity: readIdentity,
   async selfIdentity() {
     selfIdentity ??= await readIdentity(process.pid);

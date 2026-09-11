@@ -340,19 +340,20 @@ export function matchesCancelSelector(
  *
  * Runtime code asks the session for an interaction. The session owns the
  * request until it settles or is explicitly cancelled, while concrete host
- * adapters own presentation, request-id resolution, and local disposal.
+ * adapters own presentation, request-id resolution, and local disposal. A
+ * request method that is absent or returns `undefined` leaves a
+ * run-scoped request parked for a surface's decision on its approval row.
  */
 export interface HostInteractions {
   /**
-   * Present a runtime event through the active host attachment. A host that
-   * renders the event returns `true` (or a `Promise<true>` once rendered);
-   * a host that ignores it or cannot deliver it returns `false`, so callers
-   * can keep a fallback surface instead of assuming fire-and-forget delivery.
+   * Present a runtime event through the active host attachment. Presentation
+   * is fire-and-forget: a host that cannot render an event logs the cause. A
+   * host may return a promise that settles once the event is on screen.
    */
   emit?<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
-  ): boolean | Promise<boolean>;
+  ): unknown;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
@@ -512,57 +513,36 @@ export class SessionHostInteractions implements HostInteractions {
     event: K,
     payload: RuntimePresentationEventPayloads[K],
     options: AgentRuntimeEmitOptions = {},
-  ): boolean | Promise<boolean> {
+  ): unknown {
+    // Live or replayed, a host that throws on a notice carrying a fallback
+    // shows the generic error toast on the same host instead.
+    const present = (interactions: HostInteractions) => {
+      try {
+        return interactions.emit?.(event, payload);
+      } catch (error) {
+        if (options.fallbackMessage === undefined) throw error;
+        logger.warn('Presentation emit failed; showing the generic error', {
+          data: error,
+        });
+        return interactions.emit?.('requestShowError', {
+          message: options.fallbackMessage,
+        });
+      }
+    };
     const active = this.activeAttachment;
     if (active) {
       try {
-        return active.interactions.emit?.(event, payload) ?? false;
+        return present(active.interactions);
       } catch (error) {
         logger.warn('Live presentation emit failed', { data: error });
-        return false;
+        return undefined;
       }
     }
+    // The replay loop warn-logs a replay that throws or rejects.
     if (options.replayWhenAttached && !this.disposed) {
-      // A retained replay is not delivery: nothing has been rendered yet, so
-      // the caller must not treat this as confirmed presentation. The replay
-      // closure reports the eventual delivery result back through the
-      // option callbacks once a live host actually renders (or declines) it.
-      this.queuePresentationReplay((interactions) => {
-        if (!options.onReplayNotDelivered) {
-          return interactions.emit?.(event, payload);
-        }
-        // A synchronous throw from the host's emit (a desktop renderer post
-        // during teardown, a development assertion) escapes the promise
-        // chain below and would otherwise be caught only by the replay
-        // loop's warn-log, leaving the caller's presentation-pending marker
-        // stuck and the failure surfaced zero times. Route it through the
-        // same not-delivered fallback as a returned `false` or a rejection.
-        let delivered: boolean | Promise<boolean> | undefined;
-        try {
-          delivered = interactions.emit?.(event, payload);
-        } catch (error) {
-          logger.warn('Replayed presentation notice failed', {
-            data: error,
-          });
-          options.onReplayNotDelivered?.(interactions);
-          return undefined;
-        }
-        return Promise.resolve(delivered).then(
-          (value) => {
-            if (value !== true) options.onReplayNotDelivered?.(interactions);
-          },
-          (error: unknown) => {
-            logger.warn('Replayed presentation notice failed', {
-              data: error,
-            });
-            options.onReplayNotDelivered?.(interactions);
-          },
-        );
-      });
-      options.onReplayScheduled?.();
-      return false;
+      this.queuePresentationReplay(present);
     }
-    return false;
+    return undefined;
   }
 
   get readDiagnostics(): DiagnosticsReader | undefined {
@@ -933,6 +913,21 @@ export class SessionHostInteractions implements HostInteractions {
       return;
     }
     if (!result) {
+      // The host does not present this request. A run-scoped one stays
+      // pending for a surface's decision on its `approval.requested` row
+      // (`settleRequest`/`settleRetry`), a cancel, or disposal. A runless
+      // one has no row any surface could answer, so it is declined.
+      if (pending.fact) {
+        logger.info(
+          `The interaction host does not present ${pending.kind} requests: ` +
+            `parked on run ${pending.fact.runId} for a decision on its approval row.`,
+        );
+        return;
+      }
+      logger.warn(
+        `A ${pending.kind} request named no run and the interaction host ` +
+          'does not present it: declined.',
+      );
       this.deletePending(pending);
       pending.settle(pending.cancellationResult());
       return;
@@ -954,8 +949,9 @@ export class SessionHostInteractions implements HostInteractions {
       logger.warn(
         `No interaction host is attached: parked the ${pending.kind} request ` +
           `(run ${pending.runId ?? 'none'}) until one attaches. A ` +
-          'headless embedder must attach at least `{ cancel: () => {} }`, or ' +
-          'blocking requests never settle.',
+          'headless embedder must attach a host that answers requests, or ' +
+          'settle or cancel them through the session, or blocking requests ' +
+          'never settle.',
       );
     } catch {
       // A diagnostic sink must not reject or remove the request it describes.

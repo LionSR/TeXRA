@@ -6,15 +6,7 @@ import { getIncludedExtensions, type ExtensionCategory } from './fileTypeUtils';
 // Edited files have their own entry point (getEditedFileListConfig), so they
 // are not listable through getFileListConfig. The surviving vocabulary matches
 // DocumentFileTypeSchema ('input' | 'context' | 'media').
-export type ListableFileType = Exclude<ExtensionCategory, 'audio' | 'edited'>;
-
-export interface FileListSettings {
-  ignoredFileExtensions: string[];
-  ignoredDirectories: string[];
-  ignoredKeywords: string[];
-  ignoredInputFiles: string[];
-  ignoredMediaDirs: string[];
-}
+export type ListableFileType = Exclude<ExtensionCategory, 'edited'>;
 
 /**
  * One include/exclude file-filter shape, shared verbatim from category
@@ -49,53 +41,40 @@ function normalizeList(values: readonly string[]): string[] {
   return trimNonEmpty(values).map((value) => value.toLowerCase());
 }
 
-export function loadFileListSettings(): FileListSettings {
-  const { ignored } = FILE_HANDLING_RULES;
-  return {
-    ignoredFileExtensions: [...ignored.fileExtensions],
-    ignoredDirectories: [...ignored.directories],
-    ignoredKeywords: [...ignored.keywords],
-    ignoredInputFiles: [...ignored.inputFiles],
-    ignoredMediaDirs: [...ignored.mediaDirectories],
-  };
-}
+const { ignored } = FILE_HANDLING_RULES;
 
 function buildInputLikeConfig(
   category: 'input' | 'context' | 'edited',
-  settings: FileListSettings,
 ): FileFilterConfig {
   return {
     include: getIncludedExtensions(category),
-    excludeExtensions: settings.ignoredFileExtensions,
-    excludeDirs: settings.ignoredDirectories,
-    excludeKeywords: settings.ignoredKeywords,
-    excludeFiles: settings.ignoredInputFiles,
+    excludeExtensions: [...ignored.fileExtensions],
+    excludeDirs: [...ignored.directories],
+    excludeKeywords: [...ignored.keywords],
+    excludeFiles: [...ignored.inputFiles],
   };
 }
 
 export function getFileListConfig(
   fileType: ListableFileType,
-  settings: FileListSettings,
 ): FileFilterConfig {
   switch (fileType) {
     case 'input':
     case 'context':
-      return buildInputLikeConfig(fileType, settings);
+      return buildInputLikeConfig(fileType);
     case 'media':
       return {
         include: getIncludedExtensions('media'),
         excludeExtensions: [],
-        excludeDirs: settings.ignoredMediaDirs,
-        excludeKeywords: settings.ignoredKeywords,
+        excludeDirs: [...ignored.mediaDirectories],
+        excludeKeywords: [...ignored.keywords],
         excludeFiles: [],
       };
   }
 }
 
-export function getEditedFileListConfig(
-  settings: FileListSettings,
-): FileFilterConfig {
-  return buildInputLikeConfig('edited', settings);
+export function getEditedFileListConfig(): FileFilterConfig {
+  return buildInputLikeConfig('edited');
 }
 
 function sanitizeDirectories(directories: readonly string[]): string[] {

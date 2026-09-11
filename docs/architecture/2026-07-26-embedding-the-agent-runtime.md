@@ -154,8 +154,7 @@ Two ways out:
   the process-default session (`src/agent/runtime/SessionHandle.ts:445-452`,
   called once; a second call throws). This is what the CLI
   (`packages/cli/src/runtime/transcriptSession.ts:45`) and the extension
-  (`packages/extension/src/extension.ts:275`) do. `StreamLogStore.ephemeral(reason)`
-  (`src/transcript/StreamLogStore.ts:246`) is the in-memory variant.
+  (`packages/extension/src/extension.ts:275`) do.
 - Construct your own `SessionHandle` and pass it as `options.session`
   (`RunAgentOptions` picks `session` through to `executeAgent`,
   `src/agent/runtime/runAgent.ts:37`). Then `defaultSession()` is never
@@ -227,7 +226,6 @@ initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
 installProcessRuntime(await nodeProcesses.selfIdentity()); // Step 3 needs it
 await effectRuntime().runPromise(bootstrapNodeAgentDirectories({/* … */})); // Step 3
 
-// Use StreamLogStore.ephemeral('embedder') here for memory-only transcripts.
 const session = initializeDefaultSession({
   transcripts: await StreamLogStore.open(),
 });

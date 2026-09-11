@@ -115,8 +115,6 @@ interface AgentLaunchInput {
   checkpointId?: string;
   /** Runtime behavior declared by the launch source, stamped on `run.start`. */
   userFollowUpSupport?: UserFollowUpSupport;
-  /** Skip the `requestShowError` toast -- for callers that show their own UI. */
-  suppressErrorNotification?: boolean;
   /** Session owning this run's coordination state. Defaults to the launcher's session (`currentSession()`). */
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
@@ -164,28 +162,23 @@ export function withLaunchRunContext<T>(
 }
 
 /**
- * Present an error through the host and throw it, tracking whether the host
- * actually rendered it so the caller can avoid a duplicate fallback toast.
+ * Present a launch error through its targeted host notice (replayed if no
+ * host is attached yet) and throw it claimed: the notice is its one surface,
+ * so the launch catch adds no generic toast. No run exists yet, so a host
+ * that throws on the notice, live or on replay (a renderer torn down
+ * mid-post, #10398/#10466), shows the generic toast in its place.
  */
-async function presentLaunchError<K extends RuntimePresentationEvent>(
+function presentLaunchError<K extends RuntimePresentationEvent>(
   interactions: Pick<SessionHostInteractions, 'emit'>,
   err: AgentError,
   event: K,
   payload: RuntimePresentationEventPayloads[K],
-): Promise<never> {
-  const delivered = await interactions.emit(event, payload, {
+): never {
+  interactions.emit(event, payload, {
     replayWhenAttached: true,
-    onReplayScheduled: () => attachErrorPresentationClaimed(err),
-    onReplayNotDelivered: (host) => {
-      host.emit?.('requestShowError', { message: toErrorMessage(err) });
-    },
+    fallbackMessage: toErrorMessage(err),
   });
-  // Claim presentation only when a live host confirmed it rendered the
-  // targeted notice, or when the notice was retained for replay (the replay
-  // owns the eventual fallback). A live-host emit that throws synchronously
-  // is normalized to `false` by `SessionHostInteractions.emit`, leaving the
-  // marker unset so the launch catch emits the generic fallback.
-  if (delivered) attachErrorPresentationClaimed(err);
+  attachErrorPresentationClaimed(err);
   throw err;
 }
 
@@ -203,7 +196,7 @@ async function getAgentPath(
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
-  throw await presentLaunchError(
+  return presentLaunchError(
     interactions,
     new AgentError(`Could not find agent: ${agentIdentifier}`),
     'showAgentConfigBanner',
@@ -218,7 +211,7 @@ async function validateModelExists(
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;
 
-  throw await presentLaunchError(
+  return presentLaunchError(
     interactions,
     new AgentError(`Model ${modelName} is not registered`),
     'requestShowInstruction',
@@ -275,23 +268,6 @@ function beginRunStage(
     logUserMessage(agentLogger, instruction);
   }
   return agentLogger.openStage(label, { kind: 'run' });
-}
-
-function notifyLaunchFailure(
-  error: unknown,
-  input: { session: SessionHandle; suppressErrorNotification?: boolean },
-): void {
-  if (
-    !input.suppressErrorNotification &&
-    !(error instanceof ZodError) &&
-    !hasErrorPresentationClaimed(error)
-  ) {
-    input.session.interactions.emit(
-      'requestShowError',
-      { message: toErrorMessage(error) },
-      { replayWhenAttached: true },
-    );
-  }
 }
 
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
@@ -359,16 +335,44 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       );
     }
 
+    // Validated before registration, so a typo'd model name registers no
+    // FAILED execution and surfaces only its targeted instruction.
+    const modelConfig = yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(input.session, () =>
+          validateModelExists(fullConfig.model, interactions),
+        ),
+      catch: ensureError,
+    });
+    yield* failIfAborted(input.signal);
+
     const config: AgentConfig = {
       ...fullConfig,
       agentCategory: setting.agentCategory,
     };
-    return { config, setting, prompt, resolution };
+    return { config, setting, prompt, resolution, modelConfig };
   },
+  // No run exists yet, so no `result` event will present this failure: the
+  // generic toast is its one surface. Once assembly begins, the terminal
+  // `result` event is the only presentation.
   (effect, input) =>
     effect.pipe(
       Effect.onError((cause) =>
-        Effect.sync(() => notifyLaunchFailure(Cause.squash(cause), input)),
+        Effect.sync(() => {
+          const error = Cause.squash(cause);
+          if (
+            input.suppressErrorNotification ||
+            error instanceof ZodError ||
+            hasErrorPresentationClaimed(error)
+          ) {
+            return;
+          }
+          input.session.interactions.emit(
+            'requestShowError',
+            { message: toErrorMessage(error) },
+            { replayWhenAttached: true },
+          );
+        }),
       ),
     ),
 );
@@ -383,16 +387,8 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     resources: Array<() => void | Promise<void>>,
   ): Effect.fn.Return<AgentLaunchContext, Error> {
     yield* failIfAborted(input.signal);
-    const { config, setting, prompt, resolution } = input.definition;
-    const interactions = input.session.interactions;
-    const modelConfig = yield* Effect.tryPromise({
-      try: async () =>
-        runInSession(input.session, () =>
-          validateModelExists(config.model, interactions),
-        ),
-      catch: ensureError,
-    });
-    yield* failIfAborted(input.signal);
+    const { config, setting, prompt, resolution, modelConfig } =
+      input.definition;
 
     // The session is resolved once at the boundary (buildAgentLaunchContext)
     // and carried in, so a delegated launch inherits the parent run's session
@@ -645,7 +641,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
               },
             );
           }
-          notifyLaunchFailure(err, input);
         }),
       ),
     );

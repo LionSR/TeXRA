@@ -31,7 +31,6 @@ import { z } from 'zod';
 import { Result } from 'effect';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
-import { createTexraNunjucksEnvironment } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
@@ -165,23 +164,11 @@ function loadGoalPrompts(): Promise<GoalPrompts> {
 }
 
 /**
- * Render the polish prompt from the YAML template.
- * FILE_CONTEXT goes through nunjucks; user text is appended raw (safe from injection).
+ * The polish prompt: the YAML instruction prefix followed by the raw user
+ * text. Nothing is templated, so user text can't inject template syntax.
  */
-export async function renderPolishPrompt(
-  fileContext: string,
-  text: string,
-): Promise<string> {
-  const [{ prompts }, { default: nunjucks }] = await Promise.all([
-    loadPolishPrompts(),
-    import('nunjucks'),
-  ]);
-  const environment = createTexraNunjucksEnvironment(nunjucks);
-  return (
-    environment.renderString(prompts.userRequest, {
-      FILE_CONTEXT: fileContext,
-    }) + text
-  );
+export async function renderPolishPrompt(text: string): Promise<string> {
+  return (await loadPolishPrompts()).prompts.userRequest + text;
 }
 
 export async function getContinuationTemplate(): Promise<string> {

@@ -358,61 +358,6 @@ describe('session.interactions immediate capabilities', () => {
     session.dispose();
   });
 
-  it('reports a synchronously throwing live-host emit as not delivered', () => {
-    // The live-host immediate-attachment branch must apply the same guard as
-    // the queued replay path: a host adapter whose emit throws synchronously
-    // (a desktop renderer post during teardown) must read as not delivered,
-    // not escape as an arbitrary host exception (#10466).
-    const session = createTestSession();
-    session.interactions.use({
-      emit: () => {
-        throw new Error('renderer torn down mid-post');
-      },
-      cancel: vi.fn(),
-    });
-
-    expect(
-      session.interactions.emit('requestShowError', { message: 'boom' }),
-    ).toBe(false);
-    session.dispose();
-  });
-
-  it('reports a synchronously throwing replayed emit through onReplayNotDelivered', async () => {
-    // A host adapter whose emit throws synchronously (a desktop renderer
-    // post during teardown) escapes the replay closure's promise chain; the
-    // throw must land in the same not-delivered callback as a returned
-    // `false` or a rejection, not vanish into the replay loop's warn-log
-    // (#10398).
-    const session = createTestSession();
-    const onReplayScheduled = vi.fn();
-    const onReplayNotDelivered = vi.fn();
-
-    session.interactions.emit(
-      'requestShowError',
-      { message: 'queued before attach' },
-      {
-        replayWhenAttached: true,
-        onReplayScheduled,
-        onReplayNotDelivered,
-      },
-    );
-    expect(onReplayScheduled).toHaveBeenCalledOnce();
-
-    const throwingHost: HostInteractions = {
-      emit: () => {
-        throw new Error('renderer torn down mid-post');
-      },
-      cancel: vi.fn(),
-    };
-    session.interactions.use(throwingHost);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(onReplayNotDelivered).toHaveBeenCalledOnce();
-    expect(onReplayNotDelivered).toHaveBeenCalledWith(throwingHost);
-    session.dispose();
-  });
-
   it('does not queue an opted-in notice delivered to an attached presentation', () => {
     const session = createTestSession();
     const firstEmit = vi.fn();
@@ -541,13 +486,22 @@ describe('session.interactions request bookkeeping', () => {
     }
   });
 
-  it('settles against the documented minimal `{ cancel }` host', async () => {
+  it('parks a run-scoped request against a `{ cancel }` host until settleRequest', async () => {
+    // Regression: a host without a request method (the extension and desktop
+    // for bash, plan, proposal, retry, question) used to auto-reject it
+    // before any surface could answer its approval row.
     const session = createTestSession();
     session.interactions.use({ cancel: vi.fn() });
     try {
-      await expect(
-        requestPlan(session, 'approval:minimal-host'),
-      ).resolves.toEqual({ action: 'reject' });
+      const pending = requestPlan(session, 'approval:minimal-host');
+      expect(
+        session.interactions.settleRequest(
+          'planApproval',
+          'approval:minimal-host',
+          { action: 'approve' },
+        ),
+      ).toBe(true);
+      await expect(pending).resolves.toEqual({ action: 'approve' });
     } finally {
       session.dispose();
     }
@@ -615,21 +569,6 @@ describe('session.interactions request bookkeeping', () => {
       session.interactions.use({ emit, cancel: vi.fn() });
       await Promise.resolve();
       expect(emit).not.toHaveBeenCalled();
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it('reports replayable notices queued before host attach as not delivered', () => {
-    const session = createTestSession();
-    try {
-      expect(
-        session.interactions.emit(
-          'showAgentConfigBanner',
-          { agentName: 'ghost', category: AgentCategory.ToolUse },
-          { replayWhenAttached: true },
-        ),
-      ).toBe(false);
     } finally {
       session.dispose();
     }
