@@ -297,18 +297,6 @@ describe('CLI model access resolution', () => {
       expected: 'api: api key set',
     },
     {
-      name: 'preserves an OpenRouter fallback row when the global toggle is off',
-      entry: model('glm52', {
-        model: modelOption('glm52', {
-          availability: 'openrouter-key',
-          provider: 'glm',
-        }),
-        status: 'openrouter key',
-      }),
-      codingPlan: true,
-      expected: 'api: openrouter key',
-    },
-    {
       name: 'never claims GLM Coding Plan for an OpenRouter-routed GLM row',
       entry: model('glm52', {
         model: modelOption('glm52', {

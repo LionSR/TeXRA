@@ -303,6 +303,19 @@ describe('computeModelOptionsData availability', () => {
     expect(reason).toBe('Model "gpt55" requires an OpenRouter API key.');
   });
 
+  it('does not offer an OpenRouter key while the OpenRouter toggle is off', async () => {
+    // Dispatch with the toggle off asks the direct provider for its key, so an
+    // OpenRouter key alone must not mark the row ready.
+    await installAccessPlatform({
+      secrets: { [apiKeySecretName('openRouter')]: 'sk-openrouter' },
+      useOpenRouter: false,
+    });
+
+    const [model] = await computeModelOptionsData(['gemini31p']);
+
+    expect(model.availability).toBe('missing-key');
+  });
+
   it('enables eligible OpenAI models from ChatGPT sign-in without an API key', async () => {
     await installAccessPlatform({
       config: PREFER_CODEX_CONFIG,

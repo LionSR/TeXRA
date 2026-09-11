@@ -1,4 +1,4 @@
-import { ModelProvider, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
@@ -50,7 +50,6 @@ import {
 import {
   isOpenRouterRoutingUnsupported,
   resolveDirectModelApiKeyProvider,
-  resolveModelApiKeyProvider,
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
@@ -62,9 +61,7 @@ import {
   discoveredCopilotRoutes,
   getRuntimeModelConfig,
   copilotRouteForModel,
-  staticModelConfigEntries,
 } from './runtimeModelRegistry';
-type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 
 /**
  * Module-private refinement of an unavailable {@link ModelAvailabilityKind},
@@ -241,29 +238,6 @@ function withAvailabilityFields(
   };
 }
 
-/** Check whether a model is available through a personal provider or OpenRouter key. */
-async function getPersonalAccessKindForModel(
-  config: ModelConfig,
-  ctx: ModelAvailabilityContext,
-): Promise<PersonalModelAccessKind | null> {
-  const provider = resolveDirectModelApiKeyProvider(config);
-  if (!provider) return null;
-
-  if (await ctx.hasUsableApiKey(provider)) {
-    return 'provider-key';
-  }
-
-  // At the picker boundary, absent and unreadable provider keys both degrade to
-  // unavailable while still allowing an OpenRouter route below.
-  const openRouterFallbackProvider = resolveModelApiKeyProvider(config, true);
-  return config.openrouterFullName &&
-    ctx.hasOpenRouter &&
-    (config.provider !== ModelProvider.GLM ||
-      openRouterFallbackProvider === 'openRouter')
-    ? 'openrouter-key'
-    : null;
-}
-
 interface ModelAvailabilityContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
@@ -360,8 +334,13 @@ async function resolveModelAvailability(
     };
   }
 
-  const personalAccess = await getPersonalAccessKindForModel(config, ctx);
-  if (personalAccess) return availabilityStatus(personalAccess);
+  // Dispatch sends every remaining request to the direct provider, so only its
+  // key makes the model ready. The live-route branch above is the only source
+  // of 'openrouter-key'.
+  const provider = resolveDirectModelApiKeyProvider(config);
+  if (provider && (await ctx.hasUsableApiKey(provider))) {
+    return availabilityStatus('provider-key');
+  }
 
   return availabilityStatus('missing-key');
 }
@@ -639,7 +618,7 @@ function visibleModelsForAccess(
   const models = new Set(configuredModels);
   if (!context.codexSignedIn) return [...models];
 
-  for (const [model, config] of staticModelConfigEntries()) {
+  for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
     if (
       !config.retired &&
       !config.deprecated &&
