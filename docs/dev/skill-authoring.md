@@ -1,6 +1,6 @@
 # Standalone Skill Authoring
 
-The skills under `skills/` are intended to stand on their own. A person using one of these skills should not need access to this repository, any internal prompt history, or any project-specific runtime.
+The skills under `packages/extension/resources/skills/` are intended to stand on their own. A person using one of these skills should not need access to this repository, any internal prompt history, or any project-specific runtime.
 
 ## Authoring rules
 

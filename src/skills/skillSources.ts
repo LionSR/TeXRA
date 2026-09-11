@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -23,24 +22,11 @@ export const INTEROP_SKILL_DIRS = [
 ] as const;
 
 function bundledSkillSources(resourcesPath: string): SkillSource[] {
-  const packagedSource = {
-    scope: 'bundled',
-    path: path.join(resourcesPath, 'skills'),
-    label: 'bundled',
-  } satisfies SkillSource;
-  if (existsSync(packagedSource.path)) return [packagedSource];
-
   return [
-    packagedSource,
     {
       scope: 'bundled',
-      path: path.resolve(resourcesPath, '../../..', 'skills'),
-      label: 'bundled source',
-    },
-    {
-      scope: 'bundled',
-      path: path.resolve(resourcesPath, '../../../..', 'skills'),
-      label: 'bundled source',
+      path: path.join(resourcesPath, 'skills'),
+      label: 'bundled',
     },
   ];
 }

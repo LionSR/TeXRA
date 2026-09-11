@@ -119,7 +119,7 @@ installProcessRuntime(await nodeProcesses.selfIdentity());
 await effectRuntime().runPromise(
   bootstrapNodeAgentDirectories({
     channel: 'my-embedder',
-    resourcesPath, // dir containing agents/, tool_use_agents/, goal/
+    resourcesPath, // dir containing agents/, tool_use_agents/, skills/
     currentVersion,
     versionStateKey, // your own globalState key
   }),
@@ -556,13 +556,11 @@ says so.
 ## 4. What degrades gracefully (safe to skip)
 
 - **`initializeBundledPrompts(resourcesPath)`:** Registers the packaged
-  `resources/` root for every row of the bundled-prompt table
-  (`src/agent/runtime/bundledPrompts.ts`). Degradation is per row, not global:
-  the `goal` row falls back to its inline copy when no root was registered, and
-  also on a broken YAML — logging a warning in that case; the `polish` row is
-  `required` and rejects instead, so an embedder that skips this call loses
-  follow-up polish loudly. Skipping it is safe only if the embedder renders no
-  polish prompt.
+  `resources/` root for the bundled polish prompt
+  (`src/agent/runtime/bundledPrompts.ts`). The goal continuation is inline and
+  always renders; polish rejects without a root, so an embedder that skips
+  this call loses follow-up polish loudly. Skipping it is safe only if the
+  embedder renders no polish prompt.
 - **`initializeNodeRuntimeSkills({…})`:** Runtime skills degrade to an empty
   catalog: `if (sources.length === 0) return { catalog: '', issues: [] };`
   (`src/skills/runtimeSkills.ts:57-59`; registration at

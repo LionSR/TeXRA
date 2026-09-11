@@ -21,10 +21,10 @@ Package-owned prompts stay next to the code that packages them:
 - `packages/extension/resources/agents/`
 - `packages/extension/resources/tool_use_agents/`
 - `packages/extension/resources/templates/`
-- `packages/extension/resources/goal/`
 
-Reusable agent skills stay under `skills/` and `.claude/skills/`, following the
-directory conventions of the clients that load them. Runtime-generated prompt
+Reusable agent skills stay under `packages/extension/resources/skills/` (the
+product's bundled skills) and `.claude/skills/` (repo-development skills),
+following the directory conventions of the clients that load them. Runtime-generated prompt
 fragments stay beside their implementation in `src/` or `packages/`.
 
 ## Source-of-truth rules

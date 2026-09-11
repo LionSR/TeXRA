@@ -3,7 +3,7 @@ import { GoalStore, isGoalEnabled } from '@tools/goal';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
-import { getContinuationTemplate } from '../runtime/bundledPrompts';
+import { GOAL_CONTINUATION_TEMPLATE } from '../runtime/bundledPrompts';
 
 /**
  * Build the pre-wait Goal continuation for a stream.
@@ -32,8 +32,7 @@ export async function maybeBuildGoalContinuation(
 
   if (!isGoalEnabled()) return null;
 
-  const template = await getContinuationTemplate();
-  return renderPrompt(template, {
+  return renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
     objective: goal.objective,
     timeUsed: formatCompactDuration(goalElapsedMs(goal)),
   });

@@ -32,7 +32,6 @@ import {
   getPromptFileName,
   getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
@@ -42,9 +41,6 @@ import {
 } from '@utils/files/externalRoots';
 import { setVarFromFile } from '@utils/files/varsUtils';
 import { StorageFS } from '@utils/files/storageFS';
-
-/** Relative path from an agent directory to the shared LaTeX style rules file. */
-const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
 
 /** Transient user-variable key carrying the run's live model id. */
 export const USER_VAR_MODEL = 'MODEL';
@@ -134,18 +130,13 @@ export async function buildUserVars(
   logger: AgentTrace,
   options: BuildUserVarsOptions = {},
 ): Promise<BuiltUserVars> {
-  // Parallelize independent I/O: required files, rules, and memories
+  // Parallelize independent I/O: required files, memories, and skills
   const [
     { vars: requiredVars, files: requiredFiles },
-    latexStyleRules,
     attachedMemories,
     runtimeSkills,
   ] = await Promise.all([
     getRequiredFileVars(agentSetting, agentPath),
-    // Load shared LaTeX style rules (best-effort; empty string if missing)
-    AbsoluteFS.read(path.join(agentPath, SHARED_LATEX_RULES_REL)).catch(
-      () => '',
-    ),
     getAttachedMemories(agentConfig.memories),
     // AVAILABLE_SKILLS is only substituted into TOOL_USE_INSTRUCTIONS, so the
     // catalog (a multi-source readdir + per-skill realpath/read/parse) is dead
@@ -179,7 +170,6 @@ export async function buildUserVars(
   agentConfig.outputFiles = outputFiles;
 
   // Merge all variable sources using spread operator.
-  // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
   // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary
   // (BuiltUserVars) and reach templates through the channel boundary.
   const userVars: BuiltUserVars = {
@@ -188,7 +178,6 @@ export async function buildUserVars(
     ...requiredVars,
     ...outputFileVars,
     ...getToolFlags(agentSetting, agentPrompt),
-    LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories.xml,
     ATTACHED_MEMORY_MISSES: attachedMemories.misses,
     AVAILABLE_SKILLS: runtimeSkills.catalog,

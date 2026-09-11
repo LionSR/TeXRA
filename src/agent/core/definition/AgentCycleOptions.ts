@@ -69,8 +69,6 @@ export type UserVars = {
   CLAUDE_CODE_GUIDANCE: string;
   /** Effective round count; workflow agents only. */
   ROUNDS?: number;
-  /** Shared LaTeX style rules text, '' when the file is missing. */
-  LATEX_STYLE_RULES: string;
   /** XML block of attached memory contents, null when none are attached. */
   ATTACHED_MEMORIES: string | null;
   /** Attached memories that could not be read. */
@@ -140,7 +138,6 @@ const UserVariableValueSchemas = {
   CODEX_GUIDANCE: z.string(),
   CLAUDE_CODE_GUIDANCE: z.string(),
   ROUNDS: z.number(),
-  LATEX_STYLE_RULES: z.string(),
   ATTACHED_MEMORIES: z.string().nullable(),
   ATTACHED_MEMORY_MISSES: z.array(AttachedMemoryMissSchema),
   AVAILABLE_SKILLS: z.string(),
